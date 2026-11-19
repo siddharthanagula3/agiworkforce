@@ -29,6 +29,10 @@ vi.mock('@/lib/server/request-context-cache', () => ({
 }));
 
 import { NextRequest } from 'next/server';
+import {
+  CapabilityAvailableSwitchesSchema,
+  TOOL_ACCESS_SETTING_KEY,
+} from '@agiworkforce/cloud-contracts';
 import { GET, PUT } from '../route';
 
 beforeEach(() => {
@@ -120,6 +124,33 @@ describe('the capabilities namespace reports the workspace memory gate', () => {
 
     expect(await response.json()).not.toHaveProperty('organizationMemoryAllowed');
     expect(h.resolveActiveOrganizationId).not.toHaveBeenCalled();
+  });
+});
+
+describe('the capabilities read announces the switches a turn applies', () => {
+  it('lists only tool access for the capabilities namespace', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/settings/preferences?namespace=capabilities'),
+    );
+    const body = await response.json();
+
+    expect(CapabilityAvailableSwitchesSchema.parse(body.availableSwitches)).toEqual([
+      TOOL_ACCESS_SETTING_KEY,
+    ]);
+  });
+
+  it('lists it on the whole document read too', async () => {
+    const response = await GET(new NextRequest('http://localhost:3000/api/settings/preferences'));
+
+    expect((await response.json()).availableSwitches).toEqual([TOOL_ACCESS_SETTING_KEY]);
+  });
+
+  it('leaves every other namespace read without it', async () => {
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/settings/preferences?namespace=general'),
+    );
+
+    expect(await response.json()).not.toHaveProperty('availableSwitches');
   });
 });
 

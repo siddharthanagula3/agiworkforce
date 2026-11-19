@@ -31,6 +31,7 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { DEFAULT: 3, HIGH: 4, MAX: 5, MIN: 1 },
 }));
 
+import { Platform } from 'react-native';
 import {
   enablePushNotifications,
   getPushDeliveryStatus,
@@ -155,5 +156,117 @@ describe('an allowed permission is not reported as delivery', () => {
 
     expect(getPushRegistrationIssue()).toBeNull();
     await expect(getPushDeliveryStatus()).resolves.toBe('granted');
+  });
+});
+
+describe('Android 13 and later never-asked permission', () => {
+  let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+  beforeEach(() => {
+    platform = jest.replaceProperty(Platform, 'OS', 'android');
+  });
+
+  afterEach(() => {
+    platform.restore();
+  });
+
+  const neverAsked = { status: 'denied', canAskAgain: true, granted: false };
+  const blocked = { status: 'denied', canAskAgain: false, granted: false };
+
+  it('reads a never-asked permission as undetermined, because the system can still ask', async () => {
+    mockGetPermissions.mockResolvedValue(neverAsked);
+
+    await expect(getPushPermissionStatus()).resolves.toBe('undetermined');
+    await expect(getPushDeliveryStatus()).resolves.toBe('undetermined');
+  });
+
+  it('reads a permission the system will no longer ask for as denied', async () => {
+    mockGetPermissions.mockResolvedValue(blocked);
+
+    await expect(getPushPermissionStatus()).resolves.toBe('denied');
+  });
+
+  it('reads notifications switched off in system settings as denied even though the permission is held', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'denied', canAskAgain: true, granted: true });
+
+    await expect(getPushPermissionStatus()).resolves.toBe('denied');
+  });
+
+  it('shows the system prompt from the explicit enable path for a never-asked permission', async () => {
+    mockGetPermissions.mockResolvedValue(neverAsked);
+    mockRequestPermissions.mockResolvedValue({
+      status: 'granted',
+      canAskAgain: true,
+      granted: true,
+    });
+
+    await expect(enablePushNotifications()).resolves.toBe('granted');
+    expect(mockRequestPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads a prompt closed with Back as not yet decided, so the turn-on control stays', async () => {
+    mockGetPermissions.mockResolvedValue(neverAsked);
+    mockRequestPermissions.mockResolvedValue(neverAsked);
+
+    await expect(enablePushNotifications()).resolves.toBe('undetermined');
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('reports a refusal after which the system will not ask again as denied so the screen offers Settings', async () => {
+    mockGetPermissions.mockResolvedValue(neverAsked);
+    mockRequestPermissions.mockResolvedValue(blocked);
+
+    await expect(enablePushNotifications()).resolves.toBe('denied');
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('asks again after a prompt closed with Back', async () => {
+    mockGetPermissions.mockResolvedValue(neverAsked);
+    mockRequestPermissions.mockResolvedValueOnce(neverAsked).mockResolvedValueOnce({
+      status: 'granted',
+      canAskAgain: true,
+      granted: true,
+    });
+
+    await expect(enablePushNotifications()).resolves.toBe('undetermined');
+    await expect(enablePushNotifications()).resolves.toBe('granted');
+    expect(mockRequestPermissions).toHaveBeenCalledTimes(2);
+  });
+
+  it('never prompts from the sign-in registration path for a never-asked permission', async () => {
+    mockGetPermissions.mockResolvedValue(neverAsked);
+
+    await expect(registerForPushNotifications(context())).resolves.toBeNull();
+
+    expect(mockRequestPermissions).not.toHaveBeenCalled();
+  });
+});
+
+describe('iPhone permission answers are unchanged', () => {
+  let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+  beforeEach(() => {
+    platform = jest.replaceProperty(Platform, 'OS', 'ios');
+  });
+
+  afterEach(() => {
+    platform.restore();
+  });
+
+  it('keeps a denied answer denied whatever canAskAgain says', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'denied', canAskAgain: true, granted: false });
+
+    await expect(getPushPermissionStatus()).resolves.toBe('denied');
+  });
+
+  it('keeps a refusal at the prompt denied', async () => {
+    mockGetPermissions.mockResolvedValue({ status: 'undetermined', canAskAgain: true });
+    mockRequestPermissions.mockResolvedValue({
+      status: 'denied',
+      canAskAgain: false,
+      granted: false,
+    });
+
+    await expect(enablePushNotifications()).resolves.toBe('denied');
   });
 });

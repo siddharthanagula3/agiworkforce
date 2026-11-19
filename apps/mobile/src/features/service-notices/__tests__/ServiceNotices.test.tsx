@@ -61,7 +61,7 @@ describe('ServiceNoticesBanner', () => {
     expect(api.get).toHaveBeenCalledWith('/api/status/notices', expect.anything());
     fireEvent.press(screen.getByText('Details'));
     expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(
-      expect.stringMatching(/\/maintenance$/),
+      expect.stringMatching(/\/maintenance\?from=mobile$/),
     );
     fireEvent.press(screen.getByLabelText('Dismiss this notice'));
     expect(screen.queryByTestId('service-notice')).toBeNull();
@@ -89,6 +89,29 @@ describe('ServiceNoticesBanner', () => {
       expect(api.get).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('shows no billing notice in a build that sells nothing in the app', async () => {
+    jest.mocked(api.get).mockResolvedValue({
+      notices: [
+        {
+          id: 'incident:billing',
+          kind: 'incident',
+          tone: 'warning',
+          scope: 'billing',
+          message:
+            'Billing is having a problem right now, so upgrades and billing changes may not go through. We are working on it.',
+          href: '/status',
+          linkLabel: 'Status',
+        },
+        NOTICE_RESPONSE.notices[0]!,
+      ],
+    });
+    renderBanner();
+
+    expect(await screen.findByText(NOTICE_RESPONSE.notices[0]!.message)).toBeTruthy();
+    expect(screen.queryByText(/Billing is having a problem/)).toBeNull();
+    expect(screen.queryByText('Status')).toBeNull();
+  });
 
   it('does not reach the cloud in Local Mode', async () => {
     useChatAppModeStore.setState({ appMode: 'local' });

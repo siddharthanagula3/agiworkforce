@@ -17,6 +17,7 @@ import {
 } from '@/src/features/chat/utils/artifactExport';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { Artifact } from '@/types/chat';
 
 const FORMAT_ICONS: Readonly<Record<ArtifactExportFormat, LucideIcon>> = {
@@ -42,7 +43,7 @@ export function ArtifactExportSheet({
 }: ArtifactExportSheetProps) {
   const colors = useThemeColors();
   const [exporting, setExporting] = useState<ArtifactExportFormat | null>(null);
-  const options = useMemo(() => artifactExportOptions(artifact), [artifact]);
+  const options = useMemo(() => artifactExportOptions(artifact, content), [artifact, content]);
 
   const handleExport = useCallback(
     async (option: ArtifactExportOption) => {
@@ -170,9 +171,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: {
-    width: '100%',
-  },
+  safeArea: contentColumn('reading'),
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

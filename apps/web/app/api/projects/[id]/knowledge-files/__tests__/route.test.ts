@@ -371,7 +371,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
 
   it('returns 409 and does not extract or insert when the project is already at the file cap', async () => {
     mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
-    mockNeonQuery.mockResolvedValueOnce([{ count: 20 }]);
+    mockNeonQuery.mockResolvedValueOnce([{ count: MAX_PROJECT_KNOWLEDGE_FILES }]);
 
     const res = await POST(
       makePostRequest('proj-1', {

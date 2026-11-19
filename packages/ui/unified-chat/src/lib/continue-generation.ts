@@ -137,7 +137,8 @@ export function looksTruncated(content: string | undefined | null): boolean {
 
   const lastLine = trimmed.slice(trimmed.lastIndexOf('\n') + 1).trim();
   if (!lastLine || NON_PROSE_LINE.test(lastLine)) return false;
-  if (lastLine.split(/\s+/).length < 4) return false;
+  const lastClause = lastLine.replace(/^.*[.!?]\s+/u, '');
+  if (lastClause.split(/\s+/).length < 4) return false;
 
   return !SENTENCE_ENDINGS.test(lastLine);
 }

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-import { render, fireEvent } from '@testing-library/react-native';
+import { Image, Modal } from 'react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 const mockOpenBrowserAsync = jest.fn();
 jest.mock('expo-web-browser', () => ({
@@ -12,34 +13,10 @@ jest.mock('expo-linking', () => ({
   openURL: (...args: unknown[]) => mockLinkingOpenURL(...args),
 }));
 
-jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
-  return {
-    __esModule: true,
-    default: {
-      View: ({ children, style }: { children: React.ReactNode; style?: object }) => (
-        <View style={style}>{children}</View>
-      ),
-    },
-    useAnimatedStyle: (fn: () => object) => fn(),
-    useSharedValue: (initial: number) => ({ value: initial }),
-    withTiming: (toValue: number) => toValue,
-    Easing: {
-      bezier: () => ({}),
-    },
-  };
-});
-
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = ({ testID }: { testID?: string }) => <Text testID={testID}>icon</Text>;
-  return {
-    Paperclip: icon,
-    Globe: icon,
-    ChevronRight: icon,
-    ChevronDown: icon,
-    ExternalLink: icon,
-  };
+  return { ExternalLink: icon, X: icon };
 });
 
 jest.mock('../lib/mmkv', () => ({
@@ -82,22 +59,53 @@ describe('CollapsibleSources', () => {
     expect(toJSON()).toBeNull();
   });
 
-  it('renders "View N sources" when collapsed (plural)', () => {
-    const { getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
-    expect(getByText('View 3 sources')).toBeTruthy();
+  it('shows one compact Sources control, not a list, under the answer', () => {
+    const { getByText, getByTestId, queryByText } = render(
+      <CollapsibleSources sources={MOCK_SOURCES} />,
+    );
+
+    expect(getByText('Sources')).toBeTruthy();
+    expect(getByTestId('chat.sources')).toHaveStyle({ alignSelf: 'flex-start' });
+    expect(queryByText('View 3 sources')).toBeNull();
+    expect(queryByText('docs.example.com')).toBeNull();
+    expect(queryByText('Getting Started Guide')).toBeNull();
   });
 
-  it('renders "View 1 source" for single source (singular)', () => {
-    const { getByText } = render(<CollapsibleSources sources={[MOCK_SOURCES[0]!]} />);
-    expect(getByText('View 1 source')).toBeTruthy();
+  it('marks the control with the first letter of up to three sites and loads no site icon', () => {
+    const many = [...MOCK_SOURCES, { url: 'https://zeta.example.net/x', title: 'Fourth' }];
+    const { getByTestId, UNSAFE_queryAllByType } = render(<CollapsibleSources sources={many} />);
+
+    const marks = within(getByTestId('chat.sources')).getAllByText(/^[A-Z?]$/);
+    expect(marks.map((mark) => mark.props.children)).toEqual(['D', 'B', 'W']);
+    expect(UNSAFE_queryAllByType(Image)).toHaveLength(0);
   });
 
-  it('toggles to show source list when header is pressed', () => {
-    const { getByLabelText, getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
+  it('names the number of sources for assistive technology', () => {
+    const one = render(<CollapsibleSources sources={[MOCK_SOURCES[0]!]} />);
+    expect(one.getByLabelText('View 1 source')).toBeTruthy();
+    const three = render(<CollapsibleSources sources={MOCK_SOURCES} />);
+    expect(three.getByLabelText('View 3 sources')).toBeTruthy();
+  });
+
+  it('opens the list in a sheet that closes by its Close control or a swipe', () => {
+    const { getByLabelText, getByText, queryByText, UNSAFE_getByType } = render(
+      <CollapsibleSources sources={MOCK_SOURCES} />,
+    );
 
     fireEvent.press(getByLabelText('View 3 sources'));
 
-    expect(getByText('Sources')).toBeTruthy();
+    const sheet = UNSAFE_getByType(Modal);
+    expect(sheet.props.visible).toBe(true);
+    expect(sheet.props.presentationStyle).toBe('pageSheet');
+    expect(sheet.props.allowSwipeDismissal).toBe(true);
+    expect(getByText('docs.example.com')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Close'));
+    expect(queryByText('docs.example.com')).toBeNull();
+
+    fireEvent.press(getByLabelText('View 3 sources'));
+    act(() => UNSAFE_getByType(Modal).props.onRequestClose());
+    expect(queryByText('docs.example.com')).toBeNull();
   });
 
   it('each source shows domain extracted from URL', () => {
@@ -144,15 +152,5 @@ describe('CollapsibleSources', () => {
     fireEvent.press(getByLabelText('View 1 source'));
 
     expect(getByLabelText('Source 1: example.com')).toBeTruthy();
-  });
-
-  it('can collapse after expanding', () => {
-    const { getByLabelText, getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
-
-    fireEvent.press(getByLabelText('View 3 sources'));
-    expect(getByText('Sources')).toBeTruthy();
-
-    fireEvent.press(getByLabelText('Hide 3 sources'));
-    expect(getByText('View 3 sources')).toBeTruthy();
   });
 });

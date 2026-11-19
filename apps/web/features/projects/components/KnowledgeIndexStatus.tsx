@@ -1,19 +1,14 @@
 'use client';
 
+import { isKnowledgeIndexInProgress } from '@agiworkforce/cloud-contracts';
 import { Spinner } from '@agiworkforce/ui';
 import type { ProjectKnowledgeFile, ProjectKnowledgeIndexState } from '@agiworkforce/types';
 
 export const INDEX_POLL_INTERVAL_MS = 5_000;
 export const MAX_INDEX_POLLS = 60;
 
-const IN_PROGRESS_INDEX_STATUSES: ReadonlySet<ProjectKnowledgeIndexState['status']> = new Set([
-  'pending',
-  'indexing',
-  'stale',
-]);
-
 export function isIndexInProgress(file: ProjectKnowledgeFile): boolean {
-  return file.indexing ? IN_PROGRESS_INDEX_STATUSES.has(file.indexing.status) : false;
+  return isKnowledgeIndexInProgress(file.indexing);
 }
 
 export function KnowledgeIndexStatus({
@@ -28,7 +23,7 @@ export function KnowledgeIndexStatus({
   onRetry: () => void;
 }) {
   if (!indexing) return null;
-  const inProgress = IN_PROGRESS_INDEX_STATUSES.has(indexing.status) || retrying;
+  const inProgress = isKnowledgeIndexInProgress(indexing) || retrying;
   if (!inProgress && indexing.status === 'indexed') return null;
 
   const label = inProgress

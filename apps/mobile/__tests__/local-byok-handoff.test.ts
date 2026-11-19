@@ -218,6 +218,29 @@ describe('mobile local conversation forks', () => {
     ).toBe(false);
   });
 
+  it('keeps the transport failure as the cause of a Cloud conversation that could not be created', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    activateCloudAccount('local-byok-owner');
+    const failure = new Error('Network request failed');
+    (api.post as jest.Mock).mockRejectedValueOnce(failure);
+    (apiFetch as jest.Mock).mockRejectedValueOnce(failure);
+
+    try {
+      const rejection = await useChatStore
+        .getState()
+        .createConversation('Cloud attempt')
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+      expect(rejection).toBeInstanceOf(Error);
+      expect((rejection as Error).message).toBe('AGI Cloud conversation could not be created.');
+      expect((rejection as Error).cause).toBe(failure);
+    } finally {
+      __resetCloudAccountSessionForTests();
+    }
+  });
+
   it('rejects cross-mode sends before reading local memory or personalization', async () => {
     useChatStore.setState((state) => ({
       conversations: [

@@ -5,7 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
   AgentTaskStateSchema,
+  MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER,
+  MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED,
   ManagedCloudAgentRunRequestIdSchema,
+  ManagedCloudAgentRunSearchTextSchema,
 } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -23,6 +26,7 @@ import {
   listCloudAgentRuns,
   type CloudAgentRunCursor,
 } from '@/lib/services/cloud-agent-run-service';
+import { searchCloudAgentRuns } from '@/lib/services/cloud-agent-run-search';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -79,7 +83,15 @@ async function handleGet(request: NextRequest) {
     .safeParse(rawStates.length > 0 ? [...new Set(rawStates)] : DEFAULT_ACTIVE_STATES);
   const rawLimit = url.searchParams.get('limit') ?? '25';
   const parsedLimit = z.coerce.number().int().min(1).max(100).safeParse(rawLimit);
-  if (!parsedRequestIds.success || !parsedStates.success || !parsedLimit.success) {
+  const rawSearch = url.searchParams.get('q');
+  const parsedSearch =
+    rawSearch === null ? undefined : ManagedCloudAgentRunSearchTextSchema.safeParse(rawSearch);
+  if (
+    !parsedRequestIds.success ||
+    !parsedStates.success ||
+    !parsedLimit.success ||
+    parsedSearch?.success === false
+  ) {
     throw createError.validation('Invalid Cloud task list parameters');
   }
 
@@ -117,18 +129,31 @@ async function handleGet(request: NextRequest) {
   // Tasks is the AGI Work surface: it lists the runs that mode produced and
   // nothing else. An ordinary `chat` turn also writes a cloud_agent_runs row,
   // so without this filter every conversation showed up here as a "task".
-  const page = await listCloudAgentRuns(db, {
+  // A request id names one run of this user, so that lookup is not a listing
+  // and finds a chat turn too: a phone ended before the response headers
+  // arrived knows its turn only by the request id it sent.
+  const requestId = parsedRequestIds.data[0];
+  const listInput = {
     userId,
     states: parsedStates.data,
-    requestId: parsedRequestIds.data[0],
+    requestId,
     before: decodeCursor(url.searchParams.get('cursor')),
     limit: parsedLimit.data,
-    workModes: AGI_WORK_MODES,
+    ...(requestId ? {} : { workModes: AGI_WORK_MODES }),
     ...(projectId ? { projectId } : {}),
-  });
+  };
+  const page = parsedSearch
+    ? await searchCloudAgentRuns(db, { ...listInput, text: parsedSearch.data })
+    : await listCloudAgentRuns(db, listInput);
   return NextResponse.json(
     { runs: page.runs, nextCursor: encodeCursor(page.next) },
-    { headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    {
+      headers: {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+        [MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER]: MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED,
+      },
+    },
   );
 }
 

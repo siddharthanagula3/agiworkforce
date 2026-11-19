@@ -8,8 +8,11 @@ const PLUGIN_VERSION = '1.0.0';
 const PATCH_MARKER = 'rewriteShareIntent';
 
 const IMPORTS = [
+  'import android.content.ContentResolver',
   'import android.content.Intent',
+  'import android.content.pm.PackageManager',
   'import android.net.Uri',
+  'import android.os.Build',
   'import android.provider.OpenableColumns',
   'import java.io.File',
   'import org.json.JSONArray',
@@ -92,18 +95,55 @@ const COMPANION_AND_METHODS = `
     if (uris.isEmpty()) {
       return copied
     }
+    val ownAuthorities = ownProviderAuthorities() ?: return copied
     val inbox = File(cacheDir, SHARED_INBOX_DIR)
     if (!inbox.exists() && !inbox.mkdirs()) {
       return copied
     }
     pruneSharedInbox(inbox)
     for (uri in uris) {
-      val entry = copySharedStream(uri, inbox)
+      val entry = copySharedStream(uri, ownAuthorities, inbox)
       if (entry != null) {
         copied.put(entry)
       }
     }
     return copied
+  }
+
+  /**
+   * The copy runs with this app's identity, so a sender could otherwise name a
+   * file:// path or one of this app's own providers and have private data
+   * staged as a share. The user part is stripped with the resolver's own rule
+   * (text after the last '@' of the decoded authority), so "0@<own>" is refused.
+   */
+  private fun isForeignContentUri(uri: Uri, ownAuthorities: Set<String>): Boolean {
+    if (uri.scheme != ContentResolver.SCHEME_CONTENT) {
+      return false
+    }
+    val provider = uri.authority?.substringAfterLast('@')
+    if (provider.isNullOrEmpty()) {
+      return false
+    }
+    return ownAuthorities.none { it.equals(provider, ignoreCase = true) }
+  }
+
+  @Suppress("DEPRECATION")
+  private fun ownProviderAuthorities(): Set<String>? {
+    val flags = PackageManager.GET_PROVIDERS or PackageManager.MATCH_DISABLED_COMPONENTS
+    val info = try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))
+      } else {
+        packageManager.getPackageInfo(packageName, flags)
+      }
+    } catch (error: Exception) {
+      return null
+    }
+    return info.providers.orEmpty()
+      .flatMap { provider -> provider.authority?.split(';').orEmpty() }
+      .map { it.trim() }
+      .filter { it.isNotEmpty() }
+      .toSet()
   }
 
   @Suppress("DEPRECATION")
@@ -114,7 +154,10 @@ const COMPANION_AND_METHODS = `
     else -> emptyList()
   }
 
-  private fun copySharedStream(uri: Uri, inbox: File): JSONObject? {
+  private fun copySharedStream(uri: Uri, ownAuthorities: Set<String>, inbox: File): JSONObject? {
+    if (!isForeignContentUri(uri, ownAuthorities)) {
+      return null
+    }
     val fileName = sharedDisplayName(uri)
     val mimeType = contentResolver.getType(uri) ?: "application/octet-stream"
     val suffix = fileName.substringAfterLast('.', "")
@@ -155,9 +198,6 @@ const COMPANION_AND_METHODS = `
   }
 
   private fun sharedDisplayName(uri: Uri): String {
-    if (uri.scheme == "file") {
-      return uri.lastPathSegment ?: "shared-file"
-    }
     val queried = try {
       contentResolver
         .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)

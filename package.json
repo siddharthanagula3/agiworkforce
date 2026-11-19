@@ -15,6 +15,11 @@
     "pnpm": ">=10.16.0"
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-fc5q-39xc-vjpf"
+      ]
+    },
     "onlyBuiltDependencies": [
       "sharp",
       "llama.rn",

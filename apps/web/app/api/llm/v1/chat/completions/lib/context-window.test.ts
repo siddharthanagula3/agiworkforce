@@ -27,6 +27,7 @@ import {
   keptPrefixLength,
   planContextTrim,
   trimMessagesToContextWindow,
+  withDenseScriptFloor,
   type TrimmableMessage,
 } from './context-window';
 
@@ -306,5 +307,27 @@ describe('fitsModelContextWindow', () => {
     const short: TrimmableMessage[] = [{ role: 'user', content: 'hi' }];
     expect(fitsModelContextWindow(short, TEST_MODEL, Number.NaN)).toBe(true);
     expect(fitsModelContextWindow(longConversation, TEST_MODEL, Number.NaN)).toBe(false);
+  });
+});
+
+describe('a newest message in a dense script', () => {
+  const denseNewest = '語'.repeat(600_000);
+
+  it('is measured near one token per character, not by Latin-script density', () => {
+    expect(withDenseScriptFloor(10, 'plain ascii text')).toBe(10);
+    expect(withDenseScriptFloor(100, '日本語'.repeat(100))).toBe(300);
+    expect(withDenseScriptFloor(100, `${'a'.repeat(300)}${'한'.repeat(100)}`)).toBe(175);
+  });
+
+  it('is refused by the fit when the window cannot hold it', () => {
+    const messages: TrimmableMessage[] = [
+      { role: 'system', content: 'stay on task' },
+      { role: 'user', content: denseNewest },
+    ];
+
+    expect(fitsModelContextWindow(messages, WIDE_TEST_MODEL, 1_024)).toBe(false);
+    const trim = trimMessagesToContextWindow(messages, WIDE_TEST_MODEL, 1_024);
+    expect(trim?.latestUserMessageOverflow).toBe(true);
+    expect(messages.at(-1)?.content).toBe(denseNewest);
   });
 });

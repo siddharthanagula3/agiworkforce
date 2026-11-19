@@ -21,12 +21,13 @@ import { getCsrfToken } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
 import { uploadChatAttachments } from '@features/chat/services/chat-attachment-upload';
 import { CONTENT_OVERLAY_ROOT_ID } from '@shared/components/layout/WebAppShell';
-import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
+import { downloadInWindow } from '@features/desktop-host/lib/in-window-download';
 import { createWebCloudPublisher } from '@features/chat/components/artifacts/publishArtifactClient';
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
 import { NEW_CHAT_PATH } from '@features/chat/lib/new-chat-entry';
 import { buildWorkObjective } from '@features/work/launch';
 import {
+  readLibraryItemFile,
   stageLibraryItemForImageRemix,
   stageLibraryItemForNewChat,
 } from '../lib/library-chat-handoff';
@@ -153,6 +154,7 @@ export function LibraryView() {
       listPage: (params) =>
         fetch(`/api/library?${params.toString()}`, { credentials: 'same-origin' }),
       fetchAsset: (uri) => fetch(uri, { credentials: 'same-origin' }),
+      downloadInBrowser: downloadInWindow,
       inlinePreviewUri: (uri) => uri,
       textPreviewUri: (uri) => `${uri}/text`,
       listFolders: async () => {
@@ -175,7 +177,7 @@ export function LibraryView() {
       openFolder,
       createFolder,
       uploadFiles: async (files) => {
-        await uploadChatAttachments(files);
+        await uploadChatAttachments(files, { declineLargeFiles: true });
       },
       deleteItem: async (id) => {
         const csrf = await getCsrfToken();
@@ -232,7 +234,7 @@ export function LibraryView() {
       addToProject: async (item, folder) => {
         await uploadProjectKnowledgeFile({
           projectId: folder.id,
-          file: await libraryItemToFile(item),
+          file: await readLibraryItemFile(item),
         });
         toast.success(`Added to ${folder.name}`);
       },

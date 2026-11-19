@@ -74,17 +74,12 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
   const handleEmailDesktopLink = useCallback(async () => {
     const url = buildDesktopLinkMailto(accountEmail);
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        Alert.alert(
-          'No mail app',
-          'Set up a mail app on this device, or visit agiworkforce.com/download on your computer.',
-        );
-        return;
-      }
       await Linking.openURL(url);
     } catch {
-      Alert.alert('Error', 'Could not open the link. Please try again.');
+      Alert.alert(
+        'No mail app',
+        'Set up a mail app on this device, or visit agiworkforce.com/download on your computer.',
+      );
     }
   }, [accountEmail]);
 

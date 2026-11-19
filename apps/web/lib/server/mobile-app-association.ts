@@ -23,14 +23,6 @@ export function appleAppSiteAssociationResponse(): Response {
             appIDs: [IOS_APPLICATION_IDENTIFIER],
             components: [
               {
-                '/': '/pair',
-                comment: 'Desktop companion pairing code supplied in the query string.',
-              },
-              {
-                '/': '/pair/*',
-                comment: 'Desktop companion pairing code supplied as one path segment.',
-              },
-              {
                 '/': '/auth/reset-password',
                 comment: 'Clerk account recovery handoff.',
               },

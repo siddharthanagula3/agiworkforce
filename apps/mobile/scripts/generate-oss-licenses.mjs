@@ -8,7 +8,9 @@
  * scripts/lib/third-party-notices.mjs collector and writes
  * `src/features/legal/licenses.generated.ts`. Each package keeps its own
  * copyright lines; the license, copying and notice files it ships become one
- * shared body, stored once for every package that ships the same files.
+ * shared body, stored once for every package that ships the same files. Code
+ * vendored into `assets/` is not in the dependency graph, so it is added from its
+ * own licence file.
  *
  * Run it after changing dependencies and commit the result: the app bundles the
  * generated module, so a stale file is a stale attribution notice.
@@ -19,6 +21,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
+  addPackage,
   buildNotices,
   collectNpmProductionGraph,
   textId,
@@ -27,10 +30,33 @@ import {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const mobileRoot = path.resolve(scriptDir, '..');
 const outputFile = path.join(mobileRoot, 'src/features/legal/licenses.generated.ts');
+const pdfjsAssets = path.join(mobileRoot, 'assets/pdfjs');
+const PDFJS_COPYRIGHT = /^\s*\*\s*(Copyright \d{4} [^\n]+)$/m;
+
+function addVendoredPdfjs(records) {
+  const viewer = JSON.parse(fs.readFileSync(path.join(pdfjsAssets, 'pdf-viewer.json'), 'utf8'));
+  const license = fs.readFileSync(path.join(pdfjsAssets, 'LICENSE'), 'utf8');
+  const copyright = PDFJS_COPYRIGHT.exec(viewer.html)?.[1];
+  if (!copyright)
+    throw new Error('assets/pdfjs/pdf-viewer.json no longer carries its copyright line');
+  addPackage(
+    records,
+    {
+      ecosystem: 'vendored',
+      name: 'pdfjs-dist',
+      version: viewer.pdfjsVersion,
+      license: 'Apache-2.0',
+      url: 'https://github.com/mozilla/pdf.js',
+      files: [`${copyright}\n\n${license.replace(/\r\n?/g, '\n').trim()}`],
+    },
+    'mobile',
+  );
+}
 
 function build() {
   const records = new Map();
   const unresolved = collectNpmProductionGraph(records, mobileRoot, 'mobile');
+  addVendoredPdfjs(records);
   const notices = buildNotices(records);
   const bodies = new Map();
 

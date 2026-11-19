@@ -51,6 +51,7 @@ export async function startCloudWorkRun(
   });
   if (!goal) throw new Error(START_WORK_EMPTY_GOAL_ERROR);
 
+  useModelStore.getState().endConversationModel();
   const { createConversation, sendMessage } = useChatStore.getState();
   const conversationId = await createConversation(
     cloudWorkRunTitle(goal.goal),

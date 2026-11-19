@@ -8,7 +8,7 @@ import {
   PRODUCT_NAMES,
   TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
-import { GREETING_TIME_BANDS } from '@agiworkforce/utils/greeting';
+import { GREETING_TIME_BANDS, resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import {
@@ -439,10 +439,11 @@ describe('Mobile', () => {
       ['Cloud', false],
     ]);
     expect(container.querySelector('.agi-app-phone-heading')?.textContent).toBe(
-      'How can I help you tonight?',
+      GREETING_TIME_BANDS.afternoon.variants[0],
     );
+    expect(container.querySelector('.agi-app-phone-sub')).toBeNull();
     expect(container.querySelector('.agi-app-phone-placeholder')?.textContent).toBe(
-      "What's on your mind?",
+      'Type or hold to talk',
     );
     expect(container.querySelector('.agi-app-phone-model')?.textContent).toBe('Auto');
     expect(container.querySelector('.agi-app-drawer')).toBeNull();
@@ -465,11 +466,16 @@ describe('Mobile', () => {
   });
 
   it('the mobile app still ships the strings the preview shows', () => {
-    expect(readSource('apps/mobile/app/(app)/(tabs)/chat.tsx')).toContain(
-      'How can I help you tonight?',
+    const chat = readSource('apps/mobile/app/(app)/(tabs)/chat.tsx');
+    expect(chat).toContain(
+      "import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';",
+    );
+    expect(chat).toContain('resolveGreetingHeadline(greetingTime, greetingName)');
+    expect(resolveGreetingHeadline(new Date(2026, 0, 3, 14), '')).toBe(
+      GREETING_TIME_BANDS.afternoon.variants[0],
     );
     expect(readSource('apps/mobile/src/features/chat/components/ChatInput.tsx')).toContain(
-      "What's on your mind?",
+      "? 'Type or hold to talk'",
     );
   });
 });

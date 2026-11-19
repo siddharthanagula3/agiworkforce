@@ -123,7 +123,7 @@ describe('MessageContentRenderer', () => {
     expect(openUrlSpy).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith(
       'Open in Mail?',
-      'mailto:support@example.com',
+      'To: support@example.com',
       expect.arrayContaining([expect.objectContaining({ text: 'Cancel', style: 'cancel' })]),
     );
 
@@ -239,12 +239,22 @@ describe('MessageContentRenderer', () => {
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith('https://www.example.com', expect.anything());
   });
 
-  it('does not link a www fragment inside an email address', () => {
-    const { queryAllByRole } = render(
+  it('links an email address as mail rather than its www fragment as a web page', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getAllByRole } = render(
       <View>{renderMarkdownContent('Write to ops@www.example.com', lightColors)}</View>,
     );
 
-    expect(queryAllByRole('link')).toHaveLength(0);
+    const links = getAllByRole('link');
+    expect(links).toHaveLength(1);
+    fireEvent.press(links[0]!);
+
+    expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Open in Mail?',
+      'To: ops@www.example.com',
+      expect.any(Array),
+    );
   });
 
   it('leaves a bare address without a dotted host as text', () => {

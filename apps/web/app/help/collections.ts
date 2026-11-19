@@ -1,4 +1,4 @@
-import { getSupportCorpus } from '@/lib/support/agent/corpus';
+import { getSupportCorpus, type SupportCorpusView } from '@/lib/support/agent/corpus';
 import { helpArticlePath } from '@/lib/support/help-articles';
 
 export interface SupportCollectionArticle {
@@ -23,8 +23,8 @@ function label(categoryId: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-export function supportCollectionIndex(): SupportCollectionIndex {
-  const corpus = getSupportCorpus();
+export function supportCollectionIndex(view: SupportCorpusView = 'web'): SupportCollectionIndex {
+  const corpus = getSupportCorpus(view);
   if (!corpus.available) return { collections: [], articleCount: 0 };
 
   const byCategory = new Map<string, Map<string, SupportCollectionArticle>>();

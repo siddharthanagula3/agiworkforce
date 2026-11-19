@@ -22,6 +22,11 @@ jest.mock('@clerk/expo', () => ({
   useUser: () => mockClerkState,
 }));
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES } };
+});
+
 jest.mock('@/stores/connectionStore', () => ({
   useConnectionStore: (
     selector: (state: { status: string; desktopName: string | null }) => unknown,
@@ -102,7 +107,17 @@ import {
   POST_AUTH_INTENT_PARAM,
 } from '../src/features/auth/services/postAuthIntent';
 
+const setRemoteFeatures = (enabled: boolean) => {
+  const { FEATURES } = jest.requireMock('@/lib/v1FeatureFlags');
+  FEATURES.companion = enabled;
+  FEATURES.dispatch = enabled;
+};
+
 describe('Settings page', () => {
+  afterEach(() => {
+    setRemoteFeatures(false);
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockCanGoBack.mockReturnValue(true);
@@ -149,12 +164,14 @@ describe('Settings page', () => {
     expect(getByText('Capabilities')).toBeTruthy();
     expect(getByText('Safety & Security')).toBeTruthy();
     expect(getByText('Data Controls')).toBeTruthy();
+    expect(getByText('Age')).toBeTruthy();
     expect(getByText('Parental Controls')).toBeTruthy();
     expect(getByText('Shared Links')).toBeTruthy();
-    expect(getByText('Account Security')).toBeTruthy();
+    expect(getByText('Security and login')).toBeTruthy();
+    expect(queryByText('Account Security')).toBeNull();
     expect(getByText('Device Integrations')).toBeTruthy();
-    expect(getByText('Remote control')).toBeTruthy();
-    expect(getByText('Connections')).toBeTruthy();
+    expect(queryByText('Remote control')).toBeNull();
+    expect(queryByText('Connections')).toBeNull();
     expect(getByText('Storage')).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
   });
@@ -168,7 +185,17 @@ describe('Settings page', () => {
     expect(label).not.toHaveStyle({ flex: 1 });
   });
 
+  it('lists no Remote control section and no Connections row while version 1 ships with Remote hidden', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const screen = render(<SettingsTabScreen />);
+
+    expect(screen.queryByText('Remote control')).toBeNull();
+    expect(screen.queryByLabelText(/^Connections/)).toBeNull();
+    expect(screen.getByText('Device Integrations')).toBeTruthy();
+  });
+
   it('keeps Remote control out of Settings in Local', () => {
+    setRemoteFeatures(true);
     const screen = render(<SettingsTabScreen />);
 
     expect(screen.queryByText('Remote control')).toBeNull();
@@ -177,6 +204,7 @@ describe('Settings page', () => {
   });
 
   it('opens Remote control from Settings in Cloud and names the paired computer', () => {
+    setRemoteFeatures(true);
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const screen = render(<SettingsTabScreen />);
 
@@ -289,13 +317,13 @@ describe('Settings page', () => {
     expect(teamAccount.getByText('Workspace')).toBeTruthy();
   });
 
-  it('draws the account state in one style across all five Account rows', () => {
+  it('draws the account state in one style across the five Account rows that need an account', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
     for (const label of [
       'Email',
-      'Account Security',
+      'Security and login',
       'Subscription',
       'Shared Links',
       'Workspace',
@@ -349,7 +377,7 @@ describe('Settings page', () => {
 
     fireEvent.press(getByLabelText('Personalization'));
     fireEvent.press(getByLabelText('Memory'));
-    fireEvent.press(getByLabelText('Account Security'));
+    fireEvent.press(getByLabelText('Security and login'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
@@ -493,16 +521,16 @@ describe('Settings page', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/permissions');
   });
 
-  it('gives Privacy its own icon rather than the Account Security shield', () => {
+  it('gives Privacy its own icon rather than the Security and login shield', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = render(<SettingsTabScreen />);
     const lucide = jest.requireMock('lucide-react-native');
     const usesIcon = (label: string, icon: unknown) =>
       getByLabelText(label).findAll((node) => node.type === icon).length > 0;
 
-    expect(usesIcon('Account Security. Sign in', lucide.Shield)).toBe(true);
-    expect(usesIcon('Privacy. Sign in', lucide.Shield)).toBe(false);
-    expect(usesIcon('Privacy. Sign in', lucide.LockKeyhole)).toBe(true);
+    expect(usesIcon('Security and login. Sign in', lucide.Shield)).toBe(true);
+    expect(usesIcon('Privacy', lucide.Shield)).toBe(false);
+    expect(usesIcon('Privacy', lucide.LockKeyhole)).toBe(true);
   });
 
   it('hints where a navigational row goes and what Log Out does', () => {

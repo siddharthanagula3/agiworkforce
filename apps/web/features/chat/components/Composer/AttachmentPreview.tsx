@@ -66,7 +66,8 @@ function documentKind(mimeType: string): DocumentKind {
     mimeType.includes('json') ||
     mimeType.includes('html') ||
     mimeType.includes('css') ||
-    mimeType.includes('xml')
+    mimeType.includes('/xml') ||
+    mimeType.includes('+xml')
   ) {
     return CODE_KIND;
   }

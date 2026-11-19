@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import { CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
 import { SUSPENSION_APPEAL_PATH } from '@/lib/auth/account-status';
@@ -43,9 +43,9 @@ export function AuthNoticeStep({
       focusHeading
     >
       {restartHref && !waiting ? (
-        <Link href={restartHref} className={AUTH_PRIMARY_BUTTON_CLASS}>
+        <PageLink href={restartHref} className={AUTH_PRIMARY_BUTTON_CLASS}>
           {action}
-        </Link>
+        </PageLink>
       ) : (
         <button
           type="button"
@@ -61,19 +61,23 @@ export function AuthNoticeStep({
 
       {notice === 'account_suspended' ? (
         <div className={AUTH_STEP_LINKS_CLASS}>
-          <Link href={SUSPENSION_APPEAL_PATH} className={AUTH_STANDALONE_LINK_CLASS}>
+          <PageLink
+            href={SUSPENSION_APPEAL_PATH}
+            omitWhenEmbedded
+            className={AUTH_STANDALONE_LINK_CLASS}
+          >
             {copy.text('flow.notice.appeal', 'Appeal this suspension')}
-          </Link>
+          </PageLink>
         </div>
       ) : null}
       {notice === 'account_locked' ? (
         <div className={AUTH_STEP_LINKS_CLASS}>
-          <Link
+          <PageLink
             href={contactMailto(CONTACT_SUBJECTS.appeal)}
             className={AUTH_STANDALONE_LINK_CLASS}
           >
             {copy.text('flow.notice.contactSupport', 'Contact support')}
-          </Link>
+          </PageLink>
         </div>
       ) : null}
     </AuthStepFrame>

@@ -14,6 +14,10 @@ import { serverProvisionalTitle } from '@/lib/chat-title';
 import { resolveSavedMessageSourceUrls } from './resolve-source-urls';
 import { refuseEditedAssistantOverwrite } from '@/lib/server/assistant-content-edits';
 import {
+  recordStoppedRunAssistantTurn,
+  referencedCloudAgentRunId,
+} from '@/app/api/llm/v1/chat/completions/lib/stopped-run-turn';
+import {
   assertParentInConversation,
   conversationIsUnbranched,
   INSERT_MESSAGE_SQL,
@@ -150,21 +154,49 @@ export async function persistConversationMessage(input: {
         ? { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY }
         : {}),
     });
+
+    const referencedRunId = referencedCloudAgentRunId(storedMetadata);
+    if (referencedRunId && !('finishReason' in storedMetadata)) {
+      await recordStoppedRunAssistantTurn({
+        userId: scope.userId,
+        organizationId: scope.organizationId,
+        runId: referencedRunId,
+        messageId: persisted.id,
+      });
+    }
   }
 
   if (requestedMessage.role === 'user') {
     if (await markConversationActivated(db, scope)) {
       const truncatedTitle = serverProvisionalTitle(requestedMessage.content);
-      await db.execute(
+      // A conversation whose turns arrived through the sync push or a bulk copy
+      // is first activated here by a regenerate or an edit, which may re-send
+      // its only question under the same id; its title was set with its first
+      // question and only the person changes it after that. A first question is
+      // always stored before its answer, so an existing answer means it is not one.
+      const titled = await db.execute(
         `update web_conversations
             set title = $1, updated_at = now()
           where id = $2
             and user_id = $3
-            and organization_id is not distinct from $4`,
-        [truncatedTitle, scope.conversationId, scope.userId, scope.organizationId],
+            and organization_id is not distinct from $4
+            and not exists (
+              select 1
+                from web_messages earlier
+               where earlier.conversation_id = $2
+                 and earlier.role = 'user'
+                 and earlier.id <> $5
+            )
+            and not exists (
+              select 1
+                from web_messages answered
+               where answered.conversation_id = $2
+                 and answered.role = 'assistant'
+            )`,
+        [truncatedTitle, scope.conversationId, scope.userId, scope.organizationId, persisted.id],
       );
 
-      if (!getProviderOffering(conversation.model ?? '')) {
+      if (titled > 0 && !getProviderOffering(conversation.model ?? '')) {
         scheduleConversationTitleGeneration({
           db,
           conversationId: scope.conversationId,

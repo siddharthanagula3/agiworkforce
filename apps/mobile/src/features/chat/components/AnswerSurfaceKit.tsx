@@ -351,6 +351,7 @@ export function SelectControl({
   onChange,
   colors,
   disabled = false,
+  clearLabel,
 }: {
   label: string;
   options: readonly string[];
@@ -359,8 +360,10 @@ export function SelectControl({
   onChange: (value: string) => void;
   colors: ColorScheme;
   disabled?: boolean;
+  clearLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const choices = clearLabel === undefined ? options : ['', ...options];
   return (
     <View style={{ gap: spacing.xs }}>
       <PressableBox
@@ -397,11 +400,11 @@ export function SelectControl({
         </View>
       </PressableBox>
       {open
-        ? options.map((option) => (
+        ? choices.map((option) => (
             <ChoiceRow
               key={option}
               kind="radio"
-              label={option}
+              label={option || clearLabel || placeholder}
               checked={option === value}
               colors={colors}
               onPress={() => {

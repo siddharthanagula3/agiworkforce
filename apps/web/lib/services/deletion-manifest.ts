@@ -37,6 +37,7 @@ const CUSTOMER_CONTENT = [
   'cloud_agent_run_budgets',
   'cloud_agent_runs',
   'cloud_code_agent_turns',
+  'cloud_code_environments',
   'cloud_code_sessions',
   'cloud_code_terminal_entries',
   'content_reports',
@@ -105,6 +106,7 @@ const CUSTOMER_CONTENT = [
 ];
 
 const DERIVED_CONTENT = [
+  'chat_file_preparations',
   'context_manifests',
   'file_lineage',
   'retrieval_chunks',
@@ -134,6 +136,7 @@ const OPERATIONAL_RECORD = [
   'billing_disputes',
   'billing_refund_requests',
   'bonus_credit_grants',
+  'chat_file_intakes',
   'cloud_managed_waitlist',
   'cloud_waitlist',
   'cogs_adjustments',
@@ -309,6 +312,17 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     cascadesFrom: null,
     maximumAgeDays: null,
     deletionPath: 'lib/server/account-erasure.ts eraseUserMedia, bytes before rows',
+    retainedReason: null,
+  },
+  {
+    store: 'chat file staging and derived objects',
+    kind: 'object_store',
+    dataClass: 'customer_content',
+    erasedWithSubject: true,
+    erasedWithTenant: true,
+    cascadesFrom: null,
+    maximumAgeDays: null,
+    deletionPath: 'lib/server/chat-file-intake/erasure.ts eraseChatFiles',
     retainedReason: null,
   },
   {

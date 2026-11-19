@@ -7,6 +7,7 @@ import { usePathname } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import { appLockWording } from '@/src/features/auth/services/appLockWording';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -16,6 +17,7 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { hasAcknowledgedContinuityOnboarding } from '@/src/features/continuity/continuity-onboarding';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function canOfferToAccount(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
   return (
@@ -129,7 +131,9 @@ export function AppLockOffer() {
         }}
       >
         <View
+          testID="app-lock-offer-card"
           style={{
+            ...contentColumn('form'),
             backgroundColor: colors.surfaceElevated,
             borderRadius: 20,
             padding: dialogPadding,
@@ -144,7 +148,7 @@ export function AppLockOffer() {
             Protect AGI with App Lock
           </Text>
           <Text style={{ color: colors.textSecondary, textAlign: 'center', lineHeight: 21 }}>
-            Use Face ID, Touch ID, or your device passcode when opening AGI.
+            {appLockWording().offer}
           </Text>
           <PressableBox
             accessibilityRole="button"

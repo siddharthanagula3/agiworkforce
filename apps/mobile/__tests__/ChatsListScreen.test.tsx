@@ -2,6 +2,13 @@
 import React from 'react';
 import { Alert, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import {
+  actionMenuLabels,
+  actionMenuMessage,
+  actionMenuTitle,
+  chooseActionMenuItem,
+  selectedActionMenuLabels,
+} from '@/test-utils/actionMenu';
 import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
@@ -388,7 +395,10 @@ describe('ChatsListScreen', () => {
   });
 
   it('shows search guidance without chat history on the dedicated search screen', () => {
+    const savedConversations = mockChatState.conversations;
+    mockChatState.conversations = [];
     const screen = render(<ChatsListScreen searchOnly />);
+    mockChatState.conversations = savedConversations;
 
     expect(screen.getByText('Search your workspace')).toBeTruthy();
     expect(screen.getByText(/Search chats, projects, files/)).toBeTruthy();
@@ -428,11 +438,11 @@ describe('ChatsListScreen', () => {
     const { getByLabelText, getByText, queryByText } = render(<ChatsListScreen />);
     fireEvent.press(getByLabelText('Filter chats. All chats'));
 
-    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
-      text?: string;
-      onPress?: () => void;
-    }>;
-    act(() => buttons.find((button) => button.text?.includes('Pinned'))?.onPress?.());
+    expect(actionMenuTitle()).toBe('Filter chats');
+    expect(actionMenuMessage()).toBe('Choose which chats appear in this list and in search.');
+    expect(actionMenuLabels()).toEqual(['All chats', 'Pinned', 'Unread']);
+    expect(selectedActionMenuLabels()).toEqual(['All chats']);
+    chooseActionMenuItem('Pinned');
 
     expect(getByText('Local chat 2')).toBeTruthy();
     expect(queryByText('Launch checklist')).toBeNull();
@@ -461,6 +471,30 @@ describe('ChatsListScreen', () => {
       pathname: '/(app)/library',
       params: { imageId: '11111111-1111-4111-8111-111111111111' },
     });
+  });
+
+  it('says which part of a chat matched: the title alone, or the message it found', () => {
+    mockViewState.searchResults = [
+      { conversationId: 'chat-1', messageId: '', snippet: 'Launch checklist' },
+      { conversationId: 'chat-4', messageId: 'message-4', snippet: '...the launch detail...' },
+    ];
+    try {
+      const { getByLabelText, getByText, queryByText } = render(<ChatsListScreen />);
+
+      fireEvent.changeText(
+        getByLabelText('Search chats, projects, files, library, and artifacts'),
+        'launch',
+      );
+
+      expect(getByText('Launch checklist')).toBeTruthy();
+      expect(getByText('Ready for release')).toBeTruthy();
+      expect(getByText('...the launch detail...')).toBeTruthy();
+      expect(queryByText('Matched message content')).toBeNull();
+    } finally {
+      mockViewState.searchResults = [
+        { conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' },
+      ];
+    }
   });
 
   it('offers the same rename, pin and delete actions the drawer has, on a long press', () => {

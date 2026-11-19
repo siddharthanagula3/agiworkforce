@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import type { ReactNode } from 'react';
 
 export function Button({
@@ -11,9 +11,9 @@ export function Button({
   variant?: 'primary' | 'secondary';
 }) {
   return (
-    <Link href={href} className="agi-ds-btn" data-variant={variant}>
+    <PageLink href={href} className="agi-ds-btn" data-variant={variant} omitWhenEmbedded>
       {children}
-    </Link>
+    </PageLink>
   );
 }
 

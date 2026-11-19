@@ -1847,7 +1847,7 @@ describe('CloudCodePage', () => {
     const picker = await screen.findByLabelText('Coding harness');
     expect(picker).toBeEnabled();
     expect(
-      screen.getByRole('option', { name: 'codex, A coding agent CLI. · 4 vCPU, 8 GB RAM' }),
+      screen.getByRole('option', { name: 'codex, A coding agent CLI · 4 vCPU, 8 GB RAM' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Coding agents' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Environments' })).toBeInTheDocument();

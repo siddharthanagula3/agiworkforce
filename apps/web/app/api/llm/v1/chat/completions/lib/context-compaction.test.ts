@@ -591,6 +591,32 @@ describe('compactContextWindow', () => {
     expect(db.query).not.toHaveBeenCalled();
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
+
+  it('bills no summary when the newest message cannot fit, since that turn is refused', async () => {
+    const db = makeDb();
+    const messages = buildMessages();
+    messages[messages.length - 1] = { role: 'user', content: 'newest '.repeat(2_000) };
+
+    const result = await compactContextWindow(baseInput({ messages, db: db as never }));
+
+    expect(result?.latestUserMessageOverflow).toBe(true);
+    expect(db.query).not.toHaveBeenCalled();
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+    expect(drainToLlmResponse).not.toHaveBeenCalled();
+    expect(result?.droppedMessages).toBeGreaterThan(0);
+    expect(messages.at(-1)?.content).toBe('newest '.repeat(2_000));
+  });
+
+  it('still summarizes when only the history overflows', async () => {
+    const messages = buildMessages();
+    const before = messages.map((message) => message.content);
+
+    const result = await compactContextWindow(baseInput({ messages, db: makeDb() as never }));
+
+    expect(result?.latestUserMessageOverflow).toBeUndefined();
+    expect(reserveManagedUsageRequest).toHaveBeenCalledTimes(1);
+    expect(messages.at(-1)?.content).toBe(before.at(-1));
+  });
 });
 
 type ImportedModule0 = typeof import('@/lib/services/llm-cost-calculator');

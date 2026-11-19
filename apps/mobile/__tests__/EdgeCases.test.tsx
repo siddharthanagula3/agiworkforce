@@ -70,3 +70,11 @@ describe('OfflineBanner', () => {
     expect(getByText(EDGE_COPY.offline.banner)).toBeTruthy();
   });
 });
+
+describe('EDGE_COPY', () => {
+  it('names the device neutrally when it runs hot', () => {
+    expect(EDGE_COPY.thermalThrottle.body).toBe(
+      'Your device is running hot. Pausing inference for a bit to cool down.',
+    );
+  });
+});

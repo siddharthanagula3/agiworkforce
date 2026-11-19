@@ -5,6 +5,7 @@ import {
   type ToolApprovalDecisionWire,
   type ToolApprovalReviewWire,
   type ToolApprovalRiskTier,
+  type ConversationToolGrant,
   isConnectorCategoryToolName,
 } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -90,6 +91,83 @@ export async function loadConnectorToolSessionGrants(
     );
     return NO_SESSION_GRANTS;
   }
+}
+
+export async function listConversationToolGrants(
+  db: Pick<DatabaseAdapter, 'query'>,
+  scope: ConnectorToolSessionScope,
+): Promise<ConversationToolGrant[]> {
+  const rows = await db.query<{
+    id: string;
+    connector_id: string;
+    tool_name: string;
+    risk_tier: string;
+    destructive: boolean;
+    created_at: Date | string;
+  }>(
+    `select grant_row.id, grant_row.connector_id, grant_row.tool_name, grant_row.risk_tier,
+            grant_row.destructive, grant_row.created_at
+       from public.connector_tool_session_grants grant_row
+       join public.web_conversations conversation
+         on conversation.id = grant_row.conversation_id
+        and conversation.user_id = grant_row.user_id
+      where grant_row.user_id = $1 and grant_row.conversation_id = $2
+        and grant_row.trust_boundary = $3
+        and conversation.organization_id is not distinct from $4::uuid
+        and conversation.deleted_at is null
+        and conversation.is_temporary = false
+      order by grant_row.created_at asc, grant_row.id asc`,
+    [scope.userId, scope.conversationId, scope.trustBoundary, scope.organizationId],
+  );
+  const grants: ConversationToolGrant[] = [];
+  for (const row of rows) {
+    const riskTier = TOOL_APPROVAL_RISK_TIERS.find((tier) => tier === row.risk_tier);
+    if (!riskTier) continue;
+    grants.push({
+      id: row.id,
+      connectorId: row.connector_id,
+      toolName: row.tool_name,
+      riskTier,
+      destructive: row.destructive,
+      grantedAt: new Date(row.created_at).toISOString(),
+    });
+  }
+  return grants;
+}
+
+/**
+ * Removes one grant of this conversation. The connector's permission
+ * generation advances first, in the same transaction, so an approval being
+ * remembered for the same connector cannot land after the revocation.
+ */
+export async function revokeConversationToolGrant(
+  db: Pick<DatabaseAdapter, 'query'>,
+  scope: ConnectorToolSessionScope,
+  grantId: string,
+): Promise<{ connectorId: string; toolName: string } | null> {
+  const [grant] = await db.query<{ connector_id: string; tool_name: string }>(
+    `select grant_row.connector_id, grant_row.tool_name
+       from public.connector_tool_session_grants grant_row
+       join public.web_conversations conversation
+         on conversation.id = grant_row.conversation_id
+        and conversation.user_id = grant_row.user_id
+      where grant_row.id = $1 and grant_row.user_id = $2 and grant_row.conversation_id = $3
+        and grant_row.trust_boundary = $4
+        and conversation.organization_id is not distinct from $5::uuid
+        and conversation.deleted_at is null`,
+    [grantId, scope.userId, scope.conversationId, scope.trustBoundary, scope.organizationId],
+  );
+  if (!grant) return null;
+  await advanceConnectorPermissionGeneration(db, scope.userId, grant.connector_id);
+  const removed = await db.query<{ id: string }>(
+    `delete from public.connector_tool_session_grants grant_row
+      where grant_row.id = $1 and grant_row.user_id = $2 and grant_row.conversation_id = $3
+        and grant_row.trust_boundary = $4
+      returning grant_row.id`,
+    [grantId, scope.userId, scope.conversationId, scope.trustBoundary],
+  );
+  if (removed.length !== 1) return null;
+  return { connectorId: grant.connector_id, toolName: grant.tool_name };
 }
 
 export async function insertConnectorToolSessionGrants(

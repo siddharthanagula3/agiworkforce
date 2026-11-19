@@ -7,7 +7,7 @@ const PRODUCTION_ORIGIN = 'https://agiworkforce.com';
 const IOS_APPLICATION_IDENTIFIER = 'D2PR62RLT4.com.agiworkforce.app';
 const ANDROID_PACKAGE_NAME = 'com.agiworkforce.app';
 const HANDLE_ALL_URLS_RELATION = 'delegate_permission/common.handle_all_urls';
-const EXPECTED_IOS_PATHS = ['/auth/reset-password', '/pair', '/pair/*'];
+export const EXPECTED_IOS_PATHS = ['/auth/reset-password', '/github/installed', '/open/*'];
 const MAX_RESPONSE_BYTES = 64 * 1024;
 
 export function normalizeSha256Fingerprint(value) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useId, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { useEmbeddedPage } from '@shared/components/layout/EmbeddedPage';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
 import { isSupportWidgetVisible } from '../lib/route-visibility';
 import { isSupportWidgetEnabled } from '../lib/widget-flag';
@@ -13,6 +14,7 @@ const SUPPORT_WIDGET_SURFACE = 'marketing';
 
 export function SupportWidgetMount() {
   const pathname = usePathname();
+  const embedded = useEmbeddedPage();
   const [open, setOpen] = useState(false);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const panelId = useId();
@@ -31,7 +33,7 @@ export function SupportWidgetMount() {
   }, []);
 
   if (!isSupportWidgetEnabled()) return null;
-  if (!isSupportWidgetVisible(pathname)) return null;
+  if (embedded || !isSupportWidgetVisible(pathname)) return null;
 
   return (
     <div

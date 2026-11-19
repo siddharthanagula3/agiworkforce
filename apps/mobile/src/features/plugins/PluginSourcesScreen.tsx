@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Blocks } from 'lucide-react-native';
 import type {
   MemberOrganizationPluginsResponse,
   PluginMarketplaceEntry,
@@ -13,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import {
   CloudFeatureGate,
+  EmptyState,
   ErrorBanner,
   LoadingRows,
   MetaText,
@@ -72,6 +74,7 @@ export function PluginSourcesScreen() {
   const goBack = useGoBack(PLUGINS_ROUTE);
   const [state, setState] = useState<SourcesState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [repositoryUrl, setRepositoryUrl] = useState('');
   const [ref, setRef] = useState('');
@@ -81,9 +84,13 @@ export function PluginSourcesScreen() {
     if (!access.ready) return;
     const controller = new AbortController();
     loadSources(controller.signal)
-      .then(setState)
+      .then((loaded) => {
+        setLoadFailed(false);
+        setState(loaded);
+      })
       .catch((loadError: unknown) => {
         if (controller.signal.aborted) return;
+        setLoadFailed(true);
         setError(cloudActionError(loadError, 'Could not load your plugin sources.'));
         setState(
           (current) =>
@@ -112,6 +119,13 @@ export function PluginSourcesScreen() {
     } finally {
       setBusy(null);
     }
+  }, []);
+
+  const retryLoad = useCallback(() => {
+    setError(null);
+    setLoadFailed(false);
+    setState(null);
+    setAttempt((value) => value + 1);
   }, []);
 
   const installationsByEntry = useMemo(
@@ -193,7 +207,9 @@ export function PluginSourcesScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48, gap: 12 }}
         >
-          {error ? <ErrorBanner message={error} /> : null}
+          {error ? (
+            <ErrorBanner message={error} onRetry={loadFailed ? retryLoad : undefined} />
+          ) : null}
 
           {state.workspace?.organizationName ? (
             <SectionCard
@@ -395,6 +411,17 @@ export function PluginSourcesScreen() {
               </SectionCard>
             );
           })}
+
+          {!loadFailed &&
+          !state.workspace?.organizationName &&
+          state.marketplaces.length === 0 &&
+          state.submissions.length === 0 ? (
+            <EmptyState
+              Icon={Blocks}
+              title="No plugin sources yet"
+              body="A plugin source is where plugins come from, such as your workspace or a marketplace. None has been added."
+            />
+          ) : null}
 
           {state.submissions.length > 0 ? (
             <SectionCard

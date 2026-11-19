@@ -23,7 +23,7 @@ import {
 } from './managed-usage-policy';
 
 const PLAN_TABLE = {
-  free: { fiveHour: 2, weekly: 15, monthly: 20 },
+  free: { fiveHour: 200, weekly: 1_500, monthly: 2_000 },
   basic: { fiveHour: 10, weekly: 100, monthly: 400 },
   pro: { fiveHour: 50, weekly: 500, monthly: 2_000 },
   max: { fiveHour: 250, weekly: 2_500, monthly: 10_000 },
@@ -41,9 +41,9 @@ describe('managed usage policy', () => {
   });
 
   it('meters Free on its own windows in microUSD', () => {
-    expect(getPlanMonthlyUsageBudgetMicrousd('free')).toBe(20 * MICROUSD_PER_CREDIT);
-    expect(getPlanWeeklyUsageBudgetMicrousd('free')).toBe(15 * MICROUSD_PER_CREDIT);
-    expect(getPlanFiveHourUsageBudgetMicrousd('free')).toBe(2 * MICROUSD_PER_CREDIT);
+    expect(getPlanMonthlyUsageBudgetMicrousd('free')).toBe(2_000 * MICROUSD_PER_CREDIT);
+    expect(getPlanWeeklyUsageBudgetMicrousd('free')).toBe(1_500 * MICROUSD_PER_CREDIT);
+    expect(getPlanFiveHourUsageBudgetMicrousd('free')).toBe(200 * MICROUSD_PER_CREDIT);
   });
 
   it('converts paid allowances to the cents ledger at two credits a cent', () => {

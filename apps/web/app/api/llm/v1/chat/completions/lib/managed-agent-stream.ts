@@ -30,10 +30,12 @@ import type {
 import type { ProcessedRequest } from './request-processor';
 import {
   canPersistAssistantTurn,
+  extractAssistantFinishReason,
   extractAssistantTextDelta,
   patchAssistantTurnSourceUrls,
   persistAssistantTurn,
 } from './assistant-turn-persistence';
+import { recordStoppedRunAssistantTurn } from './stopped-run-turn';
 import { extractAssistantInteractiveCardDeltas } from './interactive-card-stream';
 import { createPublicTextDeltaProjector } from './agent-event-stream';
 import {
@@ -161,6 +163,7 @@ export function buildManagedAgentStream(
   let unbilledSinceProviderCalls = input.usage.providerCalls;
   const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
+  let lastWireFinishReason: string | null = null;
   let settledCostMicrousd: number | null = null;
   let citedSourceUrls: {
     sources: readonly PersistedTurnSource[] | undefined;
@@ -196,7 +199,7 @@ export function buildManagedAgentStream(
     return prior === null ? legContent : prior + legContent;
   };
 
-  const persistTurn = async (failed: boolean): Promise<void> => {
+  const persistTurn = async (outcome: 'completed' | 'failed' | 'cancelled'): Promise<void> => {
     if (!persistable || turnPersisted || !input.userId) return;
     turnPersisted = true;
     const serving = input.getServingRequest?.() ?? input.processed;
@@ -212,7 +215,7 @@ export function buildManagedAgentStream(
     // truncated, so a reload does not show a header and an action bar with
     // nothing between them.
     const truncated =
-      failed ||
+      outcome !== 'completed' ||
       isEmptyTurnOutput({
         text: content,
         interactiveCards: interactiveCards.size,
@@ -236,6 +239,9 @@ export function buildManagedAgentStream(
         inputTokens: input.usage.inputTokens,
         outputTokens: input.usage.outputTokens,
         truncated,
+        ...(outcome === 'cancelled'
+          ? {}
+          : { finishReason: outcome === 'failed' ? null : lastWireFinishReason }),
         interactiveCards: [...interactiveCards.values()],
         ...(sources ? { sources } : {}),
         ...(citations ? { citations } : {}),
@@ -243,6 +249,18 @@ export function buildManagedAgentStream(
         ...(generatedFiles ? { generatedFiles } : {}),
         ...(research ? { research } : {}),
       },
+    });
+  };
+
+  // Runs whether or not this leg wrote the row: a client that saves its own
+  // turn may already have written it, and the run is cancelled only by now.
+  const recordPersonStop = async (): Promise<void> => {
+    if (!input.runJournal) return;
+    await recordStoppedRunAssistantTurn({
+      userId: input.runJournal.userId,
+      organizationId: input.processed.organizationId ?? null,
+      runId: input.runJournal.runId,
+      legRequestId: input.processed.requestId,
     });
   };
 
@@ -454,7 +472,8 @@ export function buildManagedAgentStream(
                 );
               });
             }
-            await persistTurn(outcome !== 'completed');
+            await persistTurn(outcome);
+            if (outcome === 'cancelled') await recordPersonStop();
             await reportTerminal(outcome);
             controller.enqueue(encoder.encode(TERMINAL_EVENT));
             controller.close();
@@ -475,6 +494,7 @@ export function buildManagedAgentStream(
           if (persistable) {
             assistantText += textDelta;
             sourceCollector.ingestWireBytes(next.value);
+            lastWireFinishReason = extractAssistantFinishReason(next.value) ?? lastWireFinishReason;
             for (const card of extractAssistantInteractiveCardDeltas(next.value)) {
               if (
                 interactiveCards.has(card.cardId) ||
@@ -528,7 +548,7 @@ export function buildManagedAgentStream(
             'Managed agent terminal owner could not record failure',
           );
         });
-        await persistTurn(true).catch((persistError) => {
+        await persistTurn('failed').catch((persistError) => {
           logger.error(
             { persistError, requestId: input.processed.requestId },
             'Managed agent failure marker could not be persisted',
@@ -554,7 +574,8 @@ export function buildManagedAgentStream(
             await transitionJournal(awaitingInput ? 'awaiting_input' : 'cancelled');
           }
           if (!awaitingInput) {
-            await persistTurn(true);
+            await persistTurn('cancelled');
+            await recordPersonStop();
           }
           await reportTerminal('cancelled');
           await patchTurnSourceUrls();

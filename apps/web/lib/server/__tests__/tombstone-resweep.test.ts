@@ -98,6 +98,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: vi.fn(async () => ({ deleted: 0, failedPathnames: [] })),
   extForMime: vi.fn(),
+  sealedChatAttachmentPathname: (key: string) => `${key}.scanned`,
   streamStoredMedia: vi.fn(),
 }));
 vi.mock('@/lib/server/object-storage', () => ({

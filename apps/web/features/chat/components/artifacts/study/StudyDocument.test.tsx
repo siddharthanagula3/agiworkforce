@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { StudyDocument } from './StudyDocument';
-import { buildQuizFollowUp } from './QuizView';
 import {
+  buildQuizFollowUp,
   gradeShortAnswer,
   parseFlashcards,
   MAX_CARDS,
@@ -13,7 +13,8 @@ import {
   studySegments,
   studySourceIsLossless,
   type ShortAnswerQuestion,
-} from './study-set';
+  type StudyAnswerState,
+} from '@agiworkforce/unified-chat/study-set';
 import { flashcardsPrintHtml, printHtml, quizPrintHtml } from './study-print';
 
 const QUIZ = {
@@ -105,6 +106,25 @@ describe('study sets', () => {
     expect(prompt).toContain('source material');
   });
 
+  it('shows one position counter when the model wrote its own into the titles', () => {
+    const counted = `~~~quiz\n${JSON.stringify({ ...QUIZ, title: 'Cells: Question 1 of 5' })}\n~~~\n\n~~~flashcards\n${JSON.stringify({ ...CARDS, title: 'Terms - Card 1 of 9' })}\n~~~\n`;
+    render(<StudyDocument content={counted} editable onSave={vi.fn()} />);
+    const quiz = screen.getByTestId('quiz-view');
+    expect(quiz).toHaveAccessibleName('Cells');
+    expect(
+      within(quiz)
+        .getAllByText(/\bof \d+\b/)
+        .map((node) => node.textContent),
+    ).toEqual(['Question 1 of 2']);
+    const deck = screen.getByTestId('flashcards-view');
+    expect(deck).toHaveAccessibleName('Terms');
+    expect(
+      within(deck)
+        .getAllByText(/\bof \d+\b/)
+        .map((node) => node.textContent),
+    ).toEqual(['Card 1 of 2 · 0 known']);
+  });
+
   it('flips flashcards and narrows review to the cards still being learned', () => {
     render(<StudyDocument content={DOC} editable onSave={vi.fn()} />);
     const deck = screen.getByTestId('flashcards-view');
@@ -184,10 +204,11 @@ describe('study sets', () => {
 
   it('asks for encouragement onward when nothing was missed', () => {
     const quiz = parseQuiz(JSON.stringify(QUIZ))!;
-    const prompt = buildQuizFollowUp(quiz, [
+    const answers: StudyAnswerState[] = [
       { choice: 1, typed: '', submitted: true, correct: true, hints: 0 },
       { choice: null, typed: 'DNA', submitted: true, correct: true, hints: 0 },
-    ]);
+    ];
+    const prompt = buildQuizFollowUp(quiz, answers);
     expect(prompt).toContain('What should I study next');
   });
 });

@@ -17,6 +17,10 @@ jest.mock('@/services/api', () => ({
   },
   ApiPaywallError: class extends Error {},
 }));
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
+}));
 jest.mock('expo-crypto', () => ({ randomUUID: () => '12345678-abcd-4abc-8abc-1234567890ab' }));
 
 import {

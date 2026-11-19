@@ -4,7 +4,8 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, AlertCircle, Brain } from 'lucide-react-native';
+import { AlertCircle, Brain } from 'lucide-react-native';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -22,6 +23,7 @@ import {
   type ReflectRecap,
 } from '@/src/features/reflect';
 import { translatePlural } from '@/src/i18n/plural';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type ReflectRecapOngoingWork = NonNullable<ReflectRecap['ongoingWork']>[number];
 
@@ -131,37 +133,7 @@ export default function ReflectScreen() {
     if (await reload()) setRefreshing(false);
   }, [reload]);
 
-  const header = (
-    <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
-      <Pressable
-        onPress={handleBack}
-        hitSlop={8}
-        style={({ pressed }) => ({
-          width: 42,
-          height: 42,
-          borderRadius: 21,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: pressed ? c.surfaceHover : c.transparent,
-        })}
-        accessibilityLabel="Go back"
-        accessibilityRole="button"
-      >
-        <ArrowLeft size={22} color={c.textPrimary} />
-      </Pressable>
-      <Text
-        style={{
-          flex: 1,
-          color: c.textPrimary,
-          fontSize: typeScale.title3,
-          fontWeight: '700',
-          marginLeft: 4,
-        }}
-      >
-        Reflect
-      </Text>
-    </View>
-  );
+  const header = <ScreenHeader title="Reflect" onBack={handleBack} />;
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
@@ -191,7 +163,7 @@ export default function ReflectScreen() {
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 6, paddingBottom: 44 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingTop: 6, paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />
@@ -219,6 +191,7 @@ export default function ReflectScreen() {
             const selected = option.value === range;
             return (
               <Pressable
+                hitSlop={{ top: 5, bottom: 5 }}
                 key={option.value}
                 onPress={() => setRange(option.value)}
                 accessibilityRole="button"

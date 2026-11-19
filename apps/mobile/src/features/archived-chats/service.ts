@@ -58,13 +58,21 @@ export async function fetchArchivedConversations(
   offset: number,
   account: CloudAccountEpoch,
   signal?: AbortSignal,
+  query = '',
 ): Promise<ArchivedConversationPage> {
   assertCloudAccountEpochCurrent(account);
+  const params = new URLSearchParams({
+    archived: 'only',
+    limit: String(PAGE_SIZE),
+    offset: String(Math.max(0, offset)),
+  });
+  const title = query.trim();
+  if (title) params.set('q', title);
   const data = ManagedCloudConversationListResponseSchema.parse(
-    await api.get<unknown>(
-      `/api/chat/conversations?archived=only&limit=${PAGE_SIZE}&offset=${Math.max(0, offset)}`,
-      { accountEpoch: account, ...(signal ? { signal } : {}) },
-    ),
+    await api.get<unknown>(`/api/chat/conversations?${params.toString()}`, {
+      accountEpoch: account,
+      ...(signal ? { signal } : {}),
+    }),
   );
 
   assertCloudAccountEpochCurrent(account);
@@ -87,11 +95,12 @@ async function setConversationArchived(
   archived: boolean,
   account: CloudAccountEpoch,
   signal?: AbortSignal,
+  repin = false,
 ): Promise<void> {
   assertCloudAccountEpochCurrent(account);
   const response = await api.put<unknown>(
     managedCloudConversationPath(id),
-    { archived },
+    repin ? { archived, pinned: true } : { archived },
     { accountEpoch: account, ...(signal ? { signal } : {}) },
   );
   assertCloudAccountEpochCurrent(account);
@@ -102,8 +111,9 @@ export async function restoreArchivedConversation(
   id: string,
   account: CloudAccountEpoch,
   signal?: AbortSignal,
+  repin = false,
 ): Promise<void> {
-  return setConversationArchived(id, false, account, signal);
+  return setConversationArchived(id, false, account, signal, repin);
 }
 
 export async function archiveConversation(id: string, account: CloudAccountEpoch): Promise<void> {

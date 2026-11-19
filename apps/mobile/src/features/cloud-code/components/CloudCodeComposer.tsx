@@ -5,6 +5,7 @@ import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
 import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
+import { useTranscriptFontFamily } from '@/src/features/settings/code/useCodeAppearance';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -44,6 +45,7 @@ export function CloudCodeComposer({
   onOpenChanges?: () => void;
 }) {
   const colors = useThemeColors();
+  const fontFamily = useTranscriptFontFamily();
   const empty = value.trim().length === 0;
   const totals = useMemo(
     () => (changes ? cloudCodeChangeTotals(changes.files, changes.diff) : null),
@@ -54,6 +56,7 @@ export function CloudCodeComposer({
     <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, gap: 6 }}>
       {totals && totals.files > 0 && onOpenChanges ? (
         <Pressable
+          hitSlop={{ top: 4, bottom: 4 }}
           onPress={onOpenChanges}
           testID="cloud-code-changes-pill"
           accessibilityRole="button"
@@ -94,10 +97,12 @@ export function CloudCodeComposer({
               : CLOUD_CODE_SESSION_COPY.stopTurn
             : SEND_LABEL
         }
+        {...(fontFamily ? { fontFamily } : {})}
         onChangeText={onChangeText}
         onPrimary={working ? onStop : onSend}
       />
       <Pressable
+        hitSlop={{ top: 6, bottom: 6 }}
         onPress={onOpenOptions}
         accessibilityRole="button"
         accessibilityLabel={`${optionsLabel}. ${detail}`}

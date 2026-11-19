@@ -5,7 +5,7 @@ path: /byok
 category: providers
 tags: byok, api key, provider key, anthropic, openai, google, bring your own key, add key, encrypted
 platforms: cli, vscode
-updated: 2026-10-05
+updated: 2026-11-16
 description: How to add your own provider API key, where it is stored and how to use a custom OpenAI-compatible endpoint.
 scope: public
 ---
@@ -13,7 +13,7 @@ scope: public
 ## What BYOK means here
 
 BYOK means "bring your own key". Check [surface availability](https://agiworkforce.com/get-started)
-before installing the CLI or VS Code extension. Review your provider's billing
+before installing the CLI or VS Code extension. Review your provider's charges
 and data-use terms before using a key.
 
 ## Adding a key

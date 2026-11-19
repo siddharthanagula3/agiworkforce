@@ -6,12 +6,17 @@ jest.mock('../MathBlock', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createElement } = require('react') as typeof import('react');
   return {
-    MathBlock: ({ latex, display }: { latex: string; display: boolean }) =>
-      createElement(MockText, null, `math:${display ? 'display' : 'inline'}:${latex}`),
+    MathBlock: ({ latex, display, color }: { latex: string; display: boolean; color?: string }) =>
+      createElement(
+        MockText,
+        { style: { color } },
+        `math:${display ? 'display' : 'inline'}:${latex}`,
+      ),
   };
 });
 jest.mock('../CodeBlockCopyButton', () => ({ CodeBlockCopyButton: () => null }));
 
+import { colors } from '@/src/ui/theme';
 import { renderMarkdownContent } from '../MessageContentRenderer';
 
 function renderMarkdown(content: string) {
@@ -87,5 +92,20 @@ describe('inline math inside emphasised Markdown', () => {
     const { getByText } = renderMarkdown('plain $x^2$ text');
 
     expect(getByText('math:inline:x^2')).toBeTruthy();
+  });
+});
+
+describe('display math colour', () => {
+  it('paints display math in the primary colour, and in the quote colour inside a quote', () => {
+    const plain = renderMarkdown(['$$', 'x^2', '$$'].join('\n'));
+    expect(plain.getByText('math:display:x^2').props.style).toEqual({
+      color: colors.textPrimary,
+    });
+    plain.unmount();
+
+    const quoted = renderMarkdown(['> $$', '> y^2', '> $$'].join('\n'));
+    expect(quoted.getByText('math:display:y^2').props.style).toEqual({
+      color: colors.textSecondary,
+    });
   });
 });

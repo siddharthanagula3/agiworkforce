@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ArtifactsSharedWithMeResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -38,16 +39,23 @@ async function handleList(request: NextRequest): Promise<Response> {
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const verifiedEmail = await verifiedPrimaryEmail(userId);
   if (!verifiedEmail) {
-    return NextResponse.json({
+    const unverified: ArtifactsSharedWithMeResponse = {
       items: [],
       hasMore: false,
       nextCursor: null,
       emailVerified: false,
-    });
+    };
+    return NextResponse.json(unverified);
   }
 
   const page = await listArtifactsSharedWithViewer(db, { userId, verifiedEmail, limit, cursor });
-  return NextResponse.json({ ...page, emailVerified: true });
+  const shared: ArtifactsSharedWithMeResponse = {
+    items: [...page.items],
+    hasMore: page.hasMore,
+    nextCursor: page.nextCursor,
+    emailVerified: true,
+  };
+  return NextResponse.json(shared);
 }
 
 export const GET = withErrorHandler(handleList);

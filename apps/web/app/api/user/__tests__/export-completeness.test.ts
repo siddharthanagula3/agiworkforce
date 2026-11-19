@@ -144,6 +144,77 @@ describe('the export carries every class of content the account owns', () => {
   });
 });
 
+describe('the code environments in an export', () => {
+  const ENVIRONMENT_ROW = {
+    id: '0190a000-0000-7000-8000-000000000001',
+    organization_id: null,
+    request_id: 'request-0001',
+    name: 'Web app',
+    network_access: 'trusted',
+    extra_hosts: ['registry.example.com'],
+    allow_package_managers: false,
+    setup_script: 'pnpm install',
+    env_var_names: ['DATABASE_URL', 'API_TOKEN'],
+    env_vars_encrypted: 'sealed:v1:opaque',
+    is_default: true,
+    created_at: '2026-11-16T10:00:00.000Z',
+    updated_at: '2026-11-16T10:00:00.000Z',
+  };
+
+  async function exportedEnvironments(): Promise<{
+    sql: string;
+    rows: Array<Record<string, unknown>>;
+  }> {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_export', email: 'user@example.com' });
+    let environmentSql = '';
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (!sql.includes('from cloud_code_environments')) return [];
+      environmentSql = sql;
+      return [ENVIRONMENT_ROW];
+    });
+    const response = await GET(new NextRequest('https://agiworkforce.com/api/user/export'));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: { cloud_code_environments?: Array<Record<string, unknown>> };
+    };
+    return { sql: environmentSql, rows: body.data.cloud_code_environments ?? [] };
+  }
+
+  it('carries every setting the person saved and the names of their variables', async () => {
+    const { rows } = await exportedEnvironments();
+
+    expect(rows).toEqual([
+      {
+        id: ENVIRONMENT_ROW.id,
+        organization_id: null,
+        request_id: 'request-0001',
+        name: 'Web app',
+        network_access: 'trusted',
+        extra_hosts: ['registry.example.com'],
+        allow_package_managers: false,
+        setup_script: 'pnpm install',
+        env_var_names: ['DATABASE_URL', 'API_TOKEN'],
+        is_default: true,
+        created_at: '2026-11-16T10:00:00.000Z',
+        updated_at: '2026-11-16T10:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('never reads or hands out the sealed variable values', async () => {
+    const { sql, rows } = await exportedEnvironments();
+
+    expect(sql).toContain('where user_id = $1');
+    expect(sql).not.toMatch(/env_vars_encrypted/);
+    expect(JSON.stringify(rows)).not.toContain(ENVIRONMENT_ROW.env_vars_encrypted);
+  });
+
+  it('says in the route why the sealed values are withheld', () => {
+    expect(source).toMatch(/`env_vars_encrypted` is withheld:/);
+  });
+});
+
 describe('the links inside an export', () => {
   async function exportBody(): Promise<{
     data: {

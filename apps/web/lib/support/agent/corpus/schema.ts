@@ -41,6 +41,7 @@ export const corpusChunkSchema = z
     heading: z.string().min(1).nullable(),
     headingPath: z.string().min(1),
     text: z.string().min(1),
+    phoneText: z.string().min(1).nullable().optional(),
   })
   .strict();
 
@@ -55,6 +56,7 @@ export const corpusDocumentSchema = z
     description: z.string().min(1).max(200).optional(),
     updated: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     source: z.string().min(1),
+    onPhone: z.boolean(),
     chunks: z.array(corpusChunkSchema).min(1),
   })
   .strict();

@@ -41,6 +41,7 @@ import {
   isAgeGateConfirmed,
   isMinorMode,
   clearAgeGate,
+  readAgeGateRecord,
 } from '../src/features/auth/services/ageGate';
 
 function setTimezone(tz: string) {
@@ -277,5 +278,33 @@ describe('confirmAgeGateFromRange', () => {
   it('keeps a refused device refused when the OS later reports an adult', () => {
     confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     expect(confirmAgeGateFromRange({ lowerBound: 18, upperBound: null })?.isMinor).toBe(true);
+  });
+});
+
+describe('readAgeGateRecord', () => {
+  afterEach(() => {
+    mockStorage.clear();
+    setTimezone('America/New_York');
+  });
+
+  it('returns null before any age was recorded', () => {
+    expect(readAgeGateRecord()).toBeNull();
+  });
+
+  it('returns the stored record, with the regional threshold it was confirmed against', () => {
+    setTimezone('Europe/Berlin');
+    const written = confirmAgeGate(40);
+
+    expect(readAgeGateRecord()).toEqual(written);
+    expect(readAgeGateRecord()).toMatchObject({ confirmed: true, isMinor: false, threshold: 16 });
+  });
+
+  it('keeps a minor record readable and returns null once it is cleared', () => {
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
+    expect(readAgeGateRecord()).toMatchObject({ confirmed: true, isMinor: true });
+
+    clearAgeGate();
+
+    expect(readAgeGateRecord()).toBeNull();
   });
 });

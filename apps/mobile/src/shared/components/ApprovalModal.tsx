@@ -1,5 +1,13 @@
 import { useState, useCallback } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, SlideInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +30,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { dialogPadding } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 interface ApprovalModalProps {
@@ -110,12 +119,21 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View className="flex-1 justify-end" style={{ backgroundColor: colors.scrim }}>
-          <PressableBox accessible={false} className="flex-1" onPress={handleDismiss} />
+          <PressableBox
+            testID="approval-modal-backdrop"
+            accessible={false}
+            style={StyleSheet.absoluteFill}
+            onPress={handleDismiss}
+          />
 
           <Animated.View
             entering={reducedMotion ? undefined : SlideInDown.duration(motion.moved).springify()}
             className="rounded-t-3xl overflow-hidden"
-            style={{ backgroundColor: colors.surfaceElevated, maxHeight: '80%' }}
+            style={{
+              ...contentColumn('reading'),
+              backgroundColor: colors.surfaceElevated,
+              maxHeight: '80%',
+            }}
           >
             <View className="items-center pt-3 pb-2">
               <View

@@ -10,7 +10,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { motion } from '@/src/ui/theme/tokens';
 
 export type VoiceOrbPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -23,7 +23,7 @@ export interface VoiceOrbPalette {
   end: string;
 }
 
-export function voiceOrbPalette(phase: VoiceOrbPhase): VoiceOrbPalette {
+export function voiceOrbPalette(phase: VoiceOrbPhase, colors: ColorScheme): VoiceOrbPalette {
   if (phase === 'speaking') {
     return { start: colors.brandAmber, mid: colors.brandAmber, end: colors.voiceOrbEnd };
   }
@@ -48,6 +48,7 @@ export interface VoiceOrbProps {
 }
 
 export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: VoiceOrbProps) {
+  const colors = useThemeColors();
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.2);
@@ -111,7 +112,7 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
     transform: [{ scale: scale.value * 1.45 }],
   }));
 
-  const palette = voiceOrbPalette(phase);
+  const palette = voiceOrbPalette(phase, colors);
   const radius = size / 2;
   const box = glow ? Math.round(size * 1.7) : size;
 

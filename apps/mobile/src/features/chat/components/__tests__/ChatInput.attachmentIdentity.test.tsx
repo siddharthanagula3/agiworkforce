@@ -42,6 +42,7 @@ jest.mock('@/lib/mmkv', () => ({
 
 jest.mock('@/src/features/chat/draftStore', () => ({
   getDraft: jest.fn(() => ''),
+  getDraftAttachments: jest.fn(() => []),
   setDraft: jest.fn(),
   clearDraft: jest.fn(),
 }));
@@ -75,6 +76,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
 
 jest.mock('@/src/features/model-picker/service', () => ({
   getShortDisplayName: (id: string) => id,
+  isFreeQuotaTurnModelId: () => false,
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
@@ -218,5 +220,32 @@ describe('ChatInput attachment identity follows the resource, not its metadata',
 
     expect(capturedAttachments).toHaveLength(2);
     expect(alertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the same photo picked twice from the library, though each pick is a new copy', () => {
+    const ref = mount();
+    const photo = (id: string, uri: string, pickerAssetId?: string) =>
+      textDocument({
+        id,
+        uri,
+        mimeType: 'image/jpeg',
+        fileName: `${id}.jpg`,
+        fileSize: 100 + id.length,
+        ...(pickerAssetId ? { pickerAssetId } : {}),
+      });
+
+    act(() => {
+      ref.current!.addAttachments([photo('p1', 'file:///cache/attachment-1.jpg', 'ph://asset-7')]);
+    });
+    act(() => {
+      ref.current!.addAttachments([
+        photo('p2', 'file:///cache/attachment-2.jpg', 'ph://asset-7'),
+        photo('p3', 'file:///cache/attachment-3.jpg', 'ph://asset-8'),
+      ]);
+    });
+
+    expect(capturedAttachments.map((a) => a.fileName)).toEqual(['p1.jpg', 'p3.jpg']);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect((alertSpy.mock.calls[0] as [string, string]).join('|')).toContain('p2.jpg');
   });
 });

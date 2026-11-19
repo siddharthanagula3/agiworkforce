@@ -116,6 +116,21 @@ jest.mock('expo-calendar/legacy', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
+jest.mock('expo-speech-recognition', () => ({
+  __esModule: true,
+  ExpoSpeechRecognitionModule: {
+    getSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
+    requestSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
+  },
+}));
+
+jest.mock('expo-local-authentication', () => ({
+  AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2, IRIS: 3 },
+  supportedAuthenticationTypesAsync: jest.fn().mockResolvedValue([2]),
+  isEnrolledAsync: jest.fn().mockResolvedValue(true),
+  authenticateAsync: jest.fn().mockResolvedValue({ success: false, error: 'user_cancel' }),
+}));
+
 const mockPermissionsState: {
   permissions: Record<string, { lastObservedStatus: string }>;
   setObservedStatus: jest.Mock;
@@ -156,7 +171,7 @@ describe('permissionStatusLabel, OS status → granted level', () => {
     ['photos', 'Always'],
     ['notifications', 'Always'],
     ['calendar', 'Always'],
-    ['reminders', 'Read & write'],
+    ['reminders', 'Full access'],
   ];
 
   it.each(grantedCases)('labels a granted %s as "%s"', (kind, expected) => {
@@ -179,7 +194,7 @@ describe('permissionStatusLabel, OS status → granted level', () => {
   });
 
   it('uses the per-kind override only where the registry declares one', () => {
-    expect(PERMISSION_REGISTRY.reminders.levelLabels).toEqual({ allow_always: 'Read & write' });
+    expect(PERMISSION_REGISTRY.reminders.levelLabels).toEqual({ allow_always: 'Full access' });
     expect(PERMISSION_REGISTRY.notifications.levelLabels).toBeUndefined();
     expect(permissionStatusLabel('granted', 'notifications')).toBe(
       LEVEL_STATUS_LABELS.allow_always,

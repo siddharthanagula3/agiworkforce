@@ -4,42 +4,49 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
-import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import {
+  canOpenSource,
+  openSource,
+  sourcePublisher,
+  sourceSnippet,
+} from '@/src/features/chat/utils/sourceDisplay';
 import { formatSourcePublishedDate } from '@/src/features/chat/utils/sourcePublishedDate';
+import {
+  citationRetrievedLabel,
+  citationSnippet,
+} from '@agiworkforce/unified-chat/citation-publisher';
 
-const MAX_PREVIEW_SNIPPET_LENGTH = 300;
-
-function previewSnippet(snippet: string | undefined): string {
-  const text = snippet?.trim() ?? '';
-  return text.length > MAX_PREVIEW_SNIPPET_LENGTH
-    ? `${text.slice(0, MAX_PREVIEW_SNIPPET_LENGTH).trimEnd()}…`
-    : text;
-}
+const CHIP_HIT_SLOP = { top: 10, bottom: 10, left: 4, right: 4 };
 
 export interface CitationSource extends Partial<AgentEventSource> {
   publishedDate?: string;
+  retrievedAt?: string;
 }
 
 export function canPreviewCitation(source: CitationSource): boolean {
-  return Boolean(source.url && isValidExternalHttpUrl(source.url));
+  return canOpenSource(source.url);
+}
+
+export function citationPreviewSite(source: CitationSource & { url: string }): string {
+  const published = formatSourcePublishedDate(source.publishedDate);
+  const retrieved = citationRetrievedLabel(source);
+  return [
+    sourcePublisher({ url: source.url, ...(source.title ? { title: source.title } : {}) }),
+    published ? `Published ${published}` : null,
+    retrieved ?? null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 export function previewCitation(source: CitationSource): void {
   const url = source.url;
-  if (!url || !isValidExternalHttpUrl(url)) return;
-  const published = formatSourcePublishedDate(source.publishedDate);
-  const site = published ? `${hostnameOf(url)} · Published ${published}` : hostnameOf(url);
-  const preview = previewSnippet(source.snippet);
-  const openSource = async () => {
-    const opened = await openUntrustedUrlInAppBrowser(url);
-    if (!opened) {
-      Alert.alert('Could not open citation', 'Check your connection and try again.');
-    }
-  };
-  Alert.alert(source.title || hostnameOf(url), preview ? `${site}\n\n${preview}` : site, [
+  if (!canOpenSource(url)) return;
+  const site = citationPreviewSite({ ...source, url });
+  const preview = citationSnippet({ snippet: sourceSnippet(source) }) ?? '';
+  Alert.alert(source.title || sourcePublisher({ url }), preview ? `${site}\n\n${preview}` : site, [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Open page', onPress: () => void openSource() },
+    { text: 'Open page', onPress: () => void openSource(url, 'Could not open citation') },
   ]);
 }
 
@@ -49,11 +56,19 @@ interface CitationChipProps {
   url?: string;
   snippet?: string;
   publishedDate?: string;
+  retrievedAt?: string;
 }
 
-export function CitationChip({ index, title, url, snippet, publishedDate }: CitationChipProps) {
+export function CitationChip({
+  index,
+  title,
+  url,
+  snippet,
+  publishedDate,
+  retrievedAt,
+}: CitationChipProps) {
   const colors = useThemeColors();
-  const canOpen = canPreviewCitation(url ? { url } : {});
+  const canOpen = canOpenSource(url);
   const published = formatSourcePublishedDate(publishedDate);
   const handlePress = () => {
     previewCitation({
@@ -61,18 +76,22 @@ export function CitationChip({ index, title, url, snippet, publishedDate }: Cita
       ...(url ? { url } : {}),
       ...(snippet ? { snippet } : {}),
       ...(publishedDate ? { publishedDate } : {}),
+      ...(retrievedAt ? { retrievedAt } : {}),
     });
   };
 
   return (
     <Pressable
       onPress={canOpen ? handlePress : undefined}
+      disabled={!canOpen}
+      hitSlop={CHIP_HIT_SLOP}
       className="flex-row items-center gap-1.5 px-2.5 py-1 rounded-full"
       style={({ pressed }) => ({
+        minHeight: 24,
         backgroundColor: pressed ? colors.surfaceHover : colors.accentSurface,
       })}
       accessibilityLabel={`Citation ${index}: ${title}${published ? `, published ${published}` : ''}`}
-      accessibilityRole={canOpen ? 'link' : undefined}
+      accessibilityRole={canOpen ? 'link' : 'text'}
       accessibilityHint={canOpen ? 'Shows the source, then opens it in the browser' : undefined}
     >
       <Text className="text-sm font-medium" style={{ color: colors.teal }}>

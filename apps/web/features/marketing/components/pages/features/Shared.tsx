@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import type { ReactNode } from 'react';
 import { Eyebrow, Prose } from '../../system';
 
@@ -34,13 +34,13 @@ export function LinkGrid({ items }: { items: readonly LinkCardItem[] }) {
                   {item.title}
                 </a>
               ) : (
-                <Link
+                <PageLink
                   href={item.href}
                   className="agi-ds-link"
                   style={{ backgroundSize: '100% 1px' }}
                 >
                   {item.title}
-                </Link>
+                </PageLink>
               )}
             </h3>
             <Prose size="sm">{item.body}</Prose>

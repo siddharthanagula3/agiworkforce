@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
 
@@ -47,8 +47,11 @@ jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = ({ testID }: { testID?: string }) => <Text testID={testID}>icon</Text>;
   return {
+    Clock: icon,
     Cpu: icon,
+    Lightbulb: icon,
     Plane: icon,
+    Settings: icon,
     Shield: icon,
   };
 });
@@ -205,7 +208,13 @@ jest.mock('expo-constants', () => ({
 }));
 
 import OnboardingScreen from '../app/(public)/onboarding';
+import {
+  PRIVACY_POLICY_URL,
+  TERMS_OF_USE_URL,
+} from '../src/features/onboarding/components/FirstRunDisclosureModal';
+import { webContentPageUrl } from '../src/platform/webContentPage';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import * as personalizationFieldLimits from '../src/features/settings/personalization/personalizationFieldLimits';
 import { CLOUD_PROVIDER_CONSENT_KEY } from '../services/providerConsent';
 import {
   CLOUD_CHAT_POST_AUTH_INTENT,
@@ -269,6 +278,75 @@ describe('Onboarding', () => {
     it('shows locked footer copy', () => {
       const { getByTestId } = render(<OnboardingScreen />);
       expect(getByTestId('hero-footer')).toBeTruthy();
+    });
+
+    it('states the settings, history and accuracy notices as plain rows', () => {
+      const { getByTestId, getByText } = render(<OnboardingScreen />);
+      expect(
+        getByText("You're in control of your settings and can change them anytime."),
+      ).toBeTruthy();
+      expect(
+        getByText(
+          'Local chats stay on this device. AGI Cloud chats are saved to your account, and you can delete them.',
+        ),
+      ).toBeTruthy();
+      expect(getByText('AI can make mistakes, so check important information.')).toBeTruthy();
+      for (const id of ['settings', 'history', 'mistakes']) {
+        expect(getByTestId(`hero-notice-${id}`)).toBeTruthy();
+      }
+    });
+
+    it('sets the notice text at 17 points and keeps it left-aligned', () => {
+      const { getByText } = render(<OnboardingScreen />);
+      const style = StyleSheet.flatten(
+        getByText('AI can make mistakes, so check important information.').props.style,
+      );
+      expect(style.fontSize).toBe(17);
+      expect(style.textAlign).toBe('left');
+    });
+
+    it('holds every step to one centred form column that never exceeds an iPhone window', () => {
+      const { getByTestId } = render(<OnboardingScreen />);
+      const style = StyleSheet.flatten(getByTestId('onboarding-column').props.style);
+      expect(style.maxWidth).toBe(440);
+      expect(style.width).toBe('100%');
+      expect(style.alignSelf).toBe('center');
+    });
+
+    it('names this device, not a phone, in the history notice', () => {
+      const { getByTestId } = render(<OnboardingScreen />);
+      expect(getByTestId('hero-notice-history')).not.toHaveTextContent(/phone/i);
+    });
+
+    it('shows the agreement line above the button with both links', () => {
+      const { getByTestId, getByRole } = render(<OnboardingScreen />);
+      expect(getByTestId('hero-legal-line')).toHaveTextContent(
+        'By continuing you agree to the Terms and Privacy Policy',
+      );
+      expect(getByRole('link', { name: 'Read the terms of use' })).toBeTruthy();
+      expect(getByRole('link', { name: 'Read the privacy policy' })).toBeTruthy();
+    });
+
+    it('draws the two links at the size of the sentence around them', () => {
+      const { getByTestId, getByText } = render(<OnboardingScreen />);
+      for (const id of ['hero-terms-link', 'hero-privacy-link']) {
+        const link = getByTestId(id);
+        expect(link.props.className ?? '').not.toMatch(/\btext-(xs|sm)\b/);
+        const fontSize = StyleSheet.flatten(link.props.style)?.fontSize;
+        expect(fontSize === undefined || fontSize >= 16).toBe(true);
+      }
+      expect(getByText('Terms')).toBe(getByTestId('hero-terms-link'));
+      expect(getByText('Privacy Policy')).toBe(getByTestId('hero-privacy-link'));
+    });
+
+    it('opens the Terms and the Privacy Policy without starting onboarding', () => {
+      const { getByTestId, queryByTestId } = render(<OnboardingScreen />);
+      fireEvent.press(getByTestId('hero-terms-link'));
+      expect(mockOpenInAppBrowser).toHaveBeenLastCalledWith(webContentPageUrl(TERMS_OF_USE_URL));
+      fireEvent.press(getByTestId('hero-privacy-link'));
+      expect(mockOpenInAppBrowser).toHaveBeenLastCalledWith(webContentPageUrl(PRIVACY_POLICY_URL));
+      expect(mockOpenInAppBrowser).toHaveBeenCalledTimes(2);
+      expect(queryByTestId('onboarding-about-you-screen')).toBeNull();
     });
 
     it('shows "Start chatting" button', () => {
@@ -439,13 +517,17 @@ describe('Onboarding', () => {
         fireEvent.press(getByTestId('disclosure-privacy-policy-link'));
         await Promise.resolve();
       });
-      expect(mockOpenInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy');
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/privacy?from=mobile',
+      );
 
       await act(async () => {
         fireEvent.press(getByTestId('disclosure-dpdp-notice-link'));
         await Promise.resolve();
       });
-      expect(mockOpenInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/privacy/india');
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/privacy/india?from=mobile',
+      );
     });
 
     it('declining the disclosure keeps user on hero screen', async () => {
@@ -520,6 +602,25 @@ describe('Onboarding', () => {
       expect(queryByTestId('onboarding-device-tier-screen')).toBeNull();
       expect(getByTestId('onboarding-about-you-screen')).toBeTruthy();
     });
+
+    it('stops the name and work at the lengths Personalization keeps', async () => {
+      const limits = personalizationFieldLimits as Record<
+        keyof typeof personalizationFieldLimits,
+        number
+      >;
+      const replaced = [
+        jest.replaceProperty(limits, 'PERSONALIZATION_NICKNAME_MAX_LENGTH', 7),
+        jest.replaceProperty(limits, 'PERSONALIZATION_OCCUPATION_MAX_LENGTH', 9),
+      ];
+      try {
+        const { getByLabelText } = await renderAtAboutYou();
+
+        expect(getByLabelText('Your name').props.maxLength).toBe(7);
+        expect(getByLabelText('What best describes your work?').props.maxLength).toBe(9);
+      } finally {
+        for (const property of replaced) property.restore();
+      }
+    });
   });
 
   describe('Device-tier screen', () => {
@@ -552,7 +653,7 @@ describe('Onboarding', () => {
 
     it('shows model size without claiming a fixed download time', async () => {
       const { getByText, queryByText } = await renderAtDeviceTier();
-      expect(getByText('1.0 GB download · Wi-Fi recommended')).toBeTruthy();
+      expect(getByText('1 GB download · Wi-Fi recommended')).toBeTruthy();
       expect(getByText('Download time depends on your connection.')).toBeTruthy();
       expect(queryByText(/Estimated download/)).toBeNull();
     });

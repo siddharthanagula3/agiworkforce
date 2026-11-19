@@ -149,6 +149,21 @@ jest.mock('expo-calendar/legacy', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
+jest.mock('expo-speech-recognition', () => ({
+  __esModule: true,
+  ExpoSpeechRecognitionModule: {
+    getSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
+    requestSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
+  },
+}));
+
+jest.mock('expo-local-authentication', () => ({
+  AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2, IRIS: 3 },
+  supportedAuthenticationTypesAsync: jest.fn().mockResolvedValue([2]),
+  isEnrolledAsync: jest.fn().mockResolvedValue(true),
+  authenticateAsync: jest.fn().mockResolvedValue({ success: false, error: 'user_cancel' }),
+}));
+
 const mockDefaultPerm = { lastObservedStatus: 'undetermined' };
 
 const mockPermissionsState = {
@@ -159,6 +174,8 @@ const mockPermissionsState = {
     notifications: { ...mockDefaultPerm },
     calendar: { ...mockDefaultPerm },
     reminders: { ...mockDefaultPerm },
+    speechRecognition: { ...mockDefaultPerm },
+    faceId: { ...mockDefaultPerm },
   },
   setObservedStatus: jest.fn(),
   getPermission: jest.fn().mockReturnValue(mockDefaultPerm),
@@ -185,6 +202,7 @@ import { Camera } from 'expo-camera';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import PermissionsScreen from '@/src/features/settings/permissions';
 import PermissionDetailScreen from '@/src/features/settings/permissions/Detail';
+import { PERMISSION_REGISTRY } from '@/src/features/settings/permissions/registry';
 
 beforeEach(() => {
   mockPermissionParam = 'camera';
@@ -195,6 +213,18 @@ describe('PermissionsScreen, index', () => {
   it('locks the native-backed permission list card', () => {
     const { toJSON } = render(<PermissionsScreen />);
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it('lets every description wrap in full instead of ending in an ellipsis', () => {
+    const { queryAllByText } = render(<PermissionsScreen />);
+    const shown = Object.values(PERMISSION_REGISTRY).flatMap((entry) =>
+      queryAllByText(entry.description),
+    );
+
+    expect(shown.length).toBeGreaterThan(1);
+    for (const description of shown) {
+      expect(description.props.numberOfLines).toBeUndefined();
+    }
   });
 
   it('states in one line that a permission is asked only when a feature the reader started needs it', () => {

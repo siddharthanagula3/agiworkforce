@@ -1,17 +1,26 @@
 import 'server-only';
 
 import {
+  createS3Client,
+  createS3ObjectStore,
   hasObjectStorageCredentials,
+  isRetryableObjectStorageError,
   ObjectStorageConfigError,
+  objectStorageBackoffMs,
+  ObjectStorageTimeoutError,
   OBJECT_STORAGE_BUCKET_ENV,
   OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
   OBJECT_STORAGE_PUBLIC_BASE_URL_ENV,
+  resolveObjectStorageRetryPolicy,
+  type CopyObjectIfMatchInput,
   type ObjectStorageConfig,
   type ObjectStore,
+  type StoredObjectStream,
 } from '@agiworkforce/object-storage';
 import type { Readable } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { getObjectStore, objectStorageConfig } from './object-storage-runtime';
+import { OBJECT_STORAGE_CONNECTION_TIMEOUT_MS } from './object-storage-timeouts';
 
 export { ObjectStorageTimeoutError } from '@agiworkforce/object-storage';
 export type { StoredObjectStream, StoredObjectHead } from '@agiworkforce/object-storage';
@@ -214,21 +223,11 @@ export interface BoundedStoredObject {
   etag: string | undefined;
 }
 
-async function getBoundedObjectFromBucket(
-  bucket: string,
+async function drainBoundedStream(
+  stream: StoredObjectStream,
   key: string,
   maxBytes: number,
-): Promise<BoundedStoredObject | null> {
-  const store = getObjectStore();
-  const head = await store.head(bucket, key);
-  if (!head) return null;
-  if (head.contentLength === undefined || head.contentLength > maxBytes) {
-    throw new StoredObjectTooLargeError(key, maxBytes, head.contentLength);
-  }
-
-  const stream = await store.getStream(bucket, key);
-  if (!stream) return null;
-
+): Promise<Buffer> {
   const reader = stream.body.getReader();
   const chunks: Uint8Array[] = [];
   let received = 0;
@@ -247,7 +246,43 @@ async function getBoundedObjectFromBucket(
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
   }
-  return { data: Buffer.concat(chunks), contentType: stream.contentType, etag: head.etag };
+  return Buffer.concat(chunks);
+}
+
+async function getBoundedObjectFromBucket(
+  bucket: string,
+  key: string,
+  maxBytes: number,
+): Promise<BoundedStoredObject | null> {
+  const store = getObjectStore();
+  const head = await store.head(bucket, key);
+  if (!head) return null;
+  if (head.contentLength === undefined || head.contentLength > maxBytes) {
+    throw new StoredObjectTooLargeError(key, maxBytes, head.contentLength);
+  }
+
+  const policy = resolveObjectStorageRetryPolicy();
+  for (let attempt = 1; ; attempt += 1) {
+    // The store already retries the open; only a failure after the open is retried here,
+    // and it reopens the stream, because a half-read body cannot be resumed.
+    const stream = await store.getStream(bucket, key);
+    if (!stream) return null;
+    try {
+      const data = await drainBoundedStream(stream, key, maxBytes);
+      return { data, contentType: stream.contentType, etag: head.etag };
+    } catch (error) {
+      if (
+        error instanceof StoredObjectTooLargeError ||
+        attempt >= policy.maxAttempts ||
+        !isRetryableObjectStorageError(error)
+      ) {
+        throw error;
+      }
+      await new Promise<void>((resolve) =>
+        setTimeout(resolve, objectStorageBackoffMs(policy, attempt)),
+      );
+    }
+  }
 }
 
 export function getBoundedObject(
@@ -264,17 +299,68 @@ export function getBoundedPrivateObject(
   return getBoundedObjectFromBucket(privateBucketName(), key, maxBytes);
 }
 
+function copyBeforeDeadline(
+  store: ObjectStore,
+  input: CopyObjectIfMatchInput,
+  timeoutMs: number,
+): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new ObjectStorageTimeoutError(timeoutMs)), timeoutMs);
+  });
+  return Promise.race([store.copyIfMatch(input), deadline]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * A long copy gets a client of its own whose request deadline is the copy's,
+ * a single attempt and no retrying wrapper: a retry after the deadline would
+ * hide whether the first copy finished, which the caller settles by reading
+ * the destination.
+ */
+async function copyWithinDeadline(
+  config: ObjectStorageConfig,
+  input: CopyObjectIfMatchInput,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError('A copy deadline must be a positive whole number of milliseconds.');
+  }
+  if (config.provider !== 's3') return copyBeforeDeadline(getObjectStore(), input, timeoutMs);
+
+  const client = createS3Client(config, {
+    connectionTimeoutMs: OBJECT_STORAGE_CONNECTION_TIMEOUT_MS,
+    requestTimeoutMs: timeoutMs,
+    enforceRequestTimeout: true,
+    maxAttempts: 1,
+  });
+  try {
+    return await createS3ObjectStore({
+      client,
+      requestTimeoutMs: timeoutMs,
+      copyTimeoutMs: timeoutMs,
+      encryption: config.encryption,
+      region: config.region,
+    }).copyIfMatch(input);
+  } finally {
+    client.destroy();
+  }
+}
+
 export function copyPrivateObjectIfUnchanged(params: {
   sourceKey: string;
   destinationKey: string;
   etag: string;
+  timeoutMs?: number;
 }): Promise<boolean> {
-  return getObjectStore().copyIfMatch({
-    bucket: privateBucketName(),
+  const config = objectStorageConfig();
+  const input: CopyObjectIfMatchInput = {
+    bucket: privateBucketName(config),
     sourceKey: params.sourceKey,
     destinationKey: params.destinationKey,
     etag: params.etag,
-  });
+  };
+  if (params.timeoutMs === undefined) return getObjectStore().copyIfMatch(input);
+  return copyWithinDeadline(config, input, params.timeoutMs);
 }
 
 export function getObjectStream(key: string, range?: string) {
@@ -367,11 +453,13 @@ export function getPresignedPrivateDownloadUrl(params: {
   key: string;
   fileName: string;
   expiresInSeconds: number;
+  contentType?: string;
 }): Promise<string> {
   return getObjectStore().presignGet({
     bucket: privateBucketName(),
     key: params.key,
     downloadFileName: params.fileName,
     expiresInSeconds: params.expiresInSeconds,
+    ...(params.contentType === undefined ? {} : { contentType: params.contentType }),
   });
 }

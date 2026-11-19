@@ -10,7 +10,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 export const DOCUMENT = 'docs/security/security.md';
 export const INDEX = 'docs/security/security-claims.json';
-export const SCOPE_MANIFEST = 'apps/web/lib/connectors/oauth-scope-allowlist.ts';
+export const SCOPE_MANIFEST = 'packages/contracts/cloud-contracts/src/connector-scopes.ts';
 
 // A product claim with no executable proof is allowed only while it names why,
 // and the set may shrink but never grow.

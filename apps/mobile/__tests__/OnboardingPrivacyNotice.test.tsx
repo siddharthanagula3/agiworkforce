@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, within } from '@testing-library/react-native';
 
 const mockOpenInAppBrowser = jest.fn().mockResolvedValue(true);
@@ -67,7 +68,7 @@ describe('onboarding first-run disclosure shows a privacy notice', () => {
   it('opens the privacy policy in the in-app browser', () => {
     const { getByTestId } = renderModal();
     fireEvent.press(getByTestId('disclosure-privacy-policy-link'));
-    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(PRIVACY_POLICY_URL);
+    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(`${PRIVACY_POLICY_URL}?from=mobile`);
   });
 
   it('offers the Terms beside the privacy policy, at the address sign-in uses', () => {
@@ -77,7 +78,7 @@ describe('onboarding first-run disclosure shows a privacy notice', () => {
     expect(card.getByText('Terms of Use')).toBeTruthy();
     fireEvent.press(getByTestId('disclosure-terms-link'));
     expect(TERMS_OF_USE_URL).toBe(new URL('/terms', API_URL).toString());
-    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(TERMS_OF_USE_URL);
+    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(`${TERMS_OF_USE_URL}?from=mobile`);
   });
 
   it('shows one short line that the assistant can make mistakes, outside the privacy card', () => {
@@ -90,9 +91,17 @@ describe('onboarding first-run disclosure shows a privacy notice', () => {
     ).toBeNull();
   });
 
+  it('keeps the sheet to a centred reading column that never exceeds an iPhone window', () => {
+    const { getByTestId } = renderModal();
+    const style = StyleSheet.flatten(getByTestId('disclosure-sheet').props.style);
+    expect(style.maxWidth).toBe(720);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
+  });
+
   it('opens the India DPDP notice in the in-app browser', () => {
     const { getByTestId } = renderModal();
     fireEvent.press(getByTestId('disclosure-dpdp-notice-link'));
-    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(INDIA_DPDP_NOTICE_URL);
+    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(`${INDIA_DPDP_NOTICE_URL}?from=mobile`);
   });
 });

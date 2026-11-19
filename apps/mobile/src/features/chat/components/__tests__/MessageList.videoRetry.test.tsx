@@ -29,7 +29,10 @@ jest.mock('@shopify/flash-list', () => {
 jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
   const { View } = require('react-native');
-  return { Swipeable: ({ children }: { children: React.ReactNode }) => <View>{children}</View> };
+  return {
+    Swipeable: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    ScrollView: require('react-native').ScrollView,
+  };
 });
 
 jest.mock('expo-haptics', () => ({

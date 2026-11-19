@@ -20,9 +20,11 @@ import { Linking } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockOpenExternalUrl = jest.fn().mockResolvedValue(true);
+const mockOpenInAppBrowser = jest.fn().mockResolvedValue(true);
 
 jest.mock('@/lib/safeOpenURL', () => ({
   openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+  openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
   isAllowedExternalUrl: jest.requireActual('../lib/safeOpenURL').isAllowedExternalUrl,
 }));
 
@@ -197,6 +199,16 @@ describe('PAR-M28, DesktopSetupChecklistView', () => {
     expect(decodeURIComponent(url)).toContain(DESKTOP_DOWNLOAD_URL);
   });
 
+  it('opens the mail link without asking iOS first, since iOS answers no for an unlisted scheme', async () => {
+    canOpenURLSpy.mockResolvedValue(false);
+    const screen = render(<DesktopSetupChecklistView />);
+
+    fireEvent.press(screen.getByLabelText('Email me the desktop app link'));
+
+    await waitFor(() => expect(openURLSpy).toHaveBeenCalledTimes(1));
+    expect(canOpenURLSpy).not.toHaveBeenCalled();
+  });
+
   it('builds an unaddressed mailto when no account email is known', () => {
     const url = buildDesktopLinkMailto(null);
     expect(url.startsWith('mailto:?')).toBe(true);
@@ -215,12 +227,15 @@ describe('PAR-M28, DesktopSetupChecklistView', () => {
 });
 
 describe('PAR-M28, PairingRiskDisclosure', () => {
-  it('routes the safety link through the openExternalUrl allowlist', async () => {
+  it('opens the safety page in the in-app browser, marked as opened from the app', async () => {
     const screen = render(<PairingRiskDisclosure />);
 
     fireEvent.press(screen.getByText('Learn how to use this safely'));
 
-    await waitFor(() => expect(mockOpenExternalUrl).toHaveBeenCalledWith(DISPATCH_SAFETY_URL));
+    await waitFor(() =>
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(`${DISPATCH_SAFETY_URL}?from=mobile`),
+    );
+    expect(mockOpenExternalUrl).not.toHaveBeenCalled();
     expect(openURLSpy).not.toHaveBeenCalled();
   });
 

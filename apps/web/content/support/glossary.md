@@ -5,8 +5,8 @@ path: /docs
 category: getting-started
 tags: glossary, terminology, definitions, what does mean, jargon, terms, vocabulary, acronym
 platforms: web, desktop, cli, mobile, vscode, chrome, macos, windows, linux, ios, android
-updated: 2026-11-11
-description: Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.
+updated: 2026-11-16
+description: Definitions of the terms AGI uses for trust modes, usage, chat, tools, connectors and surfaces.
 scope: public
 ---
 
@@ -33,17 +33,23 @@ adds no markup. BYOK is free.
 **Managed cloud** runs on AGI-operated provider access. It is metered, and it
 refuses BYOK credentials by design so the two trust boundaries stay separate.
 
-## Usage and billing terms
+## Usage terms
 
 **Allowance** is the metered capacity a plan carries for managed cloud. When it
-runs out, managed requests stop until it resets, unless **Keep going after a
-usage limit** is on and you have credits; Local and BYOK are unaffected.
+runs out, managed requests stop until it resets; Local and BYOK are unaffected.
+
+{{#purchase}}
+
+With **Keep going after a usage limit** on, managed requests continue past the
+allowance while you have credits.
 
 **Credits** are a prepaid balance, separate from the allowance, that managed
 usage can draw on once the allowance is exhausted.
 
 **Top-up** is a credit purchase, either a preset pack or another amount in whole
 dollars.
+
+{{/purchase}}
 
 **Concurrency** is how many responses may be generating at once. Reaching that
 ceiling is not the same as exhausting an allowance: it clears as soon as an

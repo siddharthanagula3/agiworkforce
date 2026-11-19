@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
@@ -28,9 +28,9 @@ const QUESTIONS = [
         in Singapore, or OpenAI. Which one answers depends on what is available for that turn, and
         the reply shows the model that answered. We make no promise on their behalf, as section 02
         of the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
-        </Link>{' '}
+        </PageLink>{' '}
         states.
       </>
     ),
@@ -43,13 +43,13 @@ const QUESTIONS = [
         is limited to people who need it to operate or support the service, and two layers of access
         control scope every request to the account that owns it. What those layers are, and where
         they stop, is section 01 of the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
-        </Link>{' '}
+        </PageLink>{' '}
         and the measures table in the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.dpa} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dpa} className="agi-ds-link">
           DPA
-        </Link>
+        </PageLink>
         , which states the limit of each control next to the control.
       </>
     ),
@@ -66,9 +66,9 @@ const QUESTIONS = [
         soon to VS Code. <strong>Web and Desktop chat use Cloud</strong>; a Desktop local coding
         session runs the CLI and can also use Local or BYOK. The full comparison is section 00 of
         the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
-        </Link>
+        </PageLink>
         .
       </>
     ),
@@ -80,9 +80,9 @@ const QUESTIONS = [
         <strong>No.</strong> We do not sell personal data and we do not share it for cross-context
         behavioural advertising. We run no advertising and set no advertising cookies. The list of
         third parties that do receive data, and exactly what each one gets, is at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
           /subprocessors
-        </Link>
+        </PageLink>
         . That page also lists its past corrections at the bottom.
       </>
     ),
@@ -92,9 +92,9 @@ const QUESTIONS = [
     body: (
       <>
         It differs by the kind of data. Section 05 of the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
-        </Link>{' '}
+        </PageLink>{' '}
         gives a row per category with the job that enforces it. Where no automatic expiry exists, it
         says so instead of quoting a number, and it has a table of what is kept after you delete
         your account.
@@ -111,9 +111,9 @@ const QUESTIONS = [
         no confirmation email, but cancellation is self-serve too: sign back in and cancel from
         Settings &gt; Account any time before the 24 hours are up. Everything else (access,
         correction, deleting an address we hold without an account) goes through{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           /privacy/requests
-        </Link>
+        </PageLink>
         , which works whether or not you have an account.
       </>
     ),
@@ -127,9 +127,9 @@ const QUESTIONS = [
         Consent is asked for exactly three things: crash reporting, analytics, and email you asked
         us to send. All three are off until you turn them on, each is asked separately, and each can
         be withdrawn on its own at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           /privacy/requests
-        </Link>{' '}
+        </PageLink>{' '}
         without affecting the others or your access to anything.
       </>
     ),
@@ -144,13 +144,13 @@ const QUESTIONS = [
         the model provider that answers it runs that model: on the Free plan&rsquo;s default model
         that can be Alibaba Cloud Model Studio&rsquo;s international endpoint in Singapore, as
         described above. The transfer mechanisms are section 08 of the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
-        </Link>{' '}
+        </PageLink>{' '}
         and section 06 of the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.dpa} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dpa} className="agi-ds-link">
           DPA
-        </Link>
+        </PageLink>
         .
       </>
     ),
@@ -163,9 +163,9 @@ const QUESTIONS = [
         continues on the free tier and your data stays until you delete it. We make no commitment
         about your data if the service shuts down. Export is available today, and you can use it at
         any time to keep your own copy. The billing mechanics themselves are on{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.refunds} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.refunds} className="agi-ds-link">
           the refund policy
-        </Link>
+        </PageLink>
         .
       </>
     ),
@@ -176,17 +176,17 @@ const QUESTIONS = [
       <>
         Compliance with either is not a single yes or no, so we publish a per-regime status ledger
         with dates and what would prove each line at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.trust} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.trust} className="agi-ds-link">
           /trust
-        </Link>
+        </PageLink>
         , the India-specific notice at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
           /privacy/india
-        </Link>
+        </PageLink>
         , and a security page that lists what we have <em>not</em> done at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
           /security
-        </Link>
+        </PageLink>
         . We hold no SOC 2 report and no ISO 27001 certificate.
       </>
     ),
@@ -210,9 +210,9 @@ export default function DataUsePage() {
                 policy that governs each answer.
               </strong>{' '}
               Where the two ever disagree, the{' '}
-              <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+              <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                 privacy policy
-              </Link>{' '}
+              </PageLink>{' '}
               wins: this page is a guide to it, not a replacement for it. Last updated:{' '}
               {POLICY_LAST_UPDATED.dataUse}. <PolicyVersionsLink policy="dataUse" />
             </>

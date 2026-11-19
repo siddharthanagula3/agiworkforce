@@ -99,7 +99,7 @@ describe('model-tier-gate 403 handling', () => {
     expect(err.reason).toBe(MODEL_ACCESS_MESSAGE);
   });
 
-  it('keeps the staged-upgrade fact and sends nobody off the phone to buy', async () => {
+  it('says the model is not included and sends nobody off the phone to buy', async () => {
     const { streamChat } = await loadStreamingService();
     guardedFetchMock.mockResolvedValue({
       ok: false,
@@ -107,7 +107,7 @@ describe('model-tier-gate 403 handling', () => {
       text: async () =>
         JSON.stringify({
           error: {
-            message: `Model ${MODEL_ID} is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.`,
+            message: `Model ${MODEL_ID} is on the Premium plan, not yours. Choose a model your plan includes. Paid plans carry more capacity. If upgrades are not open to your account yet, the pricing page offers the upgrade waitlist or takes an access code.`,
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: 'pro',
@@ -128,9 +128,9 @@ describe('model-tier-gate 403 handling', () => {
 
     const err = callbacks.onError.mock.calls[0][0];
     expect(err.reason).toBe(
-      `Model ${MODEL_ID} is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages.`,
+      `Model ${MODEL_ID} isn’t included in your plan. Choose a model your plan includes.`,
     );
-    expect(err.reason).not.toMatch(/access code|waitlist/i);
+    expect(err.reason).not.toMatch(/access code|waitlist|pricing|upgrade|paid plan/i);
   });
 
   it('falls back to a generic Error for a 403 without the model_not_available code', async () => {

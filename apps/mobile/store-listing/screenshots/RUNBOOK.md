@@ -9,21 +9,38 @@ themselves are the slow part (iOS release ~15–25 min cold, Android release ~10
 
 ## What the stores actually require
 
-| Device class        | Canvas      | Upload slot                                    |
-| ------------------- | ----------- | ---------------------------------------------- |
-| `iphone-17-pro-max` | 1320 × 2868 | App Store Connect, iPhone 6.9" **(required)**  |
-| `ipad-pro-13`       | 2048 × 2732 | App Store Connect, iPad 13" **(required)**     |
-| `phone`             | 1080 × 1920 | Play Console, phone screenshots **(required)** |
-| `tablet-10`         | 1440 × 2560 | Play Console, 10" tablet (optional)            |
-| `iphone-17-pro`     | 1206 × 2622 | none, internal review only                     |
-| `ipad-pro-11`       | 1668 × 2388 | none, internal review only                     |
+| Device class        | Canvas      | Upload slot                                                                    |
+| ------------------- | ----------- | ------------------------------------------------------------------------------ |
+| `iphone-17-pro`     | 1206 × 2622 | App Store Connect, iPhone with Dynamic Island (medium display) **(required)**  |
+| `iphone-17-pro-max` | 1320 × 2868 | App Store Connect, iPhone with Dynamic Island (large display) (upload as well) |
+| `ipad-pro-13`       | 2048 × 2732 | App Store Connect, iPad 13-inch display **(required while iPad is supported)** |
+| `phone`             | 1080 × 1920 | Play Console, phone screenshots **(required: at least 2; 4 for promotion)**    |
+| `tablet-10`         | 1440 × 2560 | Play Console, 10" tablet (optional)                                            |
+| `ipad-pro-11`       | 1668 × 2388 | none, internal review only                                                     |
 
-The iPad slot is required because `app.config.js` sets `ios.supportsTablet: true`.
-Apple also accepts a direct 2064 × 2752 capture for the 13" iPad slot; the
-pipeline's branded canvas uses 2048 × 2732. See [Apple's current screenshot
-specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications).
-`iphone-17-pro` and `ipad-pro-11` produce good-looking frames that App Store Connect has
-no slot for; capture them only for internal review.
+Apple's [screenshot
+specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications),
+read 2026-11-15, list as required "At least one screenshot for iPhone with
+Dynamic Island (medium display)", which accepts 1179 × 2556 or 1206 × 2622, and
+"At least one screenshot for iPad 13-inch display" when the app supports iPad,
+which `app.config.js` does (`ios.supportsTablet: true`). Apple also accepts a
+direct 2064 × 2752 capture for the 13" iPad slot; the pipeline's branded canvas
+uses 2048 × 2732. Upload the 6.9" set too: the same page also describes the
+large-display sizes as a fallback chain, and uploading both avoids depending on
+it. `pnpm screenshots:required` does not include `iphone-17-pro`; capture it
+with the single-class command in step 3.
+
+**No transparency.** Apple says images "can't include alpha channels or
+transparencies", and Play requires JPEG or 24-bit PNG with no alpha
+([Play graphic assets](https://support.google.com/googleplay/android-developer/answer/9866151),
+read 2026-11-15). The compositor writes PNG with an alpha channel
+(`scripts/screenshots/compositor.ts`); the 2026-09-27 iPhone PNGs report
+`hasAlpha: yes`. Until the compositor writes opaque frames, convert each final
+PNG to JPEG before uploading, and confirm with `sips -g hasAlpha`:
+
+```bash
+sips -s format jpeg 01-local-demo-chat.png --out 01-local-demo-chat.jpg
+```
 
 ## One-time setup
 
@@ -117,24 +134,29 @@ store-listing/screenshots/captures/<platform>/<class>/
   final/   store-ready JPG/PNG screenshots at a size Apple accepts
 ```
 
-Upload `final/` contents:
+Upload `final/` contents, converted to JPEG as above:
 
-- App Store Connect → 6.9" iPhone slot ← `ios/iphone-17-pro-max/final/`
+- App Store Connect → iPhone medium display slot ← `ios/iphone-17-pro/final/`
+- App Store Connect → iPhone large display (6.9") slot ← `ios/iphone-17-pro-max/final/`
 - App Store Connect → 13" iPad slot ← `ios/ipad-pro-13/final/`
 - Play Console → phone screenshots ← `android/phone/final/`
 
-Apple accepts one to ten screenshots per slot. The pipeline is configured for
-five frames. On 2026-09-26, `02-onboarding-local` was captured and visually
-checked on isolated iPhone 17 Pro Max and iPad Pro 13 Simulators. Their `final/`
-files are opaque direct JPEG captures at 1320 × 2868 and 2064 × 2752. A later
-current-source iPhone run captured `01-local-demo-chat` and verified the
-capture wiring with Detox cleanup. On 2026-09-27, `03-first-message` passed on
-the iPhone 17 Pro Max Release Simulator: the send action streamed and completed
-an Apple Intelligence reply, and the 1320 × 2868 final frame was visually
-reviewed. The `04-cloud-sign-in` iPhone frame also passed on 2026-09-27. The spec completed
-the signed-out Cloud age review, opened the native sign-in screen, and produced
-a visually reviewed 1320 × 2868 frame. The remaining iPhone voice frame and
-iPad frames beyond onboarding still need capture and review.
+Apple accepts one to ten screenshots per slot; Play accepts up to eight per
+device type. The pipeline is configured for five frames.
+
+State on 2026-11-17: frames `01-local-demo-chat`, `02-onboarding-local`,
+`03-first-message` and `04-cloud-sign-in` for `ios/iphone-17-pro` were captured
+by hand on the booted iPhone 17 Pro simulator from a release build, with
+`xcrun simctl io <udid> screenshot` and a 9:41 status bar override, then
+composited with `pnpm screenshots:composite` and converted to JPEG. Each was
+checked against Apple's guidelines 2.3.1 and 2.3.3 and is 1206 × 2622 with no
+alpha channel. Frame `02-onboarding-local` shows the signed-out Local start. Its
+greeting follows the app's local hour, and a late-night line sits badly beside a
+9:41 status bar, so capture it in the morning or start the app in a time zone
+where it is morning, which changes nothing on the Mac or the simulator:
+`SIMCTL_CHILD_TZ=Europe/Berlin xcrun simctl launch --terminate-running-process <udid> com.agiworkforce.app`.
+Still to capture: `06-voice-recording`, and every large display, iPad and
+Android frame. The Detox pipeline has not been run against the current app.
 
 Re-run just the compositing (no simulator needed) after a heading or subhead edit:
 
@@ -144,16 +166,23 @@ pnpm screenshots:composite
 
 ## The five frames
 
-| File                  | Spec                                | Heading                  |
-| --------------------- | ----------------------------------- | ------------------------ |
-| `01-local-demo-chat`  | `01-multi-provider.spec.ts`         | Local chat first         |
-| `02-onboarding-local` | `02-onboarding-local.spec.ts`       | Start without an account |
-| `03-first-message`    | `03-chat-first-message.spec.ts`     | Chat with local models   |
-| `04-cloud-sign-in`    | `04-mode-toggle-to-sign-in.spec.ts` | Sign in for Cloud        |
-| `06-voice-recording`  | `06-voice-record-and-send.spec.ts`  | Hold to speak            |
+| File                  | Spec                                | Heading                    |
+| --------------------- | ----------------------------------- | -------------------------- |
+| `01-local-demo-chat`  | `01-multi-provider.spec.ts`         | Local chat first           |
+| `02-onboarding-local` | `02-onboarding-local.spec.ts`       | Start without an account   |
+| `03-first-message`    | `03-chat-first-message.spec.ts`     | Chat with local models     |
+| `04-cloud-sign-in`    | `04-mode-toggle-to-sign-in.spec.ts` | AGI Cloud when you sign in |
+| `06-voice-recording`  | `06-voice-record-and-send.spec.ts`  | Hold to speak              |
 
 Headings and subheads live in `scripts/screenshots/catalog.ts` and are the single source of
 truth for both the pipeline and the compositor.
+
+Frame 04 is a signed-in AGI Cloud chat with a complete answer. Apple's guideline
+2.3.3 says screenshots must show the app in use and "not merely the title art,
+login page, or splash screen", so a sign-in form is not a store frame. Spec
+`04-mode-toggle-to-sign-in.spec.ts` still stops at the sign-in form: change it to
+sign in and capture a finished Cloud answer before using the pipeline for this
+frame, or it will overwrite the hand capture with a login page.
 
 ## Troubleshooting
 

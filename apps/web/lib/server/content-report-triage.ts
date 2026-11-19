@@ -1,5 +1,11 @@
 import 'server-only';
 
+import {
+  MAX_CONTENT_REPORT_SUBJECT_ID_LENGTH,
+  isContentReportSubjectKind,
+  type ContentReportSubject,
+} from '@agiworkforce/cloud-contracts';
+
 import { getNeonDb } from '@/lib/server/neon-db';
 
 export const CONTENT_REPORT_STATUSES = ['received', 'in_review', 'actioned', 'dismissed'] as const;
@@ -30,6 +36,15 @@ export interface ContentReportAsset {
   inlineHeaderOnly: boolean;
 }
 
+export function parseReportSubject(value: unknown): ContentReportSubject | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { kind, id } = value as { kind?: unknown; id?: unknown };
+  if (!isContentReportSubjectKind(kind) || typeof id !== 'string') return null;
+  const trimmed = id.trim();
+  if (!trimmed || trimmed.length > MAX_CONTENT_REPORT_SUBJECT_ID_LENGTH) return null;
+  return { kind, id: trimmed };
+}
+
 export interface ContentReport {
   id: string;
   clientReportId: string;
@@ -40,6 +55,7 @@ export interface ContentReport {
   contentExcerpt: string;
   userNote: string;
   asset: ContentReportAsset | null;
+  subject: ContentReportSubject | null;
   status: ContentReportStatus;
   reviewerId: string | null;
   reviewerNote: string | null;
@@ -59,6 +75,7 @@ interface ContentReportRow {
   content_excerpt: string;
   user_note: string;
   asset: unknown;
+  subject: unknown;
   status: string;
   reviewer_id: string | null;
   reviewer_note: string | null;
@@ -95,6 +112,7 @@ function toReport(row: ContentReportRow, now: number = Date.now()): ContentRepor
     contentExcerpt: row.content_excerpt,
     userNote: row.user_note,
     asset: parseReportAsset(row.asset),
+    subject: parseReportSubject(row.subject),
     status,
     reviewerId: row.reviewer_id,
     reviewerNote: row.reviewer_note,
@@ -106,8 +124,8 @@ function toReport(row: ContentReportRow, now: number = Date.now()): ContentRepor
 }
 
 const SELECTED_COLUMNS = `id, client_report_id, user_id, message_id, conversation_id, category,
-          content_excerpt, user_note, metadata -> 'asset' as asset, status, reviewer_id, reviewer_note,
-          reviewed_at, created_at`;
+          content_excerpt, user_note, metadata -> 'asset' as asset, metadata -> 'subject' as subject,
+          status, reviewer_id, reviewer_note, reviewed_at, created_at`;
 
 export interface ReadContentReportsOptions {
   readonly statuses?: readonly ContentReportStatus[];

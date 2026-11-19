@@ -101,6 +101,17 @@ describe('release notes', () => {
     );
     if (MANAGED_CLOUD_MATURITY !== 'ga') expect(releasedNoteCount('ga')).toBe(0);
   });
+
+  it('counts only the notes it is given', () => {
+    const total = (notes: typeof RELEASE_NOTES) =>
+      DOC_MATURITIES.reduce((sum, maturity) => sum + releasedNoteCount(maturity, notes), 0);
+
+    expect(total([])).toBe(0);
+    expect(total(RELEASE_NOTES.slice(0, 1))).toBeLessThanOrEqual(1);
+    expect(total(RELEASE_NOTES)).toBe(
+      DOC_MATURITIES.reduce((sum, maturity) => sum + releasedNoteCount(maturity), 0),
+    );
+  });
 });
 
 describe('release notes describe capabilities the code actually carries', () => {

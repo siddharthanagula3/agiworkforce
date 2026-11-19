@@ -7,6 +7,10 @@ vi.mock('@/lib/clerk-session', () => ({
 
 const clerk = { cookie: true, token: true };
 
+import {
+  CLIENT_CAPABILITIES_REQUEST_HEADER,
+  LARGE_CHAT_FILES_CAPABILITY,
+} from '@agiworkforce/cloud-contracts';
 import { requestMe } from '../me-request';
 
 afterEach(() => {
@@ -28,6 +32,21 @@ describe('identity request', () => {
     expect(a.status).toBe(200);
     await expect(b.json()).resolves.toEqual({ id: 'u1' });
     await expect(c.json()).resolves.toEqual({ id: 'u1' });
+  });
+
+  it('tells the server this client can upload large chat files', async () => {
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await Promise.all([requestMe(), requestMe()]);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/me');
+    expect(init.credentials).toBe('include');
+    expect(new Headers(init.headers).get(CLIENT_CAPABILITIES_REQUEST_HEADER)).toBe(
+      LARGE_CHAT_FILES_CAPABILITY,
+    );
   });
 
   it('hands each caller its own readable body', async () => {

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { TEAM_SEAT_TYPES } from '@agiworkforce/types';
 import { EffectiveCapabilityDocumentSchema } from './capability-handshake';
+import { ChatAttachmentLimitsWireSchema } from './chat-attachments';
+import { ManagedCloudChatMessageLimitsWireSchema } from './conversations';
 export { CLIENT_VERSION_HEADER } from './header-names';
 
 export const ME_CLIENT_VERSION_PARAM = 'client_version';
@@ -85,6 +87,18 @@ export const MeResponseSchema = z.object({
   capability_handshake: EffectiveCapabilityDocumentSchema.optional(),
   disabled_features: z.array(MeDisabledFeatureSchema).optional(),
   workspace_data_region: MeWorkspaceDataRegionSchema.nullable().optional(),
+  /**
+   * The chat attachment limits this account is held to, so a client can raise
+   * its own checks without a release. A malformed block reads as absent and the
+   * client keeps the limits it was built with.
+   */
+  attachment_limits: ChatAttachmentLimitsWireSchema.optional().catch(undefined),
+  /**
+   * The chat message length limits the server enforces, so a client sends a
+   * longer newest message only to a server that accepts it. A malformed block
+   * reads as absent and the client keeps the limit it was built with.
+   */
+  message_limits: ManagedCloudChatMessageLimitsWireSchema.optional().catch(undefined),
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;

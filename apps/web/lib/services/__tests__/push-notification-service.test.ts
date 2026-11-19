@@ -355,6 +355,24 @@ describe('sendPushToUser, quiet hours', () => {
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('holds a finished research report but delivers a coding session that needs you', async () => {
+    const held = await sendPushToUser('user-1', {
+      title: 'Research report ready',
+      body: 'x',
+      data: { type: 'research_completed' },
+    });
+    expect(held.sent).toBe(0);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+
+    const delivered = await sendPushToUser('user-1', {
+      title: 'Approval needed',
+      body: 'x',
+      data: { type: 'code_session_needs_input' },
+    });
+    expect(delivered.sent).toBe(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('applies the quiet-hours type to the device preference as well', () => {
     const deviceQuiet = devicePreferences({ eventTypes: {}, ...quietPreferences });
     expect(deviceAcceptsNotice(deviceQuiet, 'schedule_run', noon)).toBe(false);
@@ -557,6 +575,44 @@ describe('device push preferences', () => {
       },
     });
     expect(deviceAcceptsNotice(quiet, 'product_update', noon)).toBe(false);
+  });
+
+  it.each([
+    ['research_completed', 'task_completed'],
+    ['code_session_completed', 'task_completed'],
+    ['code_session_failed', 'agent_failed'],
+    ['code_session_needs_input', 'agent_approval_needed'],
+  ])(
+    'asks an app that predates %s about %s instead, and a newer one about the type itself',
+    (type, predecessor) => {
+      const olderMuted = devicePreferences({ eventTypes: { [predecessor]: false } });
+      const olderOn = devicePreferences({ eventTypes: { [predecessor]: true } });
+      const newerMuted = devicePreferences({ eventTypes: { [predecessor]: true, [type]: false } });
+      const newerOn = devicePreferences({ eventTypes: { [predecessor]: false, [type]: true } });
+
+      expect(deviceAcceptsNotice(olderMuted, type, noon)).toBe(false);
+      expect(deviceAcceptsNotice(olderOn, type, noon)).toBe(true);
+      expect(deviceAcceptsNotice(newerMuted, type, noon)).toBe(false);
+      expect(deviceAcceptsNotice(newerOn, type, noon)).toBe(true);
+      expect(deviceAcceptsNotice(null, type, noon)).toBe(true);
+    },
+  );
+
+  it('keeps a coding session that needs you or failed audible in the device quiet hours', () => {
+    const quiet = devicePreferences({
+      eventTypes: {},
+      quietHours: {
+        enabled: true,
+        days: [0, 1, 2, 3, 4, 5, 6],
+        startTime: '11:00',
+        endTime: '13:00',
+        timezone: 'UTC',
+      },
+    });
+    expect(deviceAcceptsNotice(quiet, 'code_session_needs_input', noon)).toBe(true);
+    expect(deviceAcceptsNotice(quiet, 'code_session_failed', noon)).toBe(true);
+    expect(deviceAcceptsNotice(quiet, 'code_session_completed', noon)).toBe(false);
+    expect(deviceAcceptsNotice(quiet, 'research_completed', noon)).toBe(false);
   });
 
   it('lets a device mute scheduled runs alone', () => {

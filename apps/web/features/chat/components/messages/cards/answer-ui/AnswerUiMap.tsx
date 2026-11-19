@@ -3,11 +3,11 @@
 import { useTheme } from 'next-themes';
 import { ExternalLink } from '@agiworkforce/icons';
 import type { AnswerUiMapBlock } from '@agiworkforce/types';
+import { ANSWER_UI_MAP_NOTE } from '@agiworkforce/unified-chat/answer-ui';
 import { LeafletMapCanvas, type MapPoint } from '../map/LeafletMapCanvas';
 import { mapTileStyle, useMapTileConfig } from '../map/mapTileConfig';
 
 export const ANSWER_UI_MAP_HEIGHT_PX = 300;
-export const ANSWER_UI_MAP_NOTE = 'Pins are placed from the answer and can be approximate.';
 const NEW_TAB_HINT = '(opens in a new tab)';
 
 export interface AnswerUiMapProps {

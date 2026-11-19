@@ -47,6 +47,8 @@ jest.mock('lucide-react-native', () => {
 
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import * as VoiceService from '@/src/features/voice/services/voice';
+import { VOICE_UNAVAILABLE_MESSAGE } from '@/src/features/voice/services/voiceFailure';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -95,5 +97,133 @@ describe('VoiceInputButton long-press handoff', () => {
       fireEvent(button, 'pressOut');
     });
     expect(onRecordingStop).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('VoiceInputButton long-press after the hold could not start speech', () => {
+  const recognizerError = () =>
+    new VoiceInput.VoiceCaptureError('recognition-error', 'Failed to initialize recognizer');
+
+  beforeEach(async () => {
+    await VoiceInput.cancelCapture();
+    jest.restoreAllMocks();
+    jest.clearAllMocks();
+    useSettingsStore.setState({ dictationOnboardingSeen: true, voiceEnabled: true });
+  });
+
+  function renderComposerButton() {
+    const notices: string[] = [];
+    const openVoiceMode = jest.fn();
+    function ComposerButton() {
+      const [resetSignal, setResetSignal] = React.useState(0);
+      return (
+        <VoiceInputButton
+          onTranscription={jest.fn()}
+          onLongPress={openVoiceMode}
+          onError={(message) => {
+            notices.push(message);
+            setResetSignal((value) => value + 1);
+          }}
+          onFailure={() => notices.push('missed')}
+          resetSignal={resetSignal}
+        />
+      );
+    }
+    const screen = render(<ComposerButton />);
+    return { button: screen.getByTestId('voice-input-button'), notices, openVoiceMode };
+  }
+
+  async function longPress(button: ReturnType<typeof renderComposerButton>['button']) {
+    await act(async () => {
+      fireEvent(button, 'longPress');
+    });
+    await act(async () => {
+      fireEvent(button, 'pressOut');
+    });
+  }
+
+  it('gives one notice and does not open voice mode when the start is refused', async () => {
+    jest.spyOn(VoiceService, 'startRecording').mockRejectedValue(recognizerError());
+    const { button, notices, openVoiceMode } = renderComposerButton();
+
+    await act(async () => {
+      fireEvent(button, 'pressIn');
+    });
+    await waitFor(() => expect(notices).toEqual([VOICE_UNAVAILABLE_MESSAGE]));
+    await longPress(button);
+
+    expect(openVoiceMode).not.toHaveBeenCalled();
+    expect(notices).toEqual([VOICE_UNAVAILABLE_MESSAGE]);
+  });
+
+  it('gives one notice and does not open voice mode when the recognizer fails right after starting', async () => {
+    const { button, notices, openVoiceMode } = renderComposerButton();
+
+    await act(async () => {
+      fireEvent(button, 'pressIn');
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+    const errorListeners = jest
+      .mocked(ExpoSpeechRecognitionModule.addListener)
+      .mock.calls.filter(([name]) => name === 'error')
+      .map(([, listener]) => listener as (payload: unknown) => void);
+    await act(async () => {
+      for (const listener of errorListeners)
+        listener({ error: 'audio-capture', message: 'Failed to initialize recognizer' });
+    });
+    await waitFor(() => expect(notices).toEqual([VOICE_UNAVAILABLE_MESSAGE]));
+    await longPress(button);
+
+    expect(openVoiceMode).not.toHaveBeenCalled();
+    expect(notices).toEqual([VOICE_UNAVAILABLE_MESSAGE]);
+  });
+
+  it('still opens voice mode when a recording from an earlier tap fails during this press', async () => {
+    const { button, notices, openVoiceMode } = renderComposerButton();
+
+    await act(async () => {
+      fireEvent(button, 'pressIn');
+    });
+    await act(async () => {
+      fireEvent(button, 'pressOut');
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      fireEvent(button, 'pressIn');
+    });
+    const errorListeners = jest
+      .mocked(ExpoSpeechRecognitionModule.addListener)
+      .mock.calls.filter(([name]) => name === 'error')
+      .map(([, listener]) => listener as (payload: unknown) => void);
+    await act(async () => {
+      for (const listener of errorListeners)
+        listener({ error: 'audio-capture', message: 'Failed to initialize recognizer' });
+    });
+    await waitFor(() => expect(notices).toEqual([VOICE_UNAVAILABLE_MESSAGE]));
+    await longPress(button);
+
+    expect(openVoiceMode).toHaveBeenCalledTimes(1);
+    expect(notices).toEqual([VOICE_UNAVAILABLE_MESSAGE]);
+  });
+
+  it('opens voice mode on the next long-press once speech starts again', async () => {
+    jest.spyOn(VoiceService, 'startRecording').mockRejectedValueOnce(recognizerError());
+    const { button, notices, openVoiceMode } = renderComposerButton();
+
+    await act(async () => {
+      fireEvent(button, 'pressIn');
+    });
+    await waitFor(() => expect(notices).toHaveLength(1));
+    await longPress(button);
+
+    await act(async () => {
+      fireEvent(button, 'pressIn');
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+    await longPress(button);
+
+    expect(openVoiceMode).toHaveBeenCalledTimes(1);
+    expect(VoiceInput.isCapturing()).toBe(false);
+    expect(notices).toHaveLength(1);
   });
 });

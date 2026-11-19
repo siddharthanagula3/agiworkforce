@@ -3,7 +3,19 @@ import { join } from 'node:path';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EMBEDDED_PAGE_PARAM, EMBEDDED_PAGE_PARAM_VALUE } from '@agiworkforce/types';
 
+type NavigationModule = typeof import('next/navigation');
+
+const route = vi.hoisted(() => ({ search: '' }));
+
+vi.mock('next/navigation', async (importOriginal) => ({
+  ...(await importOriginal<NavigationModule>()),
+  usePathname: () => '/help',
+  useSearchParams: () => new URLSearchParams(route.search),
+}));
+
+import { EmbeddedPageProvider } from '@shared/components/layout/EmbeddedPage';
 import { STATIC_FAQS } from '@/lib/support/static-data';
 
 import { HelpSearch } from '../components/HelpSearch';
@@ -30,6 +42,41 @@ describe('HelpSearch', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    route.search = '';
+  });
+
+  it('tells the search it was opened from the phone, so purchase articles stay out', async () => {
+    route.search = `${EMBEDDED_PAGE_PARAM}=${EMBEDDED_PAGE_PARAM_VALUE}`;
+    fetchMock.mockResolvedValue(
+      jsonResponse({ query: 'upgrade', corpus: 'available', results: [] }),
+    );
+
+    render(
+      <EmbeddedPageProvider>
+        <HelpSearch initialQuery="upgrade" />
+      </EmbeddedPageProvider>,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]), 'https://agiworkforce.com');
+    expect(url.searchParams.get('q')).toBe('upgrade');
+    expect(url.searchParams.getAll(EMBEDDED_PAGE_PARAM)).toEqual([EMBEDDED_PAGE_PARAM_VALUE]);
+  });
+
+  it('sends no phone marker from the web help centre', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ query: 'upgrade', corpus: 'available', results: [] }),
+    );
+
+    render(
+      <EmbeddedPageProvider>
+        <HelpSearch initialQuery="upgrade" />
+      </EmbeddedPageProvider>,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]), 'https://agiworkforce.com');
+    expect(url.searchParams.has(EMBEDDED_PAGE_PARAM)).toBe(false);
   });
 
   it('stretches the field across the row so the placeholder is not clipped', () => {

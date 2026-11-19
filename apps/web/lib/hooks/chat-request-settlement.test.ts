@@ -160,4 +160,20 @@ describe('chat request settlement ownership', () => {
     latest.release();
     request.finish();
   });
+
+  it('reports a request in flight for another message without claiming the conversation', () => {
+    const controllers = new Map<string, AbortController>();
+    const requests = createChatRequestSettlements(controllers);
+    expect(requests.isBusyWithOtherMessage('conversation', 'older')).toBe(false);
+
+    const reply = requests.begin('conversation', 'newer');
+    expect(requests.isBusyWithOtherMessage('conversation', 'older')).toBe(true);
+    expect(requests.isBusyWithOtherMessage('conversation', 'newer')).toBe(false);
+    expect(requests.isBusyWithOtherMessage('another', 'older')).toBe(false);
+    expect(reply.controller.signal.aborted).toBe(false);
+    expect(controllers.get('conversation')).toBe(reply.controller);
+
+    reply.finish();
+    expect(requests.isBusyWithOtherMessage('conversation', 'older')).toBe(false);
+  });
 });

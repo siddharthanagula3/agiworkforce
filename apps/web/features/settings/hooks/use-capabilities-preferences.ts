@@ -21,6 +21,12 @@ import { usePreferenceOwner, usePreferenceView } from './use-preference-owner';
 import { resetMemoryCapabilityCache } from '@/lib/runtime/memory-capability';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  DEFAULT_TOOL_ACCESS_MODE,
+  isToolAccessMode,
+  TOOL_ACCESS_SETTING_KEY,
+  type ToolAccessMode,
+} from '@/lib/tool-access-mode';
 
 export interface CapabilitiesSettings {
   memory: boolean;
@@ -29,7 +35,24 @@ export interface CapabilitiesSettings {
   searchPastChats: boolean;
   includeSensitiveTopics: boolean;
   cloudCodeExecution: boolean;
+  artifacts: boolean;
+  inlineVisualizations: boolean;
+  toolAccess: ToolAccessMode;
 }
+
+type BooleanCapability = {
+  [K in keyof CapabilitiesSettings]: CapabilitiesSettings[K] extends boolean ? K : never;
+}[keyof CapabilitiesSettings];
+
+export type CapabilitySwitch = 'artifacts' | 'inlineVisualizations' | 'toolAccess';
+
+const CAPABILITY_SWITCHES: readonly CapabilitySwitch[] = [
+  'artifacts',
+  'inlineVisualizations',
+  'toolAccess',
+];
+
+const NO_SWITCHES: readonly CapabilitySwitch[] = [];
 
 type CapabilitiesPatch = Partial<CapabilitiesSettings>;
 
@@ -42,31 +65,45 @@ export const DEFAULT_CAPABILITIES_SETTINGS: CapabilitiesSettings = {
   searchPastChats: false,
   includeSensitiveTopics: false,
   cloudCodeExecution: true,
+  artifacts: true,
+  inlineVisualizations: true,
+  toolAccess: DEFAULT_TOOL_ACCESS_MODE,
 };
 
 export interface UseCapabilitiesPreferencesResult {
   settings: CapabilitiesSettings;
   loaded: boolean;
   organizationMemoryAllowed: boolean;
+  /** The switches the server says it applies; a switch it does not report stays hidden. */
+  availableSwitches: readonly CapabilitySwitch[];
   saving: boolean;
   saveError: string | null;
   savedAt: number | null;
   loadError: string | null;
   retry: () => void;
   retrySave: (() => void) | null;
-  setBoolean: (key: keyof CapabilitiesSettings, value: boolean) => void;
+  setBoolean: (key: BooleanCapability, value: boolean) => void;
+  setToolAccess: (mode: ToolAccessMode) => void;
 }
 
 function knownCapabilities(value: unknown): CapabilitiesPatch {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const source = value as Record<string, unknown>;
   const patch: CapabilitiesPatch = {};
-  for (const key of Object.keys(DEFAULT_CAPABILITIES_SETTINGS) as Array<
-    keyof CapabilitiesSettings
-  >) {
+  const booleanKeys = (
+    Object.keys(DEFAULT_CAPABILITIES_SETTINGS) as Array<keyof CapabilitiesSettings>
+  ).filter((key): key is BooleanCapability => key !== TOOL_ACCESS_SETTING_KEY);
+  for (const key of booleanKeys) {
     if (typeof source[key] === 'boolean') patch[key] = source[key];
   }
+  const toolAccess = source[TOOL_ACCESS_SETTING_KEY];
+  if (isToolAccessMode(toolAccess)) patch.toolAccess = toolAccess;
   return patch;
+}
+
+function reportedSwitches(value: unknown): CapabilitySwitch[] {
+  if (!Array.isArray(value)) return [];
+  return CAPABILITY_SWITCHES.filter((key) => value.includes(key));
 }
 
 export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
@@ -121,7 +158,11 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
       workspaceOwnerIsCurrent(workspaceOwner, epoch),
     [workspaceOwner, epoch, scopeKey, workspaceData],
   );
-  const [policy, setPolicy] = useState<{ current: () => boolean; allowed: boolean } | null>(null);
+  const [policy, setPolicy] = useState<{
+    current: () => boolean;
+    allowed: boolean;
+    switches: readonly CapabilitySwitch[];
+  } | null>(null);
 
   useEffect(() => {
     if (!workspaceOwner || !policyCurrent()) return;
@@ -137,12 +178,21 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
       })
       .then(async (response) => {
         if (!response.ok) throw new Error('Could not load workspace memory policy');
-        const data = (await response.json()) as { organizationMemoryAllowed?: unknown };
+        const data = (await response.json()) as {
+          organizationMemoryAllowed?: unknown;
+          availableSwitches?: unknown;
+        };
         authority.assertCurrent();
-        setPolicy({ current: policyCurrent, allowed: data.organizationMemoryAllowed === true });
+        setPolicy({
+          current: policyCurrent,
+          allowed: data.organizationMemoryAllowed === true,
+          switches: reportedSwitches(data.availableSwitches),
+        });
       })
       .catch(() => {
-        if (authority.isCurrent()) setPolicy({ current: policyCurrent, allowed: false });
+        if (authority.isCurrent()) {
+          setPolicy({ current: policyCurrent, allowed: false, switches: NO_SWITCHES });
+        }
       });
     return () => authority.retire();
   }, [workspaceOwner, policyCurrent, organization, capture, reloadKey]);
@@ -271,8 +321,15 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   );
 
   const setBoolean = useCallback(
-    (key: keyof CapabilitiesSettings, value: boolean) => {
+    (key: BooleanCapability, value: boolean) => {
       persist({ [key]: value });
+    },
+    [persist],
+  );
+
+  const setToolAccess = useCallback(
+    (mode: ToolAccessMode) => {
+      persist({ toolAccess: mode });
     },
     [persist],
   );
@@ -290,6 +347,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
       loadedOwner === owner && owner?.isCurrent() ? settings : DEFAULT_CAPABILITIES_SETTINGS,
     loaded: loadedOwner === owner && owner?.isCurrent() === true,
     organizationMemoryAllowed: policy?.current() === true && policy.allowed,
+    availableSwitches: policy?.current() === true ? policy.switches : NO_SWITCHES,
     saving: stateOwner === owner && saving,
     saveError: stateOwner === owner ? saveError : null,
     savedAt: stateOwner === owner ? savedAt : null,
@@ -297,5 +355,6 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     retry,
     retrySave: stateOwner === owner && rejected ? retrySave : null,
     setBoolean,
+    setToolAccess,
   };
 }

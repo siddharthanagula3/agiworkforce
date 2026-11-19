@@ -3,6 +3,11 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('react-native-webrtc', () => ({
   RTCPeerConnection: jest.fn(),
   RTCSessionDescription: jest.fn(),

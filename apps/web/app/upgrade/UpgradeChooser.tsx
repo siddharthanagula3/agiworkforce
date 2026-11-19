@@ -13,11 +13,13 @@ import {
   planUsageComparisonLabel,
   type SelectablePaidPlan,
 } from '@features/billing/lib/plan-display';
-import { formatBillingDate } from '@features/billing/lib/billing-format';
+import { formatBillingDateFromSeconds } from '@features/billing/lib/billing-format';
 import {
   billingOwnerPlanActionHref,
   billingOwnerPlanActionLabel,
   billingOwnerPlanChangeMessage,
+  planPeriodEndKind,
+  type PlanPeriodEndKind,
 } from '@features/billing/lib/subscription-owner-presentation';
 
 function priceLabel(usd: number | null): string {
@@ -26,12 +28,12 @@ function priceLabel(usd: number | null): string {
   return `${formatCatalogPrice(usd)}/month`;
 }
 
-type PeriodEndKind = 'renews' | 'trial' | 'ends';
-
-function periodEndLabel(kind: PeriodEndKind): string {
-  if (kind === 'trial') return 'Trial ends';
-  return kind === 'ends' ? 'Access ends' : 'Renews';
-}
+const PERIOD_END_LABEL: Record<PlanPeriodEndKind, string> = {
+  trial: 'Trial ends',
+  ends: 'Access ends',
+  renews: 'Renews',
+  period: 'Current period ends',
+};
 
 const secondaryLinkClassName =
   'font-medium underline underline-offset-2 transition-colors hover:text-foreground';
@@ -76,13 +78,10 @@ export function UpgradeChooser() {
     typeof rawUsedPercent === 'number' && Number.isFinite(rawUsedPercent)
       ? Math.max(0, Math.min(100, Math.round(rawUsedPercent)))
       : null;
-  const renewalDate = formatBillingDate(billing?.current_period_end ?? null);
-  const periodEndKind: PeriodEndKind =
-    billing?.status === 'canceled' || subscription?.cancel_at_period_end === true
-      ? 'ends'
-      : billing?.status === 'trialing'
-        ? 'trial'
-        : 'renews';
+  const periodEndKind = planPeriodEndKind(subscription);
+  const renewalDate = periodEndKind
+    ? formatBillingDateFromSeconds(subscription?.current_period_end ?? null)
+    : null;
   const endingPaidPlan = periodEndKind === 'ends' && !isFreeBillingPlanTier(currentPlan);
 
   return (
@@ -142,9 +141,9 @@ export function UpgradeChooser() {
               </div>
             ) : null}
 
-            {renewalDate ? (
+            {periodEndKind && renewalDate ? (
               <p className="mt-4 text-sm text-muted-foreground" data-testid="upgrade-renewal">
-                {periodEndLabel(periodEndKind)} {renewalDate}
+                {PERIOD_END_LABEL[periodEndKind]} {renewalDate}
               </p>
             ) : null}
             {endingPaidPlan && renewalDate ? (

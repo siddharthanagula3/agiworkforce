@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, Maximize2, Presentation } from 'lucide-react
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { Artifact } from '../../lib/types';
+import { splitSlides } from '../../lib/presentation-slides';
 import { MarkdownLite } from '../MessageBubble';
 
 export interface PresentationArtifactProps {
@@ -10,32 +11,6 @@ export interface PresentationArtifactProps {
 }
 
 const MAX_DOTS = 16;
-
-export function splitSlides(raw: string): string[] {
-  const content = raw.replace(/\r\n/g, '\n').trim();
-  if (!content) return [];
-
-  const parts = content.split(/\n[ \t]*-{3,}[ \t]*\n/);
-  if (parts.length > 1) {
-    return parts.map((s) => s.trim()).filter(Boolean);
-  }
-
-  const lines = content.split('\n');
-  const slideChunks: string[] = [];
-  let currentChunk: string[] = [];
-
-  lines.forEach((line) => {
-    if ((line.startsWith('# ') || line.startsWith('## ')) && currentChunk.length > 0) {
-      slideChunks.push(currentChunk.join('\n'));
-      currentChunk = [line];
-    } else {
-      currentChunk.push(line);
-    }
-  });
-  if (currentChunk.length > 0) slideChunks.push(currentChunk.join('\n'));
-
-  return slideChunks.map((s) => s.trim()).filter(Boolean);
-}
 
 export function PresentationArtifact({ artifact, className }: PresentationArtifactProps) {
   const slides = useMemo(() => splitSlides(artifact.content), [artifact.content]);

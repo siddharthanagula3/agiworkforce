@@ -10,6 +10,7 @@ import {
 import { PlanCard } from './PlanCard';
 
 const PAID_TIERS = ['basic', 'pro', 'max', 'max_15x', 'team'] as const;
+const COMPARED_TIERS = ['pro', 'max', 'max_15x', 'team'] as const;
 
 function bulletTexts(): string[] {
   return screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
@@ -25,14 +26,29 @@ describe('PlanCard', () => {
     },
   );
 
-  it.each(PAID_TIERS)('opens the %s plan with its usage relative to the plan below it', (tier) => {
-    const lines = managedUsageComparisonLines(tier);
-    expect(lines.length).toBeGreaterThan(0);
+  it.each(COMPARED_TIERS)(
+    'opens the %s plan with its usage relative to the plan below it',
+    (tier) => {
+      const lines = managedUsageComparisonLines(tier);
+      expect(lines.length).toBeGreaterThan(0);
 
-    render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
+      render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
 
-    expect(bulletTexts().slice(0, lines.length)).toEqual(lines);
-    expect(bulletTexts().join('\n')).not.toMatch(/credits per|per 5 hours/i);
+      expect(bulletTexts().slice(0, lines.length)).toEqual(lines);
+      expect(bulletTexts().join('\n')).not.toMatch(/credits per|per 5 hours/i);
+    },
+  );
+
+  // PLAN-PAID-ALLOWANCES-BELOW-FREE-01: Free is above Basic in every window until the paid
+  // allowances are set, so the Basic card states no multiple of Free.
+  it('opens the basic plan with what it includes and no comparison with Free', () => {
+    expect(managedUsageComparisonLines('basic')).toEqual([]);
+
+    render(<PlanCard tier="basic" isCurrentPlan={false} onCtaClick={vi.fn()} />);
+
+    const bullets = bulletTexts();
+    expect(bullets.length).toBeGreaterThan(0);
+    expect(bullets.join('\n')).not.toMatch(/than Free|more usage|credits per|per 5 hours/i);
   });
 
   it('states the top individual plan weekly usage against the plan it is measured from', () => {

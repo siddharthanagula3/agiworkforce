@@ -182,7 +182,27 @@ test('emits separated registry records and cross-language artifacts', () => {
   assert.deepEqual(registry.policies.auto.tierAllowedSlots.free, [
     'free_workhorse',
     'free_workhorse_fast',
+    'fast_anthropic',
   ]);
+  assert.equal(
+    registry.policies.auto.slots.fast_anthropic.modelKey,
+    Object.values(registry.families).find(
+      (family) => family.provider === 'anthropic' && family.tier === 'fast',
+    )?.activeModelKey,
+  );
+  for (const [tier, slots] of Object.entries(registry.policies.auto.tierAllowedSlots)) {
+    assert.ok(
+      slots.includes('fast_anthropic'),
+      `${tier} must admit an explicit pick of the fast Anthropic model`,
+    );
+  }
+  assert.equal(
+    JSON.stringify(
+      Object.values(registry.policies.auto.tasks).map((task) => task.preferredSlots),
+    ).includes('"fast_anthropic"'),
+    false,
+    'Auto must never route a turn to the fast Anthropic slot; it serves explicit picks only',
+  );
   for (const slotId of registry.policies.auto.tierAllowedSlots.free) {
     const modelKey = registry.policies.auto.slots[slotId].modelKey;
     assert.equal(

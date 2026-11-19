@@ -97,10 +97,13 @@ jest.mock('@/src/features/waitlist/store', () => ({
     selector({ cloudUnlocked: true }),
 }));
 
-jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: { appMode: string }) => unknown) =>
-    selector({ appMode: 'cloud' }),
-}));
+jest.mock('@/src/features/chat/store/appModeStore', () => {
+  const state = { appMode: 'cloud' };
+  const useChatAppModeStore = (selector: (s: typeof state) => unknown) => selector(state);
+  useChatAppModeStore.getState = () => state;
+  useChatAppModeStore.subscribe = () => () => undefined;
+  return { useChatAppModeStore };
+});
 
 jest.mock('@/src/features/chat/hooks/useAppModeSwitch', () => ({
   useAppModeSwitch: () => ({
@@ -112,6 +115,11 @@ jest.mock('@/src/features/chat/hooks/useAppModeSwitch', () => ({
 }));
 
 import SettingsTabScreen from '@/src/features/settings';
+
+const ROUTES_REACHED_TWICE_ON_PURPOSE: Record<string, number> = {
+  '/(app)/about': 2,
+  '/(app)/settings/parental-controls': 2,
+};
 
 function pressedDestinations() {
   const { getAllByRole } = render(<SettingsTabScreen />);
@@ -125,7 +133,11 @@ function pressedDestinations() {
 describe('settings root destinations', () => {
   it('never routes two rows to the same screen', () => {
     const destinations = pressedDestinations();
-    const duplicates = destinations.filter((d, i) => destinations.indexOf(d) !== i);
+    const duplicates = [...new Set(destinations)].filter(
+      (route) =>
+        destinations.filter((d) => d === route).length >
+        (ROUTES_REACHED_TWICE_ON_PURPOSE[route] ?? 1),
+    );
     expect(duplicates).toEqual([]);
   });
 
@@ -133,5 +145,34 @@ describe('settings root destinations', () => {
     const { getAllByLabelText, queryAllByLabelText } = render(<SettingsTabScreen />);
     expect(queryAllByLabelText(/^Billing/)).toHaveLength(0);
     expect(getAllByLabelText(/^Subscription\./)).toHaveLength(1);
+  });
+
+  it('names the feedback row with the title of the screen it opens', () => {
+    const { getByLabelText, queryByLabelText } = render(<SettingsTabScreen />);
+    mockPush.mockClear();
+    fireEvent.press(getByLabelText('Report App Issue'));
+
+    expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(app)/feedback' }));
+    expect(queryByLabelText('Send Feedback')).toBeNull();
+  });
+
+  it('names the device integrations row with the title of the screen it opens', () => {
+    const {
+      DEVICE_INTEGRATIONS_SCREEN_TITLE,
+    } = require('@/src/features/integrations/presentation');
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    mockPush.mockClear();
+    fireEvent.press(getByLabelText('Device Integrations'));
+
+    expect(DEVICE_INTEGRATIONS_SCREEN_TITLE).toBe('Device Integrations');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/integrations');
+  });
+
+  it('opens About from the header button as well as from the Support row', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    mockPush.mockClear();
+    fireEvent.press(getByLabelText('About AGI'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/about');
   });
 });

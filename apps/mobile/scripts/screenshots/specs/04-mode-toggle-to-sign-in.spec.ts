@@ -21,10 +21,16 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
   });
 
   it('ModeToggle is visible in the sidebar', async () => {
-    await element(by.label('Open navigation drawer')).tap();
-    await waitFor(element(by.id('chat.mode-toggle')))
-      .toBeVisible()
-      .withTimeout(10000);
+    try {
+      await waitFor(element(by.id('chat.mode-toggle')))
+        .toBeVisible()
+        .withTimeout(2000);
+    } catch {
+      await element(by.label('Open navigation drawer')).tap();
+      await waitFor(element(by.id('chat.mode-toggle')))
+        .toBeVisible()
+        .withTimeout(10000);
+    }
   });
 
   it('tapping the Cloud side routes to Clerk sign-in and captures the frame', async () => {

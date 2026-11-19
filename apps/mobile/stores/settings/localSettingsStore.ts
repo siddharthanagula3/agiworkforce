@@ -16,6 +16,9 @@ import type {
 
 export type { ThemeMode, AccentColor, FontPreference, Personalization };
 
+export type LinkBrowser = 'in-app' | 'system';
+export type MapProvider = 'apple' | 'google';
+
 export interface LocalSettingsState {
   themeMode: ThemeMode;
   accentColor: AccentColor;
@@ -29,6 +32,8 @@ export interface LocalSettingsState {
   generateMemoryFromHistory: boolean;
   includeSensitiveTopics: boolean;
   autoCorrectEnabled: boolean;
+  linkBrowser: LinkBrowser;
+  mapProvider: MapProvider;
   personalization: Personalization;
 
   setThemeMode: (mode: ThemeMode) => void;
@@ -43,6 +48,8 @@ export interface LocalSettingsState {
   setGenerateMemoryFromHistory: (enabled: boolean) => void;
   setIncludeSensitiveTopics: (enabled: boolean) => void;
   setAutoCorrectEnabled: (enabled: boolean) => void;
+  setLinkBrowser: (browser: LinkBrowser) => void;
+  setMapProvider: (provider: MapProvider) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
 }
 
@@ -77,6 +84,8 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       generateMemoryFromHistory: true,
       includeSensitiveTopics: false,
       autoCorrectEnabled: true,
+      linkBrowser: 'in-app',
+      mapProvider: 'apple',
       personalization: defaultPersonalization,
 
       setThemeMode: (mode) => set({ themeMode: mode }),
@@ -91,6 +100,8 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       setGenerateMemoryFromHistory: (enabled) => set({ generateMemoryFromHistory: enabled }),
       setIncludeSensitiveTopics: (enabled) => set({ includeSensitiveTopics: enabled }),
       setAutoCorrectEnabled: (enabled) => set({ autoCorrectEnabled: enabled }),
+      setLinkBrowser: (browser) => set({ linkBrowser: browser }),
+      setMapProvider: (provider) => set({ mapProvider: provider }),
       setPersonalization: (partial) =>
         set({ personalization: { ...get().personalization, ...partial } }),
     }),
@@ -111,6 +122,8 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
           ...current,
           ...persistedState,
           accentColor: accentTokenFrom(persistedState.accentColor ?? current.accentColor),
+          linkBrowser: persistedState.linkBrowser === 'system' ? 'system' : 'in-app',
+          mapProvider: persistedState.mapProvider === 'google' ? 'google' : 'apple',
           personalization: {
             ...current.personalization,
             ...(persistedState.personalization ?? {}),

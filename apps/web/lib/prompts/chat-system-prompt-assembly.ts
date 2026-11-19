@@ -68,6 +68,46 @@ export interface ChatTurnState {
   readonly writingCards?: boolean;
   /** The client publishes artifacts as hosted pages, where the artifact app runtime runs. */
   readonly artifactApps?: boolean;
+  /** The account's Capabilities switches; absent when the caller could not read them. */
+  readonly capabilityPreferences?: ChatCapabilityPreferences;
+}
+
+export interface ChatCapabilityPreferences {
+  readonly artifacts: boolean;
+  readonly inlineVisualizations: boolean;
+  readonly cloudCodeExecution: boolean;
+}
+
+/** Code execution produces artifacts of its own, so it keeps artifacts on while it is on. */
+export function artifactsSwitchedOff(preferences: ChatCapabilityPreferences | undefined): boolean {
+  return preferences !== undefined && !preferences.artifacts && !preferences.cloudCodeExecution;
+}
+
+export function inlineVisualizationsSwitchedOff(
+  preferences: ChatCapabilityPreferences | undefined,
+): boolean {
+  return preferences !== undefined && !preferences.inlineVisualizations;
+}
+
+function inlineBlocksSectionKey(
+  sections: ChatSystemPromptSections,
+  richInlineBlocks: boolean | undefined,
+  artifactsOff: boolean,
+  visualizationsOff: boolean,
+): string {
+  const variant = (key: string): string | null => (sections[key] !== undefined ? key : null);
+  if (richInlineBlocks === false && sections['inline_blocks_unavailable'] !== undefined) {
+    return (
+      (artifactsOff ? variant('inline_blocks_unavailable_without_artifacts') : null) ??
+      'inline_blocks_unavailable'
+    );
+  }
+  if (artifactsOff && visualizationsOff) {
+    return variant('inline_blocks_without_artifacts_or_visualizations') ?? 'inline_blocks';
+  }
+  if (artifactsOff) return variant('inline_blocks_without_artifacts') ?? 'inline_blocks';
+  if (visualizationsOff) return variant('inline_blocks_without_visualizations') ?? 'inline_blocks';
+  return 'inline_blocks';
 }
 
 export interface ChatTurnClock {
@@ -382,6 +422,9 @@ export function assembleChatSystemPrompt(
     !state.codeExecutionUnavailable && toolNames.includes('execute_code')
       ? (state.attachmentSandboxPaths ?? [])
       : [];
+  const artifactsOff = artifactsSwitchedOff(state.capabilityPreferences);
+  const visualizationsOff = inlineVisualizationsSwitchedOff(state.capabilityPreferences);
+  const artifactMarkers = artifactsOff ? undefined : state.artifactMarkers;
 
   const time =
     section('time_utc', { utc: clock.utc }) +
@@ -402,7 +445,7 @@ export function assembleChatSystemPrompt(
     section('capability_honesty'),
     productCapabilityBlock(
       sections,
-      state.productCapabilities && state.artifactMarkers
+      state.productCapabilities && artifactMarkers
         ? [...state.productCapabilities, ARTIFACTS_CAPABILITY]
         : state.productCapabilities,
     ),
@@ -469,27 +512,36 @@ export function assembleChatSystemPrompt(
   );
   if (state.writingCards) blocks.push(section('email_and_writing_cards'));
   if (state.artifactMarkers) {
+    if (artifactMarkers) {
+      blocks.push(
+        section('artifacts', {
+          htmlMarker: artifactMarkers.html,
+          reactMarker: artifactMarkers.react,
+          mermaidMarker: artifactMarkers.mermaid,
+        }),
+      );
+    }
     blocks.push(
-      section('artifacts', {
-        htmlMarker: state.artifactMarkers.html,
-        reactMarker: state.artifactMarkers.react,
-        mermaidMarker: state.artifactMarkers.mermaid,
-      }),
       section(
-        state.richInlineBlocks === false && sections['inline_blocks_unavailable'] !== undefined
-          ? 'inline_blocks_unavailable'
-          : 'inline_blocks',
+        inlineBlocksSectionKey(sections, state.richInlineBlocks, artifactsOff, visualizationsOff),
       ),
     );
   }
-  if (state.artifactRuntime !== false) {
+  if (state.artifactRuntime !== false && !artifactsOff) {
     blocks.push(section('artifact_runtime'));
     if (state.artifactConnectors) blocks.push(section('artifact_runtime_connectors'));
   }
-  if (state.artifactApps) {
+  if (state.artifactApps && !artifactsOff) {
     blocks.push(section('artifact_apps'));
     if (state.artifactConnectors) blocks.push(section('artifact_apps_connectors'));
   }
+  if (
+    artifactsOff &&
+    (state.artifactMarkers || state.artifactRuntime !== false || state.artifactApps)
+  ) {
+    blocks.push(section('artifacts_off'));
+  }
+  if (visualizationsOff) blocks.push(section('inline_visualizations_off'));
 
   if (state.codeExecutionUnavailable) blocks.push(section('code_execution_unavailable'));
   if (state.researchUnavailable) blocks.push(section('research_unavailable'));

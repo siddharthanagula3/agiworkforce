@@ -35,6 +35,15 @@ import { stripTrailingSlashes } from '@agiworkforce/types';
 export const TOOL_APPROVAL_RESUME_PATH = '/api/llm/v1/chat/completions/approve';
 export const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
 
+export const MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER = 'X-AGI-Runs-Search';
+export const MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED = 'title-goal';
+export const MANAGED_CLOUD_AGENT_RUN_SEARCH_MAX_LENGTH = 200;
+export const ManagedCloudAgentRunSearchTextSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(MANAGED_CLOUD_AGENT_RUN_SEARCH_MAX_LENGTH);
+
 export type ManagedCloudAgentRunHeaders = Record<string, string>;
 export type ManagedCloudAgentRunFetch = (input: string, init?: RequestInit) => Promise<Response>;
 export type ManagedCloudAgentRunWait = (ms: number, signal?: AbortSignal) => Promise<void>;
@@ -68,8 +77,13 @@ export interface ManagedCloudAgentRunListOptions {
   limit?: number;
   cursor?: string;
   projectId?: string;
+  q?: string;
   signal?: AbortSignal;
 }
+
+export type ManagedCloudAgentRunListResult = CloudAgentRunListPage & {
+  searchSupported?: boolean;
+};
 
 export interface ManagedCloudAgentRunFollowOptions {
   afterSequence?: number;
@@ -100,7 +114,7 @@ export interface ManagedCloudAgentRunInputAnswer {
 }
 
 export interface ManagedCloudAgentRunClient {
-  listRuns(options?: ManagedCloudAgentRunListOptions): Promise<CloudAgentRunListPage>;
+  listRuns(options?: ManagedCloudAgentRunListOptions): Promise<ManagedCloudAgentRunListResult>;
   getRun(
     runId: string,
     options?: ManagedCloudAgentRunReadOptions,
@@ -338,6 +352,7 @@ export function createManagedCloudAgentRunClient(
       const requestId = ManagedCloudAgentRunRequestIdSchema.optional().parse(options.requestId);
       const cursor = z.string().min(1).max(512).optional().parse(options.cursor);
       const projectId = z.string().uuid().optional().parse(options.projectId);
+      const q = ManagedCloudAgentRunSearchTextSchema.optional().parse(options.q);
       const limit = Math.min(100, Math.max(1, Math.trunc(options.limit ?? 25)));
       const params = new URLSearchParams();
       for (const state of states) params.append('state', state);
@@ -345,11 +360,16 @@ export function createManagedCloudAgentRunClient(
       if (requestId) params.set('requestId', requestId);
       if (cursor) params.set('cursor', cursor);
       if (projectId) params.set('projectId', projectId);
+      if (q) params.set('q', q);
       const response = await request(`${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?${params.toString()}`, {
         headers: await readHeaders(),
         signal: options.signal,
       });
-      return parseContract(response, CloudAgentRunListPageSchema, 'list response');
+      const page = await parseContract(response, CloudAgentRunListPageSchema, 'list response');
+      const searchSupported =
+        response.headers.get(MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER)?.trim() ===
+        MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED;
+      return searchSupported ? { ...page, searchSupported } : page;
     },
 
     async getRun(runId, options = {}) {

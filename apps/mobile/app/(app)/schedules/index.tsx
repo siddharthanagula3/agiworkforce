@@ -8,6 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ArrowLeft, Plus, Calendar, Clock, ListFilter } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
@@ -35,6 +36,8 @@ import {
   type ScheduleSort,
   type ScheduleStatusFilter,
 } from '@/src/features/schedules/sort';
+import { confirmScheduleDeletion } from '@/src/features/schedules/deleteConfirmation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const SCHEDULE_FILTERS: readonly { key: ScheduleStatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -167,18 +170,9 @@ export default function SchedulesScreen() {
   const handleDelete = useCallback(
     (id: string) => {
       const schedule = schedules.find((s) => s.id === id);
-      Alert.alert(
-        'Delete Schedule',
-        `Are you sure you want to delete "${schedule?.name ?? 'this schedule'}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => deleteSchedule(id),
-          },
-        ],
-      );
+      confirmScheduleDeletion(schedule?.name, () => {
+        void deleteSchedule(id);
+      });
     },
     [schedules, deleteSchedule],
   );
@@ -269,6 +263,7 @@ export default function SchedulesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={{ ...contentColumn('reading'), flexGrow: 0, flexShrink: 0 }}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}
         >
           {SCHEDULE_FILTERS.map((item) => {
@@ -278,6 +273,7 @@ export default function SchedulesScreen() {
             ).length;
             return (
               <PressableBox
+                hitSlop={{ top: 5, bottom: 5 }}
                 key={item.key}
                 onPress={() => setFilter(item.key)}
                 accessibilityRole="button"
@@ -371,7 +367,11 @@ export default function SchedulesScreen() {
       ) : (
         <FlatList
           data={visibleSchedules}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 100,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -422,7 +422,7 @@ function Header({
 }) {
   const colors = useThemeColors();
   return (
-    <View className="flex-row items-center px-3 h-12">
+    <View testID="schedules-header" className="flex-row items-center px-3 min-h-12">
       <PressableBox
         onPress={onBackPress}
         className="p-2 rounded-lg active:bg-white/5"
@@ -431,15 +431,16 @@ function Header({
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
       </PressableBox>
-      <View
-        pointerEvents="none"
-        style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
+      <Text
+        variant="subheading"
+        accessibilityRole="header"
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        style={{ flex: 1, textAlign: 'center' }}
       >
-        <Text variant="subheading" accessibilityRole="header">
-          Scheduled
-        </Text>
-      </View>
-      <View className="flex-1" />
+        Scheduled
+      </Text>
       <PressableBox
         onPress={onRunsPress}
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -483,31 +484,44 @@ function EmptyState({
 }) {
   const colors = useThemeColors();
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <Animated.View entering={FadeIn.duration(motion.moved)} className="items-center pt-6">
-        <View
-          className="w-20 h-20 rounded-2xl items-center justify-center mb-5"
-          style={{ backgroundColor: `${colors.teal}15` }}
-        >
-          <Calendar size={36} color={colors.teal} />
-        </View>
+    <View className="flex-1">
+      <ScrollView
+        testID="schedules-empty-scroll"
+        className="flex-1"
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 24,
+          paddingBottom: 24,
+        }}
+      >
+        <Animated.View entering={FadeIn.duration(motion.moved)} className="items-center pt-6">
+          <View
+            className="w-20 h-20 rounded-2xl items-center justify-center mb-5"
+            style={{ backgroundColor: `${colors.teal}15` }}
+          >
+            <Calendar size={36} color={colors.teal} />
+          </View>
 
-        <Text variant="heading" className="text-center mb-2">
-          {canCreateSchedule ? 'No Schedules' : LOCKED_TITLE}
-        </Text>
-        <Text className="text-white/50 text-center text-sm mb-6 leading-5">
-          {canCreateSchedule
-            ? 'Recurring tasks that run in the daily AGI Cloud scheduling window.'
-            : NATIVE_PURCHASES_AVAILABLE
-              ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
-              : 'Free Cloud chat remains available.'}
-        </Text>
+          <Text variant="heading" className="text-center mb-2">
+            {canCreateSchedule ? 'No Schedules' : LOCKED_TITLE}
+          </Text>
+          <Text className="text-white/50 text-center text-sm leading-5">
+            {canCreateSchedule
+              ? 'Recurring tasks that run in the daily AGI Cloud scheduling window.'
+              : NATIVE_PURCHASES_AVAILABLE
+                ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
+                : 'Free Cloud chat remains available.'}
+          </Text>
+          <View className="mt-2">
+            <HelpArticleLink docId="schedules-and-triggers" label="How schedules work" />
+          </View>
+        </Animated.View>
 
-        {canCreateSchedule || NATIVE_PURCHASES_AVAILABLE ? (
+        {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}
+      </ScrollView>
+
+      {canCreateSchedule || NATIVE_PURCHASES_AVAILABLE ? (
+        <View testID="schedules-empty-action" className="px-6 pt-3 pb-2">
           <Button
             title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
             variant="primary"
@@ -515,11 +529,9 @@ function EmptyState({
             onPress={onCreatePress}
             className="w-full"
           />
-        ) : null}
-      </Animated.View>
-
-      {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}
-    </ScrollView>
+        </View>
+      ) : null}
+    </View>
   );
 }
 

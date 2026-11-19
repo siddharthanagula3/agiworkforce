@@ -20,12 +20,21 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render } from '@testing-library/react-native';
+import { Stop } from 'react-native-svg';
 import {
   VoiceOrb,
   smoothVoiceLevel,
   voiceOrbPalette,
 } from '@/src/features/voice/components/VoiceOrb';
-import { colors } from '@/src/ui/theme';
+import {
+  colors,
+  highContrastColors,
+  highContrastLightColors,
+  lightColors,
+  type ColorScheme,
+} from '@/src/ui/theme/tokens';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 
 const ORB_SOURCE = readFileSync(
   join(__dirname, '..', 'src/features/voice/components/VoiceOrb.tsx'),
@@ -83,22 +92,46 @@ describe('VoiceOrb', () => {
     });
   });
 
-  describe('colour carries the phase', () => {
+  describe.each<['light' | 'dark', ColorScheme]>([
+    ['light', lightColors],
+    ['dark', colors],
+  ])('colour carries the phase in %s appearance', (themeMode, palette) => {
     it('keeps the calm periwinkle while listening, thinking and idle', () => {
       for (const phase of ['idle', 'listening', 'thinking'] as const) {
-        expect(voiceOrbPalette(phase)).toEqual({
-          start: colors.voiceOrbStart,
-          mid: colors.voiceOrbMid,
-          end: colors.voiceOrbEnd,
+        expect(voiceOrbPalette(phase, palette)).toEqual({
+          start: palette.voiceOrbStart,
+          mid: palette.voiceOrbMid,
+          end: palette.voiceOrbEnd,
         });
       }
     });
 
     it('turns warm while the assistant speaks', () => {
-      const speaking = voiceOrbPalette('speaking');
-      expect(speaking.start).toBe(colors.brandAmber);
-      expect(speaking.start).not.toBe(voiceOrbPalette('listening').start);
+      const speaking = voiceOrbPalette('speaking', palette);
+      expect(speaking.start).toBe(palette.brandAmber);
+      expect(speaking.start).not.toBe(voiceOrbPalette('listening', palette).start);
     });
+
+    it('fills the rendered orb from the current palette', () => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useLocalSettingsStore.setState({ themeMode, accentColor: 'neutral' });
+      const { UNSAFE_getAllByType } = render(<VoiceOrb phase="speaking" />);
+
+      expect(UNSAFE_getAllByType(Stop).map((stop) => stop.props.stopColor)).toEqual([
+        palette.brandAmber,
+        palette.brandAmber,
+        palette.voiceOrbEnd,
+      ]);
+    });
+  });
+
+  it('draws the same orb in every palette, because the always-dark voice screen shows the themed orb', () => {
+    const orbColours = (palette: ColorScheme) =>
+      (['idle', 'speaking'] as const).map((phase) => voiceOrbPalette(phase, palette));
+
+    for (const palette of [lightColors, highContrastColors, highContrastLightColors]) {
+      expect(orbColours(palette)).toEqual(orbColours(colors));
+    }
   });
 
   describe('level smoothing', () => {

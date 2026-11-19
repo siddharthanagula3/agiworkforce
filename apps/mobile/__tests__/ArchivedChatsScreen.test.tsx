@@ -1,7 +1,7 @@
 import type { ReactTestInstance } from 'react-test-renderer';
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert, RefreshControl } from 'react-native';
+import { Alert, RefreshControl, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 function retainedPress(node: ReactTestInstance): () => void {
@@ -46,18 +46,32 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
-jest.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'View' }));
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'View',
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+}));
 jest.mock('@/components/ui/Card', () => ({
   Card: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
   const Icon = () => <View />;
-  return { ArrowLeft: Icon, Archive: Icon, Trash2: Icon, AlertCircle: Icon, RotateCcw: Icon };
+  return {
+    ArrowLeft: Icon,
+    Archive: Icon,
+    Trash2: Icon,
+    AlertCircle: Icon,
+    RotateCcw: Icon,
+    Search: Icon,
+    X: Icon,
+  };
 });
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
-  return { useTheme: () => ({ colors: tokens.lightColors, statusBarStyle: 'dark' }) };
+  return {
+    useTheme: () => ({ colors: tokens.lightColors, statusBarStyle: 'dark' }),
+    useThemeColors: () => tokens.lightColors,
+  };
 });
 jest.mock('@/src/features/auth/store', () => {
   const { create } = jest.requireActual<ImportedModule1>('zustand');
@@ -91,6 +105,7 @@ jest.mock('@/src/features/archived-chats', () => ({
   deleteAllArchivedConversations: jest.fn(),
 }));
 
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import ArchivedChatsScreen from '../app/(app)/settings/archived-chats';
@@ -127,6 +142,16 @@ describe('Archived chats failure recovery', () => {
   });
 
   afterEach(() => alertSpy.mockRestore());
+
+  it('titles the page with the shared centred settings header', async () => {
+    mockFetch.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 0 });
+    const screen = render(<ArchivedChatsScreen />);
+    await waitFor(() => expect(screen.getByText('No archived chats')).toBeTruthy());
+
+    const header = screen.getByRole('header', { name: 'Archived Chats' });
+    expect(StyleSheet.flatten(header.props.style)).toMatchObject({ textAlign: 'center' });
+    expect(screen.getByLabelText('Go back')).toBeTruthy();
+  });
 
   it('hides server diagnostics and retries a failed list', async () => {
     mockFetch
@@ -787,6 +812,87 @@ describe('Archived chats failure recovery', () => {
     act(() => mockFocus?.());
     await screen.findByText('Initial');
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Archived chats search', () => {
+  const archived = (...titles: string[]) => ({
+    conversations: titles.map((title) => ({
+      id: title,
+      title,
+      updatedAt: '2026-09-27T00:00:00.000Z',
+    })),
+    nextOffset: titles.length,
+    hasMore: false,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFetch.mockReset();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('account-a');
+    mockFocused = true;
+    mockFocus = undefined;
+    mockBlur = undefined;
+    useAuthStore.setState({ clerkUserId: 'account-a', isClerkSignedIn: true, isClerkLoaded: true });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  async function search(screen: ReturnType<typeof render>, text: string) {
+    fireEvent.changeText(screen.getByLabelText('Search archived chats'), text);
+    await act(async () => {
+      jest.advanceTimersByTime(SEARCH_INPUT_DEBOUNCE_MS);
+    });
+  }
+
+  it('finds an archived chat by its title', async () => {
+    mockFetch
+      .mockResolvedValueOnce(archived('Trip plan', 'Budget review'))
+      .mockResolvedValueOnce(archived('Trip plan'));
+    const screen = render(<ArchivedChatsScreen />);
+    await screen.findByText('Budget review');
+
+    await search(screen, ' trip ');
+
+    await waitFor(() => expect(screen.queryByText('Budget review')).toBeNull());
+    expect(screen.getByText('Trip plan')).toBeTruthy();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch.mock.calls[1]?.[0]).toBe(0);
+    expect(mockFetch.mock.calls[1]?.[1]).toEqual(captureCloudAccountEpoch());
+    expect(mockFetch.mock.calls[1]?.[3]).toBe('trip');
+    expect(screen.queryByLabelText('Delete all archived chats')).toBeNull();
+  });
+
+  it('says when no archived chat matches, and shows them all again once cleared', async () => {
+    mockFetch
+      .mockResolvedValueOnce(archived('Trip plan'))
+      .mockResolvedValueOnce(archived())
+      .mockResolvedValueOnce(archived('Trip plan'));
+    const screen = render(<ArchivedChatsScreen />);
+    await screen.findByText('Trip plan');
+
+    await search(screen, 'recipes');
+    await screen.findByText('No archived chats match this search.');
+    expect(screen.queryByText('No archived chats')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Clear archived chat search'));
+    await act(async () => {
+      jest.advanceTimersByTime(SEARCH_INPUT_DEBOUNCE_MS);
+    });
+    await screen.findByText('Trip plan');
+    expect(mockFetch.mock.calls[2]?.[3]).toBe('');
+    expect(screen.getByLabelText('Delete all archived chats')).toBeTruthy();
+  });
+
+  it('offers no search when nothing is archived', async () => {
+    mockFetch.mockResolvedValueOnce(archived());
+    const screen = render(<ArchivedChatsScreen />);
+    await screen.findByText('No archived chats');
+
+    expect(screen.queryByLabelText('Search archived chats')).toBeNull();
   });
 });
 

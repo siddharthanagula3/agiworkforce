@@ -196,6 +196,7 @@ export function StartWorkSheet({
                     const selected = project.id === projectId;
                     return (
                       <PressableBox
+                        hitSlop={{ top: 4, bottom: 4 }}
                         key={project.id}
                         onPress={() => setProjectId(selected ? undefined : project.id)}
                         accessibilityRole="button"

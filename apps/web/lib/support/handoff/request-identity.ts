@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { getOptionalAuthUser } from '@/lib/api-auth';
 import { getOrCreateAnonSession } from '@/lib/csrf';
 import { getIdentityUser } from '@/lib/server/identity';
+import { IDENTITY_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
 import { logger } from '@/lib/logger';
 
 export interface HandoffRequestIdentity {
@@ -12,8 +13,6 @@ export interface HandoffRequestIdentity {
   verifiedEmail: string | null;
   newCookie?: string;
 }
-
-const IDENTITY_LOOKUP_TIMEOUT_MS = 1_500;
 
 async function resolveVerifiedEmail(userId: string): Promise<string | null> {
   try {

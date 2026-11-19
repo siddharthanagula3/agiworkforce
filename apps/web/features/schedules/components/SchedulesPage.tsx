@@ -63,7 +63,7 @@ import {
   scheduleToDraft,
   validateAndBuildScheduleRequest,
 } from '../lib/schedule-form';
-import { scheduleApi, type ScheduleApi } from '../services/schedule-api';
+import { ScheduleApiError, scheduleApi, type ScheduleApi } from '../services/schedule-api';
 import {
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
@@ -294,6 +294,7 @@ export function SchedulesPage({
   const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
   const [actionMessage, setActionMessage] = useState('');
   const manualRunKeys = useRef<Record<string, string>>({});
+  const deletedScheduleIds = useRef<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
   const [sortOrder, setSortOrder] = useState<ScheduleSortOrder>('next-run');
@@ -338,9 +339,10 @@ export function SchedulesPage({
           projectId: scope?.projectId,
           signal: options.signal,
         });
-        setSchedules((current) =>
-          append ? uniqueSchedules(current, result.schedules) : result.schedules,
+        const listed = result.schedules.filter(
+          (schedule) => !deletedScheduleIds.current.has(schedule.id),
         );
+        setSchedules((current) => (append ? uniqueSchedules(current, listed) : listed));
         setHasMoreSchedules(result.hasMore);
         setNextScheduleOffset(result.pagination.offset + result.pagination.limit);
         setListStatus('success');
@@ -696,7 +698,12 @@ export function SchedulesPage({
     setOperation(target.id, 'delete');
     setRowError(target.id, null);
     try {
-      await api.deleteSchedule(target.id);
+      try {
+        await api.deleteSchedule(target.id);
+      } catch (error) {
+        if (!(error instanceof ScheduleApiError && error.status === 404)) throw error;
+      }
+      deletedScheduleIds.current.add(target.id);
       setSchedules((current) => current.filter((schedule) => schedule.id !== target.id));
       setHistoryById((current) => {
         const next = { ...current };
@@ -1379,7 +1386,8 @@ export function SchedulesPage({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Schedule?</AlertDialogTitle>
             <AlertDialogDescription>
-              Delete “{deleteTarget?.name}” and its run history. This action cannot be undone.
+              Delete “{deleteTarget?.name}”, its run history and event triggers. This action cannot
+              be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

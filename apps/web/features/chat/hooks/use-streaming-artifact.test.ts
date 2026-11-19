@@ -363,4 +363,27 @@ describe('useStreamingArtifactSync', () => {
     expect(toastMock.message).not.toHaveBeenCalled();
     second.unmount();
   });
+
+  it('titles the partial block the way the finished artifact is titled for its language', () => {
+    const { rerender } = renderHook(
+      ({ block }: { block: TrailingUnclosedBlock | null }) =>
+        useStreamingArtifactSync({
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          isStreaming: true,
+          block,
+        }),
+      {
+        initialProps: {
+          block: blockFor(
+            '```markdown\n<!-- @artifact -->\nUse this to revise.\n\n# Cell biology quiz\n',
+          ),
+        },
+      },
+    );
+    expect(useStreamingArtifactStore.getState().streaming?.title).toBe('Cell biology quiz');
+
+    rerender({ block: blockFor('```csv\nFruit name,Price\napple,1\npear,2') });
+    expect(useStreamingArtifactStore.getState().streaming?.title).not.toContain('Fruit name');
+  });
 });

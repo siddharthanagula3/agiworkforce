@@ -4,7 +4,10 @@ type OriginalProjectKnowledgeObjectStorageModule =
 import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryObjectStore } from '@agiworkforce/object-storage';
-import { RESUMABLE_UPLOAD_PART_BYTES } from '@agiworkforce/cloud-contracts';
+import {
+  RESUMABLE_UPLOAD_PART_BYTES,
+  RESUMABLE_UPLOAD_RELAY_SEGMENT_BYTES,
+} from '@agiworkforce/cloud-contracts';
 
 const { mockGetUserScopedDb, mockCompleteChatAttachmentUpload, store, scopedDb } = vi.hoisted(
   () => ({
@@ -56,7 +59,7 @@ vi.mock('@/lib/server/chat-attachment-completion', () => ({
   purgeChatAttachmentUpload: vi.fn(),
   completeChatAttachmentUpload: mockCompleteChatAttachmentUpload,
   findCompletedChatAttachment: vi.fn().mockResolvedValue(null),
-  resolveTemporaryChatUpload: vi.fn().mockResolvedValue(false),
+  resolveTemporaryChatUpload: vi.fn(async () => ({ temporary: false, conversationId: null })),
   resolveUploadSourceSurface: () => 'web',
 }));
 vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
@@ -101,6 +104,7 @@ vi.mock('@/lib/server/object-storage-runtime', async (importOriginal) => ({
 
 import { POST as createUpload } from '../route';
 import { findCompletedChatAttachment } from '@/lib/server/chat-attachment-completion';
+import { RELAY_SEGMENTS_PREFIX } from '../relay-segments';
 import {
   DELETE as abortUpload,
   GET as readProgress,
@@ -328,5 +332,151 @@ describe('a resumable upload that is interrupted', () => {
 
     expect(response.status).toBe(500);
     expect((await response.json()).error.message).not.toContain('storage host');
+  });
+});
+
+const STORE_OPERATIONS = [
+  'put',
+  'get',
+  'getStream',
+  'head',
+  'delete',
+  'copyIfMatch',
+  'presignPut',
+  'presignGet',
+  'createMultipartUpload',
+  'uploadPart',
+  'listUploadedParts',
+  'completeMultipartUpload',
+  'abortMultipartUpload',
+  'listPendingMultipartUploads',
+  'presignUploadPart',
+  'listObjects',
+] as const;
+
+const FIRST_SEGMENT = LEAD.slice(0, RESUMABLE_UPLOAD_RELAY_SEGMENT_BYTES);
+const LAST_SEGMENT = LEAD.slice(RESUMABLE_UPLOAD_RELAY_SEGMENT_BYTES);
+
+function sendSegment(upload: OpenedUpload, offset: number, body: Uint8Array) {
+  return relayPart(
+    createRequest(`${sessionUrl(upload)}&partNumber=1&offset=${offset}`, {
+      method: 'PUT',
+      body: body as BodyInit,
+    }),
+    context(upload.uploadId),
+  );
+}
+
+async function relaySegmentsLeft(): Promise<string[]> {
+  const listed = (await store.current?.listObjects(PRIVATE_BUCKET, RELAY_SEGMENTS_PREFIX)) ?? [];
+  return listed.map((object) => object.key);
+}
+
+/** The operations a route asked of storage, not the ones the memory store makes of itself. */
+function recordStoreCalls(): string[] {
+  const target = store.current!;
+  const calls: string[] = [];
+  let depth = 0;
+  for (const operation of STORE_OPERATIONS) {
+    const original = target[operation].bind(target) as (...args: unknown[]) => Promise<unknown>;
+    vi.spyOn(target, operation).mockImplementation((async (...args: unknown[]) => {
+      if (depth === 0) calls.push(operation);
+      depth += 1;
+      try {
+        return await original(...args);
+      } finally {
+        depth -= 1;
+      }
+    }) as never);
+  }
+  return calls;
+}
+
+describe('a relayed part sent in segments', () => {
+  it('leaves no segment behind once the upload completes, with a closed-session check before and after each waiting segment', async () => {
+    const upload = await openUpload();
+    const key = await pendingKey();
+    const calls = recordStoreCalls();
+
+    expect((await sendSegment(upload, 0, FIRST_SEGMENT)).status).toBe(200);
+    expect((await sendSegment(upload, FIRST_SEGMENT.byteLength, LAST_SEGMENT)).status).toBe(200);
+    expect((await sendPart(upload, 2, TAIL)).status).toBe(200);
+    expect((await finish(upload)).status).toBe(200);
+    const sent = [...calls];
+
+    expect(sent).toEqual([
+      'listPendingMultipartUploads',
+      'put',
+      'listPendingMultipartUploads',
+      'get',
+      'uploadPart',
+      'delete',
+      'uploadPart',
+      'listUploadedParts',
+      'completeMultipartUpload',
+    ]);
+    expect(await relaySegmentsLeft()).toEqual([]);
+    const object = await store.current?.get(PRIVATE_BUCKET, key);
+    expect(object ? Buffer.compare(Buffer.from(object.data), FILE_BYTES) : null).toBe(0);
+  });
+
+  it('removes a waiting segment when a client that reaches storage directly cancels', async () => {
+    const upload = await openUpload();
+    expect((await sendSegment(upload, 0, FIRST_SEGMENT)).status).toBe(200);
+    expect(await relaySegmentsLeft()).toHaveLength(1);
+
+    expect((await cancel(upload)).status).toBe(200);
+
+    expect(await relaySegmentsLeft()).toEqual([]);
+  });
+
+  it('refuses a segment that arrives after the upload was cancelled, before storing it', async () => {
+    const upload = await openUpload();
+    expect((await cancel(upload)).status).toBe(200);
+
+    const late = await sendSegment(upload, 0, FIRST_SEGMENT);
+
+    expect(late.status).toBe(404);
+    expect((await late.json()).error.message).toBe(
+      'This upload is no longer open. Start it again to finish the file.',
+    );
+    expect(await relaySegmentsLeft()).toEqual([]);
+  });
+
+  it('removes a segment whose upload was cancelled while it was being stored', async () => {
+    const upload = await openUpload();
+    const target = store.current!;
+    const put = target.put.bind(target);
+    const cancelled: number[] = [];
+    vi.spyOn(target, 'put').mockImplementation(async (input) => {
+      if (input.key.startsWith(RELAY_SEGMENTS_PREFIX))
+        cancelled.push((await cancel(upload)).status);
+      return put(input);
+    });
+
+    const segment = await sendSegment(upload, 0, FIRST_SEGMENT);
+
+    expect(cancelled).toEqual([200]);
+    expect(segment.status).toBe(404);
+    expect((await segment.json()).error.message).toBe(
+      'This upload is no longer open. Start it again to finish the file.',
+    );
+    expect(await relaySegmentsLeft()).toEqual([]);
+  });
+
+  it('removes the waiting segment when the last one arrives after the upload was closed', async () => {
+    const upload = await openUpload();
+    const key = await pendingKey();
+    expect((await sendSegment(upload, 0, FIRST_SEGMENT)).status).toBe(200);
+    await store.current?.abortMultipartUpload({
+      bucket: PRIVATE_BUCKET,
+      key,
+      uploadId: upload.uploadId,
+    });
+
+    const late = await sendSegment(upload, FIRST_SEGMENT.byteLength, LAST_SEGMENT);
+
+    expect(late.status).toBe(404);
+    expect(await relaySegmentsLeft()).toEqual([]);
   });
 });

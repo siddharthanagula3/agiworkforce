@@ -1,9 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (cb: () => void | (() => void)) => {
@@ -158,6 +162,8 @@ jest.mock('@/stores/chatStore', () => ({
       deleteMessage: jest.fn(),
       setPaywallError: jest.fn(),
       clearError: jest.fn(),
+      clearUnscopedError: jest.fn(),
+      discardUnsentConversation: jest.fn(async () => undefined),
       setSendError: jest.fn(),
       features: { imageGen: false },
       workMode: 'default',
@@ -288,6 +294,20 @@ describe('chat tab download banner', () => {
     mockInstalledModelIds = [SYNTHETIC_RETIRED_MODEL_ID];
     const { getByTestId } = render(<ChatTabScreen />);
     expect(getByTestId('download-model-banner')).toBeTruthy();
+  });
+
+  it('holds the download banner to the same reading column as the composer', () => {
+    mockInstalledModelIds = [SYNTHETIC_RETIRED_MODEL_ID];
+    const { getByTestId } = render(<ChatTabScreen />);
+
+    expect(
+      StyleSheet.flatten(getByTestId('download-model-banner.column').props.style),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      marginTop: 16,
+    });
   });
 
   it('hides the banner once a picker-selectable model is installed', () => {
