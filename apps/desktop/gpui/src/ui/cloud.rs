@@ -333,6 +333,16 @@ impl Desktop {
                 palette,
                 cx,
             ));
+            let mut writes = Vec::new();
+            if crate::cloud_new_chat_defaults::attempt(
+                crate::cloud_new_chat_defaults::current(),
+                &mut writes,
+            )
+            .is_err()
+                && writes.is_empty()
+            {
+                panel = panel.child(gpui::text!(crate::cloud_new_chat_defaults::UNAVAILABLE));
+            }
         }
         let project_id = self
             .cloud

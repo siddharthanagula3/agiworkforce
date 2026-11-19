@@ -195,6 +195,7 @@ const capabilitiesSchema = z.object({
   cloudWorkStart: z.boolean().optional(),
   workspaceFiles: z.boolean().optional(),
   workspaceFileRecovery: z.boolean().optional(),
+  codeDrafts: z.boolean().optional(),
   workspaceFileRecoveryBrowser: z.boolean().optional(),
   workspaceTerminal: z.boolean().optional(),
   instructions: z.boolean().optional(),

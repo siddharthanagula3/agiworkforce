@@ -5,6 +5,7 @@ import { BLOG_POSTS } from '@/lib/blog-posts';
 import { RELEASES, releasePath } from '@/lib/changelog-entries';
 import { INSPIRATION, inspirationPath } from './gallery/inspiration';
 import { documentationIndex } from './docs/doc-index';
+import { supportCollectionIndex } from './help/collections';
 
 type ChangeFrequency = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
 
@@ -150,5 +151,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: 'monthly' as const,
     priority: 0.6,
   }));
-  return [...pages, ...guides, ...posts];
+  const collections = supportCollectionIndex().collections.map((collection) => ({
+    url: `${SITE_URL}/help/collections/${collection.id}`,
+    changeFrequency: 'monthly' as const,
+    priority: 0.5,
+  }));
+  return [...pages, ...guides, ...posts, ...collections];
 }

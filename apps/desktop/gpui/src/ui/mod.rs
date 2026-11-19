@@ -35,6 +35,8 @@ mod cloud;
 mod cloud_controls;
 mod cloud_models;
 mod cloud_sends;
+mod code_drafts;
+mod code_sessions;
 mod code_settings;
 mod code_worktrees;
 mod conversation_management;
@@ -46,9 +48,12 @@ mod ext_notifications;
 mod ext_settings;
 mod ext_updates;
 mod extensions;
+mod file_changes;
 mod file_recovery;
 mod files;
 mod frame;
+mod host_defaults;
+mod mcp_servers;
 mod project_download;
 mod project_files;
 mod project_upload;
@@ -101,6 +106,12 @@ enum UiAction {
     BrowseFiles(String, Option<String>),
     ReadFile(String),
     OpenFilePath,
+    CreateFile,
+    RenameFile,
+    DeleteFile,
+    McpServers,
+    CloseMcpServers,
+    SetMcpEnabled(String, bool),
     CodeSettings,
     CodeWorktrees,
     CloseCodeWorktrees,
@@ -123,6 +134,18 @@ enum UiAction {
     UseStoredCodeInstructions,
     KeepCodeInstructionEdits,
     CodeInstructionSources,
+    ToggleArchivedSessions,
+    BeginCodeRename,
+    SaveCodeRename,
+    CancelCodeRename,
+    ArchiveCode,
+    UnarchiveCode,
+    DeleteCode,
+    DiscardCodeArchives,
+    HostDefaults,
+    CloseHostDefaults,
+    ReloadHostDefaults,
+    SaveHostDefault(crate::host_defaults::DefaultChange),
     SaveFile,
     CloseFile,
     ReloadFileRecovery,
@@ -229,6 +252,11 @@ struct Desktop {
     contracts: Arc<NativeContracts>,
     settings: Settings,
     code_settings: crate::code_settings::CodeSettings,
+    code_sessions: crate::code_sessions::CodeSessions,
+    host_defaults: crate::host_defaults::HostDefaults,
+    mcp: crate::mcp_servers::McpPanel,
+    code_draft: crate::code_composer_drafts::CodeDraftQueue,
+    code_draft_task: Option<gpui::Task<()>>,
     code_worktrees: crate::code_worktrees::CodeWorktrees,
     instruction_buffer: gpui::Entity<EditorState>,
     executor: Arc<tokio::runtime::Runtime>,
@@ -255,6 +283,7 @@ struct Desktop {
         String,
     )>,
     composer: gpui::Entity<TextareaState>,
+    code_title: gpui::Entity<InputState>,
     drafts: HashMap<String, String>,
     models: Option<Vec<HostModelSummary>>,
     submitting: bool,
@@ -304,6 +333,13 @@ impl Desktop {
             self.open_code_worktrees(window, cx);
             self.code_worktrees.notice = Some(
                 "Wait for the worktree change to finish before changing coding folders.".into(),
+            );
+            cx.notify();
+            return false;
+        }
+        if self.code_sessions.operation.is_some() || self.host_defaults.operation.is_some() {
+            self.error = Some(
+                "Wait for the session change to finish before changing coding folders.".into(),
             );
             cx.notify();
             return false;
@@ -421,6 +457,11 @@ impl Desktop {
         self.changes = crate::changes::Changes::default();
         self.editor = crate::editor::FileEditor::default();
         self.code_settings = Default::default();
+        self.code_sessions = Default::default();
+        self.host_defaults = Default::default();
+        self.mcp = Default::default();
+        self.code_draft = Default::default();
+        self.code_draft_task = None;
         self.code_worktrees = Default::default();
         self.file_recovery_task = None;
         self.terminal = crate::terminal::TerminalPanel::default();
@@ -445,7 +486,7 @@ impl Desktop {
             let mut session =
                 RuntimeSession::connect(&binary, &workspace, consent_at_ms, &contracts, settings)
                     .await?;
-            let response = session.list_sessions(None).await?;
+            let response = session.list_sessions(None, false).await?;
             let events = session
                 .take_events()
                 .context("The runtime event stream is unavailable")?;
@@ -531,6 +572,7 @@ impl Desktop {
         self.loading = true;
         self.error = None;
         let cursor = if more { self.next_cursor.clone() } else { None };
+        let include_archived = self.code_sessions.include_archived;
         let runtime = Arc::clone(&self.runtime);
         let task = self.executor.spawn(async move {
             runtime
@@ -538,7 +580,7 @@ impl Desktop {
                 .await
                 .as_mut()
                 .context("Open the folder again to reconnect the runtime")?
-                .list_sessions(cursor)
+                .list_sessions(cursor, include_archived)
                 .await
         });
         cx.spawn(async move |view, cx| {
@@ -561,6 +603,7 @@ impl Desktop {
             return;
         };
         self.error = None;
+        let include_archived = self.code_sessions.include_archived;
         let runtime = Arc::clone(&self.runtime);
         let task = self.executor.spawn(async move {
             runtime
@@ -568,7 +611,7 @@ impl Desktop {
                 .await
                 .as_mut()
                 .context("Open the folder again to reconnect the runtime")?
-                .search_sessions(query)
+                .search_sessions(query, include_archived)
                 .await
         });
         cx.spawn(async move |view, cx| {
@@ -873,9 +916,34 @@ impl Desktop {
             UiAction::CloseCodeSettings => {
                 if self.code_settings.operation.is_none() {
                     self.code_settings.visible = false;
+                    self.host_defaults.visible = false;
                     cx.notify();
                 }
             }
+            UiAction::ToggleArchivedSessions => self.toggle_archived_sessions(cx),
+            UiAction::BeginCodeRename => self.begin_code_rename(window, cx),
+            UiAction::SaveCodeRename => self.save_code_rename(cx),
+            UiAction::CancelCodeRename => {
+                if self.code_sessions.operation.is_none() {
+                    self.code_sessions.renaming = None;
+                    self.focus.focus(window, cx);
+                    cx.notify();
+                }
+            }
+            UiAction::ArchiveCode => self.archive_code_session(true, cx),
+            UiAction::UnarchiveCode => self.archive_code_session(false, cx),
+            UiAction::DeleteCode => self.delete_code_session(window, cx),
+            UiAction::DiscardCodeArchives => self.discard_code_archives(window, cx),
+            UiAction::HostDefaults => self.open_host_defaults(window, cx),
+            UiAction::CloseHostDefaults => {
+                if self.host_defaults.operation.is_none() {
+                    self.host_defaults.visible = false;
+                    self.focus.focus(window, cx);
+                    cx.notify();
+                }
+            }
+            UiAction::ReloadHostDefaults => self.read_host_defaults(true, cx),
+            UiAction::SaveHostDefault(change) => self.save_host_default(change, window, cx),
             UiAction::InstructionScope(scope) => self.read_code_settings(scope, window, cx),
             UiAction::ReloadCodeSettings => {
                 if let Some(current) = &self.code_settings.snapshot {
@@ -909,6 +977,24 @@ impl Desktop {
             UiAction::OpenFilePath => {
                 self.read_file(self.editor_path.read(cx).value().to_string(), window, cx)
             }
+            UiAction::CreateFile => self.create_file(window, cx),
+            UiAction::RenameFile => self.rename_file(window, cx),
+            UiAction::DeleteFile => self.delete_file(window, cx),
+            UiAction::McpServers => {
+                if self.mcp.visible {
+                    self.load_mcp_servers(cx);
+                } else {
+                    self.open_mcp_servers(window, cx);
+                }
+            }
+            UiAction::CloseMcpServers => {
+                if self.mcp.operation.is_none() {
+                    self.mcp.visible = false;
+                    self.focus.focus(window, cx);
+                    cx.notify();
+                }
+            }
+            UiAction::SetMcpEnabled(name, enabled) => self.set_mcp_enabled(name, enabled, cx),
             UiAction::SaveFile => self.save_file(cx),
             UiAction::CloseFile => self.close_file(window, cx),
             UiAction::RecoveredFiles => self.open_recovered_files(window, cx),
@@ -1254,6 +1340,10 @@ impl Render for Desktop {
             });
         } else if self.account.visible {
             content = content.child(self.render_account(palette, cx));
+        } else if self.mcp.visible {
+            content = content.child(self.render_mcp_servers(palette, cx));
+        } else if self.host_defaults.visible {
+            content = content.child(self.render_host_defaults(palette, cx));
         } else if self.code_settings.visible {
             content = content.child(self.render_code_settings(palette, window, cx));
         } else if self.code_worktrees.visible {
@@ -1294,186 +1384,189 @@ impl Render for Desktop {
                 palette,
                 cx,
             ));
-        } else if let Some(conversation) = &self.conversation {
-            let transcript = &conversation.transcript;
-            let trust = self
-                .contracts
-                .trust_labels
-                .label(transcript.thread.trust_mode);
-            let provenance = match &transcript.thread.provider {
-                Some(provider) => format!(
-                    "{trust} · {provider} · {}",
-                    transcript
-                        .thread
-                        .model
-                        .as_deref()
-                        .unwrap_or("Model unavailable")
-                ),
-                None => trust.to_owned(),
-            };
-            content = content.child(
-                div()
-                    .w_full()
-                    .max_w(px(self.contracts.frame.content_width))
-                    .child(
-                        div()
-                            .text_color(rgb(palette.secondary))
-                            .child(gpui::text!(provenance)),
+        } else if self.conversation.is_some() {
+            content = content.child(self.render_code_session_actions(palette, window, cx));
+            if let Some(conversation) = &self.conversation {
+                let transcript = &conversation.transcript;
+                let trust = self
+                    .contracts
+                    .trust_labels
+                    .label(transcript.thread.trust_mode);
+                let provenance = match &transcript.thread.provider {
+                    Some(provider) => format!(
+                        "{trust} · {provider} · {}",
+                        transcript
+                            .thread
+                            .model
+                            .as_deref()
+                            .unwrap_or("Model unavailable")
                     ),
-            );
-            if self
-                .capabilities
-                .as_ref()
-                .is_some_and(|caps| caps.checkpoints && caps.managed_worktrees)
-            {
-                content = content.child(self.button(
-                    "code-changes",
-                    "Changes",
-                    UiAction::Changes,
-                    palette,
-                    cx,
-                ));
-            }
-            if transcript.transcript_truncated {
-                content = content.child(gpui::text!(
-                    "Showing the most recent messages returned by the runtime."
-                ));
-            }
-            for (index, message) in transcript.messages.iter().enumerate() {
+                    None => trust.to_owned(),
+                };
                 content = content.child(
                     div()
-                        .id(("message", index))
                         .w_full()
                         .max_w(px(self.contracts.frame.content_width))
-                        .flex()
-                        .flex_col()
-                        .gap_2()
                         .child(
                             div()
                                 .text_color(rgb(palette.secondary))
-                                .child(gpui::text!(message.role.clone())),
-                        )
-                        .child(if message.role == "assistant" {
-                            rich_text::markdown(
+                                .child(gpui::text!(provenance)),
+                        ),
+                );
+                if self
+                    .capabilities
+                    .as_ref()
+                    .is_some_and(|caps| caps.checkpoints && caps.managed_worktrees)
+                {
+                    content = content.child(self.button(
+                        "code-changes",
+                        "Changes",
+                        UiAction::Changes,
+                        palette,
+                        cx,
+                    ));
+                }
+                if transcript.transcript_truncated {
+                    content = content.child(gpui::text!(
+                        "Showing the most recent messages returned by the runtime."
+                    ));
+                }
+                for (index, message) in transcript.messages.iter().enumerate() {
+                    content = content.child(
+                        div()
+                            .id(("message", index))
+                            .w_full()
+                            .max_w(px(self.contracts.frame.content_width))
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .text_color(rgb(palette.secondary))
+                                    .child(gpui::text!(message.role.clone())),
+                            )
+                            .child(if message.role == "assistant" {
+                                rich_text::markdown(
+                                    SharedString::from(format!(
+                                        "code:{}:{}:message:{}",
+                                        self.generation,
+                                        transcript.thread.id,
+                                        message.index.map_or(index, |value| value as usize)
+                                    )),
+                                    message.text.clone(),
+                                    &self.contracts,
+                                    window,
+                                    cx,
+                                )
+                                .into_any_element()
+                            } else {
+                                gpui::text!(message.text.clone()).into_any_element()
+                            }),
+                    );
+                }
+                if let Some(turn) = &conversation.turn {
+                    if let Some(text) = &turn.submitted_text {
+                        if !transcript.messages.iter().any(|message| {
+                            message.role == "user"
+                                && message.turn_id.as_deref() == Some(turn.id.as_str())
+                        }) {
+                            content = content.child(
+                                div()
+                                    .w_full()
+                                    .max_w(px(self.contracts.frame.content_width))
+                                    .child(gpui::text!("You"))
+                                    .child(gpui::text!(text.clone())),
+                            );
+                        }
+                    }
+                    content = content.child(
+                        div()
+                            .w_full()
+                            .max_w(px(self.contracts.frame.content_width))
+                            .child(rich_text::markdown(
                                 SharedString::from(format!(
-                                    "code:{}:{}:message:{}",
-                                    self.generation,
-                                    transcript.thread.id,
-                                    message.index.map_or(index, |value| value as usize)
+                                    "code:{}:{}:turn:{}",
+                                    self.generation, transcript.thread.id, turn.id
                                 )),
-                                message.text.clone(),
+                                turn.output.clone(),
                                 &self.contracts,
                                 window,
                                 cx,
-                            )
-                            .into_any_element()
-                        } else {
-                            gpui::text!(message.text.clone()).into_any_element()
-                        }),
-                );
-            }
-            if let Some(turn) = &conversation.turn {
-                if let Some(text) = &turn.submitted_text {
-                    if !transcript.messages.iter().any(|message| {
-                        message.role == "user"
-                            && message.turn_id.as_deref() == Some(turn.id.as_str())
-                    }) {
-                        content = content.child(
-                            div()
-                                .w_full()
-                                .max_w(px(self.contracts.frame.content_width))
-                                .child(gpui::text!("You"))
-                                .child(gpui::text!(text.clone())),
-                        );
-                    }
-                }
-                content = content.child(
-                    div()
-                        .w_full()
-                        .max_w(px(self.contracts.frame.content_width))
-                        .child(rich_text::markdown(
-                            SharedString::from(format!(
-                                "code:{}:{}:turn:{}",
-                                self.generation, transcript.thread.id, turn.id
                             )),
-                            turn.output.clone(),
-                            &self.contracts,
-                            window,
-                            cx,
-                        )),
-                );
-                if conversation.is_running() {
-                    content = content.child(gpui::text!(if turn.approvals.is_empty() {
-                        turn.progress.as_deref().unwrap_or("Working…")
-                    } else {
-                        "Waiting for your approval"
+                    );
+                    if conversation.is_running() {
+                        content = content.child(gpui::text!(if turn.approvals.is_empty() {
+                            turn.progress.as_deref().unwrap_or("Working…")
+                        } else {
+                            "Waiting for your approval"
+                        }
+                        .to_owned()));
+                    } else if turn.status
+                        == agiworkforce_protocol::developer_session::TurnStatus::Interrupted
+                    {
+                        content = content.child(gpui::text!("Stopped"));
                     }
-                    .to_owned()));
-                } else if turn.status
-                    == agiworkforce_protocol::developer_session::TurnStatus::Interrupted
-                {
-                    content = content.child(gpui::text!("Stopped"));
-                }
-                for request in &turn.approvals {
-                    let mut approval = div()
-                        .id(SharedString::from(format!(
-                            "code-approval:{}",
-                            request.request_id
-                        )))
-                        .w_full()
-                        .max_w(px(self.contracts.frame.content_width))
-                        .flex()
-                        .flex_col()
-                        .gap_2()
-                        .child(gpui::text!(request.summary.clone()))
-                        .child(gpui::text!(request.detail.clone()))
-                        .child(gpui::text!(match request.reversible {
-                            Some(true) => "Reversible",
-                            Some(false) => "Cannot be undone",
-                            None => "Reversibility not stated",
-                        }));
-                    if let Some(risk) = request.risk_level {
-                        approval = approval.child(gpui::text!(match risk {
+                    for request in &turn.approvals {
+                        let mut approval = div()
+                            .id(SharedString::from(format!(
+                                "code-approval:{}",
+                                request.request_id
+                            )))
+                            .w_full()
+                            .max_w(px(self.contracts.frame.content_width))
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .child(gpui::text!(request.summary.clone()))
+                            .child(gpui::text!(request.detail.clone()))
+                            .child(gpui::text!(match request.reversible {
+                                Some(true) => "Reversible",
+                                Some(false) => "Cannot be undone",
+                                None => "Reversibility not stated",
+                            }));
+                        if let Some(risk) = request.risk_level {
+                            approval = approval.child(gpui::text!(match risk {
                             agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel::Low => "Low risk",
                             agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel::Medium => "Medium risk",
                             agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel::High => "High risk",
                         }));
+                        }
+                        if let Some(proposed) = &request.proposed_content {
+                            approval = approval.child(gpui::text!(proposed.clone()));
+                        }
+                        if let Some(question) = &request.question {
+                            approval = approval.child(gpui::text!(question.to_string()));
+                        }
+                        if self.approval_pending.is_none() {
+                            approval = approval
+                                .child(self.button(
+                                    SharedString::from(format!("allow:{}", request.request_id)),
+                                    "Review and allow once",
+                                    UiAction::Approval(request.request_id.clone(), true),
+                                    palette,
+                                    cx,
+                                ))
+                                .child(self.button(
+                                    SharedString::from(format!("deny:{}", request.request_id)),
+                                    "Deny",
+                                    UiAction::Approval(request.request_id.clone(), false),
+                                    palette,
+                                    cx,
+                                ));
+                        }
+                        content = content.child(approval);
                     }
-                    if let Some(proposed) = &request.proposed_content {
-                        approval = approval.child(gpui::text!(proposed.clone()));
-                    }
-                    if let Some(question) = &request.question {
-                        approval = approval.child(gpui::text!(question.to_string()));
-                    }
-                    if self.approval_pending.is_none() {
-                        approval = approval
-                            .child(self.button(
-                                SharedString::from(format!("allow:{}", request.request_id)),
-                                "Review and allow once",
-                                UiAction::Approval(request.request_id.clone(), true),
-                                palette,
-                                cx,
-                            ))
-                            .child(self.button(
-                                SharedString::from(format!("deny:{}", request.request_id)),
-                                "Deny",
-                                UiAction::Approval(request.request_id.clone(), false),
-                                palette,
-                                cx,
-                            ));
-                    }
-                    content = content.child(approval);
                 }
-            }
-            if let Some(error) = &conversation.error {
-                content = content.child(
-                    div()
-                        .text_color(rgb(palette.danger))
-                        .child(gpui::text!(error.clone())),
-                );
-            }
-            if transcript.messages.is_empty() && conversation.turn.is_none() {
-                content = content.child(gpui::text!("This session has no messages yet."));
+                if let Some(error) = &conversation.error {
+                    content = content.child(
+                        div()
+                            .text_color(rgb(palette.danger))
+                            .child(gpui::text!(error.clone())),
+                    );
+                }
+                if transcript.messages.is_empty() && conversation.turn.is_none() {
+                    content = content.child(gpui::text!("This session has no messages yet."));
+                }
             }
         } else if self.error.is_none() {
             content = content.child(gpui::text!(if self.workspace.is_none() {
@@ -1840,12 +1933,28 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                         },
                     )
                     .detach();
+                    let code_title =
+                        cx.new(|cx| InputState::new(window, cx).placeholder("Session title"));
+                    cx.subscribe_in(
+                        &code_title,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, _, cx| {
+                            if let InputEvent::PressEnter { .. } = event {
+                                view.save_code_rename(cx);
+                            }
+                            cx.notify();
+                        },
+                    )
+                    .detach();
                     cx.subscribe_in(
                         &composer,
                         window,
                         |view: &mut Desktop, _, event: &InputEvent, window, cx| match event {
                             InputEvent::PressEnter { shift: false, .. } => view.send(window, cx),
-                            InputEvent::Change => cx.notify(),
+                            InputEvent::Change => {
+                                view.save_code_draft(window, cx);
+                                cx.notify();
+                            }
                             _ => {}
                         },
                     )
@@ -1875,6 +1984,11 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                         contracts,
                         settings,
                         code_settings: Default::default(),
+                        code_sessions: Default::default(),
+                        host_defaults: Default::default(),
+                        mcp: Default::default(),
+                        code_draft: Default::default(),
+                        code_draft_task: None,
                         code_worktrees: Default::default(),
                         instruction_buffer,
                         executor,
@@ -1896,6 +2010,7 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                         terminal_paste,
                         pending_terminal_paste: None,
                         composer,
+                        code_title,
                         drafts: HashMap::new(),
                         models: None,
                         submitting: false,

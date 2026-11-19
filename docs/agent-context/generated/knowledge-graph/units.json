@@ -2360,12 +2360,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 355,
+      "files": 356,
       "roles": {
         "config": 1,
         "doc": 6,
         "other": 3,
-        "source": 314,
+        "source": 315,
         "test": 31
       }
     },
@@ -2411,15 +2411,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1957,
+      "files": 1974,
       "roles": {
         "asset": 59,
         "config": 22,
         "doc": 1,
         "other": 24,
-        "source": 1191,
+        "source": 1202,
         "style": 2,
-        "test": 658
+        "test": 664
       }
     },
     {
@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8612,
+      "files": 8613,
       "roles": {
         "asset": 58,
         "config": 94,
@@ -2625,7 +2625,7 @@
         "other": 37,
         "source": 3603,
         "style": 37,
-        "test": 3978
+        "test": 3979
       }
     },
     {
@@ -2671,12 +2671,12 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 820,
+      "files": 827,
       "roles": {
         "config": 13,
         "generated": 4,
         "other": 1,
-        "source": 764,
+        "source": 771,
         "test": 38
       }
     },
@@ -4268,10 +4268,10 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 975,
+      "files": 981,
       "roles": {
         "config": 29,
-        "generated": 630,
+        "generated": 636,
         "source": 177,
         "test": 139
       }

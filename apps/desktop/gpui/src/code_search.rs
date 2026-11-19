@@ -1,4 +1,6 @@
-use agiworkforce_protocol::developer_session::{ThreadSearchHit, ThreadSearchResponse};
+use agiworkforce_protocol::developer_session::{
+    ThreadSearchHit, ThreadSearchResponse, ThreadSummary,
+};
 
 #[derive(Debug, Default)]
 pub struct CodeSearch {
@@ -61,6 +63,18 @@ impl CodeSearch {
         self.shown
             .as_deref()
             .map(|query| (query, self.hits.as_slice()))
+    }
+
+    pub fn replace_thread(&mut self, thread: &ThreadSummary) {
+        for hit in &mut self.hits {
+            if hit.thread.id == thread.id {
+                hit.thread = thread.clone();
+            }
+        }
+    }
+
+    pub fn remove_thread(&mut self, thread_id: &str) {
+        self.hits.retain(|hit| hit.thread.id != thread_id);
     }
 
     fn take_pending(&mut self, generation: u64) -> Option<String> {

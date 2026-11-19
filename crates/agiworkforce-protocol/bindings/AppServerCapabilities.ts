@@ -10,6 +10,7 @@ export type AppServerCapabilities = {
   checkpoints: boolean;
   workspaceFiles?: boolean;
   workspaceFileRecovery?: boolean;
+  codeDrafts?: boolean;
   workspaceFileRecoveryBrowser?: boolean;
   workspaceTerminal?: boolean;
   worktrees: boolean;

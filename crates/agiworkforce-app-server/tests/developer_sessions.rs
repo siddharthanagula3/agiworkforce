@@ -536,6 +536,7 @@ fn capabilities() -> AppServerCapabilities {
         checkpoints: false,
         workspace_files: false,
         workspace_file_recovery: false,
+        code_drafts: false,
         workspace_file_recovery_browser: false,
         workspace_terminal: false,
         worktrees: false,

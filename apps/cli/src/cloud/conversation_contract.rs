@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct ConversationContract {
+pub(crate) struct ConversationContract {
     pub title_max_length: usize,
     pub draft_max_length: usize,
     pub organization_header: String,
@@ -17,6 +17,6 @@ static CONTRACT: LazyLock<ConversationContract> = LazyLock::new(|| {
     .expect("the compiled conversation contract must match its schema")
 });
 
-pub(super) fn contract() -> &'static ConversationContract {
+pub(crate) fn contract() -> &'static ConversationContract {
     &CONTRACT
 }
