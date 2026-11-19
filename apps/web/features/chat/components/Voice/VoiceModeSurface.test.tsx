@@ -14,6 +14,7 @@ import { hostBridgeStub } from '@/test/host-bridge-stub';
 type ScanModule0 = typeof import('@/lib/visual/use-visual-session');
 
 const controller = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+const settingsModal = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
 const visual = vi.hoisted(() => ({
   current: null as ReturnType<
     typeof import('@/lib/visual/use-visual-session').useVisualSession
@@ -38,7 +39,12 @@ vi.mock('./VoiceOrb', () => ({
 }));
 vi.mock('./VoiceComposer', () => ({ VoiceComposer: () => <div data-testid="voice-composer" /> }));
 vi.mock('./VoiceChatDock', () => ({ VoiceChatDock: () => null }));
-vi.mock('./VoiceSettingsModal', () => ({ VoiceSettingsModal: () => null }));
+vi.mock('./VoiceSettingsModal', () => ({
+  VoiceSettingsModal: (props: Record<string, unknown>) => {
+    settingsModal.props = props;
+    return null;
+  },
+}));
 
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from './VoiceModeSurface';
 
@@ -87,7 +93,6 @@ function renderSurface(overrides: Partial<Record<string, unknown>> = {}) {
       onNewChat={() => undefined}
       onOpenLibrary={() => undefined}
       onOpenConnectors={() => undefined}
-      onIntelligenceChange={() => undefined}
       {...overrides}
     />,
   );
@@ -118,6 +123,7 @@ function sharingCamera(overrides: { stop: () => void }) {
 beforeEach(() => {
   controller.current = session();
   visual.current = null;
+  settingsModal.props = null;
 });
 
 afterEach(() => {
@@ -370,6 +376,61 @@ describe('VoiceModeSurface usage limit', () => {
     });
     useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
     expect(useVoiceSessionStore.getState().usageLimited).toBe(false);
+  });
+});
+
+describe('VoiceModeSurface on a chat voice cannot run in', () => {
+  const message = "Voice mode isn't available in this chat.";
+
+  it('offers the way back to text instead of a retry that cannot succeed', async () => {
+    const exit = vi.fn();
+    const retry = vi.fn();
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.error, error: message },
+      exit,
+      retry,
+    });
+    renderSurface({ managed: false });
+
+    expect(screen.getByTestId('voice-unavailable').textContent).toContain(message);
+    expect(screen.queryByTestId('voice-error')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.queryByTestId('voice-usage-upgrade')).toBeNull();
+    await act(async () => {
+      screen.getByRole('button', { name: 'Continue in text' }).click();
+    });
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it('keeps the retry for a managed chat whose voice failed for another reason', () => {
+    controller.current = session({
+      state: {
+        ...INITIAL_VOICE_SESSION_STATE,
+        status: VOICE_SESSION_STATUS.error,
+        error: LIVE_SESSION_MESSAGE.connectionFailed,
+      },
+    });
+    renderSurface();
+
+    expect(screen.queryByTestId('voice-unavailable')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('VoiceModeSurface chat intelligence', () => {
+  it('hands the routing profile control to the voice settings', () => {
+    const chatIntelligence = { choice: 'quality' as const, onChange: vi.fn() };
+    renderSurface({ chatIntelligence });
+
+    expect(settingsModal.props?.['chatIntelligence']).toBe(chatIntelligence);
+  });
+
+  it('gives the voice settings no intelligence control when the chat cannot use one', () => {
+    renderSurface();
+
+    expect(settingsModal.props).not.toBeNull();
+    expect(settingsModal.props?.['chatIntelligence']).toBeUndefined();
   });
 });
 

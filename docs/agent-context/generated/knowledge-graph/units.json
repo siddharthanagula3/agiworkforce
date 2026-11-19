@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8605,
+      "files": 8609,
       "roles": {
         "asset": 58,
         "config": 94,
@@ -2625,7 +2625,7 @@
         "other": 37,
         "source": 3601,
         "style": 37,
-        "test": 3973
+        "test": 3977
       }
     },
     {
@@ -2694,11 +2694,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 249,
+      "files": 250,
       "roles": {
         "asset": 1,
         "config": 21,
-        "doc": 181,
+        "doc": 182,
         "generated": 45,
         "other": 1
       }

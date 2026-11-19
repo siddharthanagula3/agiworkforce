@@ -2,7 +2,8 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { VoiceSettingsModal } from './VoiceSettingsModal';
+import { ROUTING_PROFILE_CHOICE_OPTIONS } from '@agiworkforce/types';
+import { VoiceSettingsModal, type VoiceChatIntelligence } from './VoiceSettingsModal';
 import { VOICE_LANGUAGE_AUTO } from '@features/chat/stores/voice-session-store';
 
 function fakeGradient(): CanvasGradient {
@@ -25,18 +26,17 @@ function stubCanvasContext() {
   } as unknown as CanvasRenderingContext2D);
 }
 
-function renderModal() {
+function renderModal(chatIntelligence?: VoiceChatIntelligence) {
   render(
     <VoiceSettingsModal
       open
       reducedMotion
       voices={[{ voiceURI: 'voice-a', name: 'Aria', lang: 'en-US' }]}
       voiceUri="voice-a"
-      intelligence="balanced"
+      chatIntelligence={chatIntelligence}
       language={VOICE_LANGUAGE_AUTO}
       onOpenChange={vi.fn()}
       onVoiceChange={vi.fn()}
-      onIntelligenceChange={vi.fn()}
       onLanguageChange={vi.fn()}
     />,
   );
@@ -97,11 +97,9 @@ describe('the voice page dots', () => {
           { voiceURI: 'voice-b', name: 'Bram', lang: 'en-GB' },
         ]}
         voiceUri="voice-a"
-        intelligence="balanced"
         language={VOICE_LANGUAGE_AUTO}
         onOpenChange={vi.fn()}
         onVoiceChange={onVoiceChange}
-        onIntelligenceChange={vi.fn()}
         onLanguageChange={vi.fn()}
       />,
     );
@@ -129,10 +127,37 @@ describe('the intelligence control is scoped to the chat', () => {
   });
 
   it('names the setting as chat intelligence and does not promise it shapes a voice turn', () => {
-    renderModal();
+    renderModal({ choice: 'auto', onChange: vi.fn() });
 
     expect(screen.getByText('Chat intelligence')).toBeInTheDocument();
     expect(screen.queryByText(/how much intelligence a voice turn gets/)).not.toBeInTheDocument();
     expect(screen.getByText(/the intelligence for typed replies/)).toBeInTheDocument();
+  });
+
+  it('offers the routing profiles, shows the one in use and applies the one chosen', async () => {
+    const onChange = vi.fn();
+    renderModal({ choice: 'quality', onChange });
+
+    const best = ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === 'quality')!;
+    const economy = ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === 'cost')!;
+    const trigger = screen.getByTestId('voice-settings-intelligence');
+    expect(trigger.textContent).toContain(best.label);
+
+    await userEvent.click(trigger);
+    const menu = screen.getByRole('menu', { name: 'Chat intelligence' });
+    expect(within(menu).getAllByRole('menuitem')).toHaveLength(
+      ROUTING_PROFILE_CHOICE_OPTIONS.length,
+    );
+    await userEvent.click(within(menu).getByRole('menuitem', { name: new RegExp(economy.label) }));
+
+    expect(onChange).toHaveBeenCalledWith('cost');
+  });
+
+  it('leaves the control out where the chat cannot route by intelligence', () => {
+    renderModal();
+
+    expect(screen.queryByText('Chat intelligence')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('voice-settings-intelligence')).not.toBeInTheDocument();
+    expect(screen.queryByText(/the intelligence for typed replies/)).not.toBeInTheDocument();
   });
 });

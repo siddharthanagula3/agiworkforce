@@ -75,6 +75,8 @@ function resetStore() {
     language: 'en-US',
     microphoneId: '',
     captureStream: null,
+    canRetryTranscription: false,
+    allowanceRefusal: null,
   });
 }
 
@@ -392,8 +394,74 @@ describe('voiceInputStore', () => {
 
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().error).toBe(
-        'This month’s voice minutes are used up. Upgrade for more, or type instead.',
+        'This month’s voice minutes are used up. Type instead.',
       );
+      expect(useVoiceInputStore.getState().allowanceRefusal).toBe('plan');
+      expect(useVoiceInputStore.getState().canRetryTranscription).toBe(false);
+    });
+
+    it('treats a plan refusal as spent, not as something to send again', async () => {
+      await recordAgainst({ ok: false, status: 402, json: async () => ({}) });
+
+      const state = useVoiceInputStore.getState();
+      expect(state.error).toBe(
+        'Voice input needs an active plan. Nothing was charged for this recording.',
+      );
+      expect(state.allowanceRefusal).toBe('plan');
+      expect(state.canRetryTranscription).toBe(false);
+    });
+
+    it.each([
+      [402, 'plan_upgrade_required'],
+      [429, 'free_trial_feature_unavailable'],
+    ])('says voice needs a plan, not that a limit is spent, for a %i %s', async (status, code) => {
+      await recordAgainst({ ok: false, status, json: async () => ({ error: { code } }) });
+
+      const state = useVoiceInputStore.getState();
+      expect(state.error).toBe(
+        'Voice input needs an active plan. Nothing was charged for this recording.',
+      );
+      expect(state.allowanceRefusal).toBe('plan');
+      expect(state.canRetryTranscription).toBe(false);
+    });
+
+    it('blames the organization cap, not the plan, and never sends the recording again', async () => {
+      installCapture();
+      const fetchMock = stubFetch(() => ({
+        ok: false,
+        status: 402,
+        json: async () => ({ error: { code: 'organization_spend_cap_reached' } }),
+      }));
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
+
+      const state = useVoiceInputStore.getState();
+      expect(state.mode).toBe('error');
+      expect(state.error).toBe('Your organization has reached its usage limit. Type instead.');
+      expect(state.allowanceRefusal).toBe('organization');
+      expect(state.canRetryTranscription).toBe(false);
+
+      await useVoiceInputStore.getState().retryTranscription(owner);
+      const uploads = fetchMock.mock.calls.filter(([url]) => url === TRANSCRIBE_ENDPOINT);
+      expect(uploads).toHaveLength(1);
+    });
+
+    it('keeps a passing failure retryable', async () => {
+      await recordAgainst({ ok: false, status: 503, json: async () => ({}) });
+
+      expect(useVoiceInputStore.getState().allowanceRefusal).toBeNull();
+      expect(useVoiceInputStore.getState().canRetryTranscription).toBe(true);
+    });
+
+    it('clears the spent flag when the failure is dismissed', async () => {
+      await recordAgainst({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'voice_minutes_monthly_limit_reached' } }),
+      });
+      useVoiceInputStore.getState().cancelListening(owner);
+
+      expect(useVoiceInputStore.getState().allowanceRefusal).toBeNull();
     });
 
     it('keeps the wait-a-moment message for a plain 429', async () => {
@@ -406,6 +474,84 @@ describe('voiceInputStore', () => {
       expect(useVoiceInputStore.getState().error).toBe(
         'Too many recordings just now. Wait a moment, then try again.',
       );
+    });
+
+    it.each(['rolling_five_hour_limit_reached', 'rolling_weekly_limit_reached'])(
+      'treats a spent %s window as a usage limit, not a moment to wait',
+      async (code) => {
+        await recordAgainst({ ok: false, status: 429, json: async () => ({ error: { code } }) });
+
+        const state = useVoiceInputStore.getState();
+        expect(state.mode).toBe('error');
+        expect(state.error).toBe(
+          'You’ve reached your usage limit. Type instead, or try again later.',
+        );
+        expect(state.allowanceRefusal).toBe('plan');
+        expect(state.canRetryTranscription).toBe(false);
+      },
+    );
+
+    it('says the usage limit is reached when a billing-period allowance refuses with 402', async () => {
+      await recordAgainst({
+        ok: false,
+        status: 402,
+        json: async () => ({ error: { code: 'insufficient_credits' } }),
+      });
+
+      expect(useVoiceInputStore.getState().error).toBe(
+        'You’ve reached your usage limit. Type instead, or try again later.',
+      );
+      expect(useVoiceInputStore.getState().allowanceRefusal).toBe('plan');
+    });
+
+    it('drops a spent-limit recording so a retry never resends it', async () => {
+      installCapture();
+      const fetchMock = stubFetch(() => ({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'rolling_five_hour_limit_reached' } }),
+      }));
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
+      await useVoiceInputStore.getState().retryTranscription(owner);
+
+      const uploads = fetchMock.mock.calls.filter(([url]) => url === TRANSCRIBE_ENDPOINT);
+      expect(uploads).toHaveLength(1);
+    });
+
+    it('stops offering a retry once the retried recording meets a spent limit', async () => {
+      installCapture();
+      let response: unknown = { ok: false, status: 503, json: async () => ({}) };
+      const fetchMock = stubFetch(() => response);
+      await useVoiceInputStore.getState().startListening(owner);
+      await useVoiceInputStore.getState().stopListening(owner);
+      expect(useVoiceInputStore.getState().canRetryTranscription).toBe(true);
+
+      response = {
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'rolling_weekly_limit_reached' } }),
+      };
+      await useVoiceInputStore.getState().retryTranscription(owner);
+      expect(useVoiceInputStore.getState().allowanceRefusal).toBe('plan');
+      expect(useVoiceInputStore.getState().canRetryTranscription).toBe(false);
+
+      await useVoiceInputStore.getState().retryTranscription(owner);
+      const uploads = fetchMock.mock.calls.filter(([url]) => url === TRANSCRIBE_ENDPOINT);
+      expect(uploads).toHaveLength(2);
+    });
+
+    it('keeps a true rate limit retryable with the wait-a-moment message', async () => {
+      await recordAgainst({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'RATE_LIMIT_EXCEEDED' } }),
+      });
+
+      const state = useVoiceInputStore.getState();
+      expect(state.error).toBe('Too many recordings just now. Wait a moment, then try again.');
+      expect(state.allowanceRefusal).toBeNull();
+      expect(state.canRetryTranscription).toBe(true);
     });
 
     it('keeps the wait-a-moment message for a 429 whose body cannot be read', async () => {

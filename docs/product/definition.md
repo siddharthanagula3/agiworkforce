@@ -157,7 +157,9 @@ competitor layouts is not parity.
 The current baseline was re-verified against first-party documentation on
 2026-09-21. The dated evidence, July-to-September change log, and source links
 live in `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`. The
-latest vendor comparison is `docs/research/assistant-comparison-2026-11-11.md`.
+latest vendor comparisons are `docs/research/claude-chatgpt-comparison-2026-11-18.md` for
+ChatGPT and Claude and `docs/research/assistant-comparison-2026-11-11.md` for Gemini and
+Perplexity.
 Older screenshots and research files remain historical observations; they do
 not override this section.
 
