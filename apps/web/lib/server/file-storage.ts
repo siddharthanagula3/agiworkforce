@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { BillingPlanTier } from '@agiworkforce/types';
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -33,7 +34,10 @@ export async function sumFileStorageBytes(scope: FileStorageScope): Promise<numb
           from public.media_assets m
          where m.user_id = $1
            and m.organization_id is not distinct from $2::uuid
-           and not m.temporary_chat
+           and (not m.temporary_chat
+             or (m.byte_size > $3
+               and (m.metadata ->> 'source' = 'chat-attachment'
+                 or m.storage_pathname like 'chat-attachments/%')))
            and m.deleted_at is null)
      + (select coalesce(sum(k.byte_count), 0)
           from public.project_knowledge_files k
@@ -43,7 +47,7 @@ export async function sumFileStorageBytes(scope: FileStorageScope): Promise<numb
            and p.organization_id is not distinct from $2::uuid
            and k.deleted_at is null
            and k.superseded_at is null) as total`,
-    [scope.userId, scope.organizationId],
+    [scope.userId, scope.organizationId, MAX_CHAT_ATTACHMENT_BYTES],
   );
   return Number(row?.total ?? 0);
 }

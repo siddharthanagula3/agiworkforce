@@ -293,7 +293,7 @@ export async function sealChatFile(
     await deleteSealedKey(deps, row.id, sealedKey);
     return finishSealed(deps, row.id, existing);
   }
-  if (!row.temporaryChat && !(await deps.seal.storageAvailable(row))) {
+  if (!(await deps.seal.storageAvailable(row))) {
     return endHeldIntake(deps, row, runId, { state: 'rejected', refusalCode: 'storage_full' });
   }
 

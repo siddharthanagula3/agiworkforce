@@ -25,7 +25,8 @@ vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
 import { CHAT_LARGE_FILE_POLICY } from '@/lib/chat-attachment-policy';
 import { failStalledPreparations } from '@/lib/server/chat-file-preparation';
 import { getKeyValueStore } from '@/lib/server/key-value';
-import { insertScannedChatFileMediaAsset } from '@/lib/server/media-assets';
+import { sumFileStorageBytes } from '@/lib/server/file-storage';
+import { insertScannedChatFileMediaAsset, upsertVideoMediaAsset } from '@/lib/server/media-assets';
 import {
   addScanBudgetWait,
   cancelIntakeByStagingKey,
@@ -164,7 +165,7 @@ describe.skipIf(!connectionString)('chat file intake statements against PostgreS
       await insertIntake(tx, intakeInput('temp', { temporaryChat: true }));
       expect(await countInFlightIntakes(tx, { userId: OWNER })).toBe(2);
       expect(await sumInFlightIntakeBytes(tx, { userId: OWNER, organizationId: null })).toBe(
-        40 * MIB,
+        80 * MIB,
       );
       expect(
         await touchPartRequest(tx, {
@@ -376,6 +377,76 @@ describe.skipIf(!connectionString)('chat file intake statements against PostgreS
         [assetId],
       );
       expect(media).toEqual({ scanned_sha256: SHA, content_sha256: SHA });
+    });
+  });
+
+  it('keeps a sealed file temporary only while its conversation is, and meters temporary uploads over the inline limit', async () => {
+    await inRolledBackMigration(async (tx) => {
+      const temporary = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e01';
+      const kept = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e02';
+      await tx.execute(
+        `insert into public.web_conversations (id, user_id, is_temporary)
+         values ($1, $3, true), ($2, $3, false)`,
+        [temporary, kept, OWNER],
+      );
+      const seal = (name: string, conversationId: string | null, hashDigit: string) =>
+        insertScannedChatFileMediaAsset(
+          {
+            userId: OWNER,
+            organizationId: null,
+            kind: 'file',
+            mimeType: 'application/pdf',
+            byteSize: 40 * MIB,
+            storagePathname: `chat-attachments/${OWNER}/${name}.sealed`,
+            conversationId,
+            temporaryChat: true,
+            scannedSha256: hashDigit.repeat(64),
+            metadata: { source: 'chat-attachment' },
+          },
+          tx,
+        );
+      const keptMidUpload = await seal('kept', kept, 'a');
+      const stillTemporary = await seal('temporary', temporary, 'b');
+      const beforeConversation = await seal('unattached', null, 'c');
+
+      const flags = await tx.query<{ id: string; temporary_chat: boolean }>(
+        `select id, temporary_chat from public.media_assets where id = any($1::uuid[])`,
+        [[keptMidUpload, stillTemporary, beforeConversation]],
+      );
+      expect(Object.fromEntries(flags.map((row) => [row.id, row.temporary_chat]))).toEqual({
+        [keptMidUpload]: false,
+        [stillTemporary]: true,
+        [beforeConversation]: true,
+      });
+
+      await upsertVideoMediaAsset(
+        {
+          id: '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e03',
+          userId: OWNER,
+          organizationId: null,
+          mimeType: 'video/mp4',
+          storageUrl: `private-media/video/${OWNER}/clip.mp4`,
+          storagePathname: `private-media/video/${OWNER}/clip.mp4`,
+          byteSize: 40 * MIB,
+          prompt: 'a clip',
+          provider: 'test',
+          model: 'test',
+          sourceSurface: 'web',
+          conversationId: temporary,
+          metadata: {},
+        },
+        tx,
+      );
+      await tx.execute(
+        `insert into public.media_assets
+           (user_id, kind, mime_type, byte_size, storage_url, storage_pathname, metadata, temporary_chat)
+         values ($1, 'file', 'application/pdf', $2, $3, $3, '{"source":"chat-attachment"}'::jsonb, true)`,
+        [OWNER, 10 * MIB, `chat-attachments/${OWNER}/small.pdf`],
+      );
+
+      expect(await sumFileStorageBytes({ db: tx, userId: OWNER, organizationId: null })).toBe(
+        120 * MIB,
+      );
     });
   });
 

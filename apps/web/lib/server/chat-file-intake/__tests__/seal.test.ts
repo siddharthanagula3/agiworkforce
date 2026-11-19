@@ -242,7 +242,7 @@ describe('sealChatFile', () => {
     expect(await objectExists(row.stagingKey)).toBe(false);
   });
 
-  it('refuses storage_full when the person’s storage cannot take the file, but not in a temporary chat', async () => {
+  it('refuses storage_full when the person’s storage cannot take the file, in a temporary chat too', async () => {
     const { row, staged } = await sealingRow();
     const harness = createIntakeHarness({
       scanner: scannerAnswering(cleanReply(row, staged)),
@@ -260,7 +260,8 @@ describe('sealChatFile', () => {
       rows: [temporary.row],
     });
     second.seal.storageFull = true;
-    await expect(seal(second, temporary.row)).resolves.toMatchObject({ next: 'prepare' });
+    await expect(seal(second, temporary.row)).resolves.toEqual({ next: 'end', reason: 'rejected' });
+    expect(second.store.row(temporary.row.id).refusalCode).toBe('storage_full');
   });
 
   it('deletes its sealed copy when the intake row is gone by the time it commits', async () => {
