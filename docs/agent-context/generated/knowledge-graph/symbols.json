@@ -74821,6 +74821,9 @@
     "listScimUsers": [
       "apps/web/lib/server/scim/scim-provisioning-service.ts"
     ],
+    "listSealedIntakesWithIdlePreparation": [
+      "apps/web/lib/server/chat-file-intake/store.ts"
+    ],
     "ListSelectionView": [
       "apps/cli/src/tui/widgets/list_selection_view.rs"
     ],
@@ -103018,6 +103021,10 @@
       "apps/web/lib/server/chat-file-preparation/index.ts"
     ],
     "PreparationFailureReason": [
+      "apps/web/lib/server/chat-file-preparation/index.ts",
+      "apps/web/lib/server/chat-file-preparation/progress-store.ts"
+    ],
+    "preparationInProgress": [
       "apps/web/lib/server/chat-file-preparation/index.ts",
       "apps/web/lib/server/chat-file-preparation/progress-store.ts"
     ],
