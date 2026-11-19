@@ -13,6 +13,8 @@ impl Desktop {
         self.changes.applying
             || self.code_worktrees.mutating
             || self.code_settings.writing
+            || self.code_sessions.operation.is_some()
+            || self.host_defaults.operation.is_some()
             || self.editor.recovery_browser.mutating
             || self.editor.saving
             || self.submitting
@@ -43,6 +45,9 @@ impl Desktop {
             || !self.composer.read(cx).value().is_empty()
             || self.has_unsaved_cloud_draft(cx)
             || self.code_settings.operation.is_some()
+            || self.code_sessions.operation.is_some()
+            || self.code_sessions.renaming.is_some()
+            || self.host_defaults.operation.is_some()
             || self
                 .code_settings
                 .dirty(self.instruction_buffer.read(cx).value().as_str())
@@ -77,6 +82,8 @@ impl Desktop {
             return;
         }
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         self.editor.visible = false;
         self.terminal.visible = false;
@@ -233,6 +240,8 @@ impl Desktop {
             && !self.editor.recovery_browser.mutating
         {
             self.code_settings.visible = false;
+            self.host_defaults.visible = false;
+            self.mcp.visible = false;
             self.code_worktrees.visible = false;
             self.editor.visible = false;
             self.terminal.visible = false;
@@ -268,6 +277,7 @@ impl Desktop {
             }
         };
         self.save_draft(cx);
+        self.commit_open_draft(&id, window, cx);
         self.loading = true;
         self.account.visible = false;
         self.cloud.visible = false;
@@ -304,11 +314,14 @@ impl Desktop {
                 });
                 match result {
                     Ok(conversation) => {
-                        let id = &conversation.transcript.thread.id;
-                        let draft = view.drafts.get(id).cloned().unwrap_or_default();
-                        if !view.threads.iter().any(|thread| thread.id == *id) {
+                        let id = conversation.transcript.thread.id.clone();
+                        let draft = view.drafts.get(&id).cloned().unwrap_or_default();
+                        if !view.threads.iter().any(|thread| thread.id == id) {
                             view.threads
                                 .insert(0, conversation.transcript.thread.clone());
+                        }
+                        if view.code_sessions.renaming.as_ref() != Some(&id) {
+                            view.code_sessions.renaming = None;
                         }
                         view.conversation = Some(conversation);
                         view.changes = crate::changes::Changes::default();
@@ -317,6 +330,7 @@ impl Desktop {
                             state.set_value(draft, window, cx);
                             state.focus(window, cx);
                         });
+                        view.load_code_draft(id, window, cx);
                     }
                     Err(error) => view.fail(error, cx),
                 }
@@ -409,6 +423,7 @@ impl Desktop {
                 match result {
                     Ok(()) => {
                         view.drafts.remove(&thread_id);
+                        view.clear_code_draft(window, cx);
                         view.composer.update(cx, |state, cx| state.set_value("", window, cx));
                     }
                     Err(error) => view.fail(error.context("Message acceptance could not be confirmed. Your draft is retained. Reopen the session and check its history before sending again."), cx),
@@ -594,6 +609,8 @@ impl Desktop {
         if self.code_worktrees.mutating {
             self.code_worktrees.visible = true;
             self.code_settings.visible = false;
+            self.host_defaults.visible = false;
+            self.mcp.visible = false;
             self.editor.visible = false;
             self.terminal.visible = false;
             self.cloud.visible = false;

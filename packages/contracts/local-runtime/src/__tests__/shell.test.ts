@@ -94,12 +94,27 @@ describe('evaluateShellPolicy', () => {
     });
   });
 
-  it('matches on the program basename, not the path used to reach it', () => {
+  it('refuses on the program basename, whatever path is used to reach it', () => {
     expect(evaluateShellPolicy({ allow: [], deny: ['rm'] }, '/bin/rm file')).toMatchObject({
       decision: 'deny',
     });
-    expect(evaluateShellPolicy({ allow: ['git'], deny: [] }, '/usr/bin/git log')).toMatchObject({
-      decision: 'allow',
+    expect(evaluateShellPolicy(EMPTY_SHELL_POLICY, '/usr/bin/sudo ls')).toMatchObject({
+      decision: 'deny',
+      reason: 'always-refused',
+    });
+  });
+
+  it('asks about an allowed name reached by a path, which may be another file of that name', () => {
+    for (const command of ['scripts/git status', './git status', '/usr/bin/git log']) {
+      expect(evaluateShellPolicy({ allow: ['git'], deny: [] }, command)).toEqual({
+        decision: 'ask',
+        program: 'git',
+        reason: 'allowed-name-by-path',
+      });
+    }
+    expect(evaluateShellPolicy({ allow: ['git'], deny: [] }, '/usr/bin/make')).toMatchObject({
+      decision: 'ask',
+      reason: 'not-listed',
     });
   });
 

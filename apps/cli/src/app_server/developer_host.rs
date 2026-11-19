@@ -52,7 +52,8 @@ use agiworkforce_protocol::developer_session::{
     WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams, WorktreeKeepParams,
     WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams, WorktreeRefusedFile,
     WorktreeRemoveParams, WorktreeSetupFinishedNotification, WorktreeSetupRunParams,
-    WorktreeSummary,
+    WorktreeSummary, THREAD_SEARCH_DEFAULT_LIMIT, THREAD_SEARCH_MAX_LIMIT,
+    THREAD_SEARCH_QUERY_MAX_CHARS, THREAD_TITLE_MAX_CHARS,
 };
 use agiworkforce_protocol::instruction_settings::*;
 use agiworkforce_protocol::protocol::{
@@ -116,7 +117,6 @@ const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // own timeout and discovery still resolves to `mcp/ready`. Equal values race
 // the two timers and make the emitted notification nondeterministic.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
-const THREAD_TITLE_MAX_CHARS: usize = 200;
 const ACCOUNT_CONVERSATION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
@@ -145,8 +145,7 @@ const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
 const MAX_CONCURRENT_RUNNING_TURNS: usize = 8;
 const MAX_PROPOSED_CONTENT_BYTES: usize = 1_000_000;
 const MAX_APPROVAL_NOTE_CHARS: usize = 4_000;
-const DEFAULT_SEARCH_HITS: usize = 20;
-const MAX_SEARCH_HITS: usize = 50;
+
 const MAX_REMEMBERED_CLIENT_TURNS_PER_THREAD: usize = 32;
 const MAX_CLIENT_TURN_ID_CHARS: usize = 128;
 const WRITER_LABEL: &str = "AGI app-server";
@@ -1034,6 +1033,7 @@ impl CliDeveloperSessionHost {
             checkpoints: true,
             workspace_files: true,
             workspace_file_recovery: cfg!(unix),
+            code_drafts: cfg!(unix),
             workspace_file_recovery_browser: cfg!(unix),
             workspace_terminal: cfg!(unix),
             worktrees: true,
@@ -2438,6 +2438,72 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
         .map_err(internal_error)?
     }
+    async fn workspace_file_create(
+        &self,
+        params: WorkspaceFileCreateParams,
+    ) -> Result<WorkspaceFileResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let workspace_files = self.lock_workspace_files("").await?;
+        let authority = self.workspace_file_authority.clone();
+        tokio::task::spawn_blocking(move || {
+            let _workspace_files = workspace_files;
+            super::workspace_files::create(&authority, params)
+        })
+        .await
+        .map_err(internal_error)?
+    }
+    async fn workspace_file_rename(
+        &self,
+        params: WorkspaceFileRenameParams,
+    ) -> Result<WorkspaceFileRenameResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let workspace_files = self.lock_workspace_files("").await?;
+        let authority = self.workspace_file_authority.clone();
+        tokio::task::spawn_blocking(move || {
+            let _workspace_files = workspace_files;
+            super::workspace_files::rename(&authority, params)
+        })
+        .await
+        .map_err(internal_error)?
+    }
+    async fn workspace_file_delete(
+        &self,
+        params: WorkspaceFileDeleteParams,
+    ) -> Result<WorkspaceFileDeleteResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let workspace_files = self.lock_workspace_files("").await?;
+        let authority = self.workspace_file_authority.clone();
+        tokio::task::spawn_blocking(move || {
+            let _workspace_files = workspace_files;
+            super::workspace_files::delete(&authority, params)
+        })
+        .await
+        .map_err(internal_error)?
+    }
+    async fn code_draft_read(
+        &self,
+        params: agiworkforce_protocol::code_drafts::CodeDraftParams,
+    ) -> Result<agiworkforce_protocol::code_drafts::CodeDraftSnapshot, DeveloperSessionHostError>
+    {
+        let _admission = self.admit_request().await?;
+        let authority = self.workspace_file_authority.clone();
+        let base = self.store.base_dir().to_path_buf();
+        tokio::task::spawn_blocking(move || super::code_drafts::read(&base, &authority, params))
+            .await
+            .map_err(internal_error)?
+    }
+    async fn code_draft_write(
+        &self,
+        params: agiworkforce_protocol::code_drafts::CodeDraftWriteParams,
+    ) -> Result<agiworkforce_protocol::code_drafts::CodeDraftWriteResponse, DeveloperSessionHostError>
+    {
+        let _admission = self.admit_request().await?;
+        let authority = self.workspace_file_authority.clone();
+        let base = self.store.base_dir().to_path_buf();
+        tokio::task::spawn_blocking(move || super::code_drafts::write(&base, &authority, params))
+            .await
+            .map_err(internal_error)?
+    }
     async fn workspace_file_recovery_read(
         &self,
         params: WorkspaceFileParams,
@@ -3264,16 +3330,20 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: ThreadSearchParams,
     ) -> Result<ThreadSearchResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let needle = threads::lowered(params.query.trim());
-        if needle.is_empty() {
-            return Err(DeveloperSessionHostError::invalid_request(
-                "thread/search needs a query",
-            ));
+        let query = params.query.trim();
+        if query.is_empty()
+            || query.contains('\0')
+            || query.chars().count() > THREAD_SEARCH_QUERY_MAX_CHARS
+        {
+            return Err(DeveloperSessionHostError::invalid_request(format!(
+                "thread/search needs a query of 1 to {THREAD_SEARCH_QUERY_MAX_CHARS} characters"
+            )));
         }
+        let needle = threads::lowered(query);
         let limit = params
             .limit
-            .map_or(DEFAULT_SEARCH_HITS, |limit| limit as usize)
-            .clamp(1, MAX_SEARCH_HITS);
+            .map_or(THREAD_SEARCH_DEFAULT_LIMIT as usize, |limit| limit as usize)
+            .clamp(1, THREAD_SEARCH_MAX_LIMIT as usize);
         let store = self.store.clone();
         let workspace_root = self.workspace_root.clone();
         let include_archived = params.include_archived;
@@ -11197,6 +11267,35 @@ mod tests {
                 .await
                 .is_err());
         }
+    }
+
+    #[tokio::test]
+    async fn search_refuses_an_empty_or_oversized_query_and_lists_no_hits_for_a_miss() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        for query in [
+            "   ".to_string(),
+            "bad\0query".to_string(),
+            "x".repeat(THREAD_SEARCH_QUERY_MAX_CHARS + 1),
+        ] {
+            assert!(host
+                .search_threads(ThreadSearchParams {
+                    query,
+                    ..ThreadSearchParams::default()
+                })
+                .await
+                .is_err());
+        }
+        let found = host
+            .search_threads(ThreadSearchParams {
+                query: "missing session".into(),
+                limit: Some(THREAD_SEARCH_MAX_LIMIT + 1),
+                include_archived: false,
+            })
+            .await
+            .expect("search");
+        assert!(found.hits.is_empty());
     }
 
     #[tokio::test]

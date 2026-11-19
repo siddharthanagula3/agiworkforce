@@ -114,6 +114,27 @@ describe('response output intent', () => {
       ),
     ).toBe('text');
   });
+
+  it.each([
+    ['in a later sentence', 'What is this? Show me what this chat can render.'],
+    ['broken across lines', 'What can this\nchat render'],
+  ])('recognizes a chat rendering request %s', (_shape, message) => {
+    expect(classifyResponseOutputIntent(message)).toBe('rendered');
+  });
+
+  it('does not carry a request word into the next sentence', () => {
+    const message = 'What is this? Explain how this chat can render tables.';
+    expect(classifyResponseOutputIntent(message)).toBe('unknown');
+  });
+
+  it.each([
+    ['many request words in one sentence', 'what '.repeat(40_000)],
+    ['many one-word sentences', 'what. '.repeat(40_000)],
+  ])('reads a pasted message with %s in linear time', (_shape, message) => {
+    const startedAt = performance.now();
+    expect(classifyResponseOutputIntent(message)).toBe('unknown');
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+  });
 });
 
 describe('image tool admission', () => {

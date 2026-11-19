@@ -105,6 +105,29 @@ fn a_transcript_match_names_where_the_text_was_found() {
     assert!(NO_MATCHES.ends_with('.'));
 }
 
+#[test]
+fn session_changes_update_or_drop_the_shown_hits() {
+    let mut search = CodeSearch::default();
+    search.set_query("budget");
+    let (generation, _) = search.begin().unwrap();
+    assert!(search.finish(
+        generation,
+        ThreadSearchResponse {
+            hits: vec![
+                hit("a", "Budget", true, None),
+                hit("b", "Budget notes", true, None)
+            ]
+        }
+    ));
+    let mut renamed = search.results().unwrap().1[0].thread.clone();
+    renamed.title = "Budget 2027".into();
+    search.replace_thread(&renamed);
+    search.remove_thread("b");
+    let (_, hits) = search.results().unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].thread.title, "Budget 2027");
+}
+
 async fn connect(binary: &std::path::Path, folder: &std::path::Path) -> RuntimeSession {
     RuntimeSession::connect(
         binary,
@@ -154,7 +177,7 @@ async fn real_workspace_session_search_finds_only_this_folders_sessions() {
     let mut search = CodeSearch::default();
     search.set_query("BUDGET");
     let (generation, query) = search.begin().unwrap();
-    let response = session.search_sessions(query).await.unwrap();
+    let response = session.search_sessions(query, false).await.unwrap();
     assert!(search.finish(generation, response));
     let (_, hits) = search.results().unwrap();
     assert_eq!(
@@ -168,12 +191,15 @@ async fn real_workspace_session_search_finds_only_this_folders_sessions() {
     assert_eq!(hit_label(&hits[0]), "Quarterly budget review");
 
     let none = session
-        .search_sessions("no session mentions this".into())
+        .search_sessions("no session mentions this".into(), false)
         .await
         .unwrap();
     assert!(none.hits.is_empty());
 
-    let blank = session.search_sessions("   ".into()).await.unwrap_err();
+    let blank = session
+        .search_sessions("   ".into(), false)
+        .await
+        .unwrap_err();
     assert!(
         format!("{blank:#}").contains("thread/search needs a query"),
         "{blank:#}"
@@ -194,7 +220,10 @@ async fn real_account_connection_cannot_search_coding_sessions() {
     )
     .await
     .unwrap();
-    let refused = session.search_sessions("budget".into()).await.unwrap_err();
+    let refused = session
+        .search_sessions("budget".into(), false)
+        .await
+        .unwrap_err();
     assert!(refused.to_string().contains("no coding workspace"));
     session.shutdown().await.unwrap();
 }

@@ -12,6 +12,7 @@ import { RELEASE_NOTES_METADATA } from '@/app/release-notes/release-notes-metada
 import sitemap from '@/app/sitemap';
 import { SITE_URL } from '@/lib/seo/site';
 import { documentationIndex } from '@/app/docs/doc-index';
+import { supportCollectionIndex } from '@/app/help/collections';
 import { getHelpArticle } from '@/lib/support/help-articles';
 import { BLOG_POSTS } from '@/lib/blog-posts';
 import SitemapPage from '../page';
@@ -174,6 +175,15 @@ describe('sitemap.xml', () => {
 
   it('lists each address once', () => {
     expect(new Set(xmlPaths).size).toBe(xmlPaths.length);
+  });
+
+  it('lists every nonempty help collection under its canonical address', () => {
+    const { collections } = supportCollectionIndex();
+    expect(collections.length).toBeGreaterThan(0);
+    for (const collection of collections) {
+      expect(collection.articles.length, collection.id).toBeGreaterThan(0);
+      expect(xmlPaths).toContain(`/help/collections/${collection.id}`);
+    }
   });
 
   it('lists the feature pages, the founder page and the beta programme', () => {

@@ -56,6 +56,15 @@ fn accepted() -> TurnStartResponse {
 }
 
 #[test]
+fn an_archived_session_cannot_send() {
+    let mut view = conversation(None);
+    assert!(view.can_send());
+    view.transcript.thread.status =
+        agiworkforce_protocol::developer_session::ThreadStatus::Archived;
+    assert!(!view.can_send());
+}
+
+#[test]
 fn output_and_completion_before_acknowledgement_are_preserved() {
     let mut view = conversation(None);
     view.apply(delta(0, "First 🦀")).unwrap();

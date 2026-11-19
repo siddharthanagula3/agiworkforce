@@ -6,6 +6,7 @@ mod agent_path;
 pub mod attachment_recovery;
 pub mod auth;
 pub mod cloud_uploads;
+pub mod code_drafts;
 mod thread_id;
 mod tool_name;
 pub use agent_path::AgentPath;

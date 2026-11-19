@@ -102,6 +102,23 @@ describe('findPathReferences', () => {
     expect(reference?.path).toBe('src/a.ts');
     expect(reference?.line).toBeUndefined();
   });
+
+  it('reads a drive path whose letter ends a longer token', () => {
+    expect(first('-IC:/sdk/api.h:12')).toMatchObject({ path: 'C:/sdk/api.h', line: 12, start: 2 });
+  });
+
+  it('reads the rooted path after a doubled separator', () => {
+    expect(first('build//src/app.ts')).toMatchObject({ path: '/src/app.ts', start: 6 });
+  });
+
+  it('does not treat a URL behind a diff marker as a file reference', () => {
+    expect(findPathReferences('+https://agiworkforce.com/docs/setup.html')).toEqual([]);
+  });
+
+  it('scans a long token with no extension once, not again from each character', () => {
+    expect(findPathReferences('0123456789abcdef'.repeat(12_500))).toEqual([]);
+    expect(findPathReferences('deadbeef/'.repeat(20_000))).toEqual([]);
+  });
 });
 
 describe('describePathReference', () => {

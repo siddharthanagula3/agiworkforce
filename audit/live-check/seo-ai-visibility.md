@@ -335,4 +335,56 @@ and deployment remain untested. The broader typecheck still has 10 diagnostics i
 dependency files outside this change. See the support revision supplement and the existing
 support-operations runbook for the implementation boundaries.
 
+## Technical SEO follow-up, November 8
+
+Applied the crawlability, sitemap, canonical and metadata checks from
+[claude-seo](https://github.com/AgriciDaniel/claude-seo/blob/main/skills/seo-technical/SKILL.md)
+and the title/content alignment checks from
+[seo-skills](https://github.com/Illyism/seo-skills/blob/main/seo/seo-title-optimization/SKILL.md).
+These are audit references, not installed plugins or authority to schedule,
+purchase links, publish content or deploy. The sampled live public pages already
+had unique titles, descriptions, a single main H1 and matching canonical/Open Graph
+URLs. Authenticated model pages redirected to the noindex login page as intended.
+
+Implemented locally:
+
+- The XML sitemap now includes all 19 populated help collections from the existing
+  `supportCollectionIndex()`, alongside their 46 articles. The current local total
+  is 174 URLs, superseding the earlier local total of 155. Collection modification
+  dates are omitted because no collection-level update date is owned.
+- Article Open Graph metadata uses the existing content update date. Both the
+  buying guide and help articles emit `article:modified_time`; ordinary website
+  metadata does not. No publication date is inferred from a modification date.
+- Missing help article and collection URLs initially returned HTTP 200 with
+  `noindex`. Both routes now accept only params generated from the published
+  corpus, returning HTTP 404 for unknown slugs without hiding valid articles.
+  This uses the installed Next.js `generateStaticParams` / `dynamicParams`
+  contract, preserving streaming for existing pages.
+
+Verification: 86 focused Vitest cases across seven SEO/help suites passed.
+`e2e/seo-discovery.spec.ts` passed all three Chromium cases against the running
+local app: valid XML with unique URLs; canonical/indexable rendered collection
+pages and all 46 linked article destinations; article JSON-LD, visible update dates
+and Open Graph agreement; and crawler-visible 404s for nonexistent help, collection
+and blog routes. Scoped ESLint and Prettier checks passed. The full web typecheck,
+`NODE_OPTIONS=--max-old-space-size=8192 pnpm --filter @agiworkforce/web typecheck`,
+also passed.
+
+An additional existing source-level test,
+`app/__tests__/page-structured-data-hydration.test.ts`, fails because it forbids
+every page-level `JsonLd` occurrence, including the existing help and blog
+implementations. Both occurrences are present in `HEAD`; neither was introduced
+by this patch. The guard has not been weakened or bypassed. The rendered article
+JSON-LD checks above pass; this does not establish that every streaming or
+navigation hydration edge case is resolved.
+
+These changes remain local. The production sample still served the earlier
+sitemap. Deployment, Search Console submission/inspection, indexing, field Core
+Web Vitals, search traffic and conversion effects are not verified. At release,
+rerun the discovery spec against the deployment and inspect representative help
+collection/article URLs in Search Console. Relevant primary references:
+[Google canonical guidance](https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls),
+[Next.js static params](https://nextjs.org/docs/app/api-reference/functions/generate-static-params)
+and [metadata](https://nextjs.org/docs/app/api-reference/functions/generate-metadata).
+
 Close this tracker when the local patch is released and reverified, relevant product-copy inconsistencies are corrected, the initial article is published or deliberately declined, source-inspection gaps are resolved, and first-party measurement ownership/access is established. Preserve dated factual evidence in `audit/baselines/`; delete resolved queue entries rather than treating this as a permanent duplicate product specification.

@@ -4,8 +4,8 @@ use agiworkforce_protocol::agent_events::{
 use agiworkforce_protocol::developer_session::{
     method, ActiveTurnSnapshot, AppServerNotification, ApprovalRequestedNotification,
     DeveloperMessage, DeveloperSessionTrustMode, ThreadReadResponse, ThreadReconnectResponse,
-    TurnEndedNotification, TurnModelNotification, TurnOutputDeltaNotification, TurnStartResponse,
-    TurnStartedNotification, TurnStatus,
+    ThreadStatus, TurnEndedNotification, TurnModelNotification, TurnOutputDeltaNotification,
+    TurnStartResponse, TurnStartedNotification, TurnStatus,
 };
 use anyhow::{ensure, Context, Result};
 
@@ -118,6 +118,7 @@ impl Conversation {
 
     pub fn can_send(&self) -> bool {
         !self.is_running()
+            && self.transcript.thread.status != ThreadStatus::Archived
             && self.transcript.thread.trust_mode != DeveloperSessionTrustMode::Unknown
             && self.transcript.thread.model.is_some()
             && self.transcript.thread.provider.is_some()

@@ -481,6 +481,8 @@ describe('hasExplicitWebSearchOptOut', () => {
     ['a run of indented blank lines', `${'\n '.repeat(60_000)}x`],
     ['blank lines inside the text', `Summarise this log.\n${'\n'.repeat(60_000)}end of log`],
     ['many refused alternatives that are not a search', `Do not a${' or searchx'.repeat(15_000)}`],
+    ['a long gap after a listed alternative', `a or${' '.repeat(150_000)}b`],
+    ['a long gap after a refused alternative', `Do not run code or${' '.repeat(150_000)}x`],
     ['a long gap after the public qualifier', `Do not browse the public${' '.repeat(150_000)}x`],
     [
       'a long gap after a public search qualifier',

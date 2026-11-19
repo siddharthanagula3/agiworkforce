@@ -13,6 +13,64 @@
 
 const ZERO_WIDTH_AND_BIDI_RE = new RegExp('[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]', 'g');
 
+interface UnclosedBracket {
+  keptBefore: number;
+  lead: string;
+}
+
+/**
+ * Remove every `<tag ...>` and `</tag>` from `text`, leftmost first, until none is left.
+ *
+ * One global replace is not enough: removing a tag joins the text on either side of it, and
+ * that text can be the two halves of another tag. A `<` kept in front of a removed tag is
+ * therefore remembered and tested against whatever text ends up after it. Every character is
+ * read a bounded number of times, so neither nesting depth nor a long whitespace run after a
+ * `<` multiplies the work. `tag` is an XML name: no angle bracket and no whitespace.
+ */
+function stripFenceTags(text: string, tag: string): string {
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const opener = `<\\s*(?:\\/\\s*)?${escapedTag}\\b`;
+  const openerAnywhere = new RegExp(opener, 'i');
+  const openerAtStart = new RegExp(`^${opener}`, 'i');
+  // Whitespace runs collapsed, an opener spans at most tag.length + 4 characters and the next
+  // one settles its word boundary, so this much of the text after a bracket decides a match.
+  const leadLength = tag.length + 5;
+  const leadOf = (fromBracket: string) => fromBracket.replace(/\s+/g, ' ').slice(0, leadLength);
+
+  const segments = text.split('>');
+  const unterminated = segments.pop() ?? '';
+  const kept: string[] = [];
+  const unclosed: UnclosedBracket[] = [];
+
+  for (const segment of segments) {
+    const lastUnclosed = unclosed[unclosed.length - 1];
+    if (lastUnclosed && openerAtStart.test(lastUnclosed.lead + segment)) {
+      kept.length = lastUnclosed.keptBefore;
+      unclosed.pop();
+      continue;
+    }
+
+    const openerAt = segment.search(openerAnywhere);
+    if (openerAt === -1) {
+      kept.push(segment, '>');
+      unclosed.length = 0;
+      continue;
+    }
+
+    const [continuation = '', ...reopened] = segment.slice(0, openerAt).split('<');
+    kept.push(continuation);
+    if (lastUnclosed) lastUnclosed.lead = leadOf(lastUnclosed.lead + continuation);
+    for (const afterBracket of reopened) {
+      const fromBracket = `<${afterBracket}`;
+      unclosed.push({ keptBefore: kept.length, lead: leadOf(fromBracket) });
+      kept.push(fromBracket);
+    }
+  }
+
+  kept.push(unterminated);
+  return kept.join('');
+}
+
 /**
  * Wrap untrusted content in a trust-boundary fence.
  *
@@ -25,12 +83,14 @@ const ZERO_WIDTH_AND_BIDI_RE = new RegExp('[\u200B-\u200D\uFEFF\u202A-\u202E\u20
 export function fenceUntrustedContent(content: string, tag: string, sentinel: string): string {
   if (!content || content.trim().length === 0) return '';
 
+  const normalized = content.normalize('NFC').replace(ZERO_WIDTH_AND_BIDI_RE, '');
+  // An opener with no `>` of its own is completed by the closing tag below, so whatever still
+  // opens the tag loses its `<`, slash and spacing: the name stays in place and keeps the text
+  // around it apart. The second alternative puts back a run that does not reach the tag name,
+  // so every run is scanned once.
   const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const fenceTagPattern = new RegExp(`<\\s*\\/?\\s*${escapedTag}\\b[^>]*>`, 'gi');
-  const safe = content
-    .normalize('NFC')
-    .replace(ZERO_WIDTH_AND_BIDI_RE, '')
-    .replace(fenceTagPattern, '');
+  const survivingOpenerPattern = new RegExp(`<[<\\s/]*(?=${escapedTag}\\b)|(<[<\\s/]*)`, 'gi');
+  const safe = stripFenceTags(normalized, tag).replace(survivingOpenerPattern, '$1');
 
   return `<${tag}>\n<!-- ${sentinel} -->\n${safe}\n</${tag}>`;
 }

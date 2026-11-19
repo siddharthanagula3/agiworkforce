@@ -192,17 +192,18 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> Option<(String, Vec
                 .find(|(name, _)| name.trim().eq_ignore_ascii_case("content-length"))
                 .and_then(|(_, value)| value.trim().parse().ok())
                 .unwrap_or(0);
-            if end + 4 + length > MAX_REQUEST_BYTES {
-                return None;
-            }
-            while buf.len() < end + 4 + length {
+            let body_start = end + 4;
+            let body_end = body_start
+                .checked_add(length)
+                .filter(|total| *total <= MAX_REQUEST_BYTES)?;
+            while buf.len() < body_end {
                 let n = stream.read(&mut chunk).await.ok()?;
                 if n == 0 {
                     return None;
                 }
                 buf.extend_from_slice(&chunk[..n]);
             }
-            return Some((head, buf[end + 4..end + 4 + length].to_vec()));
+            return Some((head, buf.get(body_start..body_end)?.to_vec()));
         }
         if buf.len() > MAX_REQUEST_BYTES {
             return None;

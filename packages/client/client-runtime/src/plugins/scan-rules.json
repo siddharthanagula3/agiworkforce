@@ -5,7 +5,7 @@
       "id": "credential-file-read",
       "severity": "block",
       "flags": "i",
-      "pattern": "(~|\\$HOME|/home/[^\\s\"']+|/Users/[^\\s\"']+)/\\.(ssh|aws|gnupg|kube|docker|npmrc|netrc)",
+      "pattern": "(~|\\$HOME|/(?:home|Users)/(?<!/(?:home|Users)/[^\\s\"']*?/(?:home|Users)/)[^\\s\"']+)/\\.(ssh|aws|gnupg|kube|docker|npmrc|netrc)",
       "message": "reads a credential store outside the package"
     },
     {
@@ -26,7 +26,7 @@
       "id": "destructive-filesystem",
       "severity": "block",
       "flags": "i",
-      "pattern": "rm\\s+-[a-z]*[rf][a-z]*\\s+(/|~|\\$HOME)(\\s|$)",
+      "pattern": "rm\\s+-[a-eg-qs-z]*[rf][a-z]*\\s+(/|~|\\$HOME)(\\s|$)",
       "message": "deletes a filesystem root or home directory"
     },
     {
@@ -61,7 +61,7 @@
       "id": "reverse-shell",
       "severity": "block",
       "flags": "i",
-      "pattern": "(bash\\s+-i\\s*>&\\s*/dev/tcp/|\\bnc\\s+-[a-z]*e[a-z]*\\s|socat\\s+[^\\n]*exec:)",
+      "pattern": "(bash\\s+-i\\s*>&\\s*/dev/tcp/|\\bnc\\s+-[a-df-z]*e[a-z]*\\s|socat\\s+(?!\\s)(?<!(?<!\\bnc\\s+-[a-z]*e[a-df-z]*)socat[^\\S\\n][^\\n]*?socat[^\\S\\n]+)[^\\n]*exec:)",
       "message": "opens a reverse shell"
     },
     {

@@ -14,6 +14,8 @@ impl Desktop {
         }
         self.terminal.visible = true;
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         self.editor.visible = false;
         self.changes.visible = false;

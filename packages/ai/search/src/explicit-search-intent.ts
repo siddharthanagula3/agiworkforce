@@ -131,13 +131,13 @@ const REFUSING_IMPERATIVE = String.raw`(?:${REFUSAL_CLAUSE_START}|\b(?:and|but|s
 const REFUSING_COMMAND = String.raw`(?:${REFUSING_IMPERATIVE}|\b${REFUSING_MODAL})`;
 const REFUSED_LIST_ITEM = String.raw`(?:[\p{L}\p{N}'\u2019/-]+\s+)?[\p{L}\p{N}'\u2019/-]+`;
 const REFUSED_SEARCH_NOUN = String.raw`(?:public\s+)?(?:(?:web|internet|online|external|live)\s+)?(?:search(?:es|ing)?|browsing|googling)`;
-const REFUSED_OTHER_ACTIONS = String.raw`(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|be\s+afraid)\b)\s(?:[^.;:!?,\n${LONG_DASHES}]{1,80}?|[^.;:!?\n${LONG_DASHES}]{1,80}?,)\s(?:or|nor)\s+`;
+const REFUSED_OTHER_ACTIONS = String.raw`(?!\s+(?:just|only|simply|hesitate|forget|fail|worry|be\s+afraid)\b)\s(?:[^.;:!?,\n${LONG_DASHES}]{1,80}?|[^.;:!?\n${LONG_DASHES}]{1,80}?,)\s(?:or|nor)`;
 
 const SEARCH_REFUSAL_FORMS: Readonly<Record<string, string>> = {
   namedTarget: String.raw`\b(?:${REFUSING_MODAL}|${REFUSING_AUXILIARY}|avoid|without|no)\s+(?:(?:use|perform|performing)\s+)?(?:(?:a|the)\s+)?(?:web\s+search(?:es)?|search(?:ing)?\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online)|brows(?:e|ing)\s+(?:the\s+)?(?:public\s+)?web|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|googl(?:e|ing)\s+(?:it|this|that)|check(?:ing)?\s+(?:online|the\s+web))\b`,
   bareAction: String.raw`(?:${REFUSING_COMMAND}\s+(?:search|browse|google)|\b(?:without|avoid)\s+(?:searching|browsing|googling))(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
   toolUse: String.raw`(?:${REFUSING_COMMAND}\s+(?:use|run|do|perform)|\b(?:without|no|avoid)\s+(?:using|running|doing|performing))\s+(?:(?:a|an|any|the|your)\s+)?(?:(?:web|internet|online)\s+)?search(?:es)?(?:\s+tools?)?${REFUSAL_CLAUSE_END}`,
-  listedAction: String.raw`\s(?:or|nor)\s+(?<=${REFUSING_IMPERATIVE}${REFUSED_OTHER_ACTIONS})(?:search(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?|browse(?:\s+the\s+(?:public\s+)?web)?|google|look\s+(?:it|this|that|anything)\s+up)(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
+  listedAction: String.raw`\s(?:or|nor)(?<=${REFUSING_IMPERATIVE}${REFUSED_OTHER_ACTIONS})\s+(?:search(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?|browse(?:\s+the\s+(?:public\s+)?web)?|google|look\s+(?:it|this|that|anything)\s+up)(?:\s+(?:for\s+)?anything)?${REFUSAL_CLAUSE_END}`,
   bareNoun: String.raw`${REFUSAL_CLAUSE_START}no\s+${REFUSED_SEARCH_NOUN}(?:\s+(?:for|on)\s+(?:this|that)(?:\s+one)?|\s+for\s+now|\s+today|\s+here)?${REFUSAL_CLAUSE_END}`,
   listedBeforeLastItem: String.raw`${REFUSAL_CLAUSE_START}no\s+(?:${REFUSED_LIST_ITEM}\s*,\s*){1,6}${REFUSED_SEARCH_NOUN}(?:\s*,\s*${REFUSED_LIST_ITEM}){0,6}(?:\s*,)?\s+(?:or|nor)\s+(?=[\p{L}\p{N}])`,
   listedLast: String.raw`${REFUSAL_CLAUSE_START}no\s+(?:${REFUSED_LIST_ITEM}\s*,\s*){0,6}${REFUSED_LIST_ITEM}(?:\s*,)?\s+(?:or|nor|and\s+no)\s+${REFUSED_SEARCH_NOUN}${REFUSAL_CLAUSE_END}`,

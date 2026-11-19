@@ -287,6 +287,51 @@ describe('F19, the gate is wired to terminal.sendText, not just exported', () =>
     );
   });
 
+  it.each([
+    {
+      kind: 'a cursor escape left after parsing',
+      reply: 'node \u001B[\u001B[HHnpm install evilpkg',
+    },
+    {
+      kind: 'bidi controls that reorder what is shown',
+      reply: 'git push origin \u202E\u2066-d \u2069\u2066main\u2069\u202C',
+    },
+    { kind: 'a zero-width character', reply: 'git status\u200B' },
+  ])('blocks a suggestion carrying $kind and never types it', async ({ reply }) => {
+    const terminal = spyTerminal();
+    let offered: SuggestionItem[] = [];
+    offerSuggestions(reply, (items) => {
+      offered = items;
+      return { ...items[0], _valid: true };
+    });
+
+    const provider = new TerminalProvider({} as vscode.SecretStorage);
+    const result = await provider.suggestCommand('context', token());
+
+    expect(offered[0]?._valid).toBe(false);
+    expect(offered[0]?.description).toContain('BLOCKED');
+    expect(result).toBeUndefined();
+    expect(terminal.sendText).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showErrorMessage).mock.calls[0]?.[0]).toContain(
+      'terminal escape or an invisible',
+    );
+  });
+
+  it('shows and types the same text when the reply was coloured', async () => {
+    const terminal = spyTerminal();
+    let offered: SuggestionItem[] = [];
+    offerSuggestions('\u001B[32mgit status\u001B[0m', (items) => {
+      offered = items;
+      return items[0];
+    });
+
+    const provider = new TerminalProvider({} as vscode.SecretStorage);
+
+    expect(await provider.suggestCommand('context', token())).toBe('git status');
+    expect(offered[0]?.label).toBe('git status');
+    expect(terminal.sendText).toHaveBeenCalledWith('git status');
+  });
+
   it('runs a command that passes the gate', async () => {
     const terminal = spyTerminal();
     offerSuggestions('git status', (items) => items[0]);

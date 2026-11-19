@@ -135,7 +135,7 @@ describe('VSCODE-04 / PR-3B, validateSuggestedCommand (allowlist semantics)', ()
 
   it('REJECTS commands hidden behind zero-width unicode', () => {
     const withZwsp = '​rm -rf /';
-    expect(validateSuggestedCommand(withZwsp)).toContain('not in the AI-suggestion allowlist');
+    expect(validateSuggestedCommand(withZwsp)).toContain('invisible or text-reordering');
   });
 
   it('REJECTS empty command', () => {
@@ -144,9 +144,9 @@ describe('VSCODE-04 / PR-3B, validateSuggestedCommand (allowlist semantics)', ()
     expect(result).toContain('empty');
   });
 
-  it('strips ANSI escapes before allowlist check (allowed command remains allowed)', () => {
+  it('REJECTS a command carrying ANSI escapes instead of judging a stripped copy', () => {
     const withAnsi = '\x1b[32mgit status\x1b[0m';
-    expect(validateSuggestedCommand(withAnsi)).toBeUndefined();
+    expect(validateSuggestedCommand(withAnsi)).toContain('terminal escape');
   });
 });
 
