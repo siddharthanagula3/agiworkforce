@@ -108,11 +108,11 @@ async function client(role = 'lifecycle_owner') {
     host: socket,
     port: 5432,
     database: 'postgres',
-    user: process.env.USER,
+    user: role === 'lifecycle_owner' ? role : process.env.USER,
   });
   await connected.connect();
   clients.push(connected);
-  if (role) await connected.query(`set role ${role}`);
+  if (role && role !== 'lifecycle_owner') await connected.query(`set role ${role}`);
   return connected;
 }
 function fingerprint(key) {
@@ -270,7 +270,7 @@ try {
   started = true;
   const admin = await client(null);
   await admin.query(
-    'create role lifecycle_owner nologin nobypassrls; create role app_rls nologin nobypassrls; grant usage,create on schema public to lifecycle_owner; grant usage on schema public to app_rls',
+    'create role lifecycle_owner login nobypassrls; create role app_rls nologin nobypassrls; grant usage,create on schema public to lifecycle_owner; grant usage on schema public to app_rls',
   );
   const db = await client();
   await organizations(db);
@@ -344,9 +344,7 @@ try {
       )[0],
   );
   await db.query('set check_function_bodies = off');
-  await db.query(
-    helper('0200_organization_permission_grid.sql', 'organization_member_permissions'),
-  );
+  await db.query(helper('0314_workspace_managed_groups.sql', 'organization_member_permissions'));
   await db.query(helper('0200_organization_permission_grid.sql', 'app_has_org_permission'));
   await db.query(helper('0272_active_membership_authorization.sql', 'app_row_is_visible'));
   await db.query('reset check_function_bodies');

@@ -3,6 +3,7 @@
 pub mod account;
 pub mod attachment_recovery;
 pub mod bundle;
+pub mod capture;
 pub mod changes;
 pub mod chat_upload;
 pub mod cloud_history;
@@ -28,11 +29,14 @@ pub mod editor;
 pub mod editor_recovery;
 pub mod file_changes;
 pub mod host_defaults;
+pub mod integration;
 pub mod mcp_servers;
 #[cfg(feature = "native-ui")]
 pub mod native_controls;
 #[cfg(feature = "native-ui")]
 pub mod native_frame;
+pub mod notifications;
+pub mod preferences;
 pub mod project_download;
 #[cfg(feature = "native-ui")]
 pub mod project_download_controls;
@@ -53,6 +57,7 @@ pub mod terminal;
 pub mod terminal_view;
 #[cfg(feature = "native-ui")]
 pub mod ui;
+pub mod updates;
 #[cfg(feature = "native-ui")]
 pub mod viewport;
 #[cfg(feature = "native-ui")]

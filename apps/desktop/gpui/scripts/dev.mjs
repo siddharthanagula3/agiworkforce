@@ -81,6 +81,12 @@ if (process.platform !== 'darwin') {
   const packageInfo = metadata.packages.find((pkg) => pkg.name === hostName);
   const xml = (value) =>
     String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  const deepLinkScheme = /export const DESKTOP_DEEP_LINK_SCHEME = '([a-z][a-z\d+.-]*)';/.exec(
+    fs.readFileSync(path.join(root, 'packages/contracts/local-runtime/src/host-bridge.ts'), 'utf8'),
+  )?.[1];
+  if (!deepLinkScheme) {
+    throw new Error('The desktop deep-link scheme must be a lowercase URL scheme.');
+  }
   const fields = {
     CFBundleExecutable: hostName,
     CFBundleIdentifier: `${tauri.identifier}.gpui.dev`,
@@ -96,6 +102,7 @@ if (process.platform !== 'darwin') {
     `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>${Object.entries(fields)
       .map(([key, value]) => `<key>${xml(key)}</key><string>${xml(value)}</string>`)
       .join('')}
+<key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>${xml(fields.CFBundleIdentifier)}</string><key>CFBundleURLSchemes</key><array><string>${xml(deepLinkScheme)}</string></array></dict></array>
 <key>NSHighResolutionCapable</key><true/></dict></plist>\n`,
   );
   run('/usr/bin/codesign', ['--force', '--sign', '-', app]);

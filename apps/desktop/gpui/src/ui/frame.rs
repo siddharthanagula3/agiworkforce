@@ -71,7 +71,7 @@ impl Desktop {
         cx.notify();
     }
 
-    fn nav_button(
+    pub(super) fn nav_button(
         &self,
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
@@ -537,6 +537,7 @@ impl Desktop {
                 ));
             }
         }
+        let sidebar = self.extension_nav(sidebar, palette, cx);
         sidebar
             .child(recent)
             .child(self.nav_button(
