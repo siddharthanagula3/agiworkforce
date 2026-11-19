@@ -27,12 +27,39 @@ function stripCspMetaTags(content: string): string {
 // is inert. A leading meta makes the parser open <head> around it, and the
 // artifact's own <html> and <head> tags then merge into those elements. Complete
 // comments and the doctype stay ahead of it, because a meta before the doctype
-// makes the parser drop the doctype and render in quirks mode.
-const LEADING_COMMENTS_AND_DOCTYPE = /^(?:\s|<!--(?:>|->|[\s\S]*?--!?>))*<!doctype[^>]*>/i;
+// makes the parser drop the doctype and render in quirks mode. The scan follows
+// the tokenizer exactly (HTML whitespace only, each comment ending at its first
+// closing delimiter) and is linear, so no markup can be counted as prologue.
+const HTML_WHITESPACE = new Set(['\t', '\n', '\f', '\r', ' ']);
+const DOCTYPE = /<!doctype[^>]*>/iy;
+
+function commentEnd(html: string, start: number): number {
+  const data = start + '<!--'.length;
+  if (html.startsWith('>', data)) return data + 1;
+  if (html.startsWith('->', data)) return data + 2;
+  const plain = html.indexOf('-->', data);
+  const bang = html.indexOf('--!>', data);
+  if (plain === -1 && bang === -1) return -1;
+  if (bang === -1 || (plain !== -1 && plain < bang)) return plain + '-->'.length;
+  return bang + '--!>'.length;
+}
+
+function prologueLength(html: string): number {
+  let index = 0;
+  for (;;) {
+    while (index < html.length && HTML_WHITESPACE.has(html[index]!)) index += 1;
+    if (!html.startsWith('<!--', index)) break;
+    index = commentEnd(html, index);
+    if (index === -1) return 0;
+  }
+  DOCTYPE.lastIndex = index;
+  const doctype = DOCTYPE.exec(html);
+  return doctype ? index + doctype[0].length : 0;
+}
 
 function prependHeadContent(documentHtml: string, headContent: string): string {
-  const prologue = documentHtml.match(LEADING_COMMENTS_AND_DOCTYPE)?.[0] ?? '';
-  return `${prologue}${headContent}${documentHtml.slice(prologue.length)}`;
+  const prologue = prologueLength(documentHtml);
+  return `${documentHtml.slice(0, prologue)}${headContent}${documentHtml.slice(prologue)}`;
 }
 
 export function buildSandboxedHtml(content: string): string {
