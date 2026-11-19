@@ -48,6 +48,9 @@ import {
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { useShellLayout } from '@shared/components/layout/app-shell-layout';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
@@ -82,16 +85,20 @@ import {
 } from './code-surface';
 import { harnessModelChoices } from './code-runtime';
 import {
+  approvedRootId,
   localSessionFromSearch,
   localSessionPath,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
 import { ContinueOnDesktop, deleteDeveloperThread, useDesktopHost } from '@/features/desktop-host';
+import { LOCAL_MODELS_SETTINGS_SECTION } from '@/features/settings/lib/web-settings-sections';
 import {
   LOCAL_CODE_COPY,
   LOCAL_FALLBACK_AGENT_MODE,
+  localCloudModelsPlanLine,
   localDiscardArchivesConsequence,
+  localDraftNeedsPlan,
   localFolderChoice,
   localFolderChoices,
   localModelChoices,
@@ -100,6 +107,7 @@ import {
   localSessionArchivedLine,
   localSessionDeletedLine,
   localWorktreeRemovedLine,
+  planStartingModelId,
   preferredLocalRootId,
   resolveLocalRoute,
   startingModelId,
@@ -351,7 +359,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   captureViewRef.current = captureView;
   const listRevision = useRef(0);
   const changesRevision = useRef(0);
-  const local = useLocalSessions();
+  const accountPlanTier = availability?.planTier ?? null;
+  const local = useLocalSessions(accountPlanTier);
   const environmentChosen = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
   const sessionModelsRef = useRef<Record<string, string>>({});
@@ -366,6 +375,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const titleEditedRef = useRef(false);
 
   const router = useRouter();
+  const guardedRouter = useGuardedRouter();
+  const { openSettings } = useSettingsModal();
   const routerRef = useRef(router);
   const searchParams = useSearchParams();
   const githubNotice = searchParams.get('github');
@@ -550,9 +561,17 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
 
   const draftGroup = local.groups.find((group) => group.rootId === draft.localRootId) ?? null;
   const draftRuntime = draft.localRootId === null ? null : local.modelsFor(draft.localRootId);
-  const localChoices = localModelChoices(draftRuntime, draftGroup?.sessions ?? []);
+  const localChoices = localModelChoices(draftRuntime, draftGroup?.sessions ?? [], accountPlanTier);
   const localModelId =
-    draft.localModelId || startingModelId(draftRuntime, draftGroup?.sessions ?? []) || '';
+    draft.localModelId ||
+    startingModelId(draftRuntime, draftGroup?.sessions ?? [], accountPlanTier) ||
+    '';
+  const localDraftPlanRequired = localDraftNeedsPlan(
+    draftRuntime,
+    localChoices,
+    localModelId,
+    accountPlanTier,
+  );
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedId) ?? null,
@@ -1251,26 +1270,32 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     [api, captureView, committing, loadChanges, replaceSession, selectedSession],
   );
 
-  const openHome = useCallback(
-    () =>
-      leaveLocalEdits(() => {
-        draftRevision.current += 1;
-        if (paneRef.current) {
-          paneRef.current.onClose();
-          return;
-        }
-        setLocalSession(null);
-        setSelectedId(null);
-        setTurns([]);
-        setEntries([]);
-        setChangesOpen(false);
-        setChanges(null);
-        setError(null);
-        setCommitNotice(null);
-        setRailDrawerOpen(false);
-        router.push(CODE_ROUTES.root);
-      }),
-    [router, leaveLocalEdits, setLocalSession, setSelectedId],
+  const showHome = useCallback(() => {
+    draftRevision.current += 1;
+    if (paneRef.current) {
+      paneRef.current.onClose();
+      return;
+    }
+    setLocalSession(null);
+    setSelectedId(null);
+    setTurns([]);
+    setEntries([]);
+    setChangesOpen(false);
+    setChanges(null);
+    setError(null);
+    setCommitNotice(null);
+    setRailDrawerOpen(false);
+    router.push(CODE_ROUTES.root);
+  }, [router, setLocalSession, setSelectedId]);
+
+  const openHome = useCallback(() => leaveLocalEdits(showHome), [leaveLocalEdits, showHome]);
+
+  const showLocalDraft = useCallback(
+    (rootId: string, modelId = '') => {
+      showHome();
+      handleDraftChange({ environment: 'local', localRootId: rootId, localModelId: modelId });
+    },
+    [handleDraftChange, showHome],
   );
 
   const handleRename = useCallback(async () => {
@@ -1456,7 +1481,16 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           }}
           onNewSession={(rootId) =>
             leaveLocalEdits(() => {
-              void local.startSession(rootId).then((session) => {
+              const model = planStartingModelId(
+                local.modelsFor(rootId),
+                local.groups.find((group) => group.rootId === rootId)?.sessions ?? [],
+                accountPlanTier,
+              );
+              if (model === null) {
+                showLocalDraft(rootId);
+                return;
+              }
+              void local.startSession(rootId, model).then((session) => {
                 if (session) {
                   setRailDrawerOpen(false);
                   setLocalPrompt('');
@@ -1495,7 +1529,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     worktrees: local.worktrees,
     folders: localFolderChoices(local.groups),
     models: localChoices,
-    setups: localProviderSetups(draftRuntime),
+    setups: localProviderSetups(draftRuntime, local.cliProgram),
     modelId: localModelId,
     modelUnreachable: localModelSetup(draftRuntime, localModelId) !== null,
     adding: local.adding,
@@ -1546,6 +1580,27 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         <div className={styles['notice']} role="status">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{localDraftBlocked}</span>
+        </div>
+      )}
+      {isLocalDraft && !selectedSession && !localDraftBlocked && localDraftPlanRequired && (
+        <div className={styles['notice']} role="status" data-testid="local-plan-required">
+          <span>{localCloudModelsPlanLine()}</span>
+          <span className={styles['noticeActions']}>
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              onClick={() => openUpgrade((href) => guardedRouter.push(href))}
+            >
+              {CODE_COPY.upgradeAction}
+            </button>
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              onClick={() => openSettings(LOCAL_MODELS_SETTINGS_SECTION)}
+            >
+              {LOCAL_CODE_COPY.setUpLocalModel}
+            </button>
+          </span>
         </div>
       )}
       {isLocalDraft && !selectedSession && local.error !== null && (
@@ -1765,6 +1820,16 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
               session={localSession}
               group={localGroup}
               runtimeModels={local.modelsFor(localGroup.rootId)}
+              planTier={accountPlanTier}
+              cliProgram={local.cliProgram}
+              onNewSessionWith={
+                localFolderChoice(local.groups, approvedRootId(localSession.rootId)) === null
+                  ? undefined
+                  : (modelId) =>
+                      leaveLocalEdits(() =>
+                        showLocalDraft(approvedRootId(localSession.rootId), modelId),
+                      )
+              }
               modelsStale={local.modelsStale(localGroup.rootId)}
               verbose={verbose}
               initialPrompt={localPrompt}
@@ -2063,7 +2128,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                       onSubmit={(text, repository) => void handleSubmit(text, turnMode, repository)}
                       disabled={
                         isLocalDraft && !selectedSession
-                          ? draftFolder === null || localDraftBlocked !== null
+                          ? draftFolder === null ||
+                            localDraftBlocked !== null ||
+                            localDraftPlanRequired
                           : !canCreate
                       }
                       busy={busy}

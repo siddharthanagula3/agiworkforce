@@ -85,7 +85,16 @@ export interface APIKeyMutationScope {
   readonly onStepUpRequired: () => void;
 }
 
-export class APIKeyMutationRejectedError extends Error {}
+export type APIKeyRefusalRecovery = 'upgrade';
+
+export class APIKeyMutationRejectedError extends Error {
+  readonly recovery: APIKeyRefusalRecovery | null;
+
+  constructor(message: string, recovery: APIKeyRefusalRecovery | null = null) {
+    super(message);
+    this.recovery = recovery;
+  }
+}
 
 async function sendOwnedAPIKeyRequest(
   scope: APIKeyMutationScope,
@@ -116,10 +125,11 @@ async function readOwnedAPIKeyReceipt(
 ): Promise<unknown> {
   scope.request.assertCurrent();
   if (!response.ok) {
-    const message = await readApiError(response);
+    const refusal = await readApiErrorBody(response);
     scope.request.assertCurrent();
+    const message = apiErrorMessage(refusal, response.status);
     if (response.status >= 400 && response.status < 500)
-      throw new APIKeyMutationRejectedError(message);
+      throw new APIKeyMutationRejectedError(message, apiErrorRecovery(refusal));
     throw new Error(message);
   }
   const body: unknown = await response.json();
@@ -700,7 +710,7 @@ const OrganizationOverviewSchema = z.object({
 });
 
 interface ApiErrorEnvelope {
-  error?: string | { message?: string };
+  error?: string | { message?: string; details?: { recovery?: { action?: unknown } } };
 }
 
 const REQUEST_FAILED = 'The request failed. Please try again.';
@@ -709,14 +719,14 @@ function statusMessage(status: number): string {
   return toUserMessage(Object.assign(new Error(`HTTP ${status}`), { status }), REQUEST_FAILED);
 }
 
-async function readApiError(response: Response): Promise<string> {
-  const fallback = statusMessage(response.status);
-  const body = (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+async function readApiErrorBody(response: Response): Promise<ApiErrorEnvelope | null> {
+  return (await response.json().catch(() => null)) as ApiErrorEnvelope | null;
+}
+
+function apiErrorMessage(body: ApiErrorEnvelope | null, status: number): string {
+  const fallback = statusMessage(status);
   if (typeof body?.error === 'string' && body.error.trim()) {
-    return toUserMessage(
-      Object.assign(new Error(body.error), { status: response.status }),
-      fallback,
-    );
+    return toUserMessage(Object.assign(new Error(body.error), { status }), fallback);
   }
   if (
     body?.error &&
@@ -724,12 +734,20 @@ async function readApiError(response: Response): Promise<string> {
     typeof body.error.message === 'string' &&
     body.error.message.trim()
   ) {
-    return toUserMessage(
-      Object.assign(new Error(body.error.message), { status: response.status }),
-      fallback,
-    );
+    return toUserMessage(Object.assign(new Error(body.error.message), { status }), fallback);
   }
   return fallback;
+}
+
+function apiErrorRecovery(body: ApiErrorEnvelope | null): APIKeyRefusalRecovery | null {
+  const error = body?.error;
+  return error && typeof error === 'object' && error.details?.recovery?.action === 'upgrade'
+    ? 'upgrade'
+    : null;
+}
+
+async function readApiError(response: Response): Promise<string> {
+  return apiErrorMessage(await readApiErrorBody(response), response.status);
 }
 
 async function fetchOrganizationOverview(): Promise<OrganizationOverview> {

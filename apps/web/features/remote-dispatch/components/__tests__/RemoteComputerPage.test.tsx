@@ -1,8 +1,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runStatusLabel } from '@agiworkforce/types';
+import { onAppCommand, PLANS_PAGE_PATH } from '@shared/lib/app-commands';
 import { RemoteComputerPage, RemoteComputerScreen } from '../RemoteComputerPage';
 import type { RemoteTaskStatus } from '../../lib/remote-dispatch-client';
+import type { DictationLimit } from '@features/chat/hooks/use-dictation';
 
 interface Handlers {
   onReady: (name: string | null) => void;
@@ -22,6 +24,18 @@ interface FakeConnection {
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
   connections: [] as FakeConnection[],
+  router: { push: vi.fn() },
+  retry: vi.fn(),
+  dictation: {
+    isActive: false,
+    status: 'idle',
+    error: null as string | null,
+    usageLimited: null as DictationLimit | null,
+  },
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => mocks.router,
 }));
 
 vi.mock('../../lib/remote-dispatch-client', () => ({
@@ -34,20 +48,15 @@ vi.mock('../../lib/browser-pairing', async (importOriginal) => ({
 vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   useDictation: () => ({
-    isActive: false,
-    status: 'idle',
+    ...mocks.dictation,
     bars: [],
-    error: null,
     reducedMotion: false,
     cancel: vi.fn(),
     stop: vi.fn(),
     send: vi.fn(),
-    retry: vi.fn(),
+    retry: mocks.retry,
     start: vi.fn(),
   }),
-}));
-vi.mock('@features/chat/components/Composer/DictationStrip', () => ({
-  DictationStrip: () => null,
 }));
 vi.mock('@shared/components/layout/WebAppShell', () => ({
   WebAppShell: ({ children, rail = true }: { children: React.ReactNode; rail?: boolean }) => (
@@ -194,6 +203,89 @@ describe('RemoteComputerPage task ownership', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('cancel request did not reach'),
     );
+  });
+});
+
+describe('RemoteComputerPage dictation refusals', () => {
+  beforeEach(() => {
+    mocks.connect.mockReset();
+    useFakeRelay();
+    mocks.router.push.mockClear();
+    mocks.retry.mockClear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ devices: [] }) }),
+    );
+  });
+
+  afterEach(() => {
+    mocks.dictation = { isActive: false, status: 'idle', error: null, usageLimited: null };
+    vi.unstubAllGlobals();
+  });
+
+  function failDictation(error: string, usageLimited: DictationLimit | null) {
+    mocks.dictation = { isActive: true, status: 'error', error, usageLimited };
+  }
+
+  it('offers Upgrade, not a retry, when the dictation allowance is spent', async () => {
+    const openDialog = vi.fn();
+    const stopListening = onAppCommand('open-upgrade', openDialog);
+    try {
+      render(<RemoteComputerPage />);
+      await connectTo('link-a', 'Computer A');
+      failDictation(
+        'You’ve reached your usage limit. Type instead, or try again later.',
+        'upgradable',
+      );
+      fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'draft' } });
+
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+    } finally {
+      stopListening();
+    }
+
+    expect(openDialog).toHaveBeenCalledTimes(1);
+    expect(mocks.router.push).not.toHaveBeenCalled();
+    expect(mocks.retry).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the plans page where no plan dialog is listening', async () => {
+    render(<RemoteComputerPage />);
+    await connectTo('link-a', 'Computer A');
+    failDictation(
+      'You’ve reached your usage limit. Type instead, or try again later.',
+      'upgradable',
+    );
+    fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'draft' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+
+    expect(mocks.router.push).toHaveBeenCalledWith(PLANS_PAGE_PATH);
+  });
+
+  it('offers no Upgrade where no higher plan can lift the dictation limit', async () => {
+    render(<RemoteComputerPage />);
+    await connectTo('link-a', 'Computer A');
+    failDictation('Your organization has reached its usage limit. Type instead.', 'not_upgradable');
+    fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'draft' } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Your organization has reached its usage limit. Type instead.',
+    );
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a passing dictation failure retryable without an Upgrade', async () => {
+    render(<RemoteComputerPage />);
+    await connectTo('link-a', 'Computer A');
+    failDictation('Too many recordings just now. Wait a moment, then try again.', null);
+    fireEvent.change(screen.getByLabelText('Task'), { target: { value: 'draft' } });
+
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retry).toHaveBeenCalledTimes(1);
   });
 });
 

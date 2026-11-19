@@ -1,4 +1,10 @@
-import { PRODUCT_NAMES } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  canUseBillingPlanCapability,
+  modelsCatalog,
+  PRODUCT_NAMES,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,8 +19,15 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
-import { emitAppCommand } from '@shared/lib/app-commands';
-import { LOCAL_CODE_COPY } from '../local-code';
+import { emitAppCommand, onAppCommand } from '@shared/lib/app-commands';
+import {
+  LOCAL_CODE_COPY,
+  LOCAL_FAILURE_ACTION_LABELS,
+  LOCAL_MODEL_UPGRADE_HEADING,
+  localCloudModelsPlanLine,
+  withPlanModelVerdicts,
+} from '../local-code';
+import { CODE_COPY } from '../code-surface';
 
 const readDeveloperSession = vi.fn();
 const startDeveloperTurn = vi.fn();
@@ -99,7 +112,18 @@ const runtime: DeveloperRuntimeModels = {
 };
 
 function renderPanel(
-  extra: Partial<Pick<Parameters<typeof LocalSessionPanel>[0], 'group' | 'onForked'>> = {},
+  extra: Partial<
+    Pick<
+      Parameters<typeof LocalSessionPanel>[0],
+      | 'group'
+      | 'onForked'
+      | 'session'
+      | 'runtimeModels'
+      | 'planTier'
+      | 'cliProgram'
+      | 'onNewSessionWith'
+    >
+  > = {},
 ) {
   return render(
     <LocalSessionPanel
@@ -1438,6 +1462,217 @@ describe('local session effort levels', () => {
       'xHigh',
       'Max',
     ]);
+  });
+});
+
+const plans = Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[];
+const PLAN_WITHOUT = plans.find(
+  (plan) =>
+    plan !== 'local-only' &&
+    plan !== 'byok' &&
+    !canUseBillingPlanCapability(plan, 'developer_surfaces'),
+) as BillingPlanTier;
+const PLAN_WITH = plans.find((plan) =>
+  canUseBillingPlanCapability(plan, 'developer_surfaces'),
+) as BillingPlanTier;
+const MANAGED_MODEL = Object.keys(modelsCatalog.models)[0] as string;
+const LOCAL_MODEL = 'qa-runner/qa-local';
+const BYOK_MODEL = 'qa-provider/qa-byok';
+
+function hostRuntime(hostModels: DeveloperRuntimeModels['hostModels']): DeveloperRuntimeModels {
+  return { ...runtime, hostModels, managedSignedIn: true };
+}
+
+const localReady = {
+  id: LOCAL_MODEL,
+  provider: 'ollama',
+  reachable: true,
+  trustMode: 'local' as const,
+  unreachable: null,
+};
+const byokReady = {
+  id: BYOK_MODEL,
+  provider: 'qa-provider',
+  reachable: true,
+  trustMode: 'byok' as const,
+  unreachable: null,
+};
+const managedReady = {
+  id: MANAGED_MODEL,
+  provider: 'qa-vendor',
+  reachable: true,
+  trustMode: 'managed' as const,
+  unreachable: null,
+};
+
+function panelSession(overrides: Partial<LocalDeveloperSession>): LocalDeveloperSession {
+  const next = { ...session, ...overrides };
+  readDeveloperSession.mockResolvedValue({
+    session: next,
+    messages: [],
+    truncated: false,
+    activeTurn: null,
+  });
+  return next;
+}
+
+describe('the models an open session can switch to', () => {
+  it('keeps a Local session to its own boundary and offers a key as a new session', async () => {
+    const user = userEvent.setup();
+    const onNewSessionWith = vi.fn();
+    const local = panelSession({ model: LOCAL_MODEL, trustMode: 'local' });
+    renderPanel({
+      session: local,
+      group: { name: 'qa-project', branch: 'main', sessions: [local] },
+      runtimeModels: hostRuntime([localReady, byokReady]),
+      onNewSessionWith,
+    });
+
+    await user.click(composer().getByRole('button', { name: LOCAL_MODEL }));
+    const radios = screen.getAllByRole('menuitemradio').map((item) => item.textContent);
+    expect(radios).toEqual([LOCAL_MODEL]);
+    await user.click(
+      screen.getByRole('menuitem', { name: LOCAL_CODE_COPY.newSessionWith(BYOK_MODEL) }),
+    );
+
+    expect(onNewSessionWith).toHaveBeenCalledWith(BYOK_MODEL);
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+  });
+
+  it('never offers another boundary where no new session can start', async () => {
+    const user = userEvent.setup();
+    const local = panelSession({ model: LOCAL_MODEL, trustMode: 'local' });
+    renderPanel({
+      session: local,
+      group: { name: 'qa-project', branch: 'main', sessions: [local] },
+      runtimeModels: hostRuntime([localReady, byokReady]),
+    });
+
+    await user.click(composer().getByRole('button', { name: LOCAL_MODEL }));
+    expect(screen.queryByText(LOCAL_CODE_COPY.newSessionWith(BYOK_MODEL))).toBeNull();
+    expect(screen.queryByRole('menuitemradio', { name: BYOK_MODEL })).toBeNull();
+  });
+
+  it('gives a Managed session the plan refuses an upgrade and a new session, not a switch', async () => {
+    const user = userEvent.setup();
+    const onNewSessionWith = vi.fn();
+    const upgrade = vi.fn();
+    const release = onAppCommand('open-upgrade', upgrade);
+    const managed = panelSession({ model: MANAGED_MODEL, trustMode: 'managed' });
+    renderPanel({
+      session: managed,
+      group: { name: 'qa-project', branch: 'main', sessions: [managed] },
+      runtimeModels: withPlanModelVerdicts(hostRuntime([managedReady, localReady]), PLAN_WITHOUT),
+      planTier: PLAN_WITHOUT,
+      onNewSessionWith,
+    });
+
+    expect(await screen.findByText(localCloudModelsPlanLine())).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: LOCAL_CODE_COPY.switchToReadyModel }),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: LOCAL_CODE_COPY.newSessionWith(LOCAL_MODEL) }),
+    );
+    expect(onNewSessionWith).toHaveBeenCalledWith(LOCAL_MODEL);
+
+    await user.click(screen.getByRole('button', { name: LOCAL_FAILURE_ACTION_LABELS.upgrade }));
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    release();
+  });
+
+  it('keeps the chip and its plan row when nothing in the session boundary is ready', async () => {
+    const user = userEvent.setup();
+    const managed = panelSession({ model: null, trustMode: 'managed' });
+    renderPanel({
+      session: managed,
+      group: { name: 'qa-project', branch: 'main', sessions: [managed] },
+      runtimeModels: withPlanModelVerdicts(hostRuntime([managedReady]), PLAN_WITHOUT),
+      planTier: PLAN_WITHOUT,
+    });
+
+    await user.click(composer().getByRole('button', { name: LOCAL_CODE_COPY.chooseModel }));
+    expect(screen.getByText(LOCAL_MODEL_UPGRADE_HEADING)).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Cloud/ })).toBeInTheDocument();
+  });
+
+  it('says a model the plan leaves out is not in the plan, without telling a paid plan to pay', async () => {
+    const flagship = panelSession({ model: MANAGED_MODEL, trustMode: 'managed' });
+    renderPanel({
+      session: flagship,
+      group: { name: 'qa-project', branch: 'main', sessions: [flagship] },
+      runtimeModels: hostRuntime([
+        {
+          ...managedReady,
+          reachable: false,
+          unreachable: { code: 'plan_excludes_model', action: 'upgrade_plan', provider: null },
+        },
+      ]),
+      planTier: PLAN_WITH,
+    });
+
+    const notice = await screen.findByText(/is not included in your plan/);
+    expect(notice.textContent).not.toMatch(/paid plans/i);
+    expect(notice.textContent).not.toBe(localCloudModelsPlanLine());
+  });
+});
+
+describe('the sign-in command the session offers to copy', () => {
+  it('names the CLI this computer runs, not a bare program a Desktop install lacks', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => undefined);
+    const clipboard = vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
+      writeText,
+    } as unknown as Clipboard);
+    const program = "'/Applications/QA.app/Contents/Resources/agi-cli/agi'";
+    const keyed = panelSession({ model: BYOK_MODEL, trustMode: 'byok' });
+    renderPanel({
+      session: keyed,
+      group: { name: 'qa-project', branch: 'main', sessions: [keyed] },
+      runtimeModels: hostRuntime([
+        {
+          ...byokReady,
+          reachable: false,
+          unreachable: {
+            code: 'provider_auth_missing',
+            action: 'sign_in_provider',
+            provider: 'qa-provider',
+          },
+        },
+      ]),
+      cliProgram: program,
+    });
+
+    await user.click(await screen.findByRole('button', { name: LOCAL_FAILURE_ACTION_LABELS.copy }));
+
+    expect(writeText).toHaveBeenCalledWith(`${program} login qa-provider`);
+    clipboard.mockRestore();
+  });
+
+  it('names that CLI in the command that resumes the session in a terminal', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(async () => undefined);
+    const clipboard = vi.spyOn(navigator, 'clipboard', 'get').mockReturnValue({
+      writeText,
+    } as unknown as Clipboard);
+    const program = "'/Applications/QA.app/Contents/Resources/agi-cli/agi'";
+    const local = panelSession({ model: LOCAL_MODEL, trustMode: 'local' });
+    renderPanel({
+      session: local,
+      group: { name: 'qa-project', branch: 'main', sessions: [local] },
+      runtimeModels: hostRuntime([localReady]),
+      cliProgram: program,
+    });
+
+    await user.click(await screen.findByRole('button', { name: CODE_COPY.continueElsewhere }));
+    const handoff = screen.getByRole('group', { name: CODE_COPY.continueElsewhere });
+    expect(handoff).toHaveTextContent(`${program} --resume ${local.id}`);
+    await user.click(
+      within(handoff).getByRole('button', { name: LOCAL_FAILURE_ACTION_LABELS.copyCommand }),
+    );
+
+    expect(writeText).toHaveBeenCalledWith(`${program} --resume ${local.id}`);
+    clipboard.mockRestore();
   });
 });
 

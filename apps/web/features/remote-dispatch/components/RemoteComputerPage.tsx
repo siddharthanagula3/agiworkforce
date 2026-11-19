@@ -13,6 +13,8 @@ import { Button, Spinner, Textarea } from '@agiworkforce/ui';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { useShellLayout } from '@shared/components/layout/app-shell-layout';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { readBrowserPairing, type BrowserPairing } from '../lib/browser-pairing';
@@ -111,6 +113,7 @@ function titleFor(prompt: string): string {
 }
 
 export function RemoteComputerPage() {
+  const router = useGuardedRouter();
   const [computers, setComputers] = useState<ListedComputer[] | null>(null);
   const [phase, setPhase] = useState<ConnectionPhase>('idle');
   const [computerName, setComputerName] = useState<string | null>(null);
@@ -356,6 +359,8 @@ export function RemoteComputerPage() {
               onStop={dictation.stop}
               onSend={dictation.send}
               onRetry={dictation.retry}
+              usageLimited={dictation.usageLimited}
+              onUpgrade={() => openUpgrade((href) => router.push(href))}
             />
           ) : (
             <div className="flex items-center gap-2">

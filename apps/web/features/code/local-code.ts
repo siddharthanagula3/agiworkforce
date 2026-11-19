@@ -12,6 +12,7 @@ import {
   type DeveloperFileChange,
   type DeveloperMcpServerAwaitingApproval,
   type DeveloperRuntimeModels,
+  type DeveloperRuntimeStatus,
   type DeveloperSessionEvent,
   type DeveloperSessionGroup,
   type DeveloperSessionStartRequest,
@@ -22,8 +23,11 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage, ThreadStatus } from '@agiworkforce/types/protocol';
 import {
+  canUseBillingPlanCapability,
   CLOUD_CODE_DEFAULT_TURN_MODE,
+  getBillingPlanPricing,
   providerLabels,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   type CloudCodeAgentStep,
   type CloudCodeAgentStopReason,
   type CloudCodeGoalCommand,
@@ -91,6 +95,15 @@ export const LOCAL_CODE_COPY = {
   switchToReadyModel: 'Switch to a ready model',
   modelNeedsSetup: (model: string, provider: string): string =>
     `${model} cannot run on this machine yet: ${provider} needs a sign-in first.`,
+  modelNotInPlan: (model: string): string => `${model} is not included in your plan.`,
+  cloudModelsFromPlan: (plan: string): string =>
+    `Cloud models in sessions on this computer are included from the ${plan} plan.`,
+  cloudModelsNotInPlan: 'Your plan does not include cloud models in sessions on this computer.',
+  modelsUnread: "This folder's models have not been read yet. Try again in a moment.",
+  setUpLocalModel: 'Set up a local model',
+  chooseModel: 'Choose a model',
+  newSessionWith: (model: string): string => `New session with ${model}`,
+  cloudModels: 'Cloud',
   readFailed: 'That session could not be opened.',
   turnFailed: 'That message could not be sent.',
   changesFailed: 'The changes in this folder could not be read.',
@@ -514,13 +527,56 @@ export function localProviderLabel(providerId: string | null): string | null {
  * description anyone has and is shown unchanged.
  */
 /** The route that bills the AGI Workforce account, which the app signs in. */
+const MANAGED_ACCOUNT_ROUTE = 'managed_cloud';
+
 function isManagedAccountRoute(provider: string | null): boolean {
-  return provider === 'managed_cloud';
+  return provider === MANAGED_ACCOUNT_ROUTE;
 }
 
-export function localTurnFailureSentence(failure: DeveloperTurnFailure): string {
+export const LOCAL_CLI_PROGRAM = 'agi';
+
+const HOME_PREFIX = '~/';
+
+const SHELL_SAFE_ARGUMENT = /^[A-Za-z0-9._:-]+$/;
+
+function shellQuoted(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function shellArgument(value: string): string {
+  return SHELL_SAFE_ARGUMENT.test(value) ? value : shellQuoted(value);
+}
+
+/**
+ * The CLI as a terminal on this computer has to name it. Nothing puts the copy
+ * Desktop carries, or one the user pointed it at, on the PATH, so those are
+ * named by where they are. The shell reports a path in display form, with the
+ * home folder collapsed, so the tilde stays outside the quotes to expand.
+ */
+export function localCliProgram(
+  status: Pick<DeveloperRuntimeStatus, 'source' | 'path'> | null,
+): string {
+  if (status === null || status.path === null) return LOCAL_CLI_PROGRAM;
+  if (status.source !== 'bundled' && status.source !== 'custom') return LOCAL_CLI_PROGRAM;
+  return status.path.startsWith(HOME_PREFIX)
+    ? `${HOME_PREFIX}${shellQuoted(status.path.slice(HOME_PREFIX.length))}`
+    : shellQuoted(status.path);
+}
+
+export function localSignInCommand(provider: string, program = LOCAL_CLI_PROGRAM): string {
+  return `${program} login ${provider}`;
+}
+
+export function localSessionResumeCommand(sessionId: string, program = LOCAL_CLI_PROGRAM): string {
+  return `${program} --resume ${shellArgument(sessionId)}`;
+}
+
+export function localTurnFailureSentence(
+  failure: DeveloperTurnFailure,
+  program = LOCAL_CLI_PROGRAM,
+): string {
   const provider = localProviderLabel(failure.provider);
-  const login = failure.provider ? `\`agi login ${failure.provider}\`` : null;
+  const login = failure.provider ? `\`${localSignInCommand(failure.provider, program)}\`` : null;
 
   // The account's own route is signed in by this app, never from a terminal:
   // a missing or expired managed session means the app's sign-in has to be
@@ -587,22 +643,163 @@ export function localTurnFailureSentence(failure: DeveloperTurnFailure): string 
  * rather than a button that cannot do what it says. An action the desktop
  * cannot carry out gets no button at all.
  */
-export type LocalFailureAction = { kind: 'retry' } | { kind: 'copy'; text: string } | null;
+export type LocalFailureAction =
+  { kind: 'retry' } | { kind: 'copy'; text: string } | { kind: 'upgrade' } | null;
 
 export function localOfferFor(
   action: DeveloperTurnFailure['action'],
   provider: string | null,
   retryable: boolean,
+  program = LOCAL_CLI_PROGRAM,
 ): LocalFailureAction {
   if (action === 'retry' && retryable) return { kind: 'retry' };
+  if (action === 'upgrade_plan') return { kind: 'upgrade' };
   if (action === 'sign_in_provider' && provider && !isManagedAccountRoute(provider)) {
-    return { kind: 'copy', text: `agi login ${provider}` };
+    return { kind: 'copy', text: localSignInCommand(provider, program) };
   }
   return null;
 }
 
-export function localFailureAction(failure: DeveloperTurnFailure): LocalFailureAction {
-  return localOfferFor(failure.action, failure.provider, failure.retryable);
+export function localFailureAction(
+  failure: DeveloperTurnFailure,
+  program = LOCAL_CLI_PROGRAM,
+): LocalFailureAction {
+  return localOfferFor(failure.action, failure.provider, failure.retryable, program);
+}
+
+const MANAGED_LOCAL_MODELS_CAPABILITY = 'developer_surfaces';
+
+/**
+ * Whether the plan lets a session on this computer run on the account's own
+ * models. The CLI signs in with a developer token, which the gateway admits
+ * only on plans with developer surfaces. An unknown plan is not refused here;
+ * the gateway still decides.
+ */
+export function managedLocalModelsIncluded(planTier: string | null | undefined): boolean {
+  if (planTier === null || planTier === undefined || planTier === '') return true;
+  return canUseBillingPlanCapability(planTier, MANAGED_LOCAL_MODELS_CAPABILITY);
+}
+
+/** The first plan on sale that runs the account's models in a session on this computer. */
+export function localCloudModelsPlan() {
+  return (
+    SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((plan) =>
+      canUseBillingPlanCapability(plan, MANAGED_LOCAL_MODELS_CAPABILITY),
+    ) ?? null
+  );
+}
+
+export function localCloudModelsPlanLine(): string {
+  const plan = localCloudModelsPlan();
+  return plan === null
+    ? LOCAL_CODE_COPY.cloudModelsNotInPlan
+    : LOCAL_CODE_COPY.cloudModelsFromPlan(getBillingPlanPricing(plan).label);
+}
+
+/**
+ * What a model the plan leaves out is said as. The account's models are out
+ * because the plan has no developer surfaces, which names the plan that has
+ * them; any other refusal is the CLI's own, about that model alone, and a plan
+ * that already includes developer surfaces must not be told to buy them.
+ */
+export function localModelPlanLine(
+  setup: LocalProviderSetup,
+  model: string,
+  planTier: string | null | undefined,
+): string {
+  return isManagedAccountRoute(setup.provider) && !managedLocalModelsIncluded(planTier)
+    ? localCloudModelsPlanLine()
+    : LOCAL_CODE_COPY.modelNotInPlan(model);
+}
+
+const PLAN_EXCLUDED: NonNullable<DeveloperRuntimeModels['hostModels'][number]['unreachable']> = {
+  code: 'plan_excludes_model',
+  action: 'upgrade_plan',
+  provider: MANAGED_ACCOUNT_ROUTE,
+};
+
+/**
+ * The host's verdicts with the plan applied. The CLI reports the account's
+ * models as reachable once it is signed in, but on a plan without developer
+ * surfaces the gateway refuses every turn on them, so they are offered as an
+ * upgrade instead of a choice that fails after the user has written a task.
+ */
+export function withPlanModelVerdicts(
+  runtime: DeveloperRuntimeModels | null,
+  planTier: string | null | undefined,
+): DeveloperRuntimeModels | null {
+  if (runtime === null || managedLocalModelsIncluded(planTier)) return runtime;
+  const onAccount = (model: DeveloperRuntimeModels['models'][number]) =>
+    !model.local && isManagedAccountRoute(model.provider);
+  const accountDefault =
+    runtime.defaultModelId !== null &&
+    (runtime.models.some((model) => model.id === runtime.defaultModelId && onAccount(model)) ||
+      runtime.hostModels.some(
+        (model) => model.id === runtime.defaultModelId && model.trustMode === 'managed',
+      ));
+  return {
+    ...runtime,
+    models: runtime.models.filter((model) => !onAccount(model)),
+    hostModels: runtime.hostModels.map((model) =>
+      model.trustMode === 'managed' &&
+      (model.reachable || model.unreachable?.code === 'plan_excludes_model')
+        ? { ...model, reachable: false, unreachable: PLAN_EXCLUDED }
+        : model,
+    ),
+    defaultModelId: accountDefault ? null : runtime.defaultModelId,
+  };
+}
+
+/**
+ * The folder's history with the plan applied. A CLI that gives no host
+ * verdicts offers the models a folder used before, and on a plan without
+ * developer surfaces a session that ran on the account's models is no evidence
+ * that one can run now.
+ */
+export function withPlanModelHistory(
+  sessions: readonly LocalDeveloperSession[],
+  planTier: string | null | undefined,
+): readonly LocalDeveloperSession[] {
+  if (managedLocalModelsIncluded(planTier)) return sessions;
+  return sessions.filter(
+    (session) => session.trustMode !== 'managed' && !isManagedAccountRoute(session.provider),
+  );
+}
+
+/**
+ * A turn on the account's models that the gateway refused because the plan
+ * has no developer surfaces reaches the host as a bare access refusal. With
+ * the plan known, it is said as what it is and offers the upgrade.
+ */
+export function withPlanTurnFailure<T extends { failure: DeveloperTurnFailure | null }>(
+  turn: T,
+  planTier: string | null | undefined,
+): T {
+  const failure = turn.failure;
+  if (
+    failure === null ||
+    managedLocalModelsIncluded(planTier) ||
+    !isManagedAccountRoute(failure.provider) ||
+    failure.code !== 'invalid_request'
+  ) {
+    return turn;
+  }
+  return {
+    ...turn,
+    failure: { ...failure, code: 'plan_excludes_model', action: 'upgrade_plan', retryable: false },
+  };
+}
+
+/** The model a draft would start on is one the plan does not include. */
+export function localDraftNeedsPlan(
+  runtime: DeveloperRuntimeModels | null,
+  choices: readonly LocalModelChoice[],
+  modelId: string,
+  planTier: string | null | undefined,
+): boolean {
+  if (managedLocalModelsIncluded(planTier) || runtime === null) return false;
+  if (modelId !== '') return localModelSetup(runtime, modelId)?.offer?.kind === 'upgrade';
+  return choices.length === 0;
 }
 
 /**
@@ -627,7 +824,9 @@ export function localRetryPrompt(
 export const LOCAL_FAILURE_ACTION_LABELS = {
   retry: 'Send it again',
   copy: 'Copy the sign-in command',
+  copyCommand: 'Copy the command',
   copied: 'Copied',
+  upgrade: 'Upgrade',
 } as const;
 
 export interface LocalModelChoice {
@@ -664,6 +863,8 @@ export const LOCAL_MODEL_EVIDENCE_LABELS: Record<LocalModelChoice['evidence'], s
 
 export const LOCAL_MODEL_SETUP_HEADING = 'Needs setup on this machine';
 
+export const LOCAL_MODEL_UPGRADE_HEADING = 'Not in your plan';
+
 export function localModelSetupCount(setup: LocalProviderSetup): string {
   return translateUiPlural('settings', 'counts.models', setup.count, {
     one: '{{count}} model',
@@ -673,11 +874,13 @@ export function localModelSetupCount(setup: LocalProviderSetup): string {
 
 /**
  * The models offered for a session in one folder. A CLI that predates
- * `hostModels` gives no verdict, so there the folder's history stands in.
+ * `hostModels` gives no verdict, so there the folder's history stands in,
+ * with the plan applied.
  */
 export function localModelChoices(
   runtime: DeveloperRuntimeModels | null,
   sessions: readonly LocalDeveloperSession[],
+  planTier: string | null | undefined = null,
 ): LocalModelChoice[] {
   const byId = new Map<string, LocalModelChoice>();
 
@@ -691,7 +894,7 @@ export function localModelChoices(
       });
     }
   } else {
-    for (const session of sessions) {
+    for (const session of withPlanModelHistory(sessions, planTier)) {
       if (!session.model || byId.has(session.model)) continue;
       byId.set(session.model, {
         id: session.model,
@@ -722,7 +925,10 @@ export function localModelChoices(
 }
 
 /** The routes the host cannot reach, one row each, most models first. */
-export function localProviderSetups(runtime: DeveloperRuntimeModels | null): LocalProviderSetup[] {
+export function localProviderSetups(
+  runtime: DeveloperRuntimeModels | null,
+  program = LOCAL_CLI_PROGRAM,
+): LocalProviderSetup[] {
   const byProvider = new Map<string, LocalProviderSetup>();
 
   for (const model of runtime?.hostModels ?? []) {
@@ -735,9 +941,11 @@ export function localProviderSetups(runtime: DeveloperRuntimeModels | null): Loc
     }
     byProvider.set(provider, {
       provider,
-      label: localProviderLabel(getModelMetadata(model.id)?.provider ?? null) ?? provider,
+      label: isManagedAccountRoute(provider)
+        ? LOCAL_CODE_COPY.cloudModels
+        : (localProviderLabel(getModelMetadata(model.id)?.provider ?? null) ?? provider),
       count: 1,
-      offer: localOfferFor(model.unreachable.action, provider, false),
+      offer: localOfferFor(model.unreachable.action, provider, false, program),
     });
   }
 
@@ -750,12 +958,13 @@ export function localProviderSetups(runtime: DeveloperRuntimeModels | null): Loc
 export function localModelSetup(
   runtime: DeveloperRuntimeModels | null,
   modelId: string | null,
+  program = LOCAL_CLI_PROGRAM,
 ): LocalProviderSetup | null {
   if (!modelId) return null;
   const host = (runtime?.hostModels ?? []).find((model) => model.id === modelId);
   if (host === undefined || host.reachable || host.unreachable === null) return null;
   const provider = host.unreachable.provider ?? host.provider;
-  return localProviderSetups(runtime).find((setup) => setup.provider === provider) ?? null;
+  return localProviderSetups(runtime, program).find((setup) => setup.provider === provider) ?? null;
 }
 
 const TOP_QUALITY_TIER = 'best';
@@ -780,8 +989,16 @@ function isTopTier(modelId: string): boolean {
 export function startingModelId(
   runtime: DeveloperRuntimeModels | null,
   sessions: readonly LocalDeveloperSession[],
+  planTier: string | null | undefined = null,
 ): string | undefined {
-  const choices = localModelChoices(runtime, sessions);
+  return startingModelAmong(localModelChoices(runtime, sessions, planTier), runtime, sessions);
+}
+
+function startingModelAmong(
+  choices: readonly LocalModelChoice[],
+  runtime: DeveloperRuntimeModels | null,
+  sessions: readonly LocalDeveloperSession[],
+): string | undefined {
   if (choices.length === 0) return undefined;
   const offered = new Set(choices.map((choice) => choice.id));
 
@@ -799,6 +1016,61 @@ export function startingModelId(
   return choices.reduce((cheapest, choice) =>
     offeredCost(choice.id) < offeredCost(cheapest.id) ? choice : cheapest,
   ).id;
+}
+
+/**
+ * The model a session started straight from a folder, with no draft, begins
+ * on. Null when the plan leaves out the account's models and nothing else is
+ * ready, or the folder's models are not read yet: a start with no model lets
+ * the CLI fall back to its own default, which can be one of the account's.
+ */
+export function planStartingModelId(
+  runtime: DeveloperRuntimeModels | null,
+  sessions: readonly LocalDeveloperSession[],
+  planTier: string | null | undefined,
+): string | undefined | null {
+  const model = startingModelId(runtime, sessions, planTier);
+  if (managedLocalModelsIncluded(planTier)) return model;
+  return runtime === null || model === undefined ? null : model;
+}
+
+export interface LocalSessionModels {
+  /** Models the open session can switch to: the ones in its own trust boundary. */
+  here: LocalModelChoice[];
+  /** Models only a new session can run, because they sit in another trust boundary. */
+  elsewhere: LocalModelChoice[];
+  ready: string | undefined;
+  readyElsewhere: string | undefined;
+}
+
+/**
+ * The models an open session is offered. The CLI refuses a turn that moves a
+ * Local session onto a key or the account, or a Managed one off the account,
+ * so a model in another boundary is a new session, never a switch. A model
+ * the host gives no boundary for, and a session whose own is unverified, are
+ * offered as before.
+ */
+export function localSessionModels(
+  runtime: DeveloperRuntimeModels | null,
+  sessions: readonly LocalDeveloperSession[],
+  trustMode: LocalDeveloperSession['trustMode'],
+  planTier: string | null | undefined = null,
+): LocalSessionModels {
+  const choices = localModelChoices(runtime, sessions, planTier);
+  const trustOf = new Map((runtime?.hostModels ?? []).map((model) => [model.id, model.trustMode]));
+  const here: LocalModelChoice[] = [];
+  const elsewhere: LocalModelChoice[] = [];
+  for (const choice of choices) {
+    const trust = trustOf.get(choice.id);
+    if (trustMode === 'unknown' || trust === undefined || trust === trustMode) here.push(choice);
+    else elsewhere.push(choice);
+  }
+  return {
+    here,
+    elsewhere,
+    ready: startingModelAmong(here, runtime, sessions),
+    readyElsewhere: startingModelAmong(elsewhere, runtime, sessions),
+  };
 }
 
 export function newSessionLabel(folderName: string): string {
@@ -945,6 +1217,7 @@ function toSteps(tools: LocalToolRun[]): CloudCodeAgentStep[] {
 export function localTranscriptItems(
   messages: readonly DeveloperMessage[],
   turn: LocalTurn,
+  program = LOCAL_CLI_PROGRAM,
 ): CodeTranscriptItem[] {
   const items: CodeTranscriptItem[] = [];
 
@@ -997,7 +1270,7 @@ export function localTranscriptItems(
       mode: CLOUD_CODE_DEFAULT_TURN_MODE,
     });
   });
-  const said = turn.failure === null ? null : localTurnFailureSentence(turn.failure);
+  const said = turn.failure === null ? null : localTurnFailureSentence(turn.failure, program);
   const reply = [turn.reply, said].filter(Boolean).join('\n\n');
   if (reply !== '') {
     items.push({

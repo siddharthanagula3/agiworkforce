@@ -54,6 +54,8 @@ type WebSettingsSectionAlias = keyof typeof WEB_SETTINGS_SECTION_ALIASES;
 /** A section a link may address: a pane, or an alias that opens one. */
 export type WebSettingsContentSection = WebSettingsPane | WebSettingsSectionAlias;
 
+export const LOCAL_MODELS_SETTINGS_SECTION: WebSettingsContentSection = 'capabilities';
+
 /**
  * Sections the shared SettingsModal shell renders itself from the adapter,
  * with no entry in `sectionContent`.

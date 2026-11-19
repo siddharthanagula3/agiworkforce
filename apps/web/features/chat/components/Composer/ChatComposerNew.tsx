@@ -5830,6 +5830,8 @@ const ChatComposerNewComponent = ({
               onStop={dictation.stop}
               onSend={dictation.send}
               onRetry={dictation.retry}
+              usageLimited={dictation.usageLimited}
+              onUpgrade={onUpgradeRequest}
             />
           )}
 

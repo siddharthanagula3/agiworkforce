@@ -39,21 +39,12 @@ export function clampVoicePace(pace: number): number {
   return Math.min(VOICE_PACE_MAX, Math.max(VOICE_PACE_MIN, Math.round(pace * 20) / 20));
 }
 
-export const VOICE_INTELLIGENCE = {
-  economy: 'economy',
-  balanced: 'balanced',
-  premium: 'premium',
-} as const;
-
-export type VoiceIntelligence = (typeof VOICE_INTELLIGENCE)[keyof typeof VOICE_INTELLIGENCE];
-
 interface VoiceSessionStoreState {
   session: VoiceSessionState;
   focusMode: boolean;
   dockOpen: boolean;
   settingsOpen: boolean;
   activityMessageId: string | null;
-  intelligence: VoiceIntelligence;
   reasoning: LiveVoiceReasoning;
   language: string;
   voice: string;
@@ -100,7 +91,6 @@ interface VoiceSessionStoreActions {
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setActivityMessageId: (messageId: string | null) => void;
-  setIntelligence: (intelligence: VoiceIntelligence) => void;
   setReasoning: (reasoning: LiveVoiceReasoning) => void;
   setLanguage: (language: string) => void;
   setPace: (pace: number) => void;
@@ -120,7 +110,6 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
     (set, get) => ({
       session: INITIAL_VOICE_SESSION_STATE,
       ...PANELS_CLOSED,
-      intelligence: VOICE_INTELLIGENCE.balanced,
       reasoning: LIVE_VOICE_REASONING.instant,
       language: VOICE_LANGUAGE_AUTO,
       voice: LIVE_DEFAULT_VOICE,
@@ -140,7 +129,6 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
         set({
           session: INITIAL_VOICE_SESSION_STATE,
           ...PANELS_CLOSED,
-          intelligence: VOICE_INTELLIGENCE.balanced,
           reasoning: LIVE_VOICE_REASONING.instant,
           language: VOICE_LANGUAGE_AUTO,
           voice: LIVE_DEFAULT_VOICE,
@@ -205,7 +193,6 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
       setActivityMessageId: (activityMessageId) =>
         set(activityMessageId ? { activityMessageId, dockOpen: false } : { activityMessageId }),
-      setIntelligence: (intelligence) => set({ intelligence }),
       setReasoning: (reasoning) =>
         set({
           reasoning: isLiveVoiceReasoning(reasoning) ? reasoning : LIVE_VOICE_REASONING.instant,
@@ -217,7 +204,6 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       name: STORE_NAME,
       version: STORE_VERSION,
       partialize: (state) => ({
-        intelligence: state.intelligence,
         reasoning: state.reasoning,
         language: state.language,
         voice: state.voice,

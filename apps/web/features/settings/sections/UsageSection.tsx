@@ -1276,12 +1276,16 @@ export function UsageSection() {
         >
           Usage
         </h1>
-        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-          Your limits, when they reset, and where your credits went.
-        </p>
-        <div style={{ marginTop: 'var(--space-2)' }}>
-          <HelpArticleLink docId="usage-and-credits" label="Learn more about usage limits" />
-        </div>
+        {!isFreePlan && (
+          <>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+              Your limits, when they reset, and where your credits went.
+            </p>
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <HelpArticleLink docId="usage-and-credits" label="Learn more about usage limits" />
+            </div>
+          </>
+        )}
         {!isFreePlan && (
           <div style={{ marginTop: 'var(--space-2)' }}>
             <SettingsSectionLink

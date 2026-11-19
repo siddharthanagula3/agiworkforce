@@ -1,6 +1,8 @@
 import type { ComponentProps } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { billingPlanCapabilityUpgradeMessage } from '@agiworkforce/types';
+import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { WebSettingsModal } from './WebSettingsModal';
 import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalog';
 
@@ -937,6 +939,72 @@ describe('WebSettingsModal connectors while connectors are coming soon', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Add$/ }));
     expect(await screen.findByRole('menuitem', { name: 'Browse connectors' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Add custom connector' })).toBeNull();
+  }, 15_000);
+});
+
+describe('WebSettingsModal connectors on a plan that does not include them', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    invalidateSkillsCatalog();
+  });
+
+  function renderOnPlanWithoutConnectors() {
+    return render(
+      <CapabilityProvider
+        platform="web"
+        document={{
+          granted: [],
+          deniedBy: { canUseConnectors: ['tier'] },
+          sources: {
+            model: 'models',
+            tier: 'tier:free',
+            surface: 'surface:web',
+            settings: 'settings',
+          },
+        }}
+      >
+        <WebSettingsModal open onClose={vi.fn()} initialSection="connectors" />
+      </CapabilityProvider>,
+    );
+  }
+
+  it('keeps a connection listed and disconnectable, with the plan line and Upgrade', async () => {
+    const fetchMock = stubFetch({
+      connectors: [{ connectorId: 'notion', connectedAt: '2026-07-01T00:00:00Z' }],
+    });
+    renderOnPlanWithoutConnectors();
+
+    expect(await findConnectedGlyph('Notion')).toBeTruthy();
+    const pane = settingsPane();
+    expect(within(pane).getByTestId('directory-locked-notice')).toHaveTextContent(
+      billingPlanCapabilityUpgradeMessage('connectors'),
+    );
+    expect(within(pane).getByRole('button', { name: 'Upgrade' })).toBeTruthy();
+    expect(within(pane).queryByRole('button', { name: /^Add$/ })).toBeNull();
+    expect(within(pane).queryByText('Needs setup')).toBeNull();
+
+    fireEvent.click(within(pane).getByRole('button', { name: 'Notion' }));
+    fireEvent.click(await within(pane).findByRole('button', { name: 'Disconnect' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/connectors?connectorId=notion',
+        expect.objectContaining({ method: 'DELETE' }),
+      ),
+    );
+  }, 15_000);
+
+  it('shows the plan reason with Upgrade instead of connectors that read as unconfigured', async () => {
+    stubFetch({ available: ['notion'] });
+    renderOnPlanWithoutConnectors();
+
+    expect(
+      await within(settingsPane()).findByText(billingPlanCapabilityUpgradeMessage('connectors')),
+    ).toBeTruthy();
+    expect(within(settingsPane()).getByRole('button', { name: 'Upgrade' })).toBeTruthy();
+    expect(screen.queryByText('Needs setup')).toBeNull();
+    expect(screen.queryByText(/needs credentials this deployment/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Add$/ })).toBeNull();
   }, 15_000);
 });
 
