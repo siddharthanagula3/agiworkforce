@@ -24,8 +24,6 @@
 {"path":".github/workflows/build-windows-release.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/ci-failure-attribution.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/ci.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
-{"path":".github/workflows/ci.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
-{"path":".github/workflows/ci.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/cleanup-production-queue.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/clerk-bot-protection.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/codeql-analysis.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
