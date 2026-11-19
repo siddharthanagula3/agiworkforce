@@ -23,8 +23,10 @@ import { LOCAL_MODELS_SETTINGS_SECTION } from '@/features/settings/lib/web-setti
 import {
   LOCAL_CODE_COPY,
   LOCAL_MODEL_UPGRADE_HEADING,
+  LOCAL_MODELS_HELP_ARTICLE,
   localCloudModelsPlanLine,
 } from './local-code';
+import { helpArticlePath } from '@/lib/support/help-paths';
 import { useUIStore } from '@shared/stores/layout-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { getModelMetadata } from '@shared/config/llm';
@@ -135,6 +137,7 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 type FakeHost = Record<string, never> | null;
 let host: FakeHost = null;
 let hostAfterHydration: FakeHost = null;
+let localModeHost = false;
 const localSession: LocalDeveloperSession = {
   id: 'thread-1',
   rootId: 'root-recent',
@@ -215,6 +218,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
     </a>
   ),
   useDesktopHost: () => host,
+  useLocalModeHost: () => (localModeHost ? host : null),
   isDesktopHost: () => host !== null || hostAfterHydration !== null,
   archiveDeveloperThread: (...args: unknown[]) => archiveDeveloperThread(...args),
   allowDeveloperSessions: (...args: unknown[]) => allowDeveloperSessions(...args),
@@ -244,6 +248,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  localModeHost = false;
   codeIdentity.auth = {
     isLoaded: true,
     isSignedIn: true,
@@ -4514,10 +4519,41 @@ describe('local Code on a plan without cloud models on this computer', () => {
     const notice = await screen.findByTestId('local-plan-required');
     await user.click(within(notice).getByRole('button', { name: CODE_COPY.upgradeAction }));
     expect(upgrade).toHaveBeenCalledTimes(1);
-    await user.click(within(notice).getByRole('button', { name: LOCAL_CODE_COPY.setUpLocalModel }));
-    expect(openSettings).toHaveBeenCalledWith(LOCAL_MODELS_SETTINGS_SECTION);
+    const setUp = within(notice).getByRole('link', { name: LOCAL_CODE_COPY.setUpLocalModel });
+    expect(setUp).toHaveAttribute('href', helpArticlePath(LOCAL_MODELS_HELP_ARTICLE));
+    expect(setUp).toHaveAttribute('target', '_blank');
+    expect(openSettings).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalledWith('/pricing');
     release();
+  });
+
+  it('offers the upgrade beside the cloud environment a plan does not include', async () => {
+    const user = userEvent.setup();
+    const upgrade = vi.fn();
+    const release = onAppCommand('open-upgrade', upgrade);
+    host = {};
+    render(<CloudCodePage api={planApi()} />);
+
+    const notice = await screen.findByTestId('code-unavailable');
+    expect(notice).toHaveTextContent(CODE_COPY.planNotEntitled);
+    await user.click(within(notice).getByRole('button', { name: CODE_COPY.upgradeAction }));
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalledWith('/pricing');
+    release();
+  });
+
+  it('opens the local models settings where the host runs local models itself', async () => {
+    const user = userEvent.setup();
+    openSettings.mockClear();
+    host = {};
+    localModeHost = true;
+    localGroups = [folder()];
+    localHostModels = [managedReady];
+    render(<CloudCodePage api={planApi()} />);
+
+    const notice = await screen.findByTestId('local-plan-required');
+    await user.click(within(notice).getByRole('button', { name: LOCAL_CODE_COPY.setUpLocalModel }));
+    expect(openSettings).toHaveBeenCalledWith(LOCAL_MODELS_SETTINGS_SECTION);
   });
 
   it('starts a new session for a model in another trust boundary from the draft', async () => {

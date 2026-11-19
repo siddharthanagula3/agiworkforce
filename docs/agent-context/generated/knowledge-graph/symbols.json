@@ -76665,6 +76665,9 @@
     "local_models": [
       "apps/cli/src/lib.rs"
     ],
+    "LOCAL_MODELS_HELP_ARTICLE": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "LOCAL_MODELS_SETTINGS_SECTION": [
       "apps/web/features/settings/lib/web-settings-sections.ts"
     ],

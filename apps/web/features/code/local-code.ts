@@ -865,6 +865,8 @@ export const LOCAL_MODEL_SETUP_HEADING = 'Needs setup on this machine';
 
 export const LOCAL_MODEL_UPGRADE_HEADING = 'Not in your plan';
 
+export const LOCAL_MODELS_HELP_ARTICLE = 'local-mode';
+
 export function localModelSetupCount(setup: LocalProviderSetup): string {
   return translateUiPlural('settings', 'counts.models', setup.count, {
     one: '{{count}} model',

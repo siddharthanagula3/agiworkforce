@@ -91,11 +91,18 @@ import {
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
-import { ContinueOnDesktop, deleteDeveloperThread, useDesktopHost } from '@/features/desktop-host';
+import {
+  ContinueOnDesktop,
+  deleteDeveloperThread,
+  useDesktopHost,
+  useLocalModeHost,
+} from '@/features/desktop-host';
+import { helpArticlePath } from '@/lib/support/help-paths';
 import { LOCAL_MODELS_SETTINGS_SECTION } from '@/features/settings/lib/web-settings-sections';
 import {
   LOCAL_CODE_COPY,
   LOCAL_FALLBACK_AGENT_MODE,
+  LOCAL_MODELS_HELP_ARTICLE,
   localCloudModelsPlanLine,
   localDiscardArchivesConsequence,
   localDraftNeedsPlan,
@@ -397,6 +404,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const desktopHost = useDesktopHost();
+  const localModeHost = useLocalModeHost();
   const firstRun = useCodeFirstRun(!pane && !sessionId && desktopHost === null, api, capture);
 
   const leaveLocalEdits = useCallback(
@@ -1571,9 +1579,20 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const notices = (
     <>
       {unavailableNotice && !planUpgradeRequired && (!isLocalDraft || selectedSession !== null) && (
-        <div className={styles['notice']} role="status">
+        <div className={styles['notice']} role="status" data-testid="code-unavailable">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{unavailableNotice}</span>
+          {unavailableNotice === CODE_COPY.planNotEntitled && (
+            <span className={styles['noticeActions']}>
+              <button
+                type="button"
+                className={styles['secondaryButton']}
+                onClick={() => openUpgrade((href) => guardedRouter.push(href))}
+              >
+                {CODE_COPY.upgradeAction}
+              </button>
+            </span>
+          )}
         </div>
       )}
       {localDraftBlocked && !selectedSession && (
@@ -1593,13 +1612,24 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
             >
               {CODE_COPY.upgradeAction}
             </button>
-            <button
-              type="button"
-              className={styles['secondaryButton']}
-              onClick={() => openSettings(LOCAL_MODELS_SETTINGS_SECTION)}
-            >
-              {LOCAL_CODE_COPY.setUpLocalModel}
-            </button>
+            {localModeHost ? (
+              <button
+                type="button"
+                className={styles['secondaryButton']}
+                onClick={() => openSettings(LOCAL_MODELS_SETTINGS_SECTION)}
+              >
+                {LOCAL_CODE_COPY.setUpLocalModel}
+              </button>
+            ) : (
+              <a
+                className={styles['secondaryButton']}
+                href={helpArticlePath(LOCAL_MODELS_HELP_ARTICLE)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {LOCAL_CODE_COPY.setUpLocalModel}
+              </a>
+            )}
           </span>
         </div>
       )}
