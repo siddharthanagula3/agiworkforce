@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8418,
+      "files": 8449,
       "roles": {
         "asset": 57,
         "config": 93,
@@ -2623,9 +2623,9 @@
         "generated": 2,
         "migration": 746,
         "other": 37,
-        "source": 3561,
+        "source": 3558,
         "style": 37,
-        "test": 3834
+        "test": 3868
       }
     },
     {
@@ -2671,13 +2671,13 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 817,
+      "files": 820,
       "roles": {
         "config": 13,
         "generated": 4,
         "other": 1,
-        "source": 762,
-        "test": 37
+        "source": 764,
+        "test": 38
       }
     },
     {
@@ -4268,12 +4268,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 963,
+      "files": 966,
       "roles": {
         "config": 29,
-        "generated": 629,
+        "generated": 630,
         "source": 174,
-        "test": 131
+        "test": 133
       }
     },
     {
@@ -4988,12 +4988,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 454,
+      "files": 449,
       "roles": {
         "config": 3,
-        "source": 210,
+        "source": 207,
         "style": 3,
-        "test": 238
+        "test": 236
       }
     },
     {
