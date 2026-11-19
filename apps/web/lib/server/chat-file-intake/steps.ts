@@ -890,7 +890,7 @@ export function createChatFileIntakeDeps(input: ChatFileIntakeWorkflowInput): Ch
     preparationStorage: defaultPreparationStorage,
     seal: defaultSealDeps(db),
     prepare: (assetId) => prepareChatFileStep(assetId, { db }),
-    preparing: (assetId) => preparationInProgress(db, assetId),
+    preparing: (assetId) => preparationInProgress(db, { assetId, userId: input.userId }),
     async reindex(row, assetId) {
       await requestMediaAssetReindex(db, { assetId, ownerUserId: row.userId });
     },

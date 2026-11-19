@@ -771,8 +771,14 @@ describe.skipIf(!connectionString)('chat file intake statements against PostgreS
       expect(listed).toEqual([
         { id: sealed['idle']!.id, userId: OWNER, organizationId: null, state: 'sealed' },
       ]);
-      expect(await preparationInProgress(tx, sealed['idle']!.assetId)).toBe(true);
-      expect(await preparationInProgress(tx, sealed['finished']!.assetId)).toBe(false);
+      const idleAssetId = sealed['idle']!.assetId;
+      expect(await preparationInProgress(tx, { assetId: idleAssetId, userId: OWNER })).toBe(true);
+      expect(await preparationInProgress(tx, { assetId: idleAssetId, userId: SUSPENDED })).toBe(
+        false,
+      );
+      expect(
+        await preparationInProgress(tx, { assetId: sealed['finished']!.assetId, userId: OWNER }),
+      ).toBe(false);
     });
   });
 });
