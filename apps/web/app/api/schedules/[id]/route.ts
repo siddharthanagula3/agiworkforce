@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { refuseBlockedSchedulePrompt } from '../prompt-secret-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -67,6 +68,7 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
   if (csrfError) return csrfError as NextResponse;
   const { id } = await context.params;
   const body = await requestObject(request);
+  await refuseBlockedSchedulePrompt(userId, body);
   try {
     const planTier = await resolveEntitledPlanTier(db, userId);
     return NextResponse.json({

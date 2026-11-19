@@ -112,7 +112,7 @@ describe('/api/projects/[id]/memory/edit', () => {
     const response = await GET(request('GET'), context());
 
     expect(response.status).toBe(404);
-    expect(mocks.route).toHaveBeenCalledWith(expect.anything(), 'user-1');
+    expect(mocks.route).toHaveBeenCalledWith(expect.anything(), 'user-1', null);
   });
 
   it('GET refuses when the workspace has no managed compute access', async () => {

@@ -2727,6 +2727,9 @@
     "admitLiveDeveloperProjectForKey": [
       "apps/web/lib/services/developer-project-service.ts"
     ],
+    "admitManagedCloudRoute": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
     "admitRouteRateBudgets": [
       "apps/web/lib/services/free-lane/runtime-state-service.ts"
     ],
@@ -14540,6 +14543,9 @@
     "buildManagedAgentStream": [
       "apps/web/app/api/llm/v1/chat/completions/lib/managed-agent-stream.ts"
     ],
+    "buildManagedCloudRoutingRequest": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
+    ],
     "buildManagedComputeAccessGateResponse": [
       "apps/web/lib/services/managed-compute-access.ts"
     ],
@@ -15077,6 +15083,9 @@
     "buildVscodeHeartbeat": [
       "apps/extension-vscode/src/features/device-registry/deviceHeartbeat.ts",
       "apps/extension-vscode/src/features/device-registry/index.ts"
+    ],
+    "buildWebCloudAutoRoutingRequest": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
     ],
     "buildWebLocalToByokPreview": [
       "apps/web/features/chat/lib/localByokHandoff.ts"
@@ -66069,6 +66078,12 @@
     "InMemoryDisclosureLedger": [
       "packages/contracts/compliance/src/__tests__/test-ledger.ts"
     ],
+    "InMemoryPolicy": [
+      "apps/web/lib/server/managed-cloud-routing/__tests__/in-memory-policy-source.ts"
+    ],
+    "inMemoryPolicySource": [
+      "apps/web/lib/server/managed-cloud-routing/__tests__/in-memory-policy-source.ts"
+    ],
     "InMemoryTokenStore": [
       "crates/agiworkforce-mcp/src/hooks.rs"
     ],
@@ -72706,10 +72721,16 @@
     "latest_managed_session": [
       "apps/cli/src/platform/runtime/session_control.rs"
     ],
+    "latest_managed_session_in": [
+      "apps/cli/src/platform/runtime/session_control.rs"
+    ],
     "LATEST_PAGE_CONTEXT": [
       "apps/desktop/src-tauri/src/sys/commands/extension.rs"
     ],
     "latest_project_session": [
+      "apps/cli/src/platform/runtime/session_control.rs"
+    ],
+    "latest_project_session_in": [
       "apps/cli/src/platform/runtime/session_control.rs"
     ],
     "latest_session_in_folder": [
@@ -78493,6 +78514,9 @@
     "MANAGED_CLOUD_RESUMABLE_UPLOADS_PATH": [
       "packages/contracts/cloud-contracts/src/resumable-uploads.ts"
     ],
+    "MANAGED_CLOUD_RUNTIME_PROFILE_ID": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
+    ],
     "MANAGED_CLOUD_SCHEDULE_APPROVAL_DECISIONS": [
       "packages/contracts/cloud-contracts/src/schedules.ts"
     ],
@@ -78588,6 +78612,11 @@
     ],
     "MANAGED_CLOUD_TRIGGERS_PATH": [
       "packages/contracts/cloud-contracts/src/triggers.ts"
+    ],
+    "MANAGED_CLOUD_TRUST_MODE": [
+      "apps/web/__tests__/surface-page-claims.test.ts",
+      "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
     ],
     "managed_cloud_url": [
       "apps/cli/src/models/streaming.rs"
@@ -78941,11 +78970,21 @@
       "packages/platform/utils/src/index.ts",
       "packages/platform/utils/src/managedChatIdempotency.ts"
     ],
+    "ManagedCloudAccount": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts",
+      "apps/web/lib/server/managed-cloud-routing/policy-source.ts"
+    ],
     "ManagedCloudAccountWorkspaces": [
       "packages/contracts/cloud-contracts/src/workspaces.ts"
     ],
     "ManagedCloudAccountWorkspacesSchema": [
       "packages/contracts/cloud-contracts/src/workspaces.ts"
+    ],
+    "ManagedCloudAdmission": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
+    "ManagedCloudAdmitted": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
     ],
     "ManagedCloudAgent": [
       "packages/contracts/cloud-contracts/src/agents.ts"
@@ -79072,6 +79111,12 @@
     ],
     "ManagedCloudBoundary": [
       "apps/desktop/src/services/managedCloudBoundary.ts"
+    ],
+    "ManagedCloudCall": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
+    "ManagedCloudCallKind": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
     ],
     "managedCloudChat": [
       "apps/mobile/services/managedCloudChat.ts"
@@ -79391,6 +79436,9 @@
     "ManagedCloudModel": [
       "apps/desktop/src/stores/modelStore.ts"
     ],
+    "ManagedCloudNeed": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
     "ManagedCloudOwner": [
       "apps/extension/src/features/cloud-bridge/managedCloudAuthority.ts"
     ],
@@ -79429,6 +79477,13 @@
     ],
     "ManagedCloudPaginationResource": [
       "apps/desktop/src/services/managedCloudPagination.ts"
+    ],
+    "ManagedCloudPolicySnapshot": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
+    "ManagedCloudPolicySource": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts",
+      "apps/web/lib/server/managed-cloud-routing/policy-source.ts"
     ],
     "managedCloudPreferencesNamespacePath": [
       "packages/contracts/cloud-contracts/src/managed-cloud-settings-client.ts"
@@ -79746,8 +79801,17 @@
     "ManagedCloudReflectRecapSchema": [
       "packages/contracts/cloud-contracts/src/conversations.ts"
     ],
+    "ManagedCloudRefusalReason": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
+    "ManagedCloudRefused": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
     "ManagedCloudRequestContext": [
       "apps/desktop/src/services/managedCloudRequestContext.ts"
+    ],
+    "ManagedCloudRequestFields": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
     ],
     "ManagedCloudResumableUploadAbortResponse": [
       "packages/contracts/cloud-contracts/src/resumable-uploads.ts"
@@ -79817,6 +79881,12 @@
     ],
     "ManagedCloudResumableUploadSignedPartSchema": [
       "packages/contracts/cloud-contracts/src/resumable-uploads.ts"
+    ],
+    "managedCloudRoutingRequest": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
+    ],
+    "ManagedCloudRoutingRequest": [
+      "apps/web/lib/server/managed-cloud-routing/admission.ts"
     ],
     "ManagedCloudSaveMessageOptions": [
       "packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts"
@@ -104250,6 +104320,9 @@
       "scripts/check-feature-flags.mjs",
       "scripts/lib/project-context-boundary.mjs"
     ],
+    "productionPolicySource": [
+      "apps/web/lib/server/managed-cloud-routing/policy-source.ts"
+    ],
     "productionStringLiterals": [
       "scripts/check-concept-registry.mjs"
     ],
@@ -113100,6 +113173,9 @@
     "RefuseAppPicker": [
       "apps/web/features/desktop-host/components/RefuseAppPicker.tsx"
     ],
+    "refuseBlockedSchedulePrompt": [
+      "apps/web/app/api/schedules/prompt-secret-policy.ts"
+    ],
     "refuseComputerRun": [
       "apps/desktop/electron/runtime/computerUseRuns.ts"
     ],
@@ -119132,6 +119208,9 @@
     "resolveResearchConnectorPolicy": [
       "apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts"
     ],
+    "resolveResidencyRegion": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
+    ],
     "resolveResourceAccess": [
       "packages/contracts/types/src/resource-lifecycle.ts"
     ],
@@ -119473,6 +119552,9 @@
     ],
     "resolveVsCodeExecutablePath": [
       "apps/extension-vscode/src/test/resolveVsCodeExecutable.ts"
+    ],
+    "resolveWebCloudModelRoute": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
     ],
     "resolveWebCloudRolloutInputs": [
       "apps/web/lib/services/model-rollout/rollout-routing-inputs.ts"
@@ -122024,6 +122106,9 @@
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/route-health-store.ts"
     ],
+    "RouteHealthInputs": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
+    ],
     "RouteHealthKeyValueBatch": [
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/route-health-store.ts"
@@ -122286,6 +122371,9 @@
     "RouteUnavailabilityReason": [
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/runtime-state.ts"
+    ],
+    "RouteUsageEstimate": [
+      "apps/web/lib/server/managed-cloud-routing/routing-request.ts"
     ],
     "routeVisualRequest": [
       "apps/web/features/chat/components/artifacts/structuredVisualArtifact.ts"
@@ -125483,6 +125571,9 @@
       "apps/extension-vscode/src/features/schedules/schedulePresentation.ts"
     ],
     "ScheduledExecutionCancellation": [
+      "apps/web/lib/services/schedule-service.ts"
+    ],
+    "ScheduledExecutionRefusalReason": [
       "apps/web/lib/services/schedule-service.ts"
     ],
     "ScheduledExecutionResult": [
@@ -131178,6 +131269,9 @@
     "settlePublicPage": [
       "apps/web/e2e/lib/public-page-readiness.ts"
     ],
+    "settleRefusedFreeTrial": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/settle-refused-free-trial.ts"
+    ],
     "settleResearchRun": [
       "apps/mobile/src/features/chat/utils/researchRunState.ts"
     ],
@@ -132726,9 +132820,6 @@
       "apps/web/shared/components/agi/SidebarWordmark.tsx"
     ],
     "sideCallProviderAllowed": [
-      "apps/web/lib/server/side-call-training-policy.ts"
-    ],
-    "sideCallRoutingRequest": [
       "apps/web/lib/server/side-call-training-policy.ts"
     ],
     "sideCallTrainingOptOut": [
@@ -139882,6 +139973,9 @@
     ],
     "supportPlatformSchema": [
       "apps/web/lib/support/agent/corpus/schema.ts"
+    ],
+    "supportPolicySource": [
+      "apps/web/lib/support/agent/__tests__/fixtures/model-mocks.ts"
     ],
     "SupportPresenceState": [
       "apps/web/features/support/hooks/useSupportPresence.ts"
@@ -147741,6 +147835,9 @@
     ],
     "unattended_turn": [
       "apps/desktop/src-tauri/src/core/agent/mod.rs"
+    ],
+    "UnattendedPolicyUnreadableError": [
+      "apps/web/lib/services/scheduled-agent-executor.ts"
     ],
     "UnattendedProgress": [
       "apps/desktop/src-tauri/src/sys/commands/chat/state.rs"

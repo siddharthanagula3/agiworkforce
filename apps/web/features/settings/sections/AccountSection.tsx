@@ -74,7 +74,7 @@ function formatDateTime(value: Date | null | undefined): string {
 
 function livePaidPlanOf(subscription: SubscriptionPlan | null): SubscriptionPlan | null {
   if (!subscription) return null;
-  const tier = String(subscription.tier ?? 'free')
+  const tier = String(subscription.billing_tier ?? subscription.tier ?? 'free')
     .trim()
     .toLowerCase();
   if (isFreeBillingPlanTier(tier)) return null;
@@ -82,7 +82,9 @@ function livePaidPlanOf(subscription: SubscriptionPlan | null): SubscriptionPlan
 }
 
 function planLabelOf(subscription: SubscriptionPlan): string {
-  const tier = String(subscription.tier).trim().toLowerCase();
+  const tier = String(subscription.billing_tier ?? subscription.tier)
+    .trim()
+    .toLowerCase();
   return isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : subscription.display_name;
 }
 

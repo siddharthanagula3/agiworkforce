@@ -207,9 +207,9 @@ export default function ChatTabScreen() {
   const selectedMediaModel = useChatViewStore((s) => s.selectedMediaModel);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
   const videoResolution = useChatViewStore((s) => s.videoResolution);
+  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
   const imageTransparentBackground = useChatViewStore((s) => s.imageTransparentBackground);
-  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearUnscopedError = useChatStore((s) => s.clearUnscopedError);
@@ -791,9 +791,9 @@ export default function ChatTabScreen() {
       mediaMode,
       videoAspectRatio,
       videoResolution,
+      videoDurationSecs,
       imageAspectRatio,
       imageTransparentBackground,
-      videoDurationSecs,
       selectedModel,
       deleteMessage,
       setPaywallError,

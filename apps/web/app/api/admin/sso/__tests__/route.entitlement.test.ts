@@ -50,6 +50,7 @@ interface WorldOrganization {
   id: string;
   role: string;
   billingUserId: string;
+  status?: string;
 }
 
 const world = {
@@ -63,16 +64,19 @@ function norm(sql: string): string {
 
 function answer(sql: string, params: unknown[] = []): unknown[] {
   const q = norm(sql);
-  if (q === 'select organization_id, role from organization_members where user_id = $1') {
-    return world.organizations.map(({ id, role }) => ({ organization_id: id, role }));
+  const memberships = q.includes("status = 'active'")
+    ? world.organizations.filter(({ status = 'active' }) => status === 'active')
+    : world.organizations;
+  if (q.startsWith('select organization_id, role from organization_members where user_id = $1')) {
+    return memberships.map(({ id, role }) => ({ organization_id: id, role }));
   }
   if (q.startsWith('select organization_id from organization_members where user_id = $1')) {
-    return world.organizations
+    return memberships
       .filter(({ role }) => role === 'owner' || role === 'admin')
       .map(({ id }) => ({ organization_id: id }));
   }
   if (q.startsWith('select role from organization_members where organization_id = $1')) {
-    const organization = world.organizations.find(({ id }) => id === params[0]);
+    const organization = memberships.find(({ id }) => id === params[0]);
     return organization ? [{ role: organization.role }] : [];
   }
   if (q.includes('from public.organizations o left join public.subscriptions s')) {
@@ -311,6 +315,55 @@ describe('SSO entitlement gate', () => {
     expect(listed?.[1]).toEqual([[ORG_ID]]);
   });
 
+  it('refuses a suspended owner of an Enterprise organization', async () => {
+    world.organizations = [
+      { id: ORG_ID, role: 'owner', billingUserId: CALLER, status: 'suspended' },
+    ];
+
+    const response = await GET(jsonRequest('http://localhost/api/admin/sso', 'GET'));
+
+    expect(response.status).toBe(403);
+    expect(connectionStatements()).toEqual([]);
+  });
+
+  it('refuses a suspended administrator of one organization while an active one passes', async () => {
+    world.organizations = [
+      { id: ORG_ID, role: 'owner', billingUserId: CALLER },
+      { id: SECOND_ORG_ID, role: 'admin', billingUserId: ORG_OWNER, status: 'suspended' },
+    ];
+    world.subscriptions = new Map([
+      [CALLER, { plan_tier: 'enterprise', status: 'active' }],
+      [ORG_OWNER, { plan_tier: 'enterprise', status: 'active' }],
+    ]);
+
+    const active = await GET(jsonRequest(`http://localhost/api/admin/sso?orgId=${ORG_ID}`, 'GET'));
+    const suspended = await GET(
+      jsonRequest(`http://localhost/api/admin/sso?orgId=${SECOND_ORG_ID}`, 'GET'),
+    );
+
+    expect(active.status).toBe(200);
+    expect(suspended.status).toBe(403);
+  });
+
+  it('lists connections only for the organizations where the caller is an active administrator', async () => {
+    world.organizations = [
+      { id: ORG_ID, role: 'owner', billingUserId: CALLER },
+      { id: SECOND_ORG_ID, role: 'admin', billingUserId: ORG_OWNER, status: 'suspended' },
+    ];
+    world.subscriptions = new Map([
+      [CALLER, { plan_tier: 'enterprise', status: 'active' }],
+      [ORG_OWNER, { plan_tier: 'enterprise', status: 'active' }],
+    ]);
+
+    const response = await GET(jsonRequest('http://localhost/api/admin/sso', 'GET'));
+
+    expect(response.status).toBe(200);
+    const listed = mockQuery.mock.calls.find(([sql]) =>
+      norm(String(sql)).includes('from sso_connections where organization_id = any($1)'),
+    );
+    expect(listed?.[1]).toEqual([[ORG_ID]]);
+  });
+
   it('rejects an unauthenticated caller before consulting billing', async () => {
     mockGetClerkAuthUser.mockRejectedValue(new Error('no session'));
 
@@ -334,6 +387,18 @@ describe('getSSOAdminAccess', () => {
     ownOrganizationOn('team');
     await expect(getSSOAdminAccess(db, CALLER)).resolves.toEqual({
       plan: 'team',
+      canManageSSO: false,
+    });
+  });
+
+  it('does not count an organization where the administrator is suspended', async () => {
+    world.organizations = [
+      { id: ORG_ID, role: 'admin', billingUserId: ORG_OWNER, status: 'suspended' },
+    ];
+    world.subscriptions = new Map([[ORG_OWNER, { plan_tier: 'enterprise', status: 'active' }]]);
+
+    await expect(getSSOAdminAccess(db, CALLER)).resolves.toEqual({
+      plan: 'free',
       canManageSSO: false,
     });
   });

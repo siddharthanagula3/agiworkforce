@@ -55,13 +55,7 @@ import {
   normalizeResearchDeliverable,
   RESEARCH_GUIDANCE_MAX_CHARS,
 } from '@agiworkforce/types';
-import {
-  DATA_REGIONS,
-  DEFAULT_DATA_REGION,
-  NON_US_VENDOR_TRANSPORTS,
-  allowedDeveloperJurisdictions,
-  excludedTransportsFor,
-} from '@agiworkforce/compliance';
+import { DEFAULT_DATA_REGION, allowedDeveloperJurisdictions } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
@@ -110,10 +104,7 @@ import {
   webSearchToolDef,
   webSearchBackendConfigured,
 } from '@/lib/web-search/web-search-tool';
-import {
-  resolveUserRoutingPreferences,
-  type UserRoutingPreferences,
-} from '@/lib/services/user-routing-preferences';
+import { resolveUserRoutingPreferences } from '@/lib/services/user-routing-preferences';
 import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
@@ -176,7 +167,11 @@ import {
   hasExplicitWebSearchRequestOptOut as hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { MEMORY_COMMAND_KINDS, extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
+import {
+  MEMORY_COMMAND_KINDS,
+  extractCandidateMemoryFacts,
+  parseExplicitMemoryCommand,
+} from '@agiworkforce/agent-core';
 import {
   MEMORY_COMMAND_CLIENT_SURFACES,
   MEMORY_COMMAND_TURN_STATUSES,
@@ -230,7 +225,6 @@ import {
   listAvailableManagedProviderIds,
   resolveProviderFromModel,
 } from '@/lib/services/provider-adapter-service';
-import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
@@ -306,11 +300,9 @@ import {
   isCredentialUnfunded,
   isRoutePolicyExcluded,
   MODEL_POLICY_UNAVAILABLE,
-  observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
   developerJurisdictionAllowed,
-  modelsPastDeprecationDate,
   resolveAutoRoute,
   runtimeProfileImplementsTask,
   speedFirstSlots,
@@ -318,7 +310,6 @@ import {
 } from '@agiworkforce/routing';
 import type {
   AutoRouteDecision,
-  AutoRoutingRequest,
   RoutingAttachment,
   RoutingRuntimeState,
   RoutingTaskType,
@@ -344,8 +335,18 @@ import { freeLaneObserves, resolveFreeLaneMode } from '@/lib/services/free-lane/
 import {
   resolveWebCloudRolloutInputs,
   resolveWithObservedCapabilities,
-  type WebCloudRolloutInputs,
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
+import {
+  MANAGED_CLOUD_RUNTIME_PROFILE_ID,
+  MANAGED_CLOUD_TRUST_MODE,
+  buildWebCloudAutoRoutingRequest,
+  resolveResidencyRegion,
+  resolveWebCloudModelRoute,
+} from '@/lib/server/managed-cloud-routing/routing-request';
+import {
+  admitManagedCloudRoute,
+  type ManagedCloudPolicySnapshot,
+} from '@/lib/server/managed-cloud-routing/admission';
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
@@ -1013,8 +1014,6 @@ export function applyImplicitManagedToolIntent(
   }
 }
 
-const WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID = 'web/cloud-chat';
-
 /**
  * The server never drives a browser or a desktop itself. A browser-control turn
  * reaches this runtime either from a client that executes the tools it declares,
@@ -1026,7 +1025,7 @@ function taskTypeServedByWebRuntime(
   taskType: RoutingTaskType,
   request: Pick<ChatCompletionRequest, 'tools'>,
 ): RoutingTaskType {
-  if (runtimeProfileImplementsTask(WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID, taskType)) return taskType;
+  if (runtimeProfileImplementsTask(MANAGED_CLOUD_RUNTIME_PROFILE_ID, taskType)) return taskType;
   return (request.tools?.length ?? 0) > 0 ? 'agentic' : 'general';
 }
 
@@ -1114,6 +1113,13 @@ const AMBIENT_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSu
   'chrome',
 ]);
 
+const MEMORY_RECALL_OR_UPDATE_RE =
+  /\b(?:(?:do|did)\s+you\s+remember|what\s+(?:do\s+)?you\s+remember|(?:can|could)\s+you\s+recall|(?:my|your|saved)\s+memor(?:y|ies))\b/i;
+
+function asksForMemory(message: string): boolean {
+  return parseExplicitMemoryCommand(message) !== null || MEMORY_RECALL_OR_UPDATE_RE.test(message);
+}
+
 export function applyMemoryToolCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1122,6 +1128,7 @@ export function applyMemoryToolCapability(
     memoryEnabled: boolean;
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
+    userMessage: string;
   },
 ): void {
   if (
@@ -1133,7 +1140,8 @@ export function applyMemoryToolCapability(
     request.memory_enabled === false ||
     request.personalization === false ||
     request.memory_command !== undefined ||
-    !AMBIENT_TOOL_SURFACES.has(params.surface)
+    !AMBIENT_TOOL_SURFACES.has(params.surface) ||
+    !asksForMemory(params.userMessage)
   ) {
     return;
   }
@@ -1639,6 +1647,8 @@ export type ProcessedRequest = {
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
   noTrainingOnly?: boolean;
+  /** Every per-account routing rule this turn read, for the calls that follow it. */
+  routingPolicy?: ManagedCloudPolicySnapshot;
   /** Eligibility and subject facts for any semantic decision this turn schedules. */
   decisionScope?: SemanticDecisionScope;
   secretRedactionCount?: number;
@@ -2701,7 +2711,7 @@ export function buildTaskFamilySignals(
     estimatedInputTokens: context.estimatedInputTokens,
     messageCharCount: context.messageCharCount,
     priorTurnCount: context.priorTurnCount,
-    runtimeProfileId: WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID,
+    runtimeProfileId: MANAGED_CLOUD_RUNTIME_PROFILE_ID,
   };
 }
 
@@ -2790,159 +2800,11 @@ export async function resolveRouteHealthRuntimeState(
   };
 }
 
-const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
 const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${PAID_UPGRADE_ACCESS_NOTE}`;
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
 const MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE =
   'This model is not available in your region. Choose Auto or another model.';
-
-/**
- * Transports managed routing will not dispatch through.
- *
- * Not a vendor boycott. These are the endpoints the model vendors run
- * themselves, outside the United States, and every model reachable through one
- * is also carried by a gateway that re-hosts it at the same published price,
- * so excluding these transports costs no model, where excluding the models
- * themselves would cost the whole reasoning ladder.
- *
- * A model the user names is still served, through a permitted host: they chose
- * a model, not a datacentre.
- *
- * This is the home region's answer, which `DATA_REGIONS.us` states as an
- * exclusion set in `@agiworkforce/compliance`. A region that pins processing
- * inside its own territory states an ALLOW set instead, because a transport
- * whose processing location is unpublished cannot be assumed to sit inside it;
- * no such region is provisioned, so nothing selects one here yet.
- */
-const EXCLUDED_ROUTE_HOSTS: ReadonlySet<string> = excludedTransportsFor(
-  { mode: DATA_REGIONS.us.inferenceRouteSetMode, transports: new Set(NON_US_VENDOR_TRANSPORTS) },
-  NON_US_VENDOR_TRANSPORTS,
-);
-
-export function buildWebCloudAutoRoutingRequest(
-  model: string,
-  subscriptionTier: string | undefined,
-  taskType: RoutingTaskType,
-  usage?: {
-    budgetRemainingCents?: number;
-    estimatedInputTokens?: number;
-    estimatedOutputTokens?: number;
-    taskFamily?: TaskFamily | null;
-  },
-  /**
-   * Reorder-only slot preference for THIS request. Omitted on every call but
-   * the free lane's own, so nothing else can be moved by it.
-   */
-  preferSlots?: readonly string[],
-  /**
-   * Live route health, the route (if any) already warm for this
-   * conversation's cache, and the model the conversation is pinned to.
-   * `preferredRouteId` is reorder-only: `resolveAutoRoute` still requires the
-   * preferred route to already be admissible for the resolved model, so an
-   * exact-model selection can never be steered onto a different model by a
-   * stale preference. `currentModelKey`/`previousTaskType` reach
-   * `resolveAutoRoute`'s own session-stickiness gate instead, and only apply
-   * when `model` is an Auto alias, an explicit selection returns before that
-   * gate is ever reached.
-   */
-  routeHealth?: {
-    runtimeState?: RoutingRuntimeState | null;
-    unfundedRouteIds?: ReadonlySet<string>;
-    policyExcludedRouteIds?: ReadonlySet<string>;
-    preferredRouteId?: string | null;
-    currentModelKey?: string | null;
-    previousTaskType?: RoutingTaskType | null;
-  },
-  availableProviderIds?: ReadonlySet<string>,
-  zeroDataRetentionOnly?: boolean,
-  zeroDataRetentionProviders?: ReadonlySet<string>,
-  /**
-   * The workspace policy snapshot, so the resolver refuses a candidate the
-   * workspace may not run instead of the caller filtering the plan afterwards.
-   */
-  organizationPolicy?: ModelAccessPolicy | null,
-  /**
-   * The user's own saved routing preferences, as `/api/me/routing-preferences`
-   * stores them. `usOnly` is enforced by both resolvers and is threaded here
-   * the same way as `zeroDataRetentionOnly`.
-   */
-  userRoutingPreferences?: UserRoutingPreferences | null,
-  rollout?: WebCloudRolloutInputs,
-  /**
-   * The region the workspace has pinned its data to, when it has pinned one
-   * other than the region this deployment already processes in. Admission is
-   * fail-closed against it: every candidate must publish that region, so a
-   * route with no published residency answer is refused rather than assumed.
-   */
-  residencyRegion?: string | null,
-  requiredRouteId?: string | null,
-  noTrainingOnly?: boolean,
-): AutoRoutingRequest {
-  const gatewayFlagHarnessIds = admittedHarnessIds();
-  const developerJurisdictions = allowedDeveloperJurisdictions(
-    residencyRegion ?? rollout?.region ?? DEFAULT_DATA_REGION,
-  );
-  return {
-    selection: model,
-    taskType,
-    subscriptionTier,
-    trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
-    runtimeProfileId: WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID,
-    retiredModelKeys: modelsPastDeprecationDate(),
-    ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
-    ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
-    ...(usage?.budgetRemainingCents !== undefined
-      ? { budgetRemainingCents: usage.budgetRemainingCents }
-      : {}),
-    ...(usage?.estimatedInputTokens !== undefined
-      ? { estimatedInputTokens: usage.estimatedInputTokens }
-      : {}),
-    ...(usage?.estimatedOutputTokens !== undefined
-      ? { estimatedOutputTokens: usage.estimatedOutputTokens }
-      : {}),
-    ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
-    ...(routeHealth?.runtimeState
-      ? {
-          runtimeState: routeHealth.runtimeState,
-          observedRouteHealth: observedRouteHealthFromSnapshots(
-            routeHealth.runtimeState.routeHealthSnapshots,
-            routeHealth.unfundedRouteIds,
-            routeHealth.policyExcludedRouteIds,
-          ),
-        }
-      : {}),
-    ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
-    ...(requiredRouteId ? { requiredRouteId } : {}),
-    ...(routeHealth?.currentModelKey ? { currentModelKey: routeHealth.currentModelKey } : {}),
-    ...(routeHealth?.previousTaskType ? { previousTaskType: routeHealth.previousTaskType } : {}),
-    ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
-    ...(zeroDataRetentionOnly ? { zeroDataRetentionOnly } : {}),
-    ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
-      ? { zeroDataRetentionProviders }
-      : {}),
-    ...(noTrainingOnly ? { noTrainingOnly } : {}),
-    ...(organizationPolicy ? { organizationPolicy } : {}),
-    ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
-    ...(residencyRegion ? { residencyRegion } : {}),
-    excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
-    ...(developerJurisdictions ? { allowedDeveloperJurisdictions: developerJurisdictions } : {}),
-    ...(rollout
-      ? {
-          requestId: rollout.requestId,
-          region: rollout.region,
-          capabilitiesInUse: rollout.capabilitiesInUse,
-          shadowRequestsToday: rollout.shadowRequestsToday,
-          ...(rollout.enableObservedHealthRanking !== undefined
-            ? { enableObservedHealthRanking: rollout.enableObservedHealthRanking }
-            : {}),
-          ...(rollout.enableCanary !== undefined ? { enableCanary: rollout.enableCanary } : {}),
-          ...(rollout.enableShadow !== undefined ? { enableShadow: rollout.enableShadow } : {}),
-          ...(rollout.canaryCohorts ? { canaryCohorts: rollout.canaryCohorts } : {}),
-        }
-      : {}),
-  };
-}
 
 /**
  * Whether this turn may be prompt-cached, and under whose name.
@@ -2997,24 +2859,6 @@ export function turnMayBeShadowMirrored(input: {
 }
 
 /**
- * The residency region routing must admit against, or `null` when the workspace
- * has asked for nothing beyond the region this deployment already processes in.
- *
- * A workspace sitting in the deployment's own region is served from it by
- * construction, and `EXCLUDED_ROUTE_HOSTS` is that region's own answer about
- * which transports may carry its traffic. A workspace pinned elsewhere is a
- * promise routing has to keep, so its region is carried into admission, where
- * it is fail-closed.
- */
-export function resolveResidencyRegion(
-  workspaceRegion: string | null | undefined,
-  deploymentRegion: string | null,
-): string | null {
-  if (!workspaceRegion) return null;
-  return workspaceRegion === deploymentRegion ? null : workspaceRegion;
-}
-
-/**
  * Checked against the model this turn resolved to, so an image attached before
  * a switch to a text-only model is refused rather than dropped.
  */
@@ -3045,99 +2889,6 @@ export function autoModelMove(
   }
   if (priorModelKey === routeDecision.modelKey) return { movedFromModel: null, movedReason: null };
   return { movedFromModel: priorModelKey, movedReason: routeDecision.reason ?? null };
-}
-
-export function resolveWebCloudModelRoute(
-  model: string,
-  subscriptionTier: string | undefined,
-  taskType: RoutingTaskType,
-  usage?: {
-    budgetRemainingCents?: number;
-    estimatedInputTokens?: number;
-    estimatedOutputTokens?: number;
-    taskFamily?: TaskFamily | null;
-  },
-  preferSlots?: readonly string[],
-  routeHealth?: {
-    runtimeState?: RoutingRuntimeState | null;
-    preferredRouteId?: string | null;
-    currentModelKey?: string | null;
-    previousTaskType?: RoutingTaskType | null;
-  },
-  availableProviderIds?: ReadonlySet<string>,
-  zeroDataRetentionOnly?: boolean,
-  zeroDataRetentionProviders?: ReadonlySet<string>,
-  organizationPolicy?: ModelAccessPolicy | null,
-  userRoutingPreferences?: UserRoutingPreferences | null,
-  rollout?: WebCloudRolloutInputs,
-  residencyRegion?: string | null,
-  noTrainingOnly?: boolean,
-) {
-  return resolveAutoRoute(
-    buildWebCloudAutoRoutingRequest(
-      model,
-      subscriptionTier,
-      taskType,
-      usage,
-      preferSlots,
-      routeHealth,
-      availableProviderIds,
-      zeroDataRetentionOnly,
-      zeroDataRetentionProviders,
-      organizationPolicy,
-      userRoutingPreferences,
-      rollout,
-      residencyRegion,
-      undefined,
-      noTrainingOnly,
-    ),
-  );
-}
-
-/**
- * The route that summarises a conversation when it outgrows the window.
- *
- * This is a second provider call carrying the transcript itself, so it is
- * exactly the call a zero-retention workspace cannot afford to leak, so it
- * passes the same admission as the main turn: retention requirement, workspace
- * model policy, and the set of providers this deployment holds a credential
- * for.
- *
- * Named rather than inlined so the admission it passes is visible and testable.
- * Resolving nothing is safe here: the caller falls back to a mechanical trim,
- * which makes no provider call at all, so failing closed costs summary quality
- * and never leaks the transcript.
- */
-export interface CompactionAdmission {
-  availableProviderIds?: ReadonlySet<string>;
-  zeroDataRetentionOnly?: boolean;
-  zeroDataRetentionProviders?: ReadonlySet<string>;
-  organizationPolicy?: ModelAccessPolicy | null;
-  noTrainingOnly?: boolean;
-}
-
-export function buildCompactionRoutingRequest(admission: CompactionAdmission) {
-  return buildWebCloudAutoRoutingRequest(
-    'auto',
-    'free',
-    'simple_chat',
-    undefined,
-    undefined,
-    undefined,
-    admission.availableProviderIds,
-    admission.zeroDataRetentionOnly,
-    admission.zeroDataRetentionProviders,
-    admission.organizationPolicy,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    admission.noTrainingOnly,
-  );
-}
-
-export function resolveCompactionRoute(admission: CompactionAdmission) {
-  return resolveAutoRoute(buildCompactionRoutingRequest(admission));
 }
 
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
@@ -3183,7 +2934,7 @@ function resolveProviderIdentities(
   let transport: string | null;
   try {
     transport = resolveProviderFromModel(model, routeId, {
-      trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+      trustMode: MANAGED_CLOUD_TRUST_MODE,
     });
   } catch {
     transport = null;
@@ -4955,6 +4706,13 @@ async function processAdmittedRequest(
   // region is already served from it, and `EXCLUDED_ROUTE_HOSTS` is that
   // region's own answer about which transports may carry its traffic.
   const residencyRegion = resolveResidencyRegion(workspaceRegion?.effective, rolloutInputs.region);
+  const routingPolicy: ManagedCloudPolicySnapshot = {
+    noTrainingOnly: trainingOptOut,
+    zeroDataRetentionOnly,
+    organizationPolicy: workspaceModelPolicy,
+    residencyRegion,
+    usOnly: userRoutingPreferences.usOnly,
+  };
   const scopedForAssessment = await scopedDbPromise;
   const semanticResponseAssessment = await timePhase(CHAT_TURN_PHASE.responseAssessment, () =>
     assessSemanticResponseBudget({
@@ -5122,7 +4880,7 @@ async function processAdmittedRequest(
     userId,
     plan: subscription.plan_tier ?? null,
     surface: chatSurface,
-    privacyMode: canonicalPrivacyMode(MANAGED_WEB_CLOUD_TRUST_MODE),
+    privacyMode: canonicalPrivacyMode(MANAGED_CLOUD_TRUST_MODE),
     workspaceId: tracedWorkspaceId,
     zeroDataRetentionOnly,
     workspaceModelPolicy,
@@ -5788,6 +5546,7 @@ async function processAdmittedRequest(
     memoryEnabled: managedMemoryPolicy.enabled,
     isTemporary: conversationIsTemporary,
     ambientToolsAllowed,
+    userMessage: lastUserText,
   });
 
   applyFileSearchToolCapability(chatRequest, {
@@ -5851,7 +5610,7 @@ async function processAdmittedRequest(
   let fallbackReason: string | undefined;
 
   let provider = resolveProviderFromModel(chatRequest.model, routeDecision.routeId, {
-    trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+    trustMode: MANAGED_CLOUD_TRUST_MODE,
   });
 
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
@@ -6325,7 +6084,7 @@ async function processAdmittedRequest(
       if (fallbackModel) {
         const fallbackRouteId = `${fallbackModel.provider}/${fallbackModel.model}`;
         const fallbackProvider = resolveProviderFromModel(fallbackModel.model, fallbackRouteId, {
-          trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+          trustMode: MANAGED_CLOUD_TRUST_MODE,
         });
         if (trainingOptOut && !providerKeepsInputsOutOfTraining(fallbackProvider)) {
           return monthlyLimitRefusal();
@@ -6952,12 +6711,14 @@ async function processAdmittedRequest(
       isTemporary: conversationIsTemporary,
       planTier: subscription.plan_tier,
       resolveEconomyRoute: () =>
-        resolveCompactionRoute({
-          availableProviderIds,
-          zeroDataRetentionOnly,
-          zeroDataRetentionProviders,
-          organizationPolicy: workspaceModelPolicy,
-          noTrainingOnly: trainingOptOut,
+        admitManagedCloudRoute({
+          kind: 'utility',
+          account: {
+            db: scopedForCompaction.db,
+            userId,
+            organizationId: scopedForCompaction.organizationId,
+          },
+          need: { turnPolicy: routingPolicy },
         }),
       ...(promotionTurn
         ? { sizing: freeModelPromotionContextSizing(promotionTurn.promotion, resolvedTools) }
@@ -7173,6 +6934,7 @@ async function processAdmittedRequest(
     // is outside the plan above and must answer to this same snapshot.
     modelPolicy: workspaceModelPolicy,
     ...(trainingOptOut ? { noTrainingOnly: true } : {}),
+    routingPolicy,
     subscriptionTier: subscription.plan_tier,
     routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,

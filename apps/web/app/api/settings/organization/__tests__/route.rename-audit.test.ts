@@ -159,6 +159,28 @@ describe('PATCH /api/settings/organization leaves an audit record', () => {
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 
+  it('refuses a caller whose membership is suspended, and renames for an active one', async () => {
+    const answerFor = (status: string) =>
+      mockQuery.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (!text.includes('from public.organization_members')) return [];
+        return text.includes("status = 'active'") && status !== 'active'
+          ? []
+          : [{ ...membership, status }];
+      });
+
+    answerFor('suspended');
+    const refused = await PATCH(request({ name: 'Taken Over' }));
+    expect(refused.status).toBe(404);
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+
+    answerFor('active');
+    const allowed = await PATCH(request({ name: 'Research Guild' }));
+    expect(allowed.status).toBe(200);
+    expect(mockExecute).toHaveBeenCalledTimes(1);
+  });
+
   it('records nothing when the role may not change workspace settings', async () => {
     permissionRole.value = 'member';
 

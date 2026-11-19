@@ -28,6 +28,21 @@ describe('control payloads the relay forwards', () => {
     expect(controlPayloadSchema.safeParse({ action: 'emergency_stop', data }).success).toBe(false);
   });
 
+  it.each([
+    'code.sessions.list',
+    'code.session.attach',
+    'code.session.detach',
+    'code.session.steer',
+    'code.turn.interrupt',
+    'code.approval.respond',
+    'code.session.start',
+    'code.session.history',
+    'code.question.respond',
+  ])('forwards the %s request the phone sends with the large limit', (action) => {
+    const data = { pad: 'x'.repeat(20_000) };
+    expect(controlPayloadSchema.safeParse({ action, data }).success).toBe(true);
+  });
+
   it('still refuses an action it does not know', () => {
     expect(
       controlPayloadSchema.safeParse({ action: 'dispatch.task.delete', data: {} }).success,

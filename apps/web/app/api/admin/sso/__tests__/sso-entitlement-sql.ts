@@ -7,7 +7,9 @@ export function answerSsoEntitlementSql(
   text: string,
   world: SsoEntitlementWorld,
 ): Array<Record<string, unknown>> | null {
-  if (text === 'select organization_id, role from organization_members where user_id = $1') {
+  if (
+    text.startsWith('select organization_id, role from organization_members where user_id = $1')
+  ) {
     return world.memberships.map((membership) => ({ ...membership }));
   }
   if (text.includes('from public.organizations o left join public.subscriptions s')) {

@@ -29,7 +29,7 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
-import { resolveWebCloudModelRoute } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 
 const AUTO_ALIAS = 'auto';
 const PAID_TIER = 'pro';

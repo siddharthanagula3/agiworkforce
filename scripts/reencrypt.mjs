@@ -10,6 +10,10 @@ export const REENCRYPT_TARGETS = {
     idColumn: 'id',
     keyVersionColumn: 'token_key_version',
     secretColumns: ['access_token_enc', 'refresh_token_enc'],
+    purposes: {
+      access_token_enc: 'oauth-access-token',
+      refresh_token_enc: 'oauth-refresh-token',
+    },
     keyEnv: 'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
     keyEncoding: 'hex',
     legacyLayout: 'hex-triple',
@@ -20,6 +24,7 @@ export const REENCRYPT_TARGETS = {
     idColumn: 'id',
     keyVersionColumn: 'auth_header_key_version',
     secretColumns: ['auth_header_enc'],
+    purposes: { auth_header_enc: 'custom-connector-auth-header' },
     keyEnv: 'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY',
     keyEncoding: 'hex',
     legacyLayout: 'hex-triple',
@@ -112,10 +117,19 @@ export async function reencryptTarget({
       for (const column of columns) {
         const value = row[column];
         if (value === null || value === undefined || value === '') continue;
-        const opened = openEnvelope(ring, value, target.legacyLayout);
+        const purpose = target.purposes?.[column];
+        // A row goes back with the binding it came with: binding a legacy row
+        // is scripts/reseal-connector-secrets.mjs's job, not the rotation's.
+        const opened = openEnvelope(
+          ring,
+          value,
+          target.legacyLayout,
+          purpose === undefined ? undefined : { value: purpose, acceptUnbound: true },
+        );
         const layout = format === 'versioned' ? 'versioned' : opened.layout;
         if (opened.keyId === activeId && opened.layout === layout) continue;
-        updates.push([column, sealEnvelope(ring, opened.plaintext, layout)]);
+        const context = opened.contextBound ? purpose : undefined;
+        updates.push([column, sealEnvelope(ring, opened.plaintext, layout, context)]);
       }
 
       const assignments = updates.map(([column], index) => `${column} = $${index + 2}`);

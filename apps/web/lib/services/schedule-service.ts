@@ -219,10 +219,23 @@ export interface ScheduledExecutionResult {
   cancellation?: ScheduledExecutionCancellation;
 }
 
+const SCHEDULED_EXECUTION_REFUSAL_REASONS = [
+  'managed_compute_access_denied',
+  'secret_handling_blocked',
+] as const;
+
+export type ScheduledExecutionRefusalReason = (typeof SCHEDULED_EXECUTION_REFUSAL_REASONS)[number];
+
 export interface ScheduledExecutionCancellation {
-  reason: 'managed_compute_access_denied';
+  reason: ScheduledExecutionRefusalReason;
   code: string;
   message: string;
+}
+
+function isScheduledExecutionRefusalReason(
+  value: unknown,
+): value is ScheduledExecutionRefusalReason {
+  return SCHEDULED_EXECUTION_REFUSAL_REASONS.some((reason) => reason === value);
 }
 
 export function scheduleRunPolicyRefusal(
@@ -232,14 +245,15 @@ export function scheduleRunPolicyRefusal(
   const cancellation = run.result?.['cancellation'];
   if (!cancellation || typeof cancellation !== 'object' || Array.isArray(cancellation)) return null;
   const value = cancellation as Record<string, unknown>;
+  const reason = value['reason'];
   if (
-    value['reason'] !== 'managed_compute_access_denied' ||
+    !isScheduledExecutionRefusalReason(reason) ||
     typeof value['code'] !== 'string' ||
     typeof value['message'] !== 'string'
   ) {
     return null;
   }
-  return { reason: value['reason'], code: value['code'], message: value['message'] };
+  return { reason, code: value['code'], message: value['message'] };
 }
 
 export type ScheduledTaskExecutor = (
@@ -1158,9 +1172,11 @@ export async function updateSchedule(
       );
     }
     const pausedReason =
-      !definition.isEnabled && capReached && current.pausedReason === 'credit_cap_reached'
-        ? 'credit_cap_reached'
-        : null;
+      !definition.isEnabled && current.pausedReason === 'approval_required'
+        ? 'approval_required'
+        : !definition.isEnabled && capReached && current.pausedReason === 'credit_cap_reached'
+          ? 'credit_cap_reached'
+          : null;
 
     const [row] = await tx.query<TaskRow>(
       `update scheduled_tasks

@@ -62,9 +62,9 @@ import {
   isFreeTierBlockedAddOn,
   resolveManagedUsageLeaseSeconds,
   processRequest,
-  resolveWebCloudModelRoute,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import { webSearchToolOfferPolicyFor } from '@/lib/web-search/required-search';
 import * as requestProcessorModule from './request-processor';
 import {

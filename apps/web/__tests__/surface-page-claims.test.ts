@@ -1105,8 +1105,8 @@ describe('/byok, custody names the store each runtime really writes to', () => {
 
 describe('/web, the browser surface has one route and it is managed cloud', () => {
   it('reads the single trust mode the web chat route stamps on every turn', () => {
-    const processor = fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts');
-    expect(processor).toMatch(/const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u);
+    const routing = fileText('lib/server/managed-cloud-routing/routing-request.ts');
+    expect(routing).toMatch(/export const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';/u);
     expect(fileText('lib/marketing-constants.ts')).toMatch(
       /exclusion: 'Web, Mobile, Desktop and Chrome do not accept provider keys\.'/u,
     );

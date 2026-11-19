@@ -7,7 +7,7 @@ import {
   type OpenAIWireMessage,
   type OpenAIWireToolCall,
 } from '@agiworkforce/provider-protocol';
-import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens } from '@agiworkforce/routing';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
@@ -15,10 +15,12 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { reserveBackgroundUsage } from '@/lib/services/background-usage-lease';
 import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import {
+  admitManagedCloudRoute,
+  type ManagedCloudAdmitted,
+} from '@/lib/server/managed-cloud-routing/admission';
 import {
   executeProjectMemoryEditTool,
   isMemoryTool,
@@ -102,38 +104,29 @@ export function projectMemoryEditReply(content: string): string {
   return line.length > MAX_REPLY_CHARS ? `${line.slice(0, MAX_REPLY_CHARS - 1).trimEnd()}…` : line;
 }
 
-type ProjectMemoryEditRoute = Exclude<
-  ReturnType<typeof resolveAutoRoute>,
-  { status: 'unavailable' }
->;
-
 export async function resolveProjectMemoryEditRoute(
   db: DatabaseAdapter,
   userId: string,
-): Promise<ProjectMemoryEditRoute | null> {
-  const routing = await sideCallRoutingRequest(db, userId, {
-    selection: 'auto',
-    taskType: 'simple_chat',
-    subscriptionTier: 'free',
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-    requiredCapabilities: ['functionCalling'] as const,
+  organizationId: string | null,
+): Promise<ManagedCloudAdmitted | null> {
+  const admission = await admitManagedCloudRoute({
+    kind: 'utility',
+    account: { db, userId, organizationId },
+    need: { requiredCapabilities: ['functionCalling'] },
   });
-  if (!routing) return null;
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn({ code: route.code, userId }, '[project-memory-edit] no route');
-    return null;
-  }
-  return route;
+  return admission.status === 'admitted' ? admission : null;
 }
 
 export async function runProjectMemoryEdit(
   input: RunProjectMemoryEditInput,
 ): Promise<ProjectMemoryEditResponse> {
-  const route = await resolveProjectMemoryEditRoute(input.db, input.userId);
-  if (!route) throw new ProjectMemoryEditUnavailableError();
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  const admission = await resolveProjectMemoryEditRoute(
+    input.db,
+    input.userId,
+    input.organizationId,
+  );
+  if (!admission) throw new ProjectMemoryEditUnavailableError();
+  const { route, dispatchProvider } = admission;
   const adapter = buildServerProviderAdapter(dispatchProvider);
   const tools = memoryToolDefinitions();
   const messages: OpenAIWireMessage[] = [

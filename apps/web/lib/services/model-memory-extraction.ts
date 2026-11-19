@@ -19,7 +19,7 @@ import {
   isMemoryExtractionWorthwhile,
 } from '@agiworkforce/agent-core';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens } from '@agiworkforce/routing';
 import { getModelEffortOptions } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
@@ -33,10 +33,12 @@ import {
   type BackgroundUsageLease,
 } from '@/lib/services/background-usage-lease';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import {
+  admitManagedCloudRoute,
+  type ManagedCloudPolicySnapshot,
+} from '@/lib/server/managed-cloud-routing/admission';
 import {
   leavesOutNeverKeptMemoryDetails,
   leavesOutSensitiveMemoryTopics,
@@ -86,6 +88,8 @@ export interface ModelAutoMemoryExtractionInput {
   organizationId: string | null;
   planTier: string;
   forceNoTraining?: boolean;
+  /** The rules the chat turn already read; absent when the turn did not carry them. */
+  turnPolicy?: ManagedCloudPolicySnapshot;
   includeSensitiveTopics?: boolean;
   promptVariants?: Readonly<Record<string, number>>;
   /**
@@ -129,28 +133,16 @@ export async function extractAutoMemoryFactsWithModel(
   const prompt = memoryFactExtractionPrompt(input);
   if (!prompt || !isMemoryExtractionWorthwhile(input.message)) return patternFacts(input.message);
 
-  const routing = await sideCallRoutingRequest(
-    input.db,
-    input.userId,
-    {
-      selection: 'auto',
-      taskType: 'simple_chat',
-      subscriptionTier: 'free',
-      trustMode: 'managed_cloud',
-      runtimeProfileId: 'web/cloud-chat',
+  const admission = await admitManagedCloudRoute({
+    kind: 'utility',
+    account: { db: input.db, userId: input.userId, organizationId: input.organizationId },
+    need: {
+      keepOutOfTraining: input.forceNoTraining === true,
+      ...(input.turnPolicy ? { turnPolicy: input.turnPolicy } : {}),
     },
-    { forceNoTraining: input.forceNoTraining === true },
-  );
-  if (!routing) return patternFacts(input.message);
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn(
-      { code: route.code, userId: input.userId, requestId: input.requestId },
-      '[memory-extraction] no managed utility route; keeping the pattern candidates',
-    );
-    return patternFacts(input.message);
-  }
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  });
+  if (admission.status === 'refused') return patternFacts(input.message);
+  const { route, dispatchProvider } = admission;
   const wireMode = resolveWireMode(dispatchProvider);
 
   let lease: BackgroundUsageLease;
