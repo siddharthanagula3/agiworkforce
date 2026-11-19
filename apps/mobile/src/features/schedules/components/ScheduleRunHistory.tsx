@@ -1,10 +1,11 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import {
   Check,
   CheckCircle2,
+  Flag,
   XCircle,
   Clock,
   RefreshCw,
@@ -17,6 +18,19 @@ import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
+
+const REPORT_THIS_RUN = 'Report this run';
+
+function scheduleRunReportTarget(run: ScheduleRun, result: string): ReportTarget {
+  return {
+    messageId: `schedule-run:${run.id}`,
+    conversationId: `schedule:${run.scheduleId}`,
+    contentExcerpt: result,
+    subject: { kind: 'schedule-run', id: run.id },
+  };
+}
 
 function formatRunTime(isoDate: string): string {
   try {
@@ -130,6 +144,8 @@ function PendingApproval({ run }: RunRowProps) {
 
 function RunRow({ run }: RunRowProps) {
   const colors = useThemeColors();
+  const [reporting, setReporting] = useState(false);
+  const result = run.result?.trim() ? run.result : null;
   const isAwaitingApproval = run.status === 'awaiting_approval';
   const isSuccess = run.status === 'success';
   const isFailed = run.status === 'failed';
@@ -217,6 +233,30 @@ function RunRow({ run }: RunRowProps) {
         ) : null}
         <Text className="text-sm text-white/30 mt-0.5">{timeLabel}</Text>
       </View>
+      {result ? (
+        <PressableBox
+          testID={`schedule-run-report-${run.id}`}
+          onPress={() => setReporting(true)}
+          accessibilityRole="button"
+          accessibilityLabel={REPORT_THIS_RUN}
+          style={{
+            width: FULL_SCREEN_TOUCH_TARGET,
+            height: FULL_SCREEN_TOUCH_TARGET,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Flag size={14} color={colors.textMuted} />
+        </PressableBox>
+      ) : null}
+      {result && reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(false)}
+          title={REPORT_THIS_RUN}
+          target={scheduleRunReportTarget(run, result)}
+        />
+      ) : null}
     </View>
   );
 }

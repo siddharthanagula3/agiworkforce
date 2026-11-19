@@ -1,12 +1,20 @@
-import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChatAttachmentLimits } from '@agiworkforce/cloud-contracts';
 import {
+  CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE,
+  CHAT_IMAGE_ATTACHMENT_TOO_LARGE_MESSAGE,
+  CHAT_LARGE_FILE_POLICY,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
 } from '@/lib/chat-attachment-policy';
+import { useBillingStore } from '@/shared/stores/web-auth-store';
 import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
 import { useAttachments } from '../use-attachments';
+
+const MESSAGE_TOTAL = `${(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / (1024 * 1024)).toFixed(1)} MB`;
 
 function file(name: string, type: string, bytes = 4): File {
   return new File([new Uint8Array(bytes)], name, { type });
@@ -60,6 +68,35 @@ describe('a file the composer refuses', () => {
     expect(result.current.attachments.map((item) => item.name)).toEqual(['notes.txt']);
   });
 
+  it('refuses an image over the image ceiling when it is attached, not when it is sent', () => {
+    const onError = vi.fn();
+    const { result } = renderHook(() => useAttachments({ onError }));
+
+    act(() => {
+      result.current.addFiles([
+        file('photo.png', 'image/png', MAX_CHAT_IMAGE_ATTACHMENT_BYTES + 1),
+      ]);
+    });
+
+    expect(result.current.attachments).toHaveLength(0);
+    expect(result.current.refused).toEqual([{ filename: 'photo.png', reason: 'too_large' }]);
+    expect(onError).toHaveBeenCalledWith(
+      `"photo.png" is too large. ${CHAT_IMAGE_ATTACHMENT_TOO_LARGE_MESSAGE}`,
+    );
+  });
+
+  it('holds only images to the image ceiling', () => {
+    const { result } = renderHook(() => useAttachments());
+
+    act(() => {
+      result.current.addFiles([
+        file('scan.pdf', 'application/pdf', MAX_CHAT_IMAGE_ATTACHMENT_BYTES + 1),
+      ]);
+    });
+
+    expect(result.current.attachments.map((item) => item.name)).toEqual(['scan.pdf']);
+  });
+
   it('sends a file over the chat limit but within the plan to a project, in plain words', () => {
     const onError = vi.fn();
     const { result } = renderHook(() =>
@@ -77,7 +114,7 @@ describe('a file the composer refuses', () => {
     });
 
     expect(onError).toHaveBeenCalledWith(
-      '"report.pdf" was not attached. Files over 12 MB go into a project, where AGI reads and searches them.',
+      `"report.pdf" was not attached. ${CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE}`,
     );
     expect(result.current.refused).toEqual([{ filename: 'report.pdf', reason: 'too_large' }]);
   });
@@ -154,7 +191,7 @@ describe('the attachment total for one message', () => {
       { filename: 'second.pdf', reason: 'over_message_budget' },
     ]);
     expect(onError).toHaveBeenCalledWith(
-      'Attached 1 of 2 files. Not attached: "second.pdf" (over the 12.0 MB total for one message).',
+      `Attached 1 of 2 files. Not attached: "second.pdf" (over the ${MESSAGE_TOTAL} total for one message).`,
     );
     expect(chatDraftRefusalNotes(result.current.refused)).toEqual([
       '[attachment unavailable: second.pdf was left out because this message already carries as much file data as it can.]',
@@ -170,7 +207,7 @@ describe('the attachment total for one message', () => {
 
     expect(result.current.attachments.map((item) => item.name)).toEqual(['first.pdf']);
     expect(onError).toHaveBeenLastCalledWith(
-      '"second.pdf" was not attached. Files on one message must total 12.0 MB or less.',
+      `"second.pdf" was not attached. Files on one message must total ${MESSAGE_TOTAL} or less.`,
     );
   });
 
@@ -206,5 +243,208 @@ describe('the attachment total for one message', () => {
     });
     expect(refusedWhenFull).toEqual([]);
     expect(result.current.attachments.map((item) => item.name)).toEqual(['first.txt']);
+  });
+});
+
+const MIB = 1024 * 1024;
+const PLAN_FILE_LIMIT = MAX_CHAT_ATTACHMENT_BYTES;
+
+const OFFER: ChatAttachmentLimits = {
+  maxFileBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxBytes,
+  maxImageBytes: MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+  maxMessageBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxMessageBytes,
+  maxFilesPerMessage: CHAT_LARGE_FILE_POLICY.largeFiles.maxCount,
+  largeFilesAvailable: true,
+  storageRemainingBytes: null,
+  inlineMessageBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+};
+
+/** A file that reports a size without the test holding that many bytes. */
+function sized(name: string, type: string, bytes: number): File {
+  const held = new File([new Uint8Array(4)], name, { type });
+  Object.defineProperty(held, 'size', { value: bytes });
+  return held;
+}
+
+function composerUnder(limits: ChatAttachmentLimits, onError = vi.fn()) {
+  useBillingStore.setState({ attachmentLimits: limits });
+  return renderHook(() =>
+    useAttachments({
+      onError,
+      maxFiles: limits.maxFilesPerMessage,
+      maxFileSize: limits.maxFileBytes,
+      maxImageSize: limits.maxImageBytes,
+      maxTotalBytes: limits.maxMessageBytes,
+      planFileLimitBytes: PLAN_FILE_LIMIT,
+      planLabel: 'Pro',
+    }),
+  );
+}
+
+describe('a draft under a handshake that offers large files', () => {
+  afterEach(() => {
+    useBillingStore.setState({ attachmentLimits: null });
+  });
+
+  it('refuses the third 10 MiB image with the message size copy of today', async () => {
+    const onError = vi.fn();
+    const { result } = composerUnder(OFFER, onError);
+
+    act(() => result.current.addFiles([sized('a.png', 'image/png', 10 * MIB)]));
+    act(() => result.current.addFiles([sized('b.png', 'image/png', 10 * MIB)]));
+    act(() => result.current.addFiles([sized('c.png', 'image/png', 10 * MIB)]));
+
+    expect(onError).toHaveBeenLastCalledWith(
+      `"c.png" was not attached. Files on one message must total ${MESSAGE_TOTAL} or less.`,
+    );
+    expect(result.current.refused).toContainEqual({
+      filename: 'c.png',
+      reason: 'over_message_budget',
+    });
+    await waitFor(() => expect(result.current.preparing).toBe(false));
+  });
+
+  it('holds the small files of one message to the inline budget while a large file rides along', () => {
+    const onError = vi.fn();
+    const { result } = composerUnder(OFFER, onError);
+
+    act(() => {
+      result.current.addFiles([
+        sized('book.pdf', 'application/pdf', 300 * MIB),
+        sized('first.pdf', 'application/pdf', 20 * MIB),
+        sized('second.pdf', 'application/pdf', 20 * MIB),
+      ]);
+    });
+
+    expect(result.current.attachments.map((item) => item.name)).toEqual(['book.pdf', 'first.pdf']);
+    expect(onError).toHaveBeenCalledWith(
+      `Attached 2 of 3 files. Not attached: "second.pdf" (over the ${MESSAGE_TOTAL} total for one message).`,
+    );
+  });
+
+  it('says how much storage is left when that is what refuses the file', () => {
+    const onError = vi.fn();
+    const remaining = 312 * MIB;
+    const { result } = composerUnder(
+      {
+        ...OFFER,
+        maxFileBytes: remaining,
+        maxMessageBytes: remaining,
+        storageRemainingBytes: remaining,
+      },
+      onError,
+    );
+
+    act(() => result.current.addFiles([sized('archive.pdf', 'application/pdf', 400 * MIB)]));
+
+    expect(onError).toHaveBeenCalledWith(
+      '"archive.pdf" was not attached. You have 312 MB of storage left. Delete files in your Library to make room.',
+    );
+    expect(result.current.refused).toEqual([{ filename: 'archive.pdf', reason: 'too_large' }]);
+  });
+
+  it('names the storage left when two large files together pass it', () => {
+    const onError = vi.fn();
+    const remaining = 312 * MIB;
+    const { result } = composerUnder(
+      {
+        ...OFFER,
+        maxFileBytes: remaining,
+        maxMessageBytes: remaining,
+        storageRemainingBytes: remaining,
+      },
+      onError,
+    );
+
+    act(() => result.current.addFiles([sized('one.pdf', 'application/pdf', 200 * MIB)]));
+    act(() => result.current.addFiles([sized('two.pdf', 'application/pdf', 200 * MIB)]));
+
+    expect(result.current.attachments.map((item) => item.name)).toEqual(['one.pdf']);
+    expect(onError).toHaveBeenLastCalledWith(
+      '"two.pdf" was not attached. You have 312 MB of storage left. Delete files in your Library to make room.',
+    );
+  });
+
+  it('names the plan limit, not the storage left, when the plan is the lower of the two', () => {
+    const onError = vi.fn();
+    const storageLeft = OFFER.maxFileBytes + 50 * MIB;
+    const { result } = composerUnder({ ...OFFER, storageRemainingBytes: storageLeft }, onError);
+
+    act(() =>
+      result.current.addFiles([
+        sized('film.pdf', 'application/pdf', OFFER.maxFileBytes + 100 * MIB),
+      ]),
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      `"film.pdf" is too large (${((OFFER.maxFileBytes + 100 * MIB) / MIB).toFixed(1)} MB). Pro accounts can upload files up to ${(OFFER.maxFileBytes / MIB).toFixed(1)} MB each.`,
+    );
+  });
+
+  it('names the message total, not the storage left, when the plan is the lower of the two', () => {
+    const onError = vi.fn();
+    const storageLeft = OFFER.maxMessageBytes + MIB;
+    const { result } = composerUnder({ ...OFFER, storageRemainingBytes: storageLeft }, onError);
+    const fifth = Math.floor(OFFER.maxMessageBytes / 5) + MIB;
+    const names = ['one.pdf', 'two.pdf', 'three.pdf', 'four.pdf', 'five.pdf'];
+
+    for (const name of names) {
+      act(() => result.current.addFiles([sized(name, 'application/pdf', fifth)]));
+    }
+
+    expect(result.current.attachments.map((item) => item.name)).toEqual(names.slice(0, 4));
+    expect(onError).toHaveBeenLastCalledWith(
+      `"five.pdf" was not attached. Files on one message must total ${(OFFER.maxMessageBytes / MIB).toFixed(1)} MB or less.`,
+    );
+  });
+
+  it('refuses a large file over the cap for its kind when it is attached', () => {
+    const onError = vi.fn();
+    const { result } = composerUnder(OFFER, onError);
+    const cap = CHAT_LARGE_FILE_POLICY.kinds.spreadsheet.maxBytes;
+
+    act(() =>
+      result.current.addFiles([
+        sized(
+          'ledger.xlsx',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          cap + 1,
+        ),
+      ]),
+    );
+
+    expect(result.current.attachments).toHaveLength(0);
+    expect(onError).toHaveBeenCalledWith(
+      `"ledger.xlsx" is too large (${((cap + 1) / MIB).toFixed(1)} MB). Files of this type can be up to ${(cap / MIB).toFixed(1)} MB.`,
+    );
+    expect(result.current.refused).toEqual([{ filename: 'ledger.xlsx', reason: 'too_large' }]);
+  });
+
+  it('names the offered limit, not the inline one, for a file larger than chat takes', () => {
+    const onError = vi.fn();
+    const { result } = composerUnder(OFFER, onError);
+
+    act(() => result.current.addFiles([sized('film.pdf', 'application/pdf', 600 * MIB)]));
+
+    expect(onError).toHaveBeenCalledWith(
+      `"film.pdf" is too large (600.0 MB). Pro accounts can upload files up to ${(OFFER.maxFileBytes / MIB).toFixed(1)} MB each.`,
+    );
+  });
+
+  it('keeps the limits of today when the handshake does not offer large files', () => {
+    const onError = vi.fn();
+    const { result } = composerUnder({ ...OFFER, largeFilesAvailable: false }, onError);
+
+    act(() => {
+      result.current.addFiles([
+        sized('first.pdf', 'application/pdf', 20 * MIB),
+        sized('second.pdf', 'application/pdf', 20 * MIB),
+      ]);
+    });
+
+    expect(result.current.attachments.map((item) => item.name)).toEqual([
+      'first.pdf',
+      'second.pdf',
+    ]);
   });
 });

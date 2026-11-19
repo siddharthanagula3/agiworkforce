@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { cancelLiveStripeSubscriptionsNow } from '@/lib/server/payments/stripe-provider';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { eraseBackupCopies } from '@/lib/server/object-backup-erasure';
+import { chatFileTableOutcome, eraseChatFiles } from '@/lib/server/chat-file-intake/erasure';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { countActiveLegalHolds } from '@/lib/services/legal-hold-gate';
 import {
@@ -59,12 +60,15 @@ export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: 
   { table: 'web_artifacts', column: 'organization_id' },
   { table: 'user_memories', column: 'organization_id' },
   { table: 'media_assets', column: 'organization_id' },
+  { table: 'chat_file_intakes', column: 'organization_id' },
+  { table: 'chat_file_preparations', column: 'organization_id' },
   { table: 'external_resource_references', column: 'organization_id' },
   { table: 'scheduled_tasks', column: 'organization_id' },
   { table: 'cloud_agent_runs', column: 'organization_id' },
   { table: 'cloud_code_terminal_entries', column: 'organization_id' },
   { table: 'cloud_code_agent_turns', column: 'organization_id' },
   { table: 'cloud_code_sessions', column: 'organization_id' },
+  { table: 'cloud_code_environments', column: 'organization_id' },
   { table: 'user_connectors', column: 'organization_id' },
   { table: 'user_custom_connectors', column: 'organization_id' },
   { table: 'api_keys', column: 'organization_id' },
@@ -405,6 +409,9 @@ export async function eraseOrganizationData(
   // Do not start deleting if the workspace admission lock cannot be established.
   await lockdownTenantForErasure(organizationId);
 
+  // Chat files before media: a seal that commits meanwhile leaves a media row
+  // this media erasure still finds; afterwards it finds no intake and cleans up.
+  const chatFiles = await eraseChatFiles(db, { organizationId });
   const media = await eraseOrganizationMedia(organizationId);
   await eraseSharedConnectorResponseCache(db, organizationId);
   const tables: OrganizationErasureReport['tables'] = {};
@@ -416,6 +423,11 @@ export async function eraseOrganizationData(
         media.mediaObjectsFailed === 0 && media.backupObjectsFailed === 0
           ? { deleted: true }
           : { deleted: false, retainedForRetry: true };
+      continue;
+    }
+    const chatFileTable = chatFileTableOutcome(chatFiles, table);
+    if (chatFileTable !== undefined) {
+      tables[table] = chatFileTable;
       continue;
     }
     if (table === 'organization_members') {

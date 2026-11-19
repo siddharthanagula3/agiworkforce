@@ -76,6 +76,52 @@ describe('continuableCloudModel', () => {
     }
   });
 
+  describe('an answer whose connection was lost part way', () => {
+    const connectionLost = {
+      message: 'Connection lost.',
+      code: 'stream_interrupted',
+      retryable: true,
+    };
+
+    it('is continued from the text that arrived, even when that text ends a sentence', () => {
+      expect(
+        continuableCloudModel(
+          cloudConversation,
+          answer({
+            content: 'The moon pulls the near side of the ocean.',
+            metadata: { streamError: connectionLost },
+          }),
+        ),
+      ).toBe(CLOUD_MODEL);
+    });
+
+    it('is not continued when no text arrived, when stopped, or while it streams', () => {
+      const cases: Partial<ChatMessage>[] = [
+        { content: '\u200B', metadata: { streamError: connectionLost } },
+        { metadata: { finishReason: 'stopped', streamError: connectionLost } },
+        { isStreaming: true, metadata: { streamError: connectionLost } },
+        { metadata: { streamError: connectionLost, research: { status: 'failed' } } },
+      ];
+      for (const overrides of cases) {
+        expect(continuableCloudModel(cloudConversation, answer(overrides))).toBeNull();
+      }
+    });
+
+    it('leaves other failures to Retry', () => {
+      expect(
+        continuableCloudModel(
+          cloudConversation,
+          answer({
+            metadata: {
+              finishReason: 'error',
+              streamError: { message: 'Provider overloaded', code: 'provider_overloaded' },
+            },
+          }),
+        ),
+      ).toBeNull();
+    });
+  });
+
   it('does not continue a Local Mode answer through the cloud', () => {
     const localModel = requireLocalModel().id;
     expect(

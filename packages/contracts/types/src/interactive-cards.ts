@@ -47,6 +47,14 @@ export function interactiveCardRendersBeforeProse(kind: string): boolean {
   return (LEADING_INTERACTIVE_CARD_KINDS as readonly string[]).includes(kind);
 }
 
+export function cardLeadsProse(
+  card: { readonly cardId: string; readonly kind: string },
+  textOffsets: Readonly<Record<string, number>> | undefined,
+): boolean {
+  const offset = textOffsets?.[card.cardId];
+  return offset === undefined ? interactiveCardRendersBeforeProse(card.kind) : offset === 0;
+}
+
 export interface InteractiveCardFallback {
   headline: string;
   text: string;

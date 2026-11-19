@@ -1,3 +1,5 @@
+import { getToolDisplayLabel } from '@agiworkforce/types';
+
 import { TOOL_DIRECTORY_TOOL_NAME } from '@/app/api/llm/v1/chat/completions/lib/tool-schema-state';
 
 export const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>> = {
@@ -47,7 +49,7 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
       'Fetches a single URL through an SSRF-guarded path. Same classification as search, for the same reasons.',
   },
   execute_code: {
-    label: 'Run code',
+    label: getToolDisplayLabel('execute_code').displayName,
     description:
       'Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path.',
   },

@@ -1,4 +1,9 @@
-import { supportsMultipartUploads, type ObjectStore } from './types';
+import {
+  supportsMultipartUploads,
+  supportsObjectListing,
+  type ListedObject,
+  type ObjectStore,
+} from './types';
 
 export const DEFAULT_ORPHAN_MULTIPART_AGE_MS = 24 * 60 * 60 * 1_000;
 
@@ -55,4 +60,77 @@ export async function abortOrphanedMultipartUploads(
   }
 
   return { supported: true, pending: uploads.length, aborted, failed };
+}
+
+export interface DeleteObjectsUnderPrefixInput {
+  bucket: string;
+  prefix: string;
+  /** Only objects written at least this long ago go; without it every listed object does. */
+  olderThanMs?: number;
+  now?: number;
+  /** Only objects whose key this accepts go. */
+  matching?: (key: string) => boolean;
+  /** The most objects one call deletes, so a sweep stays bounded per run. */
+  limit?: number;
+  /** The most keys one call lists while it looks for objects to delete. */
+  scanLimit?: number;
+}
+
+export interface PrefixObjectSweep {
+  supported: boolean;
+  listed: number;
+  deleted: number;
+  failed: number;
+}
+
+const PREFIX_SWEEP_PAGE_KEYS = 1_000;
+
+/**
+ * Objects that only a key layout records, such as pieces of an upload that
+ * never finished, cannot be found from any row. This lists them by prefix and
+ * deletes them, paging past the objects it keeps. An object whose write time
+ * the host does not report is kept by an age sweep, since it may still be in
+ * use.
+ */
+export async function deleteObjectsUnderPrefix(
+  store: ObjectStore,
+  input: DeleteObjectsUnderPrefixInput,
+): Promise<PrefixObjectSweep> {
+  if (!input.prefix) throw new Error('A prefix sweep needs a prefix.');
+  if (!supportsObjectListing(store)) {
+    return { supported: false, listed: 0, deleted: 0, failed: 0 };
+  }
+
+  const deadline =
+    input.olderThanMs === undefined ? null : (input.now ?? Date.now()) - input.olderThanMs;
+  const due = (object: ListedObject): boolean =>
+    (deadline === null ||
+      (object.lastModifiedMs !== undefined && object.lastModifiedMs <= deadline)) &&
+    (input.matching === undefined || input.matching(object.key));
+  const sweep: PrefixObjectSweep = { supported: true, listed: 0, deleted: 0, failed: 0 };
+  const budgetSpent = (): boolean =>
+    input.limit !== undefined && sweep.deleted + sweep.failed >= input.limit;
+
+  let startAfter: string | undefined;
+  for (;;) {
+    const pageKeys = Math.min(
+      PREFIX_SWEEP_PAGE_KEYS,
+      (input.scanLimit ?? Number.POSITIVE_INFINITY) - sweep.listed,
+    );
+    if (pageKeys <= 0 || budgetSpent()) return sweep;
+    const page = await store.listObjects(input.bucket, input.prefix, pageKeys, startAfter);
+    sweep.listed += page.length;
+    for (const object of page) {
+      if (budgetSpent()) return sweep;
+      if (!due(object)) continue;
+      try {
+        await store.delete(input.bucket, object.key);
+        sweep.deleted += 1;
+      } catch {
+        sweep.failed += 1;
+      }
+    }
+    if (page.length < pageKeys) return sweep;
+    startAfter = page[page.length - 1]?.key;
+  }
 }

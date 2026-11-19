@@ -109,10 +109,10 @@
       "path": "scripts/scan-allowlist.json",
       "reason": "Triaged Trivy and ZAP findings. Every entry carries an id, a scanner, a reason, an owner and an expiry that scripts/check-scan-findings.mjs enforces, and an entry that matches nothing fails as stale.",
       "owner": "Platform lead",
-      "tracking": "SEC-§111"
+      "tracking": "SEC-\u00a7111"
     },
     {
-      "id": "picomatch-repeated-extglob-patch",
+      "id": "picomatch-redos-no-upstream-fix",
       "kind": "pnpm-audit-advisory-ignore",
       "advisories": ["GHSA-fc5q-39xc-vjpf"],
       "package": "picomatch",
@@ -204,10 +204,10 @@
         "path": "patches/picomatch@4.0.7.patch",
         "sha256": "e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547"
       },
-      "reason": "No fixed upstream version is published. The committed source patch makes picomatch treat a repeated extglob as literal text when its body nests an unbounded quantifier (a wildcard, a negation extglob or another repeat), which is the exponential backtracking the advisory describes. This same-version audit exception is accepted only when the guard verifies exact patch bytes, manifest/lock bindings and every affected dependency reference; installed-package regressions run in blocking CI.",
-      "owner": "Platform + security",
-      "tracking": "GHSA-fc5q-39xc-vjpf (docs/security/dependency-patches.md)",
-      "expires": "2026-12-16"
+      "reason": "The advisory (CVE-2026-112366, a regular expression denial of service) covers every released picomatch version and upstream has published no fix, so no override or upgrade can clear the audit. The committed source patch makes picomatch treat a repeated extglob as literal text when its body nests an unbounded quantifier (a wildcard, a negation extglob or another repeat), which is the exponential backtracking the advisory describes; the guard verifies the exact patch bytes, the manifest and lockfile bindings and every affected dependency reference, and installed-package regressions run in blocking CI. Readings on 2026-11-17 found picomatch 4.0.7 used only by build, lint and test tooling (bundlers, command-line tools, code generation, test runners), with no shipped code that lets another party supply a pattern to it; four workspaces install it through production dependencies whose build-time parts pull it in. The owner approved a dated exception on 2026-11-17.",
+      "owner": "Founder",
+      "tracking": "DEPS-PICOMATCH-REDOS-ADVISORY-01 (audit/registers/known-flaws.md)",
+      "expires": "2026-12-17"
     }
   ]
 }

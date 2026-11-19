@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { Modal } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -104,9 +105,9 @@ const mockReportProps = jest.fn();
 jest.mock('@/src/features/chat/components/ReportFlagButton', () => {
   const RN = require('react-native');
   return {
-    ReportFlagButton: (props: Record<string, unknown>) => {
+    ReportSheet: (props: Record<string, unknown>) => {
       mockReportProps(props);
-      return <RN.View testID="report-flag-button" />;
+      return <RN.View testID="report-sheet" />;
     },
   };
 });
@@ -149,6 +150,15 @@ function makeMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
   };
 }
 
+function chooseReportFromMore(): void {
+  fireEvent.press(screen.getByRole('button', { name: /^More message actions for / }));
+  const menu = screen
+    .UNSAFE_getAllByType(Modal)
+    .find((modal) => modal.props.visible && modal.props.onDismiss);
+  fireEvent.press(screen.getByTestId('message-action-report'));
+  act(() => menu!.props.onDismiss());
+}
+
 describe('MessageBubble report control', () => {
   beforeEach(() => {
     mockGetString.mockReset();
@@ -166,12 +176,40 @@ describe('MessageBubble report control', () => {
       />,
     );
 
-    expect(screen.getByTestId('report-flag-button')).toBeTruthy();
+    expect(screen.queryByText('Report')).toBeNull();
+    expect(mockReportProps).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
+
+    chooseReportFromMore();
+
     expect(mockReportProps).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        messageId: 'm-1',
-        contentExcerpt: 'a red fox',
-        asset: { kind: 'image', url: 'https://cdn.example.com/img-1.png' },
+        visible: true,
+        target: expect.objectContaining({
+          messageId: 'm-1',
+          contentExcerpt: 'a red fox',
+          asset: { kind: 'image', url: 'https://cdn.example.com/img-1.png' },
+        }),
+      }),
+    );
+  });
+
+  it('reports a text answer under its own conversation, not under the message id', () => {
+    render(
+      <MessageBubble
+        message={makeMessage({ conversationId: 'c-9', content: 'An answer worth reporting.' })}
+      />,
+    );
+
+    chooseReportFromMore();
+
+    expect(mockReportProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        visible: true,
+        target: expect.objectContaining({
+          messageId: 'm-1',
+          conversationId: 'c-9',
+          subject: { kind: 'chat-message', id: 'm-1' },
+        }),
       }),
     );
   });
@@ -184,7 +222,11 @@ describe('MessageBubble report control', () => {
     );
 
     expect(mockReportProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ asset: { kind: 'video', url: 'https://cdn.example.com/v-1.mp4' } }),
+      expect.objectContaining({
+        target: expect.objectContaining({
+          asset: { kind: 'video', url: 'https://cdn.example.com/v-1.mp4' },
+        }),
+      }),
     );
     expect(mockGeneratedVideo).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -204,19 +246,23 @@ describe('MessageBubble report control', () => {
     );
 
     expect(mockReportProps).toHaveBeenLastCalledWith(
-      expect.objectContaining({ asset: { kind: 'image', url: 'data:image/png;base64' } }),
+      expect.objectContaining({
+        target: expect.objectContaining({ asset: { kind: 'image', url: 'data:image/png;base64' } }),
+      }),
     );
   });
 
   it('hides Report on an empty assistant turn and while streaming', () => {
     const { rerender } = render(<MessageBubble message={makeMessage()} />);
-    expect(screen.queryByTestId('report-flag-button')).toBeNull();
+    expect(screen.queryByTestId('report-sheet')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^More message actions for / })).toBeNull();
 
     rerender(
       <MessageBubble
         message={makeMessage({ imageUrl: 'https://cdn.example.com/img-1.png', isStreaming: true })}
       />,
     );
-    expect(screen.queryByTestId('report-flag-button')).toBeNull();
+    expect(screen.queryByTestId('report-sheet')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^More message actions for / })).toBeNull();
   });
 });

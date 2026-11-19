@@ -8,12 +8,18 @@ const PIVOT_X = 12;
 const PIVOT_Y = 14;
 const NEEDLE_LENGTH = 6;
 const STROKE_WIDTH = 2;
-const NEEDLE_SWEEP_DEGREES = 180;
+// DIAL_ARC ends this far below the pivot's horizontal on each side, so the
+// needle must drop the same amount to rest on the dial's ends.
+const DIAL_END_DROP_DEGREES = 30;
+const NEEDLE_SWEEP_DEGREES = 180 + 2 * DIAL_END_DROP_DEGREES;
 const COORDINATE_PRECISION = 100;
 
 export function effortGaugeAngle(effort: Effort): number {
   const highestIndex = EFFORT_STEP_ORDER.length - 1;
-  return (EFFORT_STEP_ORDER.indexOf(effort) / highestIndex) * NEEDLE_SWEEP_DEGREES;
+  return (
+    (EFFORT_STEP_ORDER.indexOf(effort) / highestIndex) * NEEDLE_SWEEP_DEGREES -
+    DIAL_END_DROP_DEGREES
+  );
 }
 
 function roundCoordinate(value: number): number {

@@ -3,11 +3,7 @@ import { getAuthHeaders } from '@/services/authSession';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 
 export type GeneratedImageSourceStatus =
-  | 'authorizing'
-  | 'ready'
-  | 'signed-out'
-  | 'invalid'
-  | 'error';
+  'authorizing' | 'ready' | 'signed-out' | 'invalid' | 'error';
 
 export interface GeneratedImageRequestSource {
   uri: string;
@@ -67,7 +63,7 @@ export function useGeneratedImageSource(
           setStatus('signed-out');
           return;
         }
-        setSource({ uri: durableUrl, headers: { Authorization: authorization } });
+        setSource({ uri: durableUrl, headers });
         setStatus('ready');
       })
       .catch(() => {

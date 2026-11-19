@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -219,9 +219,9 @@ const PROHIBITED = [
         writing about these subjects for prevention, education, research, journalism, or recovery.
         AGI is not a crisis service and cannot take the place of one. If you or someone you know may
         be in danger, the{' '}
-        <Link href={helpArticlePath(CRISIS_RESOURCES_ARTICLE)} className="agi-ds-link">
+        <PageLink href={helpArticlePath(CRISIS_RESOURCES_ARTICLE)} className="agi-ds-link">
           crisis resources article
-        </Link>{' '}
+        </PageLink>{' '}
         lists who to call.
       </>
     ),
@@ -278,9 +278,9 @@ export default function AcceptableUsePage() {
                 This page is those rules.
               </strong>{' '}
               It sits alongside the{' '}
-              <Link href="/terms" className="agi-ds-link">
+              <PageLink href="/terms" className="agi-ds-link">
                 terms of service
-              </Link>
+              </PageLink>
               ; where they overlap, both apply. Last updated: {POLICY_LAST_UPDATED.acceptableUse}.{' '}
               <PolicyVersionsLink policy="acceptableUse" />
             </>
@@ -303,9 +303,9 @@ export default function AcceptableUsePage() {
                   <Prose size="sm">
                     The precise default authority for every tool (what asks, which settings let a
                     tool run without asking, and how to revoke) is on{' '}
-                    <Link href="/agent-permissions" className="agi-ds-link">
+                    <PageLink href="/agent-permissions" className="agi-ds-link">
                       /agent-permissions
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </Stack>
@@ -328,9 +328,9 @@ export default function AcceptableUsePage() {
                     contract. Where you use BYOK, the provider whose key you supply also applies
                     their own terms to your usage, and those govern that traffic. See
                     &ldquo;Third-party services and connectors&rdquo; in the{' '}
-                    <Link href="/terms" className="agi-ds-link">
+                    <PageLink href="/terms" className="agi-ds-link">
                       terms
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </Stack>
@@ -410,9 +410,9 @@ export default function AcceptableUsePage() {
                   <Prose size="sm">
                     <strong>Appeals.</strong> If your account is suspended or banned and you believe
                     it was wrong, sign in and appeal from the notice you see, or use the{' '}
-                    <Link href="/appeal" className="agi-ds-link">
+                    <PageLink href="/appeal" className="agi-ds-link">
                       appeal form
-                    </Link>{' '}
+                    </PageLink>{' '}
                     with the email address on the account if you cannot sign in. You can also email{' '}
                     <a href={contactMailto(CONTACT_SUBJECTS.appeal)} className="agi-ds-link">
                       {CONTACT_EMAIL}
@@ -446,17 +446,17 @@ export default function AcceptableUsePage() {
                     <strong>If you found a security vulnerability</strong>, use the subject line
                     &ldquo;
                     {CONTACT_SUBJECTS.security}&rdquo; and follow the guidance on{' '}
-                    <Link href="/security" className="agi-ds-link">
+                    <PageLink href="/security" className="agi-ds-link">
                       /security
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <Prose>
                     {LEGAL_ENTITY}, {NOTICE_ADDRESS}. We may update this policy with notice posted
                     on this page; material changes are recorded on{' '}
-                    <Link href="/changelog" className="agi-ds-link">
+                    <PageLink href="/changelog" className="agi-ds-link">
                       /changelog
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <ButtonRow>

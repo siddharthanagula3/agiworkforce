@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CHAT_MODEL_IMAGE_ENVELOPE } from '@agiworkforce/cloud-contracts';
 import {
   chargeMicrousdForProviderCost,
+  getModelMetadataById,
   listCanonicalModels,
   MICROUSD_PER_CREDIT,
+  resolveMaxOutputTokens,
 } from '@agiworkforce/types';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { markNativeDocument } from '@/app/api/llm/v1/chat/completions/lib/media-input';
 type ScanModule0 = typeof import('@/lib/services/cogs-ledger-service');
 
 vi.mock('server-only', () => ({}));
@@ -64,9 +69,9 @@ import { LLMCostCalculator } from './llm-cost-calculator';
 const FIVE_HOUR_OLDEST = '2026-07-22T12:00:00.000Z';
 const WEEKLY_OLDEST = '2026-07-20T08:00:00.000Z';
 const PERIOD_END = '2026-08-01T00:00:00.000Z';
-const FIVE_HOUR_BUDGET = 2 * MICROUSD_PER_CREDIT;
-const WEEKLY_BUDGET = 15 * MICROUSD_PER_CREDIT;
-const MONTHLY_BUDGET = 20 * MICROUSD_PER_CREDIT;
+const FIVE_HOUR_BUDGET = 200 * MICROUSD_PER_CREDIT;
+const WEEKLY_BUDGET = 1_500 * MICROUSD_PER_CREDIT;
+const MONTHLY_BUDGET = 2_000 * MICROUSD_PER_CREDIT;
 
 const TIERED_MODEL = (() => {
   const candidate = listCanonicalModels().find(
@@ -97,6 +102,87 @@ const ANTHROPIC_CHAT_MODEL = (() => {
   if (!candidate) throw new Error('Expected a priced Anthropic chat fixture');
   return candidate;
 })();
+
+const DOCUMENTED_IMAGE_TOKEN_MAXIMUM: Readonly<Record<string, number>> = {
+  anthropic: 4_784,
+  openai: Math.ceil(30_000 * 2.46),
+};
+const DOCUMENTED_PAGE_IMAGE_TOKEN_MAXIMUM: Readonly<Record<string, number>> = {
+  anthropic: 4_784,
+  openai: Math.ceil(6_144 * 2.46),
+};
+const FREE_PICTURE_MODELS = FREE_TRIAL_MODELS.map((id) => {
+  const metadata = getModelMetadataById(id);
+  if (!metadata) throw new Error(`Expected catalog metadata for the Free model ${id}`);
+  return metadata;
+}).filter((metadata) => metadata.inputModalities?.includes('image'));
+const FREE_PDF_MODELS = FREE_PICTURE_MODELS.filter((metadata) =>
+  metadata.inputModalities?.includes('pdf'),
+);
+const UNDOCUMENTED_IMAGE_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) =>
+      model.inputModalities?.includes('image') &&
+      model.imageInput?.maxInputTokensPerImage === undefined &&
+      typeof model.inputCost === 'number',
+  );
+  if (!candidate) throw new Error('Expected a priced image model with no per-image bound');
+  return candidate;
+})();
+const PHOTO_BASE64_LENGTH = 3_391_856;
+const PDF_BASE64_LENGTH = 2_000_000;
+const PDF_PAGE_COUNT = 40;
+const PDF_EXTRACTED_TEXT = 'Quarterly revenue rose in every region. '.repeat(2_000);
+
+function pdfMessages(extractedTextComplete: boolean) {
+  const fallback = [
+    {
+      type: 'file',
+      file: {
+        filename: 'report.pdf',
+        mime_type: 'text/plain',
+        file_data: `data:text/plain;base64,${Buffer.from(PDF_EXTRACTED_TEXT).toString('base64')}`,
+      },
+    },
+  ];
+  return [
+    {
+      role: 'user',
+      content: 'Summarize this report.',
+      multimodal_content: [
+        { type: 'text', text: 'Summarize this report.' },
+        ...markNativeDocument<Record<string, unknown>>(
+          { type: 'text', text: '[attached file: report.pdf (application/pdf)]' },
+          fallback,
+          {
+            filename: 'report.pdf',
+            mediaType: 'application/pdf',
+            data: 'A'.repeat(PDF_BASE64_LENGTH),
+            pageCount: PDF_PAGE_COUNT,
+            extractedTextComplete,
+          },
+        ),
+      ],
+    },
+  ];
+}
+
+function pictureMessages(pictures: number, base64Length = PHOTO_BASE64_LENGTH) {
+  const picture = {
+    type: 'image_url',
+    image_url: { url: `data:image/jpeg;base64,${'A'.repeat(base64Length)}` },
+  };
+  return [
+    {
+      role: 'user',
+      content: 'What is in this picture?',
+      multimodal_content: [
+        { type: 'text', text: 'What is in this picture?' },
+        ...Array.from({ length: pictures }, () => picture),
+      ],
+    },
+  ];
+}
 
 interface WindowUse {
   fiveHour: number;
@@ -192,7 +278,7 @@ beforeEach(() => {
 });
 
 describe('the Free usage windows', () => {
-  it('holds Free to the plan table: 2, 15 and 20 credits per 5 hours, week and month', () => {
+  it('holds Free to the plan table: 200, 1,500 and 2,000 credits per 5 hours, week and month', () => {
     expect(FREE_TRIAL_INTERNAL_USAGE_POLICY).toEqual({
       fiveHourBudgetMicrousd: FIVE_HOUR_BUDGET,
       fiveHourWindowHours: 5,
@@ -298,7 +384,7 @@ describe('beginFreeTrialRequest', () => {
   });
 
   it('refuses a call the five-hour window cannot cover and names when it resets', async () => {
-    useWindows({ fiveHour: 8_000, weekly: 8_000, monthly: 8_000 });
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET - 2_000, weekly: 8_000, monthly: 8_000 });
 
     await expect(beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000 })).resolves.toEqual({
       ok: false,
@@ -927,7 +1013,7 @@ describe('Free output budgeting', () => {
     expect(budget(reservedMicrousd)).toEqual({ ok: false, code: 'budget_reached' });
   });
 
-  it('uses a byte upper bound for text and the model input ceiling for images', () => {
+  it('uses a byte upper bound for text and the per-image ceiling for images', () => {
     const textOnly = estimateConservativeFreeInputTokens({
       model: FREE_CHAT_MODEL.id,
       messages: [{ role: 'user', content: '🙂' }],
@@ -946,7 +1032,10 @@ describe('Free output budgeting', () => {
     });
 
     expect(textOnly).toBeGreaterThanOrEqual(new TextEncoder().encode('🙂').byteLength);
-    expect(withImage).toBe(FREE_CHAT_MODEL.contextWindow);
+    expect(withImage).toBeGreaterThanOrEqual(
+      DOCUMENTED_IMAGE_TOKEN_MAXIMUM[FREE_CHAT_MODEL.developer] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(withImage).toBeLessThan(FREE_CHAT_MODEL.contextWindow ?? Number.POSITIVE_INFINITY);
   });
 
   it('applies the private cap to the provider request and disables cache writes', () => {
@@ -972,4 +1061,206 @@ describe('Free output budgeting', () => {
     expect(request.max_tokens).toBeLessThan(100_000);
     expect(request.usePromptCache).toBe(false);
   });
+});
+
+describe('Free picture budgeting', () => {
+  const { fiveHourBudgetMicrousd } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const reservation = (reservedMicrousd: number): FreeTrialReservation => ({
+    kind: 'free_trial',
+    userId: 'user-1',
+    requestId: 'request-picture',
+    reservedMicrousd,
+  });
+  const chargedCost = (
+    model: (typeof FREE_PICTURE_MODELS)[number],
+    promptTokens: number,
+    completionTokens: number,
+  ): number =>
+    chargeMicrousdForProviderCost(
+      LLMCostCalculator.calculateCostMicrousd(model.provider, model.id, {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
+      }),
+    );
+  const estimate = (model: { id: string }, messages: unknown): number =>
+    estimateConservativeFreeInputTokens({ model: model.id, messages });
+  const freeModels = FREE_PICTURE_MODELS.map((model) => [model.name, model] as const);
+
+  it('bounds every Free model that takes pictures at no less than its developer documents', () => {
+    expect(FREE_PICTURE_MODELS.length).toBeGreaterThan(0);
+    for (const model of FREE_PICTURE_MODELS) {
+      const imageBound = model.imageInput?.maxInputTokensPerImage;
+      const pageImageBound = model.documentInput?.maxInputTokensPerPageImage ?? imageBound;
+      expect(imageBound).toBeGreaterThanOrEqual(
+        DOCUMENTED_IMAGE_TOKEN_MAXIMUM[model.developer] ?? Number.POSITIVE_INFINITY,
+      );
+      if (!model.inputModalities?.includes('pdf')) continue;
+      expect(pageImageBound).toBeGreaterThanOrEqual(
+        DOCUMENTED_PAGE_IMAGE_TOKEN_MAXIMUM[model.developer] ?? Number.POSITIVE_INFINITY,
+      );
+    }
+  });
+
+  it.each(freeModels)(
+    'counts a picture on %s as the most its developer bills for one, whatever its encoded size',
+    (_name, model) => {
+      const maximum = DOCUMENTED_IMAGE_TOKEN_MAXIMUM[model.developer] ?? Number.POSITIVE_INFINITY;
+      const photo = estimate(model, pictureMessages(1));
+      const largest = estimate(model, pictureMessages(1, CHAT_MODEL_IMAGE_ENVELOPE.maxBase64Bytes));
+
+      expect(photo - estimate(model, pictureMessages(0))).toBeGreaterThanOrEqual(maximum);
+      expect(largest).toBe(photo);
+      expect(photo).toBeLessThan(PHOTO_BASE64_LENGTH);
+    },
+  );
+
+  it.each(freeModels)(
+    'admits a picture on %s with most of the five-hour allowance left and reserves its whole cost',
+    (_name, model) => {
+      for (const remaining of [
+        fiveHourBudgetMicrousd - 6_400,
+        Math.floor(fiveHourBudgetMicrousd / 10),
+      ]) {
+        const request = {
+          model: model.id,
+          messages: pictureMessages(1),
+          max_tokens: resolveMaxOutputTokens(model.id),
+          usePromptCache: true,
+        };
+
+        const result = applyFreeTrialProviderBudget({
+          reservation: reservation(remaining),
+          provider: model.provider,
+          request,
+        });
+
+        expect(result.ok).toBe(true);
+        expect(
+          chargedCost(model, estimate(model, request.messages), request.max_tokens),
+        ).toBeLessThanOrEqual(remaining);
+      }
+    },
+  );
+
+  it.each(freeModels)(
+    'refuses a picture on %s when the allowance left is below what it can cost',
+    (_name, model) => {
+      const messages = pictureMessages(1);
+      const leastCost = chargedCost(model, estimate(model, messages), 1);
+      const documentedLeastCost = chargedCost(
+        model,
+        estimate(model, pictureMessages(0)) +
+          (DOCUMENTED_IMAGE_TOKEN_MAXIMUM[model.developer] ?? Number.POSITIVE_INFINITY),
+        1,
+      );
+
+      expect(leastCost).toBeGreaterThanOrEqual(documentedLeastCost);
+      expect(
+        applyFreeTrialProviderBudget({
+          reservation: reservation(leastCost - 1),
+          provider: model.provider,
+          request: { model: model.id, messages, max_tokens: resolveMaxOutputTokens(model.id) },
+        }),
+      ).toEqual({ ok: false, code: 'budget_reached' });
+      expect(
+        applyFreeTrialProviderBudget({
+          reservation: reservation(leastCost),
+          provider: model.provider,
+          request: { model: model.id, messages, max_tokens: resolveMaxOutputTokens(model.id) },
+        }).ok,
+      ).toBe(true);
+    },
+  );
+
+  it.each(freeModels)('adds up every picture in one message on %s', (_name, model) => {
+    const maximum = DOCUMENTED_IMAGE_TOKEN_MAXIMUM[model.developer] ?? Number.POSITIVE_INFINITY;
+    const text = estimate(model, pictureMessages(0));
+    const one = estimate(model, pictureMessages(1)) - text;
+    const four = estimate(model, pictureMessages(4)) - text;
+
+    expect(four).toBe(4 * one);
+    expect(four).toBeGreaterThanOrEqual(4 * maximum);
+  });
+
+  it.each(freeModels)('leaves a text-only estimate on %s at its byte count', (_name, model) => {
+    const messages = [{ role: 'user', content: 'Translate that into Spanish. 🙂' }];
+
+    expect(estimate(model, messages)).toBe(
+      new TextEncoder().encode(JSON.stringify({ messages })).byteLength + 64,
+    );
+  });
+
+  it('keeps the encoded-size bound for a model with no per-image bound', () => {
+    expect(estimate(UNDOCUMENTED_IMAGE_MODEL, pictureMessages(1))).toBeGreaterThan(
+      PHOTO_BASE64_LENGTH,
+    );
+  });
+
+  const pdfModels = FREE_PDF_MODELS.map((model) => [model.name, model] as const);
+
+  it('has a Free model that reads PDFs', () => {
+    expect(FREE_PDF_MODELS.length).toBeGreaterThan(0);
+  });
+
+  it.each(pdfModels)(
+    'counts a PDF on %s by its pages and extracted text, not its encoded bytes',
+    (_name, model) => {
+      const pages =
+        PDF_PAGE_COUNT *
+        (DOCUMENTED_PAGE_IMAGE_TOKEN_MAXIMUM[model.developer] ?? Number.POSITIVE_INFINITY);
+      const document = estimate(model, pdfMessages(true));
+
+      expect(document).toBeGreaterThanOrEqual(
+        pages + new TextEncoder().encode(PDF_EXTRACTED_TEXT).byteLength,
+      );
+      expect(document).toBeLessThan(PDF_BASE64_LENGTH);
+    },
+  );
+
+  it.each(pdfModels)(
+    'admits a PDF on %s with most of the five-hour allowance left and reserves its whole cost',
+    (_name, model) => {
+      const request = {
+        model: model.id,
+        messages: pdfMessages(true),
+        max_tokens: resolveMaxOutputTokens(model.id),
+      };
+      const remaining = fiveHourBudgetMicrousd - 6_400;
+
+      const result = applyFreeTrialProviderBudget({
+        reservation: reservation(remaining),
+        provider: model.provider,
+        request,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(
+        chargedCost(model, estimate(model, request.messages), request.max_tokens),
+      ).toBeLessThanOrEqual(remaining);
+    },
+  );
+
+  it.each(pdfModels)(
+    'refuses a PDF on %s when the allowance left is below what it can cost',
+    (_name, model) => {
+      const messages = pdfMessages(true);
+      const leastCost = chargedCost(model, estimate(model, messages), 1);
+
+      expect(
+        applyFreeTrialProviderBudget({
+          reservation: reservation(leastCost - 1),
+          provider: model.provider,
+          request: { model: model.id, messages, max_tokens: resolveMaxOutputTokens(model.id) },
+        }),
+      ).toEqual({ ok: false, code: 'budget_reached' });
+    },
+  );
+
+  it.each(pdfModels)(
+    'keeps the encoded-size bound on %s when the extracted text is incomplete',
+    (_name, model) => {
+      expect(estimate(model, pdfMessages(false))).toBeGreaterThan(PDF_BASE64_LENGTH);
+    },
+  );
 });

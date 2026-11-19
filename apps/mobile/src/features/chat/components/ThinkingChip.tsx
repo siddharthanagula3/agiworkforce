@@ -7,8 +7,10 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { Brain, ChevronRight, Clock, Globe, X } from 'lucide-react-native';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import { Text } from '@/components/ui/Text';
+import { ShimmerText } from '@/components/ui/ShimmerText';
 import { motion, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
@@ -39,7 +41,9 @@ interface ThinkingChipProps {
   isStreaming?: boolean;
   duration?: number;
   startedAtMs?: number;
+  answerStarted?: boolean;
   activity?: AgentActivityState;
+  showPreview?: boolean;
 }
 
 function parseThoughtSteps(thinkingText: string): ThinkingStep[] {
@@ -118,6 +122,14 @@ function parseSearchSteps(activity: AgentActivityState): ThinkingStep[] {
     }
   }
   return steps;
+}
+
+function latestThought(steps: readonly ThinkingStep[]): string | undefined {
+  for (let index = steps.length - 1; index >= 0; index -= 1) {
+    const step = steps[index];
+    if (step?.kind === 'thought') return step.body || step.title;
+  }
+  return undefined;
 }
 
 export function buildThinkingSteps(
@@ -209,11 +221,14 @@ function ThinkingStepRow({ step, isLast }: { step: ThinkingStep; isLast: boolean
 
 export function ThinkingChip({
   thinkingText,
-  isStreaming,
+  isStreaming: turnStreaming,
   duration,
   startedAtMs,
+  answerStarted = false,
   activity,
+  showPreview = false,
 }: ThinkingChipProps) {
+  const isStreaming = turnStreaming === true && !answerStarted;
   const colors = useThemeColors();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -260,13 +275,21 @@ export function ThinkingChip({
     isStreaming && startedAtMs !== undefined
       ? Math.max(0, (nowMs - startedAtMs) / 1000)
       : undefined;
+  const thoughtSeconds =
+    duration !== undefined && duration > 0
+      ? duration
+      : turnStreaming && startedAtMs !== undefined
+        ? Math.max(0, (nowMs - startedAtMs) / 1000)
+        : undefined;
   const headerLabel = isStreaming
     ? liveSeconds !== undefined
       ? `${deriveReasoningPhrase(thinkingText)} • Thinking for ${formatThinkingDuration(liveSeconds)}`
       : deriveReasoningPhrase(thinkingText)
-    : duration !== undefined && duration > 0
-      ? `Thought for ${formatThinkingDuration(duration)}`
+    : thoughtSeconds !== undefined && thoughtSeconds > 0
+      ? `Thought for ${formatThinkingDuration(thoughtSeconds)}`
       : 'Thought process';
+
+  const preview = showPreview ? latestThought(steps) : undefined;
 
   if (!isStreaming && thinkingText.trim().length === 0) return null;
 
@@ -277,22 +300,45 @@ export function ThinkingChip({
         accessibilityRole="button"
         accessibilityLabel="Show reasoning"
         hitSlop={8}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          paddingVertical: 6,
-        }}
+        style={{ paddingVertical: 6 }}
       >
-        <Clock size={13} color={colors.textMuted} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Clock size={13} color={colors.textMuted} />
 
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }} numberOfLines={1}>
-            {headerLabel}
-          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {isStreaming ? (
+              <ShimmerText
+                testID="thinking-chip.running-label"
+                text={headerLabel}
+                baseColor={colors.textMuted}
+                shineColor={colors.textPrimary}
+                style={{ fontSize: typeScale.footnote }}
+              />
+            ) : (
+              <Text
+                style={{ fontSize: typeScale.footnote, color: colors.textMuted }}
+                numberOfLines={1}
+              >
+                {headerLabel}
+              </Text>
+            )}
+          </View>
+
+          <ChevronRight size={14} color={colors.textMuted} />
         </View>
-
-        <ChevronRight size={14} color={colors.textMuted} />
+        {preview ? (
+          <Text
+            numberOfLines={3}
+            style={{
+              fontSize: typeScale.caption,
+              color: colors.textSecondary,
+              marginTop: 4,
+              marginLeft: 19,
+            }}
+          >
+            {preview}
+          </Text>
+        ) : null}
       </PressableBox>
 
       {/*
@@ -421,9 +467,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: {
-    width: '100%',
-  },
+  safeArea: contentColumn('reading'),
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

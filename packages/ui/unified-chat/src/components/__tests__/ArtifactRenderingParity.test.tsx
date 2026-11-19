@@ -7,12 +7,11 @@ import {
   toMarkdownTable,
   isNumericCell,
   numericValue,
-} from '../../lib/tabular';
-import {
-  SpreadsheetArtifact,
   SPREADSHEET_ROW_CAP,
-} from '../artifact-components/SpreadsheetArtifact';
-import { PresentationArtifact, splitSlides } from '../artifact-components/PresentationArtifact';
+} from '../../lib/tabular';
+import { SpreadsheetArtifact } from '../artifact-components/SpreadsheetArtifact';
+import { PresentationArtifact } from '../artifact-components/PresentationArtifact';
+import { splitSlides } from '../../lib/presentation-slides';
 import { EmailArtifact, parseEmail, emailToText } from '../artifact-components/EmailArtifact';
 import type { Artifact } from '../../lib/types';
 

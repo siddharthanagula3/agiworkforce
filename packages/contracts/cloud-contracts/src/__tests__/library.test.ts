@@ -56,6 +56,14 @@ describe('LibraryItemSchema', () => {
     expect(parsed.origin).toBe('generated');
   });
 
+  it('keeps the thumbnail a server offers and reads a row without one as having none', () => {
+    const thumbnail_uri = `${item.uri}/thumbnail`;
+
+    expect(LibraryItemSchema.parse({ ...item, thumbnail_uri }).thumbnail_uri).toBe(thumbnail_uri);
+    expect(LibraryItemSchema.parse(item).thumbnail_uri).toBeUndefined();
+    expect(LibraryItemSchema.safeParse({ ...item, thumbnail_uri: '' }).success).toBe(false);
+  });
+
   it('rejects an item missing the uri', () => {
     const { uri: _omitted, ...rest } = item;
     expect(LibraryItemSchema.safeParse(rest).success).toBe(false);

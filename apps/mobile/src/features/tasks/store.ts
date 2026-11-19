@@ -66,6 +66,8 @@ export interface CloudRunDetail {
 
 export interface CloudTaskState {
   filter: CloudRunFilterKey;
+  searchQuery: string;
+  searchAvailable: boolean;
   runs: CloudAgentRun[];
   nextCursor: string | null;
   status: 'idle' | 'loading' | 'loaded' | 'error';
@@ -75,6 +77,7 @@ export interface CloudTaskState {
   detail: CloudRunDetail | null;
 
   setFilter: (filter: CloudRunFilterKey) => void;
+  setSearchQuery: (query: string) => void;
   load: (reason: CloudRunLoadReason) => Promise<void>;
   loadMore: () => Promise<void>;
   openRun: (runId: string) => Promise<void>;
@@ -99,10 +102,24 @@ const EMPTY_LIST = {
   error: null,
 } as const;
 
+const FENCE_LINE = /^\s*(```|~~~)/;
+
 function trimTranscript(transcript: string): string {
-  return transcript.length > MAX_TRANSCRIPT_CHARACTERS
-    ? transcript.slice(transcript.length - MAX_TRANSCRIPT_CHARACTERS)
-    : transcript;
+  if (transcript.length <= MAX_TRANSCRIPT_CHARACTERS) return transcript;
+  const start = transcript.length - MAX_TRANSCRIPT_CHARACTERS;
+  const cut = transcript.indexOf('\n', start);
+  if (cut === -1) return transcript.slice(start);
+  const lines = transcript.slice(cut + 1).split('\n');
+  const discardedFences = transcript
+    .slice(0, cut)
+    .split('\n')
+    .filter((line) => FENCE_LINE.test(line));
+  if (discardedFences.length % 2 === 0) return lines.join('\n');
+  const firstFence = lines.findIndex((line) => FENCE_LINE.test(line));
+  if (firstFence === -1) {
+    return [discardedFences[discardedFences.length - 1].trimStart(), ...lines].join('\n');
+  }
+  return lines.slice(firstFence + 1).join('\n');
 }
 
 function applySnapshot(
@@ -137,6 +154,8 @@ function applySnapshot(
 export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
   ...EMPTY_LIST,
   filter: DEFAULT_CLOUD_RUN_FILTER,
+  searchQuery: '',
+  searchAvailable: false,
   status: 'idle',
   detail: null,
 
@@ -144,6 +163,14 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     if (get().filter === filter) return;
     listGeneration += 1;
     set({ ...EMPTY_LIST, filter, status: 'idle' });
+    void get().load('initial');
+  },
+
+  setSearchQuery: (query) => {
+    const searchQuery = query.trim();
+    if (get().searchQuery === searchQuery) return;
+    listGeneration += 1;
+    set({ ...EMPTY_LIST, searchQuery, status: 'idle' });
     void get().load('initial');
   },
 
@@ -163,9 +190,24 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     if (reason === 'refresh') set({ refreshing: true });
 
     try {
-      const page = await listCloudRuns({ states: cloudRunFilterStates(get().filter) });
+      const page = await listCloudRuns({
+        states: cloudRunFilterStates(get().filter),
+        query: get().searchQuery,
+      });
       if (!isCurrent()) return;
-      set({ runs: page.runs, nextCursor: page.nextCursor, status: 'loaded', error: null });
+      const searchAvailable = page.searchSupported === true;
+      if (get().searchQuery && !searchAvailable) {
+        set({ ...EMPTY_LIST, searchQuery: '', searchAvailable, status: 'idle' });
+        void get().load('initial');
+        return;
+      }
+      set({
+        runs: page.runs,
+        nextCursor: page.nextCursor,
+        searchAvailable,
+        status: 'loaded',
+        error: null,
+      });
     } catch (error) {
       if (!isCurrent() || (reason === 'background' && get().status !== 'loading')) return;
       set({ status: 'error', error: describeCloudRunError(error, CLOUD_RUN_LIST_ERROR) });
@@ -188,6 +230,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
       const page = await listCloudRuns({
         states: cloudRunFilterStates(get().filter),
         cursor: nextCursor,
+        query: get().searchQuery,
       });
       if (!isCurrent()) return;
       set((state) => ({
@@ -444,6 +487,6 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     detailIncarnation += 1;
     followController?.abort();
     followController = null;
-    set({ ...EMPTY_LIST, status: 'idle', detail: null });
+    set({ ...EMPTY_LIST, searchQuery: '', searchAvailable: false, status: 'idle', detail: null });
   },
 }));

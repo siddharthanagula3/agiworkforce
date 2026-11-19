@@ -4,7 +4,7 @@ title: Connectors and MCP
 path: /connectors
 category: connectors
 tags: connector, connectors, mcp, integration, github, tools, revoke, disconnect, permissions, always allow
-updated: 2026-10-12
+updated: 2026-11-16
 description: What connectors do, how to add and remove one and how tool permissions work.
 scope: public
 ---
@@ -38,5 +38,10 @@ for them.
 
 ## Custom MCP connections and plans
 
-The number of custom MCP connections available depends on your plan. The pricing
-page lists that limit once connectors are open.
+The number of custom MCP connections available depends on your plan.
+
+{{#purchase}}
+
+The pricing page lists that limit once connectors are open.
+
+{{/purchase}}

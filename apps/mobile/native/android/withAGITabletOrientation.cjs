@@ -6,6 +6,7 @@ const PLUGIN_NAME = 'agi-tablet-orientation-plugin';
 const PLUGIN_VERSION = '1.0.0';
 
 const PATCH_MARKER = 'applyScreenOrientation';
+const SIZE_CLASS_MARKER = 'appliedLargeScreen';
 
 const IMPORTS = [
   'import android.content.pm.ActivityInfo',
@@ -16,15 +17,14 @@ const LARGE_SCREEN_MIN_WIDTH = 'private const val LARGE_SCREEN_MIN_WIDTH_DP = 60
 
 const ON_CREATE_ORIENTATION = '    applyScreenOrientation(resources.configuration)\n';
 
-const METHODS = `
-  override fun onConfigurationChanged(newConfig: Configuration) {
-    super.onConfigurationChanged(newConfig)
-    applyScreenOrientation(newConfig)
-  }
+const APPLY_SCREEN_ORIENTATION = `  private var appliedLargeScreen: Boolean? = null
 
   private fun applyScreenOrientation(configuration: Configuration) {
+    val largeScreen = configuration.smallestScreenWidthDp >= LARGE_SCREEN_MIN_WIDTH_DP
+    if (largeScreen == appliedLargeScreen) return
+    appliedLargeScreen = largeScreen
     requestedOrientation =
-      if (configuration.smallestScreenWidthDp >= LARGE_SCREEN_MIN_WIDTH_DP) {
+      if (largeScreen) {
         ActivityInfo.SCREEN_ORIENTATION_FULL_USER
       } else {
         ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -32,8 +32,30 @@ const METHODS = `
   }
 `;
 
+const METHODS = `
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    applyScreenOrientation(newConfig)
+  }
+
+${APPLY_SCREEN_ORIENTATION}`;
+
+const EARLIER_APPLY_SCREEN_ORIENTATION =
+  /^ {2}private fun applyScreenOrientation\(configuration: Configuration\) \{\n[\s\S]*?\n {2}\}\n/m;
+
+function upgradeMainActivity(contents) {
+  const earlier = contents.match(EARLIER_APPLY_SCREEN_ORIENTATION);
+  if (!earlier) {
+    throw new Error(
+      `${PLUGIN_NAME}: MainActivity.kt has an applyScreenOrientation this plugin cannot upgrade; run expo prebuild --clean`,
+    );
+  }
+  return contents.replace(earlier[0], APPLY_SCREEN_ORIENTATION);
+}
+
 function patchMainActivity(contents) {
-  if (contents.includes(PATCH_MARKER)) return contents;
+  if (contents.includes(SIZE_CLASS_MARKER)) return contents;
+  if (contents.includes(PATCH_MARKER)) return upgradeMainActivity(contents);
 
   let out = contents;
 

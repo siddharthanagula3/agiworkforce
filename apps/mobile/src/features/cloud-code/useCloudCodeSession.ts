@@ -163,8 +163,20 @@ export function useCloudCodeSession(
 
   useEffect(() => {
     if (!shouldPoll) return undefined;
-    const timer = setInterval(() => void load('background'), CLOUD_CODE_SESSION_POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const pollAfterInterval = (): void => {
+      timer = setTimeout(() => {
+        void load('background').finally(() => {
+          if (!stopped) pollAfterInterval();
+        });
+      }, CLOUD_CODE_SESSION_POLL_INTERVAL_MS);
+    };
+    pollAfterInterval();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
   }, [load, shouldPoll]);
 
   useEffect(() => {

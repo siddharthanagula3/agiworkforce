@@ -59,11 +59,13 @@ Upstream's own safe rewrites are kept, and so are its options:
 nested repeats. Every other glob compiles to the same expression as before.
 
 This is the one active audit exception. `.github/security-gate-policy.json`
-registers it as `picomatch-repeated-extglob-patch`, bound to the exact patch
+registers it as `picomatch-redos-no-upstream-fix`, bound to the exact patch
 bytes, the manifest and lockfile entries, the packages that depend on
-`picomatch` and the workspaces that reach it. It expires on 2026-12-16. Remove
-the patch, the audit ignore, the policy entry and the test together as soon as
-an upstream release fixes the advisory.
+`picomatch` and the workspaces that reach it. It expires on 2026-12-17, the date
+the owner approved on 2026-11-17, and row DEPS-PICOMATCH-REDOS-ADVISORY-01 of
+`audit/registers/known-flaws.md` tracks it. Remove the patch, the audit ignore,
+the policy entry and the test together as soon as an upstream release fixes the
+advisory.
 
 `scripts/picomatch-extglob-redos.test.cjs` runs in the blocking script-test
 chain against the installed package. It reverses the patch offline to show the

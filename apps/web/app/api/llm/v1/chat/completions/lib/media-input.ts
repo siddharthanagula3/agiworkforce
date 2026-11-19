@@ -11,6 +11,12 @@ export interface NativeDocument {
   mediaType: string;
   data: string;
   pageCount: number;
+  extractedTextComplete: boolean;
+}
+
+export interface NativeDocumentWithoutData {
+  part: Record<string, unknown>;
+  pageCount: number;
 }
 
 interface NativeDocumentMarker extends NativeDocument {
@@ -32,6 +38,23 @@ export function markNativeDocument<T extends object>(
 ): T[] {
   const marker: NativeDocumentMarker = { ...document, fallbackPartCount: fallback.length };
   return [{ ...header, [NATIVE_DOCUMENT_KEY]: marker }, ...fallback];
+}
+
+export function withoutNativeDocumentData(part: unknown): NativeDocumentWithoutData | null {
+  const marker = readMarker(part);
+  if (
+    !marker ||
+    marker.extractedTextComplete !== true ||
+    !Number.isSafeInteger(marker.pageCount) ||
+    marker.pageCount < 0
+  ) {
+    return null;
+  }
+  const { data: _data, ...withoutData } = marker;
+  return {
+    part: { ...(part as Record<string, unknown>), [NATIVE_DOCUMENT_KEY]: withoutData },
+    pageCount: marker.pageCount,
+  };
 }
 
 export function maxImagesPerRequest(modelId: string, harnessId: string): number | null {

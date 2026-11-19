@@ -128,7 +128,7 @@ describe('mobile skill detail', () => {
     const { findByText, getByLabelText } = render(<SkillDetailScreen />);
 
     expect(await findByText('Read PDFs')).toBeTruthy();
-    expect(getByLabelText('Connect google-drive')).toBeTruthy();
+    expect(getByLabelText('Connect Google Drive')).toBeTruthy();
     expect(getByLabelText('assets/logo.png, no preview')).toBeTruthy();
 
     fireEvent.press(getByLabelText('Open scripts/extract.py'));
@@ -137,6 +137,19 @@ describe('mobile skill detail', () => {
 
     fireEvent(getByLabelText('Turned on'), 'valueChange', true);
     await waitFor(() => expect(mockInstall).toHaveBeenCalledWith('pdf-reader'));
+  });
+
+  it('says nothing about the version when a skill has none, and shows it when it has one', async () => {
+    mockParams.name = 'weekly-report';
+    const personal = render(<SkillDetailScreen />);
+    expect(await personal.findByText('Write my weekly report')).toBeTruthy();
+    expect(personal.queryByText('Version unknown')).toBeNull();
+    personal.unmount();
+
+    mockParams.name = 'pdf-reader';
+    mockCatalog.mockResolvedValue([{ ...BUNDLED, version: '1.2.0' }, PERSONAL]);
+    const versioned = render(<SkillDetailScreen />);
+    expect(await versioned.findByText('Version 1.2.0')).toBeTruthy();
   });
 
   it.each([
@@ -233,14 +246,47 @@ describe('mobile skill selective connector availability', () => {
     mockFiles.mockResolvedValue([]);
     const screen = render(<SkillDetailScreen />);
 
-    await screen.findByLabelText('Connect notion');
-    expect(screen.queryByLabelText('Connect google-drive')).toBeNull();
-    expect(screen.queryByLabelText('Connect huggingface')).toBeNull();
+    await screen.findByLabelText('Connect Notion');
+    expect(screen.queryByLabelText('Connect Google Drive')).toBeNull();
+    expect(screen.queryByLabelText('Connect Huggingface')).toBeNull();
     expect(screen.getAllByText('Coming soon')).toHaveLength(2);
-    fireEvent.press(screen.getByLabelText('Connect notion'));
+    fireEvent.press(screen.getByLabelText('Connect Notion'));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/connectors/[id]',
       params: { id: 'notion' },
     });
+  });
+});
+
+describe('mobile skill connector names', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('user-1');
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockParams.name = BUNDLED.name;
+    mockInstalled.mockResolvedValue(new Set());
+    mockBody.mockResolvedValue('# Steps');
+    mockFiles.mockResolvedValue([]);
+  });
+
+  it('names each connector the way the directory does, with a readable fallback', async () => {
+    const connectors = jest.requireMock('@/services/connectors') as {
+      fetchConnectorDirectory: jest.Mock;
+    };
+    connectors.fetchConnectorDirectory.mockImplementationOnce(async () => ({
+      connectors: [{ connectorId: 'acme-crm', toolConnectorId: 'acme-crm', name: 'Acme Sales' }],
+    }));
+    mockCatalog.mockResolvedValue([
+      { ...BUNDLED, requiredConnectors: ['acme-crm', 'my_unlisted-tool'] },
+    ]);
+    const screen = render(<SkillDetailScreen />);
+
+    expect(await screen.findByText('Acme Sales')).toBeTruthy();
+    expect(screen.getByText('My Unlisted Tool')).toBeTruthy();
+    expect(screen.queryByText('acme-crm')).toBeNull();
+    expect(screen.queryByText('my_unlisted-tool')).toBeNull();
+    expect(screen.getByLabelText('Connect My Unlisted Tool')).toBeTruthy();
   });
 });

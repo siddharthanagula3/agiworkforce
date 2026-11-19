@@ -165,6 +165,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
 
       <View className="absolute top-16 left-4 right-4 flex-row items-center justify-between">
         <PressableBox
+          hitSlop={2}
           onPress={onClose}
           className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
           accessibilityLabel="Close scanner"
@@ -174,6 +175,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         </PressableBox>
 
         <PressableBox
+          hitSlop={2}
           onPress={() => setFlashEnabled((prev) => !prev)}
           className="w-10 h-10 rounded-full bg-black/50 items-center justify-center"
           accessibilityLabel={flashEnabled ? 'Turn off flashlight' : 'Turn on flashlight'}

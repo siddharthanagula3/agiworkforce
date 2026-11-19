@@ -7,6 +7,9 @@ import {
   saveLockdownMode,
   fetchAccountSessions,
   fetchAuditLog,
+  fetchSignInKeys,
+  fetchSignInMethods,
+  removeSignInKey,
   parseAccountSecurityStatus,
   parseAccountSessions,
   revokeAccountSession,
@@ -217,5 +220,87 @@ describe('Mobile account security service', () => {
     for (const call of apiMock.get.mock.calls) {
       expect(call[1]).not.toHaveProperty('strictSettings');
     }
+  });
+
+  describe('passkeys and security keys', () => {
+    const credential = (id: string, name: string, kind: string) => ({
+      id,
+      name,
+      kind,
+      worksAcrossDevices: true,
+      createdAt: '2026-11-01T00:00:00.000Z',
+      lastUsedAt: null,
+    });
+
+    it.each(['available', 'enrolled'])('lists the keys of a %s account', async (state) => {
+      apiMock.get.mockResolvedValueOnce({
+        state,
+        credentials: [
+          credential('key-1', 'Work laptop', 'passkey'),
+          credential('key-2', 'Desk key', 'security_key'),
+          credential('key-3', 'Odd key', 'other'),
+        ],
+      });
+
+      await expect(fetchSignInKeys()).resolves.toEqual({
+        state: 'listed',
+        items: [
+          { id: 'key-1', name: 'Work laptop', kind: 'passkey' },
+          { id: 'key-2', name: 'Desk key', kind: 'security_key' },
+        ],
+      });
+    });
+
+    it.each(['unavailable', 'verification_required'])(
+      'reports the %s state instead of an empty list',
+      async (state) => {
+        apiMock.get.mockResolvedValueOnce({ state, credentials: [] });
+
+        await expect(fetchSignInKeys()).resolves.toEqual({ state });
+      },
+    );
+
+    it.each([null, {}, { state: 'available' }, { credentials: 'none' }])(
+      'reports a failed read for a malformed payload %j',
+      async (payload) => {
+        apiMock.get.mockResolvedValueOnce(payload);
+
+        await expect(fetchSignInKeys()).resolves.toEqual({ state: 'failed' });
+      },
+    );
+
+    it('reports a failed read when the request fails, and rethrows an abort', async () => {
+      apiMock.get.mockRejectedValueOnce(new Error('offline'));
+      await expect(fetchSignInKeys()).resolves.toEqual({ state: 'failed' });
+
+      const controller = new AbortController();
+      controller.abort();
+      apiMock.get.mockRejectedValueOnce(new Error('aborted'));
+      await expect(fetchSignInKeys(controller.signal)).rejects.toThrow('aborted');
+    });
+
+    it('keeps the sign-in methods when only the key read fails', async () => {
+      apiMock.get.mockImplementation(async (path: string) => {
+        if (path === '/api/account-security') throw new Error('offline');
+        return { identities: [{ id: 'identity-1', provider: 'google' }] };
+      });
+
+      await expect(fetchSignInMethods()).resolves.toEqual({
+        identities: [{ id: 'identity-1', provider: 'google', lastAuthenticatedAt: null }],
+        keys: { state: 'failed' },
+      });
+    });
+
+    it('removes a key with the step-up headers and the account epoch', async () => {
+      const epoch = { ownerId: 'account-a', epoch: 3 };
+      apiMock.delete.mockResolvedValueOnce(undefined);
+
+      await removeSignInKey('key/1', { 'x-step-up-token': 'grant' }, epoch);
+
+      expect(apiMock.delete).toHaveBeenCalledWith('/api/account-security/credentials/key%2F1', {
+        headers: { 'x-step-up-token': 'grant' },
+        accountEpoch: epoch,
+      });
+    });
   });
 });

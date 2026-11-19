@@ -1,9 +1,10 @@
 'use client';
 
-import Link from 'next/link';
 import { Fragment } from 'react';
 
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
+import { PageLink, useEmbeddedPage } from '@shared/components/layout/EmbeddedPage';
+import { embeddedPageHref } from '@/lib/embedded-page';
 import { useAuthCopy } from './authCopy';
 import { AUTH_FOOTER_BAR_CLASS, AUTH_FOOTER_CLASS, AUTH_FOOTER_NAV_LINK_CLASS } from './authStyles';
 
@@ -19,15 +20,17 @@ const LINKS: ReadonlyArray<{ href: string; key: string; label: string }> = [
 
 export function AuthLegalFooter() {
   const copy = useAuthCopy();
+  const embedded = useEmbeddedPage();
+  const links = embedded ? LINKS.filter((link) => embeddedPageHref(link.href) !== null) : LINKS;
 
   return (
     <div className={AUTH_FOOTER_CLASS} data-testid="auth-legal-footer">
-      {LINKS.map((link, index) => (
+      {links.map((link, index) => (
         <Fragment key={link.href}>
           {index > 0 ? <span aria-hidden="true" className={AUTH_FOOTER_BAR_CLASS} /> : null}
-          <Link href={link.href} className={AUTH_FOOTER_NAV_LINK_CLASS}>
+          <PageLink href={link.href} className={AUTH_FOOTER_NAV_LINK_CLASS}>
             {copy.text(link.key, link.label)}
-          </Link>
+          </PageLink>
         </Fragment>
       ))}
     </div>

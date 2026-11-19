@@ -30,7 +30,7 @@ import {
   RESPONSE_RATING_REMOVE_FAILED,
   RESPONSE_RATING_SEND_FAILED,
   RESPONSE_RATING_SHARING_NOTE,
-} from '../ResponseRatingDetails';
+} from '@agiworkforce/cloud-contracts';
 
 const fetchMock = vi.fn();
 

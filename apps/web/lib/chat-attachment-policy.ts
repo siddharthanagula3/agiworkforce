@@ -1,16 +1,25 @@
 export {
   CHAT_ATTACHMENT_MIME_TYPES,
   CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE,
+  CHAT_IMAGE_ATTACHMENT_TOO_LARGE_MESSAGE,
+  CHAT_LARGE_FILE_POLICY,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
   chatAttachmentAcceptAttribute,
+  chatAttachmentMaxBytes,
   chatAttachmentSizeLabel,
+  chatAttachmentSizeRefusal,
+  chatImageTooLargeMessage,
+  chatLargeFileKind,
+  chatLargeFileKindMaxBytes,
   isChatImageMimeType,
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
   resolveChatAttachmentMimeType,
 } from '@agiworkforce/cloud-contracts';
+export type { ChatLargeFileKind, ChatLargeFilePolicy } from '@agiworkforce/cloud-contracts';
 
 /**
  * One wording for a file that is not in the turn, wherever it was stopped.

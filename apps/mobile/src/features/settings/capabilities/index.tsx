@@ -3,11 +3,13 @@ import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import {
+  BarChart3,
   Brain,
   Camera,
   ChevronRight,
   Cloud,
   FileCode,
+  FolderOpen,
   Globe,
   Layout,
   LockKeyhole,
@@ -22,16 +24,25 @@ import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import {
   useChatAppModeStore,
   type MobileChatAppMode,
 } from '@/src/features/chat/store/appModeStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatStore } from '@/stores/chatStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import { useToolApprovalPolicySync } from '../tool-approvals/useToolApprovalPolicySync';
 import { toolApprovalPolicySummary } from '../tool-approvals/toolApprovalPolicyOwner';
 import { useMemoryStore } from '@/src/features/memory/store';
+import { useCloudCodeExecutionPreference } from './useCloudCodeExecutionPreference';
+import { useArtifactVisualPreferences } from './useArtifactVisualPreferences';
+import type { ArtifactVisualSwitch } from './artifactVisualPreferencesService';
+import { useToolAccessPreference } from './useToolAccessPreference';
+import { TOOL_ACCESS_TITLE, ToolAccessOptions, toolAccessView } from './ToolAccessOptions';
 import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
 
 type CapabilityTone = 'active' | 'local' | 'device' | 'cloud' | 'desktop' | 'review';
@@ -46,6 +57,7 @@ interface CapabilityRowMeta {
   value?: string;
   href?: string;
   toggle?: ToggleCapability;
+  accountSwitch?: ArtifactVisualSwitch;
 }
 
 interface CapabilitySection {
@@ -53,13 +65,26 @@ interface CapabilitySection {
   rows: CapabilityRowMeta[];
 }
 
+const DESKTOP_CONTROL_NOT_INCLUDED = NATIVE_PURCHASES_AVAILABLE
+  ? 'Desktop control comes with paid plans.'
+  : "Desktop control isn't included in your plan.";
+
 function makeSections(input: {
   cloudUnlocked: boolean;
   appMode: MobileChatAppMode;
   approvalSummary: string;
   memoryFreshness: string | null;
+  desktopControlIncluded: boolean;
+  accountSwitches: readonly ArtifactVisualSwitch[];
 }): CapabilitySection[] {
-  const { cloudUnlocked, appMode, approvalSummary, memoryFreshness } = input;
+  const {
+    cloudUnlocked,
+    appMode,
+    approvalSummary,
+    memoryFreshness,
+    desktopControlIncluded,
+    accountSwitches,
+  } = input;
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
   const memoryDescription = localModeActive
@@ -111,11 +136,35 @@ function makeSections(input: {
     {
       title: 'Workflows',
       rows: [
+        ...(accountSwitches.includes('artifacts')
+          ? [
+              {
+                key: 'artifacts',
+                icon: Layout,
+                tone: 'cloud' as const,
+                label: 'Artifacts',
+                description: 'Create apps, documents and diagrams in a side preview.',
+                accountSwitch: 'artifacts' as const,
+              },
+            ]
+          : []),
+        ...(accountSwitches.includes('inlineVisualizations')
+          ? [
+              {
+                key: 'inline-visualizations',
+                icon: BarChart3,
+                tone: 'cloud' as const,
+                label: 'Inline visualizations',
+                description: 'Show charts and diagrams right in the chat.',
+                accountSwitch: 'inlineVisualizations' as const,
+              },
+            ]
+          : []),
         {
-          key: 'artifacts',
-          icon: Layout,
+          key: 'your-artifacts',
+          icon: FolderOpen,
           tone: 'local',
-          label: 'Artifacts',
+          label: 'Your artifacts',
           description: 'Open generated previews and files from chat.',
           href: '/(app)/artifacts',
         },
@@ -127,8 +176,10 @@ function makeSections(input: {
           description: FEATURES.codeExecution
             ? 'Run code in a sandbox and create documents, sheets, slides and PDFs.'
             : 'Code execution is not available in this mobile release.',
-          value: FEATURES.codeExecution ? cloudValue : 'Off',
-          ...(FEATURES.codeExecution ? { toggle: 'codeExecution' as const } : {}),
+          value: FEATURES.codeExecution ? (localModeActive ? 'Cloud only' : cloudValue) : 'Off',
+          ...(FEATURES.codeExecution && !localModeActive
+            ? { toggle: 'codeExecution' as const }
+            : {}),
         },
         {
           key: 'research',
@@ -185,20 +236,35 @@ function makeSections(input: {
           value: FEATURES.imageGen ? cloudValue : 'Off',
           ...(FEATURES.imageGen ? { toggle: 'imageGen' as const } : {}),
         },
-        {
-          key: 'desktop-control',
-          icon: LockKeyhole,
-          tone: 'desktop',
-          label: 'Desktop control',
-          description: 'Run workflows on your paired desktop.',
-          href: '/(app)/companion',
-        },
+        ...(FEATURES.companion
+          ? [
+              {
+                key: 'desktop-control',
+                icon: LockKeyhole,
+                tone: 'desktop' as const,
+                label: 'Desktop control',
+                description: desktopControlIncluded
+                  ? 'Run workflows on your paired desktop.'
+                  : DESKTOP_CONTROL_NOT_INCLUDED,
+                ...(desktopControlIncluded ? { href: '/(app)/companion' as const } : {}),
+              },
+            ]
+          : []),
       ],
     },
   ];
 }
 
 const CLOUD_TOGGLE_LOCKED_REASON = 'Sign in to change this Managed Cloud preference.';
+const ACCOUNT_SETTING_UNAVAILABLE_REASON =
+  'Could not load this setting from your account. Check your connection and try again.';
+const CLOUD_ONLY_REASON = 'Cloud only';
+const REQUIRED_BY_CODE_EXECUTION_REASON = 'Required by code execution';
+
+interface ToggleState {
+  disabled: boolean;
+  note?: string;
+}
 
 export default function CapabilitiesScreen() {
   const router = useRouter();
@@ -206,6 +272,20 @@ export default function CapabilitiesScreen() {
   const chatFeatures = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const appMode = useChatAppModeStore((s) => s.appMode);
+  const codeExecution = useCloudCodeExecutionPreference(appMode === 'cloud' && cloudUnlocked);
+  const accountSwitches = useArtifactVisualPreferences(appMode === 'cloud' && cloudUnlocked);
+  const toolAccess = useToolAccessPreference(appMode === 'cloud' && cloudUnlocked);
+  const toolAccessShown =
+    appMode === 'cloud' && cloudUnlocked
+      ? toolAccessView({
+          available: toolAccess.available,
+          status: toolAccess.status,
+          connectors: toolAccess.connectors,
+        })
+      : 'hidden';
+  const tier = useTierStore((s) => s.tier);
+  const tierKnown = useTierStore((s) => s.lastRefreshedAt !== null);
+  const paired = useConnectionStore((s) => s.pairingCode !== null);
   const approval = useToolApprovalPolicySync();
   const memoryEntries = useMemoryStore((s) => s.entries);
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
@@ -218,7 +298,33 @@ export default function CapabilitiesScreen() {
     appMode,
     approvalSummary: toolApprovalPolicySummary(approval),
     memoryFreshness,
+    desktopControlIncluded:
+      !tierKnown || paired || canUseBillingPlanCapability(tier, 'remote_control'),
+    accountSwitches: accountSwitches.available,
   });
+
+  const toggleStateFor = (toggle: ToggleCapability): ToggleState => {
+    if (!cloudUnlocked) return { disabled: true, note: CLOUD_TOGGLE_LOCKED_REASON };
+    if (toggle !== 'codeExecution') return { disabled: false };
+    if (codeExecution.status === 'unavailable') {
+      return { disabled: true, note: ACCOUNT_SETTING_UNAVAILABLE_REASON };
+    }
+    return { disabled: codeExecution.status === 'loading' };
+  };
+
+  const artifactsRequired = codeExecution.status === 'ready' && codeExecution.enabled;
+
+  const accountSwitchStateFor = (key: ArtifactVisualSwitch): ToggleState => {
+    if (appMode === 'local') return { disabled: true, note: CLOUD_ONLY_REASON };
+    if (!cloudUnlocked) return { disabled: true, note: CLOUD_TOGGLE_LOCKED_REASON };
+    if (accountSwitches.status === 'unavailable') {
+      return { disabled: true, note: ACCOUNT_SETTING_UNAVAILABLE_REASON };
+    }
+    if (key === 'artifacts' && artifactsRequired) {
+      return { disabled: true, note: REQUIRED_BY_CODE_EXECUTION_REASON };
+    }
+    return { disabled: accountSwitches.status === 'loading' };
+  };
 
   const navigate = useCallback(
     (href: string) => {
@@ -239,24 +345,64 @@ export default function CapabilitiesScreen() {
         <View key={section.title}>
           <SectionTitle title={section.title} />
           <SettingsGroup>
-            {section.rows.map((row, index) => (
-              <CapabilityRow
-                key={row.key}
-                row={row}
-                isLast={index === section.rows.length - 1}
-                onPress={row.href ? () => navigate(row.href as string) : undefined}
-                toggleValue={row.toggle ? chatFeatures[row.toggle] : undefined}
-                onToggle={
-                  row.toggle
-                    ? (enabled) => setFeature(row.toggle as ToggleCapability, enabled)
-                    : undefined
-                }
-                toggleDisabled={Boolean(row.toggle) && !cloudUnlocked}
-              />
-            ))}
+            {section.rows.map((row, index) => {
+              const toggle = row.toggle;
+              const accountSwitch = row.accountSwitch;
+              if (accountSwitch) {
+                const switchState = accountSwitchStateFor(accountSwitch);
+                return (
+                  <CapabilityRow
+                    key={row.key}
+                    row={row}
+                    isLast={index === section.rows.length - 1}
+                    toggleValue={
+                      (accountSwitch === 'artifacts' && artifactsRequired) ||
+                      accountSwitches.values[accountSwitch]
+                    }
+                    onToggle={(enabled) => accountSwitches.setValue(accountSwitch, enabled)}
+                    toggleDisabled={switchState.disabled}
+                    toggleNote={switchState.note}
+                  />
+                );
+              }
+              const toggleState = toggle ? toggleStateFor(toggle) : undefined;
+              return (
+                <CapabilityRow
+                  key={row.key}
+                  row={row}
+                  isLast={index === section.rows.length - 1}
+                  onPress={row.href ? () => navigate(row.href as string) : undefined}
+                  toggleValue={toggle ? chatFeatures[toggle] : undefined}
+                  onToggle={
+                    toggle
+                      ? (enabled) =>
+                          toggle === 'codeExecution'
+                            ? codeExecution.setEnabled(enabled)
+                            : setFeature(toggle, enabled)
+                      : undefined
+                  }
+                  toggleDisabled={toggleState?.disabled}
+                  toggleNote={toggleState?.note}
+                />
+              );
+            })}
           </SettingsGroup>
         </View>
       ))}
+
+      {toolAccessShown !== 'hidden' ? (
+        <View>
+          <SectionTitle title={TOOL_ACCESS_TITLE} />
+          <ToolAccessOptions
+            view={toolAccessShown}
+            mode={toolAccess.mode}
+            lockedNote={
+              toolAccess.status === 'unavailable' ? ACCOUNT_SETTING_UNAVAILABLE_REASON : undefined
+            }
+            onSelect={toolAccess.setMode}
+          />
+        </View>
+      ) : null}
     </SettingsScreenShell>
   );
 }
@@ -334,6 +480,7 @@ function CapabilityRow({
   toggleValue,
   onToggle,
   toggleDisabled,
+  toggleNote,
 }: {
   row: CapabilityRowMeta;
   isLast: boolean;
@@ -341,6 +488,7 @@ function CapabilityRow({
   toggleValue?: boolean;
   onToggle?: (enabled: boolean) => void;
   toggleDisabled?: boolean;
+  toggleNote?: string;
 }) {
   const colors = useThemeColors();
   const Icon = row.icon;
@@ -389,7 +537,7 @@ function CapabilityRow({
         >
           {row.description}
         </Text>
-        {toggleDisabled ? (
+        {toggleNote ? (
           <Text
             testID={`capability-locked-${row.label}`}
             style={{
@@ -399,7 +547,7 @@ function CapabilityRow({
               marginTop: 3,
             }}
           >
-            {CLOUD_TOGGLE_LOCKED_REASON}
+            {toggleNote}
           </Text>
         ) : null}
       </View>
@@ -411,7 +559,7 @@ function CapabilityRow({
             onValueChange={onToggle}
             disabled={toggleDisabled}
             accessibilityLabel={`${row.label}. ${row.description}`}
-            accessibilityHint={toggleDisabled ? CLOUD_TOGGLE_LOCKED_REASON : undefined}
+            accessibilityHint={toggleNote}
           />
         ) : row.value ? (
           <View

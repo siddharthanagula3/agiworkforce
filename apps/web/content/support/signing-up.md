@@ -4,7 +4,7 @@ title: Create an account and send your first message
 path: /get-started
 category: getting-started
 tags: sign up, signup, create account, register, new account, google, github, oauth, verification code, password, age, terms, first message, first chat
-updated: 2026-10-15
+updated: 2026-11-16
 description: How to create an account, what you can do right away and what to try if sign-up does not complete.
 scope: public
 ---
@@ -40,9 +40,14 @@ refused.
 
 The {{PLAN.free}} plan is open by default. A new account can open the chat surface and
 send a message straight away: it has no waitlist and no invite code to redeem.
+
+{{#purchase}}
+
 A self-serve paid plan starts at checkout when paid upgrades are open to your
 account; while they are not, it needs an access code, and without one you join
 the upgrade waitlist.
+
+{{/purchase}}
 
 ## Send the first message
 

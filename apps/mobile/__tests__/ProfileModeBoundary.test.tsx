@@ -243,12 +243,13 @@ describe('Profile mode boundary', () => {
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
 
-  it('opens the native Account Security overview from a signed-in Cloud profile', () => {
+  it('opens Security and login, named as in Settings, from a signed-in Cloud profile', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
 
-    const { getByText } = render(<ProfileScreen />);
-    fireEvent.press(getByText('Account Security'));
+    const { getByText, queryByText } = render(<ProfileScreen />);
+    expect(queryByText('Account Security')).toBeNull();
+    fireEvent.press(getByText('Security and login'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
   });

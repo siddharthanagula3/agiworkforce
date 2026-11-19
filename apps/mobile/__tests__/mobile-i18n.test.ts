@@ -19,6 +19,11 @@ jest.mock('react-native', () => ({
   },
 }));
 
+jest.mock('../lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('../lib/v1FeatureFlags');
+  return { ...actual, FEATURES: { ...actual.FEATURES, appLanguage: true } };
+});
+
 jest.mock('expo-localization', () => ({
   getLocales: () => mockLocaleState.current,
 }));
@@ -45,6 +50,9 @@ const mockI18nManager = jest.requireMock('react-native').I18nManager as {
 
 type I18nModule = typeof import('../src/i18n');
 let i18nModule: I18nModule;
+const mockFeatures = jest.requireMock('../lib/v1FeatureFlags').FEATURES as {
+  appLanguage: boolean;
+};
 
 beforeAll(() => {
   i18nModule = jest.requireActual('../src/i18n') as I18nModule;
@@ -53,6 +61,7 @@ beforeAll(() => {
 describe('Mobile i18n applies the stored app language within the selectable set', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockFeatures.appLanguage = true;
     mockI18nManager.isRTL = false;
     mockLocaleState.current = [{ languageCode: 'es', languageTag: 'es-US' }];
     mockStored.value = null;
@@ -186,5 +195,61 @@ describe('Mobile i18n applies the stored app language within the selectable set'
     await i18nModule.restoreStoredLanguage();
     expect(i18nModule.default.t('chat:timeDivider.today')).toBe('Hoy');
     expect(i18nModule.default.t('chat:timeDivider.yesterday')).toBe('Ayer');
+  });
+});
+
+describe('Mobile i18n while version 1 does not offer an app language', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockFeatures.appLanguage = false;
+    mockI18nManager.isRTL = false;
+    mockLocaleState.current = [{ languageCode: 'es', languageTag: 'es-US' }];
+    mockStored.value = null;
+    mockStored.throwOnRead = false;
+    mockStored.throwOnWrite = false;
+    await i18nModule.default.changeLanguage('es');
+  });
+
+  afterAll(() => {
+    mockFeatures.appLanguage = true;
+  });
+
+  it('follows English on a device set to a language the catalogue carries', async () => {
+    await expect(i18nModule.restoreStoredLanguage()).resolves.toEqual({
+      language: 'en',
+      directionChanged: false,
+    });
+    expect(i18nModule.default.language).toBe('en');
+    expect(i18nModule.getDeviceLanguage()).toBe('en');
+  });
+
+  it('falls back to English from a language chosen on an earlier build, and keeps that choice stored', async () => {
+    mockStored.value = 'es';
+
+    await expect(i18nModule.restoreStoredLanguage()).resolves.toEqual({
+      language: 'en',
+      directionChanged: false,
+    });
+    expect(i18nModule.default.language).toBe('en');
+    expect(i18nModule.useLanguagePreferenceStore.getState().preference).toBe('device');
+    expect(mockStored.value).toBe('es');
+  });
+
+  it('returns a layout an earlier build forced right-to-left', async () => {
+    mockI18nManager.isRTL = true;
+
+    await expect(i18nModule.restoreStoredLanguage()).resolves.toEqual({
+      language: 'en',
+      directionChanged: true,
+    });
+    expect(mockI18nManager.forceRTL).toHaveBeenCalledWith(false);
+  });
+
+  it('refuses to change the language or store a choice', async () => {
+    await i18nModule.default.changeLanguage('en');
+
+    await expect(i18nModule.setLanguage('es')).resolves.toBeNull();
+    expect(i18nModule.default.language).toBe('en');
+    expect(mockStored.value).toBeNull();
   });
 });

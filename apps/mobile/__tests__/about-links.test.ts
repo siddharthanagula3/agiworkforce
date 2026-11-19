@@ -39,14 +39,21 @@ const inAppTargets = Array.from(
 );
 
 describe('About screen destinations', () => {
-  it('hardcodes at least the site, privacy, and terms URLs', () => {
+  it('hardcodes at least the privacy and terms URLs', () => {
     expect(webUrls).toEqual(
       expect.arrayContaining([
-        'https://agiworkforce.com',
         'https://agiworkforce.com/privacy',
         'https://agiworkforce.com/terms',
       ]),
     );
+  });
+
+  it('opens no homepage, which sells plans', () => {
+    expect(webUrls.length).toBeGreaterThan(0);
+    for (const url of webUrls) {
+      expect({ url, path: new URL(url).pathname }).not.toMatchObject({ path: '/' });
+    }
+    expect(aboutSource).not.toContain('label="Website"');
   });
 
   it.each(webUrls)('%s resolves to a real page under apps/web/app', (url) => {

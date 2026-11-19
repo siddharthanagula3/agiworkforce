@@ -61,4 +61,94 @@ describe('reconcileLoadedCloudMessages', () => {
 
     expect(merged.map((message) => message.id)).toEqual(['q1']);
   });
+  it('keeps the attachments the phone holds when the server copy of the question has none', () => {
+    const attachments = [
+      { url: '/api/files/a1', mimeType: 'image/jpeg', fileName: 'a.jpg', assetId: 'a1' },
+    ];
+    const local = [row('q1', 'user', '2026-11-11T09:00:00.000Z', { attachments })];
+    const merged = reconcileLoadedCloudMessages({
+      serverMessages: [row('q1', 'user', '2026-11-11T09:00:00.000Z')],
+      requestStartMessages: local,
+      currentMessages: local,
+      dirtyMessageIds: new Set(),
+    });
+
+    expect(merged[0]?.attachments).toEqual(attachments);
+  });
+
+  it('takes the attachments the server carries over the phone copy', () => {
+    const local = [
+      row('q1', 'user', '2026-11-11T09:00:00.000Z', {
+        attachments: [{ url: '/api/files/old', mimeType: 'image/png', fileName: 'o.png' }],
+      }),
+    ];
+    const served = [
+      { url: '/api/files/a1', mimeType: 'image/jpeg', fileName: 'a.jpg', assetId: 'a1' },
+    ];
+    const merged = reconcileLoadedCloudMessages({
+      serverMessages: [row('q1', 'user', '2026-11-11T09:00:00.000Z', { attachments: served })],
+      requestStartMessages: local,
+      currentMessages: local,
+      dirtyMessageIds: new Set(),
+    });
+
+    expect(merged[0]?.attachments).toEqual(served);
+  });
+
+  it('keeps the request the phone answered when the reload brings the answer back', () => {
+    const answeredToolInput = {
+      runId: 'run_1',
+      requestedAt: '2026-11-11T09:00:02.000Z',
+      toolCalls: [
+        {
+          toolCallId: 'call_1',
+          name: 'create_issue',
+          connectorId: 'github',
+          round: 0,
+          inputRequests: { repo: { type: 'string' } },
+        },
+      ],
+    };
+    const local = [
+      row('a1', 'assistant', '2026-11-11T09:00:05.000Z', {
+        answeredToolInput,
+        metadata: { toolInputOutcome: 'sent' },
+      }),
+    ];
+    const merged = reconcileLoadedCloudMessages({
+      serverMessages: [
+        row('a1', 'assistant', '2026-11-11T09:00:05.000Z', {
+          metadata: { toolInputOutcome: 'sent' },
+        }),
+      ],
+      requestStartMessages: local,
+      currentMessages: local,
+      dirtyMessageIds: new Set(),
+    });
+
+    expect(merged[0]?.answeredToolInput).toEqual(answeredToolInput);
+    expect(merged[0]?.pendingToolInput).toBeUndefined();
+  });
+
+  it('shows the form again when the server still waits on the request', () => {
+    const request = {
+      runId: 'run_1',
+      requestedAt: '2026-11-11T09:00:02.000Z',
+      toolCalls: [],
+    };
+    const local = [
+      row('a1', 'assistant', '2026-11-11T09:00:05.000Z', { answeredToolInput: request }),
+    ];
+    const merged = reconcileLoadedCloudMessages({
+      serverMessages: [
+        row('a1', 'assistant', '2026-11-11T09:00:05.000Z', { pendingToolInput: request }),
+      ],
+      requestStartMessages: local,
+      currentMessages: local,
+      dirtyMessageIds: new Set(),
+    });
+
+    expect(merged[0]?.pendingToolInput).toEqual(request);
+    expect(merged[0]).not.toHaveProperty('answeredToolInput');
+  });
 });

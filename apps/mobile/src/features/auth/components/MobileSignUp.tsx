@@ -1,7 +1,7 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
-import { useSignUp } from '@clerk/expo';
+import { useClerk, useSignUp } from '@clerk/expo';
 import { useSignInWithApple } from '@clerk/expo/apple';
 import { useSSO } from '@clerk/expo/experimental';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -19,8 +19,7 @@ import {
 } from '@agiworkforce/compliance';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import { API_URL } from '@/lib/constants';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { authErrorMessage, isNativeAppleCancellation } from './authErrorMessage';
@@ -28,7 +27,13 @@ import {
   POST_AUTH_INTENT_PARAM,
   type PostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
+import {
+  appleFlowWithoutSession,
+  buildIncludesSignInWithApple,
+  loginProvidersToRender,
+} from '@/src/features/auth/services/loginProviders';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { useAuthEmailFieldReveal } from './useAuthEmailFieldReveal';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -42,16 +47,19 @@ export function MobileSignUp({
   postAuthIntent?: PostAuthIntent | null;
 }) {
   const { colors, isDark } = useTheme();
+  const clerk = useClerk();
   const { signUp, fetchStatus } = useSignUp();
   const signUpRef = useRef(signUp);
   signUpRef.current = signUp;
   const { startSSOFlow } = useSSO();
   const { startAppleAuthenticationFlow } = useSignInWithApple();
-  const providers = resolveAuthProviders(process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS).filter(
-    (provider) => provider.id !== 'apple' || Platform.OS === 'ios',
-  );
-  const appleConfigured = providers.some((provider) => provider.id === 'apple');
+  const appleSignInBuilt = Platform.OS === 'ios' && buildIncludesSignInWithApple();
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const providers = loginProvidersToRender(
+    resolveAuthProviders(process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS),
+    Platform.OS,
+    appleSignInBuilt && appleAvailable,
+  );
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
@@ -64,12 +72,10 @@ export function MobileSignUp({
   const [socialRecoveryAvailable, setSocialRecoveryAvailable] = useState(false);
   const busy = fetchStatus === 'fetching' || pendingProvider !== null || working;
   const verifying = verificationEmail !== null;
-  const hasVisibleProvider = providers.some(
-    (provider) => provider.id !== 'apple' || appleAvailable,
-  );
+  const hasVisibleProvider = providers.length > 0;
 
   useEffect(() => {
-    if (!appleConfigured) return;
+    if (!appleSignInBuilt) return;
     let active = true;
     void AppleAuthentication.isAvailableAsync()
       .then((available) => {
@@ -81,7 +87,7 @@ export function MobileSignUp({
     return () => {
       active = false;
     };
-  }, [appleConfigured]);
+  }, [appleSignInBuilt]);
 
   const runRequest = async (request: () => Promise<void>) => {
     if (requestInFlight.current || busy) return;
@@ -224,6 +230,7 @@ export function MobileSignUp({
       setError(null);
       setSocialRecoveryAvailable(false);
       try {
+        const before = { signIn: clerk.client?.signIn?.id, signUp: clerk.client?.signUp?.id };
         const result = await startAppleAuthenticationFlow();
         if (result.createdSessionId && result.setActive) {
           await result.setActive({
@@ -232,7 +239,11 @@ export function MobileSignUp({
               if (session?.currentTask) onNativeFallback();
             },
           });
+          return;
         }
+        const outcome = appleFlowWithoutSession(result, before);
+        if (outcome === 'not_loaded') setError('Sign-in is still loading. Please try again.');
+        else if (outcome === 'incomplete') onNativeFallback();
       } catch (cause) {
         if (isNativeAppleCancellation(cause)) return;
         setError(authErrorMessage(cause, 'sign-up'));
@@ -261,6 +272,8 @@ export function MobileSignUp({
     });
   };
 
+  const emailReveal = useAuthEmailFieldReveal();
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -268,6 +281,7 @@ export function MobileSignUp({
       testID="mobile-custom-sign-up"
     >
       <ScrollView
+        ref={emailReveal.scrollRef}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           flexGrow: 1,
@@ -276,6 +290,7 @@ export function MobileSignUp({
           paddingTop: 42,
           paddingBottom: 32,
         }}
+        {...emailReveal.scrollProps}
       >
         <View style={{ width: '100%', maxWidth: 340, alignSelf: 'center' }}>
           <Text
@@ -401,26 +416,24 @@ export function MobileSignUp({
               <View style={{ gap: 12 }}>
                 {providers.map((provider) =>
                   provider.id === 'apple' ? (
-                    appleAvailable ? (
-                      <View
-                        key={provider.id}
-                        testID="mobile-sign-up-apple"
-                        pointerEvents={busy ? 'none' : 'auto'}
-                        style={{ opacity: busy ? 0.5 : 1 }}
-                      >
-                        <AppleAuthentication.AppleAuthenticationButton
-                          buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                          buttonStyle={
-                            isDark
-                              ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                              : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                          }
-                          cornerRadius={26}
-                          style={{ height: 52, width: '100%' }}
-                          onPress={() => void startApple()}
-                        />
-                      </View>
-                    ) : null
+                    <View
+                      key={provider.id}
+                      testID="mobile-sign-up-apple"
+                      pointerEvents={busy ? 'none' : 'auto'}
+                      style={{ opacity: busy ? 0.5 : 1 }}
+                    >
+                      <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                        buttonStyle={
+                          isDark
+                            ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                            : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                        }
+                        cornerRadius={26}
+                        style={{ height: 52, width: '100%' }}
+                        onPress={() => void startApple()}
+                      />
+                    </View>
                   ) : (
                     <Pressable
                       key={provider.id}
@@ -475,74 +488,77 @@ export function MobileSignUp({
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
                 </View>
               ) : null}
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: typeScale.subhead,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  marginBottom: 10,
-                }}
-              >
-                Email address
-              </Text>
-              <TextInput
-                testID="mobile-sign-up-email"
-                accessibilityLabel="Email address"
-                value={email}
-                onChangeText={(value) => {
-                  setEmail(value);
-                  setAccountExists(false);
-                  setError(null);
-                }}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={() => void startEmail()}
-                style={{
-                  minHeight: 52,
-                  borderRadius: 26,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surfaceElevated,
-                  fontSize: typeScale.callout,
-                  textAlign: 'center',
-                  paddingHorizontal: 20,
-                }}
-              />
-              <Pressable
-                testID="mobile-sign-up-continue"
-                accessibilityRole="button"
-                disabled={busy || !email.trim()}
-                onPress={() => void startEmail()}
-                style={{
-                  minHeight: 52,
-                  borderRadius: 26,
-                  backgroundColor: colors.teal,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginTop: 28,
-                  opacity: busy || !email.trim() ? 0.5 : 1,
-                }}
-              >
-                {busy ? (
-                  <LoadingIndicator />
-                ) : (
-                  <Text
-                    style={{
-                      color: colors.accentText,
-                      fontSize: typeScale.callout,
-                      fontWeight: '600',
-                    }}
-                  >
-                    Continue
-                  </Text>
-                )}
-              </Pressable>
+              <View {...emailReveal.blockProps}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                    textAlign: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  Email address
+                </Text>
+                <TextInput
+                  {...emailReveal.inputProps}
+                  testID="mobile-sign-up-email"
+                  accessibilityLabel="Email address"
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    setAccountExists(false);
+                    setError(null);
+                  }}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={() => void startEmail()}
+                  style={{
+                    minHeight: 52,
+                    borderRadius: 26,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceElevated,
+                    fontSize: typeScale.callout,
+                    textAlign: 'center',
+                    paddingHorizontal: 20,
+                  }}
+                />
+                <Pressable
+                  testID="mobile-sign-up-continue"
+                  accessibilityRole="button"
+                  disabled={busy || !email.trim()}
+                  onPress={() => void startEmail()}
+                  style={{
+                    minHeight: 52,
+                    borderRadius: 26,
+                    backgroundColor: colors.teal,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 28,
+                    opacity: busy || !email.trim() ? 0.5 : 1,
+                  }}
+                >
+                  {busy ? (
+                    <LoadingIndicator />
+                  ) : (
+                    <Text
+                      style={{
+                        color: colors.accentText,
+                        fontSize: typeScale.callout,
+                        fontWeight: '600',
+                      }}
+                    >
+                      Continue
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
             </>
           )}
           {error ? (
@@ -631,7 +647,7 @@ export function MobileSignUp({
                 By signing up, you agree to the{' '}
                 <Text
                   accessibilityRole="link"
-                  onPress={() => void openExternalUrl(new URL('/terms', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/terms')}
                   style={{
                     color: colors.textSecondary,
                     fontSize: typeScale.footnote,
@@ -644,7 +660,7 @@ export function MobileSignUp({
                 and acknowledge the{' '}
                 <Text
                   accessibilityRole="link"
-                  onPress={() => void openExternalUrl(new URL('/privacy', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/privacy')}
                   style={{
                     color: colors.textSecondary,
                     fontSize: typeScale.footnote,
@@ -672,7 +688,7 @@ export function MobileSignUp({
                 </Text>
                 <Pressable
                   accessibilityRole="link"
-                  onPress={() => void openExternalUrl(new URL('/data-use', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/data-use')}
                   style={{ minHeight: 44, justifyContent: 'center' }}
                 >
                   <Text

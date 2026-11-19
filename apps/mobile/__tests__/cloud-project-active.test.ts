@@ -85,4 +85,22 @@ describe('cloud project active selection', () => {
     s.upsertCloudProject(project('p2', { deletedAt: '2026-06-22T04:00:00.000Z' }));
     expect(useCloudProjectStore.getState().activeProjectId).toBe('p1');
   });
+
+  it('never carries a new chat project scope across launches', () => {
+    const s = useCloudProjectStore.getState();
+    s.upsertCloudProject(project('p1'));
+    s.setActiveCloudProject('p1');
+    const options = useCloudProjectStore.persist.getOptions();
+
+    const saved = options.partialize?.(useCloudProjectStore.getState()) as Record<string, unknown>;
+    expect(saved).not.toHaveProperty('activeProjectId');
+    expect(saved.projects).toEqual([project('p1')]);
+
+    const restored = options.merge?.(
+      { projects: [project('p2')], activeProjectId: 'p2' },
+      { ...useCloudProjectStore.getState(), activeProjectId: null },
+    );
+    expect(restored?.activeProjectId).toBeNull();
+    expect(restored?.projects).toEqual([project('p2')]);
+  });
 });

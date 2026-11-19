@@ -4,7 +4,7 @@ title: Providers and models
 path: /providers
 category: providers
 tags: providers, models, switch model, model picker, anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, ollama, lm studio, routing
-updated: 2026-11-10
+updated: 2026-11-16
 description: How to choose a product surface, read the catalog counts, change the model route and use automatic routing.
 scope: public
 ---
@@ -28,8 +28,13 @@ custom endpoint configuration, see
 The provider-key catalog contains {{MARKETING.models.display}} model entries
 under {{MARKETING.providers.display}} provider integrations. These are catalog
 counts rather than a list of models offered to every account. Consult your
-surface's model picker and [plan](https://agiworkforce.com/pricing) for your
-selection.
+surface's model picker for your selection.
+
+{{#purchase}}
+
+Your [plan](https://agiworkforce.com/pricing) also shapes that selection.
+
+{{/purchase}}
 
 ## Changing the model route
 

@@ -5,6 +5,8 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
+
 jest.mock('@/stores/connectionStore', () => ({
   useConnectionStore: (selector: (state: { status: string }) => unknown) =>
     selector({ status: 'disconnected' }),

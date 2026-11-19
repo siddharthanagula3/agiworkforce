@@ -1,4 +1,4 @@
-import { artifactReplyFormat } from '../artifact-edit-request';
+import { artifactReplyFormat } from '@agiworkforce/unified-chat/artifact-edit-request';
 import type { ArtifactCommentAnchor, ArtifactCommentThread } from './artifact-comments-client';
 
 export function describeAnchor(anchor: ArtifactCommentAnchor): string {

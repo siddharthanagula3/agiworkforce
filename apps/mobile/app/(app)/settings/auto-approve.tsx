@@ -38,6 +38,8 @@ export default function AutoApproveScreen() {
   const { policy, autonomyForbidden, status, error, ready, canRetry, select, retry } =
     useToolApprovalPolicySync();
   const selectedLabel = toolApprovalPolicyOption(policy).label;
+  const safestLabel = toolApprovalPolicyOption(RECOMMENDED_POLICY).label;
+  const departsFromSafest = ready && policy !== RECOMMENDED_POLICY;
 
   return (
     <SettingsScreenShell
@@ -79,8 +81,16 @@ export default function AutoApproveScreen() {
         style={{
           borderRadius: 16,
           borderWidth: 1,
-          borderColor: error ? colors.dangerBorder : colors.warningBorder,
-          backgroundColor: error ? colors.dangerSurface : colors.warningSurface,
+          borderColor: error
+            ? colors.dangerBorder
+            : departsFromSafest
+              ? colors.warningBorder
+              : colors.neutralBorder,
+          backgroundColor: error
+            ? colors.dangerSurface
+            : departsFromSafest
+              ? colors.warningSurface
+              : colors.neutralSurface,
           padding: 14,
           marginBottom: 18,
         }}
@@ -100,7 +110,9 @@ export default function AutoApproveScreen() {
             ? error
             : !ready
               ? 'Loading account approval default…'
-              : `Current setting: ${selectedLabel}.`}
+              : departsFromSafest
+                ? `${safestLabel} is the safest setting. Your account is set to ${selectedLabel}.`
+                : `${safestLabel} is the safest setting, and it is on.`}
         </Text>
       </View>
 
@@ -181,7 +193,7 @@ function ApprovalChoiceRow({
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Text
-            numberOfLines={1}
+            numberOfLines={2}
             style={{
               color: colors.textPrimary,
               fontSize: typeScale.body,
@@ -216,7 +228,6 @@ function ApprovalChoiceRow({
           ) : null}
         </View>
         <Text
-          numberOfLines={3}
           style={{
             color: colors.textMuted,
             fontSize: typeScale.footnote,

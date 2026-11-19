@@ -450,6 +450,8 @@
     "videoModeAttachments_other": "動画生成はプロンプトのみを使用します。添付されたファイルは動画モデルには送信されません。このファイルをチャットモデルに送信する場合は、先に動画モードを終了してください。",
     "viewSources_one": "{{count}} 件のソースを表示",
     "viewSources_other": "{{count}} 件のソースを表示",
+    "viewSourcesSoFar_one": "これまでの {{count}} 件のソースを表示",
+    "viewSourcesSoFar_other": "これまでの {{count}} 件のソースを表示",
     "folderFilesLeftOut_one": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
     "folderFilesLeftOut_other": "{{folder}} の {{count}} 件のファイルは添付されませんでした。ローカルフォルダーから添付してください。",
     "savedMemoriesUsed_one": "保存されたメモリを {{count}} 件使用",

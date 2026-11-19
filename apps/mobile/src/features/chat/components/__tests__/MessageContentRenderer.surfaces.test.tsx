@@ -1,14 +1,16 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Alert } from 'react-native';
+import { Alert, Dimensions } from 'react-native';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { renderMarkdownContent } from '../MessageContentRenderer';
 import {
   MIXED_ASSISTANT_REPLY,
   MIXED_REPLY_THROUGH_EMAIL,
+  MODES_NOTE,
 } from '@agiworkforce/unified-chat/assistant-fence';
 
 jest.mock('@/lib/safeOpenURL', () => ({
+  ...jest.requireActual('@/lib/safeOpenURL'),
   openUntrustedUrlInAppBrowser: jest.fn(async () => true),
 }));
 
@@ -145,7 +147,7 @@ describe('mobile citation and gallery fences keep their resources reachable', ()
 
     fireEvent.press(screen.getByRole('link', { name: 'mailto:team@example.com' }));
 
-    expect(alertSpy).toHaveBeenCalledWith('Open in Mail?', 'mailto:team@example.com', [
+    expect(alertSpy).toHaveBeenCalledWith('Open in Mail?', 'To: team@example.com', [
       expect.objectContaining({ text: 'Cancel' }),
       expect.objectContaining({ text: 'Open' }),
     ]);
@@ -177,5 +179,88 @@ describe('mobile citation and gallery fences keep their resources reachable', ()
 
     expect(screen.queryByRole('link')).toBeNull();
     expect(openUntrustedUrlInAppBrowser).not.toHaveBeenCalled();
+  });
+});
+
+describe('answer surface fields from the shared classifier', () => {
+  it('shows a card grid title as a heading and labels the grid with it', () => {
+    renderReply(
+      [
+        '```cards',
+        'title: Launch options',
+        'columns: 1',
+        'Fast | Ship today',
+        'Safe | Ship Friday',
+        '```',
+      ].join('\n'),
+    );
+
+    expect(screen.getByRole('header', { name: 'Launch options' })).toBeTruthy();
+    expect(screen.getByLabelText('Launch options').props.testID).toBe('answer-surface-cards');
+    expect(screen.getByText('Ship Friday')).toBeTruthy();
+    expect(screen.queryByText('title: Launch options')).toBeNull();
+  });
+
+  it('lays card tiles out by the columns the fence asks for and the window allows', () => {
+    const { width } = Dimensions.get('window');
+    expect(width).toBeGreaterThanOrEqual(600);
+    expect(width).toBeLessThan(900);
+    const grid = (columns: number) =>
+      ['```cards', `columns: ${columns}`, 'Fast | Ship today', 'Safe | Ship Friday', '```'].join(
+        '\n',
+      );
+
+    const single = renderReply(grid(1));
+    expect(joinedText(single)).toContain('"width":"100%"');
+    expect(joinedText(single)).not.toContain('"width":"48%"');
+    single.unmount();
+
+    const triple = renderReply(grid(3));
+    expect(joinedText(triple)).toContain('"width":"48%"');
+    expect(joinedText(triple)).not.toContain('"width":"31%"');
+    triple.unmount();
+  });
+
+  it('adds the modes note under a modes fence', () => {
+    renderReply(
+      ['```modes', 'Focus | Fewer panels', 'Review | Every panel open', '```'].join('\n'),
+    );
+
+    expect(screen.getByLabelText('Display modes')).toBeTruthy();
+    expect(screen.getByText(MODES_NOTE)).toBeTruthy();
+  });
+
+  it('shows the date of a dated timeline step', () => {
+    renderReply(
+      [
+        '```timeline',
+        'Design | Mar 4 | Sketch the screens | complete',
+        'Build | Write the code | todo',
+        '```',
+      ].join('\n'),
+    );
+
+    expect(screen.getByText('Mar 4')).toBeTruthy();
+    expect(screen.getByText('Sketch the screens')).toBeTruthy();
+    expect(screen.getByText('Write the code')).toBeTruthy();
+  });
+
+  it('keeps follow-up rows untappable while the answer is still being written', () => {
+    const onFollowUp = jest.fn();
+    const fence = ['```followups', 'Compare prices', 'Show a map', '```'].join('\n');
+    const view = render(
+      <>{renderMarkdownContent(fence, undefined, { onFollowUp, streaming: true })}</>,
+    );
+
+    const row = screen.getByRole('button', { name: 'Compare prices' });
+    expect(row.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
+    fireEvent.press(row);
+    expect(onFollowUp).not.toHaveBeenCalled();
+
+    view.rerender(<>{renderMarkdownContent(fence, undefined, { onFollowUp, streaming: false })}</>);
+    const settled = screen.getByRole('button', { name: 'Compare prices' });
+    expect(settled.props.accessibilityState).toEqual(expect.objectContaining({ disabled: false }));
+    fireEvent.press(settled);
+    expect(onFollowUp).toHaveBeenCalledWith('Compare prices');
   });
 });

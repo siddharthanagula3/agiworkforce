@@ -3,7 +3,7 @@
     "schema": "app-store-connect-2026",
     "bundle_id": "com.agiworkforce.app",
     "version": "0.0.1",
-    "last_updated": "2026-11-10",
+    "last_updated": "2026-11-17",
     "char_limits": {
       "name": 30,
       "subtitle": 30,
@@ -15,43 +15,139 @@
     "char_counts": {
       "name": 10,
       "subtitle": 22,
-      "promotional_text": 116,
-      "keywords": 58,
-      "description": 832,
+      "promotional_text": 117,
+      "keywords": 55,
+      "description": 838,
       "whats_new": 359
     }
   },
   "app_name": "AGI Mobile",
   "subtitle": "On-device AI assistant",
-  "promotional_text": "Chat with AI on your phone, even offline. Local chats stay on your device; sign in for AGI Cloud when you want more.",
-  "keywords": "ai,chat,assistant,local,offline,privacy,llm,dpdp,on-device",
-  "description": "AGI is an AI assistant that runs on your phone first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• Supported devices use a built-in model; others download one once\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Projects, memory and skills on the Free plan\n• The app is free and has no in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Choose which models may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
+  "promotional_text": "Chat with AI on your device, even offline. Local chats stay on your device; sign in for AGI Cloud when you want more.",
+  "keywords": "chat,assistant,local,offline,privacy,llm,dpdp,on-device",
+  "description": "AGI is an AI assistant that runs on your device first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• Supported devices use a built-in model; others download one once\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Projects, memory and skills on the Free plan\n• The app is free and has no in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Limit which AI providers may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
   "whats_new": "AGI 0.0.1, first release.\n\n• On-device AI chat works offline, no account needed\n• Supported devices use a built-in model; others download a local model once\n• Sign in to AGI Cloud for cloud chat, web search, projects, memory and skills on the Free plan\n• No in-app purchases\n• On-device voice transcription\n\nEmail support@agiworkforce.com, we read everything.",
   "categories": {
     "primary": "Productivity",
     "secondary": "Utilities"
   },
   "age_rating": {
-    "rating": "13+",
+    "rating": "16+",
+    "calculated_rating": "16+",
     "questionnaire": {
-      "cartoon_or_fantasy_violence": "Infrequent / mild",
-      "realistic_violence": "Infrequent / mild",
-      "profanity_or_crude_humor": "Infrequent / mild",
-      "mature_suggestive_themes": "Infrequent / mild",
-      "sexual_content_or_nudity": "Infrequent / mild",
-      "horror_fear_themes": "Infrequent / mild",
-      "medical_treatment_information": "Infrequent / mild",
-      "alcohol_tobacco_drugs": "Infrequent / mild",
-      "gambling": "None",
-      "contests": "None",
-      "unrestricted_web_access": "No",
-      "user_generated_content": "Yes: projects and agents shared by people you work with; Report and Hide are in the app",
-      "messaging_and_chat_with_other_users": "No",
-      "social_media": "No",
-      "ai_assistant_or_chatbot": "Yes",
-      "parental_controls": "No"
+      "In-App Controls": {
+        "Parental Controls": {
+          "answer": "Yes",
+          "reason": "Settings > Parental Controls shows minor-safe mode, a content filter on every outgoing prompt that an age under the device's threshold turns on and nothing in the app turns off (src/features/settings/parental-controls/index.tsx, lib/contentFilter.ts).",
+          "owner_decision": "Yes or No is the owner's call. Apple defines Parental Controls as settings or tools that let parents or guardians monitor, manage or restrict a child's access. The screen only shows the status that follows from the stored device age, says parent accounts can't be linked, and its one control is Review Device Age Settings; Yes rests on an adult being able to set a minor age that turns the filter on."
+        },
+        "Age Assurance": {
+          "answer": "Yes",
+          "reason": "Before AGI Cloud sign-in the app asks iOS for a declared age range through the Declared Age Range API (expo-age-range) on iOS 26 and later where iOS offers age features, and otherwise asks for a typed age (app/(public)/age-gate.tsx)."
+        }
+      },
+      "Capabilities": {
+        "Unrestricted Web Access": {
+          "answer": "Yes",
+          "reason": "A link in an answer opens any http or https page in the in-app Safari sheet (openUntrustedUrlInAppBrowser in lib/safeOpenURL.ts), and from there the person can follow links anywhere; Apple's definition includes embedded browser functionality."
+        },
+        "User-Generated Content": {
+          "answer": "Yes",
+          "reason": "Projects and agents shared by people the user works with, and artifacts a user publishes; Report and Hide are in the app."
+        },
+        "Social Media": {
+          "answer": "No",
+          "reason": "No feed or other way to spread content to many users."
+        },
+        "Social Media Disabled for Users Under 13": {
+          "answer": "No",
+          "reason": "The app has no social media to disable."
+        },
+        "Messaging and Chat": {
+          "answer": "No",
+          "reason": "People cannot message one another in the app; chat is with the AI only."
+        },
+        "Advertising": {
+          "answer": "No",
+          "reason": "No ads and no ad SDK (apps/mobile/package.json)."
+        }
+      },
+      "Mature Themes": {
+        "Profanity or Crude Humor": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        },
+        "Horror/Fear Themes": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        },
+        "Alcohol, Tobacco, or Drug Use or References": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        }
+      },
+      "Medical or Wellness": {
+        "Medical or Treatment Information": {
+          "answer": "Infrequent",
+          "reason": "The assistant answers medical questions when asked; it is not a medical product."
+        },
+        "Health or Wellness Topics": {
+          "answer": "Yes",
+          "reason": "The assistant discusses health and wellness when asked."
+        }
+      },
+      "Sexuality or Nudity": {
+        "Mature or Suggestive Themes": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        },
+        "Sexual Content or Nudity": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        },
+        "Graphic Sexual Content and Nudity": {
+          "answer": "None",
+          "reason": "The providers' filters refuse it, minor-safe mode blocks such prompts, and any other answer makes the app Unrated, which cannot be published."
+        }
+      },
+      "Violence": {
+        "Cartoon or Fantasy Violence": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        },
+        "Realistic Violence": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        },
+        "Prolonged Graphic or Sadistic Realistic Violence": {
+          "answer": "None",
+          "reason": "The providers' filters refuse it, and any other answer makes the app Unrated, which cannot be published."
+        },
+        "Guns or Other Weapons": {
+          "answer": "Infrequent",
+          "reason": "AI output is not fixed, so the level counts what an answer or a generated image can contain within the providers' filters, not the usual reply."
+        }
+      },
+      "Chance-Based Activities": {
+        "Gambling": {
+          "answer": "No",
+          "reason": "No real-money gambling."
+        },
+        "Simulated Gambling": {
+          "answer": "None",
+          "reason": "No simulated gambling."
+        },
+        "Contests": {
+          "answer": "None",
+          "reason": "No contests."
+        },
+        "Loot Boxes": {
+          "answer": "No",
+          "reason": "Nothing is sold and there are no loot boxes."
+        }
+      }
     },
-    "note": "Answers account for what an AI chatbot and image generator can produce (Apple age-rating notice, 2025: https://developer.apple.com/news/?id=ks775ehf), mirroring ChatGPT's App Store rating (13+, infrequent mature, violence and medical descriptors, checked 2026-10-19). If App Store Connect calculates below 13+, use Override to Higher Age Rating: 13+, because AGI Cloud accounts are 13 and over (ACCOUNT_MINIMUM_AGE, packages/contracts/types/src/account-eligibility.ts; 16 in EU zones and North Macedonia, 18 in India and Brazil via ageGate.ts). Unrestricted web access is No: links open in the system browser, the app has no address bar. Shared chat links are read on the web, not inside the app."
+    "note": "Questions, groups and levels are Apple's current form (https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions and https://developer.apple.com/help/app-store-connect/manage-app-information/set-an-app-age-rating, read 2026-11-15): content items take None, Infrequent or Frequent, and Gambling, Loot Boxes, Health or Wellness Topics, the in-app controls and the capabilities take Yes or No. The calculated rating is 16+, set by Unrestricted Web Access; without it the answers reach 13+. Apple: \"If your app has a EULA with minimum age requirements that exceed the rating that Apple calculated, you must override to a rating that adheres to the requirements\"; the Terms set the account minimum at 13 (ACCOUNT_MINIMUM_AGE, packages/contracts/types/src/account-eligibility.ts), below 16+, so no override is needed; the regional gates of 16 in EU zones and North Macedonia and 18 in India and Brazil (ageGate.ts) are stricter local thresholds, not the EULA minimum. How links open: the app has no address bar and no place to type a web address. Fixed agiworkforce.com pages (legal, help, account and sign-in recovery) open in an in-app Safari sheet, marked from=mobile (apps/mobile/src/platform/webContentPage.ts) so that, once the from=mobile change in apps/web/lib/embedded-page.ts is deployed, the site shows them without pricing or purchase routes; until then production pages opened this way still link to /pricing and /contact-sales; a link in an answer opens any web page in the same sheet (apps/mobile/lib/safeOpenURL.ts); the change-email page and a few hand-offs to other sites, such as connecting GitHub, open the system browser. Shared chat links are read on the web, not inside the app. Answering No to Unrestricted Web Access would need a build that opens answer links outside the app."
   },
   "privacy_nutrition_labels": {
     "data_not_collected": false,
@@ -68,21 +164,28 @@
         "data_types": ["Other User Content", "Photos or Videos"],
         "purpose": "App Functionality",
         "optional": true,
-        "collected_when": "Only in AGI Cloud: the messages the user sends and any photos or files attached to them are uploaded to AGI Cloud and forwarded to the model provider serving the request. Local Mode uploads nothing."
+        "collected_when": "In AGI Cloud: the messages the user sends, any photos or files attached to them, and the calendar events a chat reads when the user asks about their schedule and allows calendar access are uploaded to AGI Cloud and forwarded to the model provider serving the request. Local Mode chats are not uploaded. In Local Mode, only a content report the person chooses to send, which uploads the reported answer to AGI."
       },
       {
         "category": "User Content",
         "data_types": ["Audio Data"],
         "purpose": "App Functionality",
         "optional": true,
-        "collected_when": "Only during live voice mode in an AGI Cloud chat: the microphone is streamed to AGI Cloud for the session and the transcript is saved to that chat. Dictation and the turn-based voice companion transcribe on the device and upload no audio."
+        "collected_when": "Only during live voice mode in an AGI Cloud chat: AGI Cloud sets up the call, then the audio streams directly between the device and the voice provider, and the transcript is saved to that chat. Dictation and the turn-based voice companion transcribe on the device and upload no audio."
       },
       {
         "category": "Identifiers",
-        "data_types": ["User ID", "Device ID"],
+        "data_types": ["User ID"],
         "purpose": "App Functionality",
         "optional": true,
-        "collected_when": "Only after sign-in: the account identifier on every authenticated cloud request, and an app-generated device UUID registered with the push token so notifications reach the right install. No advertising identifier is collected."
+        "collected_when": "Only after sign-in: the account identifier on every authenticated cloud request."
+      },
+      {
+        "category": "Identifiers",
+        "data_types": ["Device ID"],
+        "purpose": "App Functionality, Analytics",
+        "optional": false,
+        "collected_when": "While signed in to AGI Cloud: an app-generated install ID with the device name and OS version, sent on every active session to list the device in the account and registered with the push token when notifications are allowed. The update check also sends Expo's per-install client ID on every launch, which Expo does not link to a person; one Device ID answer covers both, so it is answered linked. No advertising identifier is collected."
       },
       {
         "category": "Usage Data",
@@ -90,10 +193,39 @@
         "purpose": "Analytics",
         "optional": true,
         "collected_when": "Only in AGI Cloud and only after the user allows product analytics in Settings, Privacy (off by default; a workspace administrator can also turn it off): event names such as a stopped or regenerated response, recorded against the account. No message, file or file name is included. Local Mode sends none."
+      },
+      {
+        "category": "User Content",
+        "data_types": ["Customer Support"],
+        "purpose": "App Functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: the support tickets and replies (/api/support/tickets) and the in-app feedback (/api/mobile/feedback) the user writes are stored against the account. In Local Mode, feedback opens the device mail app instead."
+      },
+      {
+        "category": "Search History",
+        "data_types": ["Search History"],
+        "purpose": "App Functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: chat search queries are sent to AGI Cloud, recorded against the account, and sent to the embedding provider to rank results when the account has indexed content."
+      },
+      {
+        "category": "Diagnostics",
+        "data_types": ["Other Diagnostic Data"],
+        "purpose": "App Functionality",
+        "optional": true,
+        "collected_when": "Only in AGI Cloud: a support ticket attaches app version, platform, device class, locale, time zone and screen size unless the user turns off Attach diagnostics, which is on by default."
       }
     ],
-    "data_not_linked_to_you": [],
-    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends; product interaction events are added only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
+    "data_not_linked_to_you": [
+      {
+        "category": "Diagnostics",
+        "data_types": ["Crash Data"],
+        "purpose": "App Functionality",
+        "optional": false,
+        "collected_when": "On every launch, signed in or not: the update check sends Expo the last error that stopped the app from launching and the IDs of updates that failed to launch, with Expo's per-install client ID (expo-updates; https://docs.expo.dev/eas-update/store-privacy-declarations/). Remove this row only together with a build that turns update checks off."
+      }
+    ],
+    "note": "Local Mode uploads no chat content: the egress guard blocks AGI hosts in Local Mode, except a content report the person chooses to send and, for a signed-in account, the account and withdrawal controls, which send the account identifier and no chat content. In every mode the app asks Expo's update service for an update on each launch (Device ID, Crash Data). Signing in to AGI Cloud collects account email, optional name, account and device identifiers, the conversation content, attachments, calendar events and search queries the user sends, the support tickets, feedback and diagnostics the user sends, and product interaction events only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors; it is never used to track the user across other companies' apps or websites."
   },
   "urls": {
     "privacy_policy": "https://agiworkforce.com/privacy",
@@ -105,25 +237,26 @@
     "first_name": "Siddhartha",
     "last_name": "Nagula",
     "phone": "+1 682-458-5291",
-    "email": "siddharthanagula3@gmail.com"
+    "email": "review@agiworkforce.com",
+    "precondition": "Create or forward the review@agiworkforce.com mailbox before submitting, or App Review's mail to this address bounces."
   },
   "pricing": {
     "price_tier": "Free",
     "in_app_purchases": false,
-    "in_app_purchase_note": "Version 1 sells nothing. apps/mobile/src/features/billing/storePurchases.json sets \"nativePurchases\": false, and src/features/billing/nativePurchaseAvailability.ts exports it as NATIVE_PURCHASES_AVAILABLE, which every purchase path reads. With it false the app shows no purchase, upgrade, top-up, restore-purchases, compare-plans or contact-sales control and no price; useMobileIap.ts picks an inert implementation at build time, so the app never opens a StoreKit connection; mobileIapService.ts refuses catalog and verify calls and never reads the App Store storefront, so the app never calls /api/mobile/iap/*. The purchase client library expo-iap is still linked into the binary and its config plugin is still registered in app.config.js, but nothing calls it. On the server the /api/mobile/iap/* routes (owner mobile-iap-catalog.ts) stay off unless the deployment sets MOBILE_IAP_ENABLED. Do not attach in-app purchase products to this version in App Store Connect. Settings > Subscription opens a screen titled Plan: current plan, renewal or end date if any, a plain-text Billing line (\"Managed on the web\", \"By your organization\" or \"Managed where you subscribed\") for an account that already holds a paid plan, \"What your plan includes\", \"Usage\" and \"Help with your plan\", which opens in-app support. A feature outside the account's plan is described as not included in the plan, with no call to action. Paid plans exist for the web product; an account that already holds one gets that plan's access after signing in, and the app neither sells nor advertises them. Selling in the app needs nativePurchases set to true, a new store build and a new review.",
-    "guideline_3_1_1_residual_risk": "Version 1 has no in-app purchases (apps/mobile/src/features/billing/storePurchases.json, \"nativePurchases\": false) and no link to a page about purchasing, pricing, billing, invoices, sales or upgrades. The source still contains web billing and workspace administration links (View invoices, Workspace administration, Manage on web and Help with a purchase in cloud-billing/index.tsx, Contact Sales in PaywallBottomSheet.tsx, and the website workspace links in settings/workspace.tsx), but none renders in this build: Settings > Subscription returns the Plan screen before the purchase screen that holds most of them, the chat sheet draws no action while NATIVE_PURCHASES_AVAILABLE is false, and the rest require useWebBillingLinksAllowed to read a US App Store storefront, which this build never reads. An account that already holds a paid plan sees its Billing line as plain text with no link. The Stripe billing portal is unreachable while FEATURES.billing is false. The external links that remain are legal pages (Terms, Privacy, acceptable use, data use, security), support, the account page behind the Change your email alert, password recovery and the GitHub connect flow, listed in REVIEWER-NOTES-IOS.md; each passes through the HTTPS host allowlist in lib/safeOpenURL.ts. These links and App Review purchase policy need a current signed-build review before submission."
+    "in_app_purchase_note": "Version 1 sells nothing. apps/mobile/src/features/billing/storePurchases.json sets \"nativePurchases\": false, and src/features/billing/nativePurchaseAvailability.ts exports it as NATIVE_PURCHASES_AVAILABLE, which every purchase path reads. With it false the app shows no purchase, upgrade, top-up, restore-purchases, compare-plans or contact-sales control and no price; useMobileIap.ts picks an inert implementation at build time, so the app never opens a StoreKit connection; mobileIapService.ts refuses catalog and verify calls and never reads the App Store storefront, so the app never calls /api/mobile/iap/*. The purchase client library expo-iap is still linked into the binary and its config plugin is still registered in app.config.js, but nothing calls it. On the server the /api/mobile/iap/* routes (owner mobile-iap-catalog.ts) stay off unless the deployment sets MOBILE_IAP_ENABLED. Do not attach in-app purchase products to this version in App Store Connect. Settings > Subscription opens a screen titled Plan: current plan, renewal or end date if any, a plain-text Billing line (\"Managed on the web\", \"By your organization\", \"Included with your account\" or \"Managed where you subscribed\") for an account that already holds a paid plan, \"What your plan includes\", \"Usage\" and \"Help with your plan\", which opens in-app support. A feature outside the account's plan is described as not included in the plan, with no call to action. Paid plans exist for the web product, but nothing is sold on any platform before 1 January 2027: no plan or credit can be bought in the app, on the web or anywhere else, and the plans that exist were granted without a purchase. An account that holds one gets that plan's access after signing in, and the app neither sells nor advertises plans. The review account's plan was granted for review without a purchase, so its Plan screen shows \"Included with your account\"; the app has no purchase, upgrade or price. Selling in the app needs nativePurchases set to true, a new store build and a new review.",
+    "guideline_3_1_1_residual_risk": "Version 1 has no in-app purchases (apps/mobile/src/features/billing/storePurchases.json, \"nativePurchases\": false) and no link to a page about purchasing, pricing, billing, invoices, sales or upgrades. The source still contains web billing and workspace administration links (View invoices, Workspace administration, Manage on web and Help with a purchase in cloud-billing/index.tsx, Contact Sales in PaywallBottomSheet.tsx, and the website workspace links in settings/workspace.tsx), but none renders in this build: Settings > Subscription returns the Plan screen before the purchase screen that holds most of them, the chat sheet draws no action while NATIVE_PURCHASES_AVAILABLE is false, and the rest require useWebBillingLinksAllowed to read a US App Store storefront, which this build never reads. An account that already holds a paid plan sees its Billing line as plain text with no link. The Stripe billing portal is unreachable while FEATURES.billing is false. The agiworkforce.com pages the app opens carry from=mobile, and the website change that makes such pages leave out the site's pricing and contact-sales links (apps/web/lib/embedded-page.ts) is not deployed: on 2026-11-15 production Terms, Privacy, Help, Support and Subprocessors pages opened that way still linked to /pricing and /contact-sales, so the claim of no link to a pricing page holds only once that change is deployed. The external links that remain are legal pages (Terms, Privacy, acceptable use, data use, security), support, the account page behind the Change your email alert, password recovery and the GitHub connect flow, listed in REVIEWER-NOTES-IOS.md; each passes through the HTTPS host allowlist in lib/safeOpenURL.ts. These links and App Review purchase policy need a current signed-build review before submission."
   },
   "export_compliance": {
     "uses_encryption": true,
     "uses_non_exempt_encryption": false,
     "info_plist_key": "ITSAppUsesNonExemptEncryption=false, declared in ios.infoPlist in apps/mobile/app.config.js",
-    "basis": "All cryptography is Apple OS-provided: TLS via URLSession, Keychain via expo-secure-store, SecRandomCopyBytes via expo-crypto, and SQLCipher compiled with -DSQLCIPHER_CRYPTO_CC (ExpoSQLite.podspec) so its codec calls Apple CommonCrypto. No proprietary or bundled third-party cipher ships in apps/mobile. Flip to true and obtain an export-compliance code if that ever changes."
+    "basis": "The facts, for the owner and counsel to classify. Apple OS cryptography: TLS through URLSession, the Keychain through expo-secure-store, SecRandomCopyBytes through expo-crypto, and SQLCipher compiled with -DSQLCIPHER_CRYPTO_CC (node_modules/expo-sqlite/ios/ExpoSQLite.podspec) so its codec calls Apple CommonCrypto. Not from the OS: react-native-mmkv 3.3.3 compiles MMKV's own OpenSSL-derived AES (MMKV/Core/aes/openssl, AES-128 in CFB mode) into the app, and lib/mmkv.ts uses it with a key to encrypt the local chat store; react-native-webrtc 124.0.8 links the JitsiWebRTC framework, which contains BoringSSL and secures live voice media. Apple's documentation table (https://developer.apple.com/help/app-store-connect/reference/app-information/export-compliance-documentation-for-encryption, read 2026-11-15): encryption limited to the Apple operating system needs no documentation; an industry-standard algorithm not provided within the Apple operating system needs a French encryption declaration uploaded in App Store Connect, required only if the app is distributed on the App Store in France; proprietary algorithms need a CCATS as well. AES and the TLS and DTLS-SRTP in BoringSSL are industry-standard algorithms, not proprietary ones, and France is in the availability list. ITSAppUsesNonExemptEncryption stays false in app.config.js until the owner and counsel decide whether an exemption covers this use, whether to upload a French declaration, or whether to leave France out; that decision is open."
   },
   "availability": {
     "territories": "All App Store territories excluding: Mainland China, Russia, Iran, North Korea, Syria, Cuba, Crimea",
     "pre_order": false
   },
-  "copyright": "© 2026 AGI Automation LLC",
+  "copyright": "2026 AGI Automation LLC",
   "app_review_information": {
     "demo_account_required": true,
     "demo_account_username": null,

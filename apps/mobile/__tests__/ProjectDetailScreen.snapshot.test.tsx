@@ -43,6 +43,18 @@ jest.mock('@react-navigation/native', () => ({
   DrawerActions: { openDrawer: () => ({ type: 'OPEN_DRAWER' }) },
 }));
 
+let mockLayoutWidth: number | null = null;
+jest.mock('@/src/shared/hooks/useResponsiveLayout', () => {
+  const actual = jest.requireActual('@/src/shared/hooks/useResponsiveLayout');
+  return {
+    ...actual,
+    useResponsiveLayout: () =>
+      mockLayoutWidth === null
+        ? actual.useResponsiveLayout()
+        : actual.getResponsiveLayout(mockLayoutWidth),
+  };
+});
+
 jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
 }));
@@ -214,7 +226,10 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
     fireEvent.press(getByLabelText('New chat in this project'));
     expect(mockSetActiveLocal).toHaveBeenCalledWith('proj_snapshot');
     expect(mockSetActiveCloud).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/(tabs)/chat',
+      params: { from: 'project' },
+    });
   });
 
   it('requires an explicit switch before opening a Cloud project from Local mode', async () => {
@@ -235,7 +250,10 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
     fireEvent.press(getByLabelText('New chat in this project'));
     expect(mockSetActiveCloud).toHaveBeenCalledWith('proj_snapshot');
     expect(mockSetActiveLocal).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/(tabs)/chat',
+      params: { from: 'project' },
+    });
   });
 
   it('does not offer chat or source actions for an unavailable project', () => {
@@ -298,5 +316,24 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
     mockSearchParams = {};
     const { toJSON } = render(<ProjectDetailScreen />);
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  describe('beside the permanent sidebar', () => {
+    afterEach(() => {
+      mockLayoutWidth = null;
+    });
+
+    it.each([402, 820])('keeps the menu button at %ipt, where the drawer overlays', (width) => {
+      mockLayoutWidth = width;
+      const { getByRole } = render(<ProjectDetailScreen />);
+      expect(getByRole('button', { name: 'Open menu' })).toBeTruthy();
+    });
+
+    it.each([1032, 1376])('offers no menu button that would do nothing at %ipt', (width) => {
+      mockLayoutWidth = width;
+      const { getByRole, queryByRole } = render(<ProjectDetailScreen />);
+      expect(queryByRole('button', { name: 'Open menu' })).toBeNull();
+      expect(getByRole('button', { name: 'Go back' })).toBeTruthy();
+    });
   });
 });

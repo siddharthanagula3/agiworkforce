@@ -14,6 +14,11 @@ import {
   DeleteCustomConnectorResponseSchema,
   webDomainAllowed,
   normalizeWebDomain,
+  ConversationToolGrantSchema,
+  RevokeConversationToolGrantResponseSchema,
+  conversationToolGrantPath,
+  conversationToolGrantRevokeConfirmation,
+  conversationToolGrantsPath,
 } from '../connectors';
 
 describe('normalizeWebDomain', () => {
@@ -446,5 +451,52 @@ describe('webDomainAllowed', () => {
     expect(webDomainAllowed(rules, 'not a url')).toBe(false);
     expect(webDomainAllowed(blocked, 'not a url')).toBe(true);
     expect(webDomainAllowed(null, 'https://anything.org/')).toBe(true);
+  });
+});
+
+describe('conversation tool grants', () => {
+  const grant = {
+    id: '33333333-3333-4333-8333-333333333333',
+    connectorId: 'github',
+    toolName: 'create_issue',
+    riskTier: 'medium',
+    destructive: false,
+    grantedAt: '2026-11-15T08:00:00.000Z',
+  };
+
+  it('addresses the grants under the conversation', () => {
+    expect(conversationToolGrantsPath('chat 1')).toBe(
+      '/api/chat/conversations/chat%201/tool-grants',
+    );
+    expect(conversationToolGrantPath('chat-1', 'a/b')).toBe(
+      '/api/chat/conversations/chat-1/tool-grants/a%2Fb',
+    );
+  });
+
+  it('accepts a grant and refuses an unknown risk tier or a missing time', () => {
+    expect(ConversationToolGrantSchema.safeParse(grant).success).toBe(true);
+    expect(ConversationToolGrantSchema.safeParse({ ...grant, riskTier: 'unknown' }).success).toBe(
+      false,
+    );
+    expect(ConversationToolGrantSchema.safeParse({ ...grant, grantedAt: 'today' }).success).toBe(
+      false,
+    );
+  });
+
+  it('confirms only a removal of exactly one grant', () => {
+    expect(
+      RevokeConversationToolGrantResponseSchema.safeParse({ success: true, removed: 1 }).success,
+    ).toBe(true);
+    expect(
+      RevokeConversationToolGrantResponseSchema.safeParse({ success: true, removed: 0 }).success,
+    ).toBe(false);
+  });
+
+  it('names what changes before a grant is withdrawn', () => {
+    expect(conversationToolGrantRevokeConfirmation('Create issue')).toEqual({
+      title: 'Stop allowing Create issue?',
+      message: 'Create issue will ask for your approval again the next time this chat uses it.',
+      confirmLabel: 'Stop allowing',
+    });
   });
 });

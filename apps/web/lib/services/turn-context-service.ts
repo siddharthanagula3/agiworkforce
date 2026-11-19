@@ -25,7 +25,7 @@ import {
   instructionLayerForContextClass,
   type InstructionBlock,
 } from '@/lib/prompts/instruction-precedence';
-import type { PastChatCitation } from '@/lib/past-chat-citation';
+import type { PastChatCitation } from '@agiworkforce/types';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   DISABLED_MANAGED_MEMORY_POLICY,

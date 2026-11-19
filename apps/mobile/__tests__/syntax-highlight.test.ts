@@ -1,4 +1,6 @@
 import {
+  CODE_TAB_SIZE,
+  expandCodeTabs,
   tokenizeCode,
   syntaxTokenColor,
   MAX_HIGHLIGHT_LENGTH,
@@ -179,11 +181,145 @@ describe('tokenizeCode', () => {
   });
 });
 
+describe('tokenizeCode language coverage', () => {
+  it('colours keywords, strings and comments in ruby, yaml and cpp', () => {
+    const ruby = tokenizeCode(`# greet\ndef hi\n  puts "hello"\nend`, 'ruby');
+    expect(tokensOfType(ruby, 'comment')).toEqual(['# greet']);
+    expect(tokensOfType(ruby, 'keyword')).toEqual(['def', 'puts', 'end']);
+    expect(tokensOfType(ruby, 'string')).toEqual(['"hello"']);
+
+    const yaml = tokenizeCode(`# app\nname: "web"\nitems:\n  - id: 2\ndebug: true`, 'yaml');
+    expect(tokensOfType(yaml, 'comment')).toEqual(['# app']);
+    expect(tokensOfType(yaml, 'keyword')).toEqual(['name', 'items', 'id', 'debug', 'true']);
+    expect(tokensOfType(yaml, 'string')).toEqual(['"web"']);
+    expect(tokensOfType(yaml, 'number')).toEqual(['2']);
+
+    const cpp = tokenizeCode(
+      `#include <vector>\n// entry\nint main() { return std::printf("%d", 0); }`,
+      'cpp',
+    );
+    expect(tokensOfType(cpp, 'comment')).toEqual(['// entry']);
+    expect(tokensOfType(cpp, 'keyword')).toEqual(['include', 'int', 'return']);
+    expect(tokensOfType(cpp, 'string')).toEqual(['"%d"']);
+  });
+
+  it('colours html tag names apart from attribute values', () => {
+    const tokens = tokenizeCode(`<!-- nav --><a href="/home">Home</a>`, 'html');
+
+    expect(tokensOfType(tokens, 'comment')).toEqual(['<!-- nav -->']);
+    expect(tokensOfType(tokens, 'keyword')).toEqual(['a', 'a']);
+    expect(tokensOfType(tokens, 'string')).toEqual(['"/home"']);
+    expect(tokens.find((token) => token.text.includes('Home</'))?.type).toBe('plain');
+  });
+
+  it('colours function names and type names apart from keywords', () => {
+    const ts = tokenizeCode(
+      'interface Point { x: number }\nfunction area(p: Point): number {\n  return Math.abs(p.x);\n}',
+      'ts',
+    );
+    expect(tokensOfType(ts, 'function')).toEqual(['area', 'abs']);
+    expect(tokensOfType(ts, 'type')).toEqual(['Point', 'Point', 'Math']);
+    expect(tokensOfType(ts, 'keyword')).toEqual(['interface', 'function', 'return']);
+
+    const python = tokenizeCode(
+      'class Cart:\n    def total(self):\n        return sum(self.items)',
+      'py',
+    );
+    expect(tokensOfType(python, 'function')).toEqual(['total', 'sum']);
+    expect(tokensOfType(python, 'type')).toEqual(['Cart']);
+
+    const constants = tokenizeCode('const MAX_SIZE = 10;\nif (n) go();', 'js');
+    expect(tokensOfType(constants, 'type')).toEqual([]);
+    expect(tokensOfType(constants, 'function')).toEqual(['go']);
+    expect(tokensOfType(constants, 'keyword')).toEqual(['const', 'if']);
+  });
+
+  it('keeps identifiers plain in data and markup languages', () => {
+    const json = tokenizeCode('{"Name": "Ada", "call": "go()"}', 'json');
+    const yaml = tokenizeCode('Title: Report(1)', 'yaml');
+
+    expect(json.some((token) => token.type === 'function' || token.type === 'type')).toBe(false);
+    expect(yaml.some((token) => token.type === 'function' || token.type === 'type')).toBe(false);
+  });
+
+  it('colours jsx tag names without touching comparisons or generics', () => {
+    const tokens = tokenizeCode(
+      'function App() {\n  return (\n    <View style={s}>\n      <Text>Hi</Text>\n    </View>\n  );\n}',
+      'tsx',
+    );
+    expect(tokensOfType(tokens, 'keyword')).toEqual([
+      'function',
+      'return',
+      'View',
+      'Text',
+      'Text',
+      'View',
+    ]);
+    expect(tokensOfType(tokens, 'function')).toEqual(['App']);
+
+    const logic = tokenizeCode('const ok = a < b && i<n;\nconst list: Array<Item> = [];', 'ts');
+    expect(tokensOfType(logic, 'keyword')).toEqual(['const', 'const']);
+    expect(tokensOfType(logic, 'type')).toEqual(['Array', 'Item']);
+  });
+
+  it('reads the language aliases web uses', () => {
+    expect(tokensOfType(tokenizeCode('debug: true', 'yml'), 'keyword')).toEqual(['debug', 'true']);
+    expect(tokensOfType(tokenizeCode('export const a = 1;', 'mjs'), 'keyword')).toEqual([
+      'export',
+      'const',
+    ]);
+    expect(tokensOfType(tokenizeCode('def f(): pass', 'python3'), 'keyword')).toEqual([
+      'def',
+      'pass',
+    ]);
+    expect(tokensOfType(tokenizeCode('FROM node:22\nRUN ls', 'Dockerfile'), 'keyword')).toEqual([
+      'FROM',
+      'RUN',
+    ]);
+  });
+
+  it('keys toml and ini by the name before the equals sign', () => {
+    expect(tokensOfType(tokenizeCode('[tool]\nname = "x" # n', 'toml'), 'keyword')).toEqual([
+      'name',
+    ]);
+    expect(tokensOfType(tokenizeCode('; note\nport=80', 'ini'), 'comment')).toEqual(['; note']);
+  });
+
+  it('reassembles the exact source for the added languages', () => {
+    const samples: Array<[string, string]> = [
+      ['c', `/* m */ int x = 'a'; // c`],
+      ['csharp', `public class A { string s = "x"; }`],
+      ['php', `<?php echo "hi"; # c\n// d`],
+      ['lua', `--[[ block ]] local x = "y" -- t`],
+      ['haskell', `{- doc -} main = putStrLn "hi" -- c`],
+      ['toml', `[a]\nb = 1 # c`],
+      ['latex', `\\section{Intro} % note`],
+      ['xml', `<?xml version="1.0"?><root a='1'/>`],
+      ['powershell', `<# doc #> Write-Host "x" # c`],
+      ['graphql', `query Q { a } # c`],
+      ['scss', `// c\n.a { b: "c"; }`],
+    ];
+    for (const [lang, code] of samples) {
+      const tokens = tokenizeCode(code, lang);
+      expect(joined(tokens)).toBe(code);
+      expect(tokens.some((token) => token.type !== 'plain')).toBe(true);
+    }
+  });
+});
+
 describe('syntaxTokenColor', () => {
   it('keeps every token at 4.5:1 on inline and fullscreen code backgrounds', () => {
     for (const scheme of [lightColors, darkColors]) {
       for (const background of [scheme.surfaceHover, scheme.surfaceBase]) {
-        for (const tokenType of ['comment', 'string', 'number', 'keyword', 'plain'] as const) {
+        for (const tokenType of [
+          'comment',
+          'string',
+          'number',
+          'keyword',
+          'function',
+          'type',
+          'plain',
+        ] as const) {
           expect(
             contrastRatio(syntaxTokenColor(tokenType, scheme), background),
           ).toBeGreaterThanOrEqual(4.5);
@@ -196,5 +332,37 @@ describe('syntaxTokenColor', () => {
     const legacyTheme = { ...darkColors, surfaceHover: undefined as never };
 
     expect(syntaxTokenColor('keyword', legacyTheme)).toBe(darkColors.textPrimary);
+  });
+});
+
+describe('expandCodeTabs', () => {
+  it('uses the four-column tab stops web code blocks inherit', () => {
+    expect(CODE_TAB_SIZE).toBe(4);
+  });
+
+  it('moves each tab to the next stop, counting columns across tokens and restarting at each line', () => {
+    const tokens: SyntaxToken[] = [
+      { text: 'ab', type: 'plain' },
+      { text: '\tc', type: 'keyword' },
+      { text: '\n\t', type: 'plain' },
+      { text: 'abcd\te', type: 'string' },
+    ];
+
+    expect(expandCodeTabs(tokens)).toEqual([
+      { text: 'ab', type: 'plain' },
+      { text: '  c', type: 'keyword' },
+      { text: '\n    ', type: 'plain' },
+      { text: 'abcd    e', type: 'string' },
+    ]);
+  });
+
+  it('counts an astral character as one column', () => {
+    expect(joined(expandCodeTabs([{ text: '\u{1F600}\tx', type: 'plain' }]))).toBe('\u{1F600}   x');
+  });
+
+  it('returns the same token objects when there is no tab', () => {
+    const tokens = tokenizeCode('const a = 1;', 'ts');
+    const expanded = expandCodeTabs(tokens);
+    expanded.forEach((token, index) => expect(token).toBe(tokens[index]));
   });
 });

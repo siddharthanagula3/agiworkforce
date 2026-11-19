@@ -56,9 +56,16 @@ jest.mock('../stores/chatStore', () => ({
   useChatStore: <T,>(selector: (state: Record<string, unknown>) => T) => selector(chatState),
 }));
 
+const mockModelState: { selectedModel: string | undefined; endConversationModel: jest.Mock } = {
+  selectedModel: undefined,
+  endConversationModel: jest.fn(),
+};
+
 jest.mock('../src/features/model-picker/store', () => ({
-  useModelStore: <T,>(selector: (state: Record<string, unknown>) => T) =>
-    selector({ selectedModel: undefined }),
+  useModelStore: Object.assign(
+    <T,>(selector: (state: Record<string, unknown>) => T) => selector(mockModelState),
+    { getState: () => mockModelState },
+  ),
 }));
 
 jest.mock('../lib/mmkv', () => ({
@@ -77,6 +84,12 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import CameraScreen from '../app/(app)/camera';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+
+function twoCloudModelIds(): [string, string] {
+  const first = requireMobileCloudModel().id;
+  return [first, requireMobileCloudModel((model) => model.id !== first).id];
+}
 
 async function captureAndSend(screen: ReturnType<typeof render>) {
   act(() => capturedOnReady?.());
@@ -99,6 +112,8 @@ describe('deep-link camera target conversation', () => {
     chatState.currentConversationId = null;
     chatState.createConversation = mockCreateConversation;
     chatState.sendMessage = mockSendMessage;
+    mockModelState.selectedModel = undefined;
+    mockModelState.endConversationModel.mockReset();
   });
 
   it('sends the capture into the conversation that is already open', async () => {
@@ -129,6 +144,44 @@ describe('deep-link camera target conversation', () => {
     );
     expect(mockReplace).toHaveBeenCalledWith('/(app)/chat/created-conversation');
     expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it('sends a new chat with the new-chat model, not one shown only for a project', async () => {
+    const [projectModel, ownModel] = twoCloudModelIds();
+    mockModelState.selectedModel = projectModel;
+    mockModelState.endConversationModel.mockImplementation(() => {
+      mockModelState.selectedModel = ownModel;
+    });
+    mockCreateConversation.mockImplementation(async () => {
+      expect(mockModelState.selectedModel).toBe(ownModel);
+      return 'created-conversation';
+    });
+
+    await captureAndSend(render(<CameraScreen />));
+
+    expect(mockModelState.endConversationModel).toHaveBeenCalledTimes(1);
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'created-conversation',
+      expect.any(String),
+      ownModel,
+      expect.any(Array),
+    );
+  });
+
+  it('keeps the open conversation model when the capture goes into that conversation', async () => {
+    const [conversationModel] = twoCloudModelIds();
+    chatState.currentConversationId = 'open-conversation';
+    mockModelState.selectedModel = conversationModel;
+
+    await captureAndSend(render(<CameraScreen />));
+
+    expect(mockModelState.endConversationModel).not.toHaveBeenCalled();
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'open-conversation',
+      expect.any(String),
+      conversationModel,
+      expect.any(Array),
+    );
   });
 
   it('keeps the captured photo when the chat store refuses the send', async () => {

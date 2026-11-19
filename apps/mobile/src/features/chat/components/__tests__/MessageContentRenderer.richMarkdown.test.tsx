@@ -1,6 +1,7 @@
 jest.mock('../MathBlock', () => ({ MathBlock: () => null }));
 jest.mock('../CodeBlockCopyButton', () => ({ CodeBlockCopyButton: () => null }));
 jest.mock('@/lib/safeOpenURL', () => ({
+  ...jest.requireActual('@/lib/safeOpenURL'),
   openUntrustedUrlInAppBrowser: jest.fn(async () => true),
 }));
 

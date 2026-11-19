@@ -35,6 +35,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
   toolResultEvent: vi.fn(() => ''),
   toolStatusEvent: vi.fn(() => ''),
   trimToolResultHistory: vi.fn(),
+  toolCallIdsIn: vi.fn(() => new Set<string>()),
   runToolLoop: mocks.runToolLoop,
   mapWithConcurrency: vi.fn(),
 }));

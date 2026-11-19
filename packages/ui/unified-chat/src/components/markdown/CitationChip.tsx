@@ -3,7 +3,12 @@ import { createContext, useContext, useState } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Globe } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { citationPublisherDomain } from './citationPublisher';
+import {
+  citationPublishedLabel,
+  citationPublisherDomain,
+  citationRetrievedLabel,
+  citationSnippet,
+} from './citationPublisher';
 
 export interface MarkdownCitation {
   url: string;
@@ -43,40 +48,6 @@ function citationFaviconSrc(citation: MarkdownCitation): string | undefined {
 
 function citationSiteName(citation: MarkdownCitation): string {
   return citation.siteName || citationHost(citation);
-}
-
-const SNIPPET_MAX_CHARS = 180;
-
-function citationSnippet(citation: MarkdownCitation): string | undefined {
-  const trimmed = citation.snippet?.replace(/\s+/g, ' ').trim();
-  if (!trimmed) return undefined;
-  return trimmed.length > SNIPPET_MAX_CHARS
-    ? `${trimmed.slice(0, SNIPPET_MAX_CHARS).trimEnd()}\u2026`
-    : trimmed;
-}
-
-// Backends report this field in their own shape: an ISO instant from one, a
-// relative phrase from another, so only a parseable value is reformatted.
-function citationPublishedLabel(citation: MarkdownCitation): string | undefined {
-  const raw = citation.publishedDate?.trim();
-  if (!raw) return undefined;
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return raw.length > 32 ? undefined : raw;
-  return parsed.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-function citationRetrievedLabel(citation: MarkdownCitation): string | undefined {
-  const parsed = citation.retrievedAt ? new Date(citation.retrievedAt) : null;
-  if (!parsed || Number.isNaN(parsed.getTime())) return undefined;
-  return `Retrieved ${parsed.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })}`;
 }
 
 function CitationFavicon({

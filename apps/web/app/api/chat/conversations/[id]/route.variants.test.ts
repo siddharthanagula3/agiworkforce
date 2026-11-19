@@ -146,6 +146,33 @@ describe('GET /api/chat/conversations/[id], thread columns', () => {
   });
 });
 
+describe('GET /api/chat/conversations/[id], answers stored with citation markup', () => {
+  it('returns the answer without the markup', async () => {
+    givenDatabase([
+      { match: MESSAGE_COUNT, rows: [{ total: '1' }] },
+      { match: CONVERSATION_SELECT, rows: [legacyConversation] },
+      {
+        match: MESSAGE_SELECT,
+        rows: [
+          {
+            ...legacyMessage,
+            role: 'assistant',
+            content: 'Starship flew again. \uE200cite\uE202turn620734view2\uE201\n\nNext.',
+          },
+        ],
+      },
+    ]);
+
+    const response = await GET(
+      new NextRequest(`https://agiworkforce.com/api/chat/conversations/${CONVERSATION_ID}`),
+      context,
+    );
+    const body = (await response.json()) as { messages: Array<{ content: string }> };
+
+    expect(body.messages[0]?.content).toBe('Starship flew again. \n\nNext.');
+  });
+});
+
 describe('GET /api/chat/conversations/[id], mocked offset SQL contract', () => {
   it.each([null, LEAF_ID])(
     'requests the unique tie order across pages without changing active leaf %s',

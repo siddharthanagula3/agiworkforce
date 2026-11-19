@@ -14,6 +14,7 @@ import {
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
+import { STATUTORY_RECORD_RETENTION_DAYS } from '@/lib/billing/financial-record-retention';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import {
@@ -108,6 +109,18 @@ describe('help article fact tokens', () => {
       expect(article(id), id).toContain('{{CONTACT.email}}');
       expect(rendered(id), id).toContain(CONTACT_EMAIL);
     }
+  });
+
+  it('gives help articles the statutory record-keeping period from the billing retention rules', () => {
+    const years = String(Math.round(STATUTORY_RECORD_RETENTION_DAYS / 365.25));
+    expect(interpolateFacts('{{RETENTION.statutoryRecordYears}}', 'probe')).toBe(years);
+    expect(article('delete-your-account').replace(/\s+/g, ' ')).toContain(
+      'Books of account are kept {{RETENTION.statutoryRecordYears}} years and then deleted.',
+    );
+    expect(article('delete-your-account')).not.toMatch(/\b\d+ years\b/);
+    expect(rendered('delete-your-account')).toContain(
+      `Books of account are kept ${years} years and then deleted.`,
+    );
   });
 
   it('states the connector release status, and says nothing once connectors are released', () => {
@@ -226,7 +239,7 @@ describe('help articles follow the release registries', () => {
       'and adds the connector limits once connectors are open. {{AVAILABILITY.connectors}}',
     );
     expect(article('mcp-connections').replace(/\s+/g, ' ')).toContain(
-      'the pricing page lists the figures once connectors are open.',
+      'The pricing page lists the figures once connectors are open.',
     );
     expect(article('connectors-and-mcp').replace(/\s+/g, ' ')).toContain(
       'The pricing page lists that limit once connectors are open.',
@@ -285,8 +298,9 @@ describe('help articles follow the plan catalogue', () => {
   it('keeps the authenticator sentence true whichever way the enrollment switch is set', () => {
     const security = article('account-security').replace(/\s+/g, ' ');
     expect(security).toContain(
-      'can be switched off for a time: while it is, Settings, Security shows',
+      'can be switched off for a time: while it is, Settings, Security on the web shows',
     );
+    expect(security).toContain('the AGI Mobile app leaves out those options');
     expect(security).not.toMatch(/backup codes are temporarily unavailable:/);
   });
 });

@@ -45,6 +45,32 @@ describe('the frame a mid-stream failure arrives in', () => {
     });
   });
 
+  it('says when a Free account can continue once its allowance runs out mid-answer', () => {
+    const parsed = parseStreamFailure({
+      message:
+        'You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going.',
+      code: 'free_trial_token_budget_reached',
+      retryAfterSeconds: 7800,
+    });
+    expect(parsed?.message).toBe(
+      'You have reached the free usage limit on your account. Try again in about 2 hours. Local mode keeps working.',
+    );
+    const notice = streamFailureNoticeText({ content: '', metadata: { streamError: parsed } });
+    expect(notice).toBe(parsed?.message);
+    expect(notice).not.toMatch(/provider key|upgrade|buy/iu);
+  });
+
+  it('keeps the untimed Free limit sentence when the frame carries no wait', () => {
+    expect(
+      parseStreamFailure({
+        message: 'You have reached the free usage limit on your account.',
+        code: 'free_trial_token_budget_reached',
+      })?.message,
+    ).toBe(
+      'You have reached the free usage limit on your account. Try again after it resets. Local mode keeps working.',
+    );
+  });
+
   it('still accepts a bare string and still rejects a frame with no message', () => {
     expect(parseStreamFailure('rate limited')).toEqual({ message: 'rate limited' });
     expect(parseStreamFailure({ code: 'provider_error' })).toBeUndefined();

@@ -2,7 +2,9 @@
 
 import { create } from 'zustand';
 import {
+  chatAttachmentLimitsFromWire,
   parseMeResponse,
+  type ChatAttachmentLimits,
   type EffectiveCapabilityDocumentWire,
   type MeBillingOwner,
   type MeDisabledFeature,
@@ -54,6 +56,7 @@ export interface AuthState {
   featureFlags: FeatureFlags | null;
   disabledFeatures: readonly MeDisabledFeature[];
   capabilityDocument: EffectiveCapabilityDocumentWire | null;
+  attachmentLimits: ChatAttachmentLimits | null;
   isLoading: boolean;
   error: string | null;
   initialized: boolean;
@@ -70,6 +73,7 @@ const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_reset'> = {
   featureFlags: null,
   disabledFeatures: [],
   capabilityDocument: null,
+  attachmentLimits: null,
   isLoading: true,
   error: null,
   initialized: false,
@@ -97,6 +101,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
               featureFlags: null,
               disabledFeatures: [],
               capabilityDocument: null,
+              attachmentLimits: null,
               isLoading: false,
               initialized: true,
               unauthenticated: true,
@@ -139,6 +144,9 @@ export const useBillingStore = create<AuthState>()((set) => ({
           featureFlags: data.feature_flags,
           disabledFeatures: data.disabled_features ?? [],
           capabilityDocument: data.capability_handshake ?? null,
+          attachmentLimits: data.attachment_limits
+            ? chatAttachmentLimitsFromWire(data.attachment_limits)
+            : null,
           isLoading: false,
           error: null,
           initialized: true,

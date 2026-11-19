@@ -45,8 +45,11 @@ jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = ({ testID }: { testID?: string }) => <Text testID={testID}>icon</Text>;
   return {
+    Clock: icon,
     Cpu: icon,
+    Lightbulb: icon,
     Plane: icon,
+    Settings: icon,
     Shield: icon,
   };
 });

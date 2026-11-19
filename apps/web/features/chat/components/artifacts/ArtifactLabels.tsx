@@ -15,30 +15,6 @@ import type { ArtifactData } from './ArtifactPreview';
 export const ARTIFACT_KIND_LABEL = 'Artifact';
 export const UNTITLED_ARTIFACT_TITLE = 'Untitled';
 
-export function artifactKindLabel(type: ArtifactData['type']): string {
-  switch (type) {
-    case 'html':
-    case 'react':
-    case 'svg':
-    case 'mermaid':
-    case 'code':
-      return 'Code';
-    case 'spreadsheet':
-    case 'csv':
-    case 'table':
-      return 'Spreadsheet';
-    case 'presentation':
-      return 'Slides';
-    case 'email':
-      return 'Email';
-    case 'image':
-      return 'Image';
-    case 'document':
-    default:
-      return 'Document';
-  }
-}
-
 const EXTENSION_LABEL: Record<string, string> = {
   markdown: 'MD',
   md: 'MD',

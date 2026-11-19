@@ -3,10 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { recordConnectorCall } from '@/lib/services/infrastructure-cost';
-import {
-  connectorIdentityName,
-  type ConnectorIdentity,
-} from '@/features/connectors/lib/connector-outcome';
+import { connectorIdentityName, type ConnectorIdentity } from '@agiworkforce/cloud-contracts';
 import {
   CONNECTOR_FAILURE_RECENCY_MS,
   CONNECTOR_FAILURE_STREAK_THRESHOLD,
@@ -26,7 +23,7 @@ export {
   type ConnectorIdentity,
   type ConnectorOutcomeKind,
   type ConnectorOutcomeNotice,
-} from '@/features/connectors/lib/connector-outcome';
+} from '@agiworkforce/cloud-contracts';
 
 /**
  * Everything here derives from the connector call log, the one record of what

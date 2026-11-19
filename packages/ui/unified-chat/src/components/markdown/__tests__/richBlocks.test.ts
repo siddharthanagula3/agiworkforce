@@ -155,6 +155,16 @@ describe('emailMailtoLink', () => {
 });
 
 describe('richBlocksAsPlainText', () => {
+  it('copies a chart fence as its title and a tab-separated table, not the raw JSON', () => {
+    const chart =
+      '{"type":"bar","title":"Requests","x":"Month","y":"Count","data":[{"name":"Jan","value":3},{"name":"Feb","value":5}]}';
+    const message = `Here it is:\n\n\`\`\`chart\n${chart}\n\`\`\`\n\nDone.`;
+    expect(richBlocksAsPlainText(message)).toBe(
+      'Here it is:\n\nRequests\nMonth\tCount\nJan\t3\nFeb\t5\n\nDone.',
+    );
+    expect(isRichBlockLanguage('chart')).toBe(false);
+  });
+
   it('turns an email fence into the plain text its card copies', () => {
     const message = `Here is the draft:\n\n\`\`\`email\n${COMPLETE_EMAIL}\n\`\`\`\n\nWant changes?`;
     expect(richBlocksAsPlainText(message)).toBe(

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { Alert } from 'react-native';
+import { actionMenuLabels, chooseActionMenuItem } from '@/test-utils/actionMenu';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
@@ -156,7 +157,10 @@ jest.mock('../src/features/library/useLibraryAssets', () => ({
     signedOut: false,
     storageUsedBytes: null,
     storageLimitBytes: null,
+    downloadUsedBytes: null,
+    downloadLimitBytes: null,
     refresh: jest.fn(),
+    revalidate: jest.fn(),
     loadMore: jest.fn(),
     removeAsset: jest.fn(),
     restoreAsset: jest.fn(),
@@ -167,6 +171,12 @@ jest.mock('../src/features/library/useLibraryAssets', () => ({
 import { LibraryScreen } from '../src/features/library';
 
 const lastVideoModalProps = () => mockVideoModal.mock.calls.at(-1)?.[0] as { visible: boolean };
+
+function pressShareInActions(screen: ReturnType<typeof render>) {
+  fireEvent(screen.getByTestId('library-document-card-doc-1'), 'longPress');
+  if (!actionMenuLabels().includes('Share')) throw new Error('The asset actions have no Share');
+  chooseActionMenuItem('Share');
+}
 
 describe('Library continuations after the account changes', () => {
   let alert: jest.SpyInstance;
@@ -234,9 +244,8 @@ describe('Library continuations after the account changes', () => {
     mockShareFile.mockResolvedValue(undefined);
     const screen = render(<LibraryScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByTestId('library-document-card-doc-1'));
-    });
+    pressShareInActions(screen);
+    await act(async () => {});
 
     const options = mockShareFile.mock.calls[0]?.[1] as { isCurrent: () => boolean };
     expect(options.isCurrent()).toBe(true);
@@ -254,7 +263,8 @@ describe('Library continuations after the account changes', () => {
     );
     const screen = render(<LibraryScreen />);
 
-    fireEvent.press(screen.getByTestId('library-document-card-doc-1'));
+    pressShareInActions(screen);
+    alert.mockClear();
     mockAccountOwned = false;
     await act(async () => {
       fail?.(new Error('offline'));

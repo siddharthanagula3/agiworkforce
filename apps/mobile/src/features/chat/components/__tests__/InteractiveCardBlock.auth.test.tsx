@@ -1,10 +1,13 @@
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, View as MockView } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import type { ReactNode } from 'react';
+import { Alert, Linking, View as MockView } from 'react-native';
+import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import type { InteractiveCard } from '@agiworkforce/types';
 
 const mockExpoImage = jest.fn();
 const mockGetAuthHeaders = jest.fn();
 const mockOpenUntrustedUrl = jest.fn();
+const mockApiFetch = jest.fn();
 
 jest.mock('expo-image', () => ({
   Image: (props: Record<string, unknown>) => {
@@ -16,7 +19,15 @@ jest.mock('expo-image', () => ({
 jest.mock('lucide-react-native', () => ({
   ExternalLink: (props: Record<string, unknown>) => <MockView {...props} />,
   MapPinned: (props: Record<string, unknown>) => <MockView {...props} />,
+  Maximize2: (props: Record<string, unknown>) => <MockView {...props} />,
+  Minus: (props: Record<string, unknown>) => <MockView {...props} />,
   Navigation: (props: Record<string, unknown>) => <MockView {...props} />,
+  Plus: (props: Record<string, unknown>) => <MockView {...props} />,
+  X: (props: Record<string, unknown>) => <MockView {...props} />,
+}));
+
+jest.mock('@/services/api', () => ({
+  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
 }));
 
 jest.mock('@/services/authSession', () => ({
@@ -27,8 +38,8 @@ jest.mock('@/lib/safeOpenURL', () => ({
   openUntrustedUrlInAppBrowser: (...args: unknown[]) => mockOpenUntrustedUrl(...args),
 }));
 
-jest.mock('@/src/ui/theme', () => ({
-  useThemeColors: () => ({
+jest.mock('@/src/ui/theme', () => {
+  const colors = {
     border: '#333333',
     surfaceElevated: '#181818',
     surfaceOverlay: '#202020',
@@ -37,10 +48,23 @@ jest.mock('@/src/ui/theme', () => ({
     cameraOverlayText: '#FFFFFF',
     textMuted: '#8D8D8D',
     textPrimary: '#FFFFFF',
-  }),
-}));
+  };
+  return { useThemeColors: () => colors, useTheme: () => ({ colors, isDark: false }) };
+});
 
+import { MAP_CONFIG_PATH } from '@agiworkforce/cloud-contracts';
 import { InteractiveCardBlock } from '../InteractiveCardBlock';
+import { resetMapTileConfigCache } from '../../services/mapTiles';
+
+const TILE_CONFIG = {
+  tileUrlTemplate: '/api/maps/tile/{z}/{x}/{y}',
+  attribution: 'Light tile credit',
+  darkTileUrlTemplate: '/api/maps/tile/{z}/{x}/{y}?style=dark',
+  darkAttribution: 'Dark tile credit',
+  dimLightTiles: false,
+  minZoom: 2,
+  maxZoom: 19,
+};
 
 const TILE_ORIGIN = 'https://app.agi.example/';
 const PROVIDER_URL = 'https://www.google.com/maps/search/?api=1&query=coffee%20austin';
@@ -83,21 +107,40 @@ const mapCard: InteractiveCard = {
   },
 };
 
+const PHONE: Metrics = {
+  frame: { x: 0, y: 0, width: 393, height: 852 },
+  insets: { top: 59, right: 0, bottom: 34, left: 0 },
+};
+
+function PhoneSafeArea({ children }: { children: ReactNode }) {
+  return <SafeAreaProvider initialMetrics={PHONE}>{children}</SafeAreaProvider>;
+}
+
 function renderMap(canLoadManagedCloudTiles = true) {
   return render(
     <InteractiveCardBlock
       cards={[mapCard]}
       tileBaseUrl={TILE_ORIGIN}
       canLoadManagedCloudTiles={canLoadManagedCloudTiles}
+      messageId="msg-map"
+      conversationId="conv-map"
     />,
+    { wrapper: PhoneSafeArea },
   );
 }
 
 describe('InteractiveCardBlock authenticated map tiles', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetMapTileConfigCache();
+    mockApiFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve(TILE_CONFIG) });
     mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer short-lived-token' });
     mockOpenUntrustedUrl.mockResolvedValue(true);
+    jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('passes the current owner bearer header to every Expo Image tile source', async () => {
@@ -116,6 +159,40 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
     }
   });
 
+  it('reads the tile template and attribution from the map config through the stamped client', async () => {
+    const { findByTestId, getByLabelText, getByTestId } = renderMap();
+
+    expect(await findByTestId('map-attribution')).toHaveTextContent('Light tile credit');
+    fireEvent.press(getByLabelText('Full screen map'));
+    expect(within(getByTestId('map-viewer')).getByText('Coffee near Austin')).toBeTruthy();
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      MAP_CONFIG_PATH,
+      { method: 'GET' },
+      {
+        baseUrl: 'https://app.agi.example',
+        headers: { Authorization: 'Bearer short-lived-token' },
+      },
+    );
+  });
+
+  it('shows the honest fallback without tile bytes when the map config is refused', async () => {
+    mockApiFetch.mockResolvedValue({ ok: false, json: () => Promise.resolve({}) });
+    const { findByText } = renderMap();
+
+    expect(
+      await findByText('Map preview is unavailable. You can still open the result in Maps.'),
+    ).toBeTruthy();
+    expect(mockExpoImage).not.toHaveBeenCalled();
+  });
+
+  it('names the first place in the map preview label', async () => {
+    const { findByLabelText } = renderMap();
+
+    expect(
+      await findByLabelText('Map of Austin, Travis County, Texas, United States'),
+    ).toBeTruthy();
+  });
+
   it('never consults auth or creates tile images for a Local transcript, while keeping the provider link', () => {
     const { getByLabelText, getByText } = renderMap(false);
 
@@ -125,6 +202,7 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
 
     fireEvent.press(getByLabelText('Open in Google Maps'));
     expect(mockOpenUntrustedUrl).toHaveBeenCalledWith(PROVIDER_URL);
+    expect(Linking.openURL).not.toHaveBeenCalled();
   });
 
   it('shows a visible error when the platform cannot open the provider map', async () => {

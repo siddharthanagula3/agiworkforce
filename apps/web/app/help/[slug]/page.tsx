@@ -1,16 +1,17 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArticleFeedback } from '@/features/docs/components/ArticleFeedback';
 import { ArticleSupportCards } from '@/features/docs/components/ArticleSupportCards';
 import { CopyPageButton } from '@/features/docs/components/CopyPageButton';
 import { DocsArticleBody } from '@/features/docs/components/DocsArticleBody';
 import { DocsShell } from '@/features/docs/components/DocsShell';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import {
   DOCS_HOME_PATH,
   docsGroupFor,
   docsNavGroups,
   docsNeighbours,
   docsRelated,
+  type DocsNavGroup,
 } from '@/features/docs/lib/docs-nav';
 import { Breadcrumb } from '@/features/marketing/components/system';
 import { buildMetadata } from '@/lib/seo/metadata';
@@ -22,14 +23,44 @@ import {
   docMetadataFor,
 } from '@/lib/support/doc-metadata';
 import { headingAnchor } from '@/lib/support/doc-topics';
-import { getHelpArticle, helpArticlePath } from '@/lib/support/help-articles';
+import { getHelpArticle, helpArticlePath, purchaseHelpPaths } from '@/lib/support/help-articles';
+import {
+  HELP_UNAVAILABLE_ON_PHONE_BODY,
+  HELP_UNAVAILABLE_ON_PHONE_TITLE,
+  HelpArticleUnavailableOnPhone,
+} from '../HelpUnavailableOnPhone';
+import { openedFromPhone, type HelpSearchParams } from '../phone-request';
 
-type ArticleProps = { params: Promise<{ slug: string }> };
+type ArticleProps = {
+  params: Promise<{ slug: string }>;
+  searchParams?: Promise<HelpSearchParams>;
+};
 
-export async function generateMetadata({ params }: ArticleProps) {
+function withoutPaths(
+  groups: readonly DocsNavGroup[],
+  hidden: ReadonlySet<string>,
+): readonly DocsNavGroup[] {
+  return groups.map((group) => ({
+    ...group,
+    links: group.links.filter((link) => !hidden.has(link.href)),
+  }));
+}
+
+export async function generateMetadata({ params, searchParams }: ArticleProps) {
   const { slug } = await params;
-  const article = getHelpArticle(slug);
-  if (!article) notFound();
+  const fromPhone = await openedFromPhone(searchParams);
+  const article = getHelpArticle(slug, fromPhone ? 'phone' : 'web');
+  if (!article) {
+    if (fromPhone && getHelpArticle(slug)) {
+      return buildMetadata({
+        title: `${HELP_UNAVAILABLE_ON_PHONE_TITLE} | Help`,
+        description: HELP_UNAVAILABLE_ON_PHONE_BODY,
+        path: helpArticlePath(slug),
+        robots: { index: false },
+      });
+    }
+    notFound();
+  }
   return buildMetadata({
     title: `${article.title} | Help`,
     description: article.description ?? `Read the AGI help guide: ${article.title}.`,
@@ -48,13 +79,25 @@ function articleMarkdown(
   return `# ${title}\n\n${body}\n`;
 }
 
-export default async function HelpArticlePage({ params }: ArticleProps) {
+export default async function HelpArticlePage({ params, searchParams }: ArticleProps) {
   const { slug } = await params;
-  const article = getHelpArticle(slug);
-  if (!article) notFound();
+  const fromPhone = await openedFromPhone(searchParams);
+  const article = getHelpArticle(slug, fromPhone ? 'phone' : 'web');
+  if (!article) {
+    if (fromPhone && getHelpArticle(slug)) {
+      return (
+        <DocsShell>
+          <HelpArticleUnavailableOnPhone />
+        </DocsShell>
+      );
+    }
+    notFound();
+  }
 
   const path = helpArticlePath(article.id);
-  const groups = docsNavGroups();
+  const groups = fromPhone
+    ? withoutPaths(docsNavGroups(), new Set(purchaseHelpPaths()))
+    : docsNavGroups();
   const group = docsGroupFor(groups, path);
   const { previous, next } = docsNeighbours(groups, path);
   const related = docsRelated(groups, path);
@@ -92,7 +135,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
               <li>{describeReleaseState(metadata)}</li>
               <li>{DOC_AUDIENCE_LABELS[metadata.audience]}</li>
               <li>{describePlatforms(metadata.applicability.platforms)}</li>
-              <li>{describePlans(metadata.applicability.plans)}</li>
+              {fromPhone ? null : <li>{describePlans(metadata.applicability.plans)}</li>}
             </>
           ) : null}
         </ul>
@@ -102,16 +145,21 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
         <ArticleSupportCards related={related} />
         <nav className="dx-pager" aria-label="More guides">
           {previous ? (
-            <Link href={previous.href} className="dx-pager-link" data-dir="previous">
+            <PageLink
+              href={previous.href}
+              className="dx-pager-link"
+              data-dir="previous"
+              omitWhenEmbedded
+            >
               <span className="dx-pager-kicker">Previous</span>
               <span className="dx-pager-title">{previous.title}</span>
-            </Link>
+            </PageLink>
           ) : null}
           {next ? (
-            <Link href={next.href} className="dx-pager-link" data-dir="next">
+            <PageLink href={next.href} className="dx-pager-link" data-dir="next" omitWhenEmbedded>
               <span className="dx-pager-kicker">Next</span>
               <span className="dx-pager-title">{next.title}</span>
-            </Link>
+            </PageLink>
           ) : null}
         </nav>
       </article>

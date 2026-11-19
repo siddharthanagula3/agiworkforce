@@ -94,7 +94,7 @@ export function getAgeThreshold(): number {
   return Math.max(detectRegionRule().threshold, ACCOUNT_MINIMUM_AGE);
 }
 
-function readRecord(): AgeGateRecord | null {
+export function readAgeGateRecord(): AgeGateRecord | null {
   try {
     const raw = storage?.getString(MMKV_KEY);
     if (!raw) return null;
@@ -109,12 +109,12 @@ function writeRecord(record: AgeGateRecord): void {
 }
 
 export function isAgeGateConfirmed(): boolean {
-  const rec = readRecord();
+  const rec = readAgeGateRecord();
   return rec?.confirmed === true && rec.isMinor !== true;
 }
 
 export function isMinorMode(): boolean {
-  const rec = readRecord();
+  const rec = readAgeGateRecord();
   return rec?.confirmed === true && rec.isMinor === true;
 }
 
@@ -147,7 +147,7 @@ export function confirmAgeGateFromRange(range: {
 }
 
 function recordAgeVerdict(isMinor: boolean): AgeGateRecord {
-  const existing = readRecord();
+  const existing = readAgeGateRecord();
   if (existing?.confirmed === true && existing.isMinor === true) return existing;
 
   const rule = detectRegionRule();

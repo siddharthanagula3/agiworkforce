@@ -93,6 +93,63 @@ export function codeRanges(content: string): Array<readonly [number, number]> {
   return ranges;
 }
 
+const TAG_OPENER = /^<(?:\/?[A-Za-z][A-Za-z0-9-]*[\s/>]|!--)/;
+const TEX_SPANS = [
+  ['\\(', '\\)'],
+  ['\\[', '\\]'],
+  ['$$', '$$'],
+] as const;
+
+function texSpanEnd(text: string, at: number): number {
+  for (const [open, close] of TEX_SPANS) {
+    if (!text.startsWith(open, at)) continue;
+    const end = text.indexOf(close, at + open.length);
+    return end === -1 ? -1 : end + close.length;
+  }
+  return -1;
+}
+
+function dollarMathEnd(text: string, open: number): number {
+  const close = text.indexOf(DOLLAR, open + 1);
+  if (close <= open + 1 || text.slice(open + 1, close).includes('\n')) return -1;
+  return /\S/.test(text[open + 1]!) && /\S/.test(text[close - 1]!) && text[close - 1] !== '\\'
+    ? close + 1
+    : -1;
+}
+
+// Outside code and TeX, every tag opener and every dollar that does not open
+// a $math$ span is escaped, so "<div>" and "$HOME" read as the words they are.
+export function tagsAndDollarsAsText(text: string): string {
+  const code = codeRanges(text);
+  let out = '';
+  let at = 0;
+  let range = 0;
+  while (at < text.length) {
+    const span = code[range];
+    if (span && span[0] === at) {
+      out += text.slice(span[0], span[1]);
+      at = span[1];
+      range += 1;
+      continue;
+    }
+    const ch = text[at]!;
+    const texEnd = texSpanEnd(text, at);
+    const end = texEnd !== -1 ? texEnd : ch === DOLLAR ? dollarMathEnd(text, at) : -1;
+    if (end !== -1) {
+      out += text.slice(at, end);
+      at = end;
+    } else if (ch === '\\') {
+      out += text.slice(at, at + 2);
+      at += 2;
+    } else {
+      out += (ch === DOLLAR || (ch === '<' && TAG_OPENER.test(text.slice(at))) ? '\\' : '') + ch;
+      at += 1;
+    }
+    while (code[range] && code[range]![0] < at) range += 1;
+  }
+  return out;
+}
+
 export function normalizeMathDelimiters(content: string): string {
   let out = '';
   let i = 0;

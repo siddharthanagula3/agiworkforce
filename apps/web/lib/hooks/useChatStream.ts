@@ -18,6 +18,7 @@ import {
   useRef,
   useEffect,
   useState,
+  useSyncExternalStore,
   type MutableRefObject,
 } from 'react';
 import {
@@ -64,7 +65,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 import { useFastModeAllowanceStore } from '@shared/stores/fast-mode-allowance-store';
 import { readSelectedLocalModel } from '@features/desktop-host';
 import {
@@ -142,7 +143,7 @@ import {
   interactiveCardAcceptsResponse,
   interactiveCardNeedsResume,
   type InteractiveCardResponseRequest,
-} from '@/app/api/interactive-cards/response-contract';
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import {
   fallbackStepLabel,
@@ -164,7 +165,7 @@ import {
   withTurnStartSummary,
   type TurnStartTicker,
 } from './turnStartProgress';
-import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
+import { SECRET_REDACTION_COUNT_HEADER } from '@agiworkforce/cloud-contracts';
 import {
   ATTACHMENTS_TRUNCATED_HEADER,
   readAttachmentTruncationHeader,
@@ -195,11 +196,13 @@ import type {
 } from '@agiworkforce/types';
 import {
   parseResearchPlanEvent,
-  parseResearchPlanQuestions,
-  parseResearchRunConfig,
   rendersResearchPlan,
   researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
+import {
+  parseResearchPlanQuestions,
+  parseResearchRunConfig,
+} from '@agiworkforce/unified-chat/research-plan';
 import { parseResearchGapsEvent } from '@/features/chat/components/research/ResearchPlan';
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import { surfaceUsageCreditsNotice } from '@/features/billing/lib/usage-credits-notice';
@@ -221,7 +224,7 @@ import {
 } from '@/features/chat/lib/quotaPaywallSlot';
 import { isAccountWideUsageBlock } from '@/features/chat/stores/account-usage-block';
 import { readRetryAt } from '@/features/chat/lib/freeCapacityRecovery';
-import { ROUTE_LANE_HEADER, readRouteLane } from '@/features/chat/lib/routeLane';
+import { ROUTE_LANE_HEADER, readRouteLane } from '@agiworkforce/cloud-contracts';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
@@ -271,7 +274,7 @@ import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-
 import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
 import type { RoutingProfileChoice } from '@agiworkforce/types';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
-import { displaySourceSnippet } from '@/lib/sources/display-snippet';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
 
 interface SendMessageOptions {
   model?: string;
@@ -990,16 +993,90 @@ function bindPendingTurnAuthority(
   return authority;
 }
 
+const expiredPausedTurnIds = new Set<string>();
+const expiredPausedTurnListeners = new Set<() => void>();
+let expiredPausedTurnsVersion = 0;
+
+function subscribeExpiredPausedTurns(listener: () => void): () => void {
+  expiredPausedTurnListeners.add(listener);
+  return () => {
+    expiredPausedTurnListeners.delete(listener);
+  };
+}
+
+function readExpiredPausedTurnsVersion(): number {
+  return expiredPausedTurnsVersion;
+}
+
+// MessageBubble's memo comparator cannot see this registry, so a bubble that
+// reads isApprovalTurnLive or isInputTurnLive re-renders through its resolver hook.
+function useExpiredPausedTurnsVersion(): number {
+  return useSyncExternalStore(
+    subscribeExpiredPausedTurns,
+    readExpiredPausedTurnsVersion,
+    readExpiredPausedTurnsVersion,
+  );
+}
+
+function markPausedTurnExpired(assistantMessageId: string): void {
+  expiredPausedTurnIds.add(assistantMessageId);
+  expiredPausedTurnsVersion += 1;
+  for (const listener of expiredPausedTurnListeners) listener();
+}
+
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
   pendingInputTurns.clear();
   remoteApprovalWatches.clear();
+  expiredPausedTurnIds.clear();
+}
+
+function isPausedTurnSuperseded(conversationId: string, assistantMessageId: string): boolean {
+  const thread = readConversationMessages(conversationId);
+  const index = thread.findIndex((message) => message.id === assistantMessageId);
+  return (
+    index >= 0 &&
+    thread
+      .slice(index + 1)
+      .some((message) => message.role === 'user' || message.role === 'assistant')
+  );
+}
+
+// A paused request belongs to the newest turn only. Resuming it after a newer
+// turn started would abort that reply and stream above it.
+function expireIfSuperseded(
+  turn: PendingTurn | PendingInputTurn,
+  assistantMessageId: string,
+  requests: ChatRequestSettlements,
+): boolean {
+  if (
+    !isPausedTurnSuperseded(turn.conversationId, assistantMessageId) &&
+    !requests.isBusyWithOtherMessage(turn.conversationId, assistantMessageId)
+  ) {
+    return false;
+  }
+  markPausedTurnExpired(assistantMessageId);
+  pendingTurns.delete(assistantMessageId);
+  pendingInputTurns.delete(assistantMessageId);
+  useChatStore.getState().updateMessage(assistantMessageId, {}, turn.conversationId);
+  return true;
+}
+
+function isPausedTurnLive(
+  assistantMessageId: string,
+  turn: PendingTurn | PendingInputTurn | null,
+): boolean {
+  return (
+    turn !== null &&
+    !expiredPausedTurnIds.has(assistantMessageId) &&
+    !isPausedTurnSuperseded(turn.conversationId, assistantMessageId)
+  );
 }
 
 export function isInputTurnLive(assistantMessageId: string): boolean {
-  return (
-    pendingInputTurns.has(assistantMessageId) ||
-    restorePendingInputTurn(assistantMessageId) !== null
+  return isPausedTurnLive(
+    assistantMessageId,
+    pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId),
   );
 }
 
@@ -1058,7 +1135,10 @@ function restorePendingInputTurn(assistantMessageId: string): PendingInputTurn |
 }
 
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
-  return pendingTurns.has(assistantMessageId) || restorePendingTurn(assistantMessageId) !== null;
+  return isPausedTurnLive(
+    assistantMessageId,
+    pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId),
+  );
 }
 
 function restorePendingTurn(assistantMessageId: string): PendingTurn | null {
@@ -1225,6 +1305,7 @@ type ResolveToolApprovalFn = UseChatStreamReturn['resolveToolApproval'];
 const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
 export const ToolApprovalProvider = ToolApprovalContext.Provider;
 export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
+  useExpiredPausedTurnsVersion();
   return useContext(ToolApprovalContext);
 }
 
@@ -1232,6 +1313,7 @@ type ResolveToolInputFn = UseChatStreamReturn['resolveToolInput'];
 const ToolInputContext = createContext<ResolveToolInputFn | null>(null);
 export const ToolInputProvider = ToolInputContext.Provider;
 export function useToolInputResolver(): ResolveToolInputFn | null {
+  useExpiredPausedTurnsVersion();
   return useContext(ToolInputContext);
 }
 
@@ -3437,7 +3519,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
             const name = (approvalReq as Record<string, unknown>)['name'];
             const rawArgs = (approvalReq as Record<string, unknown>)['args'];
-            if (typeof tcId === 'string' && tcId && typeof name === 'string' && name) {
+            if (
+              typeof tcId === 'string' &&
+              tcId &&
+              typeof name === 'string' &&
+              name &&
+              !pendingCalls.some((call) => call.toolCallId === tcId)
+            ) {
               const args =
                 rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
                   ? (rawArgs as Record<string, unknown>)
@@ -5237,6 +5325,7 @@ export function useChatStream(
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       if (!conversationId) return;
+      if (requestSettlements.isBusyWithOtherMessage(conversationId, assistantMessageId)) return;
       const existingAuthority =
         turnAuthoritiesRef.current.get(assistantMessageId) ??
         requestAuthoritiesRef.current.get(conversationId);
@@ -5443,9 +5532,11 @@ export function useResolveToolApproval(
         updateToolEntry,
       } = store;
 
+      if (expiredPausedTurnIds.has(assistantMessageId)) return;
       const turn = pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId);
       if (!turn || turn.resolving) return;
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
+      if (expireIfSuperseded(turn, assistantMessageId, requests)) return;
       const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
       if (!authority) return;
 
@@ -5780,10 +5871,12 @@ function useResolveToolInput(
         updateToolEntry,
       } = store;
 
+      if (expiredPausedTurnIds.has(assistantMessageId)) return false;
       const turn =
         pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId);
       if (!turn || turn.resolving) return false;
       if (!turn.calls.some((call) => call.toolCallId === toolCallId)) return false;
+      if (expireIfSuperseded(turn, assistantMessageId, requests)) return false;
       const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
       if (!authority) return false;
 

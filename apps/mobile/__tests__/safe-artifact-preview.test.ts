@@ -1,4 +1,5 @@
 import { ARTIFACT_CSP_CONTENT, extractMetaCspContent } from '@agiworkforce/types';
+import { REACT_PREVIEW_SCRIPTS } from '@agiworkforce/unified-chat/react-preview-document';
 import {
   buildMermaidPreviewHtml,
   buildSandboxedArtifactHtml,
@@ -40,6 +41,37 @@ describe('buildSandboxedArtifactHtml', () => {
     const html = buildSandboxedArtifactHtml('<svg><script>alert(1)</script></svg>', 'svg');
     expect(html).toContain("default-src 'none'");
     expect(html).not.toMatch(/script-src/i);
+  });
+
+  describe('a React artifact', () => {
+    const source = 'function App(){return <p>Hi</p>}';
+
+    it('loads each pinned script with its integrity hash', () => {
+      const html = buildSandboxedArtifactHtml(source, 'react');
+      expect(REACT_PREVIEW_SCRIPTS).toHaveLength(3);
+      for (const script of REACT_PREVIEW_SCRIPTS) {
+        expect(html).toContain(`src="${script.src}" integrity="${script.integrity}"`);
+      }
+    });
+
+    it('runs under the canonical artifact policy with the error reporter ahead of the scripts', () => {
+      const html = buildSandboxedArtifactHtml(source, 'react');
+      expect(extractMetaCspContent(html)).toBe(ARTIFACT_CSP_CONTENT);
+      expect(html).toContain("connect-src 'none'");
+      const reporter = html.indexOf("type: 'error'");
+      expect(reporter).toBeGreaterThan(-1);
+      expect(reporter).toBeLessThan(html.indexOf(REACT_PREVIEW_SCRIPTS[0]!.src));
+    });
+
+    it('carries the source and cannot be closed early by a script end tag inside it', () => {
+      const html = buildSandboxedArtifactHtml(
+        'const x = "</script><img src=x onerror=alert(1)>"; function App(){return null}',
+        'react',
+      );
+      expect(html).toContain('function App(){return null}');
+      expect(html).not.toContain('</script><img');
+      expect(html).toContain('<\\/script><img');
+    });
   });
 
   it('reports only a well-formed error message from the page', () => {

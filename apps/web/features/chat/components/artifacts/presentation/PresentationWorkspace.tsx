@@ -32,7 +32,7 @@ import { toast } from 'sonner';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { useOverlayDialog } from '@features/chat/hooks/use-overlay-dialog';
-import { normalizeEditInstruction } from '../artifact-edit-request';
+import { normalizeEditInstruction } from '@agiworkforce/unified-chat/artifact-edit-request';
 import { DeckMenu, type DeckMenuItem } from './DeckMenu';
 import { ChartDataEditor } from './ChartDataEditor';
 import { SlideShapes } from './SlideShapes';
@@ -45,6 +45,7 @@ import {
   insertSlide,
   joinEditedSlide,
   moveSlide,
+  NEW_SLIDE_MARKDOWN,
   parseDeck,
   removeSlide,
   replaceShapesBlock,
@@ -56,8 +57,11 @@ import {
   slideTitle,
   splitSlideForEditing,
   type DeckDocument,
-} from './deck-model';
-import { REWRITE_SLIDE_INSTRUCTION, buildSlideEditRequest } from './deck-request';
+} from '@agiworkforce/unified-chat/deck-model';
+import {
+  REWRITE_SLIDE_INSTRUCTION,
+  buildSlideEditRequest,
+} from '@agiworkforce/unified-chat/deck-request';
 import {
   SHAPE_KINDS,
   SHAPE_LABELS,
@@ -88,8 +92,6 @@ export const DECK_DIAGRAM_TEMPLATE = [
   '  B -->|Yes| C[Do it]',
   '  B -->|No| D[Rethink]',
 ].join('\n');
-
-const NEW_SLIDE = '## New slide\n\n- First point\n- Second point';
 
 const SHAPE_ICONS: Record<ShapeKind, typeof Square> = {
   rect: Square,
@@ -366,7 +368,7 @@ export function PresentationWorkspace({
       label: 'New slide after this',
       icon: Plus,
       onSelect: () => {
-        commit(insertSlide(deck, current, NEW_SLIDE));
+        commit(insertSlide(deck, current, NEW_SLIDE_MARKDOWN));
         setIndex(current + 1);
       },
     },

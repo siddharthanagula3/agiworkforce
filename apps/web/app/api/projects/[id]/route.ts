@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
@@ -190,7 +191,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.starred !== undefined) {
     baseParams.push(body.starred);
     baseSetClauses.push(
-      `metadata = coalesce(metadata, '{}'::jsonb) || jsonb_build_object('starred', $${baseParams.length}::boolean)`,
+      `metadata = ${mergeJsonbObjectSql('metadata', `jsonb_build_object('starred', $${baseParams.length}::boolean)`)}`,
     );
   }
 

@@ -44,10 +44,15 @@ export async function runSessionRowAction(
   return succeeded;
 }
 
+/**
+ * The server unpins a chat it archives, so Undo hands back the pin the chat had
+ * along with the restore, as the phone does.
+ */
 export async function toggleConversationArchive(
   archived: boolean,
-  setArchived: (archived: boolean) => Promise<boolean>,
+  setArchived: (archived: boolean, pinned?: boolean) => Promise<boolean>,
   openArchived: () => void,
+  wasPinned = false,
 ): Promise<boolean> {
   const succeeded = await runSessionRowAction(archived ? 'restore' : 'archive', () =>
     setArchived(!archived),
@@ -56,7 +61,10 @@ export async function toggleConversationArchive(
     toast('Chat archived', {
       action: {
         label: 'Undo',
-        onClick: () => void runSessionRowAction('restore', () => setArchived(false)),
+        onClick: () =>
+          void runSessionRowAction('restore', () =>
+            wasPinned ? setArchived(false, true) : setArchived(false),
+          ),
       },
       cancel: { label: 'View archived', onClick: openArchived },
     });

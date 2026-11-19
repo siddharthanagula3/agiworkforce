@@ -13,6 +13,8 @@ const NATIVE_IOS_SRC = __dirname;
 const TOP_LEVEL_FILES = [
   'AGIAppTransaction.m',
   'AGIAppTransaction.swift',
+  'AGIBackupExclusion.m',
+  'AGIBackupExclusion.swift',
   'AGIFoundationModels.m',
   'AGIFoundationModels.swift',
   'AGITranslate.m',
@@ -28,6 +30,7 @@ const APP_INTENTS_FILES = [
   'AnalyzeImageIntent.swift',
   'AppShortcuts.swift',
   'AskAGIIntent.swift',
+  'OpenAGIWorkforceIntent.swift',
   'ScanIntent.swift',
   'SetReminderIntent.swift',
   'StartChatIntent.swift',
@@ -37,6 +40,55 @@ const APP_INTENTS_FILES = [
 ];
 
 const RESOURCE_FILES = ['AGIAppIntents/AppShortcuts.xcstrings'];
+
+const WIDGET_SHARED_INTENT_FILES = ['AGIAppIntents/OpenAGIWorkforceIntent.swift'];
+
+function unquote(value) {
+  return typeof value === 'string' ? value.replace(/^"|"$/g, '') : value;
+}
+
+function appGroupKeyFor(xcodeProject, appName) {
+  return (
+    xcodeProject.findPBXGroupKey({ name: appName }) ||
+    xcodeProject.findPBXGroupKey({ path: appName })
+  );
+}
+
+// One file reference, one build file per target: the Xcode equivalent of
+// ticking both boxes under Target Membership. Either plugin may run first, so
+// whichever does creates the reference and the other only adds its build file.
+function ensureSourceInTargets(xcodeProject, { projectPath, groupKey, targetUuids }) {
+  const references = xcodeProject.pbxFileReferenceSection();
+  let fileRef = Object.keys(references).find(
+    (key) =>
+      !key.endsWith('_comment') &&
+      references[key] &&
+      typeof references[key] === 'object' &&
+      unquote(references[key].path) === projectPath,
+  );
+  if (!fileRef) {
+    const file = xcodeProject.addFile(projectPath, groupKey);
+    if (!file?.fileRef) {
+      throw new Error(`${PLUGIN_NAME}: could not add a file reference for ${projectPath}`);
+    }
+    fileRef = file.fileRef;
+  }
+
+  const baseName = path.basename(projectPath);
+  const buildFiles = xcodeProject.pbxBuildFileSection();
+  for (const targetUuid of targetUuids) {
+    if (!xcodeProject.buildPhase('Sources', targetUuid)) {
+      throw new Error(`${PLUGIN_NAME}: target ${targetUuid} has no Sources build phase`);
+    }
+    const phase = xcodeProject.pbxSourcesBuildPhaseObj(targetUuid);
+    phase.files ??= [];
+    if (phase.files.some((entry) => buildFiles[entry.value]?.fileRef === fileRef)) continue;
+    const buildFileUuid = xcodeProject.generateUuid();
+    buildFiles[buildFileUuid] = { isa: 'PBXBuildFile', fileRef, fileRef_comment: baseName };
+    buildFiles[`${buildFileUuid}_comment`] = `${baseName} in Sources`;
+    phase.files.push({ value: buildFileUuid, comment: `${baseName} in Sources` });
+  }
+}
 
 function getIosDevelopmentTeam() {
   return (
@@ -93,9 +145,7 @@ function withXcodeSourceFiles(config) {
     const xcodeProject = c.modResults;
     const targetUuid = xcodeProject.getFirstTarget()?.uuid;
     const appName = c.modRequest.projectName ?? iosProjectNameFor(c.name);
-    const appGroupKey =
-      xcodeProject.findPBXGroupKey({ name: appName }) ||
-      xcodeProject.findPBXGroupKey({ path: appName });
+    const appGroupKey = appGroupKeyFor(xcodeProject, appName);
 
     if (!targetUuid || !appGroupKey) {
       throw new Error(
@@ -172,7 +222,16 @@ function withXcodeSourceFiles(config) {
     }
 
     for (const fileName of APP_INTENTS_FILES) {
-      safeAddSource(`AGIAppIntents/${fileName}`);
+      const relPath = `AGIAppIntents/${fileName}`;
+      if (WIDGET_SHARED_INTENT_FILES.includes(relPath)) {
+        ensureSourceInTargets(xcodeProject, {
+          projectPath: toProjectPath(relPath),
+          groupKey: appGroupKey,
+          targetUuids: [targetUuid],
+        });
+      } else {
+        safeAddSource(relPath);
+      }
     }
 
     for (const relPath of RESOURCE_FILES) {
@@ -190,3 +249,6 @@ function withAGINativeModulesIOS(config) {
 }
 
 module.exports = createRunOncePlugin(withAGINativeModulesIOS, PLUGIN_NAME, PLUGIN_VERSION);
+module.exports.WIDGET_SHARED_INTENT_FILES = WIDGET_SHARED_INTENT_FILES;
+module.exports.appGroupKeyFor = appGroupKeyFor;
+module.exports.ensureSourceInTargets = ensureSourceInTargets;

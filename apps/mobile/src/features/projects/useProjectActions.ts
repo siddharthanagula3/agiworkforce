@@ -39,9 +39,7 @@ export function useProjectActions(
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';
   const localProjects = useProjectStore((s) => s.projects);
-  const localActiveId = useProjectStore((s) => s.activeProjectId);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
-  const cloudActiveId = useCloudProjectStore((s) => s.activeProjectId);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const setProjectPinned = useProjectStore((s) => s.setProjectPinned);
@@ -66,7 +64,6 @@ export function useProjectActions(
       if (!found) return;
       const archived = 'isArchived' in found && found.isArchived;
       const pinned = 'metadata' in found ? isCloudProjectPinned(found) : found.pinned === true;
-      const isActive = projectId === (isCloud ? cloudActiveId : localActiveId);
       const editable: EditableProject = {
         id: found.id,
         name: found.name,
@@ -86,9 +83,12 @@ export function useProjectActions(
         });
         if (!archived) {
           actions.push({
-            key: 'active',
-            label: isActive ? 'Clear active' : 'Set active',
-            run: guard(() => setActiveProject(isActive ? null : projectId)),
+            key: 'new-chat',
+            label: 'New chat in project',
+            run: guard(() => {
+              setActiveProject(projectId);
+              router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+            }),
           });
         }
       }
@@ -106,7 +106,7 @@ export function useProjectActions(
 
       actions.push({
         key: 'rename',
-        label: 'Rename',
+        label: 'Edit project',
         run: guard(() => onRename(editable, ownership)),
       });
 
@@ -144,7 +144,7 @@ export function useProjectActions(
           Alert.alert(
             'Delete project?',
             mode === 'cloud'
-              ? `"${found.name}" is removed from all your devices. It cannot be restored from the app.`
+              ? `"${found.name}" and its sources are deleted from all your devices. Its chats move out of the project and stay in your chat list. It cannot be restored from the app.`
               : `"${found.name}" is deleted from this device. It cannot be restored.`,
             [
               { text: 'Cancel', style: 'cancel' },
@@ -164,11 +164,9 @@ export function useProjectActions(
       setOpenMenu({ title: found.name, actions });
     },
     [
-      cloudActiveId,
       cloudProjects,
       deleteProject,
       isCloud,
-      localActiveId,
       localProjects,
       onRename,
       router,

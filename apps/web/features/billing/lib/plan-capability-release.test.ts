@@ -102,7 +102,7 @@ describe('plan capability copy follows the release state', () => {
       const display = getBillingPlanDisplay(plan, EVERYTHING_RELEASED);
       expect(display.features.join('\n'), plan).not.toMatch(/unlimited/i);
     }
-    const change = summarizePlanChange('max', 'pro', EVERYTHING_RELEASED);
+    const change = summarizePlanChange('pro', 'free', EVERYTHING_RELEASED);
     expect(JSON.stringify(change)).not.toMatch(/unlimited/i);
     expect(change.limits.find((row) => row.label === 'Projects')?.from).toBe('No set limit');
   });

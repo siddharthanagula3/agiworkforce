@@ -73,6 +73,10 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 import type { StreamCallbacks } from '../services/streaming';
 import { getCloudModelsForTier } from '../lib/models';
+import { getRoutingSlotModel, resolveModelFamilySlot } from '@agiworkforce/types';
+
+const FAST_OPENAI = resolveModelFamilySlot('openai/gpt-fast');
+const FAST_ANTHROPIC = getRoutingSlotModel('fast_anthropic');
 
 describe('CompareScreen Cloud account isolation', () => {
   beforeEach(() => {
@@ -185,8 +189,9 @@ describe('CompareScreen Cloud account isolation', () => {
     expect(screen.queryByText('late-old-model-output')).toBeNull();
   });
 
-  it('does not offer or send a two-model comparison when the current plan has one model', () => {
-    useTierStore.setState({ tier: 'free' });
+  it('does not offer or send a two-model comparison when the current plan has fewer than two models', () => {
+    expect(getCloudModelsForTier('local-only').length).toBeLessThan(2);
+    useTierStore.setState({ tier: 'local-only' });
     render(<CompareScreen />);
 
     expect(screen.getByText(/fewer than two models available/)).toBeTruthy();
@@ -206,12 +211,31 @@ describe('CompareScreen Cloud account isolation', () => {
     expect(selected.every((id) => eligible.includes(id))).toBe(true);
   });
 
+  it('compares the fast OpenAI model with the fast Anthropic model on the Free plan, one answer at a time', () => {
+    useTierStore.setState({ tier: 'free' });
+    render(<CompareScreen />);
+    fireEvent.press(screen.getByLabelText('Send comparison prompt'));
+
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
+    const callbacksA = mockStreamChat.mock.calls[0]?.[1] as StreamCallbacks;
+    act(() => callbacksA.onDone());
+    expect(mockStreamChat).toHaveBeenCalledTimes(2);
+
+    const selected = mockStreamChat.mock.calls.map((call) => (call[0] as { model: string }).model);
+    expect([...selected].sort()).toEqual([FAST_OPENAI, FAST_ANTHROPIC].sort());
+  });
+
   it('aborts a paid comparison when the account loses access to its selected models', () => {
     render(<CompareScreen />);
     fireEvent.press(screen.getByLabelText('Send comparison prompt'));
     const callbacksA = mockStreamChat.mock.calls[0]?.[1] as StreamCallbacks;
     const signalA = mockStreamChat.mock.calls[0]?.[2] as AbortSignal;
     const signalB = mockStreamChat.mock.calls[1]?.[2] as AbortSignal;
+    const paidSelection = mockStreamChat.mock.calls.map(
+      (call) => (call[0] as { model: string }).model,
+    );
+    const freeIds = getCloudModelsForTier('free').map((model) => model.id);
+    expect(paidSelection.some((id) => !freeIds.includes(id))).toBe(true);
 
     act(() => callbacksA.onDelta({ content: 'paid-only-output' }));
     act(() => useTierStore.setState({ tier: 'free' }));
@@ -219,6 +243,23 @@ describe('CompareScreen Cloud account isolation', () => {
     expect(signalA.aborted).toBe(true);
     expect(signalB.aborted).toBe(true);
     expect(screen.queryByText('paid-only-output')).toBeNull();
+
+    mockStreamChat.mockClear();
+    fireEvent.press(screen.getByLabelText('Send comparison prompt'));
+    const nextModel = (mockStreamChat.mock.calls[0]?.[0] as { model: string }).model;
+    expect(freeIds).toContain(nextModel);
+  });
+
+  it('aborts a comparison and stops offering one when the plan drops below two models', () => {
+    render(<CompareScreen />);
+    fireEvent.press(screen.getByLabelText('Send comparison prompt'));
+    const signalA = mockStreamChat.mock.calls[0]?.[2] as AbortSignal;
+    const signalB = mockStreamChat.mock.calls[1]?.[2] as AbortSignal;
+
+    act(() => useTierStore.setState({ tier: 'local-only' }));
+
+    expect(signalA.aborted).toBe(true);
+    expect(signalB.aborted).toBe(true);
     expect(screen.queryByLabelText('Send comparison prompt')).toBeNull();
   });
 });

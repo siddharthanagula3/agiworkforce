@@ -4,6 +4,7 @@ import {
   CloudCredentialUnavailableError,
   UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
 } from '@/services/apiErrors';
+import { dailyUploadLimitMessage } from '@/services/failureCopy';
 import { ensureCloudSendConsent } from '@/services/llmGate';
 import {
   captureCloudAccountEpoch,
@@ -104,6 +105,12 @@ export async function uploadWithRetry(
           .getState()
           .settle(attachmentId, 'failed', UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE);
         throw lastError;
+      }
+      const dailyLimitMessage =
+        lastError instanceof ApiHttpError ? dailyUploadLimitMessage(lastError) : null;
+      if (dailyLimitMessage) {
+        useUploadLifecycleStore.getState().settle(attachmentId, 'failed', dailyLimitMessage);
+        return null;
       }
       if (isRefusal(lastError)) {
         useUploadLifecycleStore.getState().settle(attachmentId, 'failed', lastError.message);

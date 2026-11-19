@@ -8,8 +8,7 @@ import { useAuth } from '@clerk/expo';
 import { AuthView } from '@clerk/expo/native';
 import { X } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
-import { API_URL } from '@/lib/constants';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { CLERK_NATIVE_AUTH_OPTIONS } from '@/src/integrations/clerk';
 import {
@@ -209,7 +208,7 @@ export default function LoginScreen() {
                     <Pressable
                       key={path}
                       accessibilityRole="link"
-                      onPress={() => void openExternalUrl(new URL(path, API_URL).toString())}
+                      onPress={() => void openWebContentPage(path)}
                     >
                       <Text style={{ color: colors.teal }}>{label}</Text>
                     </Pressable>
@@ -340,7 +339,7 @@ export default function LoginScreen() {
             paddingHorizontal: 24,
           }}
         >
-          Your other accounts stay signed in on this phone.
+          Your other accounts stay signed in on this device.
         </Text>
       ) : null}
       <View style={{ flex: 1 }} testID="cloud-sign-in-screen">
@@ -384,7 +383,7 @@ export default function LoginScreen() {
           </Text>
           <Pressable
             accessibilityRole="link"
-            onPress={() => void openExternalUrl(new URL('/data-use', API_URL).toString())}
+            onPress={() => void openWebContentPage('/data-use')}
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
             <Text style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
@@ -437,7 +436,7 @@ export default function LoginScreen() {
             <Pressable
               key={path}
               accessibilityRole="link"
-              onPress={() => void openExternalUrl(new URL(path, API_URL).toString())}
+              onPress={() => void openWebContentPage(path)}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
                 {label}

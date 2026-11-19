@@ -711,6 +711,10 @@
       },
       {
         "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/artifacts"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
         "to": "@agiworkforce/client-runtime"
       },
       {

@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, ChevronRight, Cloud, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Card } from '@/components/ui/Card';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -19,6 +20,7 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useTierStore } from '@/src/features/billing/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
 import { spacing, useThemeColors } from '@/src/ui/theme';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import {
   AUTO_MODES,
   LOCAL_MODEL_LIST,
@@ -144,7 +146,7 @@ export default function ModelsScreen() {
           borderBottomColor: c.border,
           borderBottomWidth: 1,
           flexDirection: 'row',
-          height: 48,
+          minHeight: 48,
           paddingHorizontal: 12,
         }}
       >
@@ -158,7 +160,11 @@ export default function ModelsScreen() {
             <ArrowLeft size={20} color={c.textSecondary} />
           </View>
         </Pressable>
-        <Text variant="subheading" style={{ color: c.textPrimary, marginLeft: 4 }}>
+        <Text
+          variant="subheading"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ color: c.textPrimary, marginLeft: 4 }}
+        >
           Models
         </Text>
       </View>
@@ -167,6 +173,7 @@ export default function ModelsScreen() {
         testID="models-scroll"
         style={{ flex: 1 }}
         contentContainerStyle={{
+          ...contentColumn('reading'),
           gap: spacing.lg,
           paddingBottom: spacing['2xl'],
           paddingHorizontal: spacing.lg,

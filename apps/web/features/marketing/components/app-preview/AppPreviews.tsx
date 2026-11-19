@@ -910,13 +910,10 @@ export function PhoneAppPreview({
             Cloud
           </span>
         </span>
-        <span className="agi-app-phone-heading">How can I help you tonight?</span>
-        <span className="agi-app-phone-sub">
-          Start privately on this device. Use the sidebar for recents and projects.
-        </span>
+        <span className="agi-app-phone-heading">{NEW_CHAT_GREETING}</span>
       </div>
       <div className="agi-app-phone-composer">
-        <span className="agi-app-phone-placeholder">What&apos;s on your mind?</span>
+        <span className="agi-app-phone-placeholder">Type or hold to talk</span>
         <div className="agi-app-phone-composer-row">
           <Plus className="agi-app-icon agi-app-icon--xl" />
           <span className="agi-app-phone-model">

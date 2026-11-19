@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-15
 
 Until 2026-09-18 the only rollback in this repository was a step inside the job
 that deployed. It fired on `failure()` of the same run, which covers exactly one
@@ -72,6 +72,25 @@ The job builds nothing. It calls
 `scripts/verify-deployment.mjs` against the public apex. An audit write that
 fails after the provider accepted the rollback is a workflow warning, not a
 failure, so the serving-path verification still runs.
+
+### The rollback floor
+
+`scripts/config/rollback-floor.json` holds the oldest web deployment production
+may be rolled back to. It is `{"web": null}` until the deploy that first carries
+a stored-size check on chat files is live, and that deploy's step writes
+`{"web": {"deploymentId", "createdAt", "reason"}}` (`createdAt` is the
+deployment's creation time in epoch milliseconds, copied from the provider's own
+`createdAt`; seconds or a date string are refused or caught below). From then on
+`scripts/release/rollback.mjs` refuses a `--to` target created before the floor
+deployment, skips such deployments when it chooses one itself, and refuses with
+the floor deployment and its reason when none is left; a floor file it cannot
+read stops the rollback instead of being ignored. While the floor deployment is
+still among the 20 listed, a recorded time that differs from the provider's
+stops the rollback, so the drill checks the record. A dry run and the drill
+print the floor with its time, and the drill records it. With `web` null the
+choice is the one described above. The floor is read from the checkout the script
+runs in: run it from an up-to-date `main`, and once the floor has been written
+treat "no rollback floor recorded" in a dry run as a stop.
 
 ### From a laptop, when Actions is the thing that is down
 

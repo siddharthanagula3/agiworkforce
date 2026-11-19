@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { RefreshControl } from 'react-native';
+import { RefreshControl, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockFetch = jest.fn();
@@ -27,7 +27,10 @@ jest.mock('lucide-react-native', () => {
 });
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
-  return { useTheme: () => ({ colors: tokens.lightColors, statusBarStyle: 'dark' }) };
+  return {
+    useTheme: () => ({ colors: tokens.lightColors, statusBarStyle: 'dark' }),
+    useThemeColors: () => tokens.lightColors,
+  };
 });
 jest.mock('@/src/features/auth/store', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
@@ -63,6 +66,18 @@ type Call = {
   signal: AbortSignal | undefined;
   reject: (error: unknown) => void;
 };
+
+describe('Reflect header', () => {
+  it('titles the page with the shared centred settings header', () => {
+    mockFetch.mockReset();
+    mockFetch.mockReturnValue(new Promise(() => undefined));
+    const screen = render(<ReflectScreen />);
+
+    const header = screen.getByRole('header', { name: 'Reflect' });
+    expect(StyleSheet.flatten(header.props.style)).toMatchObject({ textAlign: 'center' });
+    expect(screen.getByLabelText('Go back')).toBeTruthy();
+  });
+});
 
 describe('Reflect request lifetime', () => {
   let calls: Call[];

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
@@ -66,6 +66,7 @@ jest.mock('@/stores/chatStore', () => ({
 }));
 
 import { ProjectSelectorBar } from '../src/features/chat/components/ProjectSelectorBar';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -121,5 +122,15 @@ describe('ProjectSelectorBar project changes', () => {
 
     expect(mockMoveConversationToProject).not.toHaveBeenCalled();
     expect(mockSetCloudActive).toHaveBeenCalledWith('project-b');
+  });
+
+  it('stops the project sheet at the reading column on a wide window', () => {
+    const utils = renderBar();
+
+    fireEvent.press(utils.getByLabelText('Active project: Alpha. Tap to change'));
+
+    expect(
+      StyleSheet.flatten(utils.getByTestId('project-selector-sheet').props.style),
+    ).toMatchObject({ width: '100%', maxWidth: READING_COLUMN_MAX_WIDTH, alignSelf: 'center' });
   });
 });

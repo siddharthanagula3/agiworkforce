@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
 import {
   resolveObjectStorageConfig,
   resolveObjectStorageRuntime,
@@ -32,6 +33,14 @@ export const BACKUP_SECRET_ACCESS_KEY_ENV = `${BACKUP_ENV_PREFIX}SECRET_ACCESS_K
 export const BACKUP_FORCE_PATH_STYLE_ENV = `${BACKUP_ENV_PREFIX}FORCE_PATH_STYLE`;
 
 export const OBJECT_BACKUP_MAX_BYTES = 256 * 1024 * 1024;
+
+const CHAT_ATTACHMENT_KEY_PREFIX = 'chat-attachments/';
+
+function backupCopyLimit(key: string): number {
+  return key.startsWith(CHAT_ATTACHMENT_KEY_PREFIX)
+    ? MAX_CHAT_ATTACHMENT_BYTES
+    : OBJECT_BACKUP_MAX_BYTES;
+}
 
 export type ReplicationOutcome =
   'unconfigured' | 'replicated' | 'already-present' | 'missing-source' | 'too-large';
@@ -176,7 +185,9 @@ export async function replicateObject(
 
   const head = await source.head(sourceBucket, key);
   if (!head) return { outcome: 'missing-source', bytes: 0 };
-  if ((head.contentLength ?? 0) > OBJECT_BACKUP_MAX_BYTES) {
+  const lengthUnknownOnChatKey =
+    head.contentLength === undefined && key.startsWith(CHAT_ATTACHMENT_KEY_PREFIX);
+  if (lengthUnknownOnChatKey || (head.contentLength ?? 0) > backupCopyLimit(key)) {
     logger.warn(
       { key, bytes: head.contentLength },
       '[object-backup] object exceeds the copy limit',

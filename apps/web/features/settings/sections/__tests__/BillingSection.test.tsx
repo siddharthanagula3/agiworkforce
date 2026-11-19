@@ -633,6 +633,23 @@ describe('BillingSection', () => {
     expect(screen.getByText('Ends on')).toBeTruthy();
     expect(screen.queryByText('Renews on')).toBeNull();
   });
+
+  it('prints no renewal or period-end row for a plan given without a purchase until it is set to end', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    mockSubscription.subscription_source = 'manual';
+    mockSubscription.billing_owner = 'personal';
+
+    const { unmount } = render(<BillingSection />);
+    expect(screen.queryByText('Renews on')).toBeNull();
+    expect(screen.queryByText('Current period ends')).toBeNull();
+    expect(screen.queryByText('Ends on')).toBeNull();
+    unmount();
+
+    mockSubscription.cancel_at_period_end = true;
+    render(<BillingSection />);
+    expect(screen.getByText('Ends on')).toBeTruthy();
+    expect(screen.queryByText('Renews on')).toBeNull();
+  });
 });
 
 describe('BillingSection saved cards and plan comparison', () => {

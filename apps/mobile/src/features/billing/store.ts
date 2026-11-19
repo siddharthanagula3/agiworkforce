@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { api } from '@/services/api';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import {
   effectivePlanTier,
   normalizeBillingPlanTier,
@@ -11,6 +12,14 @@ import {
 import type { BillingPlanTier, CapabilityDecision, PlatformCapability } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
 import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
+import {
+  applyServerAttachmentLimits,
+  clearServerAttachmentLimits,
+} from '@/src/features/chat/upload/attachmentLimits';
+import {
+  applyServerMessageLimits,
+  clearServerMessageLimits,
+} from '@/src/features/chat/upload/messageLimits';
 import type { MobileBillingSource } from './subscriptionSource';
 import {
   captureCloudAccountEpoch,
@@ -75,6 +84,9 @@ export const useTierStore = create<TierState>()(
             data.plan.effective_tier ?? effectivePlanTier(data.plan.tier ?? null, data.plan.status),
           );
           const grantedCapabilities = data.capability_handshake?.granted ?? [];
+          const codeExecutionAvailable =
+            resolveCapabilityDocumentDecision(data.capability_handshake, 'canUseCloudExecution')
+              ?.allowed === true;
           set({
             tier,
             billingTier,
@@ -83,15 +95,16 @@ export const useTierStore = create<TierState>()(
             billingPeriodEnd: data.plan.current_period_end,
             billingCancelsAtPeriodEnd: data.plan.cancel_at_period_end ?? false,
             lastRefreshedAt: new Date().toISOString(),
-            codeExecutionAvailable:
-              resolveCapabilityDocumentDecision(data.capability_handshake, 'canUseCloudExecution')
-                ?.allowed === true,
+            codeExecutionAvailable,
             genericWebSearchAvailable: data.feature_flags.generic_web_search ?? false,
             grantedCapabilities,
             capabilityDocument: data.capability_handshake ?? null,
             capabilityHandshakeVersion: data.capability_handshake?.version ?? null,
             capabilityHandshakeReceived: data.capability_handshake !== undefined,
           });
+          applyServerAttachmentLimits(data.attachment_limits);
+          applyServerMessageLimits(data.message_limits);
+          if (codeExecutionAvailable) useChatViewStore.getState().setFeature('codeExecution', true);
           return true;
         } catch (err) {
           if (!isCloudAccountEpochCurrent(account)) return false;
@@ -107,6 +120,8 @@ export const useTierStore = create<TierState>()(
       },
 
       clearAccountEntitlements: () => {
+        clearServerAttachmentLimits();
+        clearServerMessageLimits();
         set({
           tier: 'free',
           billingTier: 'free',

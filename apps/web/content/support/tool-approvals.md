@@ -4,7 +4,7 @@ title: Approvals: what a tool may do without asking
 path: /agent-permissions
 category: connectors
 tags: approval, approvals, permission, always allow, ask every time, auto approve, read only, tool permissions, deny tool, call log, reset permissions
-updated: 2026-10-12
+updated: 2026-11-16
 description: How the account-wide default, per-tool permissions and in-the-moment approvals decide what a tool may do.
 scope: public
 ---
@@ -17,7 +17,7 @@ Settings carries one **Default approval for tool actions** with three settings:
   your approval, including actions that only read data.
 - **Run read-only actions without asking.** Actions that only read data, search
   the web, fetch a page, or run code in the AGI sandbox run on their own.
-  Anything that writes, deletes, sends, buys, changes credentials, or runs on
+  Anything that writes, deletes, sends, spends money, changes credentials, or runs on
   your own machine still asks, and so does every connector tool AGI does not
   know.
 - **Skip approvals.** This is the website default for an unconfigured account.

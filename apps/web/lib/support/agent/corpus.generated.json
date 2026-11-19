@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 46,
-  "chunkCount": 259,
+  "chunkCount": 262,
   "documents": [
     {
       "id": "account-security",
@@ -29,8 +29,9 @@
         "api keys"
       ],
       "description": "How to manage passkeys, two-factor authentication, your password, active sessions and API keys.",
-      "updated": "2026-11-08",
+      "updated": "2026-11-16",
       "source": "content/support/account-security.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "account-security#0",
@@ -44,7 +45,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Setting up an authenticator app (TOTP) and replacing backup codes can be\nswitched off for a time: while it is, Settings, Security shows **Temporarily\nunavailable** where you would set one up or replace your backup codes, and a\nworkspace cannot start requiring multi-factor authentication until they return.\nSMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one.\n{{AVAILABILITY.summary}}"
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Setting up an authenticator app (TOTP) and replacing backup codes can be\nswitched off for a time: while it is, Settings, Security on the web shows\n**Temporarily unavailable** where you would set one up or replace your backup\ncodes, the AGI Mobile app leaves out those options, and a workspace cannot start\nrequiring multi-factor authentication until they return.\nSMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one.\n{{AVAILABILITY.summary}}"
         },
         {
           "id": "account-security#2",
@@ -131,6 +132,7 @@
       "description": "How to sign in, use one account on several devices and contact support about your account.",
       "updated": "2026-10-05",
       "source": "content/support/accounts-and-sign-in.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "accounts-and-sign-in#0",
@@ -182,8 +184,9 @@
         "deliverables"
       ],
       "description": "How AGI Work runs a multi-step task, shows progress, asks for approvals and keeps past sessions.",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "source": "content/support/agi-work.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "agi-work#0",
@@ -218,7 +221,8 @@
           "ordinal": 4,
           "heading": "Availability",
           "headingPath": "Run a task with AGI Work › Availability",
-          "text": "AGI Work is a paid-plan feature, included on {{PLANS.agi_work}}. A workspace\nadministrator can also turn it off for a managed workspace. The pricing page\ncarries the current details."
+          "text": "AGI Work is a paid-plan feature, included on {{PLANS.agi_work}}.\n\nA workspace administrator can turn AGI Work off for a managed workspace.\n\nThe pricing page carries the current details.",
+          "phoneText": "A workspace administrator can turn AGI Work off for a managed workspace."
         }
       ]
     },
@@ -244,6 +248,7 @@
       "description": "What an artifact is, how to edit, copy out and publish one, and what to do when a preview will not render.",
       "updated": "2026-10-22",
       "source": "content/support/artifacts.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "artifacts#0",
@@ -309,6 +314,7 @@
       "description": "Where billing lives, and how to upgrade, switch between monthly and yearly billing, cancel and find invoices.",
       "updated": "2026-11-11",
       "source": "content/support/billing-and-plans.md",
+      "onPhone": false,
       "chunks": [
         {
           "id": "billing-and-plans#0",
@@ -396,15 +402,16 @@
         "vscode"
       ],
       "description": "How to add your own provider API key, where it is stored and how to use a custom OpenAI-compatible endpoint.",
-      "updated": "2026-10-05",
+      "updated": "2026-11-16",
       "source": "content/support/byok-provider-keys.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "byok-provider-keys#0",
           "ordinal": 0,
           "heading": "What BYOK means here",
           "headingPath": "Add your own provider API key (BYOK) › What BYOK means here",
-          "text": "BYOK means \"bring your own key\". Check [surface availability](https://agiworkforce.com/get-started)\nbefore installing the CLI or VS Code extension. Review your provider's billing\nand data-use terms before using a key."
+          "text": "BYOK means \"bring your own key\". Check [surface availability](https://agiworkforce.com/get-started)\nbefore installing the CLI or VS Code extension. Review your provider's charges\nand data-use terms before using a key."
         },
         {
           "id": "byok-provider-keys#1",
@@ -477,8 +484,9 @@
         "response style"
       ],
       "description": "How to start a chat, choose how answers are written, attach files, edit or branch a conversation and organize chats.",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "source": "content/support/chat-basics.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "chat-basics#0",
@@ -527,7 +535,7 @@
           "ordinal": 6,
           "heading": "Change the theme and appearance",
           "headingPath": "Start, steer and manage a chat › Change the theme and appearance",
-          "text": "Open Settings, General and find the **Preferences** group. The **Appearance**\nrow sets the theme: System follows your device, while Light and Dark stay as\nyou chose. To switch to dark theme, choose Dark there.\n\nThe rows beneath it change how the app looks. **Accent colour** offers AGI\namber, Green, Blue, Violet and Rose. **Contrast** offers System, which follows your device setting, and High. **Motion**\noffers System, which follows your device setting, and Reduced, which turns down\nanimation in streaming responses and other interface elements. **Chat font**\nchanges the typeface of message text to Sans, Serif or Dyslexic friendly, and\ncode stays monospace. **Chat text size** runs from Small to Large.\n\n**Display Language** translates pricing, marketing pages, device sign-in, and\nthe app's navigation: the sidebar, menus, and the composer's own labels.\nSettings field labels and your conversations are unaffected."
+          "text": "Open Settings, General and find the **Preferences** group. The **Appearance**\nrow sets the theme: System follows your device, while Light and Dark stay as\nyou chose. To switch to dark theme, choose Dark there.\n\nThe rows beneath it change how the app looks. **Accent colour** offers AGI\namber, Green, Blue, Violet and Rose. **Contrast** offers System, which follows your device setting, and High. **Motion**\noffers System, which follows your device setting, and Reduced, which turns down\nanimation in streaming responses and other interface elements. **Chat font**\nchanges the typeface of message text to Sans, Serif or Dyslexic friendly, and\ncode stays monospace. **Chat text size** runs from Small to Large.\n\n**Display Language** translates marketing pages, device sign-in, and\nthe app's navigation: the sidebar, menus, and the composer's own labels.\nSettings field labels and your conversations are unaffected."
         },
         {
           "id": "chat-basics#7",
@@ -558,8 +566,9 @@
         "chrome"
       ],
       "description": "What the Chrome extension does, how it automates the browser and what to use without it.",
-      "updated": "2026-10-15",
+      "updated": "2026-11-16",
       "source": "content/support/chrome-extension.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "chrome-extension#0",
@@ -587,7 +596,7 @@
           "ordinal": 3,
           "heading": "Managed cloud from the extension",
           "headingPath": "The Chrome extension › Managed cloud from the extension",
-          "text": "Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}}\nincluded, and spends the same credits as the web app. The extension does not\naccept provider keys, and neither do web, mobile or desktop; BYOK is a CLI and\nVS Code capability."
+          "text": "Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}}\nincluded, and is metered the same way as the web app. The extension does not\naccept provider keys, and neither do web, mobile or desktop; BYOK is a CLI and\nVS Code capability."
         },
         {
           "id": "chrome-extension#4",
@@ -624,6 +633,7 @@
       "description": "What computer use does in AGI Desktop, how to turn it on and how to stop or pause a run.",
       "updated": "2026-10-22",
       "source": "content/support/computer-use.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "computer-use#0",
@@ -692,6 +702,7 @@
       "description": "Where the CLI keeps its settings, how to view and change them and which setting wins.",
       "updated": "2026-10-12",
       "source": "content/support/configuration.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "configuration#0",
@@ -755,8 +766,9 @@
         "always allow"
       ],
       "description": "What connectors do, how to add and remove one and how tool permissions work.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/connectors-and-mcp.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "connectors-and-mcp#0",
@@ -791,7 +803,8 @@
           "ordinal": 4,
           "heading": "Custom MCP connections and plans",
           "headingPath": "Connectors and MCP › Custom MCP connections and plans",
-          "text": "The number of custom MCP connections available depends on your plan. The pricing\npage lists that limit once connectors are open."
+          "text": "The number of custom MCP connections available depends on your plan.\n\nThe pricing page lists that limit once connectors are open.",
+          "phoneText": "The number of custom MCP connections available depends on your plan."
         }
       ]
     },
@@ -818,8 +831,9 @@
         "safety"
       ],
       "description": "Who to contact in an emergency and how AGI responds to a message about self-harm.",
-      "updated": "2026-10-08",
+      "updated": "2026-11-16",
       "source": "content/support/crisis-resources.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "crisis-resources#0",
@@ -840,7 +854,7 @@
           "ordinal": 2,
           "heading": "What AGI does when a message is about self-harm",
           "headingPath": "Crisis and self-harm resources › What AGI does when a message is about self-harm",
-          "text": "Nothing special, and you should know that before you rely on it.\n\n- AGI has no feature that detects a message about suicide or self-harm.\n- A chat shows no crisis banner, helpline number or pop-up.\n- A message about self-harm alerts no person at AGI.\n- The model you picked answers under its provider's own safety rules. What it\n  says, and whether it mentions a helpline, differs from one model to another.\n\nOne setting touches this subject. **Reduce sensitive content**, in Settings under\nSafety, is off unless you turn it on. When it is on, AGI refuses a short list of\nexplicit or harmful how-to prompts before they reach a Managed Cloud model, and\nrequests for suicide or self-harm methods are on that list. The refusal says the\ncontent is unavailable while the setting is on. It shows no helpline."
+          "text": "Very little, and you should know that before you rely on it.\n\n- Apart from the Reduce sensitive content check below, AGI does not scan chats\n  for messages about suicide or self-harm, and a message about self-harm alerts\n  no person at AGI.\n- AGI adds no crisis banner or pop-up to a chat, and the only crisis note it\n  adds is in the phone refusal described below.\n- In Managed Cloud and with your own provider key, the model you picked answers\n  under its provider's own safety rules. What it says, and whether it mentions\n  a helpline, differs from one model to another.\n- In Local mode in the AGI Mobile app, a small model runs on your phone, and AGI\n  does not add an instruction about self-harm to what it sends that model. What\n  it says depends on how the model was trained, and a small model can get this\n  wrong.\n\nOne setting touches this subject. **Reduce sensitive content**, in Settings under\nSafety, is off unless you turn it on. When it is on, AGI refuses a short list of\nexplicit or harmful how-to prompts before they reach a Managed Cloud model, and\nrequests for a method, means or dose of suicide or self-harm are on that list.\nA message about how you feel, or a request for help for yourself or someone\nelse, is not refused. On the web, the refusal says the content is unavailable\nwhile the setting is on. It shows no helpline. In the AGI Mobile app the same\ncheck runs on the phone before a chat message you type or dictate reaches any\nmodel, in Local mode as well, and when it refuses a request about suicide or\nself-harm, the pop-up that says so adds a note that points to a crisis line and\nyour local emergency number. A phone in minor-safe mode runs the check whether\nor not the setting is on."
         },
         {
           "id": "crisis-resources#3",
@@ -884,6 +898,7 @@
       "description": "Which instruction files the CLI reads before a session, how repository memory works and how VS Code sets instructions.",
       "updated": "2026-10-12",
       "source": "content/support/custom-instructions.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "custom-instructions#0",
@@ -924,34 +939,59 @@
         "account erasure",
         "remove my data"
       ],
-      "description": "How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
-      "updated": "2026-11-12",
+      "description": "How to delete your account on the web or in the AGI Mobile app, what is deleted and what is kept, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
+      "updated": "2026-11-16",
       "source": "content/support/delete-your-account.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "delete-your-account#0",
           "ordinal": 0,
+          "heading": "Delete your account on the web",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Delete your account on the web",
+          "text": "You can delete your AGI Mobile account here on the web, without the app. Sign\nin at [agiworkforce.com/settings/account](https://agiworkforce.com/settings/account)\nwith the account you use in the app and choose **Delete account**. It is the\nsame request the app makes, with the same cancellation window.\n\nIf you cannot sign in, email\n[{{CONTACT.email}}](mailto:{{CONTACT.email}}?subject=Privacy%20request) from\nyour account address with the subject line \"Privacy request\", or use the form\nat [agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests),\nwhich gives you a reference. Requests are worked by a person, not by an\nautomatic process.\n\nIf you created the account in the iPhone app with Sign in with Apple and the\nsign-in page here has no Apple button, use the form at\n[agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests),\nchoose Erasure and say in the details that you signed up with Apple."
+        },
+        {
+          "id": "delete-your-account#1",
+          "ordinal": 1,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
           "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and its Cloud data are scheduled for permanent deletion,\nand erasure starts after a cancellation deadline 24 hours later. It also says\nthat anything the law or an active legal hold requires us to keep is kept.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes.\n\nIf an active legal hold covers your account, for example one your workspace has\nplaced, nothing is erased until the hold is released."
         },
         {
-          "id": "delete-your-account#1",
-          "ordinal": 1,
-          "heading": "Changing your mind",
-          "headingPath": "Delete your account, or cancel a scheduled deletion › Changing your mind",
-          "text": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing. If deleting the account stops your web plan\nfrom renewing, cancelling the deletion turns its renewal back on.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway."
-        },
-        {
           "id": "delete-your-account#2",
           "ordinal": 2,
-          "heading": "Before you confirm",
-          "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
-          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf your plan is billed on the web and still renews, deleting your account turns\nits renewal off, so you are not charged again. If you bought the plan from Apple\nor Google, deleting your account does not cancel it: the confirmation says so\nand links to the page where you cancel it with the store. A plan you have already cancelled does not block deletion: it ends when\nerasure runs, and its unused time is not refunded. While a payment on the plan\nis still being collected, the request is refused and nothing is scheduled.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
+          "heading": "What is deleted and what is kept",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › What is deleted and what is kept",
+          "text": "The daily job erases your user-scoped records and stored objects and deletes\nyour identity at our authentication provider. Section 05 of the\n[privacy policy](https://agiworkforce.com/privacy#s-05) holds the full retention\nschedule and says why each of these is kept after erasure:\n\n- Security and organisation audit log entries naming you. Erasure does not purge\n  them. The security audit log keeps an entry for 90 days. Organisation audit log\n  entries have no automatic end date: a separate privileged routine exists to\n  purge them, and it is not part of the automatic path.\n- A record that you were erased, so the system can tell that you must stay\n  erased.\n- Double-charge protection keys, deleted once their 24-hour window closes, and\n  any payment still moving when you delete.\n- Rows that belong to an organisation rather than to you, such as its billing\n  ledger row with your user id removed. Books of account are kept\n  {{RETENTION.statutoryRecordYears}} years and then deleted.\n- Stripe's own record of your payments and invoices, under Stripe's retention.\n- Platform logs and database or object-storage snapshots, retained according to\n  our hosting vendors' own configuration.",
+          "phoneText": "The daily job erases your user-scoped records and stored objects and deletes\nyour identity at our authentication provider. Section 05 of the\n[privacy policy](https://agiworkforce.com/privacy#s-05) holds the full retention\nschedule and says why each of these is kept after erasure:\n\n- Security and organisation audit log entries naming you. Erasure does not purge\n  them. The security audit log keeps an entry for 90 days. Organisation audit log\n  entries have no automatic end date: a separate privileged routine exists to\n  purge them, and it is not part of the automatic path.\n- A record that you were erased, so the system can tell that you must stay\n  erased.\n- Platform logs and database or object-storage snapshots, retained according to\n  our hosting vendors' own configuration."
         },
         {
           "id": "delete-your-account#3",
           "ordinal": 3,
+          "heading": "Changing your mind",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Changing your mind",
+          "text": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing.\n\nIf deleting the account stops your web plan from renewing, cancelling the\ndeletion turns its renewal back on.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway.",
+          "phoneText": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway."
+        },
+        {
+          "id": "delete-your-account#4",
+          "ordinal": 4,
+          "heading": "If you signed in with Apple",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › If you signed in with Apple",
+          "text": "Apple keeps AGI Mobile in the list of apps that use Sign in with Apple until you\nremove it there. On iPhone, open Settings, tap your name, tap **Sign in with\nApple**, choose the app and tap **Delete**. Apple's guide is\n[Manage your apps with Sign in with Apple](https://support.apple.com/en-us/102571)."
+        },
+        {
+          "id": "delete-your-account#5",
+          "ordinal": 5,
+          "heading": "Before you confirm",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
+          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf your plan is billed on the web and still renews, deleting your account turns\nits renewal off, so you are not charged again. If you bought the plan from Apple\nor Google, deleting your account does not cancel it: the confirmation says so\nand links to the page where you cancel it with the store. A plan you have already cancelled does not block deletion: it ends when\nerasure runs, and its unused time is not refunded. While a payment on the plan\nis still being collected, the request is refused and nothing is scheduled.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again.",
+          "phoneText": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
+        },
+        {
+          "id": "delete-your-account#6",
+          "ordinal": 6,
           "heading": "Deleting conversations without deleting the account",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Deleting conversations without deleting the account",
           "text": "Settings, Privacy has narrower controls for the workspace you are currently\nusing. **Archive all chats** moves that workspace's chats out of the sidebar and\ncan be undone from Archived chats. **Delete all chats** moves that workspace's\nactive and archived conversations to Recently deleted, where you can restore\nthem. Both ask first and name the current-workspace scope."
@@ -983,8 +1023,9 @@
         "windows"
       ],
       "description": "How to check availability before installing, and how the desktop app and the CLI reach managed cloud.",
-      "updated": "2026-11-10",
+      "updated": "2026-11-16",
       "source": "content/support/desktop-and-cli.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "desktop-and-cli#0",
@@ -1012,7 +1053,8 @@
           "ordinal": 3,
           "heading": "Managed cloud from developer surfaces",
           "headingPath": "Desktop app and CLI › Managed cloud from developer surfaces",
-          "text": "For managed-cloud setup, use the guide for the client you are installing and\nreview the current [plan details](https://agiworkforce.com/pricing). Keep account\nsign-in separate from provider-key setup."
+          "text": "For managed-cloud setup, use the guide for the client you are installing. Keep\naccount sign-in separate from provider-key setup.\n\nReview the current [plan details](https://agiworkforce.com/pricing).",
+          "phoneText": "For managed-cloud setup, use the guide for the client you are installing. Keep\naccount sign-in separate from provider-key setup."
         }
       ]
     },
@@ -1038,6 +1080,7 @@
       "description": "What to evaluate before you sign: what is claimed, administrator controls, audit evidence and data residency.",
       "updated": "2026-10-12",
       "source": "content/support/enterprise-security.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "enterprise-security#0",
@@ -1096,6 +1139,7 @@
       "description": "How to request an export of your account data, and what else you can ask for.",
       "updated": "2026-10-06",
       "source": "content/support/export-your-data.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "export-your-data#0",
@@ -1152,6 +1196,7 @@
       "description": "How to attach a file to a chat, what a chat can read and where attachments end up.",
       "updated": "2026-09-17",
       "source": "content/support/files-and-attachments.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "files-and-attachments#0",
@@ -1205,22 +1250,23 @@
         "install"
       ],
       "description": "How to create an account, start a chat, choose a model route and decide what to set up first.",
-      "updated": "2026-11-10",
+      "updated": "2026-11-16",
       "source": "content/support/getting-started.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "getting-started#0",
           "ordinal": 0,
           "heading": "Create an account and start a chat",
           "headingPath": "Getting started with AGI › Create an account and start a chat",
-          "text": "Open [Sign up](https://agiworkforce.com/signup), create an account, then open the\nweb chat and send a message. Consult [Plans](https://agiworkforce.com/pricing) and\n[Billing and plans](https://agiworkforce.com/help/billing-and-plans) before\nchoosing an upgrade."
+          "text": "Open [Sign up](https://agiworkforce.com/signup), create an account, then open the\nweb chat and send a message."
         },
         {
           "id": "getting-started#1",
           "ordinal": 1,
           "heading": "Choose a model route",
           "headingPath": "Getting started with AGI › Choose a model route",
-          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client.\n\n- **Local** uses a model served by a local runtime. With an installed CLI and\n  local model server, select Ollama or LM Studio. See\n  [Local mode](https://agiworkforce.com/help/local-mode) for setup.\n- **BYOK** means bringing your own provider API key. See\n  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login\n  commands, key storage and custom endpoints. Review your provider's billing and\n  data-use terms before using a key.\n- **Managed cloud** uses your AGI account. Review the current plan details on the\n  pricing page.\n\nDesktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there."
+          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client.\n\n- **Local** uses a model served by a local runtime. With an installed CLI and\n  local model server, select Ollama or LM Studio. See\n  [Local mode](https://agiworkforce.com/help/local-mode) for setup.\n- **BYOK** means bringing your own provider API key. See\n  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login\n  commands, key storage and custom endpoints. Review your provider's charges and\n  data-use terms before using a key.\n- **Managed cloud** uses your AGI account.\n\nDesktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there."
         },
         {
           "id": "getting-started#2",
@@ -1273,9 +1319,10 @@
         "web",
         "windows"
       ],
-      "description": "Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.",
-      "updated": "2026-11-11",
+      "description": "Definitions of the terms AGI uses for trust modes, usage, chat, tools, connectors and surfaces.",
+      "updated": "2026-11-16",
       "source": "content/support/glossary.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "glossary#0",
@@ -1294,9 +1341,10 @@
         {
           "id": "glossary#2",
           "ordinal": 2,
-          "heading": "Usage and billing terms",
-          "headingPath": "Glossary of AGI terms › Usage and billing terms",
-          "text": "**Allowance** is the metered capacity a plan carries for managed cloud. When it\nruns out, managed requests stop until it resets, unless **Keep going after a\nusage limit** is on and you have credits; Local and BYOK are unaffected.\n\n**Credits** are a prepaid balance, separate from the allowance, that managed\nusage can draw on once the allowance is exhausted.\n\n**Top-up** is a credit purchase, either a preset pack or another amount in whole\ndollars.\n\n**Concurrency** is how many responses may be generating at once. Reaching that\nceiling is not the same as exhausting an allowance: it clears as soon as an\nin-flight response finishes.\n\n**Auto** is the routing choice that picks a model for you. Where the free lane is\noffered, it appears as Auto (free), and its capacity is not guaranteed."
+          "heading": "Usage terms",
+          "headingPath": "Glossary of AGI terms › Usage terms",
+          "text": "**Allowance** is the metered capacity a plan carries for managed cloud. When it\nruns out, managed requests stop until it resets; Local and BYOK are unaffected.\n\nWith **Keep going after a usage limit** on, managed requests continue past the\nallowance while you have credits.\n\n**Credits** are a prepaid balance, separate from the allowance, that managed\nusage can draw on once the allowance is exhausted.\n\n**Top-up** is a credit purchase, either a preset pack or another amount in whole\ndollars.\n\n**Concurrency** is how many responses may be generating at once. Reaching that\nceiling is not the same as exhausting an allowance: it clears as soon as an\nin-flight response finishes.\n\n**Auto** is the routing choice that picks a model for you. Where the free lane is\noffered, it appears as Auto (free), and its capacity is not guaranteed.",
+          "phoneText": "**Allowance** is the metered capacity a plan carries for managed cloud. When it\nruns out, managed requests stop until it resets; Local and BYOK are unaffected.\n\n**Concurrency** is how many responses may be generating at once. Reaching that\nceiling is not the same as exhausting an allowance: it clears as soon as an\nin-flight response finishes.\n\n**Auto** is the routing choice that picks a model for you. Where the free lane is\noffered, it appears as Auto (free), and its capacity is not guaranteed."
         },
         {
           "id": "glossary#3",
@@ -1353,8 +1401,9 @@
         "windows"
       ],
       "description": "How to check release availability and install the desktop and mobile apps.",
-      "updated": "2026-11-10",
+      "updated": "2026-11-16",
       "source": "content/support/install-desktop-and-mobile.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "install-desktop-and-mobile#0",
@@ -1389,7 +1438,8 @@
           "ordinal": 4,
           "heading": "Before choosing a client",
           "headingPath": "Installing the desktop and mobile apps › Before choosing a client",
-          "text": "Review the client's setup guide and your [plan](https://agiworkforce.com/pricing).\nCheck workspace permissions and the operating-system or browser requirements for\nthe workflow you want to use."
+          "text": "Review the client's setup guide. Check workspace permissions and the\noperating-system or browser requirements for the workflow you want to use.\n\nReview your [plan](https://agiworkforce.com/pricing) as well.",
+          "phoneText": "Review the client's setup guide. Check workspace permissions and the\noperating-system or browser requirements for the workflow you want to use."
         }
       ]
     },
@@ -1422,8 +1472,9 @@
         "windows"
       ],
       "description": "How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "source": "content/support/install-the-cli.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "install-the-cli#0",
@@ -1465,7 +1516,8 @@
           "ordinal": 5,
           "heading": "Managed cloud from the CLI",
           "headingPath": "Install and set up the CLI › Managed cloud from the CLI",
-          "text": "Managed cloud access from the CLI requires one of these plans:\n{{PLANS.developer_surfaces}}. Local mode and BYOK work on any account, including\none with no subscription at all. The pricing page lists it once the CLI or the\nVS Code extension is released."
+          "text": "Managed cloud access from the CLI requires one of these plans:\n{{PLANS.developer_surfaces}}. Local mode and BYOK work on any account, whatever\nits plan.\n\nThe pricing page lists it once the CLI or the VS Code extension is released.",
+          "phoneText": null
         },
         {
           "id": "install-the-cli#6",
@@ -1500,6 +1552,7 @@
       "description": "The keyboard shortcuts for the app, the message composer and local Code sessions, and how to turn one off.",
       "updated": "2026-10-22",
       "source": "content/support/keyboard-shortcuts.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "keyboard-shortcuts#0",
@@ -1561,6 +1614,7 @@
       "description": "How to find, open, delete and restore your uploads, generated files and artifacts in the Library.",
       "updated": "2026-11-11",
       "source": "content/support/library.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "library#0",
@@ -1619,6 +1673,7 @@
       "description": "How to run a local model with the CLI, how to set it up and how model routes and tool permissions apply.",
       "updated": "2026-11-10",
       "source": "content/support/local-mode.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "local-mode#0",
@@ -1667,22 +1722,25 @@
         "limit"
       ],
       "description": "How AGI managed cloud works: access, usage, running out of capacity, where data is hosted and training.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/managed-cloud.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "managed-cloud#0",
           "ordinal": 0,
           "heading": "Open by default",
           "headingPath": "AGI managed cloud › Open by default",
-          "text": "The {{PLAN.free}} plan on AGI managed cloud is open by default. Sign in and start:\nit has no waitlist and needs no invite code. A self-serve paid plan starts at checkout when\npaid upgrades are open to your account; while they are not, it needs an access\ncode, and without one you join the upgrade waitlist. The {{PLAN.team}} plan is\none of those self-serve plans, billed per seat. The {{PLAN.enterprise}} plan,\nwith SSO and SCIM, is a contract conversation rather than a self-serve checkout."
+          "text": "The {{PLAN.free}} plan on AGI managed cloud is open by default. Sign in and start:\nit has no waitlist and needs no invite code.\n\nA self-serve paid plan starts at checkout when\npaid upgrades are open to your account; while they are not, it needs an access\ncode, and without one you join the upgrade waitlist. The {{PLAN.team}} plan is\none of those self-serve plans, billed per seat. The {{PLAN.enterprise}} plan,\nwith SSO and SCIM, is a contract conversation rather than a self-serve checkout.",
+          "phoneText": "The {{PLAN.free}} plan on AGI managed cloud is open by default. Sign in and start:\nit has no waitlist and needs no invite code."
         },
         {
           "id": "managed-cloud#1",
           "ordinal": 1,
           "heading": "How usage works",
           "headingPath": "AGI managed cloud › How usage works",
-          "text": "Managed cloud usage is metered. A paid plan carries a capacity allowance, and the\nusage view in Settings shows how much of your current allowance you have used and\nwhen it resets. Usage is reported as a percentage of your allowance and a reset\ntime. On the {{PLAN.free}} plan the usage view shows only **Upgrade**, never a\nmeter."
+          "text": "Managed cloud usage is metered. Usage is reported as a percentage of your\nallowance and a reset time.\n\nA paid plan carries a capacity allowance, and the\nusage view in Settings shows how much of your current allowance you have used and\nwhen it resets. On the {{PLAN.free}} plan the usage view shows only **Upgrade**, never a\nmeter.",
+          "phoneText": "Managed cloud usage is metered. Usage is reported as a percentage of your\nallowance and a reset time."
         },
         {
           "id": "managed-cloud#2",
@@ -1703,7 +1761,8 @@
           "ordinal": 4,
           "heading": "Training",
           "headingPath": "AGI managed cloud › Training",
-          "text": "AGI does not use customer conversation content to train AGI-owned models.\n{{POSITIONING.trustBoundary}}"
+          "text": "AGI does not use customer conversation content to train AGI-owned models.\n\n{{POSITIONING.trustBoundary}}",
+          "phoneText": "AGI does not use customer conversation content to train AGI-owned models."
         }
       ]
     },
@@ -1726,8 +1785,9 @@
         "scopes"
       ],
       "description": "How to connect a custom MCP server, what discovery results mean and which permissions and limits apply.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/mcp-connections.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "mcp-connections#0",
@@ -1769,7 +1829,8 @@
           "ordinal": 5,
           "heading": "Limits",
           "headingPath": "Connect a custom MCP server › Limits",
-          "text": "How many custom MCP connections you can keep depends on your plan; the pricing\npage lists the figures once connectors are open. A workspace administrator can\nrestrict which connectors a managed workspace permits."
+          "text": "How many custom MCP connections you can keep depends on your plan. A workspace\nadministrator can restrict which connectors a managed workspace permits.\n\nThe pricing page lists the figures once connectors are open.",
+          "phoneText": "How many custom MCP connections you can keep depends on your plan. A workspace\nadministrator can restrict which connectors a managed workspace permits."
         },
         {
           "id": "mcp-connections#6",
@@ -1799,6 +1860,7 @@
       "description": "The memory switches in Settings, what memory is designed not to keep and how to clear it.",
       "updated": "2026-10-15",
       "source": "content/support/memory.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "memory#0",
@@ -1866,8 +1928,9 @@
         "prompt cache"
       ],
       "description": "How to pick a model by name, what the capability badges mean and how to control thinking effort.",
-      "updated": "2026-11-07",
+      "updated": "2026-11-16",
       "source": "content/support/models-and-reasoning.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "models-and-reasoning#0",
@@ -1881,7 +1944,8 @@
           "ordinal": 1,
           "heading": "What the badges mean",
           "headingPath": "Pick a model, and control how hard it thinks › What the badges mean",
-          "text": "- **Upgrade**: the model exists but your plan does not include it.\n- **Coming soon, not yet available**: it is in the catalogue but not live.\n- **Unavailable right now**: it is live but not answering at the moment.\n- **Auto (free) · community models, capacity varies**: the free routing lane,\n  whose capacity is not guaranteed."
+          "text": "- **Upgrade**: the model exists but your plan does not include it.\n- **Coming soon, not yet available**: it is in the catalogue but not live.\n- **Unavailable right now**: it is live but not answering at the moment.\n- **Auto (free) · community models, capacity varies**: the free routing lane,\n  whose capacity is not guaranteed.",
+          "phoneText": "- **Coming soon, not yet available**: it is in the catalogue but not live.\n- **Unavailable right now**: it is live but not answering at the moment.\n- **Auto (free) · community models, capacity varies**: the free routing lane,\n  whose capacity is not guaranteed."
         },
         {
           "id": "models-and-reasoning#2",
@@ -1931,15 +1995,16 @@
         "anonymized usage"
       ],
       "description": "What is stored where, how diagnostics and temporary chats work and how to manage your data and sessions.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/privacy-controls.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "privacy-controls#0",
           "ordinal": 0,
           "heading": "What is stored where",
           "headingPath": "Privacy controls in Settings › What is stored where",
-          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select. The CLI is\n{{STATUS.cli}} and VS Code is {{STATUS.vscode}}. Web, Mobile, Desktop and Chrome\nuse managed cloud and do not accept provider keys. Managed cloud conversations\nare encrypted in transit, and at rest by the database and object-storage vendors\nthat hold them, as a property of those vendors' platforms and not a layer AGI\nadds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nThe {{PLAN.free}} plan is served by free capacity from model providers, AGI picks the\nprovider for the default model, and some of those providers' terms may allow\ntraining on what you send; to keep your chats out of training, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
+          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select. The CLI is\n{{STATUS.cli}} and VS Code is {{STATUS.vscode}}. Web, Mobile, Desktop and Chrome\nuse managed cloud and do not accept provider keys. Managed cloud conversations\nare encrypted in transit, and at rest by the database and object-storage vendors\nthat hold them, as a property of those vendors' platforms and not a layer AGI\nadds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nOn the {{PLAN.free}} plan, AGI picks the provider for the default model, a chat\non another model the plan includes goes to that model's provider, and some\nproviders' terms may allow training on what you send; to keep your chats out of\ntraining, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
         },
         {
           "id": "privacy-controls#1",
@@ -1997,8 +2062,9 @@
         "delete project"
       ],
       "description": "How to create a project, add sources, share, duplicate and delete it, and the limits that apply.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/projects.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "projects#0",
@@ -2040,7 +2106,8 @@
           "ordinal": 5,
           "heading": "Limits",
           "headingPath": "Projects: group chats around shared context › Limits",
-          "text": "How many projects and how much knowledge storage you get depends on your plan.\nThe pricing page carries the current figures."
+          "text": "How many projects and how much knowledge storage you get depends on your plan.\n\nThe pricing page carries the current figures.",
+          "phoneText": "How many projects and how much knowledge storage you get depends on your plan."
         }
       ]
     },
@@ -2068,8 +2135,9 @@
         "routing"
       ],
       "description": "How to choose a product surface, read the catalog counts, change the model route and use automatic routing.",
-      "updated": "2026-11-10",
+      "updated": "2026-11-16",
       "source": "content/support/providers-and-models.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "providers-and-models#0",
@@ -2083,7 +2151,8 @@
           "ordinal": 1,
           "heading": "Understand the catalog counts",
           "headingPath": "Providers and models › Understand the catalog counts",
-          "text": "The provider-key catalog contains {{MARKETING.models.display}} model entries\nunder {{MARKETING.providers.display}} provider integrations. These are catalog\ncounts rather than a list of models offered to every account. Consult your\nsurface's model picker and [plan](https://agiworkforce.com/pricing) for your\nselection."
+          "text": "The provider-key catalog contains {{MARKETING.models.display}} model entries\nunder {{MARKETING.providers.display}} provider integrations. These are catalog\ncounts rather than a list of models offered to every account. Consult your\nsurface's model picker for your selection.\n\nYour [plan](https://agiworkforce.com/pricing) also shapes that selection.",
+          "phoneText": "The provider-key catalog contains {{MARKETING.models.display}} model entries\nunder {{MARKETING.providers.display}} provider integrations. These are catalog\ncounts rather than a list of models offered to every account. Consult your\nsurface's model picker for your selection."
         },
         {
           "id": "providers-and-models#2",
@@ -2121,8 +2190,9 @@
         "automation"
       ],
       "description": "How to create a schedule or a trigger, what an unattended run means and the limits that apply.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/schedules-and-triggers.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "schedules-and-triggers#0",
@@ -2157,7 +2227,7 @@
           "ordinal": 4,
           "heading": "Limits",
           "headingPath": "Schedule a task, or run it on a trigger › Limits",
-          "text": "How many scheduled tasks you can keep depends on your plan, and free and\nBYOK-only accounts have none. A workspace administrator can turn Schedules and\nEvent triggers off for a managed workspace. The pricing page carries the current\nper-plan figures."
+          "text": "How many scheduled tasks you can keep depends on your plan, and free and\nBYOK-only accounts have none. A workspace administrator can turn Schedules and\nEvent triggers off for a managed workspace."
         }
       ]
     },
@@ -2179,8 +2249,9 @@
         "help search"
       ],
       "description": "How web search, Deep Research and searching your own chats and the help centre work.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/search.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "search#0",
@@ -2194,7 +2265,8 @@
           "ordinal": 1,
           "heading": "Deep Research",
           "headingPath": "Search: the web, your chats and the help centre › Deep Research",
-          "text": "**Deep Research** is a separate composer mode for multi-step investigation\nrather than a single answer. It is not available on every model: choosing one\nthat cannot do it says \"Deep Research isn't available for this model. Choose\nAuto or a model that supports Deep Research.\" Availability also depends on your\nplan, and an ineligible plan shows \"Upgrade to use Deep Research\"."
+          "text": "**Deep Research** is a separate composer mode for multi-step investigation\nrather than a single answer. It is not available on every model: choosing one\nthat cannot do it says \"Deep Research isn't available for this model. Choose\nAuto or a model that supports Deep Research.\" Availability also depends on your\nplan.\n\nAn ineligible plan shows \"Upgrade to use Deep Research\".",
+          "phoneText": "**Deep Research** is a separate composer mode for multi-step investigation\nrather than a single answer. It is not available on every model: choosing one\nthat cannot do it says \"Deep Research isn't available for this model. Choose\nAuto or a model that supports Deep Research.\" Availability also depends on your\nplan."
         },
         {
           "id": "search#2",
@@ -2240,6 +2312,7 @@
       "description": "How to create, change and revoke a share link, find your links and export a chat instead of sharing it.",
       "updated": "2026-10-02",
       "source": "content/support/sharing-conversations.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "sharing-conversations#0",
@@ -2300,8 +2373,9 @@
         "first chat"
       ],
       "description": "How to create an account, what you can do right away and what to try if sign-up does not complete.",
-      "updated": "2026-10-15",
+      "updated": "2026-11-16",
       "source": "content/support/signing-up.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "signing-up#0",
@@ -2315,7 +2389,8 @@
           "ordinal": 1,
           "heading": "What you can do immediately",
           "headingPath": "Create an account and send your first message › What you can do immediately",
-          "text": "The {{PLAN.free}} plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem.\nA self-serve paid plan starts at checkout when paid upgrades are open to your\naccount; while they are not, it needs an access code, and without one you join\nthe upgrade waitlist."
+          "text": "The {{PLAN.free}} plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem.\n\nA self-serve paid plan starts at checkout when paid upgrades are open to your\naccount; while they are not, it needs an access code, and without one you join\nthe upgrade waitlist.",
+          "phoneText": "The {{PLAN.free}} plan is open by default. A new account can open the chat surface and\nsend a message straight away: it has no waitlist and no invite code to redeem."
         },
         {
           "id": "signing-up#2",
@@ -2360,6 +2435,7 @@
       "description": "The browsers and browser features AGI needs, what we test, phones and tablets, and what works offline.",
       "updated": "2026-10-08",
       "source": "content/support/system-requirements.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "system-requirements#0",
@@ -2430,6 +2506,7 @@
       "description": "What a temporary chat does, how to turn it on and end it and what you cannot do with one.",
       "updated": "2026-10-02",
       "source": "content/support/temporary-chats.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "temporary-chats#0",
@@ -2480,15 +2557,16 @@
         "reset permissions"
       ],
       "description": "How the account-wide default, per-tool permissions and in-the-moment approvals decide what a tool may do.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/tool-approvals.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "tool-approvals#0",
           "ordinal": 0,
           "heading": "The account-wide default",
           "headingPath": "Approvals: what a tool may do without asking › The account-wide default",
-          "text": "Settings carries one **Default approval for tool actions** with three settings:\n\n- **Ask before every action.** Every connector, plugin and tool action waits for\n  your approval, including actions that only read data.\n- **Run read-only actions without asking.** Actions that only read data, search\n  the web, fetch a page, or run code in the AGI sandbox run on their own.\n  Anything that writes, deletes, sends, buys, changes credentials, or runs on\n  your own machine still asks, and so does every connector tool AGI does not\n  know.\n- **Skip approvals.** This is the website default for an unconfigured account.\n  Eligible reads, searches, sandboxed code, and reversible actions run without\n  asking. Destructive or unknown actions still ask. Saved per-tool Ask and Deny\n  choices and workspace restrictions still apply.\n\nYour saved choice syncs to your account. If the website cannot read it, tools\nask rather than assuming automatic approval."
+          "text": "Settings carries one **Default approval for tool actions** with three settings:\n\n- **Ask before every action.** Every connector, plugin and tool action waits for\n  your approval, including actions that only read data.\n- **Run read-only actions without asking.** Actions that only read data, search\n  the web, fetch a page, or run code in the AGI sandbox run on their own.\n  Anything that writes, deletes, sends, spends money, changes credentials, or runs on\n  your own machine still asks, and so does every connector tool AGI does not\n  know.\n- **Skip approvals.** This is the website default for an unconfigured account.\n  Eligible reads, searches, sandboxed code, and reversible actions run without\n  asking. Destructive or unknown actions still ask. Saved per-tool Ask and Deny\n  choices and workspace restrictions still apply.\n\nYour saved choice syncs to your account. If the website cannot read it, tools\nask rather than assuming automatic approval."
         },
         {
           "id": "tool-approvals#1",
@@ -2539,7 +2617,6 @@
         "no response",
         "offline",
         "retry",
-        "upgrade required",
         "unavailable",
         "contact support",
         "search failed",
@@ -2550,8 +2627,9 @@
         "extension"
       ],
       "description": "What to check when a page, chat, message, file, tool, model, voice, search, the CLI or an extension does not work.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/troubleshooting.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "troubleshooting#0",
@@ -2579,7 +2657,7 @@
           "ordinal": 3,
           "heading": "A message will not send",
           "headingPath": "Troubleshooting: when something does not work › A message will not send",
-          "text": "- \"Your previous message was still starting, so this one is back here. Send it\n  again.\" Send it once more; nothing was lost.\n- \"Your queued message was not sent: you switched chats before the reply\n  finished.\" It was saved as a draft in the original chat. Its attachments were\n  not kept, so re-attach them.\n- A plan-limited refusal names the plan, not a fault. On a paid plan, check the\n  usage view in Settings for the current allowance and reset time."
+          "text": "- \"Your previous message was still starting, so this one is back here. Send it\n  again.\" Send it once more; nothing was lost.\n- \"Your queued message was not sent: you switched chats before the reply\n  finished.\" It was saved as a draft in the original chat. Its attachments were\n  not kept, so re-attach them.\n- A plan-limited refusal names the plan, not a fault. Where Settings shows a usage\n  meter, check it for the current allowance and reset time."
         },
         {
           "id": "troubleshooting#4",
@@ -2600,7 +2678,8 @@
           "ordinal": 6,
           "heading": "A model is missing from the picker",
           "headingPath": "Troubleshooting: when something does not work › A model is missing from the picker",
-          "text": "The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not\nlive yet), or **Unavailable right now** (live but not answering). A workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
+          "text": "The badge says which case it is: **Coming soon** (not live yet) or\n**Unavailable right now** (live but not answering).\n\n**Upgrade** means your plan does not include the model.\n\nA workspace model policy can also remove models entirely, in which\ncase they do not appear at all.",
+          "phoneText": "The badge says which case it is: **Coming soon** (not live yet) or\n**Unavailable right now** (live but not answering).\n\nA workspace model policy can also remove models entirely, in which\ncase they do not appear at all."
         },
         {
           "id": "troubleshooting#7",
@@ -2669,6 +2748,7 @@
       "description": "How usage is measured, what happens when an allowance runs out and how credits and concurrency limits work.",
       "updated": "2026-09-19",
       "source": "content/support/usage-and-credits.md",
+      "onPhone": false,
       "chunks": [
         {
           "id": "usage-and-credits#0",
@@ -2735,6 +2815,7 @@
       "description": "The difference between dictation and voice mode, and what to check when voice will not start.",
       "updated": "2026-09-19",
       "source": "content/support/voice.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "voice#0",
@@ -2791,6 +2872,7 @@
       "description": "How to check availability, use the editor commands, manage credentials and check the local runtime.",
       "updated": "2026-10-05",
       "source": "content/support/vscode-extension.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "vscode-extension#0",
@@ -2856,22 +2938,25 @@
         "owner"
       ],
       "description": "How to create, switch, leave and delete a workspace, use its console and what members see.",
-      "updated": "2026-11-11",
+      "updated": "2026-11-16",
       "source": "content/support/workspace-administration.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "workspace-administration#0",
           "ordinal": 0,
           "heading": "The workspace console",
           "headingPath": "Administering a workspace › The workspace console",
-          "text": "A workspace is administered from its own console rather than from personal\nsettings. Its sections are:\n\n- **Overview**: the workspace's current posture at a glance.\n- **Members**: who belongs to the workspace, what role they hold, and how many\n  seats that consumes. Invitations and removals happen here.\n- **Roles**: built-in and custom roles, additional roles, and the roles a\n  directory group grants.\n- **Policy**: privacy modes, managed compute, sync surfaces, retention,\n  features and exceptions.\n- **Models**: which models and providers the workspace permits.\n- **Connectors**: which integrations the workspace permits.\n- **Code**: GitHub, MCP servers, desktop sync and review for the workspace.\n- **MCP servers**: the servers the workspace publishes to its members.\n- **Plugins**: the plugins the workspace publishes, and who gets them.\n- **Identity**: single sign-on, domain verification and SCIM directory\n  provisioning.\n- **Sharing**: the projects, conversations, artifacts and connectors shared\n  across the workspace.\n- **Usage**: managed cloud spend by member, model and provider.\n- **Data**: legal holds, and the record of what retention has deleted.\n- **Audit**: administrative and policy events, with export and SIEM streaming.\n- **Billing**: plan, seats, and where workspace billing is managed."
+          "text": "A workspace is administered from its own console rather than from personal\nsettings. Its sections are:\n\n- **Overview**: the workspace's current posture at a glance.\n- **Members**: who belongs to the workspace, what role they hold, and how many\n  seats that consumes. Invitations and removals happen here.\n- **Roles**: built-in and custom roles, additional roles, and the roles a\n  directory group grants.\n- **Policy**: privacy modes, managed compute, sync surfaces, retention,\n  features and exceptions.\n- **Models**: which models and providers the workspace permits.\n- **Connectors**: which integrations the workspace permits.\n- **Code**: GitHub, MCP servers, desktop sync and review for the workspace.\n- **MCP servers**: the servers the workspace publishes to its members.\n- **Plugins**: the plugins the workspace publishes, and who gets them.\n- **Identity**: single sign-on, domain verification and SCIM directory\n  provisioning.\n- **Sharing**: the projects, conversations, artifacts and connectors shared\n  across the workspace.\n- **Usage**: managed cloud spend by member, model and provider.\n- **Data**: legal holds, and the record of what retention has deleted.\n- **Audit**: administrative and policy events, with export and SIEM streaming.\n- **Billing**: plan, seats, and where workspace billing is managed.",
+          "phoneText": "A workspace is administered from its own console rather than from personal\nsettings. Its sections are:\n\n- **Overview**: the workspace's current posture at a glance.\n- **Members**: who belongs to the workspace, what role they hold, and how many\n  seats that consumes. Invitations and removals happen here.\n- **Roles**: built-in and custom roles, additional roles, and the roles a\n  directory group grants.\n- **Policy**: privacy modes, managed compute, sync surfaces, retention,\n  features and exceptions.\n- **Models**: which models and providers the workspace permits.\n- **Connectors**: which integrations the workspace permits.\n- **Code**: GitHub, MCP servers, desktop sync and review for the workspace.\n- **MCP servers**: the servers the workspace publishes to its members.\n- **Plugins**: the plugins the workspace publishes, and who gets them.\n- **Identity**: single sign-on, domain verification and SCIM directory\n  provisioning.\n- **Sharing**: the projects, conversations, artifacts and connectors shared\n  across the workspace.\n- **Usage**: managed cloud spend by member, model and provider.\n- **Data**: legal holds, and the record of what retention has deleted.\n- **Audit**: administrative and policy events, with export and SIEM streaming."
         },
         {
           "id": "workspace-administration#1",
           "ordinal": 1,
           "heading": "Creating a workspace",
           "headingPath": "Administering a workspace › Creating a workspace",
-          "text": "Settings, Workspace is where a workspace is created: give it a name, and a slug\nmade of lowercase letters, numbers and hyphens. Creating one needs a\n{{PLAN.team}} or {{PLAN.enterprise}} plan, and on any other plan the page says\nso in place of the form.\n\nAn account owns one workspace at most. A second attempt is refused with \"You\nalready own a workspace. Switch to it from the account menu.\" Other workspaces\nare joined by invitation. A slug another workspace already uses is refused with\n\"That organization slug is already taken\".\n\nA new workspace starts with the seats you paid for. When the seat count cannot\nbe read, nothing is created: \"Your purchased seats could not be verified. No\norganization was created; please try again.\" A workspace that is created opens\nstraight away, and the app reloads inside it."
+          "text": "Settings, Workspace is where a workspace is created: give it a name, and a slug\nmade of lowercase letters, numbers and hyphens.\n\nCreating one needs a {{PLAN.team}} or {{PLAN.enterprise}} plan, and on any other\nplan the page says so in place of the form.\n\nAn account owns one workspace at most. A second attempt is refused with \"You\nalready own a workspace. Switch to it from the account menu.\" Other workspaces\nare joined by invitation. A slug another workspace already uses is refused with\n\"That organization slug is already taken\".\n\nA new workspace starts with the seats you paid for. When the seat count cannot\nbe read, nothing is created: \"Your purchased seats could not be verified. No\norganization was created; please try again.\"\n\nA workspace that is created opens straight away, and the app reloads inside it.",
+          "phoneText": "Settings, Workspace is where a workspace is created: give it a name, and a slug\nmade of lowercase letters, numbers and hyphens.\n\nAn account owns one workspace at most. A second attempt is refused with \"You\nalready own a workspace. Switch to it from the account menu.\" Other workspaces\nare joined by invitation. A slug another workspace already uses is refused with\n\"That organization slug is already taken\".\n\nA workspace that is created opens straight away, and the app reloads inside it."
         },
         {
           "id": "workspace-administration#2",
@@ -2892,14 +2977,16 @@
           "ordinal": 4,
           "heading": "Deleting a workspace",
           "headingPath": "Administering a workspace › Deleting a workspace",
-          "text": "Only the owner can delete a workspace. Settings, Workspace, **Delete this\nworkspace** opens the deletion page, where you confirm by typing the\nworkspace's name or its slug. A confirmation that matches neither schedules\nnothing.\n\nNothing is erased on the day you ask. Deletion is scheduled 14 days ahead, and\nthe owner can cancel it from the same page until then; after the scheduled date\na cancellation is refused. A daily job then erases the workspace's\nconversations, projects, files, connectors and API keys for every member. Two\nrecords are kept rather than erased: billing history is anonymised, and the\nworkspace's audit trail stays with its reference to the workspace removed.\n\nA workspace under an active legal hold cannot be scheduled for deletion. The\nrequest is refused and names how many holds are active, and each one has to be\nreleased first. A hold placed after deletion was scheduled stops the erasure\ntoo: the workspace stays scheduled and nothing is erased while the hold lasts."
+          "text": "Only the owner can delete a workspace. Settings, Workspace, **Delete this\nworkspace** opens the deletion page, where you confirm by typing the\nworkspace's name or its slug. A confirmation that matches neither schedules\nnothing.\n\nNothing is erased on the day you ask. Deletion is scheduled 14 days ahead, and\nthe owner can cancel it from the same page until then; after the scheduled date\na cancellation is refused. A daily job then erases the workspace's\nconversations, projects, files, connectors and API keys for every member.\n\nTwo\nrecords are kept rather than erased: billing history is anonymised, and the\nworkspace's audit trail stays with its reference to the workspace removed.\n\nA workspace under an active legal hold cannot be scheduled for deletion. The\nrequest is refused and names how many holds are active, and each one has to be\nreleased first. A hold placed after deletion was scheduled stops the erasure\ntoo: the workspace stays scheduled and nothing is erased while the hold lasts.",
+          "phoneText": "Only the owner can delete a workspace. Settings, Workspace, **Delete this\nworkspace** opens the deletion page, where you confirm by typing the\nworkspace's name or its slug. A confirmation that matches neither schedules\nnothing.\n\nNothing is erased on the day you ask. Deletion is scheduled 14 days ahead, and\nthe owner can cancel it from the same page until then; after the scheduled date\na cancellation is refused. A daily job then erases the workspace's\nconversations, projects, files, connectors and API keys for every member.\n\nA workspace under an active legal hold cannot be scheduled for deletion. The\nrequest is refused and names how many holds are active, and each one has to be\nreleased first. A hold placed after deletion was scheduled stops the erasure\ntoo: the workspace stays scheduled and nothing is erased while the hold lasts."
         },
         {
           "id": "workspace-administration#5",
           "ordinal": 5,
           "heading": "What members see",
           "headingPath": "Administering a workspace › What members see",
-          "text": "Members do not see the console. A member on a workspace-managed plan sees\nread-only billing in their own settings, saying the plan is managed by the\norganization and to contact an administrator to change it."
+          "text": "Members do not see the console.\n\nA member on a workspace-managed plan sees\nread-only billing in their own settings, saying the plan is managed by the\norganization and to contact an administrator to change it.",
+          "phoneText": "Members do not see the console."
         },
         {
           "id": "workspace-administration#6",
@@ -2946,6 +3033,7 @@
       "description": "What a workspace policy controls, including exceptions, retention, spend and audit.",
       "updated": "2026-11-11",
       "source": "content/support/workspace-policy.md",
+      "onPhone": true,
       "chunks": [
         {
           "id": "workspace-policy#0",
@@ -3014,6 +3102,7 @@
       "description": "The built-in roles, what each permission grants, custom roles, directory groups and seats.",
       "updated": "2026-09-17",
       "source": "content/support/workspace-roles-and-groups.md",
+      "onPhone": false,
       "chunks": [
         {
           "id": "workspace-roles-and-groups#0",

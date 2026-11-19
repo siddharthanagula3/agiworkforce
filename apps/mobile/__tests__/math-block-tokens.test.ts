@@ -18,7 +18,6 @@
  *   - 132×2  [rgba] rgba(33,128,141,...)  blockContainer background
  *   - 227    [named-color] 'transparent'  webView style
  *   - 230    [rgba] rgba(33,128,141,0.08) fallbackBlock background
- *   - 235    [hex]  #21808d               fallbackBlock borderLeftColor
  *   - 248    [rgba] rgba(33,128,141,0.08) fallbackInline background
  */
 
@@ -106,11 +105,10 @@ describe('MathBlock, design-token color values (AP-02)', () => {
       expect(match!.backgroundColor).not.toBe('rgba(33, 128, 141, 0.08)');
     });
 
-    it('fallbackBlock borderLeftColor is the teal token', () => {
+    it('fallbackBlock has no left bar, so it never reads as a quote', () => {
       const allStyles = flatStylesFromTree('E=mc^2', true);
-      const match = allStyles.find((s) => 'borderLeftColor' in s);
-      expect(match).toBeDefined();
-      expect(match!.borderLeftColor).toBe(EXPECTED_TEAL);
+      expect(allStyles.some((style) => 'borderLeftColor' in style)).toBe(false);
+      expect(allStyles.some((style) => 'borderLeftWidth' in style)).toBe(false);
     });
   });
 });

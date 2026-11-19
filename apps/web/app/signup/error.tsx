@@ -1,5 +1,6 @@
 'use client';
 
+import { UnlessEmbedded } from '@shared/components/layout/EmbeddedPage';
 export default function Error({
   error,
   reset,
@@ -21,12 +22,14 @@ export default function Error({
           >
             Try Again
           </button>
-          <a
-            href="/"
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            Go Home
-          </a>
+          <UnlessEmbedded>
+            <a
+              href="/"
+              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Go Home
+            </a>
+          </UnlessEmbedded>
         </div>
         {error.digest && (
           <p className="mt-4 text-sm text-muted-foreground">Error ID: {error.digest}</p>

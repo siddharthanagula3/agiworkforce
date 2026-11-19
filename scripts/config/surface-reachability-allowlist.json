@@ -18,7 +18,12 @@
       }
     },
     "mobile": {
-      "intentional": [],
+      "intentional": [
+        {
+          "pathPrefix": "apps/mobile/src/features/chat/components/artifact-viewers/pdfViewerHtml.android.ts",
+          "reason": "Android variant of pdfViewerHtml.ts. Metro picks it by its platform extension, so no import names it."
+        }
+      ],
       "unreachableDebt": {
         "reason": "Pre-existing unreachable mobile modules measured by the first real import-graph walk. The list may only shrink; adding to it requires an explicit, reviewed edit.",
         "trackedBy": "SIX-32",

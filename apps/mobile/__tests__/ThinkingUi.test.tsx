@@ -52,6 +52,7 @@ jest.mock('react-native-reanimated', () => {
     withTiming: jest.fn((v) => v),
     Easing: { inOut: jest.fn(() => jest.fn()), ease: {}, linear: (value: number) => value },
     cancelAnimation: jest.fn(),
+    interpolateColor: (_value: number, _input: number[], output: string[]) => output[0],
   };
 });
 
@@ -69,21 +70,21 @@ describe('ThinkingChip', () => {
 
   it('ticks a live "Thinking for Xs" timer while streaming', () => {
     const startedAt = Date.now();
-    const { getByText } = render(
+    const { getByLabelText } = render(
       <ThinkingChip thinkingText="Analyzing the request" isStreaming startedAtMs={startedAt} />,
     );
 
-    expect(getByText(/Thinking for 0s/)).toBeTruthy();
+    expect(getByLabelText(/Thinking for 0s/)).toBeTruthy();
 
     act(() => {
       jest.advanceTimersByTime(3000);
     });
-    expect(getByText(/Thinking for 3s/)).toBeTruthy();
+    expect(getByLabelText(/Thinking for 3s/)).toBeTruthy();
 
     act(() => {
       jest.advanceTimersByTime(4000);
     });
-    expect(getByText(/Thinking for 7s/)).toBeTruthy();
+    expect(getByLabelText(/Thinking for 7s/)).toBeTruthy();
   });
 
   it('stops ticking and shows the static measured duration once done', () => {
@@ -113,9 +114,11 @@ describe('ThinkingChip', () => {
   });
 
   it('falls back to the reasoning phrase while streaming without a start timestamp', () => {
-    const { queryByText } = render(<ThinkingChip thinkingText="Analyzing the data" isStreaming />);
+    const { queryByLabelText } = render(
+      <ThinkingChip thinkingText="Analyzing the data" isStreaming />,
+    );
 
-    expect(queryByText(/Thinking for/)).toBeNull();
+    expect(queryByLabelText(/Thinking for/)).toBeNull();
   });
 
   it('expands to show the raw reasoning text on tap after completion', () => {

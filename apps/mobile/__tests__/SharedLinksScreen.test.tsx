@@ -130,7 +130,7 @@ describe('Shared links screen', () => {
     render(<SharedLinksScreen />);
     await waitFor(() => expect(mockGet).toHaveBeenCalled());
 
-    expect(screen.getByText('Shared links')).toBeTruthy();
+    expect(screen.getByText('Shared Links')).toBeTruthy();
     expect(screen.getByLabelText('Go back')).toBeTruthy();
   });
 

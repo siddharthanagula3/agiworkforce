@@ -59,13 +59,19 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-11-13",
+      "current": "2026-11-16",
       "versions": [
+        {
+          "date": "2026-11-16",
+          "summary": "Says that on the Free plan AGI chooses the default model and you may pick another model the plan includes, within a usage allowance, and that a Free chat on a model from Anthropic goes to Anthropic. Removes the statement that paid plans have more capacity than Free.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-13",
           "summary": "Corrects what the policy says about Desktop: Desktop chat uses Cloud, as before, and a local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there, or a provider key you set up in the CLI; the policy used to say Desktop was cloud-only with no user-key path. Corrects what it says about deleting your account: erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The policy used to say the account was permanently erased 24 hours after the request. It names more of what the Chrome extension handles: the titles, addresses and last visit times of up to 20 matching pages when you turn on Browsing history and allow a search; a tab's console messages and network request lines, never their bodies or headers, during browser control; the record of each action it takes and the website it acted on; for a page attach, up to 30,000 characters of the page's visible text and what is in its visible form fields, leaving out password, payment card, one-time code, PIN and Social Security number fields; and your browser's time zone name, which each extension chat request carries. It says private messages can reach us through a page you let the extension read or act on. It says what we keep when you pair a device for Remote Control: a pairing record with the pairing code, your account and workspace, the paired device identifiers and a rotating connection credential, kept while the pairing lasts and at most seven days, then deleted when either device ends the pairing or about an hour after it expires, and when you delete your account. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-11-11",

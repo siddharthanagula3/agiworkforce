@@ -9,11 +9,11 @@ export const FEATURES = {
 
   cloudTasks: true,
 
-  dispatch: true,
+  dispatch: false,
 
   schedules: true,
 
-  companion: true,
+  companion: false,
 
   connectors: true,
 
@@ -32,6 +32,10 @@ export const FEATURES = {
   pluginMarketplaceAdmin: false,
 
   codeExecution: true,
+
+  appLanguage: false,
+
+  linkBrowser: false,
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;

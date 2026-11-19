@@ -378,6 +378,7 @@ export function CodeSessionView({
 
         {awayFromLatest ? (
           <PressableBox
+            hitSlop={2}
             onPress={jumpToLatest}
             accessibilityRole="button"
             accessibilityLabel={COPY.jumpToLatest}
@@ -403,6 +404,7 @@ export function CodeSessionView({
       <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, gap: 6 }}>
         {hasChanges ? (
           <PressableBox
+            hitSlop={{ top: 4, bottom: 4 }}
             onPress={() => setChangesOpen(true)}
             testID="remote-code-changes-pill"
             accessibilityRole="button"

@@ -1300,13 +1300,6 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   letter-spacing: -0.01em;
 }
 
-[data-design='agi'] .agi-app-phone-sub {
-  font-size: calc(var(--u) * 15);
-  line-height: 1.4;
-  color: var(--chat-text-muted);
-  text-wrap: balance;
-}
-
 [data-design='agi'] .agi-app-phone-composer {
   display: grid;
   flex: none;

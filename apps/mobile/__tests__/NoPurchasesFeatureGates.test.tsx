@@ -5,6 +5,11 @@ import { fireEvent, render } from '@testing-library/react-native';
 const mockPush = jest.fn();
 const mockSearchParams: Record<string, string> = {};
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES } };
+});
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -121,6 +126,12 @@ import SchedulesScreen from '../app/(app)/schedules';
 import CreateScheduleScreen from '../app/(app)/schedules/create';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
+const setRemoteFeatures = (enabled: boolean) => {
+  const { FEATURES } = jest.requireMock('@/lib/v1FeatureFlags');
+  FEATURES.companion = enabled;
+  FEATURES.dispatch = enabled;
+};
+
 const BILLING = '/(app)/settings/cloud-billing';
 const PLANS = '/(app)/settings/plans';
 
@@ -220,6 +231,14 @@ describe('schedules without purchases', () => {
 });
 
 describe('Remote Control without purchases', () => {
+  beforeEach(() => {
+    setRemoteFeatures(true);
+  });
+
+  afterEach(() => {
+    setRemoteFeatures(false);
+  });
+
   it('states that it is not included and offers no plans row or pairing', () => {
     const { getByText, queryByLabelText, queryByText } = render(<RemoteControlSettingsScreen />);
 
@@ -237,6 +256,21 @@ describe('Remote Control without purchases', () => {
     expect(queryByText("Remote Control isn't included in your plan.")).toBeNull();
     fireEvent.press(getByLabelText('Pair a computer'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/companion');
+  });
+});
+
+describe('Remote Control hidden in version 1', () => {
+  it('renders the unavailable screen with no pairing or plans row', () => {
+    const { getByLabelText, getByText, queryByLabelText, queryByText } = render(
+      <RemoteControlSettingsScreen />,
+    );
+
+    expect(getByLabelText('unavailable-unsupported')).toBeTruthy();
+    expect(getByText(/^Remote isn.t available in this build$/)).toBeTruthy();
+    expect(queryByLabelText('Pair a computer')).toBeNull();
+    expect(queryByLabelText('See plans')).toBeNull();
+    expect(queryByText(/included in your plan/)).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
 

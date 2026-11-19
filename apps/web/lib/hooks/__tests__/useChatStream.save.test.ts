@@ -9,7 +9,7 @@ vi.mock('sonner', () => ({ toast: { error: toastError } }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: async () => 'tok' }) }));
 
 import { saveMessageToDb, notifyPersistenceFailure } from '../useChatStream';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 
 const MSG = { id: 'client-id-1', role: 'assistant', content: 'hi', model: 'm' };
 const FAST = { retryDelayMs: 0 };

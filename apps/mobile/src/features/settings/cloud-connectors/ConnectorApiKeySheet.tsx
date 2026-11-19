@@ -20,6 +20,7 @@ import {
   type ConnectorCredentialStatusResponse,
 } from '@/services/connectors';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const HEADER_PLACEMENT = 'header';
 
@@ -125,6 +126,7 @@ export function ConnectorApiKeySheet({
       >
         <View
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceBase,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,

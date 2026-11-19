@@ -897,6 +897,24 @@
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
         }
       ]
+    },
+    {
+      "name": "sweep-chat-file-intakes",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing here; each large file check is a durable workflow run that holds its row by lease, and a row whose lease passes is dispatched again on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-11-15",
+          "change": "Registered with the large chat file intake: re-dispatch, idle cancel, stall, purge, orphaned and stalled preparations, prune."
+        }
+      ]
     }
   ]
 }

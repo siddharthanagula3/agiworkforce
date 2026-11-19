@@ -42,6 +42,7 @@ jest.mock('@/lib/mmkv', () => ({
 
 jest.mock('@/src/features/chat/draftStore', () => ({
   getDraft: jest.fn(() => ''),
+  getDraftAttachments: jest.fn(() => []),
   setDraft: jest.fn(),
   clearDraft: jest.fn(),
 }));
@@ -75,6 +76,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
 
 jest.mock('@/src/features/model-picker/service', () => ({
   getShortDisplayName: (id: string) => id,
+  isFreeQuotaTurnModelId: () => false,
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
@@ -129,20 +131,31 @@ jest.mock('@/services/docParser', () => ({
 }));
 
 import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
+import {
+  CHAT_ATTACHMENT_LIMITS,
+  CHAT_ATTACHMENT_LIMITS_WITHOUT_HANDSHAKE,
+  chatAttachmentLimitsToWire,
+} from '@agiworkforce/cloud-contracts';
+import {
+  applyServerAttachmentLimits,
+  clearServerAttachmentLimits,
+} from '@/src/features/chat/upload/attachmentLimits';
 
-const TWENTY_MB = 20 * 1024 * 1024;
+const MIB = 1024 * 1024;
+const imageLimitText = (bytes: number) => `images up to ${Math.round(bytes / MIB)} MB`;
+const OVER_CLOUD_IMAGE_LIMIT = CHAT_ATTACHMENT_LIMITS.maxImageBytes + 1;
 
-function twentyMbPdf() {
+function bigPhoto(fileSize = OVER_CLOUD_IMAGE_LIMIT) {
   return {
-    id: 'doc-1',
-    uri: 'file:///tmp/report.pdf',
-    mimeType: 'application/pdf',
-    fileName: 'report.pdf',
-    fileSize: TWENTY_MB,
+    id: 'photo-1',
+    uri: 'file:///tmp/scan.png',
+    mimeType: 'image/png',
+    fileName: 'scan.png',
+    fileSize,
   };
 }
 
-function mountAndAttach(file: ReturnType<typeof twentyMbPdf>) {
+function mountAndAttach(file: ReturnType<typeof bigPhoto>) {
   const ref = React.createRef<ChatInputHandle>();
   render(<ChatInput onSend={jest.fn()} attachRef={ref} />);
   act(() => {
@@ -155,44 +168,69 @@ let alertSpy: jest.SpyInstance;
 
 beforeEach(() => {
   capturedAttachments = [];
+  applyServerAttachmentLimits(chatAttachmentLimitsToWire(CHAT_ATTACHMENT_LIMITS));
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
 afterEach(() => {
+  clearServerAttachmentLimits();
   alertSpy.mockRestore();
 });
 
 describe('ChatInput attachment cap follows the live boundary', () => {
-  it('refuses a 20 MB file in Cloud and blames the cloud limit, not the network', () => {
+  it('refuses a photo over the Cloud image limit and blames the cloud limit, not the network', () => {
     mockAppMode = 'cloud';
 
-    mountAndAttach(twentyMbPdf());
+    mountAndAttach(bigPhoto());
 
     expect(capturedAttachments).toHaveLength(0);
     expect(alertSpy).toHaveBeenCalledTimes(1);
     const [title, body] = alertSpy.mock.calls[0] as [string, string];
     expect(title).toBe('Attachment not added');
-    expect(body).toContain('report.pdf');
+    expect(body).toContain('scan.png');
     expect(body).toContain('AGI Cloud');
-    expect(body).toContain('12 MB');
+    expect(body).toContain(imageLimitText(CHAT_ATTACHMENT_LIMITS.maxImageBytes));
     expect(body.toLowerCase()).not.toContain('connection');
   });
 
-  it('still stages the same 20 MB file in Local, which never uploads', () => {
+  it('holds a Cloud photo to the conservative limit while the server has sent no limits', () => {
+    clearServerAttachmentLimits();
+    mockAppMode = 'cloud';
+
+    mountAndAttach(bigPhoto(CHAT_ATTACHMENT_LIMITS.maxImageBytes));
+
+    expect(capturedAttachments).toHaveLength(0);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect((alertSpy.mock.calls[0] as [string, string])[1]).toContain(
+      imageLimitText(CHAT_ATTACHMENT_LIMITS_WITHOUT_HANDSHAKE.maxImageBytes),
+    );
+  });
+
+  it('leaves Local alone while the server has sent no limits', () => {
+    clearServerAttachmentLimits();
     mockAppMode = 'local';
 
-    mountAndAttach(twentyMbPdf());
+    mountAndAttach(bigPhoto(CHAT_ATTACHMENT_LIMITS.maxImageBytes));
 
-    expect(capturedAttachments.map((a) => a.fileName)).toEqual(['report.pdf']);
+    expect(capturedAttachments.map((a) => a.fileName)).toEqual(['scan.png']);
     expect(alertSpy).not.toHaveBeenCalled();
   });
 
-  it('accepts a file inside the cloud contract in Cloud', () => {
+  it('still stages the same photo in Local, which never uploads', () => {
+    mockAppMode = 'local';
+
+    mountAndAttach(bigPhoto());
+
+    expect(capturedAttachments.map((a) => a.fileName)).toEqual(['scan.png']);
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('accepts a photo inside the cloud contract in Cloud', () => {
     mockAppMode = 'cloud';
 
-    mountAndAttach({ ...twentyMbPdf(), fileSize: 4 * 1024 * 1024 });
+    mountAndAttach(bigPhoto(CHAT_ATTACHMENT_LIMITS.maxImageBytes));
 
-    expect(capturedAttachments.map((a) => a.fileName)).toEqual(['report.pdf']);
+    expect(capturedAttachments.map((a) => a.fileName)).toEqual(['scan.png']);
     expect(alertSpy).not.toHaveBeenCalled();
   });
 });

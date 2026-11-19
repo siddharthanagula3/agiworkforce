@@ -10,6 +10,8 @@ import {
   cloudAgentWorkflowBillingKey,
   CloudAgentWorkflowBillingUnavailableError,
   parseCloudAgentWorkflowInput,
+  RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH,
+  RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS,
   rehydrateCloudAgentWorkflowRequest,
   type CloudAgentWorkflowInput,
   type SerializedFreeTrialReservation,
@@ -20,6 +22,7 @@ import {
   withWorkspaceToolRules,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { MANAGED_TOOL_INVENTORY_MESSAGE_NAME } from '@/app/api/llm/v1/chat/completions/lib/managed-tool-inventory';
+import { checkpointToolCallIds } from '@/app/api/llm/v1/chat/completions/lib/research-loop';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 
@@ -624,6 +627,107 @@ describe('cloud agent workflow input', () => {
 
     expect(input.processed.llmRequest.promptCacheScope).toEqual(promptCacheScope);
     expect(parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)))).toEqual(input);
+  });
+});
+
+describe('research checkpoint durable transport', () => {
+  const baseCheckpoint = {
+    stage: 'gathering' as const,
+    round: 2,
+    iteration: 3,
+    startedAtMs: 1_000,
+    nextEventSequence: 12,
+    nextOperationOrdinal: 4,
+    plan: [],
+    sources: [],
+    messages: [{ role: 'user' as const, content: 'research these pages' }],
+    totalSearches: 1,
+    totalFetches: 1,
+    rewritesUsed: 0,
+    newSourcesPerRound: [1],
+    cutShortReason: null,
+    lastTurnError: null,
+    sensitiveSourceAvailable: false,
+    untrustedContentInContext: true,
+  };
+
+  function researchInput(checkpoint: Record<string, unknown>): unknown {
+    return JSON.parse(
+      JSON.stringify({
+        ...buildCloudAgentWorkflowInput({
+          runId: RUN_ID,
+          userId: 'user-1',
+          processed: makeProcessed(),
+          mcpTools: tools,
+          approvalMode: 'manual',
+        }),
+        research: { connectorIds: [], fileSources: [], checkpoint },
+      }),
+    );
+  }
+
+  it('carries the tool call ids a research run has used across the hand-off', () => {
+    const parsed = parseCloudAgentWorkflowInput(
+      researchInput({ ...baseCheckpoint, toolCallIds: ['gemini-tool-1', 'gemini-tool-2'] }),
+    );
+
+    expect(parsed.research?.checkpoint?.toolCallIds).toEqual(['gemini-tool-1', 'gemini-tool-2']);
+  });
+
+  it('still accepts a checkpoint saved before it carried tool call ids', () => {
+    const parsed = parseCloudAgentWorkflowInput(researchInput(baseCheckpoint));
+
+    expect(parsed.research?.checkpoint?.toolCallIds).toBeUndefined();
+  });
+
+  it('accepts a checkpoint holding exactly as many tool call ids as the cap allows', () => {
+    const toolCallIds = Array.from(
+      { length: RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS },
+      (_, i) => `id-${i}`,
+    );
+
+    const parsed = parseCloudAgentWorkflowInput(researchInput({ ...baseCheckpoint, toolCallIds }));
+
+    expect(parsed.research?.checkpoint?.toolCallIds).toEqual(toolCallIds);
+  });
+
+  it.each([
+    ['at the cap', RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS],
+    ['above the cap', RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS * 3],
+  ])('accepts the tool call ids a run writes %s', (_label, count) => {
+    const providerIds = Array.from({ length: count }, (_, i) => `gemini-tool-${i + 1}`);
+    const runIds = [
+      ...providerIds,
+      ...Array.from({ length: count }, () => crypto.randomUUID()),
+      'x'.repeat(RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH + 1),
+    ];
+
+    const toolCallIds = checkpointToolCallIds(runIds, new Set(['gemini-tool-1']));
+    const parsed = parseCloudAgentWorkflowInput(researchInput({ ...baseCheckpoint, toolCallIds }));
+
+    expect(parsed.research?.checkpoint?.toolCallIds).toEqual(
+      providerIds.slice(1, RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS + 1),
+    );
+  });
+
+  it('keeps every id a run writes while they fit under the cap', () => {
+    const runIds = ['gemini-tool-1', crypto.randomUUID(), 'gemini-tool-2'];
+
+    expect(checkpointToolCallIds(runIds, new Set(['gemini-tool-2']))).toEqual(runIds.slice(0, 2));
+  });
+
+  it.each([
+    ['a non-string id', [7]],
+    ['an empty id', ['']],
+    [
+      'an id longer than the schema allows',
+      ['x'.repeat(RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH + 1)],
+    ],
+    ['a list longer than a run can produce', Array.from({ length: 193 }, (_, i) => `id-${i}`)],
+  ])('rejects a checkpoint whose tool call ids hold %s', (_label, toolCallIds) => {
+    expect(() =>
+      parseCloudAgentWorkflowInput(researchInput({ ...baseCheckpoint, toolCallIds })),
+    ).toThrow();
   });
 });
 

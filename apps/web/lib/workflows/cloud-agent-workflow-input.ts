@@ -453,6 +453,11 @@ const researchFileSourceSchemaCoversSource: SameKeys<
 > = true;
 void researchFileSourceSchemaCoversSource;
 
+// Upper clamps of the research loop's own step limits: 8 model turns, each with
+// a first pass plus 2 tool passes, each pass running up to 8 calls.
+export const RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS = 8 * (1 + 2) * 8;
+export const RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH = 256;
+
 const ResearchCheckpointSchema = z
   .object({
     stage: z.enum(['gathering', 'synthesis']),
@@ -472,6 +477,10 @@ const ResearchCheckpointSchema = z
     lastTurnError: z.string().nullable(),
     sensitiveSourceAvailable: z.boolean(),
     untrustedContentInContext: z.boolean(),
+    toolCallIds: z
+      .array(z.string().min(1).max(RESEARCH_CHECKPOINT_MAX_TOOL_CALL_ID_LENGTH))
+      .max(RESEARCH_CHECKPOINT_MAX_TOOL_CALL_IDS)
+      .optional(),
   })
   .strict();
 const researchCheckpointSchemaCoversCheckpoint: SameKeys<

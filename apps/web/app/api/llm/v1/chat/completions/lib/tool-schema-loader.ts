@@ -1,5 +1,6 @@
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { MAX_CONNECTOR_TOOLS_PER_USER } from '@/lib/user-connector-tools';
+import type { ToolAccessMode } from '@/lib/tool-access-mode';
 import { DEFAULT_TOOL_SCHEMA_BYTES, TOOL_DIRECTORY_TOOL_NAME } from './tool-schema-state';
 
 export { DEFAULT_TOOL_SCHEMA_BYTES, TOOL_DIRECTORY_TOOL_NAME } from './tool-schema-state';
@@ -15,12 +16,33 @@ const DEFERRED_SUMMARY_CHARS = 80;
 export interface ToolSchemaBudget {
   maxTools: number;
   maxSchemaBytes: number;
+  relevantOnly: boolean;
 }
 
 export const DEFAULT_TOOL_SCHEMA_BUDGET: ToolSchemaBudget = {
   maxTools: MAX_CONNECTOR_TOOLS_PER_USER,
   maxSchemaBytes: DEFAULT_TOOL_SCHEMA_BYTES,
+  relevantOnly: true,
 };
+
+const ALWAYS_TOOL_SCHEMA_BYTES_MULTIPLE = 4;
+export const ALWAYS_TOOL_SCHEMA_BYTES =
+  DEFAULT_TOOL_SCHEMA_BYTES * ALWAYS_TOOL_SCHEMA_BYTES_MULTIPLE;
+
+export function toolSchemaBudgetFor(mode: ToolAccessMode): ToolSchemaBudget {
+  switch (mode) {
+    case 'auto':
+      return DEFAULT_TOOL_SCHEMA_BUDGET;
+    case 'on_demand':
+      return { maxTools: 0, maxSchemaBytes: 0, relevantOnly: true };
+    case 'always':
+      return {
+        maxTools: MAX_CONNECTOR_TOOLS_PER_USER,
+        maxSchemaBytes: ALWAYS_TOOL_SCHEMA_BYTES,
+        relevantOnly: false,
+      };
+  }
+}
 
 export interface SelectToolSchemasInput {
   tools: readonly WebMcpToolDef[];
@@ -120,7 +142,7 @@ export function selectToolSchemas(input: SelectToolSchemasInput): SelectedToolSc
       entry.pinned ||
       (tools.length < budget.maxTools &&
         bytes + size <= budget.maxSchemaBytes &&
-        (!anyRelevant || entry.score >= MIN_RELEVANT_SCORE));
+        (!budget.relevantOnly || !anyRelevant || entry.score >= MIN_RELEVANT_SCORE));
     if (!admissible) {
       deferred.push(deferredEntry(entry.tool));
       continue;

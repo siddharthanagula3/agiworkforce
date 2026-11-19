@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RotateCcw, Square } from '@agiworkforce/icons';
 import {
+  CHAT_CODE_RUN_APPROVAL_REQUIRED_CODE,
+  CHAT_CODE_RUN_CONFIRMATION,
   ChatCodeRunResponseSchema,
   chatCodeRunPath,
   type ChatCodeRunResponse,
 } from '@agiworkforce/cloud-contracts';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -36,23 +38,26 @@ async function runCode(
   conversationId: string,
   language: string,
   code: string,
+  approved: boolean,
   signal: AbortSignal,
 ): Promise<ChatCodeRunResponse> {
   const response = await fetch(chatCodeRunPath(conversationId), {
     method: 'POST',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     credentials: 'include',
-    body: JSON.stringify({ language, code }),
+    body: JSON.stringify(approved ? { language, code, approved: true } : { language, code }),
     signal,
   });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const message =
+    const error =
       payload && typeof payload === 'object' && 'error' in payload
-        ? (payload as { error?: { message?: unknown } }).error?.message
+        ? (payload as { error?: { message?: unknown; code?: unknown } }).error
         : undefined;
+    const message = error?.message;
     throw Object.assign(new Error(typeof message === 'string' ? message : ''), {
       status: response.status,
+      code: error?.code,
     });
   }
   return ChatCodeRunResponseSchema.parse(payload);
@@ -64,24 +69,43 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ChatCodeRunResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => () => controller.current?.abort(), []);
 
-  const start = useCallback(async () => {
-    const run = new AbortController();
-    controller.current = run;
-    setRunning(true);
-    setError(null);
-    setResult(null);
-    try {
-      setResult(await runCode(conversationId, language, code, run.signal));
-    } catch (cause) {
-      if (!run.signal.aborted) setError(toUserMessage(cause, RUN_FAILED));
-    } finally {
-      if (controller.current === run) controller.current = null;
-      setRunning(false);
-    }
-  }, [conversationId, language, code]);
+  const start = useCallback(
+    async (approved: boolean) => {
+      const run = new AbortController();
+      controller.current = run;
+      setRunning(true);
+      setError(null);
+      setResult(null);
+      try {
+        setResult(await runCode(conversationId, language, code, approved, run.signal));
+      } catch (cause) {
+        if (run.signal.aborted) return;
+        if (
+          !approved &&
+          (cause as { code?: unknown }).code === CHAT_CODE_RUN_APPROVAL_REQUIRED_CODE
+        ) {
+          confirm({
+            title: CHAT_CODE_RUN_CONFIRMATION.title,
+            description: CHAT_CODE_RUN_CONFIRMATION.message,
+            confirmLabel: CHAT_CODE_RUN_CONFIRMATION.confirmLabel,
+            onConfirm: () => {
+              void start(true);
+            },
+          });
+          return;
+        }
+        setError(toUserMessage(cause, RUN_FAILED));
+      } finally {
+        if (controller.current === run) controller.current = null;
+        setRunning(false);
+      }
+    },
+    [conversationId, language, code, confirm],
+  );
 
   const stop = useCallback(() => {
     controller.current?.abort();
@@ -91,6 +115,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
 
   return (
     <div className="flex flex-col gap-2">
+      {dialog}
       <div className="flex items-center gap-2">
         {running ? (
           <>
@@ -101,7 +126,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
             <Spinner className="h-3.5 w-3.5 text-muted-foreground" aria-label={RUNNING_LABEL} />
           </>
         ) : (
-          <button type="button" className={BUTTON_CLASS} onClick={() => void start()}>
+          <button type="button" className={BUTTON_CLASS} onClick={() => void start(false)}>
             <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
             {RUN_AGAIN_LABEL}
           </button>

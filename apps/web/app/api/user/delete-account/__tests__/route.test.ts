@@ -87,7 +87,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, TEAM_SEAT_PLAN_TIERS } from '@agiworkforce/types';
 import { parseAccountDeletionScheduleReceipt } from '@agiworkforce/cloud-contracts';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { ACCOUNT_DELETION_RENEWAL_METADATA_KEY } from '@/lib/server/payments/stripe-provider';
@@ -264,6 +264,9 @@ describe('DELETE /api/user/delete-account', () => {
     expect(body.message).toContain(`Cancellation deadline: ${body.scheduledFor}.`);
     expect(body.message).toContain('before this deadline');
     expect(body.message).toContain('Erasure is processed after the deadline and may take longer.');
+    expect(body.message).toContain(
+      'If you signed in with Apple, also remove this app from Sign in with Apple: on iPhone, open Settings, tap your name, tap Sign in with Apple, choose the app and tap Delete.',
+    );
     expect(body.message).not.toMatch(/first daily|all its data|starts 24 hours/);
     expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     expect(mockDeleteUser).not.toHaveBeenCalled();
@@ -505,10 +508,70 @@ describe('DELETE /api/user/delete-account', () => {
     expect(mockDeleteUser).not.toHaveBeenCalled();
   });
 
+  function stripeCustomerOn(table: 'subscriptions' | 'profiles') {
+    mockQuery.mockImplementation(async (sql: unknown) => {
+      const text = String(sql);
+      if (table === 'subscriptions' && text.includes('from public.subscriptions')) {
+        return [{ plan_tier: 'pro', status: 'active', stripe_customer_id: 'cus_live1' }];
+      }
+      if (table === 'profiles' && text.includes('stripe_customer_id from public.profiles')) {
+        return [{ stripe_customer_id: 'cus_live1' }];
+      }
+      return [];
+    });
+  }
+
   it.each(['active', 'trialing'])(
-    'refuses a renewing %s plan that matches no purchase it can cancel',
+    'schedules deletion for a %s plan given without a purchase, and says it ends',
     async (status) => {
       mockGetSubscription.mockResolvedValue(subscription({ status }));
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.scheduledFor).toBeTruthy();
+      expect(body.message).toContain(
+        `Your ${BILLING_PLAN_PRICING.pro.label} plan was given without a purchase, so it ends when erasure runs and nothing is charged or refunded.`,
+      );
+      expect(body.storeBilling).toBeUndefined();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('deletion_requested_at'),
+        expect.anything(),
+      );
+      expect(stripeMocks.retrieve).not.toHaveBeenCalled();
+      expect(stripeMocks.update).not.toHaveBeenCalled();
+      expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps step-up and the sole-owner guard for a plan given without a purchase', async () => {
+    mockGetSubscription.mockResolvedValue(subscription());
+
+    const unverified = await DELETE(
+      new Request('http://localhost:3000/api/user/delete-account', { method: 'DELETE' }) as never,
+    );
+    expect(unverified.status).toBe(403);
+
+    ownsAlone({ id: 'org-1', name: 'Acme' });
+    const owner = await DELETE(deleteRequest());
+    expect(owner.status).toBe(409);
+    expect((await owner.json()).reason).toBe('sole_organization_owner');
+    expect(mockExecute).not.toHaveBeenCalledWith(
+      expect.stringContaining('deletion_requested_at'),
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    ['active', 'subscriptions'],
+    ['trialing', 'subscriptions'],
+    ['active', 'profiles'],
+  ] as const)(
+    'refuses a renewing %s plan with a Stripe customer on %s but no subscription it can cancel',
+    async (status, table) => {
+      mockGetSubscription.mockResolvedValue(subscription({ status }));
+      stripeCustomerOn(table);
 
       const response = await DELETE(deleteRequest());
       const body = await response.json();
@@ -516,11 +579,53 @@ describe('DELETE /api/user/delete-account', () => {
       expect(response.status).toBe(409);
       expect(body.reason).toBe('active_subscription');
       expect(body.error).toContain('could not be matched to a purchase');
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(
+        mockExecute.mock.calls.filter(([sql]) => /\b(update|insert|delete)\b/i.test(String(sql))),
+      ).toEqual([]);
       expect(stripeMocks.update).not.toHaveBeenCalled();
       expect(mockEraseUserAccountData).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    ['a team plan', { plan_tier: TEAM_SEAT_PLAN_TIERS.standard }],
+    ['an enterprise plan', { plan_tier: 'enterprise' }],
+    ['a plan outside the catalog', { plan_tier: 'contract_custom' }],
+    ['a malformed Stripe subscription id', { stripe_subscription_id: 'not-a-subscription' }],
+    [
+      'two purchase owners',
+      { stripe_subscription_id: 'sub_live1', apple_original_transaction_id: '2000000000000001' },
+    ],
+  ])('still refuses %s that matches no purchase it can cancel', async (_label, overrides) => {
+    mockGetSubscription.mockResolvedValue(subscription(overrides));
+
+    const response = await DELETE(deleteRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.reason).toBe('active_subscription');
+    expect(body.error).toContain('could not be matched to a purchase');
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(stripeMocks.update).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing when the Stripe customer lookup fails for a plan without a purchase', async () => {
+    mockGetSubscription.mockResolvedValue(subscription());
+    mockQuery.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes('from public.subscriptions')) throw new Error('connection reset');
+      return [];
+    });
+
+    const response = await DELETE(deleteRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toMatch(/nothing was deleted/i);
+    expect(mockExecute).not.toHaveBeenCalledWith(
+      expect.stringContaining('deletion_requested_at'),
+      expect.anything(),
+    );
+  });
 
   it.each([
     ['web', { stripe_subscription_id: 'sub_live1' }],

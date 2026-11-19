@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { productNameWithArticle } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -445,9 +445,9 @@ export default function CookiesPage() {
                     on, and switching it back off stops it loading on your next page view. You can
                     also manage cookies through your browser; clearing them will sign you out of any
                     active session. For data export or deletion, see the{' '}
-                    <Link href="/privacy" className="agi-ds-link">
+                    <PageLink href="/privacy" className="agi-ds-link">
                       privacy policy
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <ButtonRow>

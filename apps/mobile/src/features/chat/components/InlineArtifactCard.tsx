@@ -1,4 +1,5 @@
-import { View, Platform } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
   Code2,
@@ -8,15 +9,30 @@ import {
   FileText,
   BarChart3,
   ExternalLink,
-  Shield,
+  Share2,
 } from 'lucide-react-native';
-import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
+import { withoutTitleDirectives } from '@agiworkforce/artifacts';
+import { bareMediaType, summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
-import { Badge } from '@/components/ui/Badge';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 import { ArtifactAudienceChip } from './ArtifactAudienceChip';
+import { ImageFullScreen } from './ImageFullScreen';
+import { StoredImageView } from './artifact-viewers/StoredImageView';
+import { localFileCopy } from './artifact-viewers/useLocalFileCopy';
+import { storedImagePath } from './artifact-viewers/viewerKind';
+import { deckSlides, isDeckArtifact } from './artifact-viewers/presentation/deckContent';
+import {
+  studyArtifactContent,
+  studyArtifactTitle,
+  studySummary,
+} from './artifact-viewers/study/studyContent';
+import { withoutArtifactMarker } from '@/src/features/chat/utils/artifactMarker';
+import { shareFile } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
+import { radii } from '@/src/ui/theme/tokens';
 
 interface InlineArtifactCardProps {
   artifact: Artifact;
@@ -87,17 +103,26 @@ function artifactSurface(color: ArtifactTypeConfig['badgeColor'], colors: ColorS
   }
 }
 
+function withoutSourceDirectives(content: string): string {
+  return withoutTitleDirectives(withoutArtifactMarker(content)).trimStart();
+}
+
 function getPreview(artifact: Artifact): string {
   const { type, content, metadata } = artifact;
+  if (isDeckArtifact(artifact.language, content)) {
+    const count = deckSlides(content).length;
+    return `Presentation, ${count} slide${count === 1 ? '' : 's'}`;
+  }
+  const study = studyArtifactContent(artifact.language, content);
+  if (study !== null) return studySummary(study) || 'Open to practise';
 
   switch (type) {
-    case 'code': {
-      const lines = content
+    case 'code':
+      return withoutSourceDirectives(content)
         .split('\n')
-        .filter((l) => l.trim())
-        .slice(0, 2);
-      return lines.join('\n');
-    }
+        .filter((line) => line.trim())
+        .slice(0, 2)
+        .join('\n');
     case 'email': {
       const from = (metadata?.from as string) ?? '';
       const to = (metadata?.to as string) ?? '';
@@ -117,19 +142,90 @@ function getPreview(artifact: Artifact): string {
       return (metadata?.alt as string) ?? (metadata?.description as string) ?? 'Image';
     }
     default:
-      return content.slice(0, 100);
+      return withoutSourceDirectives(content).slice(0, 100);
   }
 }
 
+function generatedImagePath(artifact: Artifact): string | null {
+  const file = artifact.generatedFile;
+  if (!file?.uri || !bareMediaType(file.mimeType).startsWith('image/')) return null;
+  return storedImagePath(file.uri);
+}
+
+function GeneratedImageCard({ artifact, path }: { artifact: Artifact; path: string }) {
+  const [viewing, setViewing] = useState(false);
+  const name = artifact.generatedFile?.fileName ?? artifact.title;
+  return (
+    <>
+      <PressableBox
+        testID="generated-image-card"
+        onPress={() => setViewing(true)}
+        accessibilityRole="imagebutton"
+        accessibilityLabel={name}
+        accessibilityHint="Opens the image full screen"
+        style={{ marginVertical: 6, borderRadius: radii.lg, overflow: 'hidden' }}
+      >
+        <StoredImageView path={path} label={name} />
+      </PressableBox>
+      <ImageFullScreen
+        imageUrl={path}
+        kind="attachment"
+        name={name}
+        mimeType={artifact.generatedFile?.mimeType}
+        visible={viewing}
+        onClose={() => setViewing(false)}
+      />
+    </>
+  );
+}
+
+function GeneratedFileShareButton({ artifact }: { artifact: Artifact }) {
+  const colors = useThemeColors();
+  const [sharing, setSharing] = useState(false);
+  const file = artifact.generatedFile;
+  const handleShare = useCallback(() => {
+    if (!file?.uri || sharing) return;
+    setSharing(true);
+    void localFileCopy(file.uri, file.fileName)
+      .then((uri) => shareFile(uri))
+      .catch((error: unknown) =>
+        Alert.alert('Could not share file', toUserMessage(error, 'Try again in a moment.')),
+      )
+      .finally(() => setSharing(false));
+  }, [file, sharing]);
+  if (!file?.uri) return null;
+  return (
+    <PressableBox
+      testID="generated-file-share"
+      onPress={handleShare}
+      disabled={sharing}
+      accessibilityRole="button"
+      accessibilityLabel={`Share ${file.fileName}`}
+      accessibilityState={{ disabled: sharing, busy: sharing }}
+      hitSlop={12}
+      style={{ minWidth: 20, minHeight: 20, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Share2 size={14} color={colors.textMuted} />
+    </PressableBox>
+  );
+}
+
 export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardProps) {
+  const imagePath = generatedImagePath(artifact);
+  if (imagePath) return <GeneratedImageCard artifact={artifact} path={imagePath} />;
+  return <ArtifactSummaryCard artifact={artifact} onExpand={onExpand} />;
+}
+
+function ArtifactSummaryCard({ artifact, onExpand }: InlineArtifactCardProps) {
   const colors = useThemeColors();
   const config = TYPE_CONFIG[artifact.type] ?? FALLBACK_CONFIG;
   const Icon = config.icon;
+  const title = studyArtifactTitle(artifact.language, artifact.content) ?? artifact.title;
   const generatedFileSummary = summarizeGeneratedFileBundle({
     computeSession: artifact.computeSession,
     generatedFile: artifact.generatedFile,
     artifactManifest: artifact.artifactManifest,
-    fallbackFileName: artifact.title,
+    fallbackFileName: title,
     fallbackKind: artifact.generatedFile?.kind ?? artifact.language ?? artifact.type,
     fallbackMimeType: artifact.generatedFile?.mimeType,
     fallbackUri: artifact.generatedFile?.uri,
@@ -140,21 +236,20 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
   const hasGeneratedFileManifest = Boolean(
     artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
   );
-  const preview =
-    getPreview(artifact).trim() ||
-    (hasGeneratedFileManifest
-      ? [
-          generatedFileSummary.statusLabel,
-          generatedFileSummary.kindLabel,
-          generatedFileSummary.byteCountLabel,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : 'Open to view details');
+  const fileMeta = hasGeneratedFileManifest
+    ? [
+        generatedFileSummary.statusLabel,
+        generatedFileSummary.kindLabel,
+        generatedFileSummary.byteCountLabel,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
+  const preview = getPreview(artifact).trim() || (fileMeta ? '' : 'Open to view details');
 
   return (
     <PressableBox
-      onPress={() => onExpand(artifact)}
+      onPress={() => onExpand(title === artifact.title ? artifact : { ...artifact, title })}
       style={{
         backgroundColor: artifactSurface(config.badgeColor, colors),
         borderRadius: 12,
@@ -163,7 +258,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
         marginVertical: 6,
         overflow: 'hidden',
       }}
-      accessibilityLabel={`${config.label}: ${artifact.title}`}
+      accessibilityLabel={`${config.label}: ${title}`}
       accessibilityRole="button"
       accessibilityHint={
         hasGeneratedFileManifest ? 'Tap for file details and download options' : 'Tap to expand'
@@ -189,30 +284,21 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
           }}
           numberOfLines={1}
         >
-          {artifact.title}
+          {title}
         </Text>
-        <Badge label={artifact.language ?? config.label} color={config.badgeColor} />
-        <ArtifactAudienceChip artifactId={artifact.id} />
-        {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel ? (
-          <View
+        {fileMeta ? null : (
+          <Text
             style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 3,
-              borderRadius: 6,
-              paddingHorizontal: 6,
-              paddingVertical: 3,
-              backgroundColor: colors.neutralSurface,
+              fontSize: typeScale.caption,
+              color: colors.textMuted,
+              textTransform: 'uppercase',
             }}
           >
-            <Shield size={10} color={colors.textMuted} />
-            <Text
-              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
-            >
-              {generatedFileSummary.privacyShortLabel}
-            </Text>
-          </View>
-        ) : null}
+            {artifact.language ?? config.label}
+          </Text>
+        )}
+        <ArtifactAudienceChip artifactId={artifact.id} />
+        {hasGeneratedFileManifest ? <GeneratedFileShareButton artifact={artifact} /> : null}
         <ExternalLink size={12} color={colors.textMuted} />
       </View>
 
@@ -222,39 +308,31 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
           paddingBottom: 10,
         }}
       >
-        <Text
-          style={{
-            fontSize: typeScale.caption,
-            lineHeight: 18,
-            color: colors.textMuted,
-            fontFamily:
-              artifact.type === 'code'
-                ? Platform.select({ ios: 'Menlo', default: 'monospace' })
-                : undefined,
-          }}
-          numberOfLines={3}
-        >
-          {preview}
-        </Text>
-        {hasGeneratedFileManifest ? (
-          <View style={{ marginTop: 8, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-              {generatedFileSummary.statusLabel}
-            </Text>
-            <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-              {generatedFileSummary.kindLabel}
-            </Text>
-            {generatedFileSummary.byteCountLabel ? (
-              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-                {generatedFileSummary.byteCountLabel}
-              </Text>
-            ) : null}
-            {generatedFileSummary.sourceSurfaceLabel ? (
-              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-                Source: {generatedFileSummary.sourceSurfaceLabel}
-              </Text>
-            ) : null}
-          </View>
+        {preview ? (
+          <Text
+            style={{
+              fontSize: typeScale.caption,
+              lineHeight: 18,
+              color: colors.textMuted,
+              fontFamily: artifact.type === 'code' ? codeFontFamily : undefined,
+            }}
+            numberOfLines={3}
+          >
+            {preview}
+          </Text>
+        ) : null}
+        {fileMeta ? (
+          <Text
+            testID="generated-file-meta"
+            style={{
+              ...(preview ? { marginTop: 8 } : {}),
+              fontSize: typeScale.caption,
+              color: colors.textMuted,
+            }}
+            numberOfLines={1}
+          >
+            {fileMeta}
+          </Text>
         ) : null}
       </View>
     </PressableBox>
