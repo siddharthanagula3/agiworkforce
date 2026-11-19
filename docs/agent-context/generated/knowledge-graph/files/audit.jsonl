@@ -355,6 +355,8 @@
 {"path":"audit/registers/capability-gaps.csv","unit":"audit","role":"other","unparsed":"notCode"}
 {"path":"audit/registers/code-reachability-inventory.json","unit":"audit","role":"config","unparsed":"notCode"}
 {"path":"audit/registers/known-flaws.md","unit":"audit","role":"doc","unparsed":"oversize"}
+{"path":"audit/registers/known-flaws.md","unit":"audit","role":"doc","unparsed":"oversize"}
+{"path":"audit/registers/known-flaws.md","unit":"audit","role":"doc","unparsed":"oversize"}
 {"path":"audit/registers/mobile-store-feature-justification.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/registers/ui-gaps.csv","unit":"audit","role":"other","unparsed":"notCode"}
 {"path":"audit/registers/ui-gaps.md","unit":"audit","role":"doc","unparsed":"notCode"}

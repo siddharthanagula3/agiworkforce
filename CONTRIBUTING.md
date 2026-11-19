@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-23
+Last updated: 2026-11-17
 
 `AGENTS.md` is the operating contract and applies to humans too. This file
 covers the mechanics of getting a change in.
@@ -34,9 +34,9 @@ pnpm test:affected
 pnpm check:llm-operability  # what .husky/pre-push runs
 ```
 
-The guard chain is `&&`, so it stops at the first failure and hides every later
-one. When something is red, run the individual `check:*` script rather than
-re-running the chain.
+The guard chain runs every guard and lists each failure at its end. When
+something is red, run that `check:*` script on its own rather than re-running
+the chain.
 
 Guards read the working tree, not `HEAD`. Stage your change first, then run
 them, or you will validate something you did not commit.

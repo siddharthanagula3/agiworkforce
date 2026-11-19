@@ -115,7 +115,10 @@ test('runner preparation rejects local machines and invalid capacities before pr
 
 test('every affected small-runner job prepares memory after checkout and before dependency installation', () => {
   for (const [name, id] of [
+    ['ci.yml', 'js-lint'],
+    ['ci.yml', 'js-typecheck'],
     ['ci.yml', 'js-verify'],
+    ['ci.yml', 'js-build'],
     ['ci.yml', 'web-a11y'],
     ['security-scanning.yml', 'web-image-scan-and-dast'],
     ['web-container-drill.yml', 'boot-outside-the-platform'],
@@ -128,6 +131,85 @@ test('every affected small-runner job prepares memory after checkout and before 
     const install = steps.findIndex((step) => step.run === 'pnpm install --frozen-lockfile');
     assert.ok(prepare > checkout && prepare < install, `${name}:${id}`);
     assert.equal(steps[prepare].if, 'github.event.repository.private == true');
+  }
+});
+
+test('the JavaScript test lanes together run every package and every web shard', () => {
+  const job = workflow('ci.yml').jobs['js-verify'];
+  assert.equal(job.if, undefined);
+  assert.equal(job['continue-on-error'], undefined);
+  assert.equal(job.strategy['fail-fast'], false);
+  const lanes = job.strategy.matrix.include;
+  assert.deepEqual([...new Set(lanes.map((entry) => entry.lane))].sort(), [
+    'mobile',
+    'rest',
+    'web',
+  ]);
+  for (const lane of ['web', 'mobile', 'rest']) {
+    const entries = lanes.filter((entry) => entry.lane === lane);
+    const total = entries[0].shards;
+    assert.ok(Number.isInteger(total) && total > 0, lane);
+    assert.deepEqual(
+      entries.map((entry) => [entry.shard, entry.shards]),
+      Array.from({ length: total }, (_, index) => [index + 1, total]),
+      `${lane} must list every shard exactly once`,
+    );
+  }
+  assert.equal(lanes.filter((entry) => entry.lane !== 'web').length, 2);
+
+  const tests = job.steps.filter((step) => step.run?.includes('pnpm test:affected'));
+  assert.equal(tests.length, 1);
+  const [step] = tests;
+  assert.equal(step.if, undefined);
+  assert.equal(step['continue-on-error'], undefined);
+  assert.deepEqual(
+    [step.env.TEST_LANE, step.env.TEST_SHARD, step.env.TEST_SHARDS],
+    ['${{ matrix.lane }}', '${{ matrix.shard }}', '${{ matrix.shards }}'],
+  );
+  const commands = step.run
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.includes('pnpm test:affected'));
+  assert.deepEqual(commands, [
+    'AGI_VITEST_MAX_WORKERS=3 pnpm test:affected --filter=@agiworkforce/web -- --shard="$TEST_SHARD/$TEST_SHARDS"',
+    'pnpm test:affected --filter=@agiworkforce/mobile',
+    "pnpm test:affected --filter='!@agiworkforce/web' --filter='!@agiworkforce/mobile'",
+  ]);
+  assert.match(step.run, /\*\)\n\s+echo "::error::Unknown test lane \$TEST_LANE"\n\s+exit 1/);
+  assert.ok(
+    JSON.parse(
+      readFileSync(path.join(ROOT, 'turbo.json'), 'utf8'),
+    ).tasks.test.passThroughEnv.includes('AGI_VITEST_MAX_WORKERS'),
+  );
+});
+
+test('the web browser lane shards by the size of its own matrix', () => {
+  const job = workflow('ci.yml').jobs['web-a11y'];
+  assert.equal(job.strategy['fail-fast'], false);
+  const shards = job.strategy.matrix.shard;
+  assert.deepEqual(
+    shards,
+    Array.from({ length: shards.length }, (_, index) => index + 1),
+  );
+  assert.deepEqual(Object.keys(job.strategy.matrix), ['shard']);
+  const flows = job.steps.find((step) => step.name === 'Run signed-out Web Playwright flows');
+  assert.equal(flows.if, undefined);
+  assert.equal(flows.env.PLAYWRIGHT_SHARD, '${{ matrix.shard }}/${{ strategy.job-total }}');
+  assert.match(flows.run, /--shard="\$PLAYWRIGHT_SHARD"\s*$/);
+  const audit = job.steps.find((step) => step.name === 'Run blocking WCAG 2.1 A/AA audit');
+  assert.equal(audit.if, undefined);
+});
+
+test('Linux and macOS Rust lanes cache the directory cargo writes, once', () => {
+  for (const id of ['rust-desktop-cli', 'clippy-all-features', 'macos-smoke']) {
+    const job = workflow('ci.yml').jobs[id];
+    const setup = job.steps.find((step) =>
+      step.uses?.startsWith('actions-rust-lang/setup-rust-toolchain@'),
+    );
+    assert.equal(setup.with.cache, false, id);
+    const caches = job.steps.filter((step) => step.uses?.startsWith('Swatinem/rust-cache@'));
+    assert.equal(caches.length, 1, id);
+    assert.equal(caches[0].with.workspaces, '. -> target', id);
   }
 });
 

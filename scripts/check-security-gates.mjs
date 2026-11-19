@@ -17,6 +17,7 @@ const RUNTIME_FIELDS = ['dependencies', 'optionalDependencies'];
 const PATCHED_ADVISORIES = {
   'GHSA-ch52-4w7c-c8xp': { package: 'http-cache-semantics', version: '4.2.0' },
   'GHSA-vfj7-8cjw-p6xm': { package: 'braces', version: '3.0.3' },
+  'GHSA-fc5q-39xc-vjpf': { package: 'picomatch', version: '4.0.7' },
 };
 
 export function pnpmPatchHash(contents) {

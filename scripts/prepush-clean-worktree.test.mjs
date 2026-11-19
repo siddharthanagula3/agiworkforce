@@ -37,6 +37,7 @@ function runHook(dir, worktreeParent, envOverrides = {}) {
     env: {
       ...process.env,
       AGI_PREPUSH_CHAIN_CMD: FAKE_CHAIN_CMD,
+      AGI_PREPUSH_STATIC_CMD: 'true',
       AGI_PREPUSH_DIFF_CMD: 'true',
       AGI_PREPUSH_WORKTREE_PARENT: worktreeParent,
       ...envOverrides,
@@ -406,6 +407,96 @@ test('the same breakage committed fails the push gate', () => {
     const result = runHook(dir, worktreeParent);
 
     assert.notEqual(result.status, 0, result.stdout + result.stderr);
+  });
+});
+
+test('the lint and type check run in the candidate after the chain and block the push when red', () => {
+  withTempDirs((dir, worktreeParent) => {
+    initRepo(dir);
+    const log = path.join(worktreeParent, 'order.log');
+    const record = (label) => `printf '%s\\n%s\\n' ${label} "$(pwd -P)" >> ${shellQuote(log)}`;
+
+    const passing = runHook(dir, worktreeParent, {
+      AGI_PREPUSH_CHAIN_CMD: record('chain'),
+      AGI_PREPUSH_STATIC_CMD: record('static'),
+    });
+    assert.equal(passing.status, 0, passing.stdout + passing.stderr);
+    const [first, chainDirectory, second, staticDirectory] = fs
+      .readFileSync(log, 'utf8')
+      .trim()
+      .split('\n');
+    assert.deepEqual([first, second], ['chain', 'static']);
+    assert.equal(staticDirectory, chainDirectory);
+    assert.ok(chainDirectory.startsWith(fs.realpathSync(worktreeParent)));
+
+    const failing = runHook(dir, worktreeParent, {
+      AGI_PREPUSH_CHAIN_CMD: 'true',
+      AGI_PREPUSH_STATIC_CMD: 'exit 7',
+    });
+    assert.equal(failing.status, 7, failing.stdout + failing.stderr);
+  });
+});
+
+test('a red chain ends the gate before the lint and type check start', () => {
+  withTempDirs((dir, worktreeParent) => {
+    initRepo(dir);
+    const marker = path.join(worktreeParent, 'static-ran');
+    const result = runHook(dir, worktreeParent, {
+      AGI_PREPUSH_CHAIN_CMD: 'exit 3',
+      AGI_PREPUSH_STATIC_CMD: `touch ${shellQuote(marker)}`,
+    });
+    assert.equal(result.status, 3, result.stdout + result.stderr);
+    assert.equal(fs.existsSync(marker), false);
+  });
+});
+
+test('the default lint and type check is bounded, heap-sized and scoped to what main lacks', () => {
+  withTempDirs((dir, worktreeParent) => {
+    initRepo(dir);
+    const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-prepush-static-'));
+    const record = path.join(fakeBin, 'record');
+    fs.writeFileSync(
+      path.join(fakeBin, 'pnpm'),
+      `#!/bin/sh\nprintf '%s\\n' "$*" "$TURBO_SCM_BASE" "$NODE_OPTIONS" "$TURBO_CACHE_DIR" > ${shellQuote(record)}\n`,
+      { mode: 0o755 },
+    );
+    const env = {
+      ...process.env,
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH}`,
+      AGI_PREPUSH_CHAIN_CMD: 'true',
+      AGI_PREPUSH_DIFF_CMD: 'true',
+      AGI_PREPUSH_WORKTREE_PARENT: worktreeParent,
+    };
+    for (const name of [
+      'AGI_PREPUSH_STATIC_CMD',
+      'NODE_OPTIONS',
+      'TURBO_CACHE_DIR',
+      'TURBO_SCM_BASE',
+    ]) {
+      delete env[name];
+    }
+    try {
+      const everything = run('bash', [SCRIPT_PATH], { cwd: dir, env });
+      assert.equal(everything.status, 0, everything.stdout + everything.stderr);
+      assert.deepEqual(fs.readFileSync(record, 'utf8').trim().split('\n'), [
+        'exec turbo run lint typecheck --concurrency=2',
+        '',
+        '--max-old-space-size=8192',
+        path.join(worktreeParent, 'turbo-cache'),
+      ]);
+
+      run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd: dir });
+      const affected = run('bash', [SCRIPT_PATH], { cwd: dir, env });
+      assert.equal(affected.status, 0, affected.stdout + affected.stderr);
+      assert.deepEqual(fs.readFileSync(record, 'utf8').trim().split('\n'), [
+        'exec turbo run lint typecheck --affected --concurrency=2',
+        'origin/main',
+        '--max-old-space-size=8192',
+        path.join(worktreeParent, 'turbo-cache'),
+      ]);
+    } finally {
+      fs.rmSync(fakeBin, { recursive: true, force: true });
+    }
   });
 });
 
