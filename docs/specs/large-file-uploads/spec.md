@@ -1656,7 +1656,9 @@ therefore waits at most 1.5 s more, and only when the shared cache is empty.
   30 days after upload, and nothing the person can delete sooner. A file is
   temporary only while its conversation is: the seal's insert reads the
   conversation's flag under a share lock, so a Keep that commits first saves
-  the file, and one that commits later waits for it and then saves it.
+  the file, and one that commits later waits for it and then saves it. The
+  seal's duplicate lookup reads the same flag, so a file kept since create
+  reuses a saved copy of its bytes, never a temporary one.
 - **Derived objects.** `chat_file_preparations.media_asset_id` is `on delete set
 null`. Whatever deletes a media row (purge, domain retention, workspace
   retention, account or organisation erasure, the temporary-chat purge), the

@@ -333,6 +333,7 @@ export function defaultSealDeps(db: DatabaseAdapter): SealDeps {
         row.organizationId,
         db,
         row.temporaryChat,
+        row.conversationId,
       );
       return asset?.id ?? null;
     },

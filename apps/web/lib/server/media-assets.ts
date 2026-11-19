@@ -560,6 +560,10 @@ export async function latestConversationImageAssetId(
  * Scoped to the uploader and their active workspace: recognising a repeat
  * across accounts would tell one user that another holds the same file, which
  * is a disclosure the storage saving does not justify.
+ *
+ * Given a conversation, its current temporary flag decides which copies match,
+ * as it does for the seal's insert: an upload that began in a temporary chat
+ * kept since then matches saved files, not temporary ones.
  */
 export async function getMediaAssetByContentHash(
   userId: string,
@@ -567,6 +571,7 @@ export async function getMediaAssetByContentHash(
   organizationId: string | null,
   db: MediaAssetQueryClient,
   temporaryChat = false,
+  conversationId: string | null = null,
 ): Promise<MediaAssetForServing | null> {
   const rows = await db.query<Record<string, unknown>>(
     `select id, user_id, organization_id, kind, mime_type, byte_size, storage_url, storage_pathname,
@@ -575,11 +580,17 @@ export async function getMediaAssetByContentHash(
       where user_id = $1
         and organization_id is not distinct from $3::uuid
         and content_sha256 = $2
-        and temporary_chat = $4
+        and temporary_chat = case
+          when $5::uuid is null then $4::boolean
+          else exists (
+            select 1 from public.web_conversations c
+             where c.id = $5::uuid and coalesce(c.is_temporary, false)
+          )
+        end
         and deleted_at is null
       order by created_at asc
       limit 1`,
-    [userId, contentSha256, organizationId, temporaryChat],
+    [userId, contentSha256, organizationId, temporaryChat, conversationId],
   );
   const row = rows[0];
   if (!row) return null;

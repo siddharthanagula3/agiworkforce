@@ -11,6 +11,7 @@ vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
 import { createQueryDb } from '@/lib/server/chat-file-intake/__tests__/fake-query-db';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import {
+  getMediaAssetByContentHash,
   insertMediaAsset,
   insertScannedChatFileMediaAsset,
   listScannedChatFileAssets,
@@ -148,6 +149,20 @@ describe('insertScannedChatFileMediaAsset', () => {
         db,
       ),
     ).rejects.toThrow(/no identity/);
+  });
+});
+
+describe('getMediaAssetByContentHash', () => {
+  it('matches on the flag it was given when no conversation is named', async () => {
+    const { db, query } = createQueryDb(async () => []);
+
+    await getMediaAssetByContentHash('user-1', SHA, null, db, true);
+
+    const [sql, params] = query.mock.calls[0]!;
+    expect(String(sql).replace(/\s+/g, ' ')).toContain(
+      'and temporary_chat = case when $5::uuid is null then $4::boolean else exists ( select 1 from public.web_conversations c where c.id = $5::uuid and coalesce(c.is_temporary, false) ) end',
+    );
+    expect(params).toEqual(['user-1', SHA, null, true, null]);
   });
 });
 

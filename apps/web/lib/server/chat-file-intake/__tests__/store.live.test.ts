@@ -22,7 +22,7 @@ vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
   recordGeneratedArtifactBytes: vi.fn(),
 }));
 
-import { CHAT_LARGE_FILE_POLICY } from '@/lib/chat-attachment-policy';
+import { CHAT_LARGE_FILE_POLICY, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { failStalledPreparations } from '@/lib/server/chat-file-preparation';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { sumFileStorageBytes } from '@/lib/server/file-storage';
@@ -55,6 +55,7 @@ import {
   touchPartRequest,
   type InsertIntakeInput,
 } from '../store';
+import { defaultSealDeps } from '../seal';
 
 const connectionString = process.env['AGI_CHAT_FILE_INTAKE_TEST_DATABASE_URL'];
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -69,6 +70,7 @@ if (connectionString) {
 
 const OWNER = 'chat-file-owner';
 const SUSPENDED = 'chat-file-suspended';
+const LOCK_OWNER = 'chat-file-lock-owner';
 const MIB = 1024 * 1024;
 const NOW = Date.parse('2026-11-15T09:00:00.000Z');
 const DAY_KEY = `agi:chat-files:daily-bytes:${OWNER}:2026-11-15`;
@@ -121,7 +123,7 @@ async function uploadedIntake(tx: DatabaseAdapter, name: string, nowMs = NOW) {
   return uploaded;
 }
 
-// llm-guardrail-allow: requires a local disposable _test database; every case applies 0422 inside a transaction it rolls back.
+// llm-guardrail-allow: requires a local disposable _test database; every case applies 0422, or its media_assets part, inside a transaction it rolls back.
 describe.skipIf(!connectionString)('chat file intake statements against PostgreSQL', () => {
   beforeAll(async () => {
     db = createDatabaseClient({
@@ -443,12 +445,188 @@ describe.skipIf(!connectionString)('chat file intake statements against PostgreS
          values ($1, 'file', 'application/pdf', $2, $3, $3, '{"source":"chat-attachment"}'::jsonb, true)`,
         [OWNER, 10 * MIB, `chat-attachments/${OWNER}/small.pdf`],
       );
+      await tx.execute(
+        `insert into public.media_assets
+           (user_id, kind, mime_type, byte_size, storage_url, storage_pathname, metadata, temporary_chat)
+         values ($1, 'file', 'application/pdf', $2, $3, $3, '{"source":"chat-attachment"}'::jsonb, true)`,
+        [OWNER, MAX_CHAT_ATTACHMENT_BYTES, `chat-attachments/${OWNER}/at-the-limit.pdf`],
+      );
 
       expect(await sumFileStorageBytes({ db: tx, userId: OWNER, organizationId: null })).toBe(
         120 * MIB,
       );
     });
   });
+
+  it('finds a duplicate by the conversation as it is when the seal runs, not as it was at create', async () => {
+    await inRolledBackMigration(async (tx) => {
+      const temporary = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e01';
+      const kept = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e02';
+      await tx.execute(
+        `insert into public.web_conversations (id, user_id, is_temporary)
+         values ($1, $3, true), ($2, $3, false)`,
+        [temporary, kept, OWNER],
+      );
+      const store = (name: string, conversationId: string | null, hashDigit: string) =>
+        insertScannedChatFileMediaAsset(
+          {
+            userId: OWNER,
+            organizationId: null,
+            kind: 'file',
+            mimeType: 'application/pdf',
+            byteSize: 40 * MIB,
+            storagePathname: `chat-attachments/${OWNER}/${name}.sealed`,
+            conversationId,
+            temporaryChat: conversationId === temporary,
+            scannedSha256: hashDigit.repeat(64),
+            metadata: { source: 'chat-attachment' },
+          },
+          tx,
+        );
+      const saved = await store('saved', null, 'd');
+      const inTemporaryChat = await store('in-temporary-chat', temporary, 'f');
+      const uploaded = await uploadedIntake(tx, 'dedupe');
+      const startedTemporary = (conversationId: string) => ({
+        ...uploaded,
+        conversationId,
+        temporaryChat: true,
+      });
+      const { findAssetByHash } = defaultSealDeps(tx);
+
+      expect(await findAssetByHash(startedTemporary(kept), 'd'.repeat(64))).toBe(saved);
+      expect(await findAssetByHash(startedTemporary(kept), 'f'.repeat(64))).toBeNull();
+      expect(await findAssetByHash(startedTemporary(temporary), 'f'.repeat(64))).toBe(
+        inTemporaryChat,
+      );
+      expect(await findAssetByHash(startedTemporary(temporary), 'd'.repeat(64))).toBeNull();
+    });
+  });
+
+  it('makes a seal as the claimed user and a Keep of the same conversation wait for each other', async () => {
+    const other = createDatabaseClient({
+      provider: 'postgres',
+      connectionString: connectionString!,
+      poolSize: 2,
+      statementTimeoutMs: 10_000,
+    });
+    const sealFirst = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e11';
+    const keepFirst = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e12';
+    const unrelated = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e13';
+    const mediaColumnStart = migrationBody.indexOf(
+      'alter table public.media_assets add column scanned_sha256',
+    );
+    const mediaColumnEnd = migrationBody.indexOf('comment on table public.chat_file_intakes');
+    expect(mediaColumnStart).toBeGreaterThan(0);
+    expect(mediaColumnEnd).toBeGreaterThan(mediaColumnStart);
+    let releaseKeep = () => {};
+    try {
+      await other.execute(`insert into public.profiles (id) values ($1)`, [LOCK_OWNER]);
+      await other.execute(
+        `insert into public.web_conversations (id, user_id, is_temporary)
+         values ($1, $4, true), ($2, $4, true), ($3, $4, true)`,
+        [sealFirst, keepFirst, unrelated, LOCK_OWNER],
+      );
+      // Keep's own update of the row, without the retrieval trigger it fires, whose insert would wait on the uncommitted media_assets change rather than on the row.
+      const keep = async (session: DatabaseAdapter, conversationId: string) => {
+        await session.execute('set local session_replication_role = replica');
+        await session.execute(
+          `update public.web_conversations set is_temporary = false
+            where id = $1 and is_temporary`,
+          [conversationId],
+        );
+      };
+      const keepWithin = (conversationId: string, lockTimeoutMs: number) =>
+        other.transaction(async (session) => {
+          await session.execute(`set local lock_timeout = '${lockTimeoutMs}ms'`);
+          await keep(session, conversationId);
+        });
+
+      await expect(
+        db.transaction(async (tx) => {
+          // Only 0422's media_assets part: its intake tables' foreign key to web_conversations would hold a table lock that blocks the other session's Keep.
+          await tx.execute(migrationBody.slice(mediaColumnStart, mediaColumnEnd));
+          await tx.execute('set local role app_rls');
+          await tx.query(
+            `select set_config('request.jwt.claim.sub', $1, true),
+                    set_config('request.jwt.claim.org_id', '', true)`,
+            [LOCK_OWNER],
+          );
+          const sealInto = (conversationId: string, name: string, hashDigit: string) =>
+            insertScannedChatFileMediaAsset(
+              {
+                userId: LOCK_OWNER,
+                organizationId: null,
+                kind: 'file',
+                mimeType: 'application/pdf',
+                byteSize: 40 * MIB,
+                storagePathname: `chat-attachments/${LOCK_OWNER}/${name}.sealed`,
+                conversationId,
+                temporaryChat: true,
+                scannedSha256: hashDigit.repeat(64),
+                metadata: { source: 'chat-attachment' },
+              },
+              tx,
+            );
+          const temporaryFlag = async (assetId: string) =>
+            (
+              await tx.query<{ temporary_chat: boolean }>(
+                `select temporary_chat from public.media_assets where id = $1::uuid`,
+                [assetId],
+              )
+            )[0]?.temporary_chat;
+
+          const sealedFirst = await sealInto(sealFirst, 'seal-first', 'a');
+          expect(await temporaryFlag(sealedFirst)).toBe(true);
+          await expect(keepWithin(unrelated, 2_000)).resolves.toBeUndefined();
+          await expect(keepWithin(sealFirst, 300)).rejects.toMatchObject({ code: '55P03' });
+
+          let keepUpdated = () => {};
+          const updated = new Promise<void>((resolve) => {
+            keepUpdated = resolve;
+          });
+          const held = new Promise<void>((resolve) => {
+            releaseKeep = resolve;
+          });
+          const keepCommitted = other.transaction(async (session) => {
+            await keep(session, keepFirst);
+            keepUpdated();
+            await held;
+          });
+          await Promise.race([
+            updated,
+            keepCommitted.then(() => {
+              throw new Error('The Keep ended before it held the conversation row.');
+            }),
+          ]);
+          const sealedAfterKeep = sealInto(keepFirst, 'keep-first', 'b');
+          await expect
+            .poll(
+              async () =>
+                (
+                  await other.query<{ waiting: number }>(
+                    `select count(*)::int as waiting from pg_stat_activity
+                      where datname = current_database()
+                        and pid <> pg_backend_pid()
+                        and wait_event_type = 'Lock'
+                        and query like 'insert into public.media_assets%'`,
+                  )
+                )[0]?.waiting,
+              { timeout: 10_000, interval: 50 },
+            )
+            .toBe(1);
+          releaseKeep();
+          await keepCommitted;
+          expect(await temporaryFlag(await sealedAfterKeep)).toBe(false);
+          throw new RolledBack();
+        }),
+      ).rejects.toBeInstanceOf(RolledBack);
+    } finally {
+      releaseKeep();
+      await other.execute(`delete from public.web_conversations where user_id = $1`, [LOCK_OWNER]);
+      await other.execute(`delete from public.profiles where id = $1`, [LOCK_OWNER]);
+      await other.dispose();
+    }
+  }, 60_000);
 
   it('matches nothing when a statement keyed by intake id names another owner', async () => {
     await kv.increment(DAY_KEY, 40 * MIB);
