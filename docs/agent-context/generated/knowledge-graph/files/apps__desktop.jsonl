@@ -116,7 +116,7 @@
 {"path":"apps/desktop/electron/__tests__/preloadBridge.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/preload.ts","apps/desktop/src/lib/tauri-electron/bridgeContract.ts","packages/contracts/local-runtime","spec:vitest"]}
 {"path":"apps/desktop/electron/__tests__/preloadDeepLinks.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/src/lib/tauri-electron/bridgeContract.ts","spec:vitest"]}
 {"path":"apps/desktop/electron/__tests__/previewConsole.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/previewConsole.ts","packages/contracts/local-runtime","spec:vitest"]}
-{"path":"apps/desktop/electron/__tests__/previewWindow.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/previewWindow.ts","spec:vitest"]}
+{"path":"apps/desktop/electron/__tests__/previewWindow.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/previewWindow.ts","spec:electron","spec:vitest"]}
 {"path":"apps/desktop/electron/__tests__/quickAsk.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/config.ts","apps/desktop/electron/quickAsk.ts","apps/desktop/electron/windowPolicy.ts","spec:vitest"]}
 {"path":"apps/desktop/electron/__tests__/quitGuard.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/quitGuard.ts","spec:vitest"]}
 {"path":"apps/desktop/electron/__tests__/recorderOverlayWindow.test.ts","unit":"apps/desktop","role":"test","imports":["apps/desktop/electron/__tests__/shellTokenGlobals.ts","apps/desktop/electron/recorderOverlayWindow.ts","spec:node:events","spec:vitest"]}
