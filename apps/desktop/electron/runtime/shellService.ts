@@ -521,6 +521,36 @@ function claimRun(input: RunShellCommandInput): RunClaim {
   return claim;
 }
 
+async function folderEntry(file: string): Promise<string | null> {
+  try {
+    return path.join(await fs.realpath(path.dirname(file)), path.basename(file));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * An allowed name covers the file PATH finds for it and no other. A command
+ * that names its program by a path is that program only when the path is the
+ * same entry of the same folder. A link to it from elsewhere starts it another
+ * way, as a virtual environment's interpreter does, so it is asked about like
+ * any other file of that name. What starts is the file PATH found, as for the
+ * bare name, never a path a command in the folder could have swapped since.
+ */
+async function allowedProgramOnPath(
+  name: string,
+  program: string,
+  cwd: string,
+): Promise<string | null> {
+  const found = await findExecutable(name, childEnvironment(await loginPath())['PATH'], cwd);
+  if (found === null) return null;
+  const [named, listed] = await Promise.all([
+    folderEntry(path.resolve(cwd, program)),
+    folderEntry(found),
+  ]);
+  return named !== null && named === listed ? found : null;
+}
+
 async function prepareShellCommand(
   input: RunShellCommandInput,
   terminal: boolean,
@@ -562,8 +592,17 @@ async function prepareShellCommand(
   const sandboxed = sandbox.backend !== 'none';
   const project = sandboxed ? await pinnedRootPath(input.root) : null;
   const cwd = await resolveWorkingDirectory(input.root, input.relativePath);
+  const [program, ...args] = argv as [string, ...string[]];
+  const programOnPath =
+    sandboxed && verdict.reason === 'allowed-name-by-path'
+      ? await allowedProgramOnPath(verdict.program, program, cwd.absolute)
+      : null;
   let network: SandboxNetwork = 'deny';
-  if (verdict.decision === 'ask' || !sandboxed || input.review !== undefined) {
+  if (
+    (verdict.decision === 'ask' && programOnPath === null) ||
+    !sandboxed ||
+    input.review !== undefined
+  ) {
     const answer = await input.approve({ verdict, command, cwd: cwd.absolute, sandboxed });
     if (answer.approved && answer.allowNetwork) network = 'allow';
     if (!answer.approved) {
@@ -576,14 +615,13 @@ async function prepareShellCommand(
     }
   }
 
-  const [program, ...args] = argv as [string, ...string[]];
   const env = childEnvironment(await loginPath());
 
   let spawnCommand = program;
   let spawnArgs = args;
   let scratchDirectory: string | null = null;
   if (sandbox.backend !== 'none' && project !== null) {
-    const executable = await findExecutable(program, env['PATH'], cwd.absolute);
+    const executable = programOnPath ?? (await findExecutable(program, env['PATH'], cwd.absolute));
     if (!executable) throw missingProgram(program);
     scratchDirectory = await createScratch();
     env['TMPDIR'] = scratchDirectory;

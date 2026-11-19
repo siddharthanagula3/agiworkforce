@@ -1084,7 +1084,14 @@ async fn execute_tool_with_scoped_permissions(
             execute_browser_command(browser, browser_args).await
         }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
-        "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
+        "web_fetch" => {
+            execute_web_fetch_with_opts(
+                &call.args,
+                opts.quiet,
+                boundary_gated.then_some(permissions),
+            )
+            .await
+        }
         "generate_image" => execute_generate_image(&call.args, opts).await,
         "apply_patch" => {
             execute_apply_patch(
@@ -2120,8 +2127,9 @@ async fn execute_web_search_with_opts(
 async fn execute_web_fetch_with_opts(
     args: &HashMap<String, String>,
     _quiet: bool,
+    host_approval: Option<&crate::permissions::PermissionStore>,
 ) -> Result<ToolResult> {
-    execute_web_fetch(args).await
+    execute_web_fetch(args, host_approval).await
 }
 
 // ---------------------------------------------------------------------------
@@ -5213,7 +5221,7 @@ decision = "deny"
     #[tokio::test]
     async fn test_web_fetch_missing_url() {
         let args = HashMap::new();
-        let result = execute_web_fetch(&args).await.unwrap();
+        let result = execute_web_fetch(&args, None).await.unwrap();
         assert!(!result.success);
         assert!(result.output.contains("Missing required argument: url"));
     }
@@ -5222,7 +5230,7 @@ decision = "deny"
     async fn test_web_fetch_invalid_url() {
         let mut args = HashMap::new();
         args.insert("url".to_string(), "not-a-valid-url".to_string());
-        let result = execute_web_fetch(&args).await.unwrap();
+        let result = execute_web_fetch(&args, None).await.unwrap();
         assert!(!result.success);
         assert!(
             result.output.contains("Failed to fetch")

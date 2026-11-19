@@ -13,6 +13,9 @@ import {
   executeUrlFetch,
   extractHtmlText,
   extractHtmlTitle,
+  extractPageDescription,
+  extractPagePublishedDate,
+  extractPageTitle,
   decodeHtmlEntities,
   urlFetchToolDef,
   isUrlFetchTool,
@@ -429,6 +432,26 @@ describe('HTML extraction', () => {
     expect(extractHtmlTitle('<html><head></head></html>')).toBeUndefined();
   });
 
+  it('reads quoted meta attributes in either quote style, order and case', () => {
+    const singleQuoted = "<meta content='Single &amp; quoted' name = 'description'>";
+    expect(extractPageDescription(singleQuoted)).toBe('Single & quoted');
+
+    const unquotedThenUpperCase =
+      '<meta charset=utf-8 name=description content="An unquoted name is not a key">' +
+      '<META PROPERTY="OG:Description" CONTENT="Upper case tag">';
+    expect(extractPageDescription(unquotedThenUpperCase)).toBe('Upper case tag');
+
+    expect(extractPageTitle('<meta property="og:title"content="Packed">')).toBe('Packed');
+  });
+
+  it('takes the published date from the first JSON-LD block that states one', () => {
+    const html =
+      '<script>var datePublished = "2001-01-01";</script>' +
+      '<SCRIPT id="ld" TYPE=\'application/ld+json\' data-x="1">{"@type":"WebSite"}</SCRIPT>' +
+      '<script type="application/ld+json">{"dateCreated" : "2026-03-04"}</script>';
+    expect(extractPagePublishedDate(html)).toBe('2026-03-04');
+  });
+
   it('decodes numeric entities and leaves unknown named entities intact', () => {
     expect(decodeHtmlEntities('&#72;&#x69; &amp; &notarealentity;')).toBe('Hi & &notarealentity;');
   });
@@ -486,6 +509,41 @@ describe('extraction is linear in hostile HTML (no polynomial ReDoS)', () => {
     expect(html.length).toBeGreaterThan(URL_FETCH_MAX_EXTRACT_CHARS);
     const ms = elapsed(() => extractHtmlTitle(html));
     expect(ms).toBeLessThan(BUDGET_MS);
+  }, 120_000);
+
+  it.each([
+    [
+      'a meta tag that is one long attribute-name run',
+      () => `<meta ${'a'.repeat(URL_FETCH_MAX_EXTRACT_CHARS - 64)}>`,
+    ],
+    [
+      'a meta attribute whose quoted value never closes',
+      () => `<meta ${'a'.repeat(120_000)}="${'b'.repeat(120_000)}>`,
+    ],
+    ['unterminated script openings', () => '<script '.repeat(40_000)],
+    ['JSON-LD blocks that never close', () => '<script type="application/ld+json">'.repeat(9_000)],
+  ])(
+    'page metadata extraction survives %s within the time budget',
+    (_label, build) => {
+      const html = build();
+      const ms = elapsed(() => {
+        extractPageTitle(html);
+        extractPageDescription(html);
+        extractPagePublishedDate(html);
+      });
+      expect(ms).toBeLessThan(BUDGET_MS);
+    },
+    120_000,
+  );
+
+  it('executeUrlFetch survives a hostile meta tag inside the request deadline', async () => {
+    resolvePublic();
+    const hostile = `hello<meta ${'a'.repeat(260_000)}>`;
+    const fetchImpl = fetchReturning(htmlResponse(hostile));
+    const started = Date.now();
+    const outcome = await executeUrlFetch({ url: 'https://example.com/meta' }, { fetchImpl });
+    expect(Date.now() - started).toBeLessThan(BUDGET_MS);
+    expect(outcome.ok).toBe(true);
   }, 120_000);
 
   it('executeUrlFetch survives a hostile page inside the request deadline', async () => {

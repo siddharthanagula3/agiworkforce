@@ -19,7 +19,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   BINARY_SNIFF_BYTES,
-  globToRegExp,
+  compileGlob,
   grepLines,
   GREP_PREVIEW_LIMIT,
   isSkippedDirectory,
@@ -894,13 +894,12 @@ export async function globFiles(
   options: SearchOptions = {},
 ): Promise<FileEntry[]> {
   const resolved = await resolveWithinRoot(root, relativePath);
-  const exact = globToRegExp(pattern);
-  const matcher = options.ignoreCase ? new RegExp(exact.source, 'i') : exact;
+  const matches = compileGlob(pattern, options);
   const results: FileEntry[] = [];
 
   for await (const found of walk(resolved.absolute, resolved.relative, 0)) {
     if (results.length >= MAX_LIST_ENTRIES) break;
-    if (!matcher.test(found.relative)) continue;
+    if (!matches(found.relative)) continue;
     const entry = await entryFor(found.absolute, found.relative);
     if (entry) results.push(entry);
   }
