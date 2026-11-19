@@ -2576,6 +2576,57 @@ still removes expired rows, but leaves any object the reference ledger tracks to
 the lifecycle worker; it deletes bytes itself only for rows retired before the
 ledger existed, which the migration's live-row backfill does not register.
 
+The lifecycle harness connects as the owner role directly rather than through
+`SET ROLE`, matching the production owner connection; `legal_hold_preserves`
+deliberately fails closed for a set-role connection with no bound subject.
+
+## Native desktop integration
+
+Five desktop features plug into the `Desktop` view through `ui/extensions.rs`,
+which routes their actions, panels, sidebar entries, runtime notifications,
+window attachment and preference changes. Pure logic lives in a top-level
+module per feature with render-free tests; every value comes from its existing
+TypeScript or contract owner.
+
+- Settings (`preferences.rs`, `ui/ext_settings.rs`): appearance, notification
+  and keep-awake toggles, open at login, menu-bar icon, quick-ask shortcut and
+  automatic update checks, saved atomically to `preferences.json` in the
+  per-user app data directory. A failed save or login-item change leaves the
+  setting unchanged and shows the reason; a corrupt file is set aside and
+  defaults load visibly. An unset shortcut uses the contract default, an empty
+  one turns it off, and both owners validate with the same parser.
+- Notifications and keep-awake (`notifications.rs`): approval, question,
+  finished and failed notices only while the window is inactive, deduplicated,
+  with no response, command, summary or title text for any boundary. Keep-awake
+  holds the platform helper (`caffeinate`, `systemd-inhibit`, PowerShell) only
+  while a local Code turn runs and releases it on finish, preference change,
+  disconnect, window close and quit.
+- Deep links, menu-bar icon and quick ask (`integration.rs`): the
+  `host-bridge.ts` scheme is registered in the generated Info.plist and parsed
+  against a strict route table (chat, project, Code home, a local session only
+  in the open folder); anything else is refused visibly. Links that arrive
+  before the window are queued as in Electron. The macOS and Windows tray quits
+  through the existing close confirmation; Linux reports it unsupported.
+- Capture (`capture.rs`): a macOS area screenshot and a single dropped file
+  enter the Cloud composer through the reviewed chat-upload owner, so nothing
+  uploads without review. Screenshot temp folders are private and removed after
+  preparation, cancellation, failure or window close.
+- Updates and About (`updates.rs`): version, runtime version and notices;
+  update checks against the Electron cloud release feed; downloads are kept
+  only after checksum, Gatekeeper and signing-team verification, then handed to
+  the OS. `native-gpui` CI builds and tests the crate on Linux and Windows
+  (main-only, like the other native jobs), and `package-desktop-native.yml`
+  signs and notarizes a macOS bundle on manual dispatch without publishing.
+
+`cargo check`, `cargo clippy -D warnings` (default and without default features)
+and every crate test pass on macOS. None of these features has been exercised in
+a running window. Dictation is blocked: the app-server has no transcription
+method and microphone capture needs new dependencies. Click-to-focus on
+notifications, Windows and Linux deep-link delivery, a floating quick-ask panel,
+in-place update installation and a release-grade bundle are not implemented.
+The update feed currently offers the Electron installer; a native release
+channel is an owner decision.
+
 ## Remaining migration gates
 
 Native release acceptance remains incomplete. Accessibility qualification is
@@ -2621,14 +2672,16 @@ updates above. The full maintenance scan remains open under
 - Complete remaining native narrow scrolling and drag-resize acceptance for the
   implemented frame. Complete native acceptance for saved conversation model
   choice and implement account-wide new-chat defaults through their settings owner.
-- Migrate settings, provider selection where admitted, file and
-  artifact rendering, voice, capture, desktop tools, notifications, deep links,
-  tray, credential storage, browser bridges, and remote-control workflows.
+- Accept the native desktop integration above in a running window, then migrate
+  provider selection where admitted, file and artifact rendering, dictation,
+  desktop tools, credential storage, browser bridges, and remote-control
+  workflows.
 - Implement AGI Code editing, diffs, terminal and worktree flows through existing
   owners; review the license of every additional dependency separately.
 - Verify Windows and Linux builds and behavior. Only the local macOS build has
   been attempted in the initial slice; no cross-platform result is implied.
-- Add native CI, packaging, signing, notarization, updates, crash handling, resource
-  measurements, release notices, and a tested rollout/recovery procedure.
+- Run the native CI and packaging workflows on GitHub, produce a release-grade
+  universal bundle, choose the native update channel, and add crash handling,
+  resource measurements and a tested rollout/recovery procedure.
 - Switch release routing only after parity and trust-boundary acceptance, then
   remove displaced code and update architecture inventories and guards together.

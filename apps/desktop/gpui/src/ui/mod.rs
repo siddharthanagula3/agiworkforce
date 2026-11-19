@@ -40,6 +40,12 @@ mod code_worktrees;
 mod conversation_management;
 mod conversations;
 mod drafts;
+mod ext_capture;
+mod ext_integration;
+mod ext_notifications;
+mod ext_settings;
+mod ext_updates;
+mod extensions;
 mod file_recovery;
 mod files;
 mod frame;
@@ -137,6 +143,7 @@ enum UiAction {
     ChangeSection(String, Option<u32>, bool),
     OpenFolder,
     Refresh,
+    Extension(extensions::ExtensionAction),
     NextPage,
     SearchSessions,
     ClearSessionSearch,
@@ -287,6 +294,8 @@ struct Desktop {
     download_poll_task: Option<gpui::Task<()>>,
     cloud_poll_task: Option<gpui::Task<()>>,
     cloud_draft_task: Option<gpui::Task<()>>,
+    extensions: extensions::Extensions,
+    preferences: crate::preferences::Preferences,
 }
 
 impl Desktop {
@@ -486,6 +495,7 @@ impl Desktop {
                                             .context("The runtime warning had no code")?;
                                         anyhow::bail!("Runtime warning: {code}. Reopen the folder to recover its current state.");
                                 }
+                                view.observe_extensions(&notification, cx);
                                 if view.loading {
                                     anyhow::ensure!(view.pending_events.len() < view.settings.max_queued_notifications.get(), "Too many events arrived while opening the session. Reopen the folder to recover.");
                                     view.pending_events.push(notification);
@@ -611,6 +621,18 @@ impl Desktop {
     }
 
     fn dispatch(&mut self, action: UiAction, window: &mut Window, cx: &mut Context<Self>) {
+        let action = match action {
+            UiAction::Extension(action) => {
+                self.navigation_open = false;
+                self.dispatch_extension(action, window, cx);
+                return;
+            }
+            UiAction::ToggleNavigation | UiAction::CloseNavigation => action,
+            action => {
+                self.hide_extensions();
+                action
+            }
+        };
         if matches!(
             action,
             UiAction::ToggleNavigation | UiAction::CloseNavigation
@@ -720,6 +742,7 @@ impl Desktop {
         match action {
             UiAction::Code => self.open_code(window, cx),
             UiAction::ToggleNavigation | UiAction::CloseNavigation => unreachable!(),
+            UiAction::Extension(_) => unreachable!(),
             UiAction::Terminal => self.open_terminal(window, cx),
             UiAction::NewTerminal => self.new_terminal(window, cx),
             UiAction::BackFromTerminal => {
@@ -1128,10 +1151,14 @@ impl Render for Desktop {
         {
             self.history_viewport.keep_latest();
         }
-        let dark = matches!(
-            window.appearance(),
-            WindowAppearance::Dark | WindowAppearance::VibrantDark
-        );
+        let dark = match self.preferences.appearance {
+            crate::preferences::Appearance::Dark => true,
+            crate::preferences::Appearance::Light => false,
+            crate::preferences::Appearance::System => matches!(
+                window.appearance(),
+                WindowAppearance::Dark | WindowAppearance::VibrantDark
+            ),
+        };
         let palette = if dark {
             self.contracts.dark
         } else {
@@ -1212,7 +1239,9 @@ impl Render for Desktop {
         self.pump_cloud_workspace(window, cx);
         self.sync_cloud_workspace_select(window, cx);
         self.sync_cloud_model_select(window, cx);
-        if self.terminal.visible {
+        if let Some(panel) = self.render_extension(palette, window, cx) {
+            content = content.child(panel);
+        } else if self.terminal.visible {
             content = content.child(self.render_terminal(palette, dark, window, cx));
         } else if self.editor.visible {
             content = content.child(self.render_files(palette, window, cx));
@@ -1625,321 +1654,320 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
     let executor = Arc::new(tokio::runtime::Runtime::new()?);
     let runtime = Arc::new(Mutex::new(None::<RuntimeSession>));
     let account_runtime = Arc::new(Mutex::new(None::<RuntimeSession>));
-    gpui_platform::application()
-        .with_assets(gpui_kit_assets::Assets)
-        .run(move |cx: &mut App| {
-            gpui_component::init(cx);
-            if let Err(error) = bind_application_shortcuts(cx) {
-                eprintln!("Application shortcuts could not be loaded: {error:#}");
+    let application = gpui_platform::application().with_assets(gpui_kit_assets::Assets);
+    application.on_open_urls(crate::integration::receive_open_urls);
+    application.run(move |cx: &mut App| {
+        gpui_component::init(cx);
+        if let Err(error) = bind_application_shortcuts(cx) {
+            eprintln!("Application shortcuts could not be loaded: {error:#}");
+            cx.quit();
+            return;
+        }
+        extensions::install_extensions(cx);
+        cx.on_window_closed(|cx, _| {
+            if cx.windows().is_empty() {
                 cx.quit();
-                return;
             }
-            cx.on_window_closed(|cx, _| {
-                if cx.windows().is_empty() {
-                    cx.quit();
+        })
+        .detach();
+        let shutdown_runtime = Arc::clone(&runtime);
+        let shutdown_executor = Arc::clone(&executor);
+        let shutdown_account = Arc::clone(&account_runtime);
+        cx.on_app_quit(move |_| {
+            let runtime = Arc::clone(&shutdown_runtime);
+            let account = Arc::clone(&shutdown_account);
+            let executor = Arc::clone(&shutdown_executor);
+            async move {
+                if let Err(error) =
+                    crate::runtime::shutdown_sessions(executor, [runtime, account]).await
+                {
+                    eprintln!("Runtime shutdown: {error:#}");
                 }
-            })
-            .detach();
-            let shutdown_runtime = Arc::clone(&runtime);
-            let shutdown_executor = Arc::clone(&executor);
-            let shutdown_account = Arc::clone(&account_runtime);
-            cx.on_app_quit(move |_| {
-                let runtime = Arc::clone(&shutdown_runtime);
-                let account = Arc::clone(&shutdown_account);
-                let executor = Arc::clone(&shutdown_executor);
-                async move {
-                    if let Err(error) =
-                        crate::runtime::shutdown_sessions(executor, [runtime, account]).await
-                    {
-                        eprintln!("Runtime shutdown: {error:#}");
-                    }
-                }
-            })
-            .detach();
-            let opened = cx.open_window(
-                WindowOptions {
-                    titlebar: Some(gpui::TitlebarOptions {
-                        title: Some(contracts.desktop_name.clone().into()),
-                        ..Default::default()
-                    }),
-                    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-                        None,
-                        size(px(settings.window_width), px(settings.window_height)),
-                        cx,
-                    ))),
+            }
+        })
+        .detach();
+        let opened = cx.open_window(
+            WindowOptions {
+                titlebar: Some(gpui::TitlebarOptions {
+                    title: Some(contracts.desktop_name.clone().into()),
                     ..Default::default()
-                },
-                |window, cx| {
-                    let desktop = cx.new(|cx| {
-                        let focus = cx.focus_handle();
-                        focus.focus(window, cx);
-                        let editor_buffer = cx.new(|cx| EditorState::new(window, cx));
-                        let instruction_buffer = cx.new(|cx| EditorState::new(window, cx));
-                        cx.subscribe_in(
-                            &instruction_buffer,
-                            window,
-                            |_: &mut Desktop, _, _: &InputEvent, _, cx| cx.notify(),
-                        )
-                        .detach();
-                        let editor_path = cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("Relative file path")
-                        });
-                        let recovery_destination = cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("New relative file path")
-                        });
-                        cx.subscribe_in(
-                            &recovery_destination,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, window, cx| {
-                                if matches!(event, InputEvent::PressEnter { .. })
-                                    && view.editor.recovery_browser.visible
-                                {
-                                    view.save_recovery_copy(window, cx);
-                                }
-                            },
-                        )
-                        .detach();
-                        let terminal_paste = cx.new(|cx| TextareaState::new(window, cx));
-                        cx.subscribe_in(
-                            &editor_buffer,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, _, cx| {
-                                if matches!(event, InputEvent::Change) {
-                                    view.changed_file_recovery(cx);
-                                }
-                                cx.notify();
-                            },
-                        )
-                        .detach();
-                        cx.subscribe_in(
-                            &editor_path,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, window, cx| {
-                                if matches!(event, InputEvent::PressEnter { .. })
-                                    && view.editor.visible
-                                {
-                                    view.read_file(
-                                        view.editor_path.read(cx).value().to_string(),
-                                        window,
-                                        cx,
-                                    );
-                                }
-                            },
-                        )
-                        .detach();
-                        let composer = cx.new(|cx| {
-                            TextareaState::new(window, cx)
-                                .placeholder("Message")
-                                .auto_grow(1, 8)
-                                .submit_on_enter(true)
-                        });
-                        let project_name =
-                            cx.new(|cx| InputState::new(window, cx).placeholder("Project name"));
-                        let project_description =
-                            cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 4));
-                        let project_instructions =
-                            cx.new(|cx| TextareaState::new(window, cx).auto_grow(3, 8));
-                        cx.subscribe_in(
-                            &project_name,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, _, cx| {
-                                if matches!(event, InputEvent::PressEnter { .. }) {
-                                    if let Some(edit) = &view.cloud.projects.edit {
-                                        view.save_project(edit.id, cx);
-                                    }
-                                }
-                                cx.notify();
-                            },
-                        )
-                        .detach();
-                        cx.subscribe_in(
-                            &project_description,
-                            window,
-                            |_: &mut Desktop, _, _: &InputEvent, _, cx| cx.notify(),
-                        )
-                        .detach();
-                        cx.subscribe_in(
-                            &project_instructions,
-                            window,
-                            |_: &mut Desktop, _, _: &InputEvent, _, cx| cx.notify(),
-                        )
-                        .detach();
-                        let cloud_title = cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("Conversation title")
-                        });
-                        cx.subscribe_in(
-                            &cloud_title,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, _, cx| {
-                                if let InputEvent::PressEnter { .. } = event {
-                                    if let Some(edit) = &view.cloud.management.editing {
-                                        view.save_cloud_title(edit.id, cx);
-                                    }
-                                }
-                                cx.notify();
-                            },
-                        )
-                        .detach();
-                        let cloud_composer = cx.new(|cx| {
-                            TextareaState::new(window, cx)
-                                .placeholder("Message")
-                                .auto_grow(1, 8)
-                                .submit_on_enter(true)
-                        });
-                        cx.subscribe_in(
-                            &cloud_composer,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, window, cx| match event {
-                                InputEvent::PressEnter { shift: false, .. } => {
-                                    view.send_cloud(window, cx)
-                                }
-                                InputEvent::Change => view.changed_cloud_draft(cx),
-                                _ => {}
-                            },
-                        )
-                        .detach();
-                        let cloud_query = cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("Search Cloud conversations")
-                        });
-                        cx.subscribe_in(
-                            &cloud_query,
-                            window,
-                            |view: &mut Desktop, input, event: &InputEvent, _, cx| match event {
-                                InputEvent::Change if !view.cloud.reset_query => {
-                                    view.cloud.query = input.read(cx).value().to_string()
-                                }
-                                InputEvent::PressEnter { .. } => view.load_cloud(false, cx),
-                                _ => {}
-                            },
-                        )
-                        .detach();
-                        cx.subscribe_in(
-                            &composer,
-                            window,
-                            |view: &mut Desktop, _, event: &InputEvent, window, cx| match event {
-                                InputEvent::PressEnter { shift: false, .. } => {
-                                    view.send(window, cx)
-                                }
-                                InputEvent::Change => cx.notify(),
-                                _ => {}
-                            },
-                        )
-                        .detach();
-                        let code_query = cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("Search coding sessions")
-                        });
-                        cx.subscribe_in(
-                            &code_query,
-                            window,
-                            |view: &mut Desktop, input, event: &InputEvent, _, cx| match event {
-                                InputEvent::Change if !view.code_search_reset => {
-                                    view.code_search.set_query(input.read(cx).value().as_str());
-                                    cx.notify();
-                                }
-                                InputEvent::PressEnter { .. } => view.search_sessions(cx),
-                                _ => {}
-                            },
-                        )
-                        .detach();
-                        let cloud = CloudHistory::new(contracts.max_frame_bytes.get());
-                        Desktop {
-                            navigation_open: false,
-                            navigation_menu_focus: cx.focus_handle(),
-                            navigation_close_focus: cx.focus_handle(),
-                            history_viewport: crate::viewport::HistoryViewport::default(),
-                            contracts,
-                            settings,
-                            code_settings: Default::default(),
-                            code_worktrees: Default::default(),
-                            instruction_buffer,
-                            executor,
-                            runtime,
-                            account_runtime,
-                            binary,
-                            workspace: None,
-                            threads: Vec::new(),
-                            conversation: None,
-                            changes: crate::changes::Changes::default(),
-                            editor: crate::editor::FileEditor::default(),
-                            editor_buffer,
-                            editor_path,
-                            recovery_destination,
-                            file_recovery_task: None,
-                            terminal: crate::terminal::TerminalPanel::default(),
-                            terminal_view: None,
-                            terminal_poll_task: None,
-                            terminal_paste,
-                            pending_terminal_paste: None,
-                            composer,
-                            drafts: HashMap::new(),
-                            models: None,
-                            submitting: false,
-                            stopping: false,
-                            approval_pending: None,
-                            pending_events: Vec::new(),
-                            closing: false,
-                            next_cursor: None,
-                            code_query,
-                            code_search: Default::default(),
-                            code_search_reset: false,
-                            loading: false,
-                            error: None,
-                            focus,
-                            connection_client: None,
-                            event_task: None,
-                            generation: 0,
-                            capabilities: None,
-                            account: AccountPanel {
-                                visible: true,
-                                ..Default::default()
-                            },
-                            account_generation: 0,
-                            account_capabilities: None,
-                            account_connection_client: None,
-                            account_event_task: None,
-                            cloud,
-                            cloud_query,
-                            cloud_model_select: None,
-                            cloud_workspace_select: None,
-                            cloud_composer,
-                            cloud_title,
-                            project_name,
-                            project_description,
-                            project_instructions,
-                            project_upload: Default::default(),
-                            upload_poll_task: None,
-                            chat_upload: Default::default(),
-                            attachment_recovery: Default::default(),
-                            chat_upload_poll_task: None,
-                            project_download: Default::default(),
-                            download_poll_task: None,
-                            cloud_poll_task: None,
-                            cloud_draft_task: None,
-                        }
+                }),
+                window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+                    None,
+                    size(px(settings.window_width), px(settings.window_height)),
+                    cx,
+                ))),
+                ..Default::default()
+            },
+            |window, cx| {
+                let desktop = cx.new(|cx| {
+                    let focus = cx.focus_handle();
+                    focus.focus(window, cx);
+                    let editor_buffer = cx.new(|cx| EditorState::new(window, cx));
+                    let instruction_buffer = cx.new(|cx| EditorState::new(window, cx));
+                    cx.subscribe_in(
+                        &instruction_buffer,
+                        window,
+                        |_: &mut Desktop, _, _: &InputEvent, _, cx| cx.notify(),
+                    )
+                    .detach();
+                    let editor_path =
+                        cx.new(|cx| InputState::new(window, cx).placeholder("Relative file path"));
+                    let recovery_destination = cx.new(|cx| {
+                        InputState::new(window, cx).placeholder("New relative file path")
                     });
-                    desktop.update(cx, Desktop::connect_account);
-                    let weak = desktop.downgrade();
-                    window.on_window_should_close(cx, move |window, cx| {
-                        weak.update(cx, |view, cx| {
-                            if view.needs_close_confirmation(cx) {
-                                view.request_close(false, window, cx);
-                                false
-                            } else {
-                                true
+                    cx.subscribe_in(
+                        &recovery_destination,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, window, cx| {
+                            if matches!(event, InputEvent::PressEnter { .. })
+                                && view.editor.recovery_browser.visible
+                            {
+                                view.save_recovery_copy(window, cx);
                             }
-                        })
-                        .unwrap_or(true)
+                        },
+                    )
+                    .detach();
+                    let terminal_paste = cx.new(|cx| TextareaState::new(window, cx));
+                    cx.subscribe_in(
+                        &editor_buffer,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, _, cx| {
+                            if matches!(event, InputEvent::Change) {
+                                view.changed_file_recovery(cx);
+                            }
+                            cx.notify();
+                        },
+                    )
+                    .detach();
+                    cx.subscribe_in(
+                        &editor_path,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, window, cx| {
+                            if matches!(event, InputEvent::PressEnter { .. }) && view.editor.visible
+                            {
+                                view.read_file(
+                                    view.editor_path.read(cx).value().to_string(),
+                                    window,
+                                    cx,
+                                );
+                            }
+                        },
+                    )
+                    .detach();
+                    let composer = cx.new(|cx| {
+                        TextareaState::new(window, cx)
+                            .placeholder("Message")
+                            .auto_grow(1, 8)
+                            .submit_on_enter(true)
                     });
-                    cx.new(|cx| gpui_component::Root::new(desktop, window, cx))
-                },
-            );
-            match opened {
-                Ok(_) => cx.activate(true),
-                Err(error) => {
-                    eprintln!("Desktop window could not open: {error:#}");
-                    cx.quit();
-                }
+                    let project_name =
+                        cx.new(|cx| InputState::new(window, cx).placeholder("Project name"));
+                    let project_description =
+                        cx.new(|cx| TextareaState::new(window, cx).auto_grow(2, 4));
+                    let project_instructions =
+                        cx.new(|cx| TextareaState::new(window, cx).auto_grow(3, 8));
+                    cx.subscribe_in(
+                        &project_name,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, _, cx| {
+                            if matches!(event, InputEvent::PressEnter { .. }) {
+                                if let Some(edit) = &view.cloud.projects.edit {
+                                    view.save_project(edit.id, cx);
+                                }
+                            }
+                            cx.notify();
+                        },
+                    )
+                    .detach();
+                    cx.subscribe_in(
+                        &project_description,
+                        window,
+                        |_: &mut Desktop, _, _: &InputEvent, _, cx| cx.notify(),
+                    )
+                    .detach();
+                    cx.subscribe_in(
+                        &project_instructions,
+                        window,
+                        |_: &mut Desktop, _, _: &InputEvent, _, cx| cx.notify(),
+                    )
+                    .detach();
+                    let cloud_title =
+                        cx.new(|cx| InputState::new(window, cx).placeholder("Conversation title"));
+                    cx.subscribe_in(
+                        &cloud_title,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, _, cx| {
+                            if let InputEvent::PressEnter { .. } = event {
+                                if let Some(edit) = &view.cloud.management.editing {
+                                    view.save_cloud_title(edit.id, cx);
+                                }
+                            }
+                            cx.notify();
+                        },
+                    )
+                    .detach();
+                    let cloud_composer = cx.new(|cx| {
+                        TextareaState::new(window, cx)
+                            .placeholder("Message")
+                            .auto_grow(1, 8)
+                            .submit_on_enter(true)
+                    });
+                    cx.subscribe_in(
+                        &cloud_composer,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, window, cx| match event {
+                            InputEvent::PressEnter { shift: false, .. } => {
+                                view.send_cloud(window, cx)
+                            }
+                            InputEvent::Change => view.changed_cloud_draft(cx),
+                            _ => {}
+                        },
+                    )
+                    .detach();
+                    let cloud_query = cx.new(|cx| {
+                        InputState::new(window, cx).placeholder("Search Cloud conversations")
+                    });
+                    cx.subscribe_in(
+                        &cloud_query,
+                        window,
+                        |view: &mut Desktop, input, event: &InputEvent, _, cx| match event {
+                            InputEvent::Change if !view.cloud.reset_query => {
+                                view.cloud.query = input.read(cx).value().to_string()
+                            }
+                            InputEvent::PressEnter { .. } => view.load_cloud(false, cx),
+                            _ => {}
+                        },
+                    )
+                    .detach();
+                    cx.subscribe_in(
+                        &composer,
+                        window,
+                        |view: &mut Desktop, _, event: &InputEvent, window, cx| match event {
+                            InputEvent::PressEnter { shift: false, .. } => view.send(window, cx),
+                            InputEvent::Change => cx.notify(),
+                            _ => {}
+                        },
+                    )
+                    .detach();
+                    let code_query = cx.new(|cx| {
+                        InputState::new(window, cx).placeholder("Search coding sessions")
+                    });
+                    cx.subscribe_in(
+                        &code_query,
+                        window,
+                        |view: &mut Desktop, input, event: &InputEvent, _, cx| match event {
+                            InputEvent::Change if !view.code_search_reset => {
+                                view.code_search.set_query(input.read(cx).value().as_str());
+                                cx.notify();
+                            }
+                            InputEvent::PressEnter { .. } => view.search_sessions(cx),
+                            _ => {}
+                        },
+                    )
+                    .detach();
+                    let cloud = CloudHistory::new(contracts.max_frame_bytes.get());
+                    Desktop {
+                        navigation_open: false,
+                        navigation_menu_focus: cx.focus_handle(),
+                        navigation_close_focus: cx.focus_handle(),
+                        history_viewport: crate::viewport::HistoryViewport::default(),
+                        contracts,
+                        settings,
+                        code_settings: Default::default(),
+                        code_worktrees: Default::default(),
+                        instruction_buffer,
+                        executor,
+                        runtime,
+                        account_runtime,
+                        binary,
+                        workspace: None,
+                        threads: Vec::new(),
+                        conversation: None,
+                        changes: crate::changes::Changes::default(),
+                        editor: crate::editor::FileEditor::default(),
+                        editor_buffer,
+                        editor_path,
+                        recovery_destination,
+                        file_recovery_task: None,
+                        terminal: crate::terminal::TerminalPanel::default(),
+                        terminal_view: None,
+                        terminal_poll_task: None,
+                        terminal_paste,
+                        pending_terminal_paste: None,
+                        composer,
+                        drafts: HashMap::new(),
+                        models: None,
+                        submitting: false,
+                        stopping: false,
+                        approval_pending: None,
+                        pending_events: Vec::new(),
+                        closing: false,
+                        next_cursor: None,
+                        code_query,
+                        code_search: Default::default(),
+                        code_search_reset: false,
+                        loading: false,
+                        error: None,
+                        focus,
+                        connection_client: None,
+                        event_task: None,
+                        generation: 0,
+                        capabilities: None,
+                        account: AccountPanel {
+                            visible: true,
+                            ..Default::default()
+                        },
+                        account_generation: 0,
+                        account_capabilities: None,
+                        account_connection_client: None,
+                        account_event_task: None,
+                        cloud,
+                        cloud_query,
+                        cloud_model_select: None,
+                        cloud_workspace_select: None,
+                        cloud_composer,
+                        cloud_title,
+                        project_name,
+                        project_description,
+                        project_instructions,
+                        project_upload: Default::default(),
+                        upload_poll_task: None,
+                        chat_upload: Default::default(),
+                        attachment_recovery: Default::default(),
+                        chat_upload_poll_task: None,
+                        project_download: Default::default(),
+                        download_poll_task: None,
+                        cloud_poll_task: None,
+                        cloud_draft_task: None,
+                        extensions: Default::default(),
+                        preferences: Default::default(),
+                    }
+                });
+                desktop.update(cx, Desktop::connect_account);
+                desktop.update(cx, |view, cx| view.attach_extensions(window, cx));
+                let weak = desktop.downgrade();
+                window.on_window_should_close(cx, move |window, cx| {
+                    weak.update(cx, |view, cx| {
+                        if view.needs_close_confirmation(cx) {
+                            view.request_close(false, window, cx);
+                            false
+                        } else {
+                            true
+                        }
+                    })
+                    .unwrap_or(true)
+                });
+                cx.new(|cx| gpui_component::Root::new(desktop, window, cx))
+            },
+        );
+        match opened {
+            Ok(_) => cx.activate(true),
+            Err(error) => {
+                eprintln!("Desktop window could not open: {error:#}");
+                cx.quit();
             }
-        });
+        }
+    });
     Ok(())
 }

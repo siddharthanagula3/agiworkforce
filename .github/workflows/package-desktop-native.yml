@@ -1,0 +1,245 @@
+# Packages the native GPUI desktop app for macOS as a reviewable workflow
+# artifact. It never creates a release, tag or upload outside this run: the
+# signed DMG and its checksum stay attached to the run for manual review.
+#
+# The bundle comes from apps/desktop/gpui/scripts/dev.mjs, the one owner of the
+# native .app layout (runtime manifest, notices, Info.plist). Signing and
+# notarization reuse the macos-release environment secrets that
+# release-desktop.yml and release-desktop-cloud.yml already read, remapped the
+# same way release-desktop-cloud.yml does for apps/desktop/electron/notarizeInstallers.mjs.
+
+name: Package Desktop Native (GPUI)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sign:
+        description: 'Sign with Developer ID and notarize (requires the macos-release secrets)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-desktop-native-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package-macos:
+    name: Package native macOS app
+    runs-on: macos-15
+    timeout-minutes: 120
+    environment: macos-release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
+        with:
+          toolchain: '1.99.1'
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: '. -> target'
+          cache-on-failure: true
+          key: package-desktop-native
+
+      - name: Ensure the Metal compiler is available
+        run: |
+          if ! xcrun --find metal >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun --find metal
+
+      - name: Bundle the native app
+        id: bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(node apps/desktop/gpui/scripts/dev.mjs --bundle-only | tail -n 1)"
+          if [ ! -d "$app_path" ] || [ "${app_path##*.}" != "app" ]; then
+            echo "ERROR: the bundler did not report an .app bundle: ${app_path}" >&2
+            exit 1
+          fi
+          plist="${app_path}/Contents/Info.plist"
+          resources="${app_path}/Contents/Resources"
+          for required in native-runtime.json THIRD_PARTY_NOTICES.txt CLI_THIRD_PARTY_NOTICES.txt; do
+            if [ ! -s "${resources}/${required}" ]; then
+              echo "ERROR: the bundle is missing ${required}" >&2
+              exit 1
+            fi
+          done
+          runtime="$(node -e 'const m=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8"));if(!/^[^/\\]+$/.test(m.executable))process.exit(1);process.stdout.write(m.executable)' "${resources}/native-runtime.json")"
+          if [ ! -x "${app_path}/Contents/MacOS/${runtime}" ]; then
+            echo "ERROR: the bundled runtime ${runtime} is not executable" >&2
+            exit 1
+          fi
+          {
+            echo "app_path=${app_path}"
+            echo "runtime=${runtime}"
+            echo "name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$plist")"
+            echo "version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
+            echo "arch=$(uname -m)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Same scan apps/desktop/electron/verifyReleaseArtifact.mjs runs: refuse a
+      # leaky payload before anything is signed or submitted to Apple.
+      - name: Scan the bundle before signing
+        env:
+          APP_PATH: ${{ steps.bundle.outputs.app_path }}
+        run: node scripts/release/scan-release-artifact.mjs "$APP_PATH"
+
+      - name: Require Apple signing and notarization credentials
+        if: inputs.sign
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "ERROR: macos-release secret ${name} is required" >&2
+              exit 1
+            fi
+          done
+
+          key_path="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_PRIVATE_KEY" | openssl base64 -d -A -out "$key_path"
+          chmod 600 "$key_path"
+          if ! grep -q -- '-----BEGIN PRIVATE KEY-----' "$key_path"; then
+            echo "ERROR: APPLE_API_PRIVATE_KEY is not a base64-encoded App Store Connect .p8 key" >&2
+            exit 1
+          fi
+          echo "APPLE_API_KEY_PATH=${key_path}" >> "$GITHUB_ENV"
+
+          keychain="${RUNNER_TEMP}/native-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          certificate="${RUNNER_TEMP}/native-signing.p12"
+          printf '%s' "$APPLE_CERTIFICATE" | openssl base64 -d -A -out "$certificate"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm -f "$certificate"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ {print $2; exit}')"
+          if [ -z "$identity" ]; then
+            echo "ERROR: APPLE_CERTIFICATE holds no Developer ID Application identity" >&2
+            exit 1
+          fi
+          echo "SIGNING_KEYCHAIN=${keychain}" >> "$GITHUB_ENV"
+          echo "SIGNING_IDENTITY=${identity}" >> "$GITHUB_ENV"
+
+      - name: Sign the app with the hardened runtime
+        if: inputs.sign
+        env:
+          APP_PATH: ${{ steps.bundle.outputs.app_path }}
+          RUNTIME: ${{ steps.bundle.outputs.runtime }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sign() {
+            codesign --force --timestamp --options runtime --keychain "$SIGNING_KEYCHAIN" --sign "$SIGNING_IDENTITY" "$1"
+          }
+          sign "${APP_PATH}/Contents/MacOS/${RUNTIME}"
+          sign "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          for target in "$APP_PATH" "${APP_PATH}/Contents/MacOS/${RUNTIME}"; do
+            details="$(codesign -d --verbose=4 "$target" 2>&1)"
+            printf '%s\n' "$details" | grep -E '^Authority=Developer ID Application: '
+            printf '%s\n' "$details" | grep -E '^TeamIdentifier=[A-Z0-9]+$'
+            printf '%s\n' "$details" | grep -E 'flags=.*runtime'
+            printf '%s\n' "$details" | grep -E '^Timestamp='
+          done
+
+      - name: Build the installer image
+        id: dmg
+        env:
+          APP_PATH: ${{ steps.bundle.outputs.app_path }}
+          APP_NAME: ${{ steps.bundle.outputs.name }}
+          APP_VERSION: ${{ steps.bundle.outputs.version }}
+          APP_ARCH: ${{ steps.bundle.outputs.arch }}
+          SIGN: ${{ inputs.sign }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="${RUNNER_TEMP}/native-release"
+          mkdir -p "$out"
+          suffix=""
+          if [ "$SIGN" != "true" ]; then
+            suffix="-unsigned"
+          fi
+          dmg="${out}/${APP_NAME// /-}-native-${APP_VERSION}-${APP_ARCH}${suffix}.dmg"
+          hdiutil create -volname "$APP_NAME" -srcfolder "$APP_PATH" -ov -format UDZO "$dmg"
+          if [ "$SIGN" = "true" ]; then
+            codesign --force --timestamp --keychain "$SIGNING_KEYCHAIN" --sign "$SIGNING_IDENTITY" "$dmg"
+            codesign --verify --strict --verbose=2 "$dmg"
+          fi
+          echo "dmg_path=${dmg}" >> "$GITHUB_OUTPUT"
+          echo "out=${out}" >> "$GITHUB_OUTPUT"
+
+      - name: Notarize and staple the installer image
+        if: inputs.sign
+        env:
+          APPLE_API_KEY: ${{ env.APPLE_API_KEY_PATH }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          AGI_RELEASE_NOTARIZATION_RECEIPT: ${{ steps.dmg.outputs.out }}/notarization.json
+          DMG_PATH: ${{ steps.dmg.outputs.dmg_path }}
+        run: node apps/desktop/electron/notarizeInstallers.mjs "$DMG_PATH"
+
+      - name: Verify the notarized installer
+        if: inputs.sign
+        env:
+          DMG_PATH: ${{ steps.dmg.outputs.dmg_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcrun stapler validate "$DMG_PATH"
+          spctl --assess --type open --context context:primary-signature --verbose=4 "$DMG_PATH"
+
+      - name: Checksum the artifacts
+        env:
+          OUT: ${{ steps.dmg.outputs.out }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$OUT"
+          shasum -a 256 *.dmg > SHA256SUMS
+          shasum -a 256 -c SHA256SUMS
+
+      - name: Remove the signing keychain
+        if: always() && inputs.sign
+        shell: bash
+        run: |
+          if [ -n "${SIGNING_KEYCHAIN:-}" ]; then
+            security delete-keychain "$SIGNING_KEYCHAIN" || true
+          fi
+          rm -f "${APPLE_API_KEY_PATH:-/nonexistent}"
+
+      - name: Upload the native installer for review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-native-macos-${{ steps.bundle.outputs.arch }}
+          path: ${{ steps.dmg.outputs.out }}
+          if-no-files-found: error
+          retention-days: 7
