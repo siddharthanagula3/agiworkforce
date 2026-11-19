@@ -1,4 +1,5 @@
 import {
+  SORT_LABELS,
   cloudProjectToDisplay,
   isCloudProjectPinned,
   localProjectToDisplay,
@@ -6,6 +7,7 @@ import {
   projectsForFilter,
   sortDisplayProjects,
   type DisplayProject,
+  type ProjectSort,
 } from '@/src/features/projects/projectList';
 import type { CloudProject } from '@/stores/projects/cloudProjectStore';
 
@@ -79,12 +81,23 @@ describe('project list helpers', () => {
       display('c-mid', '2026-07-15T10:00:00.000Z'),
     ];
 
-    const ids = (sort: 'recent' | 'name' | 'active', active: string | null) =>
-      sortDisplayProjects(projects, sort, active).map((project) => project.id);
+    const ids = (sort: ProjectSort) =>
+      sortDisplayProjects(projects, sort).map((project) => project.id);
 
-    expect(ids('recent', null)).toEqual(['a-old', 'b-new', 'c-mid']);
-    expect(ids('name', null)).toEqual(['a-old', 'b-new', 'c-mid']);
-    expect(ids('active', 'c-mid')).toEqual(['a-old', 'c-mid', 'b-new']);
+    expect(ids('recent')).toEqual(['a-old', 'b-new', 'c-mid']);
+    expect(ids('name')).toEqual(['a-old', 'b-new', 'c-mid']);
+  });
+
+  it('offers only the recent and name orders and reads a retired order as recent', () => {
+    const projects = [
+      display('b-old', '2026-07-01T10:00:00.000Z'),
+      display('a-new', '2026-07-30T10:00:00.000Z'),
+    ];
+
+    expect(Object.keys(SORT_LABELS)).toEqual(['recent', 'name']);
+    expect(
+      sortDisplayProjects(projects, 'active' as ProjectSort).map((project) => project.id),
+    ).toEqual(['a-new', 'b-old']);
   });
 
   it('filters by archived state and returns nothing for the shared filter', () => {

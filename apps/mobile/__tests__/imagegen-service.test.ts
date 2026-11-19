@@ -19,6 +19,15 @@ describe('image generation service', () => {
     );
   });
 
+  it('resolves the Library thumbnail of a stored picture but never treats it as the picture itself', () => {
+    const thumbnailPath = `${durablePath}/thumbnail`;
+
+    expect(resolveGeneratedImageUri(thumbnailPath)).toBe(`${API_URL}${thumbnailPath}`);
+    expect(getDurableGeneratedImagePath({ url: thumbnailPath })).toBeNull();
+    expect(resolveGeneratedImageUri(`${durablePath}/thumbnail/extra`)).toBeNull();
+    expect(resolveGeneratedImageUri(`${durablePath}/download`)).toBeNull();
+  });
+
   it('allows immediate rendering but rejects non-durable media for persistence', () => {
     expect(getGeneratedImageUri({ url: 'https://example.com/image.png' })).toBe(
       'https://example.com/image.png',

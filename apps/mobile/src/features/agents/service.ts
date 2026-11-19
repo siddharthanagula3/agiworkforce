@@ -10,7 +10,10 @@ import {
   ManagedCloudAgentListResponseSchema,
   ManagedCloudAgentResponseSchema,
   managedCloudAgentPath,
+  agentCatalogCreateRequest,
+  findAgentCatalogCopy,
   type AgentActivityResponse,
+  type AgentCatalogEntry,
   type AgentCreateRequest,
   type AgentFile,
   type AgentShareRequest,
@@ -160,6 +163,15 @@ export async function deleteAgentFile(agentId: string, fileId: string): Promise<
 export async function startAgentConversation(agentId: string): Promise<string> {
   const body = await api.post<unknown>(managedCloudAgentPath(agentId, 'conversations'), {});
   return AgentConversationResponseSchema.parse(body).conversationId;
+}
+
+export async function startCatalogAgentConversation(
+  entry: AgentCatalogEntry,
+): Promise<{ agent: ManagedCloudAgent; conversationId: string }> {
+  const agent =
+    findAgentCatalogCopy(entry, await listAgents()) ??
+    (await createAgent(agentCatalogCreateRequest(entry)));
+  return { agent, conversationId: await startAgentConversation(agent.id) };
 }
 
 export async function exportAgentMarkdown(agentId: string): Promise<string> {

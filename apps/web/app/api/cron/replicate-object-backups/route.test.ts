@@ -343,6 +343,152 @@ describe(`GET ${ROUTE}`, () => {
     expect(mocks.legacyFallback).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference);
   });
 
+  it('reports failed as zero when no object throws', async () => {
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ failed: 0 });
+  });
+
+  describe('object failures', () => {
+    const THREE_ASSETS = [
+      ...ASSETS,
+      {
+        object_reference: 'private-media/image/a/3.png',
+        row_id: '44444444-4444-4444-8444-444444444444',
+        cursor_at: '2026-09-16T11:30:00.000000Z',
+      },
+    ];
+
+    function keyValue(initial: Record<string, string> = {}) {
+      const values = new Map(Object.entries(initial));
+      return {
+        values,
+        get: vi.fn(async (key: string) => values.get(key) ?? null),
+        set: vi.fn(async (key: string, value: string) => {
+          values.set(key, value);
+          return true;
+        }),
+      };
+    }
+
+    function afterCursor(rows: typeof THREE_ASSETS, params: unknown[]) {
+      const [at, id] = params as [string, string];
+      const index = rows.findIndex((row) => row.cursor_at === at && row.row_id === id);
+      return index === -1 ? rows : rows.slice(index + 1);
+    }
+
+    it('a throwing object is counted, the cursor stops before it, the next run retries it, and the knowledge source still runs', async () => {
+      const store = keyValue();
+      mocks.getKeyValueStore.mockReturnValue(store);
+      mocks.query.mockImplementation(async (sql: string, params: unknown[]) =>
+        afterCursor(sql.includes('project_knowledge_files') ? KNOWLEDGE : THREE_ASSETS, params),
+      );
+      mocks.replicateObject.mockImplementation(async (key: string) => {
+        if (key === THREE_ASSETS[1]?.object_reference) throw new Error('storage timeout');
+        return { outcome: 'replicated', bytes: 1_024 };
+      });
+
+      const first = await GET(request());
+      const firstBody = await first.json();
+
+      expect(first.status).toBe(500);
+      expect(firstBody.failed).toBe(1);
+      expect(mocks.error).toHaveBeenCalledWith(
+        expect.objectContaining({ objectKey: THREE_ASSETS[1]?.object_reference }),
+        expect.any(String),
+      );
+      const firstCursor = `${THREE_ASSETS[0]?.cursor_at}|${THREE_ASSETS[0]?.row_id}`;
+      expect(store.values.get('agi-object-backup:cursor')).toBe(firstCursor);
+      expect(firstBody.cursors.media).toBe(firstCursor);
+      expect(mocks.replicateObject).not.toHaveBeenCalledWith(THREE_ASSETS[2]?.object_reference);
+      expect(mocks.replicateObject).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference);
+      expect(store.values.get('agi-object-backup:knowledge-cursor')).toBe(
+        `${KNOWLEDGE[0]?.cursor_at}|${KNOWLEDGE[0]?.row_id}`,
+      );
+
+      mocks.replicateObject.mockClear();
+      mocks.replicateObject.mockResolvedValue({ outcome: 'replicated', bytes: 1_024 });
+
+      const second = await GET(request());
+
+      expect(second.status).toBe(200);
+      expect(mocks.query).toHaveBeenLastCalledWith(
+        expect.stringContaining('project_knowledge_files'),
+        expect.any(Array),
+      );
+      expect(mocks.replicateObject.mock.calls.map(([key]) => key)).toEqual([
+        THREE_ASSETS[1]?.object_reference,
+        THREE_ASSETS[2]?.object_reference,
+      ]);
+      expect(store.values.get('agi-object-backup:cursor')).toBe(
+        `${THREE_ASSETS[2]?.cursor_at}|${THREE_ASSETS[2]?.row_id}`,
+      );
+    });
+
+    it('a throw on the first row leaves the stored cursor unchanged', async () => {
+      const stored = `2026-09-16T09:00:00.000000Z|${NIL_UUID}`;
+      const store = keyValue({ 'agi-object-backup:cursor': stored });
+      mocks.getKeyValueStore.mockReturnValue(store);
+      mocks.replicateObject.mockImplementation(async (key: string) => {
+        if (key === ASSETS[0]?.object_reference) throw new Error('storage timeout');
+        return { outcome: 'replicated', bytes: 1_024 };
+      });
+
+      const response = await GET(request());
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.failed).toBe(1);
+      expect(body.cursors.media).toBe(stored);
+      expect(store.set).not.toHaveBeenCalledWith(
+        'agi-object-backup:cursor',
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(mocks.replicateObject).not.toHaveBeenCalledWith(ASSETS[1]?.object_reference);
+      expect(mocks.replicateObject).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference);
+    });
+
+    it('a failing replica record stops the source before that row', async () => {
+      const store = keyValue();
+      mocks.getKeyValueStore.mockReturnValue(store);
+      mocks.recordBackupReplica.mockImplementation(async (key: string) => {
+        if (key === ASSETS[1]?.object_reference) throw new Error('database unavailable');
+      });
+
+      const response = await GET(request());
+      const body = await response.json();
+
+      expect(response.status).toBe(500);
+      expect(body.failed).toBe(1);
+      expect(store.values.get('agi-object-backup:cursor')).toBe(
+        `${ASSETS[0]?.cursor_at}|${ASSETS[0]?.row_id}`,
+      );
+    });
+
+    it('an unreadable row completes and moves the cursor past it', async () => {
+      const store = keyValue();
+      mocks.getKeyValueStore.mockReturnValue(store);
+      mocks.query.mockImplementation(async (sql: string) =>
+        sql.includes('project_knowledge_files')
+          ? []
+          : ASSETS.map((row) => ({ ...row, object_reference: null })),
+      );
+      mocks.replicateObject.mockRejectedValue(new Error('storage timeout'));
+
+      const response = await GET(request());
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body).toMatchObject({ unreadable: 2, failed: 0 });
+      expect(mocks.replicateObject).not.toHaveBeenCalled();
+      expect(store.values.get('agi-object-backup:cursor')).toBe(
+        `${ASSETS[1]?.cursor_at}|${ASSETS[1]?.row_id}`,
+      );
+    });
+  });
+
   it('answers 500 without leaking the failure to the scheduler body', async () => {
     mocks.query.mockRejectedValue(new Error('connection terminated'));
 

@@ -13,7 +13,10 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import { WorkModeSwitch } from '../src/features/chat/components/WorkModeSwitch';
+import {
+  HEADER_TEXT_SCALE_LIMIT,
+  WorkModeSwitch,
+} from '../src/features/chat/components/WorkModeSwitch';
 import { useTierStore } from '../src/features/billing/store';
 import { useChatStore } from '../stores/chatStore';
 
@@ -37,5 +40,31 @@ describe('WorkModeSwitch', () => {
     expect(screen.getByTestId('chat.work-mode.chat').props.accessibilityState.selected).toBe(true);
     fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
     expect(useChatStore.getState().workMode).toBe('agiwork');
+  });
+
+  it('caps the Chat and Work labels at the header text limit instead of turning scaling off', () => {
+    useTierStore.setState({ tier: 'pro' });
+    const screen = render(<WorkModeSwitch />);
+
+    for (const label of ['Chat', 'Work']) {
+      const text = screen.getByText(label);
+      expect(text.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+      expect(text.props.maxFontSizeMultiplier).toBeGreaterThan(1);
+      expect(text.props.allowFontScaling).not.toBe(false);
+      expect(text.props.numberOfLines).toBe(1);
+    }
+  });
+
+  it('shows Chat while Work is not ready and hands a Work tap to the caller', () => {
+    useTierStore.setState({ tier: 'pro' });
+    useChatStore.getState().setWorkMode('agiwork');
+    const onSelectWork = jest.fn();
+    const screen = render(<WorkModeSwitch workReady={false} onSelectWork={onSelectWork} />);
+
+    expect(screen.getByTestId('chat.work-mode.chat').props.accessibilityState.selected).toBe(true);
+    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
+    expect(onSelectWork).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByTestId('chat.work-mode.chat'));
+    expect(useChatStore.getState().workMode).toBe('chat');
   });
 });

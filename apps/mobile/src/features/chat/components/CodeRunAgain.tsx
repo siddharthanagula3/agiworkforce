@@ -1,17 +1,30 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, View } from 'react-native';
+import { Alert, Image, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { RotateCcw, Square } from 'lucide-react-native';
-import type { ChatCodeRunResponse } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_CODE_RUN_CONFIRMATION,
+  type ChatCodeRunResponse,
+} from '@agiworkforce/cloud-contracts';
+import { safeExecutionImageSrc } from '@agiworkforce/unified-chat/code-execution-result';
 import { Text } from '@/components/ui/Text';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CODE_RUN_FAILED, runCodeAgain } from '../services/codeRun';
+import { TOOL_MONOSPACE } from './ToolFileDiffBlock';
 
-const BASE64_IMAGE_DATA = /^[A-Za-z0-9+/]+={0,2}$/;
+export const CODE_RUN_TOOK_TOO_LONG =
+  'This run took too long to answer, so the app stopped waiting. It may still finish on the server.';
+
+function isTimeoutAbort(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const name = (error as { name?: unknown }).name;
+  return name === 'AbortError' || name === 'TimeoutError';
+}
 
 interface CodeRunAgainProps {
   conversationId: string;
@@ -23,6 +36,8 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
   const colors = useThemeColors();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const allowed = useTierStore((s) => s.grantedCapabilities.includes('canUseCloudExecution'));
+  const approvals = useToolApprovalPolicySync();
+  const asksFirst = !approvals.ready || approvals.policy === 'ask_every_time';
   const controller = useRef<AbortController | null>(null);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ChatCodeRunResponse | null>(null);
@@ -30,25 +45,52 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
 
   useEffect(() => () => controller.current?.abort(), []);
 
-  const start = useCallback(async () => {
-    const run = new AbortController();
-    controller.current = run;
-    setRunning(true);
-    setError(null);
-    setResult(null);
-    try {
-      const outcome = await runCodeAgain({ conversationId, language, code, signal: run.signal });
-      if (outcome.ok) setResult(outcome.result);
-      else setError(outcome.message);
-    } catch {
-      if (!run.signal.aborted) setError(CODE_RUN_FAILED);
-    } finally {
-      if (controller.current === run) controller.current = null;
-      setRunning(false);
-    }
-  }, [conversationId, language, code]);
+  const confirmRef = useRef<(() => void) | null>(null);
+
+  const start = useCallback(
+    async (approved: boolean) => {
+      const run = new AbortController();
+      controller.current = run;
+      setRunning(true);
+      setError(null);
+      setResult(null);
+      try {
+        const outcome = await runCodeAgain({
+          conversationId,
+          language,
+          code,
+          signal: run.signal,
+          ...(approved ? { approved: true } : {}),
+        });
+        if (outcome.ok) setResult(outcome.result);
+        else if (outcome.approvalRequired && !approved) confirmRef.current?.();
+        else setError(outcome.message);
+      } catch (caught) {
+        if (!run.signal.aborted) {
+          setError(isTimeoutAbort(caught) ? CODE_RUN_TOOK_TOO_LONG : CODE_RUN_FAILED);
+        }
+      } finally {
+        if (controller.current === run) controller.current = null;
+        setRunning(false);
+      }
+    },
+    [conversationId, language, code],
+  );
 
   const stop = useCallback(() => controller.current?.abort(), []);
+
+  const confirmRun = useCallback(() => {
+    Alert.alert(CHAT_CODE_RUN_CONFIRMATION.title, CHAT_CODE_RUN_CONFIRMATION.message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: CHAT_CODE_RUN_CONFIRMATION.confirmLabel, onPress: () => void start(true) },
+    ]);
+  }, [start]);
+  confirmRef.current = confirmRun;
+
+  const requestRun = useCallback(() => {
+    if (asksFirst) confirmRun();
+    else void start(false);
+  }, [asksFirst, confirmRun, start]);
 
   if (!isCloud || !allowed) return null;
 
@@ -62,6 +104,12 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
     borderRadius: 8,
     borderWidth: 1,
     borderColor: colors.border,
+  };
+
+  const headingStyle = {
+    color: colors.textMuted,
+    fontSize: typeScale.caption,
+    fontWeight: '600' as const,
   };
 
   return (
@@ -82,7 +130,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
           </>
         ) : (
           <Pressable
-            onPress={() => void start()}
+            onPress={requestRun}
             accessibilityRole="button"
             accessibilityLabel="Run this code again"
             style={buttonStyle}
@@ -104,12 +152,15 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
       ) : null}
       {result ? (
         <View style={{ gap: 6 }} accessibilityLiveRegion="polite">
+          <Text accessibilityRole="header" style={headingStyle}>
+            Output
+          </Text>
           <Text
             selectable
             style={{
               color: colors.textPrimary,
               fontSize: typeScale.caption,
-              fontFamily: 'Menlo',
+              fontFamily: TOOL_MONOSPACE,
               backgroundColor: colors.surfaceElevated,
               padding: 8,
               borderRadius: 6,
@@ -118,19 +169,31 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
             {result.output || '(no output)'}
           </Text>
           {result.error ? (
-            <Text
-              selectable
-              style={{ color: colors.agentError, fontSize: typeScale.caption, fontFamily: 'Menlo' }}
-            >
-              {result.error}
-            </Text>
+            <>
+              <Text accessibilityRole="header" style={headingStyle}>
+                Error
+              </Text>
+              <Text
+                selectable
+                style={{
+                  color: colors.agentError,
+                  fontSize: typeScale.caption,
+                  fontFamily: TOOL_MONOSPACE,
+                }}
+              >
+                {result.error}
+              </Text>
+            </>
           ) : null}
           {result.images
-            .filter((image) => BASE64_IMAGE_DATA.test(image))
-            .map((image, index) => (
+            .flatMap((image) => {
+              const src = safeExecutionImageSrc({ mediaType: 'image/png', data: image });
+              return src ? [src] : [];
+            })
+            .map((src, index) => (
               <Image
                 key={index}
-                source={{ uri: `data:image/png;base64,${image}` }}
+                source={{ uri: src }}
                 accessibilityLabel={`Code output ${index + 1}`}
                 style={{ width: '100%', aspectRatio: 4 / 3, resizeMode: 'contain' }}
               />

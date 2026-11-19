@@ -49,16 +49,25 @@ class AGIFoundationModels: RCTEventEmitter {
   static func generationFailureCode(_ error: Error) -> String {
 #if canImport(FoundationModels)
     if #available(iOS 26.0, *) {
+#if compiler(>=6.4)
+      if #available(iOS 27.0, *) {
+        if let code = languageModelFailureCode(error) {
+          return code
+        }
+      }
+#endif
       if let generationError = error as? LanguageModelSession.GenerationError {
         switch generationError {
         case .exceededContextWindowSize:
           return "APPLE_INTELLIGENCE_CONTEXT_EXCEEDED"
         case .assetsUnavailable:
           return "APPLE_INTELLIGENCE_ASSETS_UNAVAILABLE"
-        case .rateLimited:
+        case .rateLimited, .concurrentRequests:
           return "APPLE_INTELLIGENCE_RATE_LIMITED"
-        case .guardrailViolation:
+        case .guardrailViolation, .refusal:
           return "APPLE_INTELLIGENCE_REFUSED"
+        case .unsupportedLanguageOrLocale:
+          return "APPLE_INTELLIGENCE_UNSUPPORTED_LANGUAGE"
         default:
           return "APPLE_INTELLIGENCE_FAILED"
         }
@@ -70,6 +79,35 @@ class AGIFoundationModels: RCTEventEmitter {
 #endif
     return "APPLE_INTELLIGENCE_FAILED"
   }
+
+  // The iOS 27 SDK (Swift 6.4) replaces GenerationError with these types. The
+  // Xcode 26 toolchain that builds store releases does not declare them.
+#if canImport(FoundationModels) && compiler(>=6.4)
+  @available(iOS 27.0, *)
+  static func languageModelFailureCode(_ error: Error) -> String? {
+    if let languageModelError = error as? LanguageModelError {
+      switch languageModelError {
+      case .contextSizeExceeded:
+        return "APPLE_INTELLIGENCE_CONTEXT_EXCEEDED"
+      case .rateLimited, .timeout:
+        return "APPLE_INTELLIGENCE_RATE_LIMITED"
+      case .guardrailViolation, .refusal:
+        return "APPLE_INTELLIGENCE_REFUSED"
+      case .unsupportedLanguageOrLocale:
+        return "APPLE_INTELLIGENCE_UNSUPPORTED_LANGUAGE"
+      default:
+        return "APPLE_INTELLIGENCE_FAILED"
+      }
+    }
+    if let sessionError = error as? LanguageModelSession.Error, sessionError == .concurrentRequests {
+      return "APPLE_INTELLIGENCE_RATE_LIMITED"
+    }
+    if error is SystemLanguageModel.Error {
+      return "APPLE_INTELLIGENCE_ASSETS_UNAVAILABLE"
+    }
+    return nil
+  }
+#endif
 
   @objc static func isThermallyThrottled() -> Bool {
     let state = ProcessInfo.processInfo.thermalState

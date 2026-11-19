@@ -209,6 +209,19 @@ describe('schedule service persistence', () => {
       expect(run[field]).toBe(instant);
   });
 
+  it('shows a run stored with the model reasoning as its answer alone', () => {
+    const run = mapScheduleRun({
+      ...runRow('success'),
+      result: {
+        text: '<thinking>**Creating a haiku** I need to write a haiku.</thinking>\n\nPetals on the wind',
+        toolsUsed: [],
+      },
+    });
+
+    expect(run.output).toBe('Petals on the wind');
+    expect(run.result).toEqual({ text: 'Petals on the wind', toolsUsed: [] });
+  });
+
   it('edits one-time schedule preferences without replacing driver Date timestamps', async () => {
     const stored = {
       ...taskRow,

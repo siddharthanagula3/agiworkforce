@@ -27,6 +27,9 @@ jest.mock('expo-speech-recognition', () => {
     __fireResult: (event: unknown) => {
       for (const fn of getListeners('result')) fn(event);
     },
+    __fireError: (event: unknown) => {
+      for (const fn of getListeners('error')) fn(event);
+    },
     __clearListeners: () => {
       for (const key of Object.keys(listenersByEvent)) delete listenersByEvent[key];
     },
@@ -45,6 +48,7 @@ const speechMock = jest.requireMock('expo-speech-recognition') as {
   __clearListeners: () => void;
   __fireEnd: () => void;
   __fireResult: (event: unknown) => void;
+  __fireError: (event: unknown) => void;
   ExpoSpeechRecognitionModule: {
     start: jest.Mock;
     stop: jest.Mock;
@@ -183,3 +187,53 @@ describe('listening has a client-side maximum duration', () => {
     expect(ExpoSpeechRecognitionModule.stop).not.toHaveBeenCalled();
   });
 });
+
+describe('a recognizer that cannot start is told apart by where the audio comes from', () => {
+  beforeEach(() => {
+    speechMock.__clearListeners();
+    speechMock.ExpoSpeechRecognitionModule.start.mockClear();
+    speechMock.ExpoSpeechRecognitionModule.supportsOnDeviceRecognition.mockReturnValue(true);
+    speechMock.ExpoSpeechRecognitionModule.getSupportedLocales.mockResolvedValue({
+      locales: ['en-US'],
+      installedLocales: ['en-US'],
+    });
+  });
+
+  afterEach(async () => {
+    await settleCapture();
+  });
+
+  it('reads a microphone with no usable input as recognition being unavailable', async () => {
+    const session = await VoiceInput.startCaptureSession(undefined, undefined, { lang: 'en' });
+    speechMock.__fireError({ error: 'audio-capture', message: 'Invalid audio source' });
+
+    const error = await session.result.catch((err: unknown) => err);
+    expect((error as VoiceInput.VoiceCaptureError).code).toBe('on-device-recognition-unavailable');
+  });
+
+  it('keeps an audio file the recognizer could not read as a recognition error', async () => {
+    const transcribing = VoiceInput.transcribeAudioFile('file:///voice-note.m4a', { lang: 'en' });
+    await waitForStart();
+    speechMock.__fireError({ error: 'audio-capture', message: 'Invalid audio source' });
+
+    const error = await transcribing.catch((err: unknown) => err);
+    expect((error as VoiceInput.VoiceCaptureError).code).toBe('recognition-error');
+  });
+
+  it('reads a recognizer that failed to initialize as unavailable for a file too', async () => {
+    const transcribing = VoiceInput.transcribeAudioFile('file:///voice-note.m4a', { lang: 'en' });
+    await waitForStart();
+    speechMock.__fireError({ error: 'audio-capture', message: 'Failed to initialize recognizer' });
+
+    const error = await transcribing.catch((err: unknown) => err);
+    expect((error as VoiceInput.VoiceCaptureError).code).toBe('on-device-recognition-unavailable');
+  });
+});
+
+async function waitForStart() {
+  for (let tick = 0; tick < 20; tick += 1) {
+    if (speechMock.ExpoSpeechRecognitionModule.start.mock.calls.length > 0) return;
+    await Promise.resolve();
+  }
+  throw new Error('recognizer was never started');
+}

@@ -5,8 +5,11 @@ import path from 'node:path';
 import process from 'node:process';
 
 const repoRoot = process.cwd();
-const MANIFEST_PATH = path.join(repoRoot, 'apps/web/lib/connectors/oauth-scope-allowlist.ts');
-const DESCRIPTIONS_PATH = path.join(repoRoot, 'apps/web/lib/connectors/scope-descriptions.ts');
+const MANIFEST_PATH = path.join(
+  repoRoot,
+  'packages/contracts/cloud-contracts/src/connector-scopes.ts',
+);
+const DESCRIPTIONS_PATH = MANIFEST_PATH;
 const SCAN_ROOTS = [
   'apps/web/lib/connectors',
   'apps/web/app/api/connectors',
@@ -448,7 +451,7 @@ function main() {
     console.error('\nMISSING PURPOSE');
     for (const { connectorId, scope } of missingPurpose) {
       console.error(
-        `  ${connectorId}: "${scope}" has no entry in scope-descriptions.ts SCOPE_DESCRIPTIONS`,
+        `  ${connectorId}: "${scope}" has no entry in connector-scopes.ts SCOPE_DESCRIPTIONS`,
       );
     }
   }
@@ -469,9 +472,9 @@ function main() {
   if (failures) {
     console.error(
       '\ncheck:connector-scopes FAILED. Every requested OAuth scope must be added to' +
-        ' CONNECTOR_OAUTH_SCOPE_CEILINGS in apps/web/lib/connectors/oauth-scope-allowlist.ts' +
-        ' with a description in apps/web/lib/connectors/scope-descriptions.ts, and nothing' +
-        ' outside those two files may declare a scope literal directly. A CONNECTOR BOUNDARY' +
+        ' CONNECTOR_OAUTH_SCOPE_CEILINGS in packages/contracts/cloud-contracts/src/connector-scopes.ts' +
+        ' with a description in SCOPE_DESCRIPTIONS in the same file, and nothing outside it' +
+        ' may declare a scope literal directly. A CONNECTOR BOUNDARY' +
         ' finding means the redirect-URI allowlist, a connector risk class, the server-only' +
         ' token boundary, a tenant-scoped cache key or the revoked-grant exclusion was broken.',
     );

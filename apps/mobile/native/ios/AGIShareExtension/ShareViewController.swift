@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 import UniformTypeIdentifiers
 
@@ -10,8 +11,16 @@ final class ShareViewController: UIViewController {
   // src/features/chat/utils/attachmentValidation.ts. The app re-validates every
   // staged file against that module, this cap only keeps the App Group copy
   // bounded.
-  private static let maximumSharedFileBytes = 12 * 1024 * 1024
+  private static let maximumSharedFileBytes = 25 * 1024 * 1024
   private static let maximumSharedFiles = 5
+  // The image types both Local and AGI Cloud accept, mirroring imageMimeTypes
+  // in packages/contracts/cloud-contracts/src/chat-attachment-policy.json. Any
+  // other image, usually an iPhone HEIC photo, is staged as a JPEG instead.
+  private static let portableImageTypes: [UTType] = [.jpeg, .png, .gif, .webP]
+  private static let jpegQuality = 0.85
+  // Bounds the decoded bitmap, which counts against the extension's memory
+  // limit while the JPEG is written.
+  private static let maximumImagePixelSize = 4096
 
   private struct PendingShareFile: Encodable {
     let fileName: String
@@ -154,15 +163,20 @@ final class ShareViewController: UIViewController {
   }
 
   private static func fileTypeIdentifier(for provider: NSItemProvider) -> String? {
-    for identifier in provider.registeredTypeIdentifiers {
+    let candidates = provider.registeredTypeIdentifiers.filter { identifier in
       guard let type = UTType(identifier), !type.isDynamic, !type.conforms(to: .plainText) else {
-        continue
+        return false
       }
-      if type.conforms(to: .image) || type.conforms(to: .fileURL) || type.conforms(to: .data) {
-        return identifier
-      }
+      return type.conforms(to: .image) || type.conforms(to: .fileURL) || type.conforms(to: .data)
     }
-    return nil
+    let portableImage = candidates.first { identifier in
+      UTType(identifier).map(isPortableImage) ?? false
+    }
+    return portableImage ?? candidates.first
+  }
+
+  private static func isPortableImage(_ type: UTType) -> Bool {
+    portableImageTypes.contains { type.conforms(to: $0) }
   }
 
   private func loadFiles(
@@ -209,9 +223,22 @@ final class ShareViewController: UIViewController {
     let staging = fileManager.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     let fileName = sanitizedFileName(url.lastPathComponent, typeIdentifier: typeIdentifier)
-    let destination = staging.appendingPathComponent(fileName, isDirectory: false)
     do {
       try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+    } catch {
+      return nil
+    }
+
+    let declaredType = UTType(typeIdentifier).flatMap { $0.conforms(to: .image) ? $0 : nil }
+    if let imageType = declaredType ?? UTType(filenameExtension: url.pathExtension),
+      imageType.conforms(to: .image), !isPortableImage(imageType),
+      let converted = stageJPEGCopy(of: url, fileName: fileName, in: staging)
+    {
+      return converted
+    }
+
+    let destination = staging.appendingPathComponent(fileName, isDirectory: false)
+    do {
       try fileManager.copyItem(at: url, to: destination)
     } catch {
       return nil
@@ -221,6 +248,42 @@ final class ShareViewController: UIViewController {
     return LoadedFile(
       fileName: fileName,
       mimeType: type?.preferredMIMEType ?? "application/octet-stream",
+      sourceURL: destination,
+      byteSize: byteSize
+    )
+  }
+
+  private static func stageJPEGCopy(of url: URL, fileName: String, in staging: URL) -> LoadedFile? {
+    let thumbnailOptions: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceThumbnailMaxPixelSize: maximumImagePixelSize,
+    ]
+    let jpegName = (fileName as NSString).deletingPathExtension + ".jpg"
+    let destination = staging.appendingPathComponent(jpegName, isDirectory: false)
+    guard
+      let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+      let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary),
+      let writer = CGImageDestinationCreateWithURL(
+        destination as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
+    else {
+      return nil
+    }
+    let writeOptions: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: jpegQuality]
+    CGImageDestinationAddImage(writer, image, writeOptions as CFDictionary)
+    guard
+      CGImageDestinationFinalize(writer),
+      let byteSize = (try? FileManager.default.attributesOfItem(atPath: destination.path)[.size])
+        as? Int,
+      byteSize > 0,
+      byteSize <= maximumSharedFileBytes
+    else {
+      try? FileManager.default.removeItem(at: destination)
+      return nil
+    }
+    return LoadedFile(
+      fileName: jpegName,
+      mimeType: "image/jpeg",
       sourceURL: destination,
       byteSize: byteSize
     )

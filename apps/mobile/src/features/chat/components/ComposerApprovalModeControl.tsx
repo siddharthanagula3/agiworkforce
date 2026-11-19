@@ -12,6 +12,7 @@ import { Text } from '@/components/ui/Text';
 import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { useThemeColors } from '@/src/ui/theme';
 import { sheetRadius, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const SHEET_TITLE = 'Tool approvals';
 const SCOPE_NOTE = 'Applies to every chat and session on this account.';
@@ -81,7 +82,9 @@ export function ComposerApprovalModeControl() {
           style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         >
           <View
+            testID="chat.approval-mode.sheet"
             style={{
+              ...contentColumn('reading'),
               borderTopLeftRadius: sheetRadius,
               borderTopRightRadius: sheetRadius,
               backgroundColor: colors.surfaceBase,

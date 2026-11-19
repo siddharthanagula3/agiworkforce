@@ -28,6 +28,7 @@ import {
 } from '@/src/shared/components/cloud-screen';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { cloudActionError } from '@/src/shared/utils/cloudActionError';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -44,7 +45,6 @@ import {
   readSiteData,
   republishSiteVersion,
   siteName,
-  siteSizeLabel,
   unpublishSite,
   updatePublishedSite,
 } from './service';
@@ -226,8 +226,8 @@ function SiteDetailBody({
     return (
       <CloudFeatureGate
         title="Site"
-        feature="Published sites"
-        description="Published sites live in AGI Cloud; switching won’t upload your local chats."
+        feature="Sites"
+        description="Sites live in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}
@@ -413,7 +413,7 @@ function SiteDetailBody({
         ) : data?.supported ? (
           <SectionCard title="Data" description="What visitors saved through this page.">
             <MetaText>
-              {`${data.shared.entryCount} shared ${data.shared.entryCount === 1 ? 'entry' : 'entries'}, ${siteSizeLabel(data.shared.totalBytes)} of ${siteSizeLabel(data.shared.limitBytes)}`}
+              {`${data.shared.entryCount} shared ${data.shared.entryCount === 1 ? 'entry' : 'entries'}, ${formatAttachmentSize(data.shared.totalBytes)} of ${formatAttachmentSize(data.shared.limitBytes)}`}
             </MetaText>
             {data.shared.entries.map((entry) => (
               <View key={entry.key} style={{ gap: 2 }}>

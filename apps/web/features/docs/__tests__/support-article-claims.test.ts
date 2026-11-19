@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { CANONICAL_SITE_URL } from '@/lib/seo/site';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -26,10 +27,7 @@ function repoText(...segments: string[]): string {
 }
 
 function canonicalSupportUrl(path: string): string {
-  const site = fileText('lib/seo/site.ts');
-  const origin = /NEXT_PUBLIC_APP_URL'\]\s*\?\?\s*'([^']+)'/u.exec(site)?.[1];
-  if (!origin) throw new Error('Missing canonical public origin');
-  return new URL(path, origin).href;
+  return new URL(path, CANONICAL_SITE_URL).href;
 }
 
 describe('BYOK help article follows the implemented credential paths', () => {

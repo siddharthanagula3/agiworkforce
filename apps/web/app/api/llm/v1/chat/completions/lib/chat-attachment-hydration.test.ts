@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ChatAttachmentHydrationError,
+  defaultOversizeAttachmentResolver,
   hydrateChatAttachments,
   MAX_PARALLEL_ATTACHMENT_FETCHES,
+  type OversizeAttachmentResolver,
 } from './chat-attachment-hydration';
-import { getPlanMaxAttachmentsPerMessage } from '@agiworkforce/types';
+import {
+  CHAT_MODEL_IMAGE_ENVELOPE,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+} from '@agiworkforce/cloud-contracts';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
+import { getPlanMaxAttachmentsPerMessage, MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 
 const PAID_ATTACHMENTS_PER_MESSAGE = getPlanMaxAttachmentsPerMessage('pro');
 
@@ -31,7 +39,10 @@ function partsOf(message: { content: string | TestPart[] } | undefined): TestPar
 }
 
 function textPdf(body: string): Buffer {
-  const stream = `BT /F1 14 Tf 72 700 Td (${body}) Tj ET`;
+  return pdfWithContent(`BT /F1 14 Tf 72 700 Td (${body}) Tj ET`);
+}
+
+function pdfWithContent(stream: string): Buffer {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -87,7 +98,12 @@ describe('hydrateChatAttachments', () => {
     expect(messages[0]?.content[1]).toMatchObject({
       type: 'text',
       text: '[attached file: brief.pdf (application/pdf)]',
-      x_native_document: { filename: 'brief.pdf', mediaType: 'application/pdf' },
+      x_native_document: {
+        filename: 'brief.pdf',
+        mediaType: 'application/pdf',
+        pageCount: 1,
+        extractedTextComplete: true,
+      },
     });
     const filePart = partsOf(messages[0])[2];
     expect(filePart?.file?.filename).toBe('brief.pdf');
@@ -97,6 +113,36 @@ describe('hydrateChatAttachments', () => {
       'base64',
     ).toString('utf8');
     expect(decoded).toContain('PLUM-VECTOR-9182');
+  });
+
+  it('marks a PDF whose extracted text was cut short as incomplete', async () => {
+    const assetId = '32b71cf4-c0d1-4cc7-b6c4-776ece82f138';
+    const lineLength = 500;
+    const lines = Array.from(
+      { length: Math.ceil(MAX_FILE_TEXT_CHARS / lineLength) + 1 },
+      () => `(${'W'.repeat(lineLength)}) Tj T*`,
+    );
+    const pdf = pdfWithContent(`BT /F1 1 Tf 1 TL 4 790 Td ${lines.join(' ')} ET`);
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      organizationId: null,
+      kind: 'file',
+      mimeType: 'application/pdf',
+      byteSize: pdf.byteLength,
+      storageUrl: 'https://files.example.test/key',
+      storagePathname: 'chat-attachments/user-1/key.pdf',
+      metadata: { filename: 'long.pdf' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: pdf, contentType: 'application/pdf' });
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(messages[0]?.content[0]).toMatchObject({
+      x_native_document: { filename: 'long.pdf', extractedTextComplete: false },
+    });
   });
 
   it('refuses a turn carrying more files than the plan allows on one message', async () => {
@@ -427,7 +473,10 @@ describe('hydrateChatAttachments', () => {
         organizationId,
       );
       expect(attachments).toHaveLength(1);
-      expect(mocks.readStoredMedia).toHaveBeenCalledWith('private/file.txt');
+      expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+        'private/file.txt',
+        MAX_CHAT_ATTACHMENT_BYTES,
+      );
     },
   );
 
@@ -679,7 +728,7 @@ describe('hydrateChatAttachments', () => {
       deletedAt: null,
     }));
     mocks.readStoredMedia.mockImplementation(async () => ({
-      data: Buffer.alloc(10 * 1024 * 1024),
+      data: Buffer.alloc(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / 2 + 1),
     }));
 
     const messages = [
@@ -696,6 +745,38 @@ describe('hydrateChatAttachments', () => {
     expect(partsOf(messages[0])[0]?.text).toBe(
       '[attachment unavailable: old-dump.txt was left out because this conversation has reached its attachment limit.]',
     );
+  });
+
+  it('sends one file the size of the whole message budget and refuses a byte more', async () => {
+    const assetId = '76767676-7676-4767-8767-767676767676';
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      organizationId: null,
+      kind: 'file',
+      mimeType: 'text/plain',
+      storagePathname: `chat-attachments/user-1/${assetId}.txt`,
+      metadata: { filename: 'large-notes.txt' },
+      deletedAt: null,
+    });
+    const send = (bytes: number) => {
+      mocks.readStoredMedia.mockResolvedValueOnce({ data: Buffer.alloc(bytes) });
+      const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+      return hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      ).then(() => messages);
+    };
+
+    const sent = await send(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES);
+    expect(partsOf(sent[0])[1]?.file?.filename).toBe('large-notes.txt');
+    await expect(send(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES + 1)).rejects.toMatchObject({
+      status: 413,
+      code: 'attachment_context_too_large',
+    });
   });
 
   it('gives every attachment type the same filename-and-type header, so a CSV is named as reliably as a TXT', async () => {
@@ -999,5 +1080,610 @@ describe('hydrateChatAttachments, sandbox staging manifest', () => {
     );
 
     expect(staged).toEqual([]);
+  });
+});
+
+describe('hydrateChatAttachments, an image larger than a route takes', () => {
+  const imageId = '6a1e4c2b-8f3d-4b7a-9c5e-1d2f3a4b5c6d';
+
+  function imageAsset(bytes: Buffer, mimeType = 'image/jpeg') {
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: imageId,
+      userId: 'user-1',
+      organizationId: null,
+      kind: 'image',
+      mimeType,
+      byteSize: bytes.byteLength,
+      storageUrl: 'https://files.example.test/key',
+      storagePathname: `chat-attachments/user-1/${imageId}.jpg`,
+      metadata: { filename: 'camera.jpg' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: bytes, contentType: mimeType });
+  }
+
+  function turnWithImage() {
+    return [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'What is this?' },
+          { type: 'file', file: { asset_id: imageId } },
+        ],
+      },
+    ];
+  }
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it('hands the model a copy that fits every route and stages the original for the sandbox', async () => {
+    const { default: sharp } = await import('sharp');
+    const original = await sharp({
+      create: {
+        width: 2400,
+        height: 2400,
+        channels: 3,
+        background: { r: 0, g: 0, b: 0 },
+        noise: { type: 'gaussian', mean: 128, sigma: 60 },
+      },
+    })
+      .jpeg({ quality: 100, chromaSubsampling: '4:4:4' })
+      .toBuffer();
+    expect(original.toString('base64').length).toBeGreaterThan(
+      CHAT_MODEL_IMAGE_ENVELOPE.maxBase64Bytes,
+    );
+    imageAsset(original);
+    const messages = turnWithImage();
+
+    const staged = await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
+    );
+
+    const image = partsOf(messages[0]).find((part) => part.type === 'image_url') as
+      { image_url: { url: string } } | undefined;
+    const [prefix, sent] = (image?.image_url.url ?? '').split(',');
+    expect(prefix).toBe('data:image/jpeg;base64');
+    expect(sent?.length).toBeLessThanOrEqual(CHAT_MODEL_IMAGE_ENVELOPE.maxBase64Bytes);
+    expect(staged).toEqual([
+      { filename: 'camera.jpg', mimeType: 'image/jpeg', base64: original.toString('base64') },
+    ]);
+  }, 30_000);
+
+  it('refuses the turn by name when the stored bytes are not a picture', async () => {
+    imageAsset(Buffer.from('not a picture'), 'image/png');
+
+    await expect(
+      hydrateChatAttachments(
+        turnWithImage(),
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      ),
+    ).rejects.toMatchObject({ status: 400, message: 'camera.jpg could not be read as an image.' });
+  });
+});
+
+describe('hydrateChatAttachments, deciding from the recorded size before reading', () => {
+  const MIB = 1024 * 1024;
+  const LARGE_RECORDED_BYTES = 500 * MIB;
+  const UNBOUNDED_READ = 'read a stored object without a byte bound';
+
+  type StoredFixture = {
+    byteSize: number | null;
+    filename: string;
+    stored: Buffer | null | 'larger_than_any_bound';
+  };
+  let store: Map<string, StoredFixture>;
+  let returnedIds: string[];
+
+  const pathnameOf = (id: string) => `chat-attachments/user-1/${id}.txt`;
+  const idOf = (pathname: string) =>
+    pathname.slice('chat-attachments/user-1/'.length, -'.txt'.length);
+  const readPathnames = () => mocks.readStoredMedia.mock.calls.map((call) => call[0] as string);
+
+  function stored(id: string, fixture: StoredFixture): string {
+    store.set(id, fixture);
+    return id;
+  }
+
+  function fileRef(id: string) {
+    return { type: 'file', file: { asset_id: id } };
+  }
+
+  function unavailable(filename: string, why: string): TestPart {
+    return { type: 'text', text: `[attachment unavailable: ${filename} ${why}]` };
+  }
+
+  const OVER_BUDGET = 'was left out because this conversation has reached its attachment limit.';
+  const UNREADABLE = 'could not be loaded. Attach it again to include it.';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store = new Map();
+    returnedIds = [];
+    mocks.getMediaAssetById.mockImplementation(async (id: string) => {
+      const fixture = store.get(id);
+      if (!fixture) return null;
+      return {
+        id,
+        userId: 'user-1',
+        organizationId: null,
+        kind: 'file',
+        mimeType: 'text/plain',
+        byteSize: fixture.byteSize,
+        storageUrl: 'https://files.example.test/key',
+        storagePathname: pathnameOf(id),
+        metadata: { filename: fixture.filename },
+        deletedAt: null,
+      };
+    });
+    mocks.readStoredMedia.mockImplementation(async (pathname: string, maxBytes?: number) => {
+      const fixture = store.get(idOf(pathname));
+      if (!fixture || fixture.stored === null) return null;
+      if (fixture.stored === 'larger_than_any_bound') {
+        if (maxBytes === undefined) throw new Error(UNBOUNDED_READ);
+        throw new StoredObjectTooLargeError(pathname, maxBytes);
+      }
+      if (maxBytes !== undefined && fixture.stored.byteLength > maxBytes) {
+        throw new StoredObjectTooLargeError(pathname, maxBytes, fixture.stored.byteLength);
+      }
+      returnedIds.push(idOf(pathname));
+      return { data: fixture.stored, contentType: 'text/plain' };
+    });
+  });
+
+  it('degrades a 500 MiB asset without reading it, in the current turn', async () => {
+    const large = stored('large-now', {
+      byteSize: LARGE_RECORDED_BYTES,
+      filename: 'archive.txt',
+      stored: 'larger_than_any_bound',
+    });
+    const messages = [{ role: 'user', content: [fileRef(large)] }];
+
+    await expect(
+      hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null),
+    ).rejects.toMatchObject({
+      status: 413,
+      code: 'attachment_context_too_large',
+      message:
+        'The files attached to this message are too large to send together. Remove one and try again.',
+    });
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+  });
+
+  it('degrades a 500 MiB asset without reading it, in history', async () => {
+    const large = stored('large-old', {
+      byteSize: LARGE_RECORDED_BYTES,
+      filename: 'archive.txt',
+      stored: 'larger_than_any_bound',
+    });
+    const small = stored('small-now', {
+      byteSize: 5,
+      filename: 'notes.txt',
+      stored: Buffer.from('hello'),
+    });
+    const messages = [
+      { role: 'user', content: [fileRef(large)] },
+      { role: 'assistant', content: 'Read it.' },
+      { role: 'user', content: [fileRef(small)] },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(partsOf(messages[0])).toEqual([unavailable('archive.txt', OVER_BUDGET)]);
+    expect(partsOf(messages[2])[1]?.file?.filename).toBe('notes.txt');
+    expect(readPathnames()).toEqual([pathnameOf(small)]);
+  });
+
+  it('reads none of twenty history files that do not fit the message budget', async () => {
+    const now = stored('fills-budget', {
+      byteSize: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+      filename: 'full.txt',
+      stored: Buffer.alloc(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES),
+    });
+    const history = Array.from({ length: 20 }, (_, index) =>
+      stored(`history-${index}`, {
+        byteSize: MIB,
+        filename: `history-${index}.txt`,
+        stored: Buffer.alloc(MIB),
+      }),
+    );
+    const messages = [
+      ...history.map((id) => ({ role: 'user', content: [fileRef(id)] })),
+      { role: 'assistant', content: 'Noted.' },
+      { role: 'user', content: [fileRef(now)] },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, history.length + 1, null);
+
+    expect(readPathnames()).toEqual([pathnameOf(now)]);
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(pathnameOf(now), MAX_CHAT_ATTACHMENT_BYTES);
+    history.forEach((_, index) => {
+      expect(partsOf(messages[index])).toEqual([unavailable(`history-${index}.txt`, OVER_BUDGET)]);
+    });
+    expect(partsOf(messages[21])[1]?.file?.filename).toBe('full.txt');
+  });
+
+  it.each([
+    { turn: 'current turn', live: true },
+    { turn: 'history', live: false },
+  ])(
+    'reads a file with no recorded size under the inline bound and degrades it without holding it, in the $turn',
+    async ({ live }) => {
+      const unsized = stored('unsized', {
+        byteSize: null,
+        filename: 'legacy.txt',
+        stored: 'larger_than_any_bound',
+      });
+      const messages = live
+        ? [{ role: 'user', content: [fileRef(unsized)] }]
+        : [
+            { role: 'user', content: [fileRef(unsized)] },
+            { role: 'assistant', content: 'Read it.' },
+            { role: 'user', content: 'Continue' },
+          ];
+
+      const run = hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      );
+
+      if (live) {
+        await expect(run).rejects.toMatchObject({
+          status: 413,
+          code: 'attachment_context_too_large',
+        });
+      } else {
+        await run;
+        expect(partsOf(messages[0])).toEqual([unavailable('legacy.txt', OVER_BUDGET)]);
+      }
+      expect(mocks.readStoredMedia.mock.calls).toEqual([
+        [pathnameOf(unsized), MAX_CHAT_ATTACHMENT_BYTES],
+      ]);
+    },
+  );
+
+  it('charges a file with no recorded size its real size', async () => {
+    const unsized = stored('unsized', {
+      byteSize: null,
+      filename: 'legacy.txt',
+      stored: Buffer.alloc(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES - 1),
+    });
+    const fits = stored('fits', { byteSize: 1, filename: 'one.txt', stored: Buffer.from('x') });
+    const over = stored('over', { byteSize: 1, filename: 'two.txt', stored: Buffer.from('y') });
+    const messages = [
+      { role: 'user', content: [fileRef(fits), fileRef(over)] },
+      { role: 'assistant', content: 'Read them.' },
+      { role: 'user', content: [fileRef(unsized)] },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(partsOf(messages[2])[1]?.file?.filename).toBe('legacy.txt');
+    expect(partsOf(messages[0])[1]?.file?.filename).toBe('one.txt');
+    expect(partsOf(messages[0])[2]).toEqual(unavailable('two.txt', OVER_BUDGET));
+    expect(readPathnames()).not.toContain(pathnameOf(over));
+  });
+
+  it.each([
+    { turn: 'current turn', live: true, failure: 'a missing object', bytes: null },
+    { turn: 'current turn', live: true, failure: 'a size mismatch', bytes: Buffer.from('short') },
+    { turn: 'history', live: false, failure: 'a missing object', bytes: null },
+    { turn: 'history', live: false, failure: 'a size mismatch', bytes: Buffer.from('short') },
+  ])(
+    'an admitted file found unreadable gives its charge back, so a later file that fits without it is sent as today ($failure, $turn)',
+    async ({ live, bytes }) => {
+      const share = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES * 0.6);
+      expect(share * 2).toBeGreaterThan(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES);
+      expect(share).toBeLessThanOrEqual(MAX_CHAT_ATTACHMENT_BYTES);
+      const broken = stored('broken', { byteSize: share, filename: 'broken.txt', stored: bytes });
+      const later = stored('later', {
+        byteSize: share,
+        filename: 'later.txt',
+        stored: Buffer.alloc(share),
+      });
+      const filesMessage = { role: 'user', content: [fileRef(broken), fileRef(later)] };
+      const messages = live
+        ? [filesMessage]
+        : [
+            filesMessage,
+            { role: 'assistant', content: 'Read them.' },
+            { role: 'user', content: 'Go on' },
+          ];
+
+      await hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      );
+
+      const parts = partsOf(messages[0]);
+      expect(parts[0]).toEqual(unavailable('broken.txt', UNREADABLE));
+      expect(parts[1]).toEqual({ type: 'text', text: '[attached file: later.txt (text/plain)]' });
+      expect(parts[2]?.file?.filename).toBe('later.txt');
+      expect(readPathnames()).toEqual([pathnameOf(broken), pathnameOf(later)]);
+    },
+  );
+
+  it.each([
+    { turn: 'current turn', live: true },
+    { turn: 'history', live: false },
+  ])(
+    'a give-back that admits an earlier held file pushes out a later file already read, as today ($turn)',
+    async ({ live }) => {
+      const smallBytes = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES * 0.4);
+      const bigBytes = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES * 0.8);
+      const broken = stored('broken', {
+        byteSize: smallBytes,
+        filename: 'broken.txt',
+        stored: null,
+      });
+      const big = stored('big', {
+        byteSize: bigBytes,
+        filename: 'big.txt',
+        stored: Buffer.alloc(bigBytes),
+      });
+      const small = stored('small', {
+        byteSize: smallBytes,
+        filename: 'small.txt',
+        stored: Buffer.alloc(smallBytes),
+      });
+      const filesMessage = {
+        role: 'user',
+        content: [fileRef(broken), fileRef(big), fileRef(small)],
+      };
+      const messages = live
+        ? [filesMessage]
+        : [
+            filesMessage,
+            { role: 'assistant', content: 'Read them.' },
+            { role: 'user', content: 'Go on' },
+          ];
+
+      const run = hydrateChatAttachments(
+        messages,
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+      );
+
+      if (live) {
+        await expect(run).rejects.toMatchObject({
+          status: 413,
+          code: 'attachment_context_too_large',
+        });
+      } else {
+        await run;
+        const parts = partsOf(messages[0]);
+        expect(parts[0]).toEqual(unavailable('broken.txt', UNREADABLE));
+        expect(parts[1]).toEqual({ type: 'text', text: '[attached file: big.txt (text/plain)]' });
+        expect(parts[2]?.file?.filename).toBe('big.txt');
+        expect(parts[3]).toEqual(unavailable('small.txt', OVER_BUDGET));
+      }
+      expect(readPathnames()).toEqual([pathnameOf(broken), pathnameOf(small), pathnameOf(big)]);
+    },
+  );
+
+  it('reads history files with no recorded size only up to the budget left, holding none once it is spent', async () => {
+    const now = stored('fills-budget', {
+      byteSize: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+      filename: 'full.txt',
+      stored: Buffer.alloc(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES),
+    });
+    const history = Array.from({ length: 20 }, (_, index) =>
+      stored(`legacy-${index}`, {
+        byteSize: null,
+        filename: `legacy-${index}.txt`,
+        stored: Buffer.alloc(MIB),
+      }),
+    );
+    const messages = [
+      ...history.map((id) => ({ role: 'user', content: [fileRef(id)] })),
+      { role: 'assistant', content: 'Noted.' },
+      { role: 'user', content: [fileRef(now)] },
+    ];
+    const resolver = vi.fn<OversizeAttachmentResolver>(defaultOversizeAttachmentResolver);
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, history.length + 1, null, {
+      resolveOversizeAttachment: resolver,
+    });
+
+    expect(returnedIds).toEqual([now]);
+    expect(mocks.readStoredMedia.mock.calls).toEqual([
+      [pathnameOf(now), MAX_CHAT_ATTACHMENT_BYTES],
+      ...history.map((id) => [pathnameOf(id), 0]),
+    ]);
+    history.forEach((_, index) => {
+      expect(partsOf(messages[index])).toEqual([unavailable(`legacy-${index}.txt`, OVER_BUDGET)]);
+    });
+    expect(resolver.mock.calls.map(([input]) => [input.asset.id, input.reason])).toEqual(
+      history.map((id) => [id, 'over_message_budget']),
+    );
+    expect(partsOf(messages[21])[1]?.file?.filename).toBe('full.txt');
+  });
+
+  it('still sends an empty file with no recorded size after the budget is spent, as today', async () => {
+    const now = stored('fills-budget', {
+      byteSize: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+      filename: 'full.txt',
+      stored: Buffer.alloc(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES),
+    });
+    const empty = stored('empty-legacy', {
+      byteSize: null,
+      filename: 'empty.txt',
+      stored: Buffer.alloc(0),
+    });
+    const messages = [
+      { role: 'user', content: [fileRef(empty)] },
+      { role: 'assistant', content: 'Noted.' },
+      { role: 'user', content: [fileRef(now)] },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(partsOf(messages[0])[1]?.file?.filename).toBe('empty.txt');
+    expect(partsOf(messages[2])[1]?.file?.filename).toBe('full.txt');
+  });
+
+  it('reads a file with no recorded size with the whole bound once an admitted file before it proves unreadable', async () => {
+    const broken = stored('broken-now', {
+      byteSize: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+      filename: 'broken.txt',
+      stored: null,
+    });
+    const legacy = stored('legacy-old', {
+      byteSize: null,
+      filename: 'legacy.txt',
+      stored: Buffer.alloc(MIB),
+    });
+    const messages = [
+      { role: 'user', content: [fileRef(legacy)] },
+      { role: 'assistant', content: 'Noted.' },
+      { role: 'user', content: [fileRef(broken)] },
+    ];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(partsOf(messages[2])).toEqual([unavailable('broken.txt', UNREADABLE)]);
+    expect(partsOf(messages[0])[1]?.file?.filename).toBe('legacy.txt');
+    expect(mocks.readStoredMedia.mock.calls).toEqual([
+      [pathnameOf(broken), MAX_CHAT_ATTACHMENT_BYTES],
+      [pathnameOf(legacy), MAX_CHAT_ATTACHMENT_BYTES],
+    ]);
+  });
+
+  it('reads an object larger than its recorded size as unreadable without holding it', async () => {
+    const lying = stored('lying', {
+      byteSize: 10,
+      filename: 'small-on-paper.txt',
+      stored: 'larger_than_any_bound',
+    });
+    const messages = [{ role: 'user', content: [fileRef(lying)] }];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(partsOf(messages[0])).toEqual([unavailable('small-on-paper.txt', UNREADABLE)]);
+    expect(mocks.readStoredMedia.mock.calls).toEqual([
+      [pathnameOf(lying), MAX_CHAT_ATTACHMENT_BYTES],
+    ]);
+  });
+
+  it('hands each oversize file to an injected resolver and applies its parts and note', async () => {
+    const prepared = stored('prepared-now', {
+      byteSize: LARGE_RECORDED_BYTES,
+      filename: 'report.txt',
+      stored: 'larger_than_any_bound',
+    });
+    const inlineBytes = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES * 0.8);
+    const crowdedBytes = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES * 0.4);
+    const inline = stored('inline-now', {
+      byteSize: inlineBytes,
+      filename: 'inline.txt',
+      stored: Buffer.alloc(inlineBytes),
+    });
+    const crowded = stored('crowded-old', {
+      byteSize: crowdedBytes,
+      filename: 'crowded.txt',
+      stored: Buffer.alloc(crowdedBytes),
+    });
+    const preparedParts = [{ type: 'text', text: '[prepared report.txt]' }];
+    const resolver = vi.fn<OversizeAttachmentResolver>(async ({ asset }) =>
+      asset.id === prepared
+        ? { kind: 'parts', parts: preparedParts }
+        : { kind: 'note', reason: 'too_large' },
+    );
+    const messages = [
+      { role: 'user', content: [fileRef(crowded)] },
+      { role: 'assistant', content: 'Read it.' },
+      { role: 'user', content: [fileRef(prepared), fileRef(inline)] },
+    ];
+
+    await hydrateChatAttachments(
+      messages,
+      'user-1',
+      undefined,
+      PAID_ATTACHMENTS_PER_MESSAGE,
+      null,
+      { resolveOversizeAttachment: resolver },
+    );
+
+    expect(resolver.mock.calls.map(([input]) => input)).toEqual([
+      {
+        slot: { messageIndex: 2, partIndex: 0, assetId: prepared, fromCurrentTurn: true },
+        asset: expect.objectContaining({ id: prepared, byteSize: LARGE_RECORDED_BYTES }),
+        turn: 'live',
+        reason: 'over_file_limit',
+      },
+      {
+        slot: { messageIndex: 0, partIndex: 0, assetId: crowded, fromCurrentTurn: false },
+        asset: expect.objectContaining({ id: crowded, byteSize: crowdedBytes }),
+        turn: 'history',
+        reason: 'over_message_budget',
+      },
+    ]);
+    expect(partsOf(messages[2])[0]).toEqual(preparedParts[0]);
+    expect(partsOf(messages[2])[2]?.file?.filename).toBe('inline.txt');
+    expect(partsOf(messages[0])).toEqual([
+      unavailable('crowded.txt', 'is larger than this chat can send.'),
+    ]);
+    expect(readPathnames()).toEqual([pathnameOf(inline)]);
+  });
+
+  it('applies a refusal from an injected resolver: 413 for the current turn, the over_budget note for history', async () => {
+    const refuse: OversizeAttachmentResolver = async () => ({ kind: 'refuse' });
+    const large = stored('large', {
+      byteSize: LARGE_RECORDED_BYTES,
+      filename: 'archive.txt',
+      stored: 'larger_than_any_bound',
+    });
+
+    await expect(
+      hydrateChatAttachments(
+        [{ role: 'user', content: [fileRef(large)] }],
+        'user-1',
+        undefined,
+        PAID_ATTACHMENTS_PER_MESSAGE,
+        null,
+        { resolveOversizeAttachment: refuse },
+      ),
+    ).rejects.toMatchObject({ status: 413, code: 'attachment_context_too_large' });
+
+    const history = [
+      { role: 'user', content: [fileRef(large)] },
+      { role: 'assistant', content: 'Read it.' },
+      { role: 'user', content: 'Continue' },
+    ];
+    await hydrateChatAttachments(history, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null, {
+      resolveOversizeAttachment: refuse,
+    });
+    expect(partsOf(history[0])).toEqual([unavailable('archive.txt', OVER_BUDGET)]);
+    expect(mocks.readStoredMedia).not.toHaveBeenCalled();
+  });
+
+  it('the default resolver refuses the current turn and notes history as over budget', async () => {
+    const slot = { messageIndex: 0, partIndex: 0, assetId: 'a', fromCurrentTurn: true };
+    const asset = { id: 'a' } as Parameters<OversizeAttachmentResolver>[0]['asset'];
+    await expect(
+      defaultOversizeAttachmentResolver({ slot, asset, turn: 'live', reason: 'over_file_limit' }),
+    ).resolves.toEqual({ kind: 'refuse' });
+    await expect(
+      defaultOversizeAttachmentResolver({
+        slot,
+        asset,
+        turn: 'history',
+        reason: 'over_message_budget',
+      }),
+    ).resolves.toEqual({ kind: 'note', reason: 'over_budget' });
   });
 });

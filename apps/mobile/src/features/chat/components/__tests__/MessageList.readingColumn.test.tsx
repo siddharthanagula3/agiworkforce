@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { render } from '@testing-library/react-native';
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 jest.mock('@shopify/flash-list', () => {
   const React = require('react');
@@ -12,16 +12,19 @@ jest.mock('@shopify/flash-list', () => {
       renderItem,
       keyExtractor,
       contentContainerStyle,
+      ListFooterComponent,
     }: {
       data: unknown[];
       renderItem: (info: { item: unknown }) => React.ReactNode;
       keyExtractor: (item: unknown) => string;
       contentContainerStyle?: unknown;
+      ListFooterComponent?: React.ReactNode;
     }) => (
       <View testID="chat.message-list.scroller" style={contentContainerStyle}>
         {data.map((item) => (
           <React.Fragment key={keyExtractor(item)}>{renderItem({ item })}</React.Fragment>
         ))}
+        {ListFooterComponent}
       </View>
     ),
   };
@@ -30,7 +33,10 @@ jest.mock('@shopify/flash-list', () => {
 jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
   const { View } = require('react-native');
-  return { Swipeable: ({ children }: { children: React.ReactNode }) => <View>{children}</View> };
+  return {
+    Swipeable: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    ScrollView: require('react-native').ScrollView,
+  };
 });
 
 jest.mock('expo-haptics', () => ({
@@ -96,6 +102,17 @@ describe('the thread on a wide pane', () => {
     for (const row of rows) {
       expect(maxWidthOf(row)).toBe(READING_COLUMN_MAX_WIDTH);
     }
+  });
+
+  it('holds the follow-up strip under the last answer to the same column as the rows', () => {
+    const { getByTestId } = render(
+      <MessageList messages={[message('a')]} footer={<View testID="footer-content" />} />,
+    );
+
+    expect(maxWidthOf(getByTestId('chat.message-list.footer'))).toBe(READING_COLUMN_MAX_WIDTH);
+    expect(getByTestId('chat.message-list.footer').props.style).toMatchObject({
+      alignSelf: 'center',
+    });
   });
 
   it('keeps the empty state inside the same column', () => {

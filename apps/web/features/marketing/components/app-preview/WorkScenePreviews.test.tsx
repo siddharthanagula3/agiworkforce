@@ -271,11 +271,13 @@ describe('Work run in the thread', () => {
       '<AgiMark size={14} spinning />',
       'data-testid="agi-work-plan-sentence"',
       '<Clock3 className="h-3.5 w-3.5" aria-hidden="true" />',
-      "case 'filesystem':\n      return 'fs-list';",
-      "case 'code-execution':\n      return 'bash';",
       'name={traceRowName(entry)}',
       "startedAt={entry.status === 'running' ? entry.startedAtMs : undefined}",
       "isOpen && 'rotate-90',",
+    ]);
+    expectSource('packages/ui/unified-chat/src/lib/activity-kinds.ts', [
+      "case 'filesystem':\n      return 'fs-list';",
+      "case 'code-execution':\n      return 'bash';",
     ]);
     expectSource('packages/ui/unified-chat/src/components/InlineToolCall.tsx', [
       "return 'Running';",
@@ -405,6 +407,8 @@ describe('file edit waiting for approval', () => {
     expectSource('packages/ui/unified-chat/src/components/AgentActivityTimeline.tsx', [
       "return active ? `Needs approval · ${active}` : 'Needs approval';",
       'return <PauseCircle className="h-4 w-4" aria-hidden="true" />;',
+    ]);
+    expectSource('packages/ui/unified-chat/src/lib/activity-kinds.ts', [
       "case 'filesystem':\n      return 'fs-list';",
     ]);
     expectSource('apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts', [

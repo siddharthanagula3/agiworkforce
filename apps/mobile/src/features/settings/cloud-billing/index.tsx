@@ -25,6 +25,7 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { SUBSCRIPTION_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import {
   MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES,
   canUseBillingPlanCapability,
@@ -32,8 +33,10 @@ import {
   getBillingPlanPricing,
   getMobileIapProductDefinition,
   getNextUpgradeTier,
+  isEnterprisePlanTier,
   isEntitledSubscriptionStatus,
   isSelfServeIndividualPlanTier,
+  isTeamPlanTier,
   mobileIapPlanChangeDirection,
   type MobileIapCatalogProduct,
   type MobileIapProductKey,
@@ -41,8 +44,8 @@ import {
 import { useTierStore } from '@/src/features/billing/store';
 import { planCheckOf } from '@/src/features/billing/planCheck';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
-import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -175,7 +178,16 @@ export default function CloudBillingScreen() {
           day: 'numeric',
           year: 'numeric',
         });
+  const planGivenWithoutPurchase = billingSource === 'manual';
+  const periodEndLabelShown =
+    periodEndLabel !== null &&
+    (!planGivenWithoutPurchase || billingCancelsAtPeriodEnd || isTrialing)
+      ? periodEndLabel
+      : null;
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
+  const billedByOrganization =
+    billingSource === 'manual' &&
+    (isTeamPlanTier(billingTier) || isEnterprisePlanTier(billingTier));
   const nextUpgradeTier = getNextUpgradeTier(tier);
   const subscriptionGuard = getSubscriptionOwnerGuard(
     billingSource,
@@ -330,7 +342,7 @@ export default function CloudBillingScreen() {
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
-      <SettingsScreenShell title="Billing">
+      <SettingsScreenShell title={SUBSCRIPTION_SCREEN_TITLE}>
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
       </SettingsScreenShell>
     );
@@ -338,7 +350,7 @@ export default function CloudBillingScreen() {
 
   if (!NATIVE_PURCHASES_AVAILABLE) {
     return (
-      <SettingsScreenShell title="Plan">
+      <SettingsScreenShell title={SUBSCRIPTION_SCREEN_TITLE}>
         <SettingsInfo title="Your plan" body={planSummary} icon={CreditCard} />
         {!isCloudModeActive && (
           <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
@@ -352,12 +364,12 @@ export default function CloudBillingScreen() {
           {canRetryPlanCheck ? (
             <SettingsRow label="Try again" icon={RefreshCw} onPress={checkPlan} />
           ) : null}
-          {!planUnconfirmed && !isFreeTier && isEntitled && periodEndLabel ? (
+          {!planUnconfirmed && !isFreeTier && isEntitled && periodEndLabelShown ? (
             <SettingsRow
               label={
                 billingCancelsAtPeriodEnd ? 'Access ends' : isTrialing ? 'Trial ends' : 'Renews'
               }
-              value={periodEndLabel}
+              value={periodEndLabelShown}
               icon={Clock}
             />
           ) : null}
@@ -365,11 +377,13 @@ export default function CloudBillingScreen() {
             <SettingsRow
               label="Billing"
               value={
-                billingSource === 'manual'
+                billedByOrganization
                   ? 'By your organization'
-                  : billingSource === 'stripe'
-                    ? 'Managed on the web'
-                    : 'Managed where you subscribed'
+                  : billingSource === 'manual'
+                    ? 'Included with your account'
+                    : billingSource === 'stripe'
+                      ? 'Managed on the web'
+                      : 'Managed where you subscribed'
               }
               icon={CreditCard}
             />
@@ -407,7 +421,7 @@ export default function CloudBillingScreen() {
   }
 
   return (
-    <SettingsScreenShell title="Billing">
+    <SettingsScreenShell title={SUBSCRIPTION_SCREEN_TITLE}>
       <SettingsInfo
         title="Your plan, usage, and payment details"
         body={planSummary}
@@ -499,13 +513,15 @@ export default function CloudBillingScreen() {
                 {statusLabel}
               </Text>
             )}
-            {!isFreeTier && isEntitled && periodEndLabel ? (
+            {!isFreeTier && isEntitled && periodEndLabelShown ? (
               <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
                 {billingCancelsAtPeriodEnd
-                  ? `Access ends ${periodEndLabel}. You keep ${tierLabel} until then.`
+                  ? `Access ends ${periodEndLabelShown}. You keep ${tierLabel} until then.`
                   : isTrialing
-                    ? `Free trial ends ${periodEndLabel}, then renews unless you cancel.`
-                    : `Renews ${periodEndLabel}`}
+                    ? planGivenWithoutPurchase
+                      ? `Free trial ends ${periodEndLabelShown}.`
+                      : `Free trial ends ${periodEndLabelShown}, then renews unless you cancel.`
+                    : `Renews ${periodEndLabelShown}`}
               </Text>
             ) : null}
           </View>
@@ -570,7 +586,13 @@ export default function CloudBillingScreen() {
             <SettingsRow
               label="Billing"
               icon={CreditCard}
-              value={billingSource === 'manual' ? 'By your organization' : 'Managed on the web'}
+              value={
+                billedByOrganization
+                  ? 'By your organization'
+                  : billingSource === 'manual'
+                    ? 'Included with your account'
+                    : 'Managed on the web'
+              }
               isLast
             />
           ) : null}
@@ -702,12 +724,12 @@ export default function CloudBillingScreen() {
                 <SettingsRow
                   label="Terms of Use"
                   icon={ExternalLink}
-                  onPress={() => void openExternalUrl(new URL('/terms', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/terms')}
                 />
                 <SettingsRow
                   label="Privacy Policy"
                   icon={ExternalLink}
-                  onPress={() => void openExternalUrl(new URL('/privacy', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/privacy')}
                   isLast
                 />
               </SettingsGroup>

@@ -21,9 +21,11 @@ import {
 import {
   RIGHT_TO_LEFT_TEXT,
   documentDirection,
+  type DocumentDirection,
+} from '@agiworkforce/unified-chat/text-direction';
+import {
   type DocumentAlign,
   type DocumentBlock,
-  type DocumentDirection,
   type DocumentInline,
   type DocumentListItem,
   type DocumentTableRow,

@@ -64,7 +64,8 @@ export interface ManagedCloudNeed {
 
 /**
  * - `utility`: a short helper call on the user's content (title, follow-ups,
- *   memory). Always the economy slot, never the user's paid model access.
+ *   memory). Always the economy slot, never the user's paid model access; it
+ *   may still require a capability such as tool calling.
  * - `background`: work on the user's content on their own plan.
  * - `unattended`: an agent run nobody is watching (scheduled, Slack, mobile).
  * - `preview`: what a chat turn on this account would route to, without a call.
@@ -75,7 +76,7 @@ export type ManagedCloudCall =
   | {
       kind: 'utility';
       account: ManagedCloudAccount;
-      need?: Pick<ManagedCloudNeed, 'keepOutOfTraining' | 'turnPolicy'>;
+      need?: Pick<ManagedCloudNeed, 'keepOutOfTraining' | 'turnPolicy' | 'requiredCapabilities'>;
     }
   | {
       kind: 'background' | 'unattended' | 'preview';

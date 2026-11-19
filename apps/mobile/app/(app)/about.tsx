@@ -6,7 +6,6 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import {
   ArrowLeft,
-  Sparkles,
   ExternalLink,
   FileText,
   MessageCircle,
@@ -17,25 +16,27 @@ import {
   Activity,
   Scale,
 } from 'lucide-react-native';
+import { AgiMark } from '@/components/ui/AgiMark';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { HEADER_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { SUPPORT_EMAIL } from '@/src/features/support/contact';
+import { useNoMailAppAlert } from '@/src/features/support/useNoMailAppAlert';
 import { useAuthStore } from '@/src/features/auth/store';
+import { readAppBuild } from '@/src/features/feedback/clientContext';
+import { FEEDBACK_SCREEN_TITLE } from '@/src/features/feedback/presentation';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import pkg from '../../package.json';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
+
+const ABOUT_SYMBOL_SIZE = 68;
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
-const APP_BUILD = (() => {
-  const cfg = Constants.expoConfig;
-  if (!cfg) return 'unknown';
-  if (Platform.OS === 'ios') return `${cfg.version} (${cfg.ios?.buildNumber ?? '?'})`;
-  if (Platform.OS === 'android') return `${cfg.version} (${cfg.android?.versionCode ?? '?'})`;
-  return cfg.version ?? 'unknown';
-})();
+const embeddedBuild = readAppBuild();
+const APP_BUILD = embeddedBuild ? `${APP_VERSION} (${embeddedBuild})` : APP_VERSION;
 const expoVersion = (pkg.dependencies?.expo ?? '').replace(/^[~^]/, '').split('.')[0] || '?';
 const rnVersion = pkg.dependencies?.['react-native'] ?? '?';
 const RUNTIME = `Expo ${expoVersion} + React Native ${rnVersion}`;
@@ -57,7 +58,7 @@ function LinkRow({
       accessibilityRole="button"
       style={({ pressed }) => ({
         width: '100%',
-        minHeight: 40,
+        minHeight: 44,
         borderRadius: 10,
         paddingHorizontal: 4,
         paddingVertical: 8,
@@ -119,22 +120,25 @@ export default function AboutScreen() {
   }, [router]);
 
   const openWebPage = useCallback(async (url: string) => {
-    const opened = await openInAppBrowser(url);
-    if (!opened) Alert.alert('Error', 'Could not open the link. Please try again.');
-  }, []);
-
-  const openMail = useCallback(async (url: string) => {
-    try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'No mail app is set up on this device.');
-      }
-    } catch {
-      Alert.alert('Error', 'Could not open the link. Please try again.');
+    const opened = await openWebContentPage(url);
+    if (!opened) {
+      Alert.alert('Error', 'Could not open the link. Please try again.', undefined, {
+        cancelable: true,
+      });
     }
   }, []);
+
+  const alertNoMailApp = useNoMailAppAlert();
+  const openMail = useCallback(
+    async (url: string) => {
+      try {
+        await Linking.openURL(url);
+      } catch {
+        alertNoMailApp();
+      }
+    },
+    [alertNoMailApp],
+  );
 
   const platformVersion = `${platformDisplayName(Platform.OS)} ${String(Platform.Version)}`;
 
@@ -142,13 +146,14 @@ export default function AboutScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
       <View
         style={{
-          height: 48,
+          minHeight: 48,
           paddingHorizontal: 12,
           flexDirection: 'row',
           alignItems: 'center',
         }}
       >
         <Pressable
+          hitSlop={4}
           onPress={handleBack}
           accessibilityLabel="Go back"
           accessibilityRole="button"
@@ -165,6 +170,7 @@ export default function AboutScreen() {
         </Pressable>
         <Text
           variant="subheading"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
           style={{ marginLeft: 8, color: c.textPrimary, fontWeight: '700' }}
         >
           About
@@ -173,21 +179,15 @@ export default function AboutScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 14 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+          gap: 14,
+        }}
       >
         <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 2, gap: 8 }}>
-          <View
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: 34,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: c.accentSurface,
-            }}
-          >
-            <Sparkles size={30} color={c.teal} />
-          </View>
+          <AgiMark size={ABOUT_SYMBOL_SIZE} testID="about.brand-symbol" />
           <View style={{ alignItems: 'center', gap: 4 }}>
             <Text style={{ color: c.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}>
               AGI Mobile
@@ -203,7 +203,7 @@ export default function AboutScreen() {
               lineHeight: 19,
             }}
           >
-            Private Local Mode and AGI Cloud, on your phone.
+            Private Local Mode and AGI Cloud, on your device.
           </Text>
         </View>
 
@@ -228,12 +228,6 @@ export default function AboutScreen() {
           >
             Resources
           </Text>
-          <LinkRow
-            icon={ExternalLink}
-            label="Website"
-            onPress={() => void openWebPage('https://agiworkforce.com')}
-          />
-          <Separator />
           <LinkRow
             icon={ExternalLink}
             label="Privacy Policy"
@@ -295,11 +289,11 @@ export default function AboutScreen() {
                 params: { returnTo: '/(app)/about' },
               } as Parameters<typeof router.push>[0])
             }
-            accessibilityLabel="Send Feedback"
+            accessibilityLabel={FEEDBACK_SCREEN_TITLE}
             accessibilityRole="button"
             style={({ pressed }) => ({
               width: '100%',
-              minHeight: 40,
+              minHeight: 44,
               borderRadius: 10,
               paddingHorizontal: 4,
               paddingVertical: 8,
@@ -312,7 +306,7 @@ export default function AboutScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <MessageCircle size={18} color={c.textSecondary} />
               <Text style={{ color: c.textPrimary, fontSize: typeScale.subhead }}>
-                Send Feedback
+                {FEEDBACK_SCREEN_TITLE}
               </Text>
             </View>
           </Pressable>

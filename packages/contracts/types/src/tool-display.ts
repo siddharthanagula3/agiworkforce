@@ -92,6 +92,11 @@ const TOOL_DISPLAY_LABEL: Record<string, ToolDisplayLabel> = {
     activeForm: 'Running code…',
     completedForm: 'Ran code',
   },
+  execute_code: {
+    displayName: 'Run code',
+    activeForm: 'Running code…',
+    completedForm: 'Ran code',
+  },
   device_calendar_events: {
     displayName: 'Read your calendar',
     activeForm: 'Reading your calendar…',

@@ -1287,6 +1287,12 @@
     },
     {
       "from": "packages/ui/unified-chat",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
       "to": "packages/platform/utils",
       "type": "depends_on",
       "via": "typescript"

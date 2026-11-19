@@ -11,7 +11,7 @@ import { resetLeafletMock } from '@/test/__mocks__/leaflet';
 import { resetMapTileConfigCache } from '../map/mapTileConfig';
 import { MAP_ENTER_FULLSCREEN_LABEL, MAP_EXIT_FULLSCREEN_LABEL } from '../map/LeafletMapCanvas';
 import { AnswerUiCard, type AnswerUiCardContext } from './AnswerUiCard';
-import { ANSWER_UI_CHART_DATA_LABEL } from './AnswerUiChart';
+import { ANSWER_UI_CHART_DATA_LABEL } from '@agiworkforce/unified-chat/answer-ui';
 
 const TILE_CONFIG = {
   tileUrlTemplate: '/api/maps/tile/{z}/{x}/{y}',

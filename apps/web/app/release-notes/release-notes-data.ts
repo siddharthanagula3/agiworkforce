@@ -93,8 +93,11 @@ export function releaseStateLine(note: ReleaseNote): string {
     .join(' · ');
 }
 
-export function releasedNoteCount(maturity: DocMaturity): number {
-  return RELEASE_NOTES.filter(
+export function releasedNoteCount(
+  maturity: DocMaturity,
+  notes: readonly ReleaseNote[] = RELEASE_NOTES,
+): number {
+  return notes.filter(
     (note) =>
       note.surfaces.some(isReleasedSurface) &&
       publishedMaturity(note.maturity, note.surfaces) === maturity,

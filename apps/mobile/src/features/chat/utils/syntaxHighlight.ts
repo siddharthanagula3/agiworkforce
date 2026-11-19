@@ -1,7 +1,11 @@
-
+import {
+  resolveHighlightLanguage,
+  type LanguageId,
+} from '@agiworkforce/unified-chat/highlight-languages';
 import type { ColorScheme } from '@/src/ui/theme';
 
-export type SyntaxTokenType = 'comment' | 'string' | 'number' | 'keyword' | 'plain';
+export type SyntaxTokenType =
+  'comment' | 'string' | 'number' | 'keyword' | 'function' | 'type' | 'plain';
 
 export interface SyntaxToken {
   text: string;
@@ -31,19 +35,33 @@ const HASH_COMMENT = String.raw`#[^\n]*`;
 interface LanguageSpec {
   pattern: RegExp;
   keywords: ReadonlySet<string>;
-  caseInsensitiveKeywords?: boolean;
+  caseInsensitiveKeywords: boolean;
+  identifiers: boolean;
 }
+
+interface SpecOptions {
+  caseInsensitiveKeywords?: boolean;
+  named?: { lead: string; name: string };
+  identifiers?: boolean;
+}
+
+const NEVER = '(?!)';
 
 function makeSpec(
   comment: string,
   string: string,
   keywords: string,
-  caseInsensitiveKeywords = false,
+  options: SpecOptions = {},
 ): LanguageSpec {
+  const named = options.named ?? { lead: NEVER, name: NEVER };
   return {
-    pattern: new RegExp(`(${comment})|(${string})|(${NUMBER})`, 'g'),
-    keywords: new Set(keywords.split(' ')),
-    caseInsensitiveKeywords,
+    pattern: new RegExp(
+      `(${comment})|(${string})|(${NUMBER})|(${named.lead})(${named.name})`,
+      'gm',
+    ),
+    keywords: new Set(keywords.split(' ').filter(Boolean)),
+    caseInsensitiveKeywords: options.caseInsensitiveKeywords === true,
+    identifiers: options.identifiers === true,
   };
 }
 
@@ -74,7 +92,8 @@ const JVM_KEYWORDS =
   'for while do switch case break continue try catch finally throw throws this super null true ' +
   'false instanceof synchronized volatile transient native fun val var when object companion ' +
   'override data sealed init constructor lateinit suspend func let guard defer struct protocol ' +
-  'extension deinit inout mutating some any where associatedtype typealias open is in';
+  'extension deinit inout mutating some any where associatedtype typealias open is in def ' +
+  'trait match lazy implicit yield with';
 
 const RUST_KEYWORDS =
   'fn let mut const static struct enum trait impl for while loop if else match return use mod ' +
@@ -86,79 +105,226 @@ const GO_KEYWORDS =
   'range switch case break continue fallthrough select goto true false nil iota make new len ' +
   'cap append error string int int64 float64 bool byte rune';
 
-const SPEC_JS = makeSpec(
-  `${SLASH_LINE_COMMENT}|${BLOCK_COMMENT}`,
-  `${DQ_STRING}|${SQ_STRING}|${TEMPLATE_STRING}`,
-  JS_KEYWORDS,
-);
-const SPEC_PYTHON = makeSpec(
-  HASH_COMMENT,
-  `${PY_TRIPLE_STRING}|${DQ_STRING}|${SQ_STRING}`,
-  PYTHON_KEYWORDS,
-);
-const SPEC_JSON = makeSpec('(?!)', DQ_STRING, 'true false null');
-const SPEC_HTML = makeSpec(String.raw`<!--[\s\S]*?-->`, `${DQ_STRING}|${SQ_STRING}`, '');
-const SPEC_CSS = makeSpec(BLOCK_COMMENT, `${DQ_STRING}|${SQ_STRING}`, '');
+const C_FAMILY_KEYWORDS =
+  'auto break case char const continue default do double else enum extern float for goto if ' +
+  'inline int long register return short signed sizeof static struct switch typedef union ' +
+  'unsigned void volatile while bool true false nullptr NULL class namespace template typename ' +
+  'public private protected virtual override final new delete this using try catch throw ' +
+  'constexpr noexcept operator friend explicit mutable include define ifdef ifndef endif pragma ' +
+  'nil self import interface implementation property';
+
+const CSHARP_KEYWORDS =
+  'using namespace class struct interface enum record public private protected internal static ' +
+  'readonly const void int long short byte string bool double float decimal char object var ' +
+  'new return if else for foreach while do switch case break continue try catch finally throw ' +
+  'this base null true false async await get set init override virtual abstract sealed partial ' +
+  'in out ref is as typeof nameof default';
+
+const PHP_KEYWORDS =
+  'function fn return if else elseif foreach for while do switch case match break continue ' +
+  'class interface trait extends implements abstract final public private protected static ' +
+  'const new echo print array null true false namespace use try catch finally throw as';
+
+const RUBY_KEYWORDS =
+  'def end class module if elsif else unless while until for in do return yield begin rescue ' +
+  'ensure raise then case when nil true false self require attr_accessor attr_reader puts and ' +
+  'or not lambda proc next break';
+
+const PERL_KEYWORDS =
+  'my our local sub if elsif else unless while until for foreach return use package print ' +
+  'last next require';
+
+const R_KEYWORDS =
+  'function if else for while repeat break next return TRUE FALSE NULL NA in library';
+
+const ELIXIR_KEYWORDS =
+  'def defp defmodule defstruct do end if else unless case cond fn when with import alias use ' +
+  'require true false nil';
+
+const LUA_KEYWORDS =
+  'and break do else elseif end false for function goto if in local nil not or repeat return ' +
+  'then true until while';
+
+const HASKELL_KEYWORDS =
+  'module where import qualified as hiding data type newtype class instance deriving let in ' +
+  'case of if then else do';
+
+const ZIG_KEYWORDS =
+  'const var fn pub return if else while for switch struct enum union error try catch defer ' +
+  'comptime null undefined true false';
+
+const DOCKER_KEYWORDS =
+  'FROM RUN CMD LABEL EXPOSE ENV ADD COPY ENTRYPOINT VOLUME USER WORKDIR ARG ONBUILD ' +
+  'STOPSIGNAL HEALTHCHECK SHELL AS';
+
+const MAKE_KEYWORDS = 'ifeq ifneq ifdef ifndef else endif include define endef export override';
+
+const NGINX_KEYWORDS =
+  'server location listen server_name root index proxy_pass return rewrite if include ' +
+  'upstream http events';
+
+const TERRAFORM_KEYWORDS =
+  'resource variable output provider module data locals terraform true false null for in if';
+
+const POWERSHELL_KEYWORDS =
+  'function param if else elseif foreach for while do switch return try catch finally throw ' +
+  'begin process end';
+
+const GRAPHQL_KEYWORDS =
+  'query mutation subscription fragment on type input enum interface union scalar schema ' +
+  'extend implements directive true false null';
+
+const PROTO_KEYWORDS =
+  'syntax package import option message enum service rpc returns repeated optional required ' +
+  'oneof map reserved string int32 int64 uint32 uint64 bool bytes double float';
+
+const PRISMA_KEYWORDS =
+  'model enum datasource generator type String Int BigInt Boolean DateTime Float Decimal Json Bytes';
+
+const SLASH_COMMENTS = `${SLASH_LINE_COMMENT}|${BLOCK_COMMENT}`;
+const QUOTED = `${DQ_STRING}|${SQ_STRING}`;
+const TAG = { lead: '<\\/?', name: '[A-Za-z][\\w:.-]*' };
+const COLON_KEY = { lead: '^[ \\t]*(?:- )?', name: '[A-Za-z_][\\w.-]*(?=[ \\t]*:(?:[ \\t]|$))' };
+const EQUALS_KEY = { lead: '^[ \\t]*', name: '[A-Za-z_][\\w.-]*(?=[ \\t]*=)' };
+const JSX_TAG = { lead: '(?:^|[\\s(>{,=?:&|])<\\/?|<\\/', name: '[A-Za-z][\\w.]*' };
+const CODE = { identifiers: true };
+
+const SPEC_JS = makeSpec(SLASH_COMMENTS, `${QUOTED}|${TEMPLATE_STRING}`, JS_KEYWORDS, {
+  ...CODE,
+  named: JSX_TAG,
+});
+const SPEC_PYTHON = makeSpec(HASH_COMMENT, `${PY_TRIPLE_STRING}|${QUOTED}`, PYTHON_KEYWORDS, CODE);
+const SPEC_JSON = makeSpec(NEVER, DQ_STRING, 'true false null');
+const SPEC_HTML = makeSpec(String.raw`<!--[\s\S]*?-->`, QUOTED, '', { named: TAG });
+const SPEC_CSS = makeSpec(BLOCK_COMMENT, QUOTED, '');
+const SPEC_SCSS = makeSpec(SLASH_COMMENTS, QUOTED, '');
 const SPEC_SHELL = makeSpec(HASH_COMMENT, String.raw`"(?:[^"\\]|\\.)*"|'[^']*'`, SHELL_KEYWORDS);
-const SPEC_SQL = makeSpec(
-  String.raw`--[^\n]*|${BLOCK_COMMENT}`,
-  `${SQ_STRING}|${DQ_STRING}`,
-  SQL_KEYWORDS,
-  true,
-);
-const SPEC_JVM = makeSpec(
-  `${SLASH_LINE_COMMENT}|${BLOCK_COMMENT}`,
-  `${DQ_STRING}|${SQ_STRING}`,
-  JVM_KEYWORDS,
-);
-const SPEC_RUST = makeSpec(`${SLASH_LINE_COMMENT}|${BLOCK_COMMENT}`, DQ_STRING, RUST_KEYWORDS);
+const SPEC_SQL = makeSpec(String.raw`--[^\n]*|${BLOCK_COMMENT}`, QUOTED, SQL_KEYWORDS, {
+  caseInsensitiveKeywords: true,
+});
+const SPEC_JVM = makeSpec(SLASH_COMMENTS, QUOTED, JVM_KEYWORDS, CODE);
+const SPEC_RUST = makeSpec(SLASH_COMMENTS, DQ_STRING, RUST_KEYWORDS, CODE);
 const SPEC_GO = makeSpec(
-  `${SLASH_LINE_COMMENT}|${BLOCK_COMMENT}`,
+  SLASH_COMMENTS,
   `${DQ_STRING}|${TEMPLATE_STRING}|${SQ_STRING}`,
   GO_KEYWORDS,
+  CODE,
 );
+const SPEC_C = makeSpec(SLASH_COMMENTS, QUOTED, C_FAMILY_KEYWORDS, CODE);
+const SPEC_CSHARP = makeSpec(SLASH_COMMENTS, QUOTED, CSHARP_KEYWORDS, CODE);
+const SPEC_PHP = makeSpec(`${SLASH_COMMENTS}|${HASH_COMMENT}`, QUOTED, PHP_KEYWORDS, {
+  ...CODE,
+  caseInsensitiveKeywords: true,
+});
+const SPEC_RUBY = makeSpec(HASH_COMMENT, QUOTED, RUBY_KEYWORDS, CODE);
+const SPEC_PERL = makeSpec(HASH_COMMENT, QUOTED, PERL_KEYWORDS, CODE);
+const SPEC_R = makeSpec(HASH_COMMENT, QUOTED, R_KEYWORDS, CODE);
+const SPEC_ELIXIR = makeSpec(HASH_COMMENT, QUOTED, ELIXIR_KEYWORDS, CODE);
+const SPEC_LUA = makeSpec(String.raw`--\[\[[\s\S]*?\]\]|--[^\n]*`, QUOTED, LUA_KEYWORDS, CODE);
+const SPEC_HASKELL = makeSpec(
+  String.raw`\{-[\s\S]*?-\}|--[^\n]*`,
+  DQ_STRING,
+  HASKELL_KEYWORDS,
+  CODE,
+);
+const SPEC_ZIG = makeSpec(SLASH_LINE_COMMENT, DQ_STRING, ZIG_KEYWORDS, CODE);
+const SPEC_YAML = makeSpec(HASH_COMMENT, QUOTED, 'true false null', { named: COLON_KEY });
+const SPEC_TOML = makeSpec(HASH_COMMENT, QUOTED, 'true false', { named: EQUALS_KEY });
+const SPEC_INI = makeSpec('[;#][^\\n]*', DQ_STRING, 'true false', { named: EQUALS_KEY });
+const SPEC_DOCKER = makeSpec(HASH_COMMENT, QUOTED, DOCKER_KEYWORDS);
+const SPEC_MAKE = makeSpec(HASH_COMMENT, QUOTED, MAKE_KEYWORDS);
+const SPEC_NGINX = makeSpec(HASH_COMMENT, QUOTED, NGINX_KEYWORDS);
+const SPEC_TERRAFORM = makeSpec(`${SLASH_COMMENTS}|${HASH_COMMENT}`, DQ_STRING, TERRAFORM_KEYWORDS);
+const SPEC_POWERSHELL = makeSpec(String.raw`<#[\s\S]*?#>|#[^\n]*`, QUOTED, POWERSHELL_KEYWORDS, {
+  caseInsensitiveKeywords: true,
+});
+const SPEC_GRAPHQL = makeSpec(HASH_COMMENT, DQ_STRING, GRAPHQL_KEYWORDS, CODE);
+const SPEC_PROTO = makeSpec(SLASH_COMMENTS, QUOTED, PROTO_KEYWORDS, CODE);
+const SPEC_PRISMA = makeSpec(SLASH_LINE_COMMENT, DQ_STRING, PRISMA_KEYWORDS, CODE);
+const SPEC_LATEX = makeSpec('%[^\\n]*', NEVER, '', {
+  named: { lead: '', name: String.raw`\\[A-Za-z]+` },
+});
 
-const LANGUAGE_SPECS: Record<string, LanguageSpec> = {
-  js: SPEC_JS,
-  jsx: SPEC_JS,
+const LANGUAGE_SPECS: Partial<Record<LanguageId, LanguageSpec>> = {
   javascript: SPEC_JS,
-  ts: SPEC_JS,
-  tsx: SPEC_JS,
+  jsx: SPEC_JS,
   typescript: SPEC_JS,
-  py: SPEC_PYTHON,
+  tsx: SPEC_JS,
   python: SPEC_PYTHON,
   json: SPEC_JSON,
   html: SPEC_HTML,
   xml: SPEC_HTML,
-  svg: SPEC_HTML,
+  vue: SPEC_HTML,
+  svelte: SPEC_HTML,
   css: SPEC_CSS,
-  sh: SPEC_SHELL,
+  scss: SPEC_SCSS,
+  less: SPEC_SCSS,
   bash: SPEC_SHELL,
-  shell: SPEC_SHELL,
-  zsh: SPEC_SHELL,
   sql: SPEC_SQL,
   java: SPEC_JVM,
   kotlin: SPEC_JVM,
-  kt: SPEC_JVM,
+  scala: SPEC_JVM,
   swift: SPEC_JVM,
   rust: SPEC_RUST,
-  rs: SPEC_RUST,
   go: SPEC_GO,
-  golang: SPEC_GO,
+  c: SPEC_C,
+  cpp: SPEC_C,
+  'objective-c': SPEC_C,
+  csharp: SPEC_CSHARP,
+  php: SPEC_PHP,
+  ruby: SPEC_RUBY,
+  perl: SPEC_PERL,
+  r: SPEC_R,
+  elixir: SPEC_ELIXIR,
+  lua: SPEC_LUA,
+  haskell: SPEC_HASKELL,
+  zig: SPEC_ZIG,
+  yaml: SPEC_YAML,
+  toml: SPEC_TOML,
+  ini: SPEC_INI,
+  docker: SPEC_DOCKER,
+  makefile: SPEC_MAKE,
+  nginx: SPEC_NGINX,
+  terraform: SPEC_TERRAFORM,
+  powershell: SPEC_POWERSHELL,
+  graphql: SPEC_GRAPHQL,
+  proto: SPEC_PROTO,
+  prisma: SPEC_PRISMA,
+  latex: SPEC_LATEX,
 };
 
+function specFor(language: string | undefined): LanguageSpec | undefined {
+  const id = language ? resolveHighlightLanguage(language) : null;
+  return id ? LANGUAGE_SPECS[id] : undefined;
+}
+
 const WORD_REGEX = /[A-Za-z_][A-Za-z0-9_]*/g;
+const TYPE_NAME = /^[A-Z][A-Za-z0-9_]*[a-z][A-Za-z0-9_]*$/;
+
+function wordType(word: string, next: string | undefined, spec: LanguageSpec): SyntaxTokenType {
+  if (spec.keywords.has(spec.caseInsensitiveKeywords ? word.toLowerCase() : word)) {
+    return 'keyword';
+  }
+  if (!spec.identifiers) return 'plain';
+  if (next === '(') return 'function';
+  return TYPE_NAME.test(word) ? 'type' : 'plain';
+}
 
 function pushPlainWithKeywords(text: string, spec: LanguageSpec, tokens: SyntaxToken[]): void {
+  if (spec.keywords.size === 0 && !spec.identifiers) {
+    pushToken(tokens, text, 'plain');
+    return;
+  }
   let last = 0;
   let match: RegExpExecArray | null;
   WORD_REGEX.lastIndex = 0;
   while ((match = WORD_REGEX.exec(text)) !== null) {
-    const word = spec.caseInsensitiveKeywords ? match[0].toLowerCase() : match[0];
-    if (!spec.keywords.has(word)) continue;
+    const end = match.index + match[0].length;
+    const type = wordType(match[0], text[end], spec);
+    if (type === 'plain') continue;
     if (match.index > last) pushToken(tokens, text.slice(last, match.index), 'plain');
-    pushToken(tokens, match[0], 'keyword');
-    last = match.index + match[0].length;
+    pushToken(tokens, match[0], type);
+    last = end;
   }
   if (last < text.length) pushToken(tokens, text.slice(last), 'plain');
 }
@@ -173,9 +339,17 @@ function pushToken(tokens: SyntaxToken[], text: string, type: SyntaxTokenType): 
   tokens.push({ text, type });
 }
 
+function pushMatch(match: RegExpExecArray, tokens: SyntaxToken[]): void {
+  if (match[1] !== undefined) return pushToken(tokens, match[0], 'comment');
+  if (match[2] !== undefined) return pushToken(tokens, match[0], 'string');
+  if (match[3] !== undefined) return pushToken(tokens, match[0], 'number');
+  pushToken(tokens, match[4] ?? '', 'plain');
+  pushToken(tokens, match[5] ?? '', 'keyword');
+}
+
 export function tokenizeCode(code: string, language: string | undefined): SyntaxToken[] {
   if (code.length === 0) return [];
-  const spec = LANGUAGE_SPECS[language?.trim().toLowerCase() ?? ''];
+  const spec = specFor(language);
   if (!spec || code.length > MAX_HIGHLIGHT_LENGTH) {
     return [{ text: code, type: 'plain' }];
   }
@@ -188,14 +362,45 @@ export function tokenizeCode(code: string, language: string | undefined): Syntax
     if (match.index > last) {
       pushPlainWithKeywords(code.slice(last, match.index), spec, tokens);
     }
-    const type: SyntaxTokenType =
-      match[1] !== undefined ? 'comment' : match[2] !== undefined ? 'string' : 'number';
-    pushToken(tokens, match[0], type);
+    pushMatch(match, tokens);
     last = match.index + match[0].length;
     if (match[0].length === 0) spec.pattern.lastIndex++;
   }
   if (last < code.length) pushPlainWithKeywords(code.slice(last), spec, tokens);
   return tokens;
+}
+
+/** Web code blocks inherit tab-size: 4 from the Tailwind preflight. */
+export const CODE_TAB_SIZE = 4;
+
+function columnAfter(text: string, column: number): number {
+  const lineStart = text.lastIndexOf('\n') + 1;
+  return (lineStart === 0 ? column : 0) + Array.from(text.slice(lineStart)).length;
+}
+
+export function expandCodeTabs(
+  tokens: readonly SyntaxToken[],
+  tabSize: number = CODE_TAB_SIZE,
+): SyntaxToken[] {
+  let column = 0;
+  return tokens.map((token) => {
+    if (!token.text.includes('\t')) {
+      column = columnAfter(token.text, column);
+      return token;
+    }
+    let expanded = '';
+    for (const char of token.text) {
+      if (char === '\t') {
+        const width = tabSize - (column % tabSize);
+        expanded += ' '.repeat(width);
+        column += width;
+      } else {
+        expanded += char;
+        column = char === '\n' ? 0 : column + 1;
+      }
+    }
+    return { ...token, text: expanded };
+  });
 }
 
 function parseCssColor(value: unknown): RgbaColor | null {
@@ -321,6 +526,8 @@ function syntaxPalette(colors: ColorScheme): Record<SyntaxTokenType, string> {
     string: accessibleCodeColor(colors.agentSuccess, colors),
     number: accessibleCodeColor(colors.agentWarning, colors),
     keyword: accessibleCodeColor(colors.purple, colors),
+    function: accessibleCodeColor(colors.agentActive, colors),
+    type: accessibleCodeColor(colors.agentActive, colors),
     plain: accessibleCodeColor(colors.textPrimary, colors),
   };
   syntaxPaletteCache.set(colors, palette);

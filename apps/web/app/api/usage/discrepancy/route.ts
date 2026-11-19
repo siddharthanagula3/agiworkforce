@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/types';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { requireReplyEmail } from '@/lib/auth/email-confirmation';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -141,7 +142,7 @@ function usageRecord(input: {
 }
 
 async function handleCreate(request: NextRequest) {
-  const { userId, email } = await getClerkAuthUser(request);
+  const { userId, email: claimedEmail } = await getClerkAuthUser(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -153,9 +154,7 @@ async function handleCreate(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid discrepancy report', parsed.error);
   }
-  if (!email) {
-    throw createError.validation('Add an email address to your account so support can reply.');
-  }
+  const email = await requireReplyEmail(userId, claimedEmail);
 
   const { db } = await getUserScopedDb(request);
   const window = resolveUsageWindow(parsed.data.from, parsed.data.to);

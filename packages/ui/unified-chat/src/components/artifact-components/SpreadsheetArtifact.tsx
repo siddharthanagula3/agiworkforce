@@ -2,7 +2,13 @@ import { ArrowDown, ArrowUp, FileSpreadsheet } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
-import { numericValue, parseTabular } from '../../lib/tabular';
+import {
+  nextTabularSort,
+  parseTabular,
+  sortTabularRows,
+  SPREADSHEET_ROW_CAP,
+  type TabularSort,
+} from '../../lib/tabular';
 import type { Artifact } from '../../lib/types';
 
 export interface SpreadsheetSheet {
@@ -19,16 +25,12 @@ export interface SpreadsheetArtifactProps {
   readOnly?: boolean;
 }
 
-export const SPREADSHEET_ROW_CAP = 500;
-
 const ARROW_STEPS: Record<string, [number, number] | undefined> = {
   ArrowUp: [-1, 0],
   ArrowDown: [1, 0],
   ArrowLeft: [0, -1],
   ArrowRight: [0, 1],
 };
-
-type SortState = { column: number; direction: 'asc' | 'desc' } | null;
 
 function SheetTabs({
   sheets,
@@ -75,7 +77,7 @@ export function SpreadsheetArtifact({ artifact, sheets, className }: Spreadsheet
   const content = tabbedSheets ? (tabbedSheets[activeIndex]?.content ?? '') : artifact.content;
   const data = useMemo(() => parseTabular(content), [content]);
 
-  const [sort, setSort] = useState<SortState>(null);
+  const [sort, setSort] = useState<TabularSort>(null);
   const [selected, setSelected] = useState<{ r: number; c: number } | null>(null);
   const [copiedCell, setCopiedCell] = useState(false);
 
@@ -85,37 +87,14 @@ export function SpreadsheetArtifact({ artifact, sheets, className }: Spreadsheet
     setSelected(null);
   }, []);
 
-  const sortedRows = useMemo(() => {
-    if (!data) return [];
-    if (!sort) return data.rows;
-    const { column, direction } = sort;
-    const numeric = data.numericColumns[column] ?? false;
-    const sign = direction === 'asc' ? 1 : -1;
-    return [...data.rows].sort((a, b) => {
-      const av = (a[column] ?? '').trim();
-      const bv = (b[column] ?? '').trim();
-      if (!av && !bv) return 0;
-      if (!av) return 1;
-      if (!bv) return -1;
-      if (numeric) {
-        const an = numericValue(av);
-        const bn = numericValue(bv);
-        if (!Number.isNaN(an) && !Number.isNaN(bn)) return sign * (an - bn);
-      }
-      return sign * av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
-    });
-  }, [data, sort]);
+  const sortedRows = useMemo(() => (data ? sortTabularRows(data, sort) : []), [data, sort]);
 
   const visibleRows = sortedRows.slice(0, SPREADSHEET_ROW_CAP);
   const truncated = sortedRows.length > SPREADSHEET_ROW_CAP;
 
   const cycleSort = useCallback((column: number) => {
     setSelected(null);
-    setSort((prev) => {
-      if (!prev || prev.column !== column) return { column, direction: 'asc' };
-      if (prev.direction === 'asc') return { column, direction: 'desc' };
-      return null;
-    });
+    setSort((prev) => nextTabularSort(prev, column));
   }, []);
 
   const copySelected = useCallback(async () => {

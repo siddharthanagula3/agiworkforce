@@ -4,7 +4,7 @@ title: AGI managed cloud
 path: /docs
 category: managed-cloud
 tags: managed cloud, hosted, open by default, waitlist, usage, metered, capacity, quota, limit
-updated: 2026-10-12
+updated: 2026-11-16
 description: How AGI managed cloud works: access, usage, running out of capacity, where data is hosted and training.
 scope: public
 ---
@@ -12,19 +12,31 @@ scope: public
 ## Open by default
 
 The {{PLAN.free}} plan on AGI managed cloud is open by default. Sign in and start:
-it has no waitlist and needs no invite code. A self-serve paid plan starts at checkout when
+it has no waitlist and needs no invite code.
+
+{{#purchase}}
+
+A self-serve paid plan starts at checkout when
 paid upgrades are open to your account; while they are not, it needs an access
 code, and without one you join the upgrade waitlist. The {{PLAN.team}} plan is
 one of those self-serve plans, billed per seat. The {{PLAN.enterprise}} plan,
 with SSO and SCIM, is a contract conversation rather than a self-serve checkout.
 
+{{/purchase}}
+
 ## How usage works
 
-Managed cloud usage is metered. A paid plan carries a capacity allowance, and the
+Managed cloud usage is metered. Usage is reported as a percentage of your
+allowance and a reset time.
+
+{{#purchase}}
+
+A paid plan carries a capacity allowance, and the
 usage view in Settings shows how much of your current allowance you have used and
-when it resets. Usage is reported as a percentage of your allowance and a reset
-time. On the {{PLAN.free}} plan the usage view shows only **Upgrade**, never a
+when it resets. On the {{PLAN.free}} plan the usage view shows only **Upgrade**, never a
 meter.
+
+{{/purchase}}
 
 ## Running out of capacity
 
@@ -41,4 +53,9 @@ the first place.
 ## Training
 
 AGI does not use customer conversation content to train AGI-owned models.
+
+{{#purchase}}
+
 {{POSITIONING.trustBoundary}}
+
+{{/purchase}}

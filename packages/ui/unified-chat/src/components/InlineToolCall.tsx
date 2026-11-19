@@ -29,28 +29,14 @@ import {
   type LucideProps,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import type { InlineToolKind } from '../lib/activity-kinds';
 
 export type InlineToolCallStatus =
   'pending' | 'running' | 'awaiting-approval' | 'success' | 'error' | 'partial';
 
 export type InlineToolIconStyle = 'lucide' | 'badge';
 
-export type InlineToolKind =
-  | 'auto'
-  | 'bash'
-  | 'read'
-  | 'write'
-  | 'edit'
-  | 'web-search'
-  | 'web-fetch'
-  | 'fs-list'
-  | 'image-gen'
-  | 'browser'
-  | 'mcp-custom'
-  | 'skill'
-  | 'thinking'
-  | 'done'
-  | 'unknown';
+export type { InlineToolKind };
 
 export interface InlineToolCallProps {
   id: string;

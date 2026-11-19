@@ -49,6 +49,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 
 const persistence = vi.hoisted(() => ({
   TRUNCATED_ASSISTANT_TURN_REASON: 'stream_cancelled',
+  wireFinishReason: vi.fn(() => null),
   canPersistAssistantTurn: vi.fn(() => true),
   persistAssistantTurn: vi.fn(async () => undefined),
   patchAssistantTurnSourceUrls: vi.fn(async (_params: unknown) => undefined),

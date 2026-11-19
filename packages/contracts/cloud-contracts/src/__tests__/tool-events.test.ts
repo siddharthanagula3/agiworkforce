@@ -54,6 +54,29 @@ describe('ToolApprovalRequestPayloadSchema / parseToolApprovalRequestDelta', () 
     expect(parseToolApprovalRequestDelta(payload)).toEqual(payload);
   });
 
+  it('keeps the server review so the card shows what the server will allow', () => {
+    const reviewed = {
+      ...payload,
+      risk_tier: 'medium',
+      destructive: false,
+      approval_scopes: ['once', 'session'],
+    };
+    expect(parseToolApprovalRequestDelta(reviewed)).toEqual(reviewed);
+  });
+
+  it('drops only a malformed review and keeps the approval request', () => {
+    const parsed = parseToolApprovalRequestDelta({
+      ...payload,
+      risk_tier: 'unknown',
+      destructive: 'no',
+      approval_scopes: [],
+    });
+    expect(parsed).toEqual(payload);
+    expect(parsed?.risk_tier).toBeUndefined();
+    expect(parsed?.destructive).toBeUndefined();
+    expect(parsed?.approval_scopes).toBeUndefined();
+  });
+
   it('returns null when tool_call_id is missing', () => {
     const { tool_call_id: _omitted, ...rest } = payload;
     expect(parseToolApprovalRequestDelta(rest)).toBeNull();

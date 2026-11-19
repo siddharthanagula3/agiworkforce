@@ -70,7 +70,7 @@ describe('knowledge file capacity is visible before it is enforced', () => {
   });
 
   it('reads the cap from the shared contract, so the panel cannot drift from the server', () => {
-    expect(MAX_PROJECT_KNOWLEDGE_FILES).toBe(20);
+    expect(MAX_PROJECT_KNOWLEDGE_FILES).toBe(40);
   });
 });
 

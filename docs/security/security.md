@@ -517,10 +517,12 @@ Two consequences worth stating plainly rather than implying otherwise:
 
 ### Enforcement
 
-`apps/web/lib/connectors/oauth-scope-allowlist.ts` holds
-`CONNECTOR_OAUTH_SCOPE_CEILINGS`, one entry per connector id.
-`filterConnectorScopes(connectorId, requested)` splits an operator's requested
-list into the scopes on the ceiling and the ones above it.
+`packages/contracts/cloud-contracts/src/connector-scopes.ts` holds
+`CONNECTOR_OAUTH_SCOPE_CEILINGS`, one entry per connector id, and
+`apps/web/lib/connectors/oauth-scope-allowlist.ts` re-exports it.
+`filterConnectorScopes(connectorId, requested)` in `oauth-scope-allowlist.ts`
+splits an operator's requested list into the scopes on the ceiling and the
+ones above it.
 
 `loadConnectorOAuthRegistry()` in `oauth-registry.ts` calls it for every
 descriptor it admits. Scopes above the ceiling are dropped from the provider
@@ -543,22 +545,23 @@ all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one
 survives, that the authorization URL carries only the survivors, that every
 `oauth2` connector in the catalog has an entry, and that no enforced ceiling
 admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in
-`oauth-scope-allowlist.ts` (`admin`, `full`, `default`,
+`connector-scopes.ts` (`admin`, `full`, `default`,
 `https://mail.google.com/`, the bare Google `drive`, `calendar`, or
 `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and
 `Mail.ReadWrite`). Removing the enforcement or widening a ceiling to include
 one of those fails CI.
 
 `pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into
-`pnpm check:llm-operability`) statically parses the manifest and
-`scope-descriptions.ts` on every run, independent of the vitest suite, and
+`pnpm check:llm-operability`) statically parses the manifest,
+`connector-scopes.ts`, which also holds `SCOPE_DESCRIPTIONS`, on every run,
+independent of the vitest suite, and
 fails the build if a ceiling admits a forbidden scope, a ceiling scope has no
 description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced
 ceiling is declared a second time anywhere else under
 `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or
 `apps/web/lib/user-connector-tools.ts`. That last check is what keeps
 "the manifest is the only place a scope may be added" true going forward
-rather than as a one-time fact: nothing outside `oauth-scope-allowlist.ts` can
+rather than as a one-time fact: nothing outside `connector-scopes.ts` can
 introduce a scope string without the guard catching the duplicate.
 
 ### Ceiling table

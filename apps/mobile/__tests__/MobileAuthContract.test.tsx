@@ -8,13 +8,15 @@ const SOURCE_ROOTS = ['app', 'src', 'components', 'hooks', 'services', 'lib', 's
 
 const AUTH_PATHS = [/^app\/\(auth\)\//, /^src\/features\/auth\//, /^services\/authSession\.ts$/];
 const WEBVIEW_IMPORT = /from 'react-native-webview'/;
-// The two places a WebView renders untrusted content. Neither is an auth path,
-// and no third may appear: a hand-rolled WebView sign-in is the pattern both
+// The places a WebView renders untrusted content. None is an auth path, and no
+// other may appear unreviewed: a hand-rolled WebView sign-in is the pattern both
 // stores reject and the one this contract exists to keep out.
 const WEBVIEW_SURFACES = [
   'src/features/chat/components/MathBlock.tsx',
   'src/features/chat/components/SafeArtifactPreview.tsx',
   'src/features/chat/components/VideoPlayerModal.tsx',
+  'src/features/chat/components/artifact-viewers/DocumentFileView.tsx',
+  'src/features/chat/components/artifact-viewers/PdfFileView.tsx',
 ];
 
 // Every keychain write names when the item may be read. Without it iOS

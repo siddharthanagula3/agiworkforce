@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FlatList, Platform, ScrollView, View } from 'react-native';
+import { FlatList, ScrollView, View } from 'react-native';
 import {
   artifactChanges,
   type ArtifactChangeKind,
@@ -8,6 +8,7 @@ import {
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { translatePlural } from '@/src/i18n/plural';
 
@@ -25,7 +26,7 @@ interface ChangedLine {
   text: string;
 }
 
-const MONOSPACE = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+const MONOSPACE = codeFontFamily;
 const LINE_SIGNS: Record<ArtifactChangeKind, string> = { same: '', added: '+', removed: '-' };
 const LINE_LABELS: Record<ArtifactChangeKind, string> = {
   same: '',

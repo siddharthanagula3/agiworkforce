@@ -4,7 +4,6 @@ import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '@agiworkforce/provider-protocol';
 import { getModelMetadataById } from '@agiworkforce/types';
 import {
   contextBudgetTokens,
-  estimateConversationTokens,
   estimateMessageTokens,
   type ContextSizedMessage,
 } from '@features/chat/components/Composer/model-compatibility';
@@ -20,7 +19,6 @@ export const DROPPED_HISTORY_MARKER =
 const TRUNCATED_MESSAGE_MARKER = '\n\n[...truncated to fit the model context window]';
 
 const messageTokens = estimateMessageTokens;
-const totalTokens = estimateConversationTokens;
 
 export interface ContextTrimResult {
   droppedMessages: number;
@@ -75,14 +73,48 @@ export interface ContextSizing {
   measure: (message: TrimmableMessage) => number;
 }
 
-function sizingFor(model: string, sizing: ContextSizing | undefined) {
-  const measure = sizing?.measure ?? ((message: TrimmableMessage) => messageTokens(message, model));
+function isDenseScriptCodeUnit(code: number): boolean {
+  return (
+    (code >= 0x1100 && code <= 0x11ff) ||
+    (code >= 0x2e80 && code <= 0x9fff) ||
+    (code >= 0xa960 && code <= 0xa97f) ||
+    (code >= 0xac00 && code <= 0xd7ff) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0xff00 && code <= 0xffef)
+  );
+}
+
+/**
+ * The shared estimator assumes Latin-script density, several characters per
+ * token. CJK, kana and Hangul run near one token per character, so the request
+ * itself is never measured below that; otherwise a long one is sent to a model
+ * it overflows instead of being refused here.
+ */
+export function withDenseScriptFloor(estimatedTokens: number, text: string): number {
+  let dense = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (isDenseScriptCodeUnit(text.charCodeAt(index))) dense += 1;
+  }
+  if (dense === 0) return estimatedTokens;
+  return Math.max(estimatedTokens, Math.ceil(estimatedTokens * (1 - dense / text.length)) + dense);
+}
+
+function sizingFor(
+  model: string,
+  sizing: ContextSizing | undefined,
+  latestUserMessage: TrimmableMessage | null,
+) {
+  const estimate =
+    sizing?.measure ?? ((message: TrimmableMessage) => messageTokens(message, model));
+  const latestUserMessageTokens = latestUserMessage
+    ? withDenseScriptFloor(estimate(latestUserMessage), latestUserMessage.content)
+    : 0;
+  const measure = (message: TrimmableMessage) =>
+    message === latestUserMessage ? latestUserMessageTokens : estimate(message);
   return {
     measure,
     total: (messages: readonly TrimmableMessage[]) =>
-      sizing
-        ? messages.reduce((sum, message) => sum + measure(message), 0)
-        : totalTokens(messages, model),
+      messages.reduce((sum, message) => sum + measure(message), 0),
   };
 }
 
@@ -109,7 +141,7 @@ export function planContextTrim(
   const contextWindow = getModelMetadataById(model)?.contextWindow;
   if (!sizing && (!contextWindow || contextWindow <= 0)) return null;
 
-  const { measure, total } = sizingFor(model, sizing);
+  const { measure, total } = sizingFor(model, sizing, latestUserMessageOf(messages));
   const budgetTokens = sizing
     ? sizing.budgetTokens
     : contextBudgetTokens(contextWindow ?? 0, maxOutputTokens);
@@ -171,7 +203,58 @@ export function applyDroppedSpanReplacement(
   model: string,
   sizing?: ContextSizing,
 ): ContextTrimResult {
-  const { measure, total } = sizingFor(model, sizing);
+  const { trim, latestUserMessageTokens } = fitDroppedSpan(
+    messages,
+    plan,
+    replacementText,
+    model,
+    sizing,
+  );
+  if (trim.latestUserMessageOverflow) {
+    logger.warn(
+      {
+        model,
+        estimatedTokensAfter: trim.estimatedTokensAfter,
+        budgetTokens: plan.budgetTokens,
+        latestUserMessageTokens,
+      },
+      '[context-window] the latest user message is longer than the model context window leaves room for',
+    );
+  } else if (trim.protectedOverflow) {
+    logger.warn(
+      { model, estimatedTokensAfter: trim.estimatedTokensAfter, budgetTokens: plan.budgetTokens },
+      '[context-window] protected instructions exceed the budget left after fitting; sent whole',
+    );
+  }
+  return trim;
+}
+
+/**
+ * Whether the latest user message would still overflow once `plan` dropped and
+ * shrank everything it may. Fitted on copies, so `messages` is left untouched.
+ */
+export function planLeavesLatestUserMessageOverflow(
+  messages: readonly TrimmableMessage[],
+  plan: ContextTrimPlan,
+  model: string,
+  sizing?: ContextSizing,
+): boolean {
+  const copies = messages.map((message) => ({ ...message }));
+  return (
+    fitDroppedSpan(copies, plan, DROPPED_HISTORY_MARKER, model, sizing).trim
+      .latestUserMessageOverflow === true
+  );
+}
+
+function fitDroppedSpan(
+  messages: TrimmableMessage[],
+  plan: ContextTrimPlan,
+  replacementText: string | null,
+  model: string,
+  sizing: ContextSizing | undefined,
+): { trim: ContextTrimResult; latestUserMessageTokens: number } {
+  const latestUserMessage = latestUserMessageOf(messages);
+  const { measure, total } = sizingFor(model, sizing, latestUserMessage);
   const dropped = new Set(plan.droppedIndices);
   const next = messages.filter((_, index) => !dropped.has(index));
 
@@ -188,7 +271,6 @@ export function applyDroppedSpanReplacement(
   }
 
   const truncated = new Set<number>();
-  const latestUserMessage = latestUserMessageOf(next);
   if (running > plan.budgetTokens) {
     // One sweep only approximates the budget, because the keep-ratio is derived
     // from an estimator and every message carries fixed overhead. Sweeping until
@@ -230,31 +312,18 @@ export function applyDroppedSpanReplacement(
     protectedOverflow &&
     latestUserMessage !== null &&
     running - latestUserMessageTokens <= plan.budgetTokens;
-  if (latestUserMessageOverflow) {
-    logger.warn(
-      {
-        model,
-        estimatedTokensAfter: running,
-        budgetTokens: plan.budgetTokens,
-        latestUserMessageTokens,
-      },
-      '[context-window] the latest user message is longer than the model context window leaves room for',
-    );
-  } else if (protectedOverflow) {
-    logger.warn(
-      { model, estimatedTokensAfter: running, budgetTokens: plan.budgetTokens },
-      '[context-window] protected instructions exceed the budget left after fitting; sent whole',
-    );
-  }
 
   return {
-    droppedMessages: dropped.size,
-    truncatedMessages: truncated.size,
-    estimatedTokensBefore: plan.estimatedTokensBefore,
-    estimatedTokensAfter: running,
-    budgetTokens: plan.budgetTokens,
-    ...(protectedOverflow ? { protectedOverflow: true as const } : {}),
-    ...(latestUserMessageOverflow ? { latestUserMessageOverflow: true as const } : {}),
+    trim: {
+      droppedMessages: dropped.size,
+      truncatedMessages: truncated.size,
+      estimatedTokensBefore: plan.estimatedTokensBefore,
+      estimatedTokensAfter: running,
+      budgetTokens: plan.budgetTokens,
+      ...(protectedOverflow ? { protectedOverflow: true as const } : {}),
+      ...(latestUserMessageOverflow ? { latestUserMessageOverflow: true as const } : {}),
+    },
+    latestUserMessageTokens,
   };
 }
 
@@ -309,7 +378,8 @@ export function fitsModelContextWindow(
 ): boolean {
   const contextWindow = getModelMetadataById(model)?.contextWindow;
   if (!contextWindow || contextWindow <= 0) return true;
-  return totalTokens(messages, model) <= contextBudgetTokens(contextWindow, maxOutputTokens);
+  const { total } = sizingFor(model, undefined, latestUserMessageOf(messages));
+  return total(messages) <= contextBudgetTokens(contextWindow, maxOutputTokens);
 }
 
 export function compactionUsageFields(trim: ContextTrimResult | null | undefined): {

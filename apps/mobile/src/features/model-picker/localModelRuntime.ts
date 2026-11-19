@@ -1,4 +1,9 @@
-import { getCapabilities, getSystemModelForTier1Runtime } from '@agiworkforce/local-llm';
+import {
+  getCapabilities,
+  getSystemModelForTier1Runtime,
+  refreshCapabilities,
+  type DeviceCapabilities,
+} from '@agiworkforce/local-llm';
 import {
   getInstalledModel,
   listInstalledModels,
@@ -14,6 +19,12 @@ import {
   LOCAL_MODEL_LIST,
   type ModelDef,
 } from './service';
+import {
+  isAbortedTurn,
+  isSystemModelUnusableError,
+  systemModelFailedThisSession,
+  useSystemModelSession,
+} from './systemModelAvailability';
 
 export interface LocalModelRef {
   modelId: string;
@@ -42,7 +53,9 @@ async function resolveAutoModelId(
   const caps = await getCapabilities().catch(() => null);
   const activeSystemModel = LOCAL_MODEL_LIST.find(
     (model) =>
-      isSystemModel(model) && modelSupportsActiveSystemRuntime(model, caps?.tier1Runtime ?? null),
+      isSystemModel(model) &&
+      !systemModelFailedThisSession(model.id) &&
+      modelSupportsActiveSystemRuntime(model, caps?.tier1Runtime ?? null),
   );
   const defaultModel = getSelectableModelById(DEFAULT_LOCAL_MODEL_ID);
   const installedDefault =
@@ -131,6 +144,24 @@ export async function resolveLocalModelRef(requestedModelId: string): Promise<Lo
   throw new Error(
     `${model.name} is selected, but it is not downloaded yet. Open Models and download it before chatting locally.`,
   );
+}
+
+export async function recordLocalModelTurnFailure(modelId: string, error: unknown): Promise<void> {
+  const model = getSelectableModelById(modelId);
+  if (!model || !isSystemModel(model) || isAbortedTurn(error)) return;
+  if (isSystemModelUnusableError(error)) {
+    useSystemModelSession.getState().markFailed(model.id);
+    return;
+  }
+  let caps: DeviceCapabilities;
+  try {
+    caps = await refreshCapabilities();
+  } catch {
+    return;
+  }
+  if (!modelSupportsActiveSystemRuntime(model, caps.tier1Runtime)) {
+    useSystemModelSession.getState().markFailed(model.id);
+  }
 }
 
 export async function markLocalModelRefUsed(ref: LocalModelRef): Promise<void> {

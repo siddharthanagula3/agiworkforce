@@ -1,8 +1,7 @@
 import { CircleHelp } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import { API_URL } from '@/lib/constants';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { openWebContentPage, webContentPageUrl } from '@/src/platform/webContentPage';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -12,6 +11,8 @@ export const MOBILE_HELP_ARTICLE_IDS = [
   'billing-and-plans',
   'connectors-and-mcp',
   'crisis-resources',
+  'delete-your-account',
+  'export-your-data',
   'library',
   'local-mode',
   'memory',
@@ -27,16 +28,23 @@ export const MOBILE_HELP_ARTICLE_IDS = [
 
 export type MobileHelpArticleId = (typeof MOBILE_HELP_ARTICLE_IDS)[number];
 
+function helpArticlePath(docId: MobileHelpArticleId): string {
+  return `/help/${encodeURIComponent(docId)}`;
+}
+
 export function helpArticleUrl(docId: MobileHelpArticleId): string {
-  const origin = API_URL.replace(/\/+$/, '');
-  return `${origin}/help/${encodeURIComponent(docId)}?from=mobile`;
+  return webContentPageUrl(helpArticlePath(docId));
+}
+
+export function openHelpArticle(docId: MobileHelpArticleId): Promise<boolean> {
+  return openWebContentPage(helpArticlePath(docId));
 }
 
 export function HelpArticleLink({ docId, label }: { docId: MobileHelpArticleId; label: string }) {
   const colors = useThemeColors();
   return (
     <Pressable
-      onPress={() => void openUntrustedUrlInAppBrowser(helpArticleUrl(docId))}
+      onPress={() => void openHelpArticle(docId)}
       accessibilityRole="link"
       accessibilityLabel={label}
       accessibilityHint="Opens the help article"

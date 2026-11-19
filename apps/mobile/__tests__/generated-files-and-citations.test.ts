@@ -1,14 +1,11 @@
-
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
   mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
 }));
 
-import {
-  generatedFileArtifactsFromWire,
-  citationsFromToolCalls,
-} from '../stores/chat/chatExecutionStore';
+import { generatedFileArtifactsFromWire } from '../stores/chat/chatExecutionStore';
+import { turnSources } from '../src/features/chat/utils/messageSources';
 import {
   dedupeGeneratedFileWire,
   generatedFileMetadataFromWire,
@@ -209,7 +206,7 @@ describe('generatedFileArtifactsFromWire', () => {
   });
 });
 
-describe('citationsFromToolCalls', () => {
+describe('live turn sources', () => {
   const search = (results: Array<{ url: string; title: string; snippet?: string }>): ToolCall => ({
     id: 't1',
     name: 'web_search',
@@ -217,31 +214,35 @@ describe('citationsFromToolCalls', () => {
     searchResults: results,
   });
 
-  it('flattens search results into citations, deduped by url', () => {
-    const citations = citationsFromToolCalls([
-      search([
-        { url: 'https://a.com', title: 'A' },
-        { url: 'https://b.com', title: 'B', snippet: 'about b' },
-        { url: 'https://a.com', title: 'A again' },
-      ]),
-    ]);
-    expect(citations).toEqual([
-      { url: 'https://a.com', title: 'A' },
-      { url: 'https://b.com', title: 'B', snippet: 'about b' },
-    ]);
+  it('flattens search results into sources, deduped by url', () => {
+    const sources = turnSources(
+      [
+        search([
+          { url: 'https://a.com', title: 'A' },
+          { url: 'https://b.com', title: 'B', snippet: 'about b' },
+          { url: 'https://a.com', title: 'A again' },
+        ]),
+      ],
+      [],
+    );
+    expect(sources.map((source) => source.url)).toEqual(['https://a.com', 'https://b.com']);
+    expect(sources[1]).toMatchObject({ title: 'B', snippet: 'about b' });
   });
 
-  it('caps at 8 citations across tools', () => {
-    const many = Array.from({ length: 12 }, (_, i) => ({
-      url: `https://site${i}.com`,
-      title: `S${i}`,
-    }));
-    expect(citationsFromToolCalls([search(many)])).toHaveLength(8);
+  it('puts the pages the model cited first, in the order it cited them', () => {
+    const sources = turnSources(
+      [
+        search([
+          { url: 'https://a.com', title: 'A' },
+          { url: 'https://b.com', title: 'B' },
+        ]),
+      ],
+      [{ url: 'https://b.com', title: 'B cited' }],
+    );
+    expect(sources.map((source) => source.url)).toEqual(['https://b.com', 'https://a.com']);
   });
 
   it('returns [] for tools without search results (code execution, MCP)', () => {
-    expect(
-      citationsFromToolCalls([{ id: 'c', name: 'code_execution', status: 'completed' }]),
-    ).toEqual([]);
+    expect(turnSources([{ id: 'c', name: 'code_execution', status: 'completed' }], [])).toEqual([]);
   });
 });

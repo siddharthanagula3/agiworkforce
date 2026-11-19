@@ -18,6 +18,7 @@ const themeColors = {
   neutralSurface: '#222',
 };
 
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('@/src/ui/theme', () => ({
   colors: themeColors,
   useTheme: () => ({ colors: themeColors, isDark: true, statusBarStyle: 'light' }),
@@ -123,11 +124,13 @@ beforeEach(() => {
   usePermissionsStore.setState({
     permissions: {
       microphone: { lastObservedStatus: 'undetermined' },
+      speechRecognition: { lastObservedStatus: 'undetermined' },
       camera: { lastObservedStatus: 'undetermined' },
       photos: { lastObservedStatus: 'undetermined' },
       notifications: { lastObservedStatus: 'undetermined' },
       calendar: { lastObservedStatus: 'undetermined' },
       reminders: { lastObservedStatus: 'undetermined' },
+      faceId: { lastObservedStatus: 'undetermined' },
     },
   });
 });

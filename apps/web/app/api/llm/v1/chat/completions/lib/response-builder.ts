@@ -20,7 +20,7 @@ import {
 import { compactionUsageFields } from './context-window';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
 import { FREE_LANE_RECOVERY } from '@/lib/services/free-lane/stage';
-import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
+import { describeSecretRedactionNotice } from '@agiworkforce/cloud-contracts';
 import {
   observeFreeLaneSettlement,
   recordRouteOutcome,
@@ -353,6 +353,7 @@ export async function buildNonStreamResponse(
         provider,
         inputTokens: llmResponse.promptTokens,
         outputTokens: llmResponse.completionTokens,
+        finishReason: llmResponse.finishReason || 'stop',
         truncated: isTurnTruncated({
           reportedFailure: false,
           finishReason: llmResponse.finishReason ?? null,

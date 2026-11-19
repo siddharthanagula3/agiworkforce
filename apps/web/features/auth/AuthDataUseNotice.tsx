@@ -1,5 +1,5 @@
 import { ArrowRight, Info } from 'lucide-react';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import {
   FREE_PLAN_TRAINING_SIGNUP_NOTICE,
@@ -34,9 +34,12 @@ export function AuthDataUseNotice() {
           </summary>
           <div className="mt-3 flex flex-col gap-2 text-[1.0625rem] leading-relaxed">
             <p>{FREE_PLAN_TRAINING_SIGNUP_STATEMENT}</p>
-            <Link href={CANONICAL_POLICY_ROUTES.dataUse} className={AUTH_NOTICE_DETAIL_LINK_CLASS}>
+            <PageLink
+              href={CANONICAL_POLICY_ROUTES.dataUse}
+              className={AUTH_NOTICE_DETAIL_LINK_CLASS}
+            >
               Data Use Guidelines
-            </Link>
+            </PageLink>
           </div>
         </details>
       </div>

@@ -14,6 +14,11 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
+import {
   assertDeviceActionable,
   buildMobileHeartbeat,
   deviceStatusMetrics,
@@ -142,5 +147,73 @@ describe('device status freshness', () => {
     expect(seen).toMatchObject({ sent: 2, failed: 1, consecutiveFailures: 0 });
     expect(seen.lastSuccessAtMs).not.toBeNull();
     expect(localDeviceStatus()).toBe('online');
+  });
+
+  it('shares a beat already on its way instead of sending a second one', async () => {
+    (api.post as jest.Mock).mockClear();
+    let answer: (value: unknown) => void = () => undefined;
+    (api.post as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+
+    const first = sendMobileHeartbeat();
+    const second = sendMobileHeartbeat();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    answer({});
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(deviceStatusMetrics()).toMatchObject({ sent: 1, failed: 0 });
+
+    await expect(sendMobileHeartbeat()).resolves.toBe(true);
+    expect(api.post).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('presence belongs to the account the beat was sent for', () => {
+  afterEach(() => {
+    invalidateCloudAccount();
+    __resetCloudAccountSessionForTests();
+  });
+
+  it('does not count a beat the server accepted for the account signed in before', async () => {
+    activateCloudAccount('user_a');
+    await expect(sendMobileHeartbeat()).resolves.toBe(true);
+    expect(localDeviceStatus()).toBe('online');
+
+    activateCloudAccount('user_b');
+    expect(localDeviceStatus()).toBe('offline');
+
+    activateCloudAccount('user_a');
+    expect(localDeviceStatus()).toBe('online');
+  });
+
+  it('sends a new beat for the next account instead of sharing the previous account beat', async () => {
+    (api.post as jest.Mock).mockClear();
+    let answer: (value: unknown) => void = () => undefined;
+    (api.post as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    activateCloudAccount('user_a');
+    const previousAccountBeat = sendMobileHeartbeat();
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+
+    activateCloudAccount('user_b');
+    await expect(sendMobileHeartbeat()).resolves.toBe(true);
+    expect(api.post).toHaveBeenCalledTimes(2);
+
+    answer({});
+    await expect(previousAccountBeat).resolves.toBe(true);
+    expect(localDeviceStatus()).toBe('online');
+
+    activateCloudAccount('user_c');
+    expect(localDeviceStatus()).toBe('offline');
   });
 });

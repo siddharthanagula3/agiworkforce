@@ -108,3 +108,31 @@ describe('createToolTurnGovernor · turn cap', () => {
     expect(turnToolCapRowSummary(16)).toBe('Stopped after 16 tool calls');
   });
 });
+
+describe('noteFailedCall', () => {
+  it('reports a repeat for the same tool and arguments in any key order', () => {
+    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
+    expect(governor.noteFailedCall('create_office_file', { format: 'csv', title: 'A' })).toBe(
+      'first',
+    );
+    expect(governor.noteFailedCall('create_office_file', { title: 'A', format: 'csv' })).toBe(
+      'repeat',
+    );
+  });
+
+  it('keeps different arguments and different tools apart', () => {
+    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
+    governor.noteFailedCall('create_office_file', { format: 'csv', title: 'A' });
+    expect(governor.noteFailedCall('create_office_file', { format: 'csv', title: 'B' })).toBe(
+      'first',
+    );
+    expect(governor.noteFailedCall(FETCH, { format: 'csv', title: 'A' })).toBe('first');
+  });
+
+  it('treats the same failing call as new once a state-changing call has succeeded', () => {
+    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
+    governor.noteFailedCall('execute_code', { code: 'python main.py' });
+    governor.forgetFailedCalls();
+    expect(governor.noteFailedCall('execute_code', { code: 'python main.py' })).toBe('first');
+  });
+});

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   notify: vi.fn(),
   notifyReply: vi.fn(),
+  reportByRequest: vi.fn(),
   trackOutcome: vi.fn(),
   warn: vi.fn(),
 }));
@@ -20,7 +21,13 @@ vi.mock('./chat-reply-notification-service', async (importOriginal) => ({
   notifyChatReplyReady: (...args: unknown[]) => mocks.notifyReply(...args),
 }));
 
+vi.mock('./research-report-service', async (importOriginal) => ({
+  ...(await importOriginal<ResearchReportServiceModule>()),
+  getResearchReportByRequestId: (...args: unknown[]) => mocks.reportByRequest(...args),
+}));
+
 type ChatReplyNotificationModule = typeof import('./chat-reply-notification-service');
+type ResearchReportServiceModule = typeof import('./research-report-service');
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -286,6 +293,67 @@ describe('cloud agent run notifications', () => {
 
     expect(mocks.notifyReply).not.toHaveBeenCalled();
     expect(mocks.notify).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a finished research run to the report notice and still announces a failed one', async () => {
+    mocks.reportByRequest.mockResolvedValue({ id: 'report-1', status: 'completed' });
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        { ...RUN_ROW, work_mode: 'research', state: 'completed', previous_state: 'running' },
+      ])
+      .mockResolvedValueOnce([
+        { ...RUN_ROW, work_mode: 'research', state: 'failed', previous_state: 'running' },
+      ]);
+
+    await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'completed' });
+    expect(mocks.reportByRequest).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      requestId: RUN_ROW.request_id,
+    });
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(mocks.trackOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', event: 'completed' }),
+    );
+
+    await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'failed' });
+    expect(mocks.notify).toHaveBeenCalledTimes(1);
+    expect(mocks.notify).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      event: 'failed',
+    });
+  });
+
+  it('announces a finished research run that has no completed report', async () => {
+    mocks.reportByRequest
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'report-1', status: 'interrupted' });
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        { ...RUN_ROW, work_mode: 'research', state: 'ready_for_review', previous_state: 'running' },
+      ])
+      .mockResolvedValueOnce([
+        { ...RUN_ROW, work_mode: 'research', state: 'completed', previous_state: 'running' },
+      ]);
+
+    await transitionCloudAgentRun(db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      state: 'ready_for_review',
+    });
+    await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'completed' });
+
+    expect(mocks.notify).toHaveBeenCalledTimes(2);
+    expect(mocks.notify).toHaveBeenNthCalledWith(1, db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      event: 'completed',
+    });
+    expect(mocks.notify).toHaveBeenNthCalledWith(2, db, {
+      userId: 'user-1',
+      runId: RUN_ROW.id,
+      event: 'completed',
+    });
   });
 
   it('reads the pre-update state so a repeated terminal transition notifies once', async () => {

@@ -42,6 +42,22 @@ import {
   ensureCloudEntitlementsReadyForRequest,
 } from '../src/features/billing/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
+import {
+  clearServerAttachmentLimits,
+  currentAttachmentLimits,
+} from '../src/features/chat/upload/attachmentLimits';
+import {
+  clearServerMessageLimits,
+  useCloudLatestMessageMaxChars,
+} from '../src/features/chat/upload/messageLimits';
+import {
+  CHAT_ATTACHMENT_LIMITS,
+  CHAT_ATTACHMENT_LIMITS_WITHOUT_HANDSHAKE,
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  chatAttachmentLimitsToWire,
+} from '@agiworkforce/cloud-contracts';
+import { renderHook } from '@testing-library/react-native';
 import { api } from '../services/api';
 import {
   __resetCloudAccountSessionForTests,
@@ -130,6 +146,8 @@ beforeEach(() => {
   activateCloudAccount('tier-test-user-a');
   useChatAppModeStore.setState({ appMode: 'cloud' });
   resetStore();
+  clearServerAttachmentLimits();
+  clearServerMessageLimits();
 });
 
 describe('tierStore defaults', () => {
@@ -269,6 +287,30 @@ describe('refreshTier, success cases', () => {
   });
 });
 
+describe('refreshTier, code execution switch mirror', () => {
+  const executionSwitch = () => useChatViewStore.getState().features.codeExecution;
+
+  it('turns the device switch back on when the account allows execution', async () => {
+    useChatViewStore.getState().setFeature('codeExecution', false);
+    mockApiGet.mockResolvedValueOnce(mePayload('max'));
+
+    await getState().refreshTier();
+
+    expect(getState().codeExecutionAvailable).toBe(true);
+    expect(executionSwitch()).toBe(true);
+  });
+
+  it('leaves the device switch alone when execution is not allowed', async () => {
+    useChatViewStore.getState().setFeature('codeExecution', false);
+    mockApiGet.mockResolvedValueOnce(mePayload('max', { granted: ['canChat'] }));
+
+    await getState().refreshTier();
+
+    expect(getState().codeExecutionAvailable).toBe(false);
+    expect(executionSwitch()).toBe(false);
+  });
+});
+
 describe('refreshTier, failure cases', () => {
   it('keeps cached tier when network call fails', async () => {
     useTierStore.setState({ tier: 'pro', isRefreshing: false, lastRefreshedAt: null });
@@ -388,6 +430,118 @@ describe('setTier', () => {
 
     expect(getState().isRefreshing).toBe(false);
     expect(getState().lastRefreshedAt).toBeNull();
+  });
+});
+
+describe('attachment limits from /api/me', () => {
+  const published = {
+    ...CHAT_ATTACHMENT_LIMITS,
+    maxFileBytes: CHAT_ATTACHMENT_LIMITS.maxFileBytes * 2,
+    maxFilesPerMessage: CHAT_ATTACHMENT_LIMITS.maxFilesPerMessage + 5,
+  };
+
+  it('uses the limits the server publishes instead of the ones the build was made with', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ...mePayload('max'),
+      attachment_limits: chatAttachmentLimitsToWire(published),
+    });
+
+    await getState().refreshTier();
+
+    expect(currentAttachmentLimits()).toEqual(published);
+  });
+
+  it('falls back to the conservative limits when the response carries none', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ...mePayload('max'),
+      attachment_limits: chatAttachmentLimitsToWire(published),
+    });
+    await getState().refreshTier();
+    mockApiGet.mockResolvedValueOnce(mePayload('max'));
+
+    await getState().refreshTier();
+
+    expect(currentAttachmentLimits()).toEqual(CHAT_ATTACHMENT_LIMITS_WITHOUT_HANDSHAKE);
+  });
+
+  it('forgets them when the account entitlements are cleared', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ...mePayload('max'),
+      attachment_limits: chatAttachmentLimitsToWire(published),
+    });
+    await getState().refreshTier();
+    expect(currentAttachmentLimits()).toEqual(published);
+
+    getState().clearAccountEntitlements();
+
+    expect(currentAttachmentLimits()).toEqual(CHAT_ATTACHMENT_LIMITS_WITHOUT_HANDSHAKE);
+  });
+
+  it('does not apply limits from a response that arrives after an account switch', async () => {
+    let resolve!: (value: unknown) => void;
+    mockApiGet.mockReturnValueOnce(new Promise((next) => (resolve = next)));
+    const pending = getState().refreshTier();
+    activateCloudAccount('tier-test-user-b');
+    resolve({ ...mePayload('max'), attachment_limits: chatAttachmentLimitsToWire(published) });
+    await pending;
+
+    expect(currentAttachmentLimits()).toEqual(CHAT_ATTACHMENT_LIMITS_WITHOUT_HANDSHAKE);
+  });
+});
+
+describe('newest message limit from /api/me', () => {
+  const announced = MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH / 4;
+
+  function newestMessageLimit(): number {
+    return renderHook(() => useCloudLatestMessageMaxChars()).result.current;
+  }
+
+  it('uses the limit the server announces', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ...mePayload('max'),
+      message_limits: { latest_message_max_chars: announced },
+    });
+
+    await getState().refreshTier();
+
+    expect(newestMessageLimit()).toBe(announced);
+  });
+
+  it('keeps the limit it has always enforced when the server announces none', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ...mePayload('max'),
+      message_limits: { latest_message_max_chars: announced },
+    });
+    await getState().refreshTier();
+    mockApiGet.mockResolvedValueOnce(mePayload('max'));
+
+    await getState().refreshTier();
+
+    expect(newestMessageLimit()).toBe(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH);
+  });
+
+  it('forgets it when the account entitlements are cleared', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      ...mePayload('max'),
+      message_limits: { latest_message_max_chars: announced },
+    });
+    await getState().refreshTier();
+    expect(newestMessageLimit()).toBe(announced);
+
+    getState().clearAccountEntitlements();
+
+    expect(newestMessageLimit()).toBe(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH);
+  });
+
+  it('does not apply a limit from a response that arrives after an account switch', async () => {
+    let resolve!: (value: unknown) => void;
+    mockApiGet.mockReturnValueOnce(new Promise((next) => (resolve = next)));
+    const pending = getState().refreshTier();
+    activateCloudAccount('tier-test-user-b');
+    resolve({ ...mePayload('max'), message_limits: { latest_message_max_chars: announced } });
+    await pending;
+
+    expect(newestMessageLimit()).toBe(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH);
   });
 });
 

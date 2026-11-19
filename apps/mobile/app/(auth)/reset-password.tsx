@@ -7,7 +7,13 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { EMBEDDABLE_ACCOUNT_PAGE_PATHS } from '@agiworkforce/types';
+import { openWebContentPage, webContentPageUrl } from '@/src/platform/webContentPage';
+
+function webRecoverySignInPath(): string {
+  const accountPage = new URL(webContentPageUrl(EMBEDDABLE_ACCOUNT_PAGE_PATHS[0]));
+  return `/login?redirectTo=${encodeURIComponent(`${accountPage.pathname}${accountPage.search}`)}`;
+}
 
 export default function ResetPasswordScreen() {
   const { colors: themeColors } = useTheme();
@@ -21,7 +27,7 @@ export default function ResetPasswordScreen() {
 
   const handleOpenWebRecovery = useCallback(async () => {
     void params;
-    const opened = await openExternalUrl('https://agiworkforce.com/login');
+    const opened = await openWebContentPage(webRecoverySignInPath());
     if (opened) {
       return;
     }
@@ -32,7 +38,7 @@ export default function ResetPasswordScreen() {
   }, [params]);
 
   const handleOpenAccountRecovery = useCallback(async () => {
-    const opened = await openExternalUrl('https://agiworkforce.com/recover');
+    const opened = await openWebContentPage('/recover');
     if (opened) return;
     Alert.alert(
       'Could not open account recovery',

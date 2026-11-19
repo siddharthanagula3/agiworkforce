@@ -4,10 +4,16 @@ import type {
   InteractiveCardClientCapability,
 } from '@agiworkforce/types';
 
-export const INTERACTIVE_CARD_RESPONSE_PATH = '/api/interactive-cards/respond';
-
 export const MOBILE_INTERACTIVE_CARD_CAPABILITY: InteractiveCardClientCapability = {
-  supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'image.v1'],
+  supported: [
+    'clarify.v1',
+    'itinerary.v1',
+    'map-search.v1',
+    'image.v1',
+    'places.v1',
+    'answer-ui.v1',
+    'product-comparison.v1',
+  ],
   canRespond: true,
 };
 

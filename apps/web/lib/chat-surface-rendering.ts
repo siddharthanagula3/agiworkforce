@@ -5,13 +5,14 @@ import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
  * clients. The desktop app loads the web chat by default, which reports the
  * desktop surface, so both render the same: a fenced email or writing block as
  * a card through unified-chat's MarkdownContent, and an artifact published as
- * a hosted page, where its window.agi calls run. The mobile app also publishes
- * hosted artifacts but shows email and writing blocks as code blocks; the
- * extensions do neither.
+ * a hosted page, where its window.agi calls run. The mobile app classifies the
+ * same fences and shows email and writing drafts as cards, and publishes hosted
+ * artifacts; the extensions do neither.
  */
 const WRITING_CARD_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
   'web',
   'desktop',
+  'mobile',
 ]);
 
 const ARTIFACT_APP_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([

@@ -13,6 +13,7 @@ import { downloadModel } from '@/services/modelDownload';
 
 jest.mock('@/services/modelDownload', () => ({
   downloadModel: jest.fn(),
+  excludeModelFilesFromBackup: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('@/storage/installedModels', () => ({

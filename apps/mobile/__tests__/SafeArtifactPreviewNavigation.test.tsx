@@ -34,7 +34,9 @@ describe('SafeArtifactPreview navigation', () => {
   it.each(['html', 'svg', 'mermaid'] as const)(
     'sends every %s request through the policy and blocks page navigation and new windows',
     async (kind) => {
-      render(<SafeArtifactPreview content="<p>x</p>" kind={kind} />);
+      render(
+        <SafeArtifactPreview content={kind === 'svg' ? '<svg></svg>' : '<p>x</p>'} kind={kind} />,
+      );
       await waitFor(() => expect(lastProps).toBeDefined());
       expect(lastProps?.originWhitelist).toEqual(['*']);
       expect(lastProps?.setSupportMultipleWindows).toBe(false);

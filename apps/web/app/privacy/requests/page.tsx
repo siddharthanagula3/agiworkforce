@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -55,9 +55,9 @@ const SELF_SERVE: readonly LedgerRow[] = [
     value: (
       <>
         The cookie preferences dialog, reachable from{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.cookies} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.cookies} className="agi-ds-link">
           /cookies
-        </Link>
+        </PageLink>
         . Analytics is off until you turn it on, and the gate fails closed.
       </>
     ),
@@ -80,13 +80,13 @@ export default async function DataRightsPage() {
               Each control on this page says whether it is self-serve or needs a person, and what
               happens when you use it. Last updated: {POLICY_LAST_UPDATED.dataRights}. The notice
               that explains what we collect and why is at{' '}
-              <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
+              <PageLink href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
                 /privacy/india
-              </Link>{' '}
+              </PageLink>{' '}
               for India, and{' '}
-              <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+              <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                 /privacy
-              </Link>{' '}
+              </PageLink>{' '}
               generally. <PolicyVersionsLink policy="dataRights" />
             </>
           }

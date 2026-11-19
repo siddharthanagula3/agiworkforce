@@ -44,14 +44,17 @@ beforeEach(() => {
 });
 
 describe('MathBlock without a network', () => {
-  it('draws the equation from MathML built on the device and loads nothing', () => {
+  it('draws the equation from KaTeX built on the device and loads nothing but its bundled fonts', () => {
     render(<MathBlock latex="x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}" display />);
 
     const html = lastDocument();
+    expect(html).toContain('class="katex-html"');
     expect(html).toContain('<math');
     expect(html).toContain('<mfrac>');
     expect(html).toContain("default-src 'none'");
-    expect(html).not.toMatch(/<link|<img|\b(?:src|href)=|url\(/i);
+    expect(html).toContain('font-src data:');
+    expect(html).toMatch(/url\(data:font\/woff2;base64,/);
+    expect(html).not.toMatch(/<link|<img|\b(?:src|href)=|url\((?!data:font\/woff2;base64,)/i);
   });
 
   it('paints the equation in the Local or Cloud theme the app is showing, not the system one', () => {
@@ -84,7 +87,9 @@ describe('MathBlock without a network', () => {
       });
     });
 
-    const frame = screen.getByLabelText('Inline math: \\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}');
+    const frame = screen.getByLabelText(
+      'Inline math: the sum from i equals 1 to n of i equals n open paren n plus 1 close paren over 2',
+    );
     expect(StyleSheet.flatten(frame.props.style)).toMatchObject({
       height: 30,
       width: 152,
@@ -94,10 +99,10 @@ describe('MathBlock without a network', () => {
 });
 
 describe('readMathSize', () => {
-  it('keeps display math full width and reads only well-formed size messages', () => {
+  it('reports the natural width of display math and reads only well-formed size messages', () => {
     expect(
       readMathSize(JSON.stringify({ type: 'size', height: 40, width: 300, descent: 9 }), true),
-    ).toEqual({ height: 60, width: null, baselineOffset: 0 });
+    ).toEqual({ height: 60, width: 300, baselineOffset: 0 });
     expect(readMathSize(JSON.stringify({ type: 'size', height: 0, width: 10 }), false)).toBeNull();
     expect(readMathSize('not json', false)).toBeNull();
   });

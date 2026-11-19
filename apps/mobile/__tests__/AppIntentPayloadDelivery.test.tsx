@@ -74,7 +74,9 @@ describe('the App Intent dispatcher forwards each payload', () => {
     expect(rootLayoutSource).toContain("pathname: '/(app)/scan' as const");
     expect(rootLayoutSource).toContain("pathname: '/(app)/camera' as const");
     expect(rootLayoutSource).toContain("pathname: '/(app)/voice' as const");
-    expect(rootLayoutSource).toContain("const audioUri = getParam('audioUri')");
+    expect(rootLayoutSource).toContain(
+      "const audioUri = stagedIntentFileUri(getParam('audioUri'))",
+    );
     expect(rootLayoutSource).toContain("const question = getParam('question')");
   });
 

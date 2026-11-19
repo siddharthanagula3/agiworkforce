@@ -6,7 +6,7 @@ import {
   type FreeAutoUnavailable,
   type SelectedAutoRoute,
 } from '@agiworkforce/routing';
-import { getSlotForModel } from '@agiworkforce/types';
+import { getDefaultModelFor, getSlotForModel } from '@agiworkforce/types';
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
@@ -18,6 +18,7 @@ import {
   freeLaneModeFor,
   freeLaneObserves,
   freeLaneStrandsWhenUnavailable,
+  FREE_LANE_MODES,
   type FreeLaneMode,
 } from './mode';
 import { routesOf, toFreeAutoCandidate, withRankedHead, type FreeLanePlan } from './plan';
@@ -102,13 +103,23 @@ export interface FreeLaneActivation {
  * `isFreePlan` must come from the exact-`free` check. It does not trim, so a
  * whitespace-padded tier reads as not-free and the lane stays off, the safe
  * direction for a value we could not parse.
+ *
+ * The lane re-resolves the turn as Auto, so it stays off for any model other
+ * than the Free default: a Free account that picked another included model is
+ * answered by that model.
  */
 export function activateFreeLane(input: {
   configuredMode: FreeLaneMode;
   isFreePlan: boolean;
+  requestedModel: string;
   document?: FreePoolsDocument;
 }): FreeLaneActivation {
-  const mode = freeLaneModeFor(input.configuredMode, input.isFreePlan);
+  const mode = freeLaneModeFor(
+    input.requestedModel === getDefaultModelFor('free', 'chat')
+      ? input.configuredMode
+      : FREE_LANE_MODES.off,
+    input.isFreePlan,
+  );
   return {
     mode,
     preferSlots: freeLaneObserves(mode) ? freeLanePreferredSlots(input.document) : [],

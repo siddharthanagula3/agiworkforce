@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { ScrollView, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
@@ -14,6 +15,7 @@ import {
   beginCloudPostAuthIntent,
   clearPostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import ParentalControlsScreen from '@/src/features/settings/parental-controls';
 
 const mockStore = new Map<string, string>();
@@ -36,7 +38,7 @@ let mockTimeZone = DEFAULT_TIME_ZONE;
 const realIntl = global.Intl;
 
 const mockReplace = jest.fn();
-let mockSearchParams: { returnTo?: string } = {};
+let mockSearchParams: { returnTo?: string; entry?: string } = {};
 
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router');
@@ -51,6 +53,8 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => mockSearchParams,
   };
 });
+
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 
 let mockSignedIn = false;
 const mockSignOut = jest.fn(() => Promise.resolve());
@@ -195,6 +199,80 @@ describe('the age screen when the answer does not work', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
   });
 
+  it('hands the Age entry back to parental controls when backing out of the review', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/parental-controls',
+      params: { entry: 'age' },
+    });
+  });
+
+  it('hands the Age entry back to parental controls after an adult confirms their age', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/parental-controls',
+      params: { entry: 'age' },
+    });
+  });
+
+  it('drops an entry it does not know instead of passing it on', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'elsewhere' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
+  });
+
+  it('takes the entry only for the parental controls return path', () => {
+    clearPostAuthIntent();
+    mockSearchParams = { returnTo: '/(auth)/login', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('still refuses a return path that is not on the allow-list, entry or not', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/account-security', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    expect(screen.queryByLabelText('Go back')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/(public)/onboarding');
+  });
+
+  it('lets the review header grow and caps its title at the largest text size', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls' };
+    render(<AgeGateScreen />);
+
+    const title = screen.getByRole('header', { name: 'Review Age Settings' });
+    expect(title.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+    let node = title.parent;
+    let row: Record<string, unknown> | undefined;
+    while (node && !row) {
+      const flat = StyleSheet.flatten(node.props?.style) as Record<string, unknown> | undefined;
+      if (flat && 'flexDirection' in flat) row = flat;
+      node = node.parent;
+    }
+    expect(row?.minHeight).toBeGreaterThan(0);
+    expect(row?.height).toBeUndefined();
+  });
+
   it('says what went wrong instead of ignoring the button', () => {
     render(<AgeGateScreen />);
 
@@ -216,6 +294,29 @@ describe('the age screen when the answer does not work', () => {
 
     fireEvent.changeText(screen.getByTestId('age-gate-input'), '21');
     expect(screen.queryByTestId('age-gate-error')).toBeNull();
+  });
+
+  it('keeps the question to a centred form column that never exceeds an iPhone window', () => {
+    render(<AgeGateScreen />);
+
+    const style = StyleSheet.flatten(
+      screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle,
+    );
+    expect(style.maxWidth).toBe(440);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
+  });
+
+  it('keeps the refusal in the same form column', () => {
+    render(<AgeGateScreen />);
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), String(ACCOUNT_MINIMUM_AGE - 1));
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    const style = StyleSheet.flatten(
+      screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle,
+    );
+    expect(style.maxWidth).toBe(440);
+    expect(style.alignSelf).toBe('center');
   });
 
   it('refuses anyone under the account minimum with the Terms wording and moves them nowhere', () => {

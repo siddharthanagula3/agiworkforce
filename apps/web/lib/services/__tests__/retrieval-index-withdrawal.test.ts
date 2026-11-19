@@ -79,7 +79,12 @@ function recordingDb(rows: unknown[] = []) {
       return 1;
     }),
     transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-      callback(db as unknown as DatabaseAdapter),
+      callback({
+        ...db,
+        transaction: async () => {
+          throw new Error('A transaction cannot be opened inside another transaction.');
+        },
+      } as unknown as DatabaseAdapter),
     ),
     withUser: vi.fn(),
     withOrg: vi.fn(),

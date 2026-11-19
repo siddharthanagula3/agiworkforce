@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ResponseRatingReason } from '@/app/api/feedback/response-rating-contract';
+import type { ResponseRatingReason } from '@agiworkforce/cloud-contracts';
 
 export interface ResponseRatingDraft {
   reason: ResponseRatingReason | null;

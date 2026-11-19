@@ -2,11 +2,7 @@ import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ToolShortlistShadowInput } from '@/lib/services/semantic-decisions/consumers/tool-shortlist';
 import type { SemanticDecisionScope } from '@/lib/services/semantic-decisions/shadow';
 
-import {
-  DEFAULT_TOOL_SCHEMA_BUDGET,
-  selectToolSchemas,
-  toolSchemaBytes,
-} from './tool-schema-loader';
+import { selectToolSchemas, toolSchemaBytes, type ToolSchemaBudget } from './tool-schema-loader';
 
 /**
  * Ranking the catalog a second time and JSON-encoding every connector tool to
@@ -18,6 +14,7 @@ export function toolShortlistShadowInput(input: {
   scope: SemanticDecisionScope;
   tools: readonly WebMcpToolDef[];
   turnText: () => string;
+  budget: ToolSchemaBudget;
 }): ToolShortlistShadowInput {
   return {
     scope: input.scope,
@@ -33,10 +30,12 @@ export function toolShortlistShadowInput(input: {
           description: tool.description,
           bytes: toolSchemaBytes(tool),
         })),
-        baselineQualifiedNames: selectToolSchemas({ tools: input.tools, turnText }).tools.map(
-          (tool) => tool.qualifiedName,
-        ),
-        budget: DEFAULT_TOOL_SCHEMA_BUDGET,
+        baselineQualifiedNames: selectToolSchemas({
+          tools: input.tools,
+          turnText,
+          budget: input.budget,
+        }).tools.map((tool) => tool.qualifiedName),
+        budget: input.budget,
       };
     },
   };

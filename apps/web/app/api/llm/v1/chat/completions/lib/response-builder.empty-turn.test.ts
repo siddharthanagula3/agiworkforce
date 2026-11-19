@@ -133,3 +133,11 @@ describe('buildNonStreamResponse, a turn with nothing in it', () => {
     expect(await persistedTurn('Here it is.', 'stop')).toMatchObject({ truncated: false });
   });
 });
+
+describe('buildNonStreamResponse, the finish reason stored with the turn', () => {
+  it('stores the finish reason the response carries', async () => {
+    expect(await persistedTurn('Here it is, cut', 'length')).toMatchObject({
+      finishReason: 'length',
+    });
+  });
+});

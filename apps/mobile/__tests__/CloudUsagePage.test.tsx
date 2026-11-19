@@ -45,6 +45,7 @@ jest.mock('lucide-react-native', () => {
     RefreshCw: Icon,
     CloudOff: Icon,
     Coins: Icon,
+    Info: Icon,
   };
 });
 
@@ -90,6 +91,8 @@ jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
   fetchUsageAllowances: () => new Promise(() => undefined),
   fetchUsageHistory: () => new Promise(() => undefined),
+  fetchUsageOverage: () => new Promise(() => undefined),
+  saveUsageOverage: jest.fn(),
 }));
 
 const mockFetchIapCatalog = jest.fn();
@@ -105,6 +108,7 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
   captureCloudAccountEpoch: () => ({ ownerId: mockAccountOwner, epoch: mockAccountEpoch }),
   isCloudAccountEpochCurrent: (snapshot: { ownerId: string; epoch: number }) =>
     snapshot.ownerId === mockAccountOwner && snapshot.epoch === mockAccountEpoch,
+  isStaleCloudAccountOperation: () => false,
 }));
 
 import CloudUsageScreen from '../src/features/settings/cloud-usage/index';
@@ -178,6 +182,56 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     const fill = StyleSheet.flatten(getAllByTestId('usage-meter-fill')[0].props.style);
     expect(fill.backgroundColor).toBe(expected);
     expect(fill.width).toBe(`${percent}%`);
+  });
+
+  it('lets the credits line and the reset text wrap instead of clipping one of them', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({
+        planTier: 'pro',
+        usagePercentage: 25,
+        credits: {
+          monthly: { allowance: 5000, used: 96.5, remaining: 4903.5, reset_at: null },
+          weekly: { allowance: 1200, used: 10, remaining: 1190, reset_at: null },
+          five_hour: null,
+          flagship_weekly: null,
+          purchased: { remaining: 0, overage_enabled: false },
+        },
+      }),
+    );
+
+    const { getByText, getAllByTestId, queryByText } = render(<CloudUsageScreen />);
+
+    await waitFor(() => expect(getByText(/4,903\.5 left/)).toBeTruthy());
+    expect(getByText(/^Resets /)).toBeTruthy();
+    const caption = StyleSheet.flatten(getAllByTestId('usage-meter-caption')[0].props.style);
+    expect(caption).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
+    expect(queryByText(/Upgrade/i)).toBeNull();
+  });
+
+  it('shows purchased and bonus balances to a paid account while the store sells credits', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({
+        planTier: 'pro',
+        credits: {
+          monthly: { allowance: 5000, used: 1000, remaining: 4000, reset_at: null },
+          weekly: { allowance: 1200, used: 10, remaining: 1190, reset_at: null },
+          five_hour: null,
+          flagship_weekly: null,
+          purchased: { remaining: 250, overage_enabled: false },
+          bonus: { remaining: 40, next_expiry_at: null },
+        },
+      }),
+    );
+
+    const { getByText } = render(<CloudUsageScreen />);
+
+    await waitFor(() => expect(getByText('Included in your plan')).toBeTruthy());
+    expect(
+      getByText('Past a plan limit, bonus credits go first, soonest expiring, then purchased.'),
+    ).toBeTruthy();
+    expect(getByText('Bonus credits')).toBeTruthy();
+    expect(getByText('Purchased credits')).toBeTruthy();
+    expect(getByText("Purchased credits don't expire.")).toBeTruthy();
   });
 
   it('keeps server diagnostics private and recovers on retry', async () => {

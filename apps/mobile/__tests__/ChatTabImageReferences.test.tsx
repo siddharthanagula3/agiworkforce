@@ -14,6 +14,8 @@ const mockResolveImageRequest = jest.fn();
 let mockChatInputOnSend: ((text: string) => void | boolean | Promise<void | boolean>) | undefined;
 const mockCloudAccountStorage = new Map<string, string>();
 
+jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
+
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: jest.fn(() => new Promise(() => undefined)),
 }));
@@ -55,6 +57,8 @@ jest.mock('@/stores/chatStore', () => ({
       deleteMessage: jest.fn(),
       setPaywallError: jest.fn(),
       clearError: jest.fn(),
+      clearUnscopedError: jest.fn(),
+      discardUnsentConversation: jest.fn(async () => undefined),
       features: { imageGen: true },
     }),
 }));
@@ -143,6 +147,11 @@ jest.mock('@/src/features/model-picker/installStore', () => ({
     selector({ installedModelIds: [], readySystemModelIds: [], jobs: {} }),
   readyLocalModelIdOr: (fallback: string) => fallback,
   pickReadyLocalModelId: () => null,
+}));
+
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
 }));
 
 jest.mock('@/lib/mmkv', () => ({

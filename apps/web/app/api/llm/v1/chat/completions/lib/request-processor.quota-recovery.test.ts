@@ -178,6 +178,9 @@ describe('quota refusals carry a recovery destination', () => {
 
     expect(status).toBe(403);
     expect(error['code']).toBe('free_trial_model_only');
+    expect(error['message']).toMatch(
+      /^The Free plan includes the free models only\. Select one in the model picker/u,
+    );
     expect(error['recovery']).toEqual({ action: 'upgrade', href: '/pricing' });
   });
 

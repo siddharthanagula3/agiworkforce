@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageAnchor, PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import { Header } from '@shared/components/layout/Header';
 import { releasePath } from '@/lib/changelog-entries';
@@ -9,11 +9,18 @@ import {
   policyChanges,
 } from '@/lib/legal/policy-archive';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
+import {
+  Ledger,
+  Prose,
+  Section,
+  Stack,
+  type LedgerRow,
+} from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { DOC_MATURITIES, type DocMaturity } from '@/lib/support/doc-metadata';
 
 import { ATOM_MEDIA_TYPE, CHANGELOG_FEED_PATH } from './changelog-feed';
+import { EmbeddedVariant } from './EmbeddedVariant';
 import {
   FORTHCOMING,
   RELEASE_NOTES,
@@ -26,18 +33,26 @@ const MATURITY_FACT_LABELS: Readonly<Record<DocMaturity, string>> = {
   beta: 'In beta',
   alpha: 'In alpha',
 };
-const MATURITY_FACTS = DOC_MATURITIES.flatMap((maturity) => {
-  const count = releasedNoteCount(maturity);
-  return count > 0 ? [`${MATURITY_FACT_LABELS[maturity]}: ${count}`] : [];
-});
+type Notes = readonly (typeof RELEASE_NOTES)[number][];
+
+function maturityFacts(notes: Notes): string[] {
+  return DOC_MATURITIES.flatMap((maturity) => {
+    const count = releasedNoteCount(maturity, notes);
+    return count > 0 ? [`${MATURITY_FACT_LABELS[maturity]}: ${count}`] : [];
+  });
+}
 const HAS_FORTHCOMING = FORTHCOMING.length > 0;
 
-const HERO_FACTS = [
-  `Dated releases: ${RELEASE_NOTES.length}`,
-  ...RELEASE_NOTES.slice(0, 1).map((note) => `Newest: ${note.date}`),
-  ...MATURITY_FACTS,
-  ...(HAS_FORTHCOMING ? [`Forthcoming: ${FORTHCOMING.length}`] : []),
-];
+function heroFacts(notes: Notes): string[] {
+  return [
+    `Dated releases: ${notes.length}`,
+    ...notes.slice(0, 1).map((note) => `Newest: ${note.date}`),
+    ...maturityFacts(notes),
+    ...(HAS_FORTHCOMING ? [`Forthcoming: ${FORTHCOMING.length}`] : []),
+  ];
+}
+
+const SHOWN_IN_APP = RELEASE_NOTES.filter((note) => !note.billing);
 
 const LEDE = [
   'Every release states which surfaces it reached and whether it is generally available, in beta or alpha. Work on a surface with no published release is marked not yet released.',
@@ -49,6 +64,27 @@ const LEDE = [
 ].join(' ');
 
 const POLICY_CHANGES = policyChanges();
+
+function releaseRows(notes: Notes): LedgerRow[] {
+  return notes.map((note) => ({
+    label: (
+      <Stack gap="tight">
+        <span>{note.date}</span>
+        <span>{releaseStateLine(note)}</span>
+      </Stack>
+    ),
+    value: (
+      <Stack gap="tight">
+        <PageLink href={releasePath(note)} className="agi-ds-link">
+          <strong>{note.headline}</strong>
+        </PageLink>
+        {note.body.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+      </Stack>
+    ),
+  }));
+}
 
 export function ReleaseNotesPage({ titleId }: { titleId: string }) {
   return (
@@ -63,47 +99,33 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
           lede={
             <>
               {LEDE}{' '}
-              <a
+              <PageAnchor
                 href={CHANGELOG_FEED_PATH}
                 rel="alternate"
                 type={ATOM_MEDIA_TYPE}
                 className="agi-ds-link"
               >
                 Subscribe with the Atom feed
-              </a>
+              </PageAnchor>
               .
             </>
           }
           ctas={[]}
         />
 
-        <FactLine facts={HERO_FACTS} />
+        <EmbeddedVariant
+          standard={<FactLine facts={heroFacts(RELEASE_NOTES)} />}
+          embedded={<FactLine facts={heroFacts(SHOWN_IN_APP)} />}
+        />
 
         <Section id="releases" labelledBy="agi-release-notes-releases-title" rule>
           <Stack gap="loose">
             <h2 className="agi-ds-h2" id="agi-release-notes-releases-title">
               Releases, newest first.
             </h2>
-            <Ledger
-              caption="Releases"
-              rows={RELEASE_NOTES.map((note) => ({
-                label: (
-                  <Stack gap="tight">
-                    <span>{note.date}</span>
-                    <span>{releaseStateLine(note)}</span>
-                  </Stack>
-                ),
-                value: (
-                  <Stack gap="tight">
-                    <Link href={releasePath(note)} className="agi-ds-link">
-                      <strong>{note.headline}</strong>
-                    </Link>
-                    {note.body.map((line) => (
-                      <span key={line}>{line}</span>
-                    ))}
-                  </Stack>
-                ),
-              }))}
+            <EmbeddedVariant
+              standard={<Ledger caption="Releases" rows={releaseRows(RELEASE_NOTES)} />}
+              embedded={<Ledger caption="Releases" rows={releaseRows(SHOWN_IN_APP)} />}
             />
           </Stack>
         </Section>
@@ -131,13 +153,13 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                 still serving versions dated before 21 September 2026, so no version listed here
                 with a date before {POLICY_PUBLICATION_FLOOR.label} had been published on this site
                 before that day. The window to object to a new subprocessor, set in{' '}
-                <Link href="/dpa#s-05" className="agi-ds-link">
+                <PageLink href="/dpa#s-05" className="agi-ds-link">
                   section 05 of our data processing addendum
-                </Link>
+                </PageLink>
                 , runs from the day the change is first published on{' '}
-                <Link href="/subprocessors" className="agi-ds-link">
+                <PageLink href="/subprocessors" className="agi-ds-link">
                   /subprocessors
-                </Link>
+                </PageLink>
                 , not from the date listed here.
               </Prose>
             </div>
@@ -149,13 +171,13 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                   label: change.date,
                   value: (
                     <Stack gap="tight">
-                      <Link
+                      <PageLink
                         href={change.href}
                         className="agi-ds-link"
                         aria-label={`${policyChangeTitle(change)} ${change.date}`}
                       >
                         <strong>{policyChangeTitle(change)}</strong>
-                      </Link>
+                      </PageLink>
                       <span>{change.summary}</span>
                       {standing ? <span>{standing}</span> : null}
                     </Stack>

@@ -53,6 +53,16 @@ export function countEditableAssistantFences(markdown: string): number {
   return visitEditableFences(parser.parse(markdown) as FenceNode, () => undefined);
 }
 
+export type EditableAssistantFence = Omit<AssistantFenceEdit, 'content'>;
+
+export function listEditableAssistantFences(markdown: string): EditableAssistantFence[] {
+  const fences: EditableAssistantFence[] = [];
+  visitEditableFences(parser.parse(markdown) as FenceNode, (node, index) => {
+    fences.push({ index, language: node.lang?.toLowerCase() ?? '', source: node.value ?? '' });
+  });
+  return fences;
+}
+
 export function imageResourceKey(source: string): string {
   return markdownImageSource(source)?.src.split('#', 1)[0] ?? '';
 }

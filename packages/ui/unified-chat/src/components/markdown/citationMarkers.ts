@@ -1,3 +1,5 @@
+import { stripTrailingSlashes } from '@agiworkforce/types';
+
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 const MARKER_RUN = /(?<!\])(?:\[\d{1,3}\])+(?![(:[])/g;
 
@@ -18,7 +20,7 @@ export function normalizeCitationUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    const path = parsed.pathname.replace(/\/+$/, '');
+    const path = stripTrailingSlashes(parsed.pathname);
     const params = Array.from(parsed.searchParams.entries())
       .filter(([key]) => !TRACKING_PARAM_PATTERN.test(key))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -40,7 +42,7 @@ function registrableDomain(url: string): string | null {
 function isBareDomainHref(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.pathname.replace(/\/+$/, '') === '' && parsed.search === '';
+    return stripTrailingSlashes(parsed.pathname) === '' && parsed.search === '';
   } catch {
     return false;
   }
@@ -172,18 +174,100 @@ export function insertCitationMarkers(
   return out;
 }
 
+export interface CitationAnchor {
+  offset: number;
+  marker: number;
+}
+
+const SENTENCE_TERMINATORS = '.!?';
+
+function claimEnd(content: string, from: number): number {
+  for (let index = Math.max(from, 0); index < content.length; index += 1) {
+    const character = content[index];
+    if (character === '\n') return index;
+    if (SENTENCE_TERMINATORS.includes(character ?? '')) {
+      const next = content[index + 1];
+      if (next === undefined || /\s/.test(next)) return index;
+    }
+  }
+  return content.length;
+}
+
+function lineStartsAt(content: string, index: number): number {
+  return content.lastIndexOf('\n', Math.max(index - 1, 0)) + 1;
+}
+
+/**
+ * A provider that cites inline sends each citation just before the text it
+ * supports, so the claim is the sentence that text completes. Rows of a table
+ * are left alone: a marker after the last pipe breaks the row.
+ */
+export function citationSpansFromAnchors(
+  content: string,
+  anchors: readonly CitationAnchor[],
+): CitationSpan[] {
+  const byEnd = new Map<number, Set<number>>();
+  for (const anchor of anchors) {
+    if (anchor.offset < 0 || anchor.offset >= content.length) continue;
+    const end = claimEnd(content, anchor.offset);
+    if (end <= 0) continue;
+    if (content.slice(lineStartsAt(content, end), end).trimStart().startsWith('|')) continue;
+    const markers = byEnd.get(end) ?? new Set<number>();
+    markers.add(anchor.marker);
+    byEnd.set(end, markers);
+  }
+  return [...byEnd.entries()].map(([endIndex, markers]) => ({
+    endIndex,
+    positions: [...markers].sort((a, b) => a - b),
+  }));
+}
+
+export function readCitationSpans(value: unknown): CitationSpan[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const { endIndex, positions } = entry as { endIndex?: unknown; positions?: unknown };
+    if (typeof endIndex !== 'number' || !Number.isFinite(endIndex)) return [];
+    if (!Array.isArray(positions)) return [];
+    const cited = positions.filter((n): n is number => Number.isInteger(n) && n >= 1);
+    return cited.length > 0 ? [{ endIndex, positions: cited }] : [];
+  });
+}
+
+/**
+ * A provider numbers its spans by its own result list; the answer shows the
+ * delivered list, so each position is moved to where its page sits there and a
+ * page that was never delivered loses its marker.
+ */
+export function deliveredCitationSpans(
+  spans: readonly CitationSpan[],
+  providerUrls: readonly string[],
+  deliveredUrls: readonly string[],
+): CitationSpan[] {
+  const keyOf = (url: string) => normalizeCitationUrl(url) ?? url;
+  const deliveredIndex = new Map<string, number>();
+  deliveredUrls.forEach((url, index) => {
+    const key = keyOf(url);
+    if (!deliveredIndex.has(key)) deliveredIndex.set(key, index + 1);
+  });
+  return spans.flatMap((span) => {
+    const positions = span.positions.flatMap((position) => {
+      const url = providerUrls[position - 1];
+      const delivered = url ? deliveredIndex.get(keyOf(url)) : undefined;
+      return delivered === undefined ? [] : [delivered];
+    });
+    return positions.length > 0 ? [{ endIndex: span.endIndex, positions }] : [];
+  });
+}
+
 const CITATION_MARKER_TEXT_PATTERN = /^(?:\[\d{1,3}\])+$/;
 const URL_SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\//i;
 const WWW_PREFIX = /^www\./;
-const TRAILING_SLASHES = /\/+$/;
 
 function bareLinkTextShape(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(URL_SCHEME_PREFIX, '')
-    .replace(WWW_PREFIX, '')
-    .replace(TRAILING_SLASHES, '');
+  return stripTrailingSlashes(
+    text.trim().toLowerCase().replace(URL_SCHEME_PREFIX, '').replace(WWW_PREFIX, ''),
+  );
 }
 
 /**
@@ -269,7 +353,19 @@ function linkifyPart(part: string, citationCount: number): string {
  */
 export function linkifyCitationMarkers(markdown: string, citationCount: number): string {
   if (citationCount <= 0 || !markdown) return markdown;
+  return replaceOutsideCode(markdown, (part) => linkifyPart(part, citationCount));
+}
 
+/**
+ * The answer as it is read aloud: a voice saying "one two" after a sentence is
+ * noise, and the sources stay one tap away on the page.
+ */
+export function withoutCitationMarkers(markdown: string): string {
+  if (!markdown) return markdown;
+  return replaceOutsideCode(markdown, (part) => part.replace(MARKER_RUN, ''));
+}
+
+function replaceOutsideCode(markdown: string, replacePart: (part: string) => string): string {
   const lines = markdown.split('\n');
   let insideFence = false;
   const out: string[] = [];
@@ -286,7 +382,7 @@ export function linkifyCitationMarkers(markdown: string, citationCount: number):
     }
     out.push(
       splitInlineCode(line)
-        .map((part) => (part.startsWith('`') ? part : linkifyPart(part, citationCount)))
+        .map((part) => (part.startsWith('`') ? part : replacePart(part)))
         .join(''),
     );
   }

@@ -47,7 +47,7 @@ const MEMORY_TOOLS_MODULE = fileURLToPath(
   new URL('../../../apps/web/lib/server/tools/memory-tools.ts', import.meta.url),
 );
 const FILE_SEARCH_TOOLS_MODULE = fileURLToPath(
-  new URL('../../../apps/web/lib/server/tools/file-search-tool.ts', import.meta.url),
+  new URL('../../../apps/web/lib/server/tools/file-tool-names.ts', import.meta.url),
 );
 const TOOL_NAME_EXPORT = /export const [A-Z_]+_TOOL_NAME = '([a-z_]+)';/gu;
 const CONNECTORS_CAPABILITY = 'canUseConnectors';

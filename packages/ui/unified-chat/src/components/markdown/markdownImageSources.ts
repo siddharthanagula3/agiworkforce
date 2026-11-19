@@ -61,3 +61,24 @@ export function trustedImageKeys(urls: readonly string[]): ReadonlySet<string> {
   }
   return keys;
 }
+
+export const FILENAME_ALT = /^[\w.-]+\.(?:png|jpe?g|gif|webp|svg|avif)$/i;
+
+export function readableImageAlt(alt: string | undefined): string {
+  const trimmed = alt?.trim() ?? '';
+  if (!trimmed || !FILENAME_ALT.test(trimmed)) return trimmed;
+  const stem = trimmed
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim();
+  if (!stem) return '';
+  return stem.charAt(0).toUpperCase() + stem.slice(1);
+}
+
+export function imageTitle(title: string | undefined, alt: string | undefined): string | undefined {
+  const explicit = title?.trim();
+  if (explicit && !FILENAME_ALT.test(explicit)) return explicit;
+  const readable = readableImageAlt(alt);
+  if (!readable || FILENAME_ALT.test(alt?.trim() ?? '')) return undefined;
+  return readable;
+}

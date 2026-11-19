@@ -50,8 +50,8 @@ exports[`Mobile project-detail screen snapshots (round-17) requires an explicit 
         "borderBottomColor": "rgba(255, 255, 255, 0.10)",
         "borderBottomWidth": 1,
         "flexDirection": "row",
-        "height": 48,
         "justifyContent": "space-between",
+        "minHeight": 48,
         "paddingHorizontal": 12,
       }
     }
@@ -102,6 +102,7 @@ exports[`Mobile project-detail screen snapshots (round-17) requires an explicit 
       />
     </View>
     <Text
+      maxFontSizeMultiplier={2}
       numberOfLines={1}
       style={
         {
@@ -170,42 +171,55 @@ exports[`Mobile project-detail screen snapshots (round-17) requires an explicit 
     }
     testID="project-detail-scroll"
   >
-    <View
+    <RCTScrollView
+      showsVerticalScrollIndicator={false}
       style={
         {
-          "backgroundColor": "#212121",
-          "borderColor": "rgba(255, 255, 255, 0.10)",
-          "borderRadius": 12,
-          "borderWidth": 1,
-          "gap": 12,
-          "margin": 16,
-          "padding": 16,
+          "flexGrow": 0,
+          "maxHeight": "50%",
         }
       }
-      testID="project-detail-local-fallback"
+      testID="project-detail-header-scroll"
     >
-      <Text
-        style={
-          {
-            "color": "#f4f4f4",
-            "fontSize": 15,
-            "fontWeight": "600",
+      <View>
+        <View
+          style={
+            {
+              "backgroundColor": "#212121",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
+              "borderRadius": 12,
+              "borderWidth": 1,
+              "gap": 12,
+              "margin": 16,
+              "padding": 16,
+            }
           }
-        }
-      >
-        Snapshot project
-      </Text>
-      <Text
-        style={
-          {
-            "color": "rgba(244, 244, 244, 0.74)",
-            "fontSize": 14,
-          }
-        }
-      >
-        Local project. Details, chats, and sources stay on this device.
-      </Text>
-    </View>
+          testID="project-detail-local-fallback"
+        >
+          <Text
+            style={
+              {
+                "color": "#f4f4f4",
+                "fontSize": 15,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Snapshot project
+          </Text>
+          <Text
+            style={
+              {
+                "color": "rgba(244, 244, 244, 0.74)",
+                "fontSize": 14,
+              }
+            }
+          >
+            Local project. Details, chats, and sources stay on this device.
+          </Text>
+        </View>
+      </View>
+    </RCTScrollView>
     <View
       style={
         {
@@ -319,8 +333,8 @@ exports[`Mobile project-detail screen snapshots (round-17) shows local project c
         "borderBottomColor": "rgba(255, 255, 255, 0.10)",
         "borderBottomWidth": 1,
         "flexDirection": "row",
-        "height": 48,
         "justifyContent": "space-between",
+        "minHeight": 48,
         "paddingHorizontal": 12,
       }
     }
@@ -371,6 +385,7 @@ exports[`Mobile project-detail screen snapshots (round-17) shows local project c
       />
     </View>
     <Text
+      maxFontSizeMultiplier={2}
       numberOfLines={1}
       style={
         {
@@ -488,42 +503,123 @@ exports[`Mobile project-detail screen snapshots (round-17) shows local project c
     }
     testID="project-detail-scroll"
   >
-    <View
+    <RCTScrollView
+      showsVerticalScrollIndicator={false}
       style={
         {
-          "backgroundColor": "#212121",
-          "borderColor": "rgba(255, 255, 255, 0.10)",
-          "borderRadius": 12,
-          "borderWidth": 1,
-          "gap": 12,
-          "margin": 16,
-          "padding": 16,
+          "flexGrow": 0,
+          "maxHeight": "50%",
         }
       }
-      testID="project-detail-local-fallback"
+      testID="project-detail-header-scroll"
     >
-      <Text
-        style={
-          {
-            "color": "#f4f4f4",
-            "fontSize": 15,
-            "fontWeight": "600",
+      <View>
+        <View
+          style={
+            {
+              "backgroundColor": "#212121",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
+              "borderRadius": 12,
+              "borderWidth": 1,
+              "gap": 12,
+              "margin": 16,
+              "padding": 16,
+            }
           }
-        }
-      >
-        Snapshot project
-      </Text>
-      <Text
-        style={
-          {
-            "color": "rgba(244, 244, 244, 0.74)",
-            "fontSize": 14,
+          testID="project-detail-local-fallback"
+        >
+          <Text
+            style={
+              {
+                "color": "#f4f4f4",
+                "fontSize": 15,
+                "fontWeight": "600",
+              }
+            }
+          >
+            Snapshot project
+          </Text>
+          <Text
+            style={
+              {
+                "color": "rgba(244, 244, 244, 0.74)",
+                "fontSize": 14,
+              }
+            }
+          >
+            Local project. Details, chats, and sources stay on this device.
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "gap": 8,
+              "marginHorizontal": 16,
+              "marginTop": 4,
+            }
           }
-        }
-      >
-        Local project. Details, chats, and sources stay on this device.
-      </Text>
-    </View>
+          testID="project-quick-actions"
+        >
+          <View
+            accessibilityLabel="Add instructions"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderColor": "rgba(255, 255, 255, 0.10)",
+                "borderRadius": 12,
+                "borderWidth": 1,
+                "justifyContent": "center",
+                "minHeight": 44,
+                "paddingHorizontal": 16,
+              }
+            }
+            testID="project-instructions-add"
+          >
+            <Text
+              style={
+                {
+                  "color": "#f4f4f4",
+                  "fontSize": 15,
+                  "fontWeight": "600",
+                }
+              }
+            >
+              Add instructions
+            </Text>
+          </View>
+        </View>
+      </View>
+    </RCTScrollView>
     <View
       style={
         {

@@ -4,7 +4,7 @@ title: Schedule a task, or run it on a trigger
 path: /chat/schedules
 category: work
 tags: schedule, scheduled task, cron, recurring, timezone, trigger, webhook, gmail, google calendar, github, run history, automation
-updated: 2026-10-12
+updated: 2026-11-16
 description: How to create a schedule or a trigger, what an unattended run means and the limits that apply.
 scope: public
 ---
@@ -53,5 +53,4 @@ asks first, and deleting a trigger is a separate confirmation.
 
 How many scheduled tasks you can keep depends on your plan, and free and
 BYOK-only accounts have none. A workspace administrator can turn Schedules and
-Event triggers off for a managed workspace. The pricing page carries the current
-per-plan figures.
+Event triggers off for a managed workspace.

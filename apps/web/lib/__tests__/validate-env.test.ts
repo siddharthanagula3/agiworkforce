@@ -978,3 +978,64 @@ describe('the production config switch decides the boot, never the loudness', ()
     expect(example).toMatch(/Set it to 1 once production is confirmed to hold live keys/);
   });
 });
+
+describe('the large chat file keys', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    for (const key of ['VERCEL_ENV', 'AGI_DEPLOY_ENV']) delete process.env[key];
+    for (const key of Object.keys(configKeyRegistry())) delete process.env[key];
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  function findingsFor(key: string): string[] {
+    return validateConfigKeyRegistry().errors.filter((message) => message.includes(key));
+  }
+
+  it('declares the flag off by default, public and allowed everywhere', () => {
+    expect(configKeyRegistry()['CHAT_LARGE_FILES_ENABLED']).toMatchObject({
+      type: 'enum',
+      secrecy: 'public',
+      defaultValue: 'off',
+      requiredIn: [],
+      allowedEnvironments: ['development', 'test', 'preview', 'production'],
+    });
+  });
+
+  it.each(['on', 'off'])('accepts the flag set to %s', (value) => {
+    process.env['CHAT_LARGE_FILES_ENABLED'] = value;
+    expect(findingsFor('CHAT_LARGE_FILES_ENABLED')).toEqual([]);
+  });
+
+  it.each(['ON', 'true', '1', 'yes'])(
+    'refuses %s, a spelling the flag would read as off',
+    (value) => {
+      process.env['CHAT_LARGE_FILES_ENABLED'] = value;
+      expect(findingsFor('CHAT_LARGE_FILES_ENABLED')).not.toEqual([]);
+    },
+  );
+
+  it('accepts bare web origins for the storage CORS list', () => {
+    process.env['UPLOAD_STORAGE_CORS_ORIGINS'] =
+      'https://preview.example.test, http://localhost:4000/';
+    expect(findingsFor('UPLOAD_STORAGE_CORS_ORIGINS')).toEqual([]);
+  });
+
+  it.each([
+    'https://preview.example.test/path',
+    'preview.example.test',
+    'ftp://preview.example.test',
+    'https://*.example.test',
+  ])('refuses %s in the storage CORS list', (value) => {
+    process.env['UPLOAD_STORAGE_CORS_ORIGINS'] = value;
+    expect(findingsFor('UPLOAD_STORAGE_CORS_ORIGINS')).not.toEqual([]);
+  });
+});

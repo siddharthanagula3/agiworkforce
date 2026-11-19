@@ -62,12 +62,21 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import CameraScreen from '../app/(app)/camera';
-import { useRemoteCapabilityStore } from '../src/lib/Capabilities';
+import { useTierStore } from '../src/features/billing/store';
+import { CapabilityUnavailable, useRemoteCapabilityStore } from '../src/lib/Capabilities';
+
+const DOCUMENT_SOURCES = {
+  model: 'models.json@test',
+  tier: 'tier:free',
+  surface: 'surface:mobile',
+  settings: 'settings:none-configured',
+};
 
 describe('a mobile capability closed from the server', () => {
   beforeEach(() => {
     cameraMounted = false;
     useRemoteCapabilityStore.setState({ switchedOff: {}, loadedAt: null });
+    useTierStore.setState({ capabilityDocument: null });
     jest.clearAllMocks();
   });
 
@@ -100,5 +109,59 @@ describe('a mobile capability closed from the server', () => {
     render(<CameraScreen />);
 
     expect(cameraMounted).toBe(true);
+  });
+
+  it('names the plan, not an outage, when the account plan leaves the capability out', () => {
+    useTierStore.setState({
+      capabilityDocument: {
+        granted: [],
+        deniedBy: { canUseCamera: ['tier'] },
+        sources: DOCUMENT_SOURCES,
+      },
+    });
+
+    const screen = render(<CameraScreen />);
+
+    expect(cameraMounted).toBe(false);
+    expect(screen.getByText('Not on your plan')).toBeTruthy();
+    expect(screen.getByText('Your current plan does not include this.')).toBeTruthy();
+    expect(screen.queryByText(/unavailable right now/)).toBeNull();
+  });
+
+  it('still reads as a pause when the account document reports the operator switch', () => {
+    useTierStore.setState({
+      capabilityDocument: {
+        granted: [],
+        deniedBy: { canUseCamera: ['settings'] },
+        denialReasons: { canUseCamera: 'temporarily_unavailable' },
+        sources: DOCUMENT_SOURCES,
+      },
+    });
+
+    const screen = render(<CameraScreen />);
+
+    expect(screen.getByText('The camera is unavailable right now')).toBeTruthy();
+  });
+});
+
+describe('the closed-capability notice', () => {
+  it('offers no purchase step for a plan limit in a build that sells nothing', () => {
+    const screen = render(<CapabilityUnavailable label="Connectors" reason="requires_upgrade" />);
+
+    expect(screen.getByText('Not on your plan')).toBeTruthy();
+    expect(screen.queryByText(/upgrade/i)).toBeNull();
+  });
+
+  it('keeps the next step for a reason that is not a purchase', () => {
+    const screen = render(
+      <CapabilityUnavailable label="Connectors" reason="feature_coming_soon" />,
+    );
+
+    expect(screen.getByText('Coming soon')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'This has not launched yet, on any plan. It will turn on here when it launches; there is nothing to change.',
+      ),
+    ).toBeTruthy();
   });
 });

@@ -1,13 +1,18 @@
 import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
+import { photoSelectionLimitForPlan } from '@/src/features/chat/utils/photoSelectionLimit';
+import { attachmentLimitsFor } from '@/src/features/chat/utils/attachmentValidation';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
+import { Button } from '@/components/ui/Button';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { isImageGenerationChat, turnEndedCleanly } from '@/stores/chat/conversationTurnState';
+import { noteBannerModelSwitch, setLocalActiveLeaf } from '@/stores/chat/chatExecutionStore';
 import { View, KeyboardAvoidingView, Alert, Keyboard, Linking } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect, useNavigation } from 'expo-router';
-import { MoreHorizontal, WifiOff, SquarePen, Menu } from 'lucide-react-native';
+import { FolderOpen, MoreHorizontal, WifiOff, SquarePen, Menu, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -16,7 +21,11 @@ import type { ResearchPlanDecision } from '@/src/features/chat/components/resear
 import type { ResearchPlanChoices } from '@/src/features/chat/utils/researchPlanChoices';
 import type { ResearchStep } from '@agiworkforce/types';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
-import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
+import {
+  QuotedReplyBar,
+  quotedReplyAuthor,
+  quotedReplyText,
+} from '@/src/features/chat/components/QuotedReplyBar';
 import { trackProductEvent } from '@/services/productAnalytics';
 import { useReplyNoticeFocus } from '@/services/conversationFocus';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
@@ -26,12 +35,23 @@ import {
 } from '@/src/features/chat/utils/sendDispatch';
 import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
-import { WorkModeSwitch } from '@/src/features/chat/components/WorkModeSwitch';
+import { selectedSkillTools } from '@/stores/chat/skillTurnOptions';
+import { hasEditableImage, serverEditsImages } from '@/stores/chat/imageEditSupport';
+import { useImageEditModelIds } from '@/stores/chat/imageEditAdmissions';
+import { PAST_CHAT_HIGHLIGHT_PARAM } from '@/src/features/chat/utils/referenceCitations';
+import type { ToolApprovalDecisionValue } from '@agiworkforce/cloud-contracts';
+import {
+  HEADER_TEXT_SCALE_LIMIT,
+  WorkModeSwitch,
+} from '@/src/features/chat/components/WorkModeSwitch';
 import { ComposerApprovalModeControl } from '@/src/features/chat/components/ComposerApprovalModeControl';
 import {
   EMPTY_VARIANT_INFO,
+  RESPONSE_RATING_SEND_FAILED,
   resolveLeafForSibling,
+  sameVariantInfoMap,
   variantInfoByMessage,
+  type VariantInfoByMessageId,
 } from '@agiworkforce/cloud-contracts';
 import { managedCloudChat } from '@/services/managedCloudChat';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
@@ -41,7 +61,11 @@ import { StyleSelector } from '@/src/features/chat/components/StyleSelector';
 import { readClipboardImageAttachment } from '@/src/features/media/clipboard-image';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { StudyModeBanner } from '@/src/features/study/StudyModeBanner';
-import { FollowUpSuggestions } from '@/src/features/chat/components/FollowUpSuggestions';
+import {
+  cachedFollowUpSuggestions,
+  FollowUpSuggestions,
+  type FollowUpFallbackTurn,
+} from '@/src/features/chat/components/FollowUpSuggestions';
 import { retiredModelNotice } from '@/src/features/model-picker/retirement';
 import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { buildAgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
@@ -49,6 +73,8 @@ import { ConversationExportSheet } from '@/src/features/chat/components/Conversa
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
 import {
   IN_FLIGHT_TURN_STALLED_MESSAGE,
+  IN_FLIGHT_TURN_WAITING_MESSAGE,
+  lastAnswerLiveRun,
   useInFlightTurnRecovery,
 } from '@/src/features/chat/inFlightTurnRecovery';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
@@ -61,17 +87,21 @@ import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerShe
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { LiveVoiceComposer } from '@/src/features/voice/components/LiveVoiceComposer';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
+import { onDeviceRecognizerGuaranteed } from '@/src/features/voice/services/voiceInput';
 import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/Capabilities';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import {
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
-import { peekConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import {
-  useVoiceConversation,
-  voiceCaptureErrorMessage,
-} from '@/src/features/voice/hooks/useVoiceConversation';
+  hasUnavailableWebSearch,
+  peekConversationSend,
+  takeConversationSend,
+} from '@agiworkforce/client-runtime';
+import { useVoiceConversation } from '@/src/features/voice/hooks/useVoiceConversation';
+import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
+import { classifyVoiceFailure } from '@/src/features/voice/services/voiceFailure';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
 import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
@@ -87,7 +117,9 @@ import { Text } from '@/components/ui/Text';
 import {
   LOCAL_NO_MODEL_MESSAGE,
   paywallErrorStateFromApiError,
+  useChatExecutionStore,
   useChatStore,
+  type PaywallErrorState,
 } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { ProjectSourcesButton } from '@/src/features/projects/components/ProjectSourcesButton';
@@ -99,6 +131,7 @@ import { ProviderConsentBanner } from '@/src/features/chat/components/ProviderCo
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
 import { PendingSendBubble } from '@/src/features/chat/components/PendingSendBubble';
 import {
+  canUseBillingPlanCapability,
   classifyManagedQuotaErrorCode,
   formatUsageResetIn,
   managedQuotaResetAt,
@@ -125,7 +158,9 @@ import {
   readyLocalModelIdOr,
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
+import { useSystemModelSession } from '@/src/features/model-picker/systemModelAvailability';
 import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
+import { hasUnfinishedRun } from '@/src/features/chat/utils/agentActivity';
 import { continuableCloudModel } from '@/src/features/chat/utils/continuableAnswer';
 import {
   captureImageAssetsFromCamera,
@@ -138,11 +173,17 @@ import {
 } from '@/src/features/media/image-metadata';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
-import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
+import { ResponseRatingError } from '@/stores/chat/responseRatingError';
+import {
+  deleteCloudMessagesRemote,
+  type ResponseRatingDetailsInput,
+} from '@/src/features/chat/services/cloudMessageMutations';
 import {
   captureCloudAccountEpoch,
+  hasCloudAccountOwner,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { hasCurrentCloudProviderConsent } from '@/services/providerConsent';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
@@ -152,13 +193,16 @@ import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
 import { getMessageStreamErrorMessage } from '@/src/features/chat/utils/messageStreamError';
+import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import {
+  peekImageEditRetry,
   runImageGenerationTurn,
   takeImageEditRetry,
   type ImageEditTurnRequest,
 } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
 import { resolveImageRetryFallback } from '@/src/features/chat/actions/imageRetryFallback';
 import {
   MediaGenerationAdmissionError,
@@ -175,10 +219,17 @@ import {
 import { useTheme, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import {
+  ProjectChatBackButton,
+  openedFromProject,
+} from '@/src/features/projects/components/ProjectChatBackButton';
+import { clearNewChatProjectScope } from '@/stores/projects/newChatProjectScope';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
-import type { ChatMessage } from '@/types/chat';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import {
   captureAccountScopedUiState,
   isAccountScopedUiStateCurrent,
@@ -187,8 +238,10 @@ import {
 import { toUserMessage } from '@/services/userMessage';
 import { showToast } from '@/src/shared/components/Toast';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
+import { wholeImageEditRequest, type ImageWholeEdit } from '@/src/features/image/wholeImageEdit';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
+const PROMPT_COMPOSER_FOCUS_FRAMES = 30;
 const EMPTY_CHAT_MESSAGES: ChatMessage[] = [];
 const MESSAGE_LOAD_FAILED = 'Messages could not be loaded. Check your connection and retry.';
 
@@ -197,30 +250,50 @@ interface ConversationUiActionScope {
   ownership: AccountScopedUiState;
 }
 
+// Every row receives these handlers, so they must keep their identity while a
+// turn streams or each finished row re-renders its Markdown per token.
+function useRowHandler<Args extends unknown[], Result>(
+  handler: (...args: Args) => Result,
+): (...args: Args) => Result {
+  const latest = useRef(handler);
+  useLayoutEffect(() => {
+    latest.current = handler;
+  });
+  return useCallback((...args: Args) => latest.current(...args), []);
+}
+
 export default function ChatScreen() {
   const { colors, isDark } = useTheme();
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
-  const params = useLocalSearchParams<{ id: string; prompt?: string; voice?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    prompt?: string;
+    voice?: string;
+    from?: string;
+    [PAST_CHAT_HIGHLIGHT_PARAM]?: string;
+  }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const highlightParam = params[PAST_CHAT_HIGHLIGHT_PARAM];
+  const highlightMessageId = Array.isArray(highlightParam) ? highlightParam[0] : highlightParam;
   const composerFocusedRef = useRef(false);
   const composerFocusGenerationRef = useRef(0);
+  const [screenFocused, setScreenFocused] = useState(true);
   useFocusEffect(
     useCallback(() => {
       composerFocusGenerationRef.current += 1;
       composerFocusedRef.current = true;
+      setScreenFocused(true);
       if (id) useChatViewStore.getState().bindStyleConversation(id);
       return () => {
         composerFocusedRef.current = false;
         composerFocusGenerationRef.current += 1;
+        setScreenFocused(false);
+        clearNewChatProjectScope();
       };
     }, [id]),
   );
   const initialPrompt = Array.isArray(params.prompt) ? params.prompt[0] : (params.prompt ?? '');
   const requestedVoiceMode = Array.isArray(params.voice) ? params.voice[0] : params.voice;
-  const activeProjectId = useProjectStore((s) => s.activeProjectId);
-  const activeProject = useProjectStore((s) =>
-    s.activeProjectId ? s.projects.find((p) => p.id === s.activeProjectId) : undefined,
-  );
   const router = useRouter();
   const navigation = useNavigation();
   const modelPickerRef = useRef<BottomSheet>(null);
@@ -234,6 +307,26 @@ export default function ChatScreen() {
     import('@/src/features/chat/components/ChatInput').ChatInputHandle | null
   >(null);
   useComposerAttachmentHandoff(id, chatInputAttachRef);
+  const promptFocusedConversationRef = useRef<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (!id || !initialPrompt.trim() || promptFocusedConversationRef.current === id) return;
+      let framesLeft = PROMPT_COMPOSER_FOCUS_FRAMES;
+      let frame = 0;
+      const focusComposerOnce = () => {
+        const composer = chatInputAttachRef.current;
+        if (!composer?.focus) {
+          framesLeft -= 1;
+          if (framesLeft > 0) frame = requestAnimationFrame(focusComposerOnce);
+          return;
+        }
+        promptFocusedConversationRef.current = id;
+        composer.focus();
+      };
+      frame = requestAnimationFrame(focusComposerOnce);
+      return () => cancelAnimationFrame(frame);
+    }, [id, initialPrompt]),
+  );
   useReplyNoticeFocus(id);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const quotedMessageScopeRef = useRef<ConversationUiActionScope | null>(null);
@@ -263,6 +356,8 @@ export default function ChatScreen() {
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setMessageReaction = useChatStore((s) => s.setMessageReaction);
+  const submitResponseRatingDetails = useChatStore((s) => s.submitResponseRatingDetails);
+  const rememberFollowUpSuggestions = useChatStore((s) => s.rememberFollowUpSuggestions);
   const retryMessage = useChatStore((s) => s.retryMessage);
   const continueCloudAnswer = useChatStore((s) => s.continueCloudAnswer);
   const resumeResearch = useChatStore((s) => s.resumeResearch);
@@ -273,18 +368,43 @@ export default function ChatScreen() {
   const messageLoadFailed = useChatStore(
     (s) => id !== undefined && s.messageLoadErrorConversationId === id,
   );
+  const missingOnServer = useChatStore((s) => id !== undefined && s.missingConversationId === id);
   const clearMessageLoadError = useChatStore((s) => s.clearMessageLoadError);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
-  const paywallError = useChatStore((s) => s.paywallError);
+  const ownsSendFailure = useChatExecutionStore(
+    (s) => id !== undefined && s.errorConversationId === id,
+  );
+  const ownPaywallError = useChatStore((s) => s.paywallError);
+  const paywallError = ownsSendFailure ? ownPaywallError : null;
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
-  const setPaywallError = useChatStore((s) => s.setPaywallError);
-  const sendError = useChatStore((s) => s.error);
-  const sendFailureCode = useChatStore((s) => s.failureCode);
-  const providerConsentError = useChatStore((s) => s.providerConsentError);
-  const freeCapacityError = useChatStore((s) => s.freeCapacityError);
+  const ownSendError = useChatStore((s) => s.error);
+  const sendError = ownsSendFailure ? ownSendError : null;
+  const ownFailureCode = useChatStore((s) => s.failureCode);
+  const sendFailureCode = ownsSendFailure ? ownFailureCode : null;
+  const ownProviderConsentError = useChatStore((s) => s.providerConsentError);
+  const providerConsentError = ownsSendFailure ? ownProviderConsentError : null;
+  const ownFreeCapacityError = useChatStore((s) => s.freeCapacityError);
+  const freeCapacityError = ownsSendFailure ? ownFreeCapacityError : null;
+  const ownErrorRetry = useChatExecutionStore((s) => s.errorRetry);
+  const sendErrorRetry = ownsSendFailure ? ownErrorRetry : null;
   const clearProviderConsentError = useChatStore((s) => s.clearProviderConsentError);
-  const clearError = useChatStore((s) => s.clearError);
-  const setSendError = useChatStore((s) => s.setSendError);
+  const clearError = useCallback(() => {
+    if (id) useChatExecutionStore.getState().clearErrorFor(id);
+  }, [id]);
+  const setSendError = useCallback(
+    (message: string, retry: { kind: 'resend' } | null = null) => {
+      if (id) useChatExecutionStore.getState().setSendError(message, { conversationId: id, retry });
+    },
+    [id],
+  );
+  const setPaywallError = useCallback(
+    (state: PaywallErrorState) => {
+      if (id) useChatExecutionStore.getState().setPaywallError(state, id);
+    },
+    [id],
+  );
+  const [composerHoldsRefusedSend, setComposerHoldsRefusedSend] = useState(false);
+  const [composerHasText, setComposerHasText] = useState(false);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
   const resolveOfflineMessage = useChatStore((s) => s.resolveOfflineMessage);
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
@@ -319,6 +439,15 @@ export default function ChatScreen() {
   const conversationActions = useConversationActions();
   const { openActions } = conversationActions;
   const conversation = conversations.find((c) => c.id === id);
+  const conversationProjectId = conversation?.projectId ?? null;
+  const localConversationProject = useProjectStore((s) =>
+    conversationProjectId ? s.projects.find((p) => p.id === conversationProjectId) : undefined,
+  );
+  const cloudConversationProject = useCloudProjectStore((s) =>
+    conversationProjectId
+      ? s.projects.find((p) => p.id === conversationProjectId && p.deletedAt === null)
+      : undefined,
+  );
   // Branches are resolved here rather than in the store so the abandoned turns
   // stay in memory for the pager, and so a conversation that has never branched
   // keeps the very array the store holds.
@@ -330,23 +459,31 @@ export default function ChatScreen() {
   const conversationExecutionMode = conversation
     ? executionModeForConversation(conversation)
     : executionModeForSelection(selectedModel, appMode);
+  const conversationProject =
+    conversationExecutionMode === 'cloud' ? cloudConversationProject : localConversationProject;
   const speechOwner = useVoiceOutputOwner(conversationExecutionMode, id ?? 'unavailable');
   const inFlightTurn = useInFlightTurnRecovery({
     conversationId: id,
     isCloud: conversationExecutionMode === 'cloud',
     isStreaming: isStreaming || isLoadingMessages,
+    isOnline,
     messages: conversationMessages,
     onFinished: () => {
       if (id) void loadMessages(id);
     },
   });
-  const variantInfo = useMemo(
-    () =>
-      conversationExecutionMode === 'cloud'
-        ? variantInfoByMessage(conversationRows, conversation?.activeLeafMessageId)
-        : EMPTY_VARIANT_INFO,
-    [conversationExecutionMode, conversationRows, conversation?.activeLeafMessageId],
-  );
+  const lastAnswerRun = lastAnswerLiveRun({
+    isCloud: conversationExecutionMode === 'cloud',
+    isStreaming: isStreaming || isLoadingMessages,
+    verdict: inFlightTurn,
+  });
+  const variantInfoRef = useRef<VariantInfoByMessageId>(EMPTY_VARIANT_INFO);
+  const variantInfo = useMemo(() => {
+    const next = variantInfoByMessage(conversationRows, conversation?.activeLeafMessageId);
+    if (sameVariantInfoMap(variantInfoRef.current, next)) return variantInfoRef.current;
+    variantInfoRef.current = next;
+    return next;
+  }, [conversationRows, conversation?.activeLeafMessageId]);
 
   const sendPreviewInput = useMemo<SendPreviewInput>(
     () => ({
@@ -413,16 +550,39 @@ export default function ChatScreen() {
     }
   }, [clerkUserId, conversationExecutionMode, id, isConversationActionCurrent, quotedMessage]);
 
+  const historyLoadRef = useRef<{ conversationId: string; done: Promise<void> } | null>(null);
+  const loadHistory = useCallback(
+    (conversationId: string) => {
+      if (historyLoadRef.current?.conversationId === conversationId) return;
+      const done: Promise<void> = Promise.resolve(loadMessages(conversationId)).finally(() => {
+        if (historyLoadRef.current?.done === done) historyLoadRef.current = null;
+      });
+      historyLoadRef.current = { conversationId, done };
+    },
+    [loadMessages],
+  );
+
   useEffect(() => {
     if (!id) return;
     setCurrentConversationId(id);
-    loadMessages(id);
+    loadHistory(id);
     markConversationRead(id);
 
     return () => {
       setCurrentConversationId(null);
     };
-  }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
+  }, [id, setCurrentConversationId, loadHistory, markConversationRead]);
+
+  // The drawer keeps this screen mounted, so reopening the same chat after it
+  // left the store (archived, then restored) only shows up as a new focus.
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      const state = useChatStore.getState();
+      if (state.messages[id]?.length || state.streamingConversationIds.includes(id)) return;
+      loadHistory(id);
+    }, [id, loadHistory]),
+  );
 
   const stopSpeaking = useCallback(() => {
     void speechOwner?.stop().catch(() => undefined);
@@ -449,6 +609,14 @@ export default function ChatScreen() {
         );
         return false;
       }
+      if (
+        conversationExecutionMode === 'cloud' &&
+        hasCloudAccountOwner() &&
+        useChatAppModeStore.getState().appMode !== 'cloud'
+      ) {
+        setAppMode('cloud');
+        if (useChatAppModeStore.getState().appMode !== 'cloud') return false;
+      }
 
       let finalText = text;
       const currentQuote =
@@ -459,17 +627,19 @@ export default function ChatScreen() {
         quotedMessageScopeRef.current = null;
         setQuotedMessage(null);
       }
+      const sentQuoteScope = currentQuote ? quotedMessageScopeRef.current : null;
+      const clearSentQuote = () => {
+        if (!sentQuoteScope || quotedMessageScopeRef.current !== sentQuoteScope) return;
+        quotedMessageScopeRef.current = null;
+        setQuotedMessage(null);
+      };
       if (currentQuote) {
-        const quoteLabel =
-          currentQuote.role === 'user' ? 'You' : (currentQuote.model ?? 'Assistant');
-        const quotePreview =
-          currentQuote.content.length > 150
-            ? currentQuote.content.slice(0, 150).trim() + '...'
-            : currentQuote.content;
-        finalText = `> ${quoteLabel}: ${quotePreview}\n\n${text}`;
+        const quoteLabel = quotedReplyAuthor(currentQuote, subscriptionTier);
+        finalText = `> ${quoteLabel}: ${quotedReplyText(currentQuote.content)}\n\n${text}`;
       }
 
       const trimmedInput = text.trim();
+      if (refuseFilteredSend(trimmedInput)) return false;
 
       const videoRequest = resolveMobileVideoGenerationRequest({
         executionMode: conversationExecutionMode,
@@ -489,46 +659,57 @@ export default function ChatScreen() {
         return false;
       }
       if (videoRequest.status === 'ready') {
-        let started = false;
-        const videoTurn = runVideoGenerationTurn({
-          conversationId: id,
-          displayText: finalText,
-          prompt: videoRequest.prompt,
-          model: videoRequest.model,
-          aspectRatio: videoRequest.aspectRatio,
-          resolution: videoRequest.resolution,
-          durationSecs: videoRequest.durationSecs,
-          ownerId: videoRequest.ownerId,
-          onStarted: () => {
-            started = true;
-            clearError();
-            quotedMessageScopeRef.current = null;
-            setQuotedMessage(null);
-          },
-          begin: beginVideoGeneration,
-          taskCreated: recordVideoGenerationTask,
-          isCancelRequested: isVideoGenerationCancelRequested,
-          progress: updateVideoGenerationProgress,
-          complete: completeVideoGeneration,
-          fail: failVideoGeneration,
-          remove: deleteMessage,
-          onPaywall: (error) => {
-            setPaywallError(paywallErrorStateFromApiError(error));
-          },
-          onUnexpectedError: (error) => {
+        const action = captureConversationAction();
+        return sharingWithProvidersAllowed()
+          .then((allowed) => {
+            if (!allowed || (action && !isConversationActionCurrent(action))) return false;
+            let started = false;
+            const videoTurn = runVideoGenerationTurn({
+              conversationId: id,
+              displayText: finalText,
+              prompt: videoRequest.prompt,
+              model: videoRequest.model,
+              aspectRatio: videoRequest.aspectRatio,
+              resolution: videoRequest.resolution,
+              durationSecs: videoRequest.durationSecs,
+              ownerId: videoRequest.ownerId,
+              onStarted: () => {
+                started = true;
+                useChatViewStore.getState().resetMediaChoice('video');
+                clearError();
+                quotedMessageScopeRef.current = null;
+                setQuotedMessage(null);
+              },
+              begin: beginVideoGeneration,
+              taskCreated: recordVideoGenerationTask,
+              isCancelRequested: isVideoGenerationCancelRequested,
+              progress: updateVideoGenerationProgress,
+              complete: completeVideoGeneration,
+              fail: failVideoGeneration,
+              remove: deleteMessage,
+              onPaywall: (error) => {
+                setPaywallError(paywallErrorStateFromApiError(error));
+              },
+              onUnexpectedError: (error) => {
+                console.warn('[ChatScreen] Video generation failed:', error);
+                setSendError(
+                  !started && error instanceof MediaGenerationAdmissionError
+                    ? error.userMessage
+                    : mediaGenerationFailureMessage('video'),
+                );
+              },
+            });
+            if (dispatchOptions?.awaitCompletion) {
+              return videoTurn.then((outcome) => outcome.assistantMessageId !== null);
+            }
+            void videoTurn;
+            return started;
+          })
+          .catch((error: unknown) => {
             console.warn('[ChatScreen] Video generation failed:', error);
-            setSendError(
-              !started && error instanceof MediaGenerationAdmissionError
-                ? error.userMessage
-                : mediaGenerationFailureMessage('video'),
-            );
-          },
-        });
-        if (dispatchOptions?.awaitCompletion) {
-          return videoTurn.then((outcome) => outcome.assistantMessageId !== null);
-        }
-        void videoTurn;
-        return started;
+            setSendError(mediaGenerationFailureMessage('video'));
+            return false;
+          });
       }
 
       const imageRequest = resolveMobileImageGenerationRequest({
@@ -607,46 +788,57 @@ export default function ChatScreen() {
         });
       }
       if (imageRequest.status === 'ready') {
-        let started = false;
-        const imageTurn = runImageGenerationTurn({
-          conversationId: id,
-          displayText: finalText,
-          prompt: imageRequest.prompt,
-          model: imageRequest.model,
-          aspectRatio: imageRequest.aspectRatio,
-          transparentBackground: imageRequest.transparentBackground,
-          operation: imageRequest.operation,
-          sourceImage: imageRequest.sourceImage,
-          referenceImages: imageRequest.referenceImages,
-          ownerId: imageRequest.ownerId,
-          onStarted: () => {
-            started = true;
-            clearError();
-            quotedMessageScopeRef.current = null;
-            setQuotedMessage(null);
-            dispatchOptions?.onAccepted?.();
-          },
-          begin: beginImageGeneration,
-          complete: completeImageGeneration,
-          fail: failImageGeneration,
-          remove: deleteMessage,
-          onPaywall: (error) => {
-            setPaywallError(paywallErrorStateFromApiError(error));
-          },
-          onUnexpectedError: (error) => {
+        const action = captureConversationAction();
+        return sharingWithProvidersAllowed()
+          .then((allowed) => {
+            if (!allowed || (action && !isConversationActionCurrent(action))) return false;
+            let started = false;
+            const imageTurn = runImageGenerationTurn({
+              conversationId: id,
+              displayText: finalText,
+              prompt: imageRequest.prompt,
+              model: imageRequest.model,
+              aspectRatio: imageRequest.aspectRatio,
+              transparentBackground: imageRequest.transparentBackground,
+              operation: imageRequest.operation,
+              sourceImage: imageRequest.sourceImage,
+              referenceImages: imageRequest.referenceImages,
+              ownerId: imageRequest.ownerId,
+              onStarted: () => {
+                started = true;
+                useChatViewStore.getState().resetMediaChoice('image');
+                clearError();
+                quotedMessageScopeRef.current = null;
+                setQuotedMessage(null);
+                dispatchOptions?.onAccepted?.();
+              },
+              begin: beginImageGeneration,
+              complete: completeImageGeneration,
+              fail: failImageGeneration,
+              remove: deleteMessage,
+              onPaywall: (error) => {
+                setPaywallError(paywallErrorStateFromApiError(error));
+              },
+              onUnexpectedError: (error) => {
+                console.warn('[ChatScreen] Image generation failed:', error);
+                setSendError(
+                  !started && error instanceof MediaGenerationAdmissionError
+                    ? error.userMessage
+                    : mediaGenerationFailureMessage('image'),
+                );
+              },
+            });
+            if (dispatchOptions?.awaitCompletion) {
+              return imageTurn.then((outcome) => outcome.assistantMessageId !== null);
+            }
+            void imageTurn;
+            return started;
+          })
+          .catch((error: unknown) => {
             console.warn('[ChatScreen] Image generation failed:', error);
-            setSendError(
-              !started && error instanceof MediaGenerationAdmissionError
-                ? error.userMessage
-                : mediaGenerationFailureMessage('image'),
-            );
-          },
-        });
-        if (dispatchOptions?.awaitCompletion) {
-          return imageTurn.then((outcome) => outcome.assistantMessageId !== null);
-        }
-        void imageTurn;
-        return started;
+            setSendError(mediaGenerationFailureMessage('image'));
+            return false;
+          });
       }
 
       const skillNameForTurn =
@@ -671,8 +863,6 @@ export default function ChatScreen() {
           );
           return false;
         }
-        quotedMessageScopeRef.current = null;
-        setQuotedMessage(null);
         let entry;
         try {
           entry = offlineQueue.enqueue({
@@ -690,26 +880,31 @@ export default function ChatScreen() {
           return false;
         }
         enqueueOfflineMessage(id, finalText, selectedModel, entry.id);
+        clearSentQuote();
         if (skillNameForTurn) clearSelectedSkill();
         return true;
       }
 
-      const sendOptions = skillNameForTurn ? { skillName: skillNameForTurn } : {};
+      const sendOptions = skillNameForTurn
+        ? { skillName: skillNameForTurn, skillTools: selectedSkillTools(skillSelection) }
+        : {};
 
-      quotedMessageScopeRef.current = null;
-      setQuotedMessage(null);
       if (dispatchOptions?.awaitCompletion) {
         return sendMessage(id, finalText, selectedModel, attachments, {
           ...sendOptions,
-          onAccepted: dispatchOptions.onAccepted,
+          onAccepted: () => {
+            clearSentQuote();
+            dispatchOptions.onAccepted?.();
+          },
         })
           .then((accepted) => {
+            if (accepted) clearSentQuote();
             if (accepted && skillNameForTurn) clearSelectedSkill();
             return accepted;
           })
           .catch((err: unknown) => {
             console.warn('[ChatScreen] sendMessage rejected:', err);
-            setSendError('Message could not be sent. Please try again.');
+            setSendError('Message could not be sent. Please try again.', { kind: 'resend' });
             return false;
           });
       }
@@ -721,9 +916,10 @@ export default function ChatScreen() {
           }),
         (err) => {
           console.warn('[ChatScreen] sendMessage rejected:', err);
-          setSendError('Message could not be sent. Please try again.');
+          setSendError('Message could not be sent. Please try again.', { kind: 'resend' });
         },
       ).then((accepted) => {
+        if (accepted) clearSentQuote();
         if (accepted && skillNameForTurn) clearSelectedSkill();
         return accepted;
       });
@@ -765,8 +961,13 @@ export default function ChatScreen() {
       imageAspectRatio,
       videoAspectRatio,
       videoResolution,
+      setAppMode,
     ],
   );
+
+  const handleFollowUp = useRowHandler((prompt: string) => {
+    void handleSend(prompt);
+  });
 
   const pendingSendText = id && isLoadingMessages ? peekConversationSend(id) : null;
   const conversationStarted =
@@ -794,6 +995,7 @@ export default function ChatScreen() {
       decision: 'start' | 'cancel' | 'retry',
       steps?: ResearchStep[],
       choices?: ResearchPlanChoices,
+      answers?: string,
     ) => {
       if (!id) return;
       if (decision === 'cancel') {
@@ -802,7 +1004,7 @@ export default function ChatScreen() {
       }
       setResumingResearchMessageId(messageId);
       try {
-        await resumeResearch(id, messageId, decision, steps, choices);
+        await resumeResearch(id, messageId, decision, steps, choices, answers);
       } finally {
         setResumingResearchMessageId(null);
       }
@@ -813,7 +1015,14 @@ export default function ChatScreen() {
   const handleResearchPlanDecision = useCallback(
     (messageId: string, decision: ResearchPlanDecision) => {
       if (decision === 'cancel') void runResearchDecision(messageId, 'cancel');
-      else void runResearchDecision(messageId, 'start', decision.steps, decision.choices);
+      else
+        void runResearchDecision(
+          messageId,
+          'start',
+          decision.steps,
+          decision.choices,
+          decision.answers,
+        );
     },
     [runResearchDecision],
   );
@@ -825,25 +1034,22 @@ export default function ChatScreen() {
     [runResearchDecision],
   );
 
-  const handlePauseResearch = useCallback(
-    async (messageId: string): Promise<boolean> => {
-      const reference = ManagedCloudAgentRunReferenceSchema.safeParse(
-        conversationMessages.find((message) => message.id === messageId)?.metadata?.cloudAgentRun,
-      );
-      if (!reference.success) {
-        setSendError('This research cannot be paused. Stop it instead to keep what it found.');
-        return false;
-      }
-      try {
-        await createMobileCloudAgentRunClient().pauseRun(reference.data.runId);
-        return true;
-      } catch {
-        setSendError('Could not pause this research. It is still running.');
-        return false;
-      }
-    },
-    [conversationMessages, setSendError],
-  );
+  const handlePauseResearch = useRowHandler(async (messageId: string): Promise<boolean> => {
+    const reference = ManagedCloudAgentRunReferenceSchema.safeParse(
+      conversationMessages.find((message) => message.id === messageId)?.metadata?.cloudAgentRun,
+    );
+    if (!reference.success) {
+      setSendError('This research cannot be paused. Stop it instead to keep what it found.');
+      return false;
+    }
+    try {
+      await createMobileCloudAgentRunClient().pauseRun(reference.data.runId);
+      return true;
+    } catch {
+      setSendError('Could not pause this research. It is still running.');
+      return false;
+    }
+  });
 
   const resolveAppMode = useCallback(
     (modelId: string): AppMode => {
@@ -863,6 +1069,7 @@ export default function ChatScreen() {
     },
     [conversationExecutionMode],
   );
+  const handleChooseModel = useCallback(() => handleOpenModelPicker(), [handleOpenModelPicker]);
 
   useEffect(() => {
     if (conversationExecutionMode !== 'cloud' || !isClerkSignedIn) return;
@@ -872,10 +1079,17 @@ export default function ChatScreen() {
   }, [clerkUserId, conversationExecutionMode, id, isClerkSignedIn]);
 
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const cloudModeWrittenFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!conversation) return;
-    setAppMode(conversationExecutionMode);
+    if (!conversation || !screenFocused) return;
+    // A Cloud write without the permission asks the person, so it is made once
+    // per conversation, never again on each focus after they said Not now.
+    const asksForCloud = conversationExecutionMode === 'cloud' && !hasCurrentCloudProviderConsent();
+    if (!asksForCloud || cloudModeWrittenFor.current !== conversation.id) {
+      setAppMode(conversationExecutionMode);
+    }
+    cloudModeWrittenFor.current = conversationExecutionMode === 'cloud' ? conversation.id : null;
     const currentModel = useModelStore.getState().selectedModel;
     const fitsConversation = (modelId: string | null | undefined): modelId is string =>
       Boolean(modelId) &&
@@ -894,18 +1108,28 @@ export default function ChatScreen() {
     if (!preferredModel) return;
     if (conversationExecutionMode === 'cloud' && !cloudUnlocked) return;
     if (useModelStore.getState().selectedModel !== preferredModel) {
-      useModelStore.getState().setModel(preferredModel);
+      useModelStore.getState().showConversationModel(preferredModel);
     }
-  }, [cloudUnlocked, conversation, conversationExecutionMode, setAppMode, subscriptionTier]);
+  }, [
+    cloudUnlocked,
+    conversation,
+    conversationExecutionMode,
+    screenFocused,
+    setAppMode,
+    subscriptionTier,
+  ]);
 
   const installedModelIds = useModelInstallStore((state) => state.installedModelIds);
   const readySystemModelIds = useModelInstallStore((state) => state.readySystemModelIds);
+  const failedSystemModelIds = useSystemModelSession((state) => state.failedModelIds);
 
   const localRecovery = useMemo(
     () =>
       localModelRecovery({
         executionMode: conversationExecutionMode,
-        isNoLocalModelError: sendError === LOCAL_NO_MODEL_MESSAGE,
+        isNoLocalModelError:
+          sendError === LOCAL_NO_MODEL_MESSAGE ||
+          (Boolean(sendError) && failedSystemModelIds.includes(selectedModel)),
         selectedModelId: selectedModel,
         installedModelIds,
         readySystemModelIds,
@@ -913,6 +1137,7 @@ export default function ChatScreen() {
       }),
     [
       conversationExecutionMode,
+      failedSystemModelIds,
       installedModelIds,
       readySystemModelIds,
       selectedModel,
@@ -932,7 +1157,7 @@ export default function ChatScreen() {
           return;
         }
         if (!localRecovery.modelId) return;
-        useModelStore.getState().setModel(localRecovery.modelId);
+        useModelStore.getState().showConversationModel(localRecovery.modelId);
         clearError();
         if (!id) return;
         const lastUser = [...conversationMessages].reverse().find((m) => m.role === 'user');
@@ -974,6 +1199,7 @@ export default function ChatScreen() {
         label: 'Switch model',
         onPress: () => {
           clearError();
+          if (id) noteBannerModelSwitch(id);
           handleOpenModelPicker();
         },
       };
@@ -984,6 +1210,7 @@ export default function ChatScreen() {
     failureShownInTurn,
     handleOpenCloudSignIn,
     handleOpenModelPicker,
+    id,
     localRecoveryAction,
     sendError,
     sendFailureCode,
@@ -1028,18 +1255,64 @@ export default function ChatScreen() {
     [conversationExecutionMode, forkConversation, id, router, title],
   );
 
+  const [dismissedStallFor, setDismissedStallFor] = useState<string | null>(null);
+  const handleRetryStalledTurn = useCallback(() => {
+    const stalled = conversationMessages[conversationMessages.length - 1];
+    if (!id || (stalled?.role !== 'user' && stalled?.role !== 'assistant')) return;
+    retryMessage(id, stalled.id);
+  }, [conversationMessages, id, retryMessage]);
+  const stalledNoticeDismissed =
+    inFlightTurn === 'stalled' &&
+    dismissedStallFor !== null &&
+    dismissedStallFor === conversationMessages[conversationMessages.length - 1]?.id;
+  const turnErrorShown = Boolean(
+    sendError || paywallError || providerConsentError || freeCapacityError,
+  );
+  const stalledNoticeHidden = stalledNoticeDismissed || turnErrorShown;
+  const inFlightNoticeShown =
+    inFlightTurn === 'running' ||
+    (inFlightTurn === 'waiting' && !turnErrorShown) ||
+    (inFlightTurn === 'stalled' && !stalledNoticeHidden);
   const retiredNotice = retiredModelNotice(conversation?.model);
+  const retiredNoticeKey = `${id ?? ''}:${conversation?.model ?? ''}`;
+  const [dismissedRetiredNotice, setDismissedRetiredNotice] = useState<string | null>(null);
+  const showRetiredNotice = retiredNotice !== null && dismissedRetiredNotice !== retiredNoticeKey;
   const lastMessage = conversationMessages[conversationMessages.length - 1];
   const followUpTarget =
     conversationExecutionMode === 'cloud' &&
     !conversation?.temporary &&
     !isStreaming &&
+    !sendError &&
     lastMessage?.role === 'assistant' &&
     !lastMessage.isStreaming &&
     lastMessage.content.trim().length > 0 &&
-    !lastMessage.metadata?.research
+    !lastMessage.metadata?.research &&
+    turnEndedCleanly(lastMessage)
       ? lastMessage.id
       : null;
+  const followUpMetadata = followUpTarget ? lastMessage?.metadata : undefined;
+  const followUpFallbackTurn = useMemo<FollowUpFallbackTurn | undefined>(() => {
+    if (!followUpTarget || !lastMessage) return undefined;
+    const lastUser = [...conversationMessages].reverse().find((m) => m.role === 'user');
+    return {
+      assistantContent: lastMessage.content,
+      ...(lastUser ? { userContent: lastUser.content } : {}),
+      messageCount: conversationMessages.length,
+    };
+  }, [followUpTarget, lastMessage, conversationMessages]);
+  const followUpSearchUnavailable = followUpTarget
+    ? hasUnavailableWebSearch(lastMessage?.metadata?.['agentActivity'])
+    : false;
+  const storedFollowUps = useMemo(
+    () => cachedFollowUpSuggestions(followUpMetadata),
+    [followUpMetadata],
+  );
+  const handleFollowUpsFetched = useCallback(
+    (messageId: string, suggestions: string[]) => {
+      if (id) rememberFollowUpSuggestions(id, messageId, suggestions);
+    },
+    [id, rememberFollowUpSuggestions],
+  );
 
   const handleScheduleMessage = useCallback(
     (messageId: string) => {
@@ -1067,7 +1340,7 @@ export default function ChatScreen() {
         if (id && nextMode === conversationExecutionMode) {
           void setConversationModel(id, newModelId);
         }
-        useModelStore.getState().setModel(newModelId);
+        useModelStore.getState().showConversationModel(newModelId);
         modelPickerRef.current?.close();
         return;
       }
@@ -1086,7 +1359,7 @@ export default function ChatScreen() {
       }
 
       if (id) void setConversationModel(id, newModelId);
-      useModelStore.getState().setModel(newModelId);
+      useModelStore.getState().showConversationModel(newModelId);
       modelPickerRef.current?.close();
       if (id && retryTarget) {
         stopSpeaking();
@@ -1110,7 +1383,7 @@ export default function ChatScreen() {
     const nextModelId = modeSwitchState.pendingModelId;
     if (!nextModelId) return;
 
-    useModelStore.getState().setModel(nextModelId);
+    useModelStore.getState().showConversationModel(nextModelId);
     setAppMode(modeSwitchState.toMode === 'cloud' ? 'cloud' : 'local');
     setModeSwitchState((s) => ({ ...s, visible: false }));
   }, [modeSwitchState.pendingModelId, modeSwitchState.toMode, setAppMode]);
@@ -1143,14 +1416,6 @@ export default function ChatScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  const handleOpenConnectors = useCallback(() => {
-    if (!FEATURES.connectors) {
-      handleOpenCloudSignIn();
-      return;
-    }
-    router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [handleOpenCloudSignIn, router]);
-
   const [voiceInlineVisible, setVoiceInlineVisible] = useFocusBoundVisibility(id ?? '');
   const composerDraftProvenance: DraftProvenance | undefined =
     conversationExecutionMode === 'local'
@@ -1171,7 +1436,7 @@ export default function ChatScreen() {
     const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
     await runComposerAttachmentPick(
       operation,
-      async (scope) => {
+      async (scope, onPicked) => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (!scope.isCurrent()) return [];
         if (status !== 'granted') {
@@ -1190,7 +1455,7 @@ export default function ChatScreen() {
           );
           return [];
         }
-        const assets = await captureImageAssetsFromCamera();
+        const assets = await captureImageAssetsFromCamera({ onPicked });
         return scope.isCurrent() ? imageAssetsToChatAttachments(assets, 'cam') : [];
       },
       (error) => {
@@ -1225,11 +1490,14 @@ export default function ChatScreen() {
     const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
     await runComposerAttachmentPick(
       operation,
-      async (scope) => {
+      async (scope, onPicked) => {
         const assets = await pickImageAssetsFromLibrary({
           allowsMultipleSelection: true,
-          selectionLimit: 5,
+          selectionLimit:
+            attachmentLimitsFor(conversationExecutionMode, subscriptionTier).filesPerMessage ??
+            photoSelectionLimitForPlan(subscriptionTier),
           orderedSelection: true,
+          onPicked,
         });
         return scope.isCurrent() ? imageAssetsToChatAttachments(assets) : [];
       },
@@ -1242,7 +1510,7 @@ export default function ChatScreen() {
         );
       },
     );
-  }, [activeAttachTarget, conversationExecutionMode]);
+  }, [activeAttachTarget, conversationExecutionMode, subscriptionTier]);
 
   const handleSheetFile = useCallback(async () => {
     const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
@@ -1269,19 +1537,15 @@ export default function ChatScreen() {
     );
   }, [activeAttachTarget, conversationExecutionMode]);
 
-  const handleSelectVariant = useCallback(
-    (messageId: string) => {
-      if (!id || isStreaming) return;
-      const leafId = resolveLeafForSibling(conversationRows, messageId);
-      useChatCloudMessageStore
-        .getState()
-        .patchCloudConversation(id, { activeLeafMessageId: leafId });
-      managedCloudChat.updateConversation(id, { activeLeafMessageId: leafId }).catch((error) => {
-        console.warn('[ChatScreen] The chosen version was not saved for other devices:', error);
-      });
-    },
-    [conversationRows, id, isStreaming],
-  );
+  const handleSelectVariant = useRowHandler((messageId: string) => {
+    if (!id || isStreaming) return;
+    const leafId = resolveLeafForSibling(conversationRows, messageId);
+    setLocalActiveLeaf(id, leafId);
+    if (conversationExecutionMode !== 'cloud') return;
+    managedCloudChat.updateConversation(id, { activeLeafMessageId: leafId }).catch((error) => {
+      console.warn('[ChatScreen] The chosen version was not saved for other devices:', error);
+    });
+  });
 
   const handleOpenSkills = useCallback(() => {
     router.push({
@@ -1306,12 +1570,14 @@ export default function ChatScreen() {
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
   const handleNewChat = useCallback(() => {
+    clearNewChatProjectScope();
     router.push('/(app)' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
   }, [navigation]);
+  const { usesPersistentDrawer } = useResponsiveLayout();
 
   const handleQuoteReply = useCallback(
     (message: ChatMessage) => {
@@ -1345,6 +1611,7 @@ export default function ChatScreen() {
         : 'live',
     [conversationExecutionMode, isClerkSignedIn],
   );
+  const voiceModeAvailable = onDeviceRecognizerGuaranteed() || voiceOnboardingMode === 'live';
 
   const startVoiceMode = useCallback(() => {
     if (!voiceAllowed) {
@@ -1355,6 +1622,7 @@ export default function ChatScreen() {
       executionMode: conversationExecutionMode,
       signedIn: isClerkSignedIn,
     });
+    if (reason && !onDeviceRecognizerGuaranteed()) return;
     setVoiceFallbackReason(reason);
     if (reason) {
       setVoiceInlineVisible(true);
@@ -1370,13 +1638,14 @@ export default function ChatScreen() {
   ]);
 
   const handleOpenVoiceMode = useCallback(() => {
+    if (!voiceModeAvailable) return;
     Keyboard.dismiss();
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
     }
     startVoiceMode();
-  }, [startVoiceMode]);
+  }, [startVoiceMode, voiceModeAvailable]);
 
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);
@@ -1475,12 +1744,19 @@ export default function ChatScreen() {
       if (conversationExecutionMode === 'cloud') {
         const accountEpoch = captureCloudAccountEpoch();
         if (!isCloudAccountEpochCurrent(accountEpoch)) return;
-        const previous = useChatCloudMessageStore.getState().messages[id];
-        useChatCloudMessageStore.getState().deleteCloudMessage(id, messageId);
+        const cloudStore = useChatCloudMessageStore.getState();
+        const previous = cloudStore.messages[id];
+        const previousLeaf = cloudStore.conversations.find((c) => c.id === id)?.activeLeafMessageId;
+        cloudStore.deleteCloudMessage(id, messageId);
         deleteCloudMessagesRemote(id, [messageId], accountEpoch).catch(() => {
           if (!isCloudAccountEpochCurrent(accountEpoch)) return;
           if (previous) {
             useChatCloudMessageStore.getState().setCloudMessages(id, previous);
+          }
+          if (previousLeaf === messageId) {
+            useChatCloudMessageStore
+              .getState()
+              .patchCloudConversation(id, { activeLeafMessageId: previousLeaf });
           }
           Alert.alert('Could not delete message', 'Check your connection and try again.');
         });
@@ -1494,30 +1770,52 @@ export default function ChatScreen() {
   const handleReaction = useCallback(
     (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => {
       if (!id) return;
-      void setMessageReaction(id, messageId, reaction).catch(() => {
-        Alert.alert('Could not save rating', 'Check your connection or sign in, then try again.');
+      void setMessageReaction(id, messageId, reaction).catch((error: unknown) => {
+        Alert.alert(
+          'Could not save rating',
+          error instanceof ResponseRatingError
+            ? error.userMessage
+            : toUserMessage(error, 'Check your connection or sign in, then try again.'),
+        );
       });
     },
     [id, setMessageReaction],
   );
 
+  const handleSubmitRatingDetails = useCallback(
+    async (messageId: string, details: ResponseRatingDetailsInput) => {
+      if (!id) throw new ResponseRatingError(RESPONSE_RATING_SEND_FAILED);
+      await submitResponseRatingDetails(id, messageId, details);
+    },
+    [id, submitResponseRatingDetails],
+  );
+
   const runImageEditTurn = useCallback(
-    (request: ImageEditTurnRequest) => {
-      void runImageGenerationTurn({
-        ...request,
-        begin: beginImageGeneration,
-        complete: completeImageGeneration,
-        fail: failImageGeneration,
-        remove: deleteMessage,
-        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
-        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
-      });
+    (request: ImageEditTurnRequest, retryOfMessageId?: string) => {
+      const action = captureConversationAction();
+      void sharingWithProvidersAllowed()
+        .then((allowed) => {
+          if (!allowed || (action && !isConversationActionCurrent(action))) return;
+          if (retryOfMessageId && !takeImageEditRetry(retryOfMessageId, request.ownerId)) return;
+          void runImageGenerationTurn({
+            ...request,
+            begin: beginImageGeneration,
+            complete: completeImageGeneration,
+            fail: failImageGeneration,
+            remove: deleteMessage,
+            onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
+            onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
+          });
+        })
+        .catch(() => setSendError(mediaGenerationFailureMessage('image')));
     },
     [
       beginImageGeneration,
+      captureConversationAction,
       completeImageGeneration,
       deleteMessage,
       failImageGeneration,
+      isConversationActionCurrent,
       setPaywallError,
       setSendError,
     ],
@@ -1528,10 +1826,14 @@ export default function ChatScreen() {
     return !isStreaming &&
       conversation &&
       lastVisibleMessage &&
-      continuableCloudModel(conversation, lastVisibleMessage)
+      continuableCloudModel(
+        conversation,
+        lastVisibleMessage,
+        isLoadingMessages && hasUnfinishedRun(lastVisibleMessage) ? 'checking' : inFlightTurn,
+      )
       ? lastVisibleMessage.id
       : null;
-  }, [conversation, conversationMessages, isStreaming]);
+  }, [conversation, conversationMessages, inFlightTurn, isLoadingMessages, isStreaming]);
 
   const handleContinueMessage = useCallback(
     (messageId: string) => {
@@ -1542,75 +1844,95 @@ export default function ChatScreen() {
     [continueCloudAnswer, id, stopSpeaking],
   );
 
-  const handleRetryMessage = useCallback(
-    (messageId: string) => {
-      if (!id) return;
-      stopSpeaking();
-      const messageIndex = conversationMessages.findIndex((message) => message.id === messageId);
-      const target = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
-      const failedQueueId = target?.queueFailed ? target.offlineQueueId : undefined;
-      if (target && failedQueueId) {
-        void Promise.resolve(handleSend(target.content))
-          .then((accepted) => {
-            if (accepted) resolveOfflineMessage(id, failedQueueId);
-          })
-          .catch((err: unknown) => {
-            console.warn('[ChatScreen] Resending a failed queued message failed:', err);
-            setSendError('Message could not be sent. Please try again.');
-          });
+  const handleRetryMessage = useRowHandler((messageId: string) => {
+    if (!id) return;
+    stopSpeaking();
+    const messageIndex = conversationMessages.findIndex((message) => message.id === messageId);
+    const target = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
+    const failedQueueId = target?.queueFailed ? target.offlineQueueId : undefined;
+    if (target && failedQueueId) {
+      void Promise.resolve(handleSend(target.content))
+        .then((accepted) => {
+          if (accepted) resolveOfflineMessage(id, failedQueueId);
+        })
+        .catch((err: unknown) => {
+          console.warn('[ChatScreen] Resending a failed queued message failed:', err);
+          setSendError('Message could not be sent. Please try again.');
+        });
+      return;
+    }
+    if (
+      target?.role === 'assistant' &&
+      (target.type === 'video' ||
+        target.videoGenStatus === 'failed' ||
+        target.videoGenStatus === 'timeout' ||
+        target.videoGenStatus === 'cancelled')
+    ) {
+      const original = conversationMessages[messageIndex - 1];
+      const prompt = target.videoGenPrompt?.trim() || original?.content.trim();
+      if (prompt) {
+        void Promise.resolve(
+          handleSend(/^\/video(?:\s|$)/i.test(prompt) ? prompt : `/video ${prompt}`),
+        );
         return;
       }
-      if (
-        target?.role === 'assistant' &&
-        (target.type === 'video' ||
-          target.videoGenStatus === 'failed' ||
-          target.videoGenStatus === 'timeout' ||
-          target.videoGenStatus === 'cancelled')
-      ) {
-        const original = conversationMessages[messageIndex - 1];
-        const prompt = target.videoGenPrompt?.trim() || original?.content.trim();
-        if (prompt) {
-          void Promise.resolve(
-            handleSend(/^\/video(?:\s|$)/i.test(prompt) ? prompt : `/video ${prompt}`),
-          );
-          return;
-        }
+    }
+    if (
+      target?.role === 'assistant' &&
+      (target.type === 'image' || target.imageGenStatus === 'failed')
+    ) {
+      const edit = clerkUserId ? peekImageEditRetry(messageId, clerkUserId) : null;
+      if (edit) {
+        runImageEditTurn(edit, messageId);
+        return;
       }
-      if (
-        target?.role === 'assistant' &&
-        (target.type === 'image' || target.imageGenStatus === 'failed')
-      ) {
-        const edit = clerkUserId ? takeImageEditRetry(messageId, clerkUserId) : null;
-        if (edit) {
-          runImageEditTurn(edit);
+      const original = conversationMessages[messageIndex - 1];
+      if (original?.role === 'user') {
+        const fallback = resolveImageRetryFallback(original);
+        if (fallback.kind === 'reference_unavailable') {
+          setSendError(fallback.message);
           return;
         }
-        const original = conversationMessages[messageIndex - 1];
-        if (original?.role === 'user') {
-          const fallback = resolveImageRetryFallback(original);
-          if (fallback.kind === 'reference_unavailable') {
-            setSendError(fallback.message);
-            return;
-          }
-          void Promise.resolve(handleSend(fallback.text));
-          return;
-        }
+        void Promise.resolve(handleSend(fallback.text));
+        return;
       }
-      trackProductEvent('response_regenerated');
-      retryMessage(id, messageId);
-    },
-    [
-      clerkUserId,
-      conversationMessages,
-      handleSend,
-      id,
-      resolveOfflineMessage,
-      retryMessage,
-      runImageEditTurn,
-      setSendError,
-      stopSpeaking,
-    ],
-  );
+    }
+    trackProductEvent('response_regenerated');
+    retryMessage(id, messageId);
+  });
+
+  const retryFailedSend = useMemo(() => {
+    if (
+      !id ||
+      sendError === CLOUD_SIGN_IN_MESSAGE ||
+      sendError?.startsWith('The active AGI Cloud account changed')
+    ) {
+      return undefined;
+    }
+    if (sendErrorRetry?.kind === 'regenerate') {
+      const { messageId } = sendErrorRetry;
+      if (!conversationMessages.some((message) => message.id === messageId)) return undefined;
+      return () => {
+        clearError();
+        retryMessage(id, messageId);
+      };
+    }
+    if (sendErrorRetry?.kind === 'resend' && composerHoldsRefusedSend) {
+      return () => {
+        clearError();
+        chatInputAttachRef.current?.retrySend?.();
+      };
+    }
+    return undefined;
+  }, [
+    clearError,
+    composerHoldsRefusedSend,
+    conversationMessages,
+    id,
+    retryMessage,
+    sendError,
+    sendErrorRetry,
+  ]);
 
   const handleProviderConsentEnabled = useCallback(() => {
     clearProviderConsentError();
@@ -1626,10 +1948,10 @@ export default function ChatScreen() {
   }, [clearError, clearProviderConsentError]);
 
   const handleEditMessage = useCallback(
-    (messageId: string, newContent: string) => {
+    (messageId: string, newContent: string, attachments?: MessageAttachment[]) => {
       if (!id) return false;
       stopSpeaking();
-      return editMessage(id, messageId, newContent);
+      return editMessage(id, messageId, newContent, attachments);
     },
     [id, editMessage, stopSpeaking],
   );
@@ -1638,7 +1960,7 @@ export default function ChatScreen() {
     (
       messageId: string,
       toolCallId: string,
-      decision: 'approved' | 'rejected',
+      decision: ToolApprovalDecisionValue,
       guidance?: string,
     ) => {
       if (!id) return;
@@ -1655,28 +1977,66 @@ export default function ChatScreen() {
       router.replace('/(app)' as Parameters<typeof router.replace>[0]);
     }
   }, [router, stopSpeaking]);
+  const backToProject = openedFromProject(params.from) && router.canGoBack();
 
-  const canEditImages =
+  const mayEditImages =
     conversationExecutionMode === 'cloud' &&
     isClerkSignedIn &&
     FEATURES.imageGen &&
-    imageGenerationEnabled;
+    imageGenerationEnabled &&
+    hasEditableImage(conversationMessages);
+  const imageEditModelIds = useImageEditModelIds(mayEditImages ? clerkUserId : null);
+  const canEditImages = mayEditImages && hasEditableImage(conversationMessages, imageEditModelIds);
+
+  const imageEditTarget = useCallback(
+    (message: ChatMessage): { conversationId: string; ownerId: string; model: string } | null => {
+      if (!id) return null;
+      if (!clerkUserId) {
+        Alert.alert('Sign in to edit this image', 'Image edits run in AGI Cloud.');
+        return null;
+      }
+      if (!message.model) {
+        Alert.alert(
+          'This image cannot be edited',
+          'The model that made it is not recorded with it. Describe the change in a new message instead.',
+        );
+        return null;
+      }
+      if (!serverEditsImages(message.model, imageEditModelIds)) {
+        Alert.alert(
+          'This image cannot be edited',
+          'The model that made it does not edit images. Describe the change in a new message instead.',
+        );
+        return null;
+      }
+      return { conversationId: id, ownerId: clerkUserId, model: message.model };
+    },
+    [clerkUserId, id, imageEditModelIds],
+  );
 
   const handleEditImageArea = useCallback(
     (message: ChatMessage, edit: ImageAreaEdit) => {
-      if (!id || !clerkUserId || !message.model) return;
+      const target = imageEditTarget(message);
+      if (!target) return;
       runImageEditTurn({
-        conversationId: id,
+        ...target,
         displayText: edit.prompt,
         prompt: edit.prompt,
-        model: message.model,
         operation: 'inpaint',
         sourceImageBase64: edit.sourceBase64,
         maskImageBase64: edit.maskBase64,
-        ownerId: clerkUserId,
       });
     },
-    [clerkUserId, id, runImageEditTurn],
+    [imageEditTarget, runImageEditTurn],
+  );
+
+  const handleEditImage = useCallback(
+    (message: ChatMessage, edit: ImageWholeEdit) => {
+      const target = imageEditTarget(message);
+      if (!target) return;
+      runImageEditTurn(wholeImageEditRequest({ edit, ...target }));
+    },
+    [imageEditTarget, runImageEditTurn],
   );
 
   const handleDeleteImageConversation = useCallback(() => {
@@ -1763,6 +2123,9 @@ export default function ChatScreen() {
         },
       ],
       onDeleted: handleBack,
+      onArchived: whenCurrent(() => {
+        if (composerFocusedRef.current) handleBack();
+      }),
     });
   }, [
     captureConversationAction,
@@ -1798,8 +2161,8 @@ export default function ChatScreen() {
     speechOwner,
     speechOptions: speechSettings(),
     onCaptureError: (err) => {
-      setVoiceInlineVisible(false);
-      Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
+      if (classifyVoiceFailure(err) !== 'no-speech') setVoiceInlineVisible(false);
+      showVoiceCaptureFailureAlert(err);
     },
   });
 
@@ -1813,6 +2176,17 @@ export default function ChatScreen() {
       </SafeAreaView>
     );
   }
+
+  const conversationUnavailable = missingOnServer && conversationMessages.length === 0;
+  const workSwitchVisible =
+    conversationExecutionMode === 'cloud' &&
+    !conversationStarted &&
+    !messageLoadFailed &&
+    !conversationUnavailable &&
+    !voiceInlineVisible &&
+    !liveVoiceVisible &&
+    canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const workSwitchCentred = !conversation?.projectId;
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
@@ -1839,28 +2213,38 @@ export default function ChatScreen() {
             borderBottomColor: colors.border,
           }}
         >
-          <Pressable
-            onPress={handleOpenDrawer}
-            style={({ pressed }) => ({
-              width: 44,
-              height: 44,
-              borderRadius: radii.full,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-            })}
-            accessibilityLabel="Open menu"
-            accessibilityRole="button"
-          >
-            <Menu size={18} color={colors.textSecondary} />
-          </Pressable>
+          {backToProject ? (
+            <ProjectChatBackButton
+              testID="chat.thread-header.back-to-project"
+              projectName={conversationProject?.name}
+              onPress={handleBack}
+            />
+          ) : usesPersistentDrawer ? (
+            <View testID="chat.thread-header.drawer-slot" style={{ width: 44, height: 44 }} />
+          ) : (
+            <Pressable
+              onPress={handleOpenDrawer}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                borderRadius: radii.full,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+              })}
+              accessibilityLabel="Open menu"
+              accessibilityRole="button"
+            >
+              <Menu size={18} color={colors.textSecondary} />
+            </Pressable>
+          )}
 
-          {conversationExecutionMode === 'local' && activeProjectId && activeProject ? (
+          {conversationProject ? (
             <Pressable
               onPress={() =>
                 router.push({
                   pathname: '/(app)/projects/[id]' as const,
-                  params: { id: activeProjectId },
+                  params: { id: conversationProject.id },
                 })
               }
               style={{
@@ -1875,43 +2259,78 @@ export default function ChatScreen() {
                 minWidth: 44,
                 flexShrink: 1,
               }}
-              accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
+              accessibilityLabel={`Active project: ${conversationProject.name}. Tap to view details.`}
               accessibilityRole="button"
             >
+              <FolderOpen size={14} color={colors.teal} />
               <Text
                 numberOfLines={1}
-                style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '500' }}
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                style={{
+                  flexShrink: 1,
+                  fontSize: typeScale.caption,
+                  color: colors.teal,
+                  fontWeight: '500',
+                }}
               >
-                {activeProject.name}
+                {conversationProject.name}
               </Text>
             </Pressable>
           ) : null}
 
-          <Pressable
-            onPress={handleMenuPress}
-            disabled={!conversation}
-            style={{
-              flex: 1,
-              minWidth: 44,
-              minHeight: 44,
-              justifyContent: 'center',
-              paddingHorizontal: 4,
-            }}
-            accessibilityLabel={`${title}. Open conversation menu`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !conversation }}
-          >
-            <Text
-              numberOfLines={1}
-              style={{
-                fontSize: typeScale.callout,
-                fontWeight: '600',
-                color: colors.textPrimary,
-              }}
+          {workSwitchVisible ? (
+            <View
+              testID="chat.thread-header.work-switch"
+              pointerEvents="box-none"
+              style={
+                workSwitchCentred
+                  ? {
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }
+                  : { flex: 1, alignItems: 'center' }
+              }
             >
-              {title}
-            </Text>
-          </Pressable>
+              <WorkModeSwitch />
+            </View>
+          ) : null}
+          {workSwitchVisible ? (
+            workSwitchCentred ? (
+              <View style={{ flex: 1 }} />
+            ) : null
+          ) : (
+            <Pressable
+              onPress={handleMenuPress}
+              disabled={!conversation}
+              style={{
+                flex: 1,
+                minWidth: 44,
+                minHeight: 44,
+                justifyContent: 'center',
+                paddingHorizontal: 4,
+              }}
+              accessibilityLabel={`${title}. Open conversation menu`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !conversation }}
+            >
+              <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                style={{
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
+                {title}
+              </Text>
+            </Pressable>
+          )}
 
           <View style={{ flexDirection: 'row', flexShrink: 0, alignItems: 'center', gap: 4 }}>
             <ProjectSourcesButton projectId={conversation?.projectId} />
@@ -1973,15 +2392,39 @@ export default function ChatScreen() {
 
         <TemporaryChatBanner />
 
-        {retiredNotice ? (
+        {showRetiredNotice ? (
           <View
             testID="retired-model-notice"
             accessibilityRole="alert"
-            style={{ paddingHorizontal: 16, paddingVertical: 6 }}
+            style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 16, gap: 4 }}
           >
-            <Text style={{ color: colors.agentWarning, fontSize: typeScale.footnote }}>
+            <Text style={{ flex: 1, color: colors.agentWarning, fontSize: typeScale.footnote }}>
               {retiredNotice}
             </Text>
+            <Pressable
+              onPress={handleChooseModel}
+              accessibilityRole="button"
+              accessibilityLabel="Choose a model"
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
+            >
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+              >
+                Choose model
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setDismissedRetiredNotice(retiredNoticeKey)}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss"
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X size={16} color={colors.textSecondary} strokeWidth={2} />
+            </Pressable>
           </View>
         ) : null}
 
@@ -2007,12 +2450,50 @@ export default function ChatScreen() {
             ) : (
               <MessageSkeleton />
             )
+          ) : conversationUnavailable ? (
+            <View
+              testID="chat.conversation-unavailable"
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingHorizontal: 32,
+                gap: 12,
+              }}
+            >
+              <Text
+                accessibilityRole="header"
+                style={{
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                  textAlign: 'center',
+                }}
+              >
+                This chat is not available
+              </Text>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  color: colors.textSecondary,
+                  textAlign: 'center',
+                }}
+              >
+                It may have been deleted, or it belongs to a different account.
+              </Text>
+              <Button title="New chat" variant="secondary" onPress={handleNewChat} />
+            </View>
+          ) : messageLoadFailed && conversationMessages.length === 0 ? (
+            <View testID="chat.history-not-loaded" style={{ flex: 1 }} />
           ) : (
             <MessageList
               messages={conversationMessages}
               speechOwner={speechOwner}
               onDeleteMessage={handleDeleteMessage}
               onReaction={handleReaction}
+              onSubmitRatingDetails={
+                conversationExecutionMode === 'cloud' ? handleSubmitRatingDetails : undefined
+              }
               onRetryMessage={handleRetryMessage}
               onRetryWithModel={handleRetryWithModel}
               continuableMessageId={continuableMessageId}
@@ -2024,17 +2505,28 @@ export default function ChatScreen() {
                   : undefined
               }
               footer={
-                followUpTarget && id ? (
+                followUpTarget && id && !composerHasText ? (
                   <FollowUpSuggestions
                     conversationId={id}
                     messageId={followUpTarget}
-                    onSelect={(prompt) => void handleSend(prompt)}
+                    onSelect={handleFollowUp}
+                    cached={storedFollowUps}
+                    onFetched={handleFollowUpsFetched}
+                    fallbackTurn={followUpFallbackTurn}
+                    searchUnavailable={followUpSearchUnavailable}
                   />
                 ) : null
               }
-              onFollowUp={(prompt) => void handleSend(prompt)}
+              onFollowUp={handleFollowUp}
               onEditImageArea={canEditImages ? handleEditImageArea : undefined}
-              onDeleteImageConversation={handleDeleteImageConversation}
+              onEditImage={canEditImages ? handleEditImage : undefined}
+              inTemporaryChat={conversation?.temporary === true}
+              imageEditModelIds={imageEditModelIds}
+              onDeleteImageConversation={
+                isImageGenerationChat(conversationMessages)
+                  ? handleDeleteImageConversation
+                  : undefined
+              }
               variantInfoByMessageId={variantInfo}
               onSelectVariant={handleSelectVariant}
               onSwitchModel={handleOpenModelPicker}
@@ -2044,10 +2536,13 @@ export default function ChatScreen() {
               onPauseResearch={handlePauseResearch}
               resumingResearchMessageId={resumingResearchMessageId}
               onEditMessage={handleEditMessage}
+              editAttachmentsSupported
+              {...(highlightMessageId ? { highlightMessageId } : {})}
               onRefresh={handleRefresh}
               refreshing={refreshing}
               onQuoteReply={handleQuoteReply}
               onResolveToolApproval={handleResolveToolApproval}
+              lastAnswerLiveRun={lastAnswerRun}
             />
           )}
         </View>
@@ -2057,7 +2552,7 @@ export default function ChatScreen() {
         {/* Context-budget warning. The component computes its own threshold and
             renders null below it, so it is mounted unconditionally, it appears
             only once the thread crosses ~70% of the model's context window. */}
-        {inFlightTurn !== 'idle' ? (
+        {inFlightNoticeShown && !liveVoiceVisible ? (
           <View
             accessibilityRole={inFlightTurn === 'stalled' ? 'alert' : undefined}
             accessibilityLiveRegion="polite"
@@ -2070,7 +2565,7 @@ export default function ChatScreen() {
               paddingVertical: 8,
             }}
           >
-            {inFlightTurn === 'running' ? <LoadingIndicator size="small" /> : null}
+            {inFlightTurn !== 'stalled' ? <LoadingIndicator size="small" /> : null}
             <Text
               style={{
                 flex: 1,
@@ -2080,8 +2575,38 @@ export default function ChatScreen() {
             >
               {inFlightTurn === 'running'
                 ? 'Still answering. The reply appears here when it is ready.'
-                : IN_FLIGHT_TURN_STALLED_MESSAGE}
+                : inFlightTurn === 'waiting'
+                  ? IN_FLIGHT_TURN_WAITING_MESSAGE
+                  : IN_FLIGHT_TURN_STALLED_MESSAGE}
             </Text>
+            {inFlightTurn === 'stalled' ? (
+              <>
+                <Pressable
+                  onPress={handleRetryStalledTurn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry"
+                  style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typeScale.footnote,
+                      fontWeight: '600',
+                      color: colors.textPrimary,
+                    }}
+                  >
+                    Retry
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setDismissedStallFor(lastMessage?.id ?? null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss"
+                  style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <X size={16} color={colors.textSecondary} strokeWidth={2} />
+                </Pressable>
+              </>
+            ) : null}
           </View>
         ) : null}
         <ContextWarningChip
@@ -2090,7 +2615,7 @@ export default function ChatScreen() {
           onStartFreshChat={handleNewChat}
         />
 
-        <ModelTierWarningBanner />
+        <ModelTierWarningBanner onChooseModel={handleChooseModel} />
 
         <UsageLimitBanner
           warning={workUsageCardShown ? null : usageLimit.warning}
@@ -2110,20 +2635,7 @@ export default function ChatScreen() {
           freeCapacity={providerConsentError ? null : freeCapacityError}
           action={sendRecoveryAction}
           detailShownInTurn={failureShownInTurn}
-          onRetry={
-            sendError !== CLOUD_SIGN_IN_MESSAGE &&
-            !sendError?.startsWith('The active AGI Cloud account changed') &&
-            conversationMessages.some((m) => m.role === 'user')
-              ? () => {
-                  if (!id) return;
-                  const lastUser = [...conversationMessages]
-                    .reverse()
-                    .find((m) => m.role === 'user');
-                  clearError();
-                  if (lastUser) retryMessage(id, lastUser.id);
-                }
-              : undefined
-          }
+          onRetry={retryFailedSend}
           onDismiss={clearError}
         />
 
@@ -2133,24 +2645,18 @@ export default function ChatScreen() {
             is neither reference-03 nor what VoiceInlineBar's own docstring
             promises ("the only thing that changes is the composer"). */}
         {conversationExecutionMode === 'cloud' &&
-        !conversationStarted &&
-        !voiceInlineVisible &&
-        !liveVoiceVisible ? (
-          <WorkModeSwitch />
-        ) : null}
-        {conversationExecutionMode === 'cloud' &&
         workMode === 'agiwork' &&
         !voiceInlineVisible &&
         !liveVoiceVisible ? (
           <ComposerApprovalModeControl />
         ) : null}
-        {voiceInlineVisible || liveVoiceVisible ? null : (
+        {voiceInlineVisible || liveVoiceVisible || conversationUnavailable ? null : (
           <Composer
             onSend={handleSend}
             isStreaming={isStreaming}
             onStop={handleStop}
             onOpenModelPicker={handleOpenModelPicker}
-            onOpenVoiceMode={handleOpenVoiceMode}
+            onOpenVoiceMode={voiceModeAvailable ? handleOpenVoiceMode : undefined}
             onOpenCompare={compareAction}
             onOpenExport={handleOpenExport}
             onOpenAddToChat={handleOpenAddToChat}
@@ -2173,6 +2679,8 @@ export default function ChatScreen() {
                 : undefined
             }
             onClearSelectedSkill={clearSelectedSkill}
+            onRefusedSendChange={setComposerHoldsRefusedSend}
+            onHasTextChange={setComposerHasText}
           />
         )}
 
@@ -2189,6 +2697,7 @@ export default function ChatScreen() {
           onAttachFromLibrary={handleAttachFromLibrary}
           onOpenSkills={handleOpenSkills}
           offersOutputFormat
+          conversationProjectId={conversation?.projectId ?? null}
         />
 
         <StyleSelector openSignal={styleSelectorOpenSignal} />

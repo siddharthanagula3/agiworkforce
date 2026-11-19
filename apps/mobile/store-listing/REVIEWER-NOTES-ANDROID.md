@@ -2,14 +2,33 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-11
+Last updated: 2026-11-17
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
-Paste the body of this file into the **App content → App access → Instructions**
-field in Play Console.
 `store-listing/LISTING-METADATA-ANDROID.json` points
-`play_console_review_notes_file` here.
+`play_console_review_notes_file` here. In Play Console, **App content → App
+access** takes the review account's email and password in their own fields and
+a short instruction text; only the text in the next section goes there. The
+rest of this file is the reference behind it and behind the Data safety form:
+answer the Play reviewer from it if they ask.
+
+## Paste this into App access
+
+Google's pages read on 2026-11-15 (answers 15748846 and 9859455) allow up to
+five instruction sets and state no length limit for the instruction field, so
+this text is kept short rather than held to a known limit. When pasting, check
+the field's character counter in Play Console.
+
+```text
+Local Mode works without an account. AGI Cloud needs the sign-in above; no one-time code is needed.
+1. Finish onboarding, then tap Cloud in the Local/Cloud switch (side menu or Settings).
+2. Age step: share the age signal if Android asks, or enter an age of 18 or more.
+3. Sign in with the email and password above, and accept the Terms if asked.
+4. Before AGI Cloud opens, the app asks "Share with AI providers?": tap Allow. Not now keeps Local Mode, and tapping Cloud asks again. To withdraw: Settings > Privacy > Share with AI providers, off.
+Nothing is sold on any platform before 1 January 2027: the app has no purchase, upgrade or price, and no plan or credit can be bought on the web either. The review account's plan was granted for this review without a purchase.
+Report: three-dot menu under any answer. Delete Account: Settings > Email > Danger Zone; in Local Mode, Settings > Data Controls > Delete account, then Check deletion status.
+```
 
 Every statement below is checked against shipped code in `apps/mobile` (and, for
 server endpoints, `apps/web`). Each claim names the file it was verified in. When
@@ -36,22 +55,37 @@ entries, with their exact model identifiers, licences and sizes, are defined in
 truth for what can run on a device, and this document deliberately points at it
 rather than restating identifiers that would then drift.
 
-Local chats are stored in an encrypted MMKV store whose 256-bit key is held by
+Local chats are stored in an MMKV store encrypted with AES-128 in CFB mode,
+keyed by 16 random printable characters (about 105 bits) held by
 `expo-secure-store`, which is Android Keystore-backed (`lib/mmkv.ts`). On-device
 memory and model records use a local SQLite database encrypted with SQLCipher
-(`app.config.js` → `['expo-sqlite', { useSQLCipher: true }]`, key handling in
-`storage/db.ts`).
+(AES-256-CBC with HMAC-SHA512 under a random 256-bit key; `app.config.js` →
+`['expo-sqlite', { useSQLCipher: true }]`, key handling in `storage/db.ts`).
 
 Local Mode does not merely _avoid_ our servers, it is prevented from reaching
 them: `lib/egressGuard.ts` throws `EgressBlockedError` on any outbound request to
-an AGI managed-cloud host while Local Mode is active.
+an AGI managed-cloud host while Local Mode is active. The exceptions are a
+content report the person chooses to send with its own **Send** tap
+(`consentedReport`, see **Reporting AI-generated content**) and, for an account
+that is already signed in, two kinds of control that carry no chat content: the
+account controls (Terms, account deletion and its status and cancellation, the
+identity check for deletion, and the data export), because deletion and export
+must not depend on sharing with AI providers; and the controls that pause the
+account's scheduled and running tasks when the person turns off sharing with AI
+providers. AGI Cloud itself is
+open only while the signed-in account allows sharing with AI providers
+(`services/providerConsent.ts`, `src/features/chat/store/cloudModeDoor.ts`).
 
 **AGI Cloud (optional, requires sign-in).** Signing in enables server-side chat
 and web search on the Free plan, which is open to anyone who signs in
 (`lib/v1FeatureFlags.ts` → `cloudChat`, `webSearch` are `true`). Sign-in is
-Clerk's native `AuthView` sheet, not a browser (`app/(auth)/login.tsx` →
-`<AuthView mode="signInOrUp" />`). This version is free, sells nothing and has
-no in-app products; see **Billing** below.
+the app's own form, not a browser (`app/(auth)/login.tsx`,
+`src/features/auth/components/MobileSignIn.tsx`): **Email address**,
+**Continue**, then a password or an emailed code, with Google and GitHub
+buttons; Clerk's native `AuthView` opens only from **More sign-in options** or
+as a fallback. Remote Control and Send to Desktop are not in this version
+(`companion` and `dispatch` are `false`). This version is free, sells nothing
+and has no in-app products; see **Billing** below.
 
 ## How to review it
 
@@ -66,6 +100,28 @@ includes age confirmation, and a signed-in account must accept the current
 Terms before Cloud unlocks. The review account needs no purchase setup: this
 version has no in-app products.
 
+**Consent before AGI Cloud opens.** After sign-in and the Terms, and whenever a
+signed-in person taps **Cloud** in Local Mode, the app asks **Share with AI
+providers?**, names each provider, and offers **Details**, **Not now** and
+**Allow**. Without **Allow** the app cannot be in AGI Cloud: **Not now** keeps
+it in Local Mode, signed in, and tapping **Cloud** asks again. The Back key on
+the question counts as **Not now**. The permission belongs to the account that
+gave it; another account on the same device is asked itself. Messages,
+attachments, picture and video requests, the image editor and live voice check
+it again before they send (`services/llmGate.ts`,
+`src/features/chat/actions/mediaGenerationConsent.ts`,
+`src/features/voice/services/liveVoiceSession.ts`).
+
+**Withdrawing it.** Settings → **Privacy** → **Share with AI providers**,
+captioned "AGI Cloud needs this. Off keeps Local Mode." The switch shows in AGI
+Cloud, and in Local Mode while the account's permission is on. Turning it off
+withdraws the permission at once: the app returns to Local Mode and stays
+there, live voice and answers being written stop, and the account's active
+schedules and running tasks are paused, never cancelled. When there was
+something to pause, one line says what was paused or what could not be.
+Turning it on asks the same question
+(`src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx`).
+
 ## Age gate and minor-safe mode
 
 Implemented in `src/features/auth/services/ageGate.ts` and
@@ -75,8 +131,8 @@ That screen first asks Play Age Signals for the age range (`expo-age-range`) and
 **Where it fires.** The gate guards Cloud sign-in, not first launch. The moment a
 signed-out user heads for the auth group, `app/_layout.tsx` redirects to
 `/(public)/age-gate` with `returnTo` set to the Cloud sign-in path. Local first
-launch is deliberately _not_ gated, Local Mode sends nothing off the device, so
-there is no data subject to protect and the gate would only be a wall. That
+launch is deliberately _not_ gated, Local Mode sends no chat content and no
+account data off the device, so the gate would only be a wall. That
 boundary is pinned by a test that fails if anyone reintroduces it:
 `__tests__/age-gate-guards-cloud-not-local.test.ts`.
 
@@ -97,15 +153,17 @@ IP geolocation, no network call, and no regional age is above 18:
 
 **What it stores.** One MMKV record under `age-gate:v1`: confirmed flag, minor
 flag, timestamp, region code, threshold. It is on-device only and is never sent
-anywhere. The screen says so verbatim: "Your age is stored only on this device
-and never shared."
+anywhere. The screen says so verbatim: "Your age stays on this device and is
+never shared."
 
 **Minor-safe mode is one-way.** If the entered age is under the device's
 threshold, `confirmAgeGate` records `isMinor: true` and thereafter refuses to accept a higher age, nothing in
 the app verifies a typed age, so accepting one would let the protected user
 switch the protection off. Only `clearAgeGate` lifts it, and the refusal screen
-tells the user the honest way to do that: reinstall the app. The screen is
-`age-gate-refused` in `app/(public)/age-gate.tsx`.
+tells the user the honest way to do that: "This device recorded an age under
+13, which only erasing AGI’s data on this device can reset." (with the
+regional age in place of 13). The screen is `age-gate-refused` in
+`app/(public)/age-gate.tsx`.
 
 **What minor mode does.** `lib/contentFilter.ts` checks every outgoing prompt
 against a shared blocklist before it reaches any model, local or cloud. The check
@@ -116,22 +174,32 @@ review, but explicitly cannot turn it off.
 
 **To exercise it:** tap Cloud sign-in, enter an age under 13, and the "Age
 requirement" screen appears; Settings → Parental Controls then reads "Minor-safe
-mode is active". Only a reinstall lets that device sign in to Cloud again.
+mode is active". Only erasing AGI's data on that device lets it sign in to
+Cloud again.
 
 ## Reporting AI-generated content
 
 Required by the Play GenAI policy, and implemented as an in-app control on the
 turn itself rather than a link to a support page.
 
-**Where the control is.** A flag button under **every completed assistant turn**.
-`src/features/chat/components/MessageBubble.tsx` renders `<ReportFlagButton />`
-whenever the message is from the assistant, is no longer streaming, and has
-content. There is no per-conversation opt-in and nothing to enable first.
+**Where the control is.** On **every completed assistant turn**, **Report…** is
+in the menu that the three-dot button under the answer opens (TalkBack: **More
+message actions**), and in the same menu on a long press.
+`src/features/chat/components/MessageBubble.tsx` offers it whenever the message
+is from the assistant, is no longer streaming, and has content or a generated
+image or video. There is no per-conversation opt-in and nothing to enable
+first. A generated image or video also has a Report control in its full-screen
+viewer (`src/features/chat/components/ImageFullScreen.tsx`,
+`src/features/chat/components/VideoPlayerModal.tsx`), a research report and an
+artifact preview have one in their header
+(`src/features/research/ReportsScreen.tsx`, `src/features/artifacts/index.tsx`),
+and an item shared with the person has its own **Report**
+(`src/features/shared-with-you/SharedItemSafetyActions.tsx`).
 
-**What the user picks.** Six categories, from
-`src/features/chat/components/ReportFlagButton.tsx`: harmful or dangerous,
-inaccurate or misleading, offensive or hateful, misinformation, privacy concern,
-other, plus a free-text note.
+**What the user picks.** One report sheet, `ReportSheet` in
+`src/features/chat/components/ReportFlagButton.tsx`, with six categories:
+harmful or dangerous, inaccurate or misleading, offensive or hateful,
+misinformation, privacy concern, other, plus a free-text note.
 
 **Where the report goes.** `services/contentReport.ts`:
 
@@ -146,19 +214,22 @@ other, plus a free-text note.
    `support@agiworkforce.com`, only when the user ticks that box.
 
 **Offline and Local Mode are handled honestly.** In Local Mode the egress guard
-refuses the POST; the report stays on the device and the confirmation says
-exactly that, "Report saved on this device … nothing was sent". The
-`ReportDelivery` union and the `DELIVERY_TITLE` / `DELIVERY_BODY` maps in
-`ReportFlagButton.tsx` make it impossible for a report that never left the phone
-to be described as submitted.
+refuses the POST, and the sheet asks **Send this report to AGI?** with "Saved on
+this device. Nothing was sent." Only a tap on **Send** lets that one report
+through the guard (`consentedReport` in `lib/egressGuard.ts`); when the phone is
+offline it reads **Report queued** and sends as soon as it can. **Email support
+instead** hands it to the mail app. The `ReportDelivery` union and the
+`DELIVERY_TITLE` / `DELIVERY_BODY` maps in `ReportFlagButton.tsx` make it
+impossible for a report that never left the phone to be described as
+submitted.
 
 ## Permissions the app requests, and why
 
 Declared in `app.config.js` → `android.permissions`:
 
-| Permission     | Why                                                                                                                                                                                                                                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `RECORD_AUDIO` | Voice input in the chat composer (`src/features/voice/services/voiceInput.ts`), and live voice mode in an AGI Cloud chat, which streams the microphone to AGI Cloud over WebRTC for the session (`src/features/voice/services/liveVoiceSession.ts`). Declared as "Voice or sound recordings" in Data safety. |
+| Permission     | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RECORD_AUDIO` | Voice input in the chat composer (`src/features/voice/services/voiceInput.ts`), and live voice mode in an AGI Cloud chat: AGI Cloud sets up the WebRTC call with the voice provider, then the audio streams directly between the device and that provider (`src/features/voice/services/liveVoiceSession.ts`, `apps/web/app/api/voice/live/sessions/route.ts`, and the app's own Privacy, Data use & access screen, `src/features/settings/cloud-privacy/DataUseScreen.tsx`). Declared as "Voice or sound recordings" in Data safety. |
 
 Merged into the manifest by library config plugins rather than listed above:
 
@@ -168,11 +239,19 @@ Merged into the manifest by library config plugins rather than listed above:
   opt-in from Settings → Safety & Security. Off by default.
 - `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED` from `expo-notifications`,
   which is only added to production and preview builds (`conditionalPlugins` in
-  `app.config.js`). Used for model-download, reminder and cloud-job completion
-  alerts, and for agent actions waiting on the user's approval.
+  `app.config.js`). Used for a notice when a reply finishes while the app is in
+  the background (`services/replyReadyNotice.ts`). Pushes from AGI Cloud need
+  Firebase Cloud Messaging: `app.config.js` sets `googleServicesFile` only when
+  the build has `GOOGLE_SERVICES_JSON`, and without it registration fails
+  quietly and the Notifications screen says the device could not be registered
+  (`services/notifications.ts`). Background polling is off in this version
+  (`lib/v1FeatureFlags.ts`, `dispatch` is `false`).
 - `READ_CALENDAR` / `WRITE_CALENDAR` from `expo-calendar`, optional: the calendar
-  is read when the user asks about their schedule, and an event is added only
-  after the user confirms it in a chat
+  is read when the user asks about their schedule in a Cloud chat, and the
+  events read (titles, times, places, notes) go to AGI Cloud and the model
+  provider, declared as "Calendar events" in Data safety
+  (`src/features/integrations/services/phoneDeviceSteps.ts`); an event is added
+  only after the user confirms it in a chat
   (`src/features/settings/permissions/registry.ts` → `calendar`).
 - `READ_EXTERNAL_STORAGE`, `READ_MEDIA_VISUAL_USER_SELECTED`,
   `ACCESS_MEDIA_LOCATION` and `SYSTEM_ALERT_WINDOW`, which libraries would add,
@@ -182,9 +261,12 @@ Merged into the manifest by library config plugins rather than listed above:
   manifest: `app.config.js` lists it in `android.blockedPermissions` while
   `src/features/billing/storePurchases.json` sets `"nativePurchases": false`. See **Billing**
   below.
-- `WRITE_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`'s
-  own `AndroidManifest.xml`. It is legacy-only: on Android 13+ it is stripped by
-  `maxSdkVersion` and the app never requests it.
+- `WRITE_EXTERNAL_STORAGE`. `expo-image-picker` and `expo-media-library` declare
+  it in their own `AndroidManifest.xml` with `android:maxSdkVersion="32"`, and
+  the `expo-media-library` config plugin also adds it at app level without that
+  cap, with `android:requestLegacyExternalStorage="true"`
+  (`node_modules/expo-media-library/plugin/build/withMediaLibrary.js`). Whether
+  the merged manifest keeps the cap is checked on the first release build.
 
 **Runtime behaviour.** The permissions in the table above are requested on first
 use, from a user action, never on launch and never on screen mount. The request
@@ -192,17 +274,16 @@ functions live in `src/features/settings/permissions/registry.ts`, and Settings 
 Permissions shows the live OS status of each. Declining any one of them leaves the
 rest of the app usable.
 
-**One exception, stated plainly: notifications.** `POST_NOTIFICATIONS` is the only
-permission the app can prompt for without a permission-specific tap. Once the user
-has signed in to AGI Cloud and the app is in Cloud mode, a root-layout effect
-in `app/_layout.tsx` calls `registerForPushNotifications`, which requests the
-permission if it is not already granted (`services/notifications.ts`).
-On Android 13+ that is the system POST_NOTIFICATIONS dialog, and on a review device
-it appears shortly after the first Cloud sign-in completes, not on a tap of a
-notifications control. It never fires in Local Mode, never before sign-in, and
-never on a fresh launch of a signed-out install; declining it leaves every other
-feature working. The same permission can also be requested deliberately from
-Settings → Permissions (`registry.ts` → `requestNotifications`).
+**Notifications follow the same rule.** On Android 13+ the system
+POST_NOTIFICATIONS dialog appears only when the user taps **Turn on
+notifications** in Settings → Notifications (`services/notifications.ts` →
+`enablePushNotifications`) or **Allow Notifications** in Settings → Permissions →
+Notifications (`registry.ts` → `requestNotifications`). Signing in to AGI Cloud
+registers the device for push only when notifications are already allowed, and
+never shows the dialog (`app/_layout.tsx`, `services/notifications.ts` →
+`registerForPushNotifications`). The app targets API 36, so creating its
+notification channels does not show the dialog either. Declining it leaves every
+other feature working.
 
 **Not requested.** The app has no location permission and does not depend on
 `expo-location` (it is not in `apps/mobile/package.json`). It collects no
@@ -212,56 +293,78 @@ advertising identifier, there is no `AD_ID` permission, no
 accordingly. Reminders access is iOS-only and short-circuits to `denied` on
 Android (`registry.ts` → `getRemindersStatus`).
 
-Speech recognition on Android is performed by the Android system speech service,
-not by AGI's servers: `voiceInput.ts` starts `ExpoSpeechRecognitionModule` with
-`requiresOnDeviceRecognition: true`, and `app.config.js` names
-`com.google.android.googlequicksearchbox` as the speech service package.
+Dictation is offered only on Android 13 (API 33) and later, where the on-device
+recognizer exists. On Android 8 to 12L the composer shows no dictation
+microphone (`onDeviceRecognizerGuaranteed` in
+`src/features/voice/services/voiceInput.ts`), and `voiceInput.ts`
+refuses dictation there before asking for the microphone. Where it is offered,
+speech recognition is performed on the device by the Android system speech
+service, not by AGI's servers: `voiceInput.ts` starts
+`ExpoSpeechRecognitionModule` with `requiresOnDeviceRecognition: true`, and
+`app.config.js` names `com.google.android.googlequicksearchbox` as the speech
+service package. A speech language with no on-device model installed gets a
+message saying so; the audio is never sent to a server instead.
 
 ## Data safety: and where each declaration is backed in code
 
 Two files in the repo describe this declaration:
 `store-listing/android/data-safety.json` holds the per-type records, and
 `LISTING-METADATA-ANDROID.json` → `data_safety` holds the listing copy. They
-declare the same nine types with the same sharing answers, and
+declare the same thirteen Play types with the same sharing and optional answers
+(Other in-app messages has two records, one for chat content and one for support
+messages), and
 `__tests__/ios-store-submission-config.test.ts` fails if they drift apart.
 
-| Declared type             | Shared | Backed by                                                                                                                                                                                                     |
-| ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Email address, Name       | No     | Clerk sign-in only (`app/(auth)/login.tsx`). Never collected in Local Mode.                                                                                                                                   |
-| User IDs                  | No     | The account identifier carried by authenticated cloud requests (`services/api.ts`).                                                                                                                           |
-| Other in-app messages     | Yes    | Cloud-mode chat content, uploaded to AGI Cloud and forwarded to the model provider serving the request.                                                                                                       |
-| Photos                    | Yes    | Image attachments the user picks for a Cloud message (`src/features/media/photo-picker.ts`), and the Cloud profile photo, which is uploaded to Clerk (`src/features/settings/index.tsx` → `handleEditPhoto`). |
-| Files and docs            | Yes    | A document attached to a Cloud message through `expo-document-picker` (`app/(app)/chat/[id].tsx`, `app/(app)/(tabs)/chat.tsx`).                                                                               |
-| Voice or sound recordings | Yes    | Live voice mode in an AGI Cloud chat streams the microphone to AGI Cloud for the session (`src/features/voice/services/liveVoiceSession.ts`). Dictation transcribes on the device and uploads no audio.       |
-| Device or other IDs       | No     | An app-generated UUID from `lib/deviceId.ts`, registered with the push token by `services/notifications.ts` → `POST /api/mobile/push-token`. Created only when push is enabled; it is not an advertising ID.  |
-| App interactions          | No     | Product analytics events in AGI Cloud, only after the user allows them in Settings → Privacy → Product analytics (`src/features/settings/cloud-privacy/ProductAnalyticsConsentGroup.tsx`).                    |
+| Declared type             | Shared | Optional | Backed by                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email address, Name       | No     | Yes      | Clerk sign-in only (`app/(auth)/login.tsx`). Never collected in Local Mode.                                                                                                                                                                                                                                                                                                              |
+| User IDs                  | No     | Yes      | The account identifier carried by authenticated cloud requests (`services/api.ts`).                                                                                                                                                                                                                                                                                                      |
+| Other in-app messages     | Yes    | Yes      | Cloud-mode chat content, uploaded to AGI Cloud and forwarded to the model provider serving the request; and the support tickets and in-app feedback the user writes in Cloud mode (`src/features/support/service.ts`, `src/features/feedback/index.tsx`), which go to no model provider.                                                                                                 |
+| Photos                    | Yes    | Yes      | Image attachments the user picks for a Cloud message (`src/features/media/photo-picker.ts`), and the Cloud profile photo, which is uploaded to Clerk (`src/features/settings/index.tsx` → `handleEditPhoto`).                                                                                                                                                                            |
+| Files and docs            | Yes    | Yes      | A document attached to a Cloud message through `expo-document-picker` (`app/(app)/chat/[id].tsx`, `app/(app)/(tabs)/chat.tsx`).                                                                                                                                                                                                                                                          |
+| Voice or sound recordings | Yes    | Yes      | Live voice in an AGI Cloud chat: AGI Cloud sets up the call, then the audio streams directly between the device and the voice provider (`src/features/voice/services/liveVoiceSession.ts`). Not marked ephemeral, because the provider's retention is not established. Dictation transcribes on the device and uploads no audio.                                                         |
+| Calendar events           | Yes    | Yes      | Events a Cloud chat reads when the user asks about their schedule and allows calendar access, sent to AGI Cloud and the model provider (`src/features/integrations/services/phoneDeviceSteps.ts`, `stores/chat/chatExecutionStore.ts`).                                                                                                                                                  |
+| In-app search history     | Yes    | Yes      | Chat search queries sent to `/api/search` (`stores/chat/chatViewStore.ts`), recorded by the server and sent to the embedding provider when the account has indexed content (`apps/web/app/api/search/route.ts`).                                                                                                                                                                         |
+| Device or other IDs       | No     | No       | Expo's per-install client ID with the update check on every launch; Google ML Kit's per-installation identifiers; and, while signed in, an app-generated install ID from `lib/deviceId.ts` with the device name and OS version, sent on every active session (`src/features/device-registry/heartbeat.ts`) and with the push token (`services/notifications.ts`). Not an advertising ID. |
+| App interactions          | No     | Yes      | Product analytics events in AGI Cloud, only after the user allows them in Settings → Privacy → Product analytics (`src/features/settings/cloud-privacy/ProductAnalyticsConsentGroup.tsx`).                                                                                                                                                                                               |
+| Diagnostics               | No     | No       | Google ML Kit's device information, app information and performance metrics, sent when on-device text recognition, translation or the Android system model runs, Local Mode included; and the diagnostics a Cloud support ticket attaches unless the user turns that off (`src/features/settings/diagnostics/diagnosticsBundle.ts`).                                                     |
+| Crash logs                | No     | No       | The launch error and failed update IDs `expo-updates` sends with the update check on every launch.                                                                                                                                                                                                                                                                                       |
 
-Every type is marked optional in both files, because every one of them is
-collected only after a Cloud sign-in the user does not have to perform: a
-signed-out user who has completed onboarding lands in Local Mode and is never
-redirected to a sign-in wall (`app/_layout.tsx`).
+**Optional.** A type is optional when only a Cloud sign-in, which the user does
+not have to perform, or a feature the user chooses sends it: a signed-out user
+who has completed onboarding lands in Local Mode and is never redirected to a
+sign-in wall (`app/_layout.tsx`). Device or other IDs, Diagnostics and Crash
+logs are required, because SDKs send them on installs that never sign in and the
+app gives no control over them.
 
-**Sharing: declared "yes" for messages, photos, files and voice.** In Cloud
-mode the user's messages and attachments leave the device, reach AGI Cloud, and
-are forwarded server-side to the model provider serving the request. On the
-Free plan some of those providers' terms allow training on what they receive,
-which is use for their own purposes, so those four types are declared shared
-(`sharingBasis` in `store-listing/android/data-safety.json`). Identity data goes
-only to Clerk and push delivery only to the push service, both acting on AGI's
-behalf, so those types are declared not shared. The subprocessors are listed at
-https://agiworkforce.com/subprocessors.
+**Sharing: declared "yes" for messages, photos, files, voice, calendar events
+and search history.** Google defines sharing as a transfer to a third party and
+exempts a service provider that processes data on the developer's behalf (the
+service-provider exception). In Cloud mode those types reach the model, voice
+or embedding provider serving the request. On the Free plan some of those
+providers' terms allow training on what they receive, which is use for their
+own purposes, so the exception cannot be shown to apply and those types are
+declared shared (`sharingBasis` in `store-listing/android/data-safety.json`).
+Identity data goes only to Clerk, push delivery only to the push service,
+update checks only to Expo and ML Kit diagnostics only to Google, each to
+provide its service, so those types are declared not shared. The subprocessors
+are listed at https://agiworkforce.com/subprocessors.
 
 What the source tree can prove about this, and does:
 
-- Every outbound request from the device goes to an AGI-controlled host.
-  `agiworkforce.com`, `api.agiworkforce.com`, `signaling.agiworkforce.com`
-  (`lib/constants.ts` → `API_URL`, `GATEWAY_URL`, `WS_URL`), plus Clerk for
-  sign-in and the push service. No third party receives data directly from the
-  device.
-- **The app contains no analytics SDK, no crash-reporting SDK and no ad SDK.**
-  `apps/mobile/package.json` has no Sentry, Firebase, Crashlytics, Amplitude,
-  PostHog, Mixpanel, Segment, Bugsnag or Datadog dependency; product analytics
-  events go only to AGI Cloud.
+- The device talks to AGI's hosts (`agiworkforce.com`, `api.agiworkforce.com`,
+  `signaling.agiworkforce.com`; `lib/constants.ts` → `API_URL`, `GATEWAY_URL`,
+  `WS_URL`), Clerk for sign-in, the push service, Expo's update service on
+  every launch (`expo-updates`), Google for ML Kit diagnostics, and, in live
+  voice, the voice provider directly.
+- **The app contains no ad SDK and no crash-reporting or analytics SDK of its
+  own choosing.** `apps/mobile/package.json` has no Sentry, Firebase,
+  Crashlytics, Amplitude, PostHog, Mixpanel, Segment, Bugsnag or Datadog
+  dependency, and product analytics events go only to AGI Cloud. Google's ML Kit
+  SDKs, linked through Gradle for on-device text recognition, translation and
+  the Android system model (`native/android/withAGIVisionOCR.cjs`,
+  `withAGITranslate.cjs`, `withAGIAICore.cjs`), send their own diagnostics to
+  Google, declared above.
 - No advertising identifier is collected: no `AD_ID` permission, no
   `AdvertisingIdClient` call, and `usesAdvertisingId: false` in
   `store-listing/android/data-safety.json`.
@@ -276,9 +379,14 @@ Security practices, each verifiable:
   is recorded in `store-listing/android/data-safety.json` as
   `apps/web/app/api/user/delete-account/route.ts`.
 
-**Local Mode collects nothing.** That is not a promise about intent, it is
-enforced by `lib/egressGuard.ts`, which blocks managed-cloud hosts outright while
-Local Mode is active, verified in `__tests__/egress-guard.test.ts`.
+**Local Mode sends AGI no chat content.** That is enforced by
+`lib/egressGuard.ts`, which blocks managed-cloud hosts while Local Mode is
+active, verified in `__tests__/egress-guard.test.ts`. The one thing Local Mode
+sends to AGI without a sign-in is a content report, and only after the person
+taps **Send** on it. Signed in, Local Mode also sends the account and
+withdrawal controls described under **What the app does**, none of which
+carries chat content. The update check to Expo and ML Kit's diagnostics to Google
+still run in Local Mode, as declared above.
 
 ## Billing: please read
 
@@ -308,34 +416,45 @@ false:
   `apps/web/lib/server/mobile-iap-catalog.ts`) stay off unless the deployment
   sets `MOBILE_IAP_ENABLED`. This version never calls them either way.
 
-What you will see under **Settings → Subscription**: a screen titled **Plan**
+What you will see under **Settings → Subscription**: a screen titled **Subscription**
 (`src/features/settings/cloud-billing/index.tsx`, the
 `if (!NATIVE_PURCHASES_AVAILABLE)` branch) with:
 
 - **Current plan**, and the renewal or end date if the plan has one.
 - **Billing**, as plain text with no link, only for an account that already
-  holds a paid plan: **Managed on the web**, **By your organization**, or
-  **Managed where you subscribed**. A Free-plan account gets no Billing row.
+  holds a paid plan: **Managed on the web**, **By your organization** (a
+  workspace plan), **Included with your account** (a personal plan given without
+  a purchase), or **Managed where you subscribed**. A Free-plan account gets no
+  Billing row.
 - **What your plan includes**, which lists the current plan's features only.
-- **Usage**, the account's usage, read natively from the usage API.
+- **Usage**: on a paid plan, the account's usage read natively from the usage
+  API; on the Free plan, a short explanation of how its limits reset, with no
+  meters (`src/features/settings/cloud-usage/index.tsx`).
 - **Help with your plan**, which opens the in-app support screen.
 
-How a locked feature is presented: when something is outside the account's
-plan, the app says it "isn’t included in your plan" (or that the plan's
-allowance is used up for now) and offers **Close**, plus **Choose a standard
-model** when the locked item is a model, with no upgrade button, plan comparison
-or link (`src/features/chat/components/PaywallBottomSheet.tsx`). Elsewhere the
-same rule holds: a model the plan does not include is not listed in the model
-picker, and other plan-locked features are described as not included, never as
-something to buy.
+How a locked feature is presented: the chat sheet says the item "isn’t
+included in your plan" (or that the plan's allowance is used up for now) and
+offers **Close**, plus **Choose a standard model** when the locked item is a
+model, with no upgrade button, plan comparison or link
+(`src/features/chat/components/PaywallBottomSheet.tsx`). A screen whose feature
+the plan leaves out, such as Connectors on the Free plan, reads **Not on your
+plan** and "Your current plan does not include this." (`src/lib/Capabilities.tsx`).
+Server messages are shown without any sentence or alternative about upgrading,
+pricing, access codes, the waitlist or credits (`services/failureCopy.ts`), and
+server notices about billing are not shown. A model the plan does not include
+is not listed in the model picker.
 
-Paid plans exist for the AGI Cloud web product. An account that already holds a
-paid plan gets that plan's access after signing in here. The app neither sells
-nor advertises those plans, names no price, and has no link to where they are
-sold.
+Paid plans exist for the AGI Cloud web product, but nothing is sold on any
+platform before 1 January 2027: no plan or credit can be bought in this app, on
+the web or anywhere else. The plans that exist were granted without a purchase.
+An account that holds one gets that plan's access after signing in here. The app
+neither sells nor advertises plans, names no price, and has no link to a
+purchase.
 
-The review account needs no purchase setup: there are no test purchases to
-make, no products to load and nothing to restore.
+The review account's plan was granted to it for this review without a purchase,
+so its Plan screen shows **Billing: Included with your account**. It needs no
+purchase setup: there are no test purchases to make, no products to load and
+nothing to restore.
 
 Before submitting (operator step, not for the reviewer): do not activate Play
 products for this release. Selling in the app needs `nativePurchases` set to
@@ -347,52 +466,66 @@ This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
+Pages on `agiworkforce.com` are opened through `src/platform/webContentPage.ts`.
+`openWebContentPage` adds `from=mobile` to the address and opens the page in
+an in-app Custom Tab. `openWebAccountPage` adds the same marker, opens only
+`/settings/account` and `/settings/security`, and opens nothing for any other
+address.
+
 **A. Account destinations.** These account links render in this version:
 
-| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                      |
-| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
-| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Custom Tab.                                                      |
-| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Custom Tab.                              |
-| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Custom Tab.                                                                    |
+| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                         |
+| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens the browser. |
+| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Custom Tab.                                                         |
+| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Custom Tab.                                 |
+| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Custom Tab.                                                                       |
 
 No link in the app opens a page about pricing, billing, invoices, sales or
-upgrades.
+upgrades. The `agiworkforce.com` pages it opens carry `from=mobile`, which makes
+the site leave out its pricing and contact-sales links; that website change
+(`apps/web/lib/embedded-page.ts`) must be deployed before review (operator
+check, not for the reviewer: on 2026-11-15 production pages opened that way
+still linked to `/pricing` and `/contact-sales`).
 
-**B. Non-billing destinations.** The sign-in and account-creation flows open
-Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
-account Terms confirmation also links to Terms and Privacy
-(`app/(auth)/login.tsx`, `src/features/auth/components/MobileSignUp.tsx`).
-Settings → Privacy links to Privacy, Data rights requests and Terms
+**B. Non-billing destinations.** In an in-app Custom Tab, through
+`openWebContentPage`: the sign-in and account-creation flows open Terms,
+Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the account
+Terms confirmation also links to Terms and Privacy (`app/(auth)/login.tsx`,
+`src/features/auth/components/MobileSignUp.tsx`). Settings → Privacy links to
+Privacy, Data rights requests and Terms
 (`src/features/settings/cloud-privacy/index.tsx`). Settings → Personalization links its
 custom-instructions helper to the acceptable-use page
-(`src/features/settings/personalization/index.tsx`). Password recovery opens
-`agiworkforce.com/login`, whose password step offers Forgot password, and
-account recovery opens `agiworkforce.com/recover`
-(`app/(auth)/reset-password.tsx`). The desktop-pairing safety disclosure opens
-`agiworkforce.com/security`
-(`src/features/companion/components/PairingRiskDisclosure.tsx`). When the
-server refuses a locked or suspended account, the alert's **Open on the web**
-opens the reset-password or appeal page (`services/api.ts`), and the updated
-Terms notice opens `/terms` (`services/termsNotice.ts`).
+(`src/features/settings/personalization/index.tsx`). The updated Terms notice
+opens `/terms` (`services/termsNotice.ts`). The desktop-pairing safety
+disclosure opens `agiworkforce.com/security`
+(`src/features/companion/components/PairingRiskDisclosure.tsx`), but it is on
+the Remote Control screen, which this version does not show. In the browser:
+password recovery opens `agiworkforce.com/login`, whose password step offers
+Forgot password, and account recovery opens `agiworkforce.com/recover`
+(`app/(auth)/reset-password.tsx`); when the server refuses a locked or
+suspended account, the alert's **Open on the web** opens the reset-password or
+appeal page (`services/api.ts`).
 
-**C. Opened in an in-app Custom Tab, not the browser.** These go through
-`openInAppBrowser` (`lib/safeOpenURL.ts`), which opens an in-app Custom Tab
-rather than leaving the app: Settings →
-About opens `agiworkforce.com`, `/privacy`, `/terms`, `/acceptable-use`, `/help`
-and `/status` (`app/(app)/about.tsx`); Settings opens the Help Center
+**C. Opened in an in-app Custom Tab, not the browser.** The Custom Tab is
+opened by `lib/safeOpenURL.ts`, so the person never leaves the app. Through
+`openWebContentPage`: Settings →
+About opens `/privacy`, `/terms`, `/acceptable-use`, `/help` and `/status`
+(`app/(app)/about.tsx`); Settings opens the Help Center
 (`src/features/settings/index.tsx`); Settings → Permissions opens a help article
 (`src/features/settings/permissions/index.tsx`); the first-run disclosure opens
-`/privacy` and the India notice at `/privacy/india`
+`/privacy`, `/terms` and the India notice at `/privacy/india`
 (`src/features/onboarding/components/FirstRunDisclosureModal.tsx`); the cloud
 provider consent opens `/privacy` and the provider list at `/subprocessors`
 (`src/features/settings/cloud-privacy/NamedProviderConsentModal.tsx`,
-`services/providerConsent.ts`); and a notification whose target has no screen in
+`services/providerConsent.ts`). A notification whose target has no screen in
 the app opens its web page (`services/notifications.ts`). A link in assistant
 output, and a map place or route card, also opens in a Custom Tab and is never
 auto-followed; a non-`http(s)` scheme requires a confirmation alert first
 (`src/features/chat/components/MarkdownInline.tsx`,
-`src/features/chat/components/InteractiveCardBlock.tsx`).
+`src/features/chat/components/InteractiveCardBlock.tsx`). **Open** on an
+artifact the person has published opens its public page through
+`openExternalUrl` (`src/features/chat/components/ArtifactFullScreen.tsx`).
 
 **D. Not `agiworkforce.com`, or not a web page.** Settings → Connectors
 authorizes a connector in an in-app authentication session
@@ -412,7 +545,8 @@ shows an **Open link** button for it
 `Linking.openURL` targets are not web pages: `mailto:` to
 `support@agiworkforce.com` (`app/(app)/about.tsx`, `services/contentReport.ts`)
 and to the account's own address for the desktop link
-(`src/features/companion/components/DesktopSetupChecklistView.tsx`), an
+(`src/features/companion/components/DesktopSetupChecklistView.tsx`, also on
+the Remote Control screen), an
 `otpauth:` link to an authenticator app
 (`src/features/settings/account-security/TwoFactorSection.tsx`), and the
 device-settings intents (`app/(app)/settings/integrations.tsx`,
@@ -445,8 +579,17 @@ no card form, and none of the links above reaches one.
 
 Requested in the app, with no support ticket:
 
-**Settings → Account → Delete Account** → confirmation alert → identity check →
-`DELETE /api/user/delete-account`. The request schedules deletion of the AGI
+In Cloud mode: Settings → **Email** (under Account) → **Danger Zone** →
+**Delete Account** → confirmation alert → identity check →
+`DELETE /api/user/delete-account`. From either mode, Settings → **Data
+Controls** → **Delete account** opens the same screen (after sign-in, if
+signed out; if the app then asks **Share with AI providers?**, either answer
+leads to the same screen). In Local Mode the **Danger Zone** shows **Check
+deletion status**; tapping it asks AGI Cloud for the account's deletion status
+without switching modes or asking about AI providers, and then shows **Delete
+Account**, or **Cancel Account Deletion** when a deletion is scheduled.
+Deletion, its cancellation and **Export Cloud Data** never need the permission
+to share with AI providers (`lib/egressGuard.ts`). The request schedules deletion of the AGI
 Cloud account and its cloud data (chats, projects, memory, artifacts) and
 returns a cancellation deadline 24 hours later; the app shows it and signs out,
 and signing back in before the deadline lets the person cancel. After the
@@ -460,14 +603,20 @@ separately. Sources: `src/features/settings/cloud-account/index.tsx`,
 account epoch captured when the dialog opened, so a mid-flight account switch
 cannot delete the wrong account.
 
-When the server refuses, nothing is scheduled and the app shows why. A paid plan
-that still renews (bought on the web, since this version sells nothing) has to
-be cancelled where it was bought first, so a renewal cannot charge after the
-account is gone; the app names where but does not link to the billing page.
-Once the plan is cancelled, deletion is scheduled straight away, the remaining
-paid time ends when erasure runs, and the confirmation says the unused time is
-not refunded. A cancelled plan with a payment still being collected, and the
-only owner of a workspace, are also refused, with the reason shown.
+A paid plan does not stop the deletion. A plan that still renews and was bought
+on the web stops renewing when the deletion is scheduled, so no renewal can
+charge after the account is gone, and cancelling the deletion turns renewal back
+on. A plan bought through Google Play or Apple (an older store purchase; this
+version sells nothing) cannot be cancelled by us, so the receipt says the store
+keeps billing until the person cancels there. A plan already cancelled, and a
+personal paid plan given without a purchase on an account with no web billing
+account, are scheduled straight away. The remaining paid time ends when erasure
+runs, and the confirmation says the unused time is not refunded
+(`apps/web/app/api/user/delete-account/route.ts`).
+
+When the server refuses, nothing is scheduled and the app shows why: a payment
+still being collected, a plan change already scheduled on a web plan, a plan
+whose purchase cannot be identified, and the only owner of a workspace.
 
 **Settings → Data Controls** offers **Export Local Data**, chats, memory,
 settings and installed model details, which runs entirely on the device

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { describe, expect, it } from 'vitest';
 import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
@@ -8,6 +11,7 @@ import {
   checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from './approval-checkpoint-request';
+import { fileSearchToolDefinitions } from '@/lib/server/tools/file-search-tool';
 import { ToolSchemaStateSchema, createToolSchemaState } from './tool-schema-state';
 import type { ModelSelection } from './capability-preamble';
 import type { ChatCompletionRequest, ProcessedRequest } from './request-processor';
@@ -291,5 +295,223 @@ describe('server-owned context policy snapshot', () => {
       messages: [],
     });
     expect(processed.contextPolicySnapshot).toBe(saved);
+  });
+});
+
+describe('the large-file ledger a checkpoint keeps', () => {
+  const turn = { model: 'fixture-model', messages: [], stream: true } as ChatCompletionRequest;
+  const ledger = {
+    assetIds: ['11111111-1111-4111-8111-111111111111'],
+    attachmentAssetIds: [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ],
+    limitTokens: 6_666,
+    charged: 4_210,
+    readingClosed: true,
+    fileToolsOffered: true,
+  };
+
+  function saved(largeFileTurn?: typeof ledger) {
+    return buildApprovalCheckpointRequest(
+      turn,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      largeFileTurn,
+    );
+  }
+
+  function resumed(
+    request: Record<string, unknown>,
+    overrides: Partial<Pick<ProcessedRequest, 'turnToolProhibition'>> & { tools?: unknown[] } = {},
+  ): ProcessedRequest {
+    const { tools, ...rest } = overrides;
+    const processed = {
+      chatRequest: { ...turn },
+      llmRequest: { messages: [], ...(tools ? { tools } : {}) },
+      largeFileTurn: { ...ledger, charged: 0, readingClosed: false, pendingStepAllowance: 900 },
+      ...rest,
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, JSON.parse(JSON.stringify({ request, messages: [] })));
+    return processed;
+  }
+
+  it('saves and restores largeFileTurn', () => {
+    const request = saved({ ...ledger, pendingStepAllowance: 900 } as typeof ledger);
+
+    expect(request['x_large_file_turn']).toEqual(ledger);
+    expect(resumed(request).largeFileTurn).toEqual(ledger);
+    for (const isFree of [true, false]) {
+      expect(checkpointRequestForResume(request, isFree)).not.toHaveProperty('x_large_file_turn');
+    }
+  });
+
+  it('keeps what the paused step had left of its file-tool allowance', () => {
+    const request = saved({
+      ...ledger,
+      readingClosed: false,
+      stepAllowanceLeft: 1_250,
+    } as typeof ledger);
+
+    expect(resumed(request).largeFileTurn).toEqual({
+      ...ledger,
+      readingClosed: false,
+      stepAllowanceLeft: 1_250,
+    });
+  });
+
+  it('a checkpoint without the key resumes with no ledger', () => {
+    expect(resumed(saved()).largeFileTurn).toBeUndefined();
+  });
+
+  it('gives the resumed turn back the file tools the paused turn offered, once each', () => {
+    const plainFileTools = fileSearchToolDefinitions();
+    const processed = resumed(saved(ledger), { tools: [internalTool, ...plainFileTools] });
+
+    expect(processed.llmRequest.tools).toEqual([
+      internalTool,
+      ...fileSearchToolDefinitions({ largeFileTurn: true }),
+    ]);
+    expect(processed.largeFileTurn?.fileToolsOffered).toBe(true);
+  });
+
+  it('a resumed turn whose tools are all refused offers no file tools and its cards say so', () => {
+    const processed = resumed(saved(ledger), {
+      turnToolProhibition: { allTools: true } as ProcessedRequest['turnToolProhibition'],
+    });
+
+    expect(processed.llmRequest.tools).toBeUndefined();
+    expect(processed.largeFileTurn?.fileToolsOffered).toBe(false);
+  });
+
+  it('leaves the tools of a resumed turn that never offered the file tools as they are', () => {
+    const processed = resumed(saved({ ...ledger, fileToolsOffered: false }), {
+      tools: [internalTool],
+    });
+    expect(processed.llmRequest.tools).toEqual([internalTool]);
+    expect(resumed(saved(), { tools: [internalTool] }).llmRequest.tools).toEqual([internalTool]);
+  });
+
+  it('never keeps a ledger the caller sent, nor one that does not parse', () => {
+    const incoming = { ...turn, x_large_file_turn: ledger } as unknown as ChatCompletionRequest;
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty('x_large_file_turn');
+    const forged = saved({ ...ledger, assetIds: ['not-a-uuid'] });
+    expect(forged).not.toHaveProperty('x_large_file_turn');
+    expect(
+      resumed({ x_large_file_turn: { ...ledger, charged: -1 } }).largeFileTurn,
+    ).toBeUndefined();
+  });
+});
+
+describe('the outside-content mark a checkpoint keeps', () => {
+  const turn = { model: 'fixture-model', messages: [], stream: true } as ChatCompletionRequest;
+  const ledger = {
+    assetIds: ['11111111-1111-4111-8111-111111111111'],
+    attachmentAssetIds: ['11111111-1111-4111-8111-111111111111'],
+    limitTokens: 6_666,
+    charged: 0,
+    readingClosed: false,
+    fileToolsOffered: false,
+  };
+
+  function saved(untrustedContextPresent?: boolean) {
+    return buildApprovalCheckpointRequest(
+      turn,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      untrustedContextPresent,
+    );
+  }
+
+  function resumed(
+    request: Record<string, unknown>,
+    before: Partial<Pick<ProcessedRequest, 'untrustedContextPresent'>> = {},
+  ): ProcessedRequest {
+    const processed = {
+      chatRequest: { ...turn },
+      llmRequest: { messages: [] },
+      ...before,
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, JSON.parse(JSON.stringify({ request, messages: [] })));
+    return processed;
+  }
+
+  it('saves the mark of a paused turn and gives it back to the resumed one', () => {
+    const request = saved(true);
+
+    expect(request['x_untrusted_context_present']).toBe(true);
+    expect(resumed(request).untrustedContextPresent).toBe(true);
+    for (const isFree of [true, false]) {
+      expect(checkpointRequestForResume(request, isFree)).not.toHaveProperty(
+        'x_untrusted_context_present',
+      );
+    }
+  });
+
+  it('a turn that held no outside content saves no mark and resumes with none', () => {
+    for (const request of [saved(), saved(false)]) {
+      expect(request).not.toHaveProperty('x_untrusted_context_present');
+      expect(resumed(request)).not.toHaveProperty('untrustedContextPresent');
+    }
+  });
+
+  it('never keeps a mark the caller sent, and a saved value other than true sets nothing', () => {
+    const incoming = {
+      ...turn,
+      x_untrusted_context_present: true,
+    } as unknown as ChatCompletionRequest;
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty(
+      'x_untrusted_context_present',
+    );
+    expect(resumed({ x_untrusted_context_present: 'true' })).not.toHaveProperty(
+      'untrustedContextPresent',
+    );
+  });
+
+  it.each([
+    'app/api/llm/v1/chat/completions/route.ts',
+    'lib/workflows/start-cloud-agent-workflow.ts',
+    'lib/workflows/steps/execute-cloud-agent-invocation.ts',
+  ])('every checkpoint %s saves carries the mark of its turn', (file) => {
+    const webRoot = path.resolve(import.meta.dirname, '../../../../../../..');
+    const source = readFileSync(path.join(webRoot, file), 'utf8');
+    const built = source.split('buildApprovalCheckpointRequest(').length - 1;
+    const marked = source.split('processed.untrustedContextPresent,\n').length - 1;
+
+    expect(built).toBeGreaterThan(0);
+    expect(marked).toBe(built);
+  });
+
+  it('never clears a mark the resumed request already carries', () => {
+    expect(resumed(saved(), { untrustedContextPresent: true }).untrustedContextPresent).toBe(true);
+  });
+
+  it('marks a turn resumed from an older checkpoint that kept a file', () => {
+    const withLedger = buildApprovalCheckpointRequest(
+      turn,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ledger,
+    );
+    const withStagedFile = buildApprovalCheckpointRequest(turn, {}, [
+      { filename: 'notes.txt', mimeType: 'text/plain', base64: 'aGVsbG8=' },
+    ]);
+
+    expect(withLedger).not.toHaveProperty('x_untrusted_context_present');
+    expect(resumed(withLedger).untrustedContextPresent).toBe(true);
+    expect(resumed(withStagedFile).untrustedContextPresent).toBe(true);
   });
 });

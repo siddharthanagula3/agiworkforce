@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { createMapSearchToolDefinition } from '@/lib/services/map-search-tool-service';
 
+type MapGeocodingServiceModule = typeof import('@/lib/services/map-geocoding-service');
+
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: provider.stream,
@@ -12,6 +14,17 @@ vi.mock('@/lib/e2b/runtime', () => ({
   getE2BExecutor: vi.fn().mockResolvedValue(null),
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
 }));
+const geocoder = vi.hoisted(() => ({ resolve: vi.fn() }));
+vi.mock('@/lib/services/map-geocoding-service', async (importOriginal) => ({
+  ...(await importOriginal<MapGeocodingServiceModule>()),
+  resolveMapView: geocoder.resolve,
+}));
+
+const AUSTIN_VIEW = {
+  view: { latitude: 30.2672, longitude: -97.7431, zoom: 11, attribution: 'OpenStreetMap' },
+  places: [{ label: 'Austin, Texas', latitude: 30.2672, longitude: -97.7431, confident: true }],
+  unresolvedStops: [],
+};
 
 import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
@@ -134,8 +147,67 @@ async function collect(generator: AsyncGenerator<Uint8Array>): Promise<string> {
   return output;
 }
 
+const FORCED_MAP_CHOICE = { type: 'function' as const, function: { name: 'search_maps' } };
+
+const SECOND_TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'fixture_lookup',
+    description: 'Looks something up.',
+    parameters: { type: 'object', properties: {} },
+  },
+};
+
+function makeForcedProcessed(
+  messages: ProcessedRequest['llmRequest']['messages'] = [
+    { role: 'user', content: 'Show coffee shops on a map.' },
+  ],
+): ProcessedRequest {
+  const processed = makeProcessed();
+  return {
+    ...processed,
+    chatSurface: 'mobile' as const,
+    chatRequest: { ...processed.chatRequest, tool_choice: FORCED_MAP_CHOICE },
+    llmRequest: {
+      ...processed.llmRequest,
+      messages,
+      tools: [createMapSearchToolDefinition(), SECOND_TOOL],
+      tool_choice: FORCED_MAP_CHOICE,
+    },
+  } as ProcessedRequest;
+}
+
+const MAP_CALL_MESSAGE = {
+  role: 'assistant' as const,
+  content: '',
+  tool_calls: [
+    {
+      id: 'fixture-map-call',
+      type: 'function',
+      function: {
+        name: 'search_maps',
+        arguments: JSON.stringify({ query: 'coffee shops near Austin, Texas' }),
+      },
+    },
+  ],
+};
+
+function stepToolChoice(callIndex: number): unknown {
+  return (provider.stream.mock.calls[callIndex]?.[2] as { tool_choice?: unknown }).tool_choice;
+}
+
+function offeredToolNames(callIndex: number): string[] {
+  const request = provider.stream.mock.calls[callIndex]?.[2] as
+    { tools?: Array<{ function?: { name?: string } }> } | undefined;
+  return (request?.tools ?? []).map((tool) => tool.function?.name ?? '');
+}
+
 describe('map search tool loop', () => {
-  beforeEach(() => provider.stream.mockReset());
+  beforeEach(() => {
+    provider.stream.mockReset();
+    geocoder.resolve.mockReset();
+    geocoder.resolve.mockResolvedValue(AUSTIN_VIEW);
+  });
 
   it('emits one validated card and completes without another provider step', async () => {
     provider.stream.mockResolvedValueOnce(mapToolCallStream());
@@ -176,5 +248,114 @@ describe('map search tool loop', () => {
     expect(output).toContain(answer);
     expect(output).toContain('data: [DONE]');
     expect(output).not.toContain('max_agent_steps_reached');
+  });
+
+  it('shows map results as unavailable and has the model answer without the map tool when no place is found', async () => {
+    geocoder.resolve.mockResolvedValue(null);
+    const answer = 'I could not look up places, so here is what I know about coffee in Austin.';
+    provider.stream
+      .mockResolvedValueOnce(mapToolCallStream())
+      .mockResolvedValueOnce(finalAnswerStream(answer));
+
+    const output = await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+    const cards = output
+      .split('\n')
+      .filter((line) => line.startsWith('data: {'))
+      .flatMap((line) => {
+        const payload = JSON.parse(line.slice('data: '.length)) as {
+          choices?: Array<{ delta?: { x_interactive_card?: unknown } }>;
+        };
+        const card = parseInteractiveCardDelta(payload.choices?.[0]?.delta?.x_interactive_card);
+        return card ? [card] : [];
+      });
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      recognized: true,
+      kind: 'map-search.v1',
+      body: { title: 'Map results are not available' },
+    });
+    expect(provider.stream).toHaveBeenCalledTimes(2);
+    expect(offeredToolNames(0)).toContain('search_maps');
+    expect(offeredToolNames(1)).not.toContain('search_maps');
+    const secondStep = provider.stream.mock.calls[1]?.[2] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const toolResult = secondStep.messages.find((message) => message.role === 'tool');
+    expect(toolResult?.content).toContain('No place data');
+    expect(toolResult?.content).toContain('Do not call search_maps again');
+    expect(output).toContain(answer);
+    expect(output).toContain('data: [DONE]');
+  });
+
+  it('releases a forced map choice once no place is found, so the next step answers', async () => {
+    geocoder.resolve.mockResolvedValue(null);
+    const answer = 'I could not look up places, so here is what I know.';
+    provider.stream
+      .mockResolvedValueOnce(mapToolCallStream())
+      .mockResolvedValueOnce(finalAnswerStream(answer));
+
+    const output = await collect(runToolLoop(makeForcedProcessed(), { approvalMode: 'auto' }));
+
+    expect(provider.stream).toHaveBeenCalledTimes(2);
+    expect(offeredToolNames(1)).toEqual(['fixture_lookup']);
+    expect(stepToolChoice(1)).toBe('auto');
+    expect(output).toContain(answer);
+    expect(output).toContain('data: [DONE]');
+  });
+
+  it('ends the turn on the card when an approved map search finds places', async () => {
+    const onApprovalCheckpoint = vi.fn(async () => undefined);
+
+    const output = await collect(
+      runToolLoop(
+        makeForcedProcessed([
+          { role: 'user', content: 'Show coffee shops on a map.' },
+          MAP_CALL_MESSAGE,
+        ]),
+        {
+          approvalMode: 'manual',
+          userId: 'fixture-user',
+          onApprovalCheckpoint,
+          resume: { approvals: [{ toolCallId: 'fixture-map-call', decision: 'approved' }] },
+        },
+      ),
+    );
+
+    expect(geocoder.resolve).toHaveBeenCalledTimes(1);
+    expect(provider.stream).not.toHaveBeenCalled();
+    expect(onApprovalCheckpoint).not.toHaveBeenCalled();
+    expect(output).toContain('x_interactive_card');
+    expect(output).not.toContain('x_tool_approval_request');
+    expect(output).toContain('data: [DONE]');
+  });
+
+  it('does not offer or force the map search again on a later run in a turn that found no places', async () => {
+    geocoder.resolve.mockResolvedValue(null);
+    provider.stream
+      .mockResolvedValueOnce(mapToolCallStream())
+      .mockResolvedValueOnce(finalAnswerStream('No places found.'));
+    await collect(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+    const noPlaces = (
+      provider.stream.mock.calls[1]?.[2] as {
+        messages: Array<{ role: string; content: unknown }>;
+      }
+    )?.messages.find((message) => message.role === 'tool')?.content;
+    provider.stream.mockReset();
+    provider.stream.mockResolvedValueOnce(finalAnswerStream('Here is what I know.'));
+
+    await collect(
+      runToolLoop(
+        makeForcedProcessed([
+          { role: 'user', content: 'Show coffee shops on a map.' },
+          MAP_CALL_MESSAGE,
+          { role: 'tool', content: noPlaces as string, tool_call_id: 'fixture-map-call' },
+        ]),
+        { approvalMode: 'auto' },
+      ),
+    );
+
+    expect(offeredToolNames(0)).toEqual(['fixture_lookup']);
+    expect(stepToolChoice(0)).toBe('auto');
   });
 });

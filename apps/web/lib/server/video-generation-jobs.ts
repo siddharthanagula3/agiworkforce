@@ -17,6 +17,7 @@ import {
   VIDEO_ADMISSION_FLOOR_SECONDS,
   VIDEO_GENERATION_ADMISSION_SECONDS,
 } from '@/lib/workflows/video-generation-timing';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 export type VideoJobProvider = 'google' | 'runway' | 'openrouter';
 
@@ -455,7 +456,7 @@ export async function createVideoGenerationJob(input: {
         `update public.web_messages message
             set model = $4,
                 provider = $5,
-                metadata = coalesce(message.metadata, '{}'::jsonb) || $6::jsonb
+                metadata = ${mergeJsonbObjectSql('message.metadata', '$6::jsonb')}
            from public.web_conversations conversation
           where message.id = $1
             and message.conversation_id = $2

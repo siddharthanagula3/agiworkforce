@@ -179,7 +179,7 @@ describe('free space check', () => {
     const error = await assertFreeSpaceFor(4 * GB).catch((err: unknown) => err);
     expect(error).toBeInstanceOf(ModelDownloadError);
     expect((error as ModelDownloadError).kind).toBe('storage_full');
-    expect((error as ModelDownloadError).message).toContain('2.0 GB');
+    expect((error as ModelDownloadError).message).toContain('2 GB');
   });
 
   it('passes when there is room for the model plus headroom', async () => {

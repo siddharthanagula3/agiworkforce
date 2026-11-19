@@ -9,7 +9,7 @@ jest.mock('../lib/mmkv', () => ({
 
 import { ManagedMediaImageGenerationRequestSchema } from '@agiworkforce/cloud-contracts';
 import { ApiPaywallError } from '../services/api';
-import { CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
+import { ApiHttpError, CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
 import {
   clearCloudImageGenerationState,
   runImageGenerationTurn,
@@ -19,6 +19,7 @@ import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import type { ImageGenResponse } from '../src/features/image/services/imagegen';
 
 function createCallbacks() {
   return {
@@ -247,6 +248,78 @@ describe('runImageGenerationTurn', () => {
       'conversation-1',
       'assistant-1',
       'Image generation failed. Try again.',
+    );
+  });
+
+  it('hands a rate limit back with the server sentence and when to retry', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-11-15T10:00:00Z'));
+    try {
+      const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+      const outcome = await runImageGenerationTurn(
+        {
+          conversationId: 'conversation-1',
+          displayText: '/image Mars',
+          prompt: 'Mars',
+          model: 'registry-image-route',
+          ownerId: 'default-test-account',
+          ...callbacks,
+        },
+        {
+          generate: async () => {
+            throw new ApiHttpError(
+              'Too many requests right now. Try again in 30 seconds.',
+              429,
+              null,
+              {
+                retryAfterSeconds: 30,
+              },
+            );
+          },
+          getUri: () => null,
+        },
+      );
+
+      expect(callbacks.fail).toHaveBeenCalledWith(
+        'conversation-1',
+        'assistant-1',
+        'Too many requests right now. Try again in 30 seconds.',
+        Date.now() + 30_000,
+      );
+      expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('leaves Retry open when a rate limit names no wait', async () => {
+    const callbacks = createCallbacks();
+    await runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: '/image Mars',
+        prompt: 'Mars',
+        model: 'registry-image-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      {
+        generate: async () => {
+          throw new ApiHttpError(
+            'Too many requests right now. Please wait a moment and try again.',
+            429,
+          );
+        },
+        getUri: () => null,
+      },
+    );
+
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'Too many requests right now. Please wait a moment and try again.',
+      undefined,
     );
   });
 
@@ -577,6 +650,30 @@ describe('runImageGenerationTurn', () => {
       expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(areaEdit);
     });
 
+    it('hands back a failed change of shape with its ratio so Retry does not send the label as a prompt', async () => {
+      const callbacks = createCallbacks();
+      const reshape = {
+        conversationId: 'conversation-1',
+        displayText: 'Make it 3:2',
+        prompt: 'a harbour at dusk',
+        model: 'registry-image-route',
+        aspectRatio: '3:2' as const,
+        replayOnRetry: true as const,
+        ownerId: 'default-test-account',
+      };
+      await runImageGenerationTurn(
+        { ...reshape, ...callbacks },
+        {
+          generate: jest.fn(async () => {
+            throw new Error('provider unavailable');
+          }),
+          getUri: () => null,
+        },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(reshape);
+    });
+
     it('replays the area edit as a contract-valid inpaint request', async () => {
       await failAreaEdit();
       const retry = takeImageEditRetry('assistant-1', 'default-test-account');
@@ -698,5 +795,99 @@ describe('runImageGenerationTurn', () => {
       );
       expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
     });
+  });
+});
+
+describe('a failed picture in the chat', () => {
+  const SAFETY_SENTENCE =
+    'Your prompt was flagged by our content safety filters. Please try a different prompt.';
+
+  function failTurn(response: ImageGenResponse) {
+    const callbacks = createCallbacks();
+    const outcome = runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: '/image a red circle on white',
+        prompt: 'a red circle on white',
+        model: 'registry-image-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      { generate: async () => response, getUri: () => null },
+    );
+    return { callbacks, outcome };
+  }
+
+  beforeEach(() => {
+    mockMmkvValues.clear();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('default-test-account');
+    clearCloudImageGenerationState();
+  });
+
+  it('says the sentence the server wrote for a refused job', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      status: 'failed',
+      job_id: 'job-1',
+      retryable: false,
+      error: SAFETY_SENTENCE,
+    });
+
+    await expect(outcome).resolves.toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+    expect(callbacks.fail).toHaveBeenCalledWith('conversation-1', 'assistant-1', SAFETY_SENTENCE);
+  });
+
+  it('says the server sentence for a failure another try can pass', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      status: 'failed',
+      retryable: true,
+      error: 'The image generation service is temporarily busy. Please try again in a few moments.',
+    });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'The image generation service is temporarily busy. Please try again in a few moments.',
+    );
+  });
+
+  it('says the server sentence when the server says nothing about trying again', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      status: 'failed',
+      error: SAFETY_SENTENCE,
+    });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith('conversation-1', 'assistant-1', SAFETY_SENTENCE);
+  });
+
+  it('keeps the generic sentence when the server sends no sentence', async () => {
+    const { callbacks, outcome } = failTurn({ success: false, status: 'failed', error: '  ' });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'AGI Cloud did not return an image. Try again.',
+    );
+  });
+
+  it('does not show an error string that does not come from a failed job', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      retryable: false,
+      error: 'Provider unavailable at /private/route',
+    });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'AGI Cloud did not return an image. Try again.',
+    );
   });
 });

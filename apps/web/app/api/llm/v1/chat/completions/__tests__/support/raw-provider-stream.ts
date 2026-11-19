@@ -6,7 +6,7 @@ import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { toOtelAttributes } from '@/lib/cost-tracker';
 import { buildCpstUsageFields } from '@/lib/cpst-telemetry';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
-import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addSecretRedactionNoticeHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { estimateMicrousdOf } from '@/lib/services/managed-usage-request-service';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from '../../lib/sse-heartbeat';

@@ -23,7 +23,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   InteractiveCardResponseRequestSchema,
   interactiveCardAcceptsResponse,
-} from '../response-contract';
+} from '@agiworkforce/cloud-contracts';
 
 function findQuestion(body: ClarifyCardBody, questionId: string): ClarifyQuestion {
   const question = body.questions.find((candidate) => candidate.id === questionId);

@@ -175,6 +175,7 @@ jest.mock('../services/api', () => ({
 
 jest.mock('../services/notifications', () => ({
   notificationCenterStore: { clear: jest.fn() },
+  clearDeliveredNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../services/backgroundFetch', () => ({

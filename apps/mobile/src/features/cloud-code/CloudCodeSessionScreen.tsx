@@ -1,6 +1,7 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   RefreshControl,
   ScrollView,
@@ -32,6 +33,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { useCodePreferences } from '@/src/features/settings/code/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudCodeApprovalCard } from './components/CloudCodeApprovalCard';
@@ -237,6 +239,13 @@ function SessionView({
     () => view.transcript.filter((item) => item.kind === 'reply').length,
     [view.transcript],
   );
+  const latestTaskId = useMemo(
+    () => [...view.transcript].reverse().find((item) => item.kind === 'task')?.id ?? null,
+    [view.transcript],
+  );
+  const dismissKeyboardAfterSend = useCodePreferences((state) => state.dismissKeyboardAfterSend);
+  const showContextUsage = useCodePreferences((state) => state.showContextUsage);
+  const keyboardDismissBaseline = useRef<string | null | undefined>(undefined);
   const changes = useCloudCodeChanges(
     sessionId,
     view.status === 'ready',
@@ -266,6 +275,16 @@ function SessionView({
     });
   }, [initialGoal, router, send, turnOptions, view.session?.state, view.status]);
 
+  useEffect(() => {
+    if (
+      keyboardDismissBaseline.current === undefined ||
+      latestTaskId === keyboardDismissBaseline.current
+    )
+      return;
+    keyboardDismissBaseline.current = undefined;
+    Keyboard.dismiss();
+  }, [latestTaskId]);
+
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     nearBottom.current =
@@ -281,9 +300,18 @@ function SessionView({
     if (!goal) return;
     setDraft('');
     nearBottom.current = true;
+    keyboardDismissBaseline.current = dismissKeyboardAfterSend ? latestTaskId : undefined;
     const sent = await send(goal, turnOptions);
-    if (!sent) setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
-  }, [draft, send, turnOptions]);
+    if (!sent) {
+      keyboardDismissBaseline.current = undefined;
+      setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
+      return;
+    }
+    if (keyboardDismissBaseline.current !== undefined) {
+      keyboardDismissBaseline.current = undefined;
+      Keyboard.dismiss();
+    }
+  }, [dismissKeyboardAfterSend, draft, latestTaskId, send, turnOptions]);
 
   const session = view.session;
   const pullRequestLabel = session ? cloudCodePullRequestLabel(session) : null;
@@ -292,7 +320,8 @@ function SessionView({
   const closed = session?.state === 'closed';
   const failedMessage = session?.state === 'failed' ? session.lastError : null;
   const noticeMessage = view.actionError ?? view.loadError;
-  const contextPercent = session ? cloudCodeContextPercent(session, agentModel) : null;
+  const contextPercent =
+    session && showContextUsage ? cloudCodeContextPercent(session, agentModel) : null;
   const composerDetail = [
     getManagedDisplayName(agentModel),
     turnControls && turnMode !== CLOUD_CODE_DEFAULT_TURN_MODE
@@ -440,6 +469,7 @@ function SessionView({
           ) : null}
 
           <CloudCodeTranscript
+            sessionId={sessionId}
             items={view.transcript}
             changes={changes.changes}
             onOpenChanges={openChanges}

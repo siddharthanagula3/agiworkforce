@@ -27,6 +27,7 @@ import {
   resolveWireMode,
 } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
+import { createPublicTextDeltaProjector } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { extractAssistantTextDelta } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import {
   loadConnectorToolPermissions,
@@ -580,6 +581,7 @@ async function runArtifactToolLoop(input: {
       tools: [],
     },
   };
+  const publicText = createPublicTextDeltaProjector();
   let text = '';
   let toolCalls = 0;
   let reportedError: string | undefined;
@@ -595,12 +597,13 @@ async function runArtifactToolLoop(input: {
     usage: input.usage,
     signal: input.signal,
   })) {
-    text += extractAssistantTextDelta(chunk);
+    text += publicText.push(extractAssistantTextDelta(chunk));
     for (const envelope of extractManagedAgentEventEnvelopes(chunk)) {
       if (envelope.event.type === 'tool-execution-start') toolCalls += 1;
       if (envelope.event.type === 'error' && !reportedError) reportedError = envelope.event.message;
     }
   }
+  text += publicText.flush();
   input.signal.throwIfAborted();
   if (reportedError) throw new Error(reportedError);
   return {

@@ -40,9 +40,16 @@ jest.mock('@/stores/chatStore', () => ({
     select({ sendMessage: (...args: unknown[]) => mockSendMessage(...args) }),
 }));
 
+const mockModelState: { selectedModel: string | undefined; endConversationModel: jest.Mock } = {
+  selectedModel: undefined,
+  endConversationModel: jest.fn(),
+};
+
 jest.mock('@/src/features/model-picker/store', () => ({
-  useModelStore: (select: (value: Record<string, unknown>) => unknown) =>
-    select({ selectedModel: undefined }),
+  useModelStore: Object.assign(
+    (select: (value: Record<string, unknown>) => unknown) => select(mockModelState),
+    { getState: () => mockModelState },
+  ),
 }));
 
 jest.mock('expo-haptics', () => ({

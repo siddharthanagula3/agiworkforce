@@ -157,12 +157,37 @@ describe('ToolCallTimeline', () => {
 });
 
 describe('ToolCallTimeline auto-collapse', () => {
-  it('stays expanded while a tool is still running', () => {
+  it('rests as one closed shining line while a tool is still running, and opens on tap', () => {
     const tools = [makeTool({ status: 'running' })];
-    const { getByLabelText } = render(
-      <ToolCallTimeline toolCalls={tools} summary="Using 1 tool" />,
+    const { getByLabelText, getByTestId, queryByLabelText } = render(
+      <ToolCallTimeline messageId="m1" toolCalls={tools} summary="Using 1 tool" />,
     );
 
+    expect(getByLabelText('Using 1 tool, collapsed')).toBeTruthy();
+    expect(getByTestId('tool-timeline.running-label')).toBeTruthy();
+    expect(queryByLabelText(/web search.*running|searching/i)).toBeNull();
+
+    fireEvent.press(getByLabelText('Using 1 tool, collapsed'));
+    expect(getByLabelText('Using 1 tool, expanded')).toBeTruthy();
+  });
+
+  it('opens by itself when a running group reaches an approval', () => {
+    const { getByLabelText, rerender } = render(
+      <ToolCallTimeline
+        messageId="m1"
+        toolCalls={[makeTool({ status: 'running' })]}
+        summary="Using 1 tool"
+      />,
+    );
+    expect(getByLabelText('Using 1 tool, collapsed')).toBeTruthy();
+
+    rerender(
+      <ToolCallTimeline
+        messageId="m1"
+        toolCalls={[makeTool({ status: 'pending', requiresApproval: true, toolCallId: 'call-1' })]}
+        summary="Using 1 tool"
+      />,
+    );
     expect(getByLabelText('Using 1 tool, expanded')).toBeTruthy();
   });
 
@@ -214,7 +239,7 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
       />,
     );
     if (view.queryByLabelText('Used 1 tool, collapsed')) {
-      fireEvent.press(view.getByText('Used 1 tool'));
+      fireEvent.press(view.getByLabelText('Used 1 tool, collapsed'));
     }
     return view;
   }
@@ -267,7 +292,10 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
 describe('WebSearchToolCard inside the timeline', () => {
   it('shows the search query as progress while the search runs', () => {
     const tools = [makeTool({ status: 'running', input: '{"query":"AGI Workforce pricing"}' })];
-    const { getByText } = render(<ToolCallTimeline toolCalls={tools} summary="Using 1 tool" />);
+    const { getByText, getByLabelText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Using 1 tool" />,
+    );
+    fireEvent.press(getByLabelText('Using 1 tool, collapsed'));
 
     expect(getByText('Searching the web\u2026')).toBeTruthy();
     expect(getByText('Searching for \u201cAGI Workforce pricing\u201d')).toBeTruthy();

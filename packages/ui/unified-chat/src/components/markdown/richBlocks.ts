@@ -28,6 +28,12 @@ export function isRichBlockLanguage(language: string): boolean {
   return RICH_BLOCK_LANGUAGES.has(language);
 }
 
+const CHART_FENCE_LANGUAGE = 'chart';
+
+function copiesAsReaderText(language: string): boolean {
+  return isRichBlockLanguage(language) || language === CHART_FENCE_LANGUAGE;
+}
+
 export type EmailField = 'to' | 'cc' | 'bcc' | 'subject';
 
 export interface EmailDraft {
@@ -232,7 +238,9 @@ function richBlockText(language: string, source: string): string {
     const parsed = parseEmailBlock(source);
     return parsed ? emailPlainText(parsed.draft) : source;
   }
-  if (ANSWER_SURFACE_LANGUAGES.has(language)) return answerSurfacePlainText(language, source);
+  if (ANSWER_SURFACE_LANGUAGES.has(language) || language === CHART_FENCE_LANGUAGE) {
+    return answerSurfacePlainText(language, source);
+  }
   return source;
 }
 
@@ -249,10 +257,10 @@ export function richBlocksAsPlainText(markdown: string): string {
     const line = lines[index] ?? '';
     if (fence === null) {
       fence = opensFence(line, index);
-      if (!fence || !isRichBlockLanguage(fence.language)) output.push(line);
+      if (!fence || !copiesAsReaderText(fence.language)) output.push(line);
       continue;
     }
-    const rich = isRichBlockLanguage(fence.language);
+    const rich = copiesAsReaderText(fence.language);
     if (closesFence(line, fence)) {
       output.push(
         rich ? richBlockText(fence.language, lines.slice(fence.start + 1, index).join('\n')) : line,
@@ -263,7 +271,7 @@ export function richBlocksAsPlainText(markdown: string): string {
     if (!rich) output.push(line);
   }
 
-  if (fence !== null && isRichBlockLanguage(fence.language)) {
+  if (fence !== null && copiesAsReaderText(fence.language)) {
     output.push(richBlockText(fence.language, lines.slice(fence.start + 1).join('\n')));
   }
   return output.join('\n');

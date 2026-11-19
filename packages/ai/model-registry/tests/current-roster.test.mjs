@@ -328,11 +328,20 @@ test('selects the founder-approved roster and subscription bands', () => {
   assert.equal(basicRoster.has(compatibility.providers.google.defaultModel), true);
   assert.equal(basicRoster.has(currentOpenAI.balanced.modelKey), false);
   const anthropicModelKeys = new Set(registry.providerModelKeys.anthropic);
-  assert.equal(
-    [...basicRoster].some((modelKey) => anthropicModelKeys.has(modelKey)),
-    false,
-    'economy has no Anthropic slot',
+  const fastAnthropicFamilies = Object.values(registry.families).filter(
+    (family) => family.provider === 'anthropic' && family.tier === 'fast',
   );
+  assert.equal(fastAnthropicFamilies.length, 1);
+  const fastAnthropicModelKey = fastAnthropicFamilies[0].activeModelKey;
+  assert.deepEqual(
+    [...basicRoster].filter((modelKey) => anthropicModelKeys.has(modelKey)),
+    [fastAnthropicModelKey],
+    'economy carries only the fast Anthropic family, the Free plan model the owner chose on 2026-11-16',
+  );
+  for (const modelKey of [currentOpenAI.economy.modelKey, fastAnthropicModelKey]) {
+    assert.equal(basicRoster.has(modelKey), true, `${modelKey} must stay in economy`);
+    assert.equal(compatibility.models[modelKey].tierPolicy.minTier, 'free', `${modelKey} is free`);
+  }
   for (const modelKey of registry.providerModelKeys.perplexity) {
     assert.equal(basicRoster.has(modelKey), false);
     assert.equal(compatibility.tierAllowedModels.pro_additions.includes(modelKey), false);

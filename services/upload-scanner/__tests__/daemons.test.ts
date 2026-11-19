@@ -1,9 +1,25 @@
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { refreshSignatures, startClamd, startFreshclam, type Daemon } from '../src/daemons.ts';
+import { CLAMD_SOURCE_SCAN_SETTINGS } from '../src/config.ts';
+import {
+  CLAMD_CONFIG_FILE,
+  refreshSignatures,
+  startClamd,
+  startFreshclam,
+  writeSourceScanClamdConfig,
+  type Daemon,
+} from '../src/daemons.ts';
 
 const originalPath = process.env['PATH'];
 const running: Daemon[] = [];
@@ -82,5 +98,46 @@ describe('daemon supervision', () => {
     process.env['PATH'] = bin;
 
     await expect(refreshSignatures()).resolves.toBeUndefined();
+  });
+});
+
+describe('clamd configuration file', () => {
+  function clamdArguments(): string {
+    const file = join(bin, 'clamd-args');
+    return existsSync(file) ? readFileSync(file, 'utf8').trim() : '';
+  }
+
+  it('starts clamd on the legacy configuration by default', async () => {
+    stub('clamd', `echo "$@" > "${join(bin, 'clamd-args')}"\nexec sleep 30`);
+    running.push(startClamd(vi.fn()));
+
+    await vi.waitFor(() => expect(clamdArguments()).toContain('--foreground'), { timeout: 5000 });
+    expect(clamdArguments()).toBe(`--config-file=${CLAMD_CONFIG_FILE} --foreground`);
+  });
+
+  it('starts clamd on the configuration it is given', async () => {
+    stub('clamd', `echo "$@" > "${join(bin, 'clamd-args')}"\nexec sleep 30`);
+    running.push(startClamd(vi.fn(), join(bin, 'source-scans.conf')));
+
+    await vi.waitFor(() => expect(clamdArguments()).toContain('--foreground'), { timeout: 5000 });
+    expect(clamdArguments()).toBe(`--config-file=${join(bin, 'source-scans.conf')} --foreground`);
+  });
+
+  it('writes the source scan configuration from the legacy file without changing it', () => {
+    const base = join(bin, 'clamd.conf');
+    const target = join(bin, 'generated', 'clamd.conf');
+    writeFileSync(base, 'TCPSocket 3310\nTemporaryDirectory /dev/shm\nMaxScanSize 400M\n');
+
+    expect(writeSourceScanClamdConfig(target, base)).toBe(target);
+
+    const written = readFileSync(target, 'utf8');
+    expect(written).toContain('TCPSocket 3310');
+    expect(written).toContain(
+      `TemporaryDirectory ${CLAMD_SOURCE_SCAN_SETTINGS['TemporaryDirectory']}`,
+    );
+    expect(written).toContain(`MaxScanSize ${CLAMD_SOURCE_SCAN_SETTINGS['MaxScanSize']}`);
+    expect(written).not.toContain('/dev/shm');
+    expect(readFileSync(base, 'utf8')).toContain('TemporaryDirectory /dev/shm');
+    expect(statSync(target).mode & 0o077).toBe(0);
   });
 });

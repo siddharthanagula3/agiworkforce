@@ -3,9 +3,9 @@ import { sameSourceUrl } from '@/lib/web-search/source-url-key';
 import type { ChatSession, ChatMessage } from '../types';
 import {
   collectMessageResearchSources,
-  sourceDisplayHost,
   type MessageResearchSourceMetadata,
-} from '../utils/research-sources';
+} from '@agiworkforce/unified-chat/message-sources';
+import { sourceDisplayHost } from '../utils/research-sources';
 
 export interface ExportContentOptions {
   includeTimestamps?: boolean;

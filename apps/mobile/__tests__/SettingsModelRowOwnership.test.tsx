@@ -9,6 +9,11 @@ jest.mock('@/stores/connectionStore', () => ({
     selector({ status: 'disconnected' }),
 }));
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { ...actual, FEATURES: { ...actual.FEATURES, appLanguage: true } };
+});
+
 jest.mock('@clerk/expo', () => ({
   useUser: () => ({ user: null, isLoaded: true }),
 }));
@@ -194,6 +199,20 @@ describe('General settings auto-correct', () => {
 });
 
 describe('General settings app language row', () => {
+  const features = jest.requireMock('@/lib/v1FeatureFlags').FEATURES as { appLanguage: boolean };
+
+  afterEach(() => {
+    features.appLanguage = true;
+  });
+
+  it('is not offered while version 1 has no app language', () => {
+    features.appLanguage = false;
+    const { queryByLabelText, getByText } = render(<GeneralSettingsScreen />);
+
+    expect(queryByLabelText('App language. Match device')).toBeNull();
+    expect(getByText('Haptic Feedback')).toBeTruthy();
+  });
+
   it('shows Match device and opens the app language picker', () => {
     const { getByLabelText } = render(<GeneralSettingsScreen />);
 

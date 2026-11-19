@@ -7,7 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 import { legalHoldExclusion, refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
-import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 import {
   ASSISTANT_CONTENT_PRESERVED_METADATA_SQL,
   CLIENT_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL,

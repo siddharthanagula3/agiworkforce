@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import { agiChatTypography } from '@agiworkforce/design-tokens';
 import {
   colors,
@@ -68,6 +68,8 @@ describe.each(THEMES)('%s native chat typography', (_name, palette) => {
     );
 
     expect(screen.getByTestId('answer-surface-writing')).toHaveStyle({ padding: 20 });
+    expect(screen.getByText('A draft that remains editable.')).toHaveStyle(agiChatTypography.body);
+    fireEvent.press(screen.getByRole('button', { name: 'Edit' }));
     expect(screen.getByDisplayValue('A draft that remains editable.')).toHaveStyle(
       agiChatTypography.body,
     );

@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const mockSyncNow = jest.fn().mockResolvedValue(undefined);
 const mockMarkProjectForSync = jest.fn();
+const mockPush = jest.fn();
 let mockClerkUserId: string | null = null;
 
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('@/lib/mmkv', () => ({
   rehydrateWhenMmkvReady: jest.fn(),
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
@@ -51,7 +53,7 @@ jest.mock('expo-router', () => ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -188,6 +190,32 @@ describe('Projects list pin and filter', () => {
       expect(screen.getByLabelText(/^Sort projects\./)).toBeTruthy();
     });
 
+    it('starts a chat scoped to the project from the long-press menu', () => {
+      const screen = render(<ProjectsTabScreen />);
+
+      longPress(screen, 'Android polish');
+      choose(screen, 'new-chat');
+
+      expect(useProjectStore.getState().activeProjectId).toBe('l-old');
+      expect(useCloudProjectStore.getState().activeProjectId).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    });
+
+    it('shows no Active banner while a project holds the new chat scope', () => {
+      useProjectStore.setState({ activeProjectId: 'l-old' });
+      const screen = render(<ProjectsTabScreen />);
+
+      expect(screen.queryByText(/^Active:/)).toBeNull();
+      expect(screen.queryByLabelText('Clear active project')).toBeNull();
+    });
+
+    it('labels a project holding the new chat scope like any other project', () => {
+      useProjectStore.setState({ activeProjectId: 'l-old' });
+      const screen = render(<ProjectsTabScreen />);
+
+      expect(order(screen)).toEqual(['Zurich launch', 'Android polish']);
+    });
+
     it('pins a project from the long-press menu and sorts it first with a marker', () => {
       const screen = render(<ProjectsTabScreen />);
       expect(order(screen)).toEqual(['Zurich launch', 'Android polish']);
@@ -195,9 +223,9 @@ describe('Projects list pin and filter', () => {
       longPress(screen, 'Android polish');
       expect(menuLabels(screen)).toEqual([
         'Open',
-        'Set active',
+        'New chat in project',
         'Pin',
-        'Rename',
+        'Edit project',
         'Delete',
         'Cancel',
       ]);
@@ -327,9 +355,9 @@ describe('Projects list pin and filter', () => {
       longPress(screen, 'Billing rewrite');
       expect(menuLabels(screen)).toEqual([
         'Open',
-        'Set active',
+        'New chat in project',
         'Pin',
-        'Rename',
+        'Edit project',
         'Archive',
         'Delete',
         'Cancel',
@@ -388,12 +416,32 @@ describe('Projects list pin and filter', () => {
       expect(screen.queryByText(/^Active:/)).toBeNull();
     });
 
+    it('starts a chat scoped to the project from the long-press menu', () => {
+      const screen = render(<ProjectsTabScreen />);
+
+      longPress(screen, 'Billing rewrite');
+      choose(screen, 'new-chat');
+
+      expect(useCloudProjectStore.getState().activeProjectId).toBe('c-old');
+      expect(useProjectStore.getState().activeProjectId).toBeNull();
+      expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    });
+
+    it('offers no new chat for an archived project', () => {
+      const screen = render(<ProjectsTabScreen />);
+      chooseFilter(screen, 'archived');
+
+      longPress(screen, 'Old migration');
+
+      expect(screen.queryByTestId('conversation-action-new-chat')).toBeNull();
+    });
+
     it('restores an archived project from the Archived filter', () => {
       const screen = render(<ProjectsTabScreen />);
       chooseFilter(screen, 'archived');
 
       longPress(screen, 'Old migration');
-      expect(menuLabels(screen)).toEqual(['Open', 'Rename', 'Restore', 'Delete', 'Cancel']);
+      expect(menuLabels(screen)).toEqual(['Open', 'Edit project', 'Restore', 'Delete', 'Cancel']);
       choose(screen, 'archive');
 
       expect(order(screen)).toEqual([]);
@@ -414,7 +462,7 @@ describe('Projects list pin and filter', () => {
 
       expect(Alert.alert).toHaveBeenCalledWith(
         'Delete project?',
-        '"Billing rewrite" is removed from all your devices. It cannot be restored from the app.',
+        '"Billing rewrite" and its sources are deleted from all your devices. Its chats move out of the project and stay in your chat list. It cannot be restored from the app.',
         expect.any(Array),
       );
       expect(

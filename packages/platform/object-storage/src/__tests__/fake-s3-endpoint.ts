@@ -8,6 +8,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListMultipartUploadsCommand,
+  ListObjectsV2Command,
   ListPartsCommand,
   PutObjectCommand,
   S3Client,
@@ -21,6 +22,7 @@ const RANGE_PATTERN = /^bytes=(\d+)-(\d*)$/u;
 const KEY_SEPARATOR = '/';
 const ETAG_MULTIPLIER = 31;
 const ETAG_RADIX = 16;
+const LIST_PAGE_KEYS = 2;
 
 interface StoredObject {
   data: Uint8Array;
@@ -29,6 +31,7 @@ interface StoredObject {
   checksum: string;
   metadata: Record<string, string> | undefined;
   encryption: string | undefined;
+  lastModified: Date;
 }
 
 interface PendingUpload {
@@ -120,6 +123,7 @@ export function createFakeS3Endpoint(
         checksum: objectChecksum(data),
         metadata: command.input.Metadata,
         encryption: command.input.ServerSideEncryption,
+        lastModified: new Date(),
       });
       return { ETag: etagOf(data) };
     }
@@ -184,7 +188,10 @@ export function createFakeS3Endpoint(
           $metadata: { httpStatusCode: 412 },
         });
       }
-      objects.set(address(command.input.Bucket, command.input.Key), { ...stored });
+      objects.set(address(command.input.Bucket, command.input.Key), {
+        ...stored,
+        lastModified: new Date(),
+      });
       return { CopyObjectResult: { ETag: stored.etag } };
     }
 
@@ -254,6 +261,7 @@ export function createFakeS3Endpoint(
         checksum: objectChecksum(joined),
         metadata: upload.metadata,
         encryption: upload.encryption,
+        lastModified: new Date(),
       });
       return { ETag: etagOf(joined) };
     }
@@ -276,6 +284,32 @@ export function createFakeS3Endpoint(
             Initiated: upload.initiated,
           })),
         IsTruncated: false,
+      };
+    }
+
+    if (command instanceof ListObjectsV2Command) {
+      sent.push(`list ${command.input.Bucket}/${command.input.Prefix ?? ''}`);
+      const start = address(command.input.Bucket, command.input.Prefix);
+      const keys = [...objects.keys()]
+        .filter((stored) => stored.startsWith(start))
+        .sort()
+        .filter(
+          (stored) =>
+            command.input.StartAfter === undefined ||
+            stored > address(command.input.Bucket, command.input.StartAfter),
+        )
+        .filter(
+          (stored) => !command.input.ContinuationToken || stored > command.input.ContinuationToken,
+        );
+      const page = keys.slice(0, Math.min(command.input.MaxKeys ?? LIST_PAGE_KEYS, LIST_PAGE_KEYS));
+      const truncated = page.length < keys.length;
+      return {
+        Contents: page.map((stored) => ({
+          Key: stored.slice(`${command.input.Bucket ?? ''}${KEY_SEPARATOR}`.length),
+          LastModified: objects.get(stored)?.lastModified,
+        })),
+        IsTruncated: truncated,
+        NextContinuationToken: truncated ? page.at(-1) : undefined,
       };
     }
 

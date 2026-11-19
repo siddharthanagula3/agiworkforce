@@ -49,6 +49,8 @@ type ScanModule8 = typeof import('@/lib/server/generated-file-persist');
 type ScanModule9 = typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate');
 type ScanModule10 = typeof import('@/lib/server/free-pools');
 type ScanModule11 = typeof import('@/lib/server/free-quota-catalogue-cache');
+type ScanModule12 =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence');
 
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
@@ -59,6 +61,7 @@ const mocks = vi.hoisted(() => ({
   plan: vi.fn(),
   download: vi.fn(),
   persist: vi.fn(),
+  persistTurn: vi.fn(),
   moderateMedia: vi.fn(),
   expireCatalogue: vi.fn(),
   after: vi.fn(),
@@ -127,6 +130,13 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (imp
     texts,
   })),
 }));
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<ScanModule12>()),
+    persistAssistantTurn: mocks.persistTurn,
+  }),
+);
 const PROJECT_TURN_SHARE_TOKENS = 1_000_000;
 
 vi.mock('@/lib/server/free-pools', async (importOriginal) => {
@@ -1212,5 +1222,73 @@ describe('limited media admission and uncertain consumption', () => {
     expect(
       await readFreeQuotaDailyUse(mocks.store, { userId: USER_ID, category: 'image', nowMs: NOW }),
     ).toBe(1);
+  });
+});
+
+describe('the finish reason a Free Auto answer is saved with', () => {
+  const frame = (delta: Record<string, unknown>, finishReason: string | null = null) =>
+    JSON.stringify({ choices: [{ index: 0, delta, finish_reason: finishReason }] });
+
+  function sendAuto(turn: string) {
+    return serveFreeQuotaTurn(
+      new NextRequest('https://agiworkforce.com/api/models/free-quota/completions', {
+        method: 'POST',
+        headers: { 'Idempotency-Key': turn },
+      }),
+      scoped,
+      FreeOfferingRequestSchema.parse({
+        model: chatModel,
+        conversation_id: '52d14f7e-0b3d-40c7-952d-987e841033c5',
+        assistant_message_id: '62d14f7e-0b3d-40c7-952d-987e841033c5',
+        messages: [{ role: 'user', content: 'Say hello' }],
+      }),
+      { requestId: `auto-${turn}`, requestedModel: chatModel },
+    );
+  }
+
+  function savedSnapshot() {
+    expect(mocks.persistTurn).toHaveBeenCalledTimes(1);
+    return mocks.persistTurn.mock.calls[0]![0].snapshot as Record<string, unknown>;
+  }
+
+  beforeEach(() => {
+    mocks.persistTurn.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('saves the provider reason with a finished answer', async () => {
+    mocks.stream.mockResolvedValue(sse(frame({ content: 'Hello' }), frame({}, 'stop'), '[DONE]'));
+
+    await (await sendAuto('finish-stop')).text();
+
+    expect(savedSnapshot()).toMatchObject({ truncated: false, finishReason: 'stop' });
+  });
+
+  it('saves no reason for an answer cut off at the provider output limit', async () => {
+    mocks.stream.mockResolvedValue(sse(frame({ content: 'Hello' }), frame({}, 'length'), '[DONE]'));
+
+    await (await sendAuto('finish-length')).text();
+
+    expect(savedSnapshot()).toMatchObject({ truncated: true, finishReason: null });
+  });
+
+  it('saves no reason for a finished answer whose provider never named one', async () => {
+    mocks.stream.mockResolvedValue(sse(frame({ content: 'Hello' }), '[DONE]'));
+
+    await (await sendAuto('finish-unnamed')).text();
+
+    expect(savedSnapshot()).toMatchObject({ truncated: false, finishReason: null });
+  });
+
+  it('leaves the reason a client saved alone when the reader stops before one arrives', async () => {
+    mocks.stream.mockResolvedValue(sse(frame({ content: 'Hel' }), frame({ content: 'lo' })));
+
+    const response = await sendAuto('finish-stopped');
+    const reader = response.body!.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    const snapshot = savedSnapshot();
+    expect(snapshot).toMatchObject({ truncated: true });
+    expect(snapshot).not.toHaveProperty('finishReason');
   });
 });

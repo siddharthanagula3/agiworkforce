@@ -30,8 +30,6 @@ jest.mock('expo-print', () => ({ printToFileAsync: jest.fn() }));
 const mockGuardedFetch = jest.fn();
 jest.mock('@/lib/egressGuard', () => ({
   guardedFetch: (...args: unknown[]) => mockGuardedFetch(...args),
-  isOurCloudHost: (host: string) =>
-    host === 'agiworkforce.com' || host.endsWith('.agiworkforce.com'),
 }));
 
 const mockGetAuthHeaders = jest.fn();
@@ -40,14 +38,19 @@ jest.mock('@/services/authSession', () => ({
 }));
 
 import * as Sharing from 'expo-sharing';
+import { CLIENT_CAPABILITIES_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import {
+  FileDownloadError,
+  downloadFailureMessage,
   downloadGeneratedFile,
   prepareLocalVideoPlayer,
   shareFile,
   shareGeneratedImage,
   saveGeneratedImageToPhotos,
   copyGeneratedImage,
+  viewerFileCopy,
 } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -70,7 +73,7 @@ describe('downloadGeneratedFile', () => {
     mockRandomUUID.mockImplementation(() => `export-${++nextExportId}`);
     (globalThis as Record<string, unknown>).FileReader = FakeFileReader;
     mockGetInfoAsync.mockImplementation(async (uri: string) => ({
-      exists: uri === 'file:///docs/exports/',
+      exists: uri === 'file:///cache/exports/',
     }));
     mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer test-jwt' });
     mockGuardedFetch.mockResolvedValue({
@@ -97,17 +100,30 @@ describe('downloadGeneratedFile', () => {
       headers: { Authorization: 'Bearer test-jwt' },
     });
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/report.pdf',
+      'file:///cache/exports/export-1/report.pdf',
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
-    expect(uri).toBe('file:///docs/exports/export-1/report.pdf');
+    expect(uri).toBe('file:///cache/exports/export-1/report.pdf');
   });
 
   it('does NOT attach the Bearer token for non-our-cloud hosts (no JWT leak)', async () => {
     await downloadGeneratedFile('https://media.example/x.pdf', 'x.pdf');
     expect(mockGetAuthHeaders).not.toHaveBeenCalled();
     expect(mockGuardedFetch).toHaveBeenCalledWith('https://media.example/x.pdf', { headers: {} });
+  });
+
+  it.each([
+    ['another site on a shared platform domain', 'https://someone-else.vercel.app/x.pdf'],
+    ['another host under the product domain', 'https://files.agiworkforce.com/x.pdf'],
+    ['the API host over plain http', 'http://agiworkforce.com/api/files/gf-1'],
+    ['the API host on another port', 'https://agiworkforce.com:8443/api/files/gf-1'],
+  ])('sends the session token only to the API origin, not to %s', async (_case, url) => {
+    await downloadGeneratedFile(url, 'x.pdf');
+    await viewerFileCopy(url, 'x.pdf');
+    expect(mockGetAuthHeaders).not.toHaveBeenCalled();
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    for (const call of mockGuardedFetch.mock.calls) expect(call).toEqual([url, { headers: {} }]);
   });
 
   it('rejects non-absolute urls (relative wire uris must be resolved upstream)', async () => {
@@ -123,6 +139,53 @@ describe('downloadGeneratedFile', () => {
       downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'report.pdf'),
     ).rejects.toThrow(/signed in/);
     expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('a 413 gives the too-large copy and builds no blob', async () => {
+    const blob = jest.fn(async () => ({}));
+    mockGuardedFetch.mockResolvedValue({ ok: false, status: 413, blob });
+    const fileUrl = 'https://agiworkforce.com/api/files/33333333-3333-4333-8333-333333333333';
+
+    const exported = await downloadGeneratedFile(fileUrl, 'dataset.zip').catch((e: unknown) => e);
+    const viewed = await viewerFileCopy(fileUrl, 'dataset.zip').catch((e: unknown) => e);
+
+    for (const error of [exported, viewed]) {
+      expect(error).toBeInstanceOf(FileDownloadError);
+      expect(downloadFailureMessage(error, 'Download failed')).toBe(
+        'This file is too large to open on this device.',
+      );
+      expect(toUserMessage(error, 'This file could not be opened. Check your connection.')).toBe(
+        'This file is too large to open on this device.',
+      );
+    }
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    expect(blob).not.toHaveBeenCalled();
+    expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain copy of other refusals on the viewer path', () => {
+    const fallback = 'This file could not be opened. Check your connection.';
+    expect(toUserMessage(new FileDownloadError(404), fallback)).toBe(
+      'That is no longer available.',
+    );
+    expect(toUserMessage(new FileDownloadError(429), fallback)).toBe(
+      'You are going a little fast. Wait a moment and try again.',
+    );
+    expect(toUserMessage(new FileDownloadError(500), fallback)).toBe(
+      'Something went wrong on our side. Try again shortly.',
+    );
+    expect(toUserMessage(new FileDownloadError(400), fallback)).toBe(fallback);
+  });
+
+  it('no file request carries x-agi-client-capabilities', async () => {
+    await downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'report.pdf');
+    await viewerFileCopy('https://agiworkforce.com/api/files/gf-2', 'report.pdf');
+
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    for (const [, init] of mockGuardedFetch.mock.calls as [string, RequestInit][]) {
+      const names = Object.keys(init.headers ?? {}).map((name) => name.toLowerCase());
+      expect(names).not.toContain(CLIENT_CAPABILITIES_REQUEST_HEADER.toLowerCase());
+    }
   });
 
   it('surfaces other HTTP failures with the status code', async () => {
@@ -142,12 +205,12 @@ describe('downloadGeneratedFile', () => {
       { headers: { Authorization: 'Bearer test-jwt' } },
     );
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/generated-image.png',
+      'file:///cache/exports/export-1/generated-image.png',
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/generated-image.png',
+      'file:///cache/exports/export-1/generated-image.png',
       {
         mimeType: 'image/png',
         dialogTitle: 'Share generated image',
@@ -177,12 +240,12 @@ describe('downloadGeneratedFile', () => {
     await shareGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222');
 
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/generated-image.${extension}`,
+      `file:///cache/exports/export-1/generated-image.${extension}`,
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/generated-image.${extension}`,
+      `file:///cache/exports/export-1/generated-image.${extension}`,
       expect.objectContaining({ mimeType }),
     );
   });
@@ -197,7 +260,7 @@ describe('downloadGeneratedFile', () => {
   }
 
   function trackWrittenFiles(): Set<string> {
-    const files = new Set<string>(['file:///docs/exports/']);
+    const files = new Set<string>(['file:///cache/exports/']);
     const fileSystem = jest.requireMock('expo-file-system/legacy') as {
       moveAsync: jest.Mock;
     };
@@ -316,10 +379,10 @@ describe('downloadGeneratedFile', () => {
     ['mov', 'com.apple.quicktime-movie', 'video/quicktime'],
     ['webm', 'public.movie', 'video/webm'],
   ])('shares a .%s file with video metadata', async (extension, uti, mimeType) => {
-    await shareFile(`file:///docs/exports/export-1/video.${extension}`);
+    await shareFile(`file:///cache/exports/export-1/video.${extension}`);
 
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/video.${extension}`,
+      `file:///cache/exports/export-1/video.${extension}`,
       { UTI: uti, mimeType },
     );
   });
@@ -332,19 +395,31 @@ describe('downloadGeneratedFile', () => {
     ['m4a', 'public.mpeg-4-audio', 'audio/mp4'],
     ['txt', 'public.plain-text', 'text/plain'],
   ])('shares a .%s file with its own type', async (extension, uti, mimeType) => {
-    await shareFile(`file:///docs/exports/export-1/file.${extension}`);
+    await shareFile(`file:///cache/exports/export-1/file.${extension}`);
 
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/file.${extension}`,
+      `file:///cache/exports/export-1/file.${extension}`,
       { UTI: uti, mimeType },
     );
   });
 
+  it.each(['ts', 'tsx', 'mts', 'cts', 'py', 'rs', 'kt', 'swift', 'sh', 'yml', 'sql'])(
+    'shares a .%s source file as plain text and keeps its name',
+    async (extension) => {
+      await shareFile(`file:///cache/exports/export-1/code.${extension}`);
+
+      expect(Sharing.shareAsync).toHaveBeenCalledWith(
+        `file:///cache/exports/export-1/code.${extension}`,
+        { UTI: 'public.plain-text', mimeType: 'text/plain' },
+      );
+    },
+  );
+
   it('does not claim a type it does not know when sharing', async () => {
-    await shareFile('file:///docs/exports/export-1/notes.unknownext');
+    await shareFile('file:///cache/exports/export-1/notes.unknownext');
 
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/notes.unknownext',
+      'file:///cache/exports/export-1/notes.unknownext',
       {},
     );
   });
@@ -425,7 +500,7 @@ describe('downloadGeneratedFile', () => {
   it('preserves default Photos and Clipboard callers and exact bytes', async () => {
     const path = '/api/files/22222222-2222-4222-8222-222222222222';
     await saveGeneratedImageToPhotos(path, 'kept-name');
-    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///docs/exports/export-1/kept-name.png');
+    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///cache/exports/export-1/kept-name.png');
     await copyGeneratedImage(path);
     expect(mockSetImage).toHaveBeenCalledWith('JVBERi0xLjc=');
   });

@@ -12,6 +12,7 @@ jest.mock('@/src/features/library/libraryClient', () => ({
 }));
 
 import { MediaJobsSection } from '@/src/features/library/MediaJobsSection';
+import { requireMediaSlotModel } from '../test-utils/modelFixtures';
 
 function job(id: string, status: MediaJobEntry['status']): MediaJobEntry {
   return {
@@ -92,5 +93,17 @@ describe('MediaJobsSection completion', () => {
     await pollOnce();
 
     expect(onJobsCompleted).not.toHaveBeenCalled();
+  });
+
+  it('names a job by its model display name, never by the model id', async () => {
+    const imageModel = requireMediaSlotModel('image');
+    expect(imageModel.name).not.toBe(imageModel.id);
+    mockListMediaJobs.mockResolvedValue([{ ...job('1', 'failed'), model: imageModel.id }]);
+
+    const screen = render(<MediaJobsSection onOpenConversation={jest.fn()} />);
+    await act(async () => {});
+
+    expect(screen.getByText(new RegExp(`· ${imageModel.name} ·`))).toBeTruthy();
+    expect(screen.queryByText(new RegExp(imageModel.id))).toBeNull();
   });
 });

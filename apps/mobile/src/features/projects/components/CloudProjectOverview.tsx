@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Modal, ScrollView, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
@@ -16,8 +16,20 @@ import {
 } from '@/src/features/projects/projectAppearance';
 import type { CloudProject, CloudProjectDetails } from '@/stores/projects/cloudProjectStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
+import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
+import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import { formatRelativeTime } from '@/src/lib/time';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn, contentColumnInset } from '@/src/shared/layout/contentColumn';
+
+function projectSyncLine(failed: boolean, pending: boolean): string {
+  if (failed && pending) {
+    return 'Not synced. Your other devices get these changes when sync works again.';
+  }
+  if (pending) return 'Not synced yet.';
+  if (failed) return 'Could not sync. Changes made on your other devices may be missing.';
+  return 'Synced across your devices.';
+}
 
 function countLabel(value: number | null | undefined, one: string, many: string): string | null {
   if (value === null || value === undefined) return null;
@@ -33,7 +45,6 @@ export function CloudProjectOverview({
 }) {
   const projectId = project.id;
   const description = project.description?.trim();
-  const instructions = project.instructions?.trim();
   const lastChatAt = useChatCloudMessageStore((s) =>
     s.conversations.reduce<string | null>(
       (latest, c) =>
@@ -41,9 +52,15 @@ export function CloudProjectOverview({
       null,
     ),
   );
+  const projectsSyncFailed = useCloudSyncStateStore(
+    (s) => s.status === 'error' && s.failedSyncSteps.includes('projects'),
+  );
+  const syncPending = useProjectSyncStateStore((s) => s.dirtyProjectIds.includes(projectId));
   const lastUsedAt = lastChatAt && lastChatAt > project.updatedAt ? lastChatAt : project.updatedAt;
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const dimsBesideSheet = contentColumnInset('reading', windowWidth) > 0;
   const [pickerOpen, setPickerOpen] = useState(false);
   const Icon = projectIcon(details?.iconEmoji);
   const accent = projectAccentHex(details?.accentColor) ?? colors.teal;
@@ -115,22 +132,8 @@ export function CloudProjectOverview({
           {description}
         </Text>
       ) : null}
-      {instructions ? (
-        <Text
-          testID="project-detail-instructions"
-          numberOfLines={2}
-          style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}
-        >
-          <Text
-            style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textPrimary }}
-          >
-            Instructions:{' '}
-          </Text>
-          {instructions}
-        </Text>
-      ) : null}
       <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
-        {`${meta.join(' · ')}. Synced across your devices.`}
+        {`${meta.join(' · ')}. ${projectSyncLine(projectsSyncFailed, syncPending)}`}
       </Text>
 
       <Modal
@@ -140,15 +143,25 @@ export function CloudProjectOverview({
         statusBarTranslucent
         onRequestClose={() => setPickerOpen(false)}
       >
+        {dimsBesideSheet ? (
+          <PressableBox
+            testID="project-appearance-scrim"
+            accessible={false}
+            importantForAccessibility="no"
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]}
+            onPress={() => setPickerOpen(false)}
+          />
+        ) : null}
         <PressableBox
           accessibilityViewIsModal
-          style={{ flex: 1, backgroundColor: colors.scrim }}
+          style={{ flex: 1, backgroundColor: dimsBesideSheet ? undefined : colors.scrim }}
           onPress={() => setPickerOpen(false)}
           accessibilityRole="button"
           accessibilityLabel="Close"
         />
         <View
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceElevated,
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,

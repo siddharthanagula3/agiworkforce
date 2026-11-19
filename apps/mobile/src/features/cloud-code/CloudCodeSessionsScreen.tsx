@@ -1,6 +1,6 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
+import { FlatList, RefreshControl, ScrollView, SectionList, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -13,9 +13,11 @@ import {
   FLOATING_PRIMARY_ACTION_LIST_PADDING,
   FloatingPrimaryAction,
 } from '@/src/shared/components/FloatingPrimaryAction';
+import { useCodePreferences } from '@/src/features/settings/code/store';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudCodeGate } from './components/CloudCodeGate';
+import { CodeApprovalNotice } from './components/CodeApprovalNotice';
 import { CodeDevicesSection, CodeListSectionHeading } from './components/CodeDevicesSection';
 import { CodeSessionListRow } from './components/CodeSessionListRow';
 import { useComputerCodeSessions } from './components/useComputerCodeSessions';
@@ -26,26 +28,31 @@ import { useCloudCodeSessions } from './useCloudCodeSessions';
 import {
   CLOUD_CODE_DEFAULT_SESSION_SORT,
   CLOUD_CODE_DEFAULT_SESSION_VIEW,
+  CLOUD_CODE_GROUP_BY_REPOSITORY_LABEL,
   CLOUD_CODE_SCREEN_TITLE,
   CLOUD_CODE_SESSION_SORTS,
   CLOUD_CODE_SESSION_SORT_LABELS,
   CLOUD_CODE_SESSION_VIEWS,
   CLOUD_CODE_SESSION_VIEW_LABELS,
   cloudCodeViewStatusFilter,
+  groupCodeListEntries,
   visibleCodeListEntries,
   type CodeListEntry,
   type CloudCodeSessionSort,
   type CloudCodeSessionView,
 } from './presentation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function Header({
   onBack,
   sort,
+  grouped,
   sortOpen,
   onToggleSort,
 }: {
   onBack: () => void;
   sort: CloudCodeSessionSort;
+  grouped: boolean;
   sortOpen: boolean;
   onToggleSort: () => void;
 }) {
@@ -80,7 +87,9 @@ function Header({
       <PressableBox
         onPress={onToggleSort}
         accessibilityRole="button"
-        accessibilityLabel={`Sort sessions: ${CLOUD_CODE_SESSION_SORT_LABELS[sort]}`}
+        accessibilityLabel={`View and sort sessions: ${CLOUD_CODE_SESSION_SORT_LABELS[sort]}${
+          grouped ? ', grouped by repository' : ''
+        }`}
         accessibilityState={{ expanded: sortOpen }}
         hitSlop={8}
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -91,19 +100,41 @@ function Header({
   );
 }
 
-function SortOptions({
-  value,
-  onChange,
+function MenuHeading({ children }: { children: string }) {
+  const colors = useThemeColors();
+
+  return (
+    <Text
+      accessibilityRole="header"
+      style={{
+        color: colors.textMuted,
+        fontSize: typeScale.caption,
+        fontWeight: '600',
+        paddingHorizontal: 14,
+        paddingTop: 12,
+        paddingBottom: 4,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function ViewSortMenu({
+  grouped,
+  onGroupedChange,
+  sort,
+  onSortChange,
 }: {
-  value: CloudCodeSessionSort;
-  onChange: (value: CloudCodeSessionSort) => void;
+  grouped: boolean;
+  onGroupedChange: (value: boolean) => void;
+  sort: CloudCodeSessionSort;
+  onSortChange: (value: CloudCodeSessionSort) => void;
 }) {
   const colors = useThemeColors();
 
   return (
     <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel="Sort sessions"
       style={{
         marginHorizontal: 16,
         marginBottom: 12,
@@ -114,31 +145,45 @@ function SortOptions({
         overflow: 'hidden',
       }}
     >
-      {CLOUD_CODE_SESSION_SORTS.map((key, index) => {
-        const selected = key === value;
-        return (
-          <PressableBox
-            key={key}
-            onPress={() => onChange(key)}
-            accessibilityRole="radio"
-            accessibilityLabel={CLOUD_CODE_SESSION_SORT_LABELS[key]}
-            accessibilityState={{ checked: selected }}
-            style={{
-              minHeight: 44,
-              paddingHorizontal: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              borderTopWidth: index === 0 ? 0 : 1,
-              borderTopColor: colors.border,
-            }}
-          >
-            <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
-              {CLOUD_CODE_SESSION_SORT_LABELS[key]}
-            </Text>
-            {selected ? <Check size={18} color={colors.textPrimary} /> : null}
-          </PressableBox>
-        );
-      })}
+      <MenuHeading>View</MenuHeading>
+      <PressableBox
+        onPress={() => onGroupedChange(!grouped)}
+        accessibilityRole="checkbox"
+        accessibilityLabel={CLOUD_CODE_GROUP_BY_REPOSITORY_LABEL}
+        accessibilityState={{ checked: grouped }}
+        style={{ minHeight: 44, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center' }}
+      >
+        <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
+          {CLOUD_CODE_GROUP_BY_REPOSITORY_LABEL}
+        </Text>
+        {grouped ? <Check size={18} color={colors.textPrimary} /> : null}
+      </PressableBox>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Sort sessions">
+        <MenuHeading>Sort</MenuHeading>
+        {CLOUD_CODE_SESSION_SORTS.map((key) => {
+          const selected = key === sort;
+          return (
+            <PressableBox
+              key={key}
+              onPress={() => onSortChange(key)}
+              accessibilityRole="radio"
+              accessibilityLabel={CLOUD_CODE_SESSION_SORT_LABELS[key]}
+              accessibilityState={{ checked: selected }}
+              style={{
+                minHeight: 44,
+                paddingHorizontal: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
+                {CLOUD_CODE_SESSION_SORT_LABELS[key]}
+              </Text>
+              {selected ? <Check size={18} color={colors.textPrimary} /> : null}
+            </PressableBox>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -162,9 +207,7 @@ function EmptyState({ searching, filtered }: { searching: boolean; filtered: boo
             : 'No sessions yet'}
       </Text>
       <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 7 }}>
-        {narrowed
-          ? 'Try a different title, repository or branch.'
-          : 'Start one with New session, on the web or in the desktop app.'}
+        {narrowed ? 'Try a different title, repository or branch.' : 'Start one with New session.'}
       </Text>
     </View>
   );
@@ -224,13 +267,15 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-function SessionList({ onBack }: { onBack: () => void }) {
+function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () => void }) {
   const router = useRouter();
   const { colors, isDark } = useTheme();
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const [view, setView] = useState<CloudCodeSessionView>(CLOUD_CODE_DEFAULT_SESSION_VIEW);
   const [sort, setSort] = useState<CloudCodeSessionSort>(CLOUD_CODE_DEFAULT_SESSION_SORT);
   const [sortOpen, setSortOpen] = useState(false);
+  const grouped = useCodePreferences((state) => state.groupSessionsByRepository);
+  const setGrouped = useCodePreferences((state) => state.setGroupSessionsByRepository);
   const [query, setQuery] = useState('');
   const { status, sessions, availability, runtimes, error, refreshing, load } =
     useCloudCodeSessions(cloudCodeViewStatusFilter(view));
@@ -239,21 +284,28 @@ function SessionList({ onBack }: { onBack: () => void }) {
     () => visibleCodeListEntries(sessions, computer.sessions, { view, sort, query }),
     [sessions, computer.sessions, view, sort, query],
   );
+  const sections = useMemo(
+    () => (grouped ? groupCodeListEntries(visibleSessions) : []),
+    [grouped, visibleSessions],
+  );
   const searching = query.trim().length > 0;
   const loadRef = useRef(load);
   loadRef.current = load;
   const refreshComputerRef = useRef(computer.refresh);
   refreshComputerRef.current = computer.refresh;
   const focusedOnce = useRef(false);
+  const [focused, setFocused] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      if (!focusedOnce.current) {
+      setFocused(true);
+      if (focusedOnce.current) {
+        void loadRef.current('background');
+        refreshComputerRef.current();
+      } else {
         focusedOnce.current = true;
-        return;
       }
-      void loadRef.current('background');
-      refreshComputerRef.current();
+      return () => setFocused(false);
     }, []),
   );
 
@@ -307,18 +359,138 @@ function SessionList({ onBack }: { onBack: () => void }) {
     refreshComputer();
   }, [load, refreshComputer]);
 
+  const listProps = {
+    keyboardShouldPersistTaps: 'handled' as const,
+    keyExtractor: (entry: CodeListEntry) => entry.id,
+    renderItem: ({ item }: { item: CodeListEntry }) => (
+      <CodeSessionListRow
+        entry={item}
+        computerName={computer.computerName}
+        computerConnected={computer.connected}
+        onOpen={handleOpen}
+      />
+    ),
+    contentContainerStyle: {
+      ...contentColumn('reading'),
+      paddingHorizontal: 4,
+      paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
+      flexGrow: 1,
+    },
+    ListHeaderComponent: (
+      <View style={{ paddingTop: 4, paddingBottom: 8, gap: 8 }}>
+        <CodeDevicesSection />
+        <CodeListSectionHeading>Sessions</CodeListSectionHeading>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingHorizontal: 12, paddingBottom: 4 }}
+        >
+          {CLOUD_CODE_SESSION_VIEWS.map((key) => {
+            const selected = key === view;
+            return (
+              <PressableBox
+                key={key}
+                onPress={() => setView(key)}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter sessions: ${CLOUD_CODE_SESSION_VIEW_LABELS[key]}`}
+                accessibilityState={{ selected }}
+                hitSlop={4}
+                style={{
+                  height: 36,
+                  borderRadius: 18,
+                  paddingHorizontal: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: selected ? colors.textPrimary : colors.surfaceElevated,
+                  borderWidth: 1,
+                  borderColor: selected ? colors.textPrimary : colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    color: selected ? colors.accentText : colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                  }}
+                >
+                  {CLOUD_CODE_SESSION_VIEW_LABELS[key]}
+                </Text>
+              </PressableBox>
+            );
+          })}
+        </ScrollView>
+        {error && status !== 'error' ? (
+          <Text
+            accessibilityRole="alert"
+            style={{
+              color: colors.agentError,
+              fontSize: typeScale.footnote,
+              lineHeight: 19,
+              paddingHorizontal: 12,
+            }}
+          >
+            {error}
+          </Text>
+        ) : null}
+        {status === 'error' && visibleSessions.length > 0 ? (
+          <CloudListFailedLine
+            message={error ?? CLOUD_LIST_FAILED}
+            onRetry={() => void load('initial')}
+          />
+        ) : null}
+        {computer.waiting ? (
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.footnote,
+              lineHeight: 19,
+              paddingHorizontal: 12,
+            }}
+          >
+            {computerWaitingLine(computer.computerName)}
+          </Text>
+        ) : null}
+      </View>
+    ),
+    ListEmptyComponent:
+      status === 'loading' ? (
+        <View style={{ minHeight: 200, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <LoadingIndicator />
+          <Text style={{ color: colors.textMuted }}>Loading cloud sessions</Text>
+        </View>
+      ) : status === 'error' ? (
+        <ErrorState message={error ?? CLOUD_LIST_FAILED} onRetry={() => void load('initial')} />
+      ) : (
+        <EmptyState searching={searching} filtered={view !== CLOUD_CODE_DEFAULT_SESSION_VIEW} />
+      ),
+    refreshControl: (
+      <RefreshControl
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        tintColor={colors.textPrimary}
+        progressBackgroundColor={colors.surfaceElevated}
+      />
+    ),
+  };
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: pageBackground }}>
       <Header
         onBack={onBack}
         sort={sort}
+        grouped={grouped}
         sortOpen={sortOpen}
         onToggleSort={() => setSortOpen((open) => !open)}
       />
       {sortOpen ? (
-        <SortOptions
-          value={sort}
-          onChange={(next) => {
+        <ViewSortMenu
+          grouped={grouped}
+          onGroupedChange={(next) => {
+            setGrouped(next);
+            setSortOpen(false);
+          }}
+          sort={sort}
+          onSortChange={(next) => {
             setSort(next);
             setSortOpen(false);
           }}
@@ -333,123 +505,22 @@ function SessionList({ onBack }: { onBack: () => void }) {
         onCreatedInBackground={handleCreatedInBackground}
         onStartedOnComputer={handleStartedOnComputer}
       />
+      {newSessionOpen || !focused ? null : <CodeApprovalNotice accountKey={accountKey} />}
 
-      <FlatList
-        data={visibleSessions}
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={(entry) => entry.id}
-        renderItem={({ item }) => (
-          <CodeSessionListRow
-            entry={item}
-            computerName={computer.computerName}
-            computerConnected={computer.connected}
-            onOpen={handleOpen}
-          />
-        )}
-        contentContainerStyle={{
-          paddingHorizontal: 4,
-          paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
-          flexGrow: 1,
-        }}
-        ListHeaderComponent={
-          <View style={{ paddingTop: 4, paddingBottom: 8, gap: 8 }}>
-            <CodeDevicesSection />
-            <CodeListSectionHeading>Sessions</CodeListSectionHeading>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 8, paddingHorizontal: 12, paddingBottom: 4 }}
-            >
-              {CLOUD_CODE_SESSION_VIEWS.map((key) => {
-                const selected = key === view;
-                return (
-                  <PressableBox
-                    key={key}
-                    onPress={() => setView(key)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Filter sessions: ${CLOUD_CODE_SESSION_VIEW_LABELS[key]}`}
-                    accessibilityState={{ selected }}
-                    hitSlop={4}
-                    style={{
-                      height: 36,
-                      borderRadius: 18,
-                      paddingHorizontal: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: selected ? colors.textPrimary : colors.surfaceElevated,
-                      borderWidth: 1,
-                      borderColor: selected ? colors.textPrimary : colors.border,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: selected ? colors.accentText : colors.textSecondary,
-                        fontSize: typeScale.footnote,
-                        fontWeight: '600',
-                      }}
-                    >
-                      {CLOUD_CODE_SESSION_VIEW_LABELS[key]}
-                    </Text>
-                  </PressableBox>
-                );
-              })}
-            </ScrollView>
-            {error && status !== 'error' ? (
-              <Text
-                accessibilityRole="alert"
-                style={{
-                  color: colors.agentError,
-                  fontSize: typeScale.footnote,
-                  lineHeight: 19,
-                  paddingHorizontal: 12,
-                }}
-              >
-                {error}
-              </Text>
-            ) : null}
-            {status === 'error' && visibleSessions.length > 0 ? (
-              <CloudListFailedLine
-                message={error ?? CLOUD_LIST_FAILED}
-                onRetry={() => void load('initial')}
-              />
-            ) : null}
-            {computer.waiting ? (
-              <Text
-                style={{
-                  color: colors.textMuted,
-                  fontSize: typeScale.footnote,
-                  lineHeight: 19,
-                  paddingHorizontal: 12,
-                }}
-              >
-                {computerWaitingLine(computer.computerName)}
-              </Text>
-            ) : null}
-          </View>
-        }
-        ListEmptyComponent={
-          status === 'loading' ? (
-            <View
-              style={{ minHeight: 200, alignItems: 'center', justifyContent: 'center', gap: 12 }}
-            >
-              <LoadingIndicator />
-              <Text style={{ color: colors.textMuted }}>Loading cloud sessions</Text>
+      {grouped ? (
+        <SectionList
+          sections={sections}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <View style={{ paddingTop: 12, paddingBottom: 4 }}>
+              <CodeListSectionHeading>{section.title}</CodeListSectionHeading>
             </View>
-          ) : status === 'error' ? (
-            <ErrorState message={error ?? CLOUD_LIST_FAILED} onRetry={() => void load('initial')} />
-          ) : (
-            <EmptyState searching={searching} filtered={view !== CLOUD_CODE_DEFAULT_SESSION_VIEW} />
-          )
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.textPrimary}
-            progressBackgroundColor={colors.surfaceElevated}
-          />
-        }
-      />
+          )}
+          {...listProps}
+        />
+      ) : (
+        <FlatList data={visibleSessions} {...listProps} />
+      )}
 
       <FloatingPrimaryAction
         testID="cloud-code-new-session"
@@ -487,5 +558,5 @@ export function CloudCodeSessionsScreen() {
     );
   }
 
-  return <SessionList key={access.accountKey} onBack={handleBack} />;
+  return <SessionList key={access.accountKey} accountKey={access.accountKey} onBack={handleBack} />;
 }

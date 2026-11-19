@@ -20,6 +20,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import {
   getBillingPlanPricing,
+  isAppSession,
   isBillingPlanTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -28,6 +29,7 @@ import {
   subscriptionAccessRank,
 } from '@/lib/services/subscription-access-policy';
 import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
+import { sessionDeviceLabel } from '@/features/settings/lib/session-device-label';
 import {
   STORE_BILLING_NAME,
   STORE_SUBSCRIPTION_MANAGEMENT_URL,
@@ -55,6 +57,7 @@ import {
   type OwnedAccountDeletionSnapshot,
 } from '../hooks/use-account-deletion-status';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 
 type DeletionStatusSnapshot = OwnedAccountDeletionSnapshot;
 
@@ -92,6 +95,8 @@ interface AccountSession {
   id: string;
   status: string;
   device: string;
+  os?: string | null;
+  surface?: string | null;
   browser: string | null;
   location: string | null;
   createdAt: string | null;
@@ -269,6 +274,7 @@ export function AccountSection({
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const signedOutPath = useEmbeddedSignInPath() ?? '/login';
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
@@ -343,7 +349,7 @@ export function AccountSection({
 
         if (session.isCurrent) {
           await logout();
-          await identitySignOut({ sessionId: session.id, redirectUrl: '/login' });
+          await identitySignOut({ sessionId: session.id, redirectUrl: signedOutPath });
           return;
         }
 
@@ -351,7 +357,7 @@ export function AccountSection({
         setSessionTotalCount((current) => (current === null ? current : Math.max(0, current - 1)));
       } catch (error) {
         if (sessionRevoked && session.isCurrent) {
-          router.replace('/login');
+          router.replace(signedOutPath);
           return;
         }
         setSessionActionError(toUserMessage(error, 'Unable to revoke this session.'));
@@ -359,7 +365,7 @@ export function AccountSection({
         setRevokingSessionId(null);
       }
     },
-    [identitySignOut, logout, router],
+    [identitySignOut, logout, router, signedOutPath],
   );
 
   // ── Delete account (canonical, working flow on this surface) ───────────────
@@ -703,8 +709,8 @@ export function AccountSection({
                             fontWeight: 500,
                           }}
                         >
-                          <div>{row.device}</div>
-                          {row.browser ? (
+                          <div>{sessionDeviceLabel(row)}</div>
+                          {row.browser && !isAppSession(row) ? (
                             <div
                               style={{
                                 marginTop: 'var(--space-1)',
@@ -786,7 +792,7 @@ export function AccountSection({
                               confirm({
                                 title: row.isCurrent
                                   ? 'Log out this session?'
-                                  : `Revoke the ${row.device} session?`,
+                                  : `Revoke the ${sessionDeviceLabel(row)} session?`,
                                 description: row.isCurrent
                                   ? 'You will be signed out on this device and returned to the sign-in page.'
                                   : 'That device is signed out immediately and has to sign in again to regain access.',
@@ -798,7 +804,7 @@ export function AccountSection({
                             aria-label={
                               row.isCurrent
                                 ? 'Log out current session'
-                                : `Revoke ${row.device} session`
+                                : `Revoke ${sessionDeviceLabel(row)} session`
                             }
                             style={{
                               padding: 'var(--space-2) var(--space-3)',

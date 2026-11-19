@@ -69,6 +69,19 @@ export interface E2BGitExecutor {
   }): Promise<CommandExecutionResult>;
 }
 
+export interface StagedStorageFile {
+  path: string;
+  byteSize: number;
+}
+
+export type StagedStorageRecord = Readonly<Record<string, StagedStorageFile>>;
+
+export interface StagedStorageMemory {
+  load(): Promise<StagedStorageRecord>;
+  /** `forget` names entries another executor may have saved that this save must not bring back. */
+  save(record: StagedStorageRecord, forget?: readonly string[]): Promise<void>;
+}
+
 export interface E2BExecutor {
   runCode(input: {
     language: string;
@@ -80,6 +93,13 @@ export interface E2BExecutor {
     content: string;
     encoding?: 'utf8' | 'base64';
   }): Promise<ExecutionResult>;
+  writeFileStream?(input: {
+    path: string;
+    content: ReadableStream<Uint8Array>;
+    signal: AbortSignal;
+  }): Promise<ExecutionResult>;
+  removeFile?(path: string, options?: { requestTimeoutMs?: number }): Promise<ExecutionResult>;
+  storageStaging?: StagedStorageMemory;
   createFolder(input: { path: string }): Promise<ExecutionResult>;
   runCommand?(input: {
     command: string;
