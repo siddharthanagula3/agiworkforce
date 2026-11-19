@@ -1,0 +1,149 @@
+{
+  "scenario": "stripe dispute opened",
+  "outcomes": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed (top-up)"
+    },
+    {
+      "outcome": "ok",
+      "step": "charge.dispute.created"
+    }
+  ],
+  "ledger": {
+    "billing_disputes": [
+      {
+        "amount_cents": 2000,
+        "charge_id": "ch_ledgerReplayPlan",
+        "closed_at": null,
+        "currency": "usd",
+        "id": "dp_ledgerReplay",
+        "opened_at": "T0+60s",
+        "outcome": "open",
+        "prior_cancel_at_period_end": false,
+        "prior_subscription_status": "active",
+        "restored_at": null,
+        "restored_credits_microusd": null,
+        "revoked_account_id": "<id 1>",
+        "revoked_at": "T0",
+        "revoked_credits_microusd": 22500000,
+        "revoked_top_up_microusd": 12500000,
+        "stripe_status": "needs_response"
+      }
+    ],
+    "credit_transactions": [
+      {
+        "amount_cents": -2250,
+        "amount_microusd": -22500000,
+        "credit_account_id": "<id 1>",
+        "description": "Dispute revocation dp_ledgerReplay",
+        "id": "<id 2>",
+        "metadata": {
+          "dispute_id": "dp_ledgerReplay",
+          "top_up_microusd": 12500000
+        },
+        "transaction_type": "adjustment"
+      },
+      {
+        "amount_cents": 1000,
+        "amount_microusd": 10000000,
+        "credit_account_id": "<id 1>",
+        "description": "initial credit allocation for billing period",
+        "id": "<id 3>",
+        "metadata": null,
+        "transaction_type": "allocation"
+      },
+      {
+        "amount_cents": 1250,
+        "amount_microusd": 12500000,
+        "credit_account_id": "<id 1>",
+        "description": "Credit top-up purchase cs_test_ledgerReplayTopUp",
+        "id": "<id 4>",
+        "metadata": {
+          "charged_cents": 4750,
+          "charged_currency": "usd",
+          "purchase_country": "US"
+        },
+        "transaction_type": "purchase"
+      }
+    ],
+    "expiring_credit_purchases": [],
+    "mobile_iap_transactions": [],
+    "subscriptions": [
+      {
+        "apple_original_transaction_id": null,
+        "cancel_at_period_end": true,
+        "canceled_at": null,
+        "current_period_end": "T0+20d",
+        "current_period_start": "T0-10d",
+        "google_purchase_token": null,
+        "id": "<id 5>",
+        "last_stripe_event_at": "T0",
+        "plan_catalog_version": 4,
+        "plan_tier": "pro",
+        "status": "past_due",
+        "stripe_customer_id": "cus_ledgerReplay",
+        "stripe_price_id": "price_ledgerReplayPro",
+        "stripe_subscription_id": "sub_ledgerReplay"
+      }
+    ],
+    "token_credits": [
+      {
+        "bonus_granted_cents": 0,
+        "credits_allocated_cents": 2250,
+        "credits_allocated_microusd": 22500000,
+        "credits_used_cents": 2250,
+        "credits_used_microusd": 22500000,
+        "id": "<id 1>",
+        "period_end": "T0+20d",
+        "period_start": "T0-10d",
+        "plan_catalog_version": 4,
+        "subscription_id": "<id 5>",
+        "top_up_allocated_cents": 1250,
+        "top_up_allocated_microusd": 12500000
+      }
+    ]
+  },
+  "outcomesDeliveredTwice": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed (top-up)"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed (top-up)"
+    },
+    {
+      "outcome": "ok",
+      "step": "charge.dispute.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "charge.dispute.created"
+    }
+  ]
+}
