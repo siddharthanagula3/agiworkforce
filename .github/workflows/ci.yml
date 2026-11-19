@@ -581,6 +581,9 @@ jobs:
       - name: Replay the shared auto-route fixture against the Rust resolver
         run: cargo test --locked -p agiworkforce-model-registry --test auto_route_conformance
 
+      - name: Replay the shared plan tier fixture against the Rust resolver
+        run: cargo test --locked -p agiworkforce-model-registry --test plan_tier_conformance
+
   rust-desktop-cli:
     name: Rust desktop and CLI (default features)
     runs-on: ubuntu-24.04
