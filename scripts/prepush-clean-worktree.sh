@@ -36,6 +36,21 @@ export CARGO_TARGET_DIR="$(pwd -P)/target"
 unset NODE_PATH
 eval "$CHAIN_CMD"
 
+if [ -n "${AGI_PREPUSH_STATIC_CMD+set}" ]; then
+  eval "$AGI_PREPUSH_STATIC_CMD"
+else
+  # The candidate is a fresh checkout with no task cache of its own, so the
+  # cache lives beside the candidates and survives them.
+  export TURBO_CACHE_DIR="${TURBO_CACHE_DIR:-$WORKTREE_PARENT/turbo-cache}"
+  STATIC_SCOPE=""
+  if git rev-parse --verify --quiet 'origin/main^{commit}' >/dev/null; then
+    export TURBO_SCM_BASE=origin/main
+    STATIC_SCOPE="--affected"
+  fi
+  NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}" \
+    pnpm exec turbo run lint typecheck $STATIC_SCOPE --concurrency=2
+fi
+
 if [ -n "${AGI_PREPUSH_DIFF_CMD:-}" ]; then
   eval "$AGI_PREPUSH_DIFF_CMD"
 else

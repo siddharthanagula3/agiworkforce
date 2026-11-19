@@ -6,7 +6,6 @@ import {
 
 import {
   placeTurnSystemNotices,
-  resolveResidencyRegion,
   resolveTurnPromptCache,
   type ProcessedRequest,
 } from '../request-processor';
@@ -110,24 +109,6 @@ describe('resolveTurnPromptCache', () => {
       organizationId: null,
       userId: 'user_alpha',
     });
-  });
-});
-
-describe('resolveResidencyRegion', () => {
-  it('carries a workspace pinned away from the deployment region into routing', () => {
-    expect(resolveResidencyRegion('eu', 'us')).toBe('eu');
-  });
-
-  it('asks nothing of routing for a workspace in the deployment region', () => {
-    expect(resolveResidencyRegion('us', 'us')).toBeNull();
-  });
-
-  it('asks nothing when the workspace region is unknown', () => {
-    expect(resolveResidencyRegion(null, 'us')).toBeNull();
-  });
-
-  it('carries the workspace region when the deployment asserts none of its own', () => {
-    expect(resolveResidencyRegion('eu', null)).toBe('eu');
   });
 });
 

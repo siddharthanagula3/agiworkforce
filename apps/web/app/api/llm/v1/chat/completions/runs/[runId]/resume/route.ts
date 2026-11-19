@@ -31,6 +31,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../../../lib/auth-gate';
 import { withManagedTurnSlot } from '../../../lib/turn-slot';
 import { processRequest } from '../../../lib/request-processor';
+import { settleRefusedFreeTrial } from '../../../lib/settle-refused-free-trial';
 import { loadMcpToolDefs } from '../../../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
 import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
@@ -277,6 +278,7 @@ async function handlePausedRunResume(
     discovery = { mcpTools: [...operatorTools, ...connectorTools], permissions };
   } catch (error) {
     await releaseReservation(processed.managedUsage, 'tool_discovery_failed');
+    await settleRefusedFreeTrial(processed, 'tool_discovery_failed');
     await releaseClaim(db, userId, claim);
     throw error;
   }
@@ -354,6 +356,7 @@ async function handlePausedRunResume(
     });
   } catch (error) {
     await releaseReservation(processed.managedUsage, 'workflow_start_failed');
+    await settleRefusedFreeTrial(processed, 'workflow_start_failed');
     await releaseClaim(db, userId, claim);
     logger.error(
       { error, userId, requestId: processed.requestId, runId },

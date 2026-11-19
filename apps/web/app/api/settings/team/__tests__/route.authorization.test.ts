@@ -123,6 +123,16 @@ function listRequest(organizationId: string) {
   ) as never;
 }
 
+function callerMembershipRows(
+  sql: string,
+  params: unknown[] | undefined,
+  row: { status: string },
+): unknown[] {
+  if (params?.[1] !== 'admin-user') return [];
+  if (sql.includes("status = 'active'") && row.status !== 'active') return [];
+  return [row];
+}
+
 function request(body: unknown) {
   return new Request('http://localhost:3000/api/settings/team', {
     method: 'POST',
@@ -245,6 +255,7 @@ describe('POST /api/settings/team authorization invariants', () => {
       organization_id: ORG_A,
       user_id: 'admin-user',
       role: 'admin',
+      status: 'active',
       provisioning_source: 'manual',
       provisioned_at: null,
       joined_at: '2026-07-23T00:00:00.000Z',
@@ -273,7 +284,7 @@ describe('POST /api/settings/team authorization invariants', () => {
       if (text.includes('from sso_connections')) return [{ domain: 'example.com' }];
       if (text.includes('insert into public.organization_members')) return [insertedMembership];
       if (text.includes('from public.organization_members')) {
-        return (params as unknown[] | undefined)?.[1] === 'admin-user' ? [adminMembership] : [];
+        return callerMembershipRows(text, params, adminMembership);
       }
       return [];
     });
@@ -295,6 +306,41 @@ describe('POST /api/settings/team authorization invariants', () => {
     expect(
       mockNeonQuery.mock.calls.some(([sql]) => String(sql).includes('from public.profiles')),
     ).toBe(true);
+  });
+
+  it('refuses a caller whose membership is suspended', async () => {
+    const suspendedMembership = {
+      organization_id: ORG_A,
+      user_id: 'admin-user',
+      role: 'admin',
+      status: 'suspended',
+      provisioning_source: 'manual',
+      provisioned_at: null,
+      joined_at: '2026-07-23T00:00:00.000Z',
+    };
+    const profiles: ProfileFixtureRow[] = [
+      { id: 'target-user', email: 'someone@example.com', display_name: null, avatar_url: null },
+    ];
+    mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const text = String(sql);
+      const profileResult = rlsScopedProfileLookup(profiles, 'admin-user', text, params);
+      if (profileResult !== undefined) return profileResult;
+      if (text.includes('pg_advisory_xact_lock')) return [];
+      if (text.includes('from sso_connections')) return [{ domain: 'example.com' }];
+      if (text.includes('from public.organization_members')) {
+        return callerMembershipRows(text, params, suspendedMembership);
+      }
+      return [];
+    });
+
+    const response = await POST(
+      request({ organizationId: ORG_A, email: 'someone@example.com', role: 'member' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
   });
 });
 

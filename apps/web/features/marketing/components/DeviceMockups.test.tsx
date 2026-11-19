@@ -238,10 +238,7 @@ describe('cloud-only surfaces never show a Local or own-key route', () => {
       'if (!trimmed || !isAllowedApiBaseUrl(trimmed)) return null;',
     ],
     ['apps/desktop/electron/runtime/dispatcher.ts', 'localModels: false'],
-    [
-      'apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts',
-      'MANAGED_WEB_CLOUD_TRUST_MODE',
-    ],
+    ['apps/web/lib/server/managed-cloud-routing/routing-request.ts', 'MANAGED_CLOUD_TRUST_MODE'],
     ['apps/extension/src/background.ts', 'executeChromeManagedChat'],
   ])('%s still contains %s', (path, needle) => {
     expect(readSource(path)).toContain(needle);

@@ -148,7 +148,7 @@ async function handleAddMember(request: NextRequest) {
       const [requesterMembership] = await tx.query<OrganizationMemberRow>(
         `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
-       where organization_id = $1 and user_id = $2
+       where organization_id = $1 and user_id = $2 and status = 'active'
        limit 1`,
         [organizationId, userId],
       );

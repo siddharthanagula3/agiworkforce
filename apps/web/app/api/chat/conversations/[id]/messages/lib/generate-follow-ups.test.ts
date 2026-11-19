@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModelEffortOptions, listCanonicalModels } from '@agiworkforce/types';
-type ScanModule0 = typeof import('@agiworkforce/routing');
-
-vi.mock('@/lib/server/side-call-training-policy', () => ({
-  sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
-}));
+type AdmissionModule = typeof import('@/lib/server/managed-cloud-routing/admission');
 
 vi.mock('server-only', () => ({}));
 
@@ -28,10 +24,17 @@ const SELECTED_ROUTE = {
 };
 
 let selectedRoute: typeof SELECTED_ROUTE = SELECTED_ROUTE;
-vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<ScanModule0>();
-  return { ...actual, resolveAutoRoute: () => selectedRoute };
-});
+const admissionCalls: unknown[] = [];
+let refuseAdmission = false;
+vi.mock('@/lib/server/managed-cloud-routing/admission', async (importOriginal) => ({
+  ...(await importOriginal<AdmissionModule>()),
+  admitManagedCloudRoute: async (call: unknown) => {
+    admissionCalls.push(call);
+    return refuseAdmission
+      ? { status: 'refused', reason: 'no_training_route', code: null }
+      : { status: 'admitted', route: selectedRoute, dispatchProvider: selectedRoute.provider };
+  },
+}));
 
 const drainToLlmResponseMock = vi.fn();
 const streamedRequests: unknown[] = [];
@@ -85,6 +88,8 @@ function input(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  admissionCalls.length = 0;
+  refuseAdmission = false;
   selectedRoute = SELECTED_ROUTE;
   streamedRequests.length = 0;
   drainToLlmResponseMock.mockResolvedValue({
@@ -121,6 +126,29 @@ describe('generateFollowUpSuggestions', () => {
       }),
     );
     expect(suggestions).toHaveLength(3);
+  });
+
+  it('asks for a utility route on behalf of the conversation the answer belongs to', async () => {
+    await generateFollowUpSuggestions(input());
+
+    expect(admissionCalls).toEqual([
+      {
+        kind: 'utility',
+        account: expect.objectContaining({
+          userId: 'user-1',
+          organizationId: null,
+          conversationId: 'conversation-1',
+        }),
+      },
+    ]);
+  });
+
+  it('returns no suggestions and never reaches the provider when admission refuses', async () => {
+    refuseAdmission = true;
+
+    expect(await generateFollowUpSuggestions(input())).toEqual([]);
+    expect(reserveBackgroundUsageMock).not.toHaveBeenCalled();
+    expect(drainToLlmResponseMock).not.toHaveBeenCalled();
   });
 
   it('never reaches the provider when the budget refuses the call', async () => {

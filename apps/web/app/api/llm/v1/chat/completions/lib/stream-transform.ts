@@ -19,7 +19,12 @@ import {
   routeAffinityTtlMs,
 } from '@/lib/services/free-lane/runtime-state-service';
 import { getRoutePricing } from '@agiworkforce/model-registry';
-import { MICROUSD_PER_USD, type StreamChunk } from '@agiworkforce/types';
+import {
+  INTERACTIVE_CARD_DELTA_KEY,
+  MICROUSD_PER_USD,
+  type InteractiveCard,
+  type StreamChunk,
+} from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import {
   classifyError,
@@ -50,6 +55,7 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
 import { estimateTokens } from '@agiworkforce/routing';
+import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
 import { createUsageAccumulator, ingestUsageChunk, type UsageAccumulator } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
@@ -413,6 +419,33 @@ function recordDirectRouteSuccess(input: {
 
 type StreamErrorChunk = Extract<StreamChunk, { type: 'error' }>;
 
+function clientRendersClarifyCards(processed: ProcessedRequest): boolean {
+  return (
+    processed.chatRequest.x_interactive_cards?.supported.includes('clarify.v1') === true &&
+    (processed.chatRequest.tools ?? []).some((tool) => isClarifyTool(tool.function.name))
+  );
+}
+
+function latestUserText(processed: ProcessedRequest): string {
+  const latest = processed.chatRequest.messages?.findLast((message) => message.role === 'user');
+  if (!latest) return '';
+  if (typeof latest.content === 'string') return latest.content;
+  return latest.content
+    .flatMap((part) => (part.type === 'text' && part.text ? [part.text] : []))
+    .join('\n');
+}
+
+function parsedToolArgs(argsJson: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(argsJson);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 function presentStreamError(
   chunk: StreamErrorChunk,
   processed: ProcessedRequest,
@@ -473,6 +506,12 @@ export async function buildAdapterStreamResponse(
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
   const sourceCollector = new AssistantTurnSourceCollector();
   let toolCallsSeen = 0;
+  // The tool loop is the only place a clarify call is executed. A turn answered
+  // inline still offers the tool, so its call is turned into the card here; a
+  // raw call reaches no client that runs it, and the turn would end empty.
+  const clarifyCardsRendered = clientRendersClarifyCards(processed);
+  const pendingClarifyArgs = new Map<string, string>();
+  const interactiveCards: InteractiveCard[] = [];
   let lastStopReason: string | null = null;
   let lastWireFinishReason: string | null = null;
   let lastErrorCode: string | undefined;
@@ -486,6 +525,7 @@ export async function buildAdapterStreamResponse(
       text: assembler.canonicalText(),
       toolCalls: toolCallsSeen,
       generatedFiles: generatedFileRefs.size,
+      interactiveCards: interactiveCards.length,
       otherVisibleOutput: Boolean(
         sourceCollector.snapshot() ||
         sourceCollector.citationSnapshot() ||
@@ -541,18 +581,79 @@ export async function buildAdapterStreamResponse(
         ...(sourceCollector.generatedFilesSnapshot()
           ? { generatedFiles: sourceCollector.generatedFilesSnapshot() }
           : {}),
+        ...(interactiveCards.length > 0 ? { interactiveCards } : {}),
       },
     });
+  };
+
+  const settleClarifyCall = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    toolUseId: string,
+  ): void => {
+    const argsJson = pendingClarifyArgs.get(toolUseId);
+    if (argsJson === undefined) return;
+    pendingClarifyArgs.delete(toolUseId);
+    const outcome = executeClarifyTool(parsedToolArgs(argsJson), {
+      toolCallId: toolUseId,
+      userMessage: latestUserText(processed),
+    });
+    if (!outcome.ok) {
+      logger.warn(
+        { requestId, toolUseId, reason: outcome.content },
+        'Inline clarify call was rejected and shows no card',
+      );
+      return;
+    }
+    interactiveCards.push(outcome.card);
+    controller.enqueue(
+      encoder.encode(
+        sseDataFrames([
+          {
+            choices: [
+              { delta: { [INTERACTIVE_CARD_DELTA_KEY]: { card: outcome.card } }, index: 0 },
+            ],
+            model: responseModelName,
+          },
+        ]),
+      ),
+    );
   };
 
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const received of chunks) {
-          const chunk =
+          let chunk =
             received.type === 'error'
               ? presentStreamError(received, processed, assembler.canonicalText().trim().length > 0)
               : received;
+          if (
+            clarifyCardsRendered &&
+            chunk.type === 'tool-use-start' &&
+            isClarifyTool(chunk.name)
+          ) {
+            pendingClarifyArgs.set(chunk.toolUseId, '');
+            continue;
+          }
+          if (chunk.type === 'tool-use-delta' && pendingClarifyArgs.has(chunk.toolUseId)) {
+            pendingClarifyArgs.set(
+              chunk.toolUseId,
+              (pendingClarifyArgs.get(chunk.toolUseId) ?? '') + chunk.deltaJson,
+            );
+            continue;
+          }
+          if (chunk.type === 'tool-use-end' && pendingClarifyArgs.has(chunk.toolUseId)) {
+            settleClarifyCall(controller, chunk.toolUseId);
+            continue;
+          }
+          if (chunk.type === 'stop') {
+            for (const toolUseId of [...pendingClarifyArgs.keys()]) {
+              settleClarifyCall(controller, toolUseId);
+            }
+            if (chunk.reason === 'tool_use' && interactiveCards.length > 0 && toolCallsSeen === 0) {
+              chunk = { ...chunk, reason: 'end_turn' };
+            }
+          }
           ingestUsageChunk(usage, chunk);
           if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
             upstreamProvider = chunk.provider;

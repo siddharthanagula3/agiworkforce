@@ -17,6 +17,7 @@ type ScanModule11 = typeof import('@/lib/workflows/durable-stream-bounds');
 type ScanModule12 = typeof import('@/lib/server/rls-db');
 type ScanModule13 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule14 = typeof import('@/lib/services/managed-usage-request-service');
+type FreeTrialModule = typeof import('@/lib/services/free-trial-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -43,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   providerStarted: vi.fn(),
   finalize: vi.fn(),
   workspaceControls: vi.fn(),
+  settleFreeTrial: vi.fn(),
 }));
 
 const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
@@ -112,6 +114,11 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   ...(await importOriginal<ScanModule14>()),
   markManagedUsageProviderStarted: mocks.providerStarted,
   finalizeManagedUsageRequest: mocks.finalize,
+}));
+
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialModule>()),
+  settleFreeTrialRequest: mocks.settleFreeTrial,
 }));
 
 import {
@@ -208,6 +215,17 @@ function processed() {
   };
 }
 
+const freeTrialReservation = {
+  userId: 'user-1',
+  requestId: 'agi.chat.desktop.device-resume.resume-1',
+  reservedMicrousd: 5_000_000,
+};
+
+function freeProcessed() {
+  const { managedUsage: _managedUsage, ...rest } = processed();
+  return { ...rest, subscriptionTier: 'free', freeTrial: freeTrialReservation };
+}
+
 function resumeBody(over: Record<string, unknown> = {}) {
   return {
     run_id: RUN_ID,
@@ -270,6 +288,7 @@ beforeEach(() => {
   mocks.connectorTools.mockResolvedValue([]);
   mocks.approvalPolicy.mockResolvedValue({});
   mocks.providerStarted.mockResolvedValue(undefined);
+  mocks.settleFreeTrial.mockResolvedValue(0);
   mocks.finalize.mockResolvedValue({
     requestStatus: 'released',
     operationResult: 'finalized',
@@ -561,6 +580,47 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
     });
     expect(mocks.release).toHaveBeenCalledOnce();
     expect(mocks.providerStarted).not.toHaveBeenCalled();
+  });
+
+  it('settles the Free reservation and releases the step when tool discovery fails', async () => {
+    mocks.processRequest.mockResolvedValue(freeProcessed());
+    mocks.operatorTools.mockRejectedValue(new Error('tool registry unavailable'));
+
+    const response = await POST(resume(resumeBody()));
+
+    expect(response.status).toBe(500);
+    expect(mocks.settleFreeTrial).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'tool_discovery_failed' },
+    });
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('settles the Free reservation when neither transport can start the turn', async () => {
+    mocks.processRequest.mockResolvedValue(freeProcessed());
+    mocks.runTurn.mockRejectedValue(new Error('workflow platform down'));
+
+    const response = await POST(resume(resumeBody()));
+
+    expect(response.status).toBe(503);
+    expect(mocks.settleFreeTrial).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'workflow_start_failed' },
+    });
+    expect(mocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the Free reservation to the resumed turn once the turn has started', async () => {
+    mocks.processRequest.mockResolvedValue(freeProcessed());
+
+    const response = await POST(resume(resumeBody()));
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(mocks.settleFreeTrial).not.toHaveBeenCalled();
   });
 
   it('releases the reservation at no charge when the provider start cannot be recorded', async () => {

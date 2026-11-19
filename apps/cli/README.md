@@ -124,8 +124,10 @@ unsandboxed and is the only supported way to proceed without the backend.
 - A hook blocks the action by printing `{"decision": "block"}` or exiting
   with code 2 (its stderr is the reason); any other non-zero exit is shown and
   the action continues. A blocking hook that cannot run at all, because the
-  sandbox refused it or it could not start, blocks. One that runs out of time
-  is shown and the action continues, as in Claude Code. Every hook failure is
+  sandbox refused it or it could not start, blocks, and so does one that runs
+  out of time; the CLI says the hook timed out and the action was stopped. A
+  non-blocking hook that runs out of time is shown and the action continues.
+  Every hook failure is
   shown once a session, and a sandboxed hook or server that fails says it ran
   in the sandbox and how to opt out.
 - Unsandboxed servers and hooks find programs only on a `PATH` without the

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
+import { estimateTokens } from '@agiworkforce/routing';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getModelEffortOptions, normalizeBillingPlanTier } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
@@ -10,7 +10,6 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   reserveBackgroundUsage,
   type BackgroundUsageLease,
@@ -19,8 +18,7 @@ import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { logger } from '@/lib/logger';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
-import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 
 export const FOLLOW_UP_SUGGESTIONS_METADATA_KEY = 'followUpSuggestions';
 export const FOLLOW_UP_SUGGESTION_COUNT = 3;
@@ -123,34 +121,17 @@ export async function generateFollowUpSuggestions(
 ): Promise<string[]> {
   if (!input.answer.trim()) return [];
 
-  const routing = await sideCallRoutingRequest(
-    input.db,
-    input.userId,
-    {
-      selection: 'auto',
-      taskType: 'simple_chat',
-      subscriptionTier: 'free',
-      trustMode: 'managed_cloud',
-      runtimeProfileId: 'web/cloud-chat',
+  const admission = await admitManagedCloudRoute({
+    kind: 'utility',
+    account: {
+      db: input.db,
+      userId: input.userId,
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
     },
-    {
-      forceNoTraining: await conversationKeepsOutOfTraining(
-        input.db,
-        input.userId,
-        input.conversationId,
-      ),
-    },
-  );
-  if (!routing) return [];
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn(
-      { code: route.code, messageId: input.messageId },
-      '[follow-ups] no managed route available',
-    );
-    return [];
-  }
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  });
+  if (admission.status === 'refused') return [];
+  const { route, dispatchProvider } = admission;
 
   const chatRequest = openAIWireRequestToChatRequest({
     model: route.providerModelId,

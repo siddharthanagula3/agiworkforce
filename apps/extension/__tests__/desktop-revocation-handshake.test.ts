@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NATIVE_BROWSER_POLL_MESSAGE, NATIVE_BROWSER_UNPAIR_MESSAGE } from '@agiworkforce/types';
+import { endEarlierWorkers } from './worker-timers';
 
 const harness = vi.hoisted(() => {
   const SESSION_SECRET = '5a'.repeat(32);
@@ -175,6 +176,7 @@ async function settled(predicate: () => boolean): Promise<void> {
 
 describe('reconnecting while Desktop is still owed an unpair', () => {
   beforeEach(() => {
+    endEarlierWorkers();
     vi.resetModules();
     harness.posted.length = 0;
     harness.port.disconnect.mockClear();

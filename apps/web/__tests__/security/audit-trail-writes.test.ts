@@ -485,6 +485,7 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
             organization_id: organizationId,
             user_id: calls === 1 ? 'user_admin' : 'user_target',
             role: calls === 1 ? 'owner' : 'member',
+            status: 'active',
             provisioning_source: 'manual',
             provisioned_at: null,
             joined_at: '2026-01-01T00:00:00Z',

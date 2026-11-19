@@ -382,7 +382,9 @@ export function BillingSection() {
     });
   }
 
-  const entitledTier: string = String(subscription?.tier ?? 'free').toLowerCase();
+  const entitledTier: string = String(
+    subscription?.billing_tier ?? subscription?.tier ?? 'free',
+  ).toLowerCase();
   const tier: string = isBillingPlanTier(entitledTier)
     ? subscriptionPlanTierOf(entitledTier)
     : entitledTier;

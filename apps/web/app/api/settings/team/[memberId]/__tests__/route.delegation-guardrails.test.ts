@@ -111,6 +111,7 @@ function member(userId: string, role: string) {
     organization_id: organizationId,
     user_id: userId,
     role,
+    status: 'active',
     provisioning_source: 'manual',
     provisioned_at: null,
     joined_at: '2026-07-23T00:00:00.000Z',

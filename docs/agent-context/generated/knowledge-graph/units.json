@@ -2457,7 +2457,7 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 609,
+      "files": 610,
       "roles": {
         "asset": 12,
         "config": 6,
@@ -2465,7 +2465,7 @@
         "other": 31,
         "source": 243,
         "style": 3,
-        "test": 311
+        "test": 312
       }
     },
     {
@@ -2551,7 +2551,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 2476,
+      "files": 2477,
       "roles": {
         "asset": 4,
         "config": 14,
@@ -2560,7 +2560,7 @@
         "other": 49,
         "source": 1225,
         "style": 1,
-        "test": 1178
+        "test": 1179
       }
     },
     {
@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8561,
+      "files": 8574,
       "roles": {
         "asset": 58,
         "config": 94,
@@ -2623,9 +2623,9 @@
         "generated": 2,
         "migration": 752,
         "other": 37,
-        "source": 3599,
+        "source": 3604,
         "style": 37,
-        "test": 3931
+        "test": 3939
       }
     },
     {
@@ -4008,11 +4008,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 216,
+      "files": 217,
       "roles": {
         "config": 13,
         "source": 120,
-        "test": 83
+        "test": 84
       }
     },
     {
@@ -5066,10 +5066,10 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 18,
+      "files": 19,
       "roles": {
         "config": 1,
-        "other": 16,
+        "other": 17,
         "source": 1
       }
     },
@@ -5087,13 +5087,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 728,
+      "files": 731,
       "roles": {
         "config": 68,
         "doc": 1,
         "other": 21,
-        "source": 380,
-        "test": 258
+        "source": 381,
+        "test": 260
       }
     },
     {

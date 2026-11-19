@@ -3,8 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   drain: vi.fn(),
   stream: vi.fn(),
-  resolveRoute: vi.fn(),
-  routingRequest: vi.fn(),
+  admit: vi.fn(),
   reserve: vi.fn(),
   started: vi.fn(),
   completed: vi.fn(),
@@ -17,17 +16,9 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@agiworkforce/routing', async (importOriginal) => ({
+vi.mock('@/lib/server/managed-cloud-routing/admission', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  resolveAutoRoute: mocks.resolveRoute,
-}));
-vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  sideCallRoutingRequest: mocks.routingRequest,
-}));
-vi.mock('@/lib/services/aggregator-routing', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  dispatchProviderForSelectedRoute: () => 'tool-provider',
+  admitManagedCloudRoute: mocks.admit,
 }));
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -98,8 +89,11 @@ function input() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.routingRequest.mockImplementation(async (_db, _user, request: unknown) => request);
-  mocks.resolveRoute.mockReturnValue(ROUTE);
+  mocks.admit.mockResolvedValue({
+    status: 'admitted',
+    route: ROUTE,
+    dispatchProvider: 'tool-provider',
+  });
   mocks.stream.mockImplementation((request: unknown) => request);
   mocks.started.mockResolvedValue(undefined);
   mocks.completed.mockResolvedValue(undefined);
@@ -117,11 +111,11 @@ describe('runProjectMemoryEdit', () => {
 
     await runProjectMemoryEdit(input());
 
-    expect(mocks.routingRequest).toHaveBeenCalledWith(
-      expect.anything(),
-      'user-1',
-      expect.objectContaining({ selection: 'auto', requiredCapabilities: ['functionCalling'] }),
-    );
+    expect(mocks.admit).toHaveBeenCalledWith({
+      kind: 'utility',
+      account: { db: expect.anything(), userId: 'user-1', organizationId: null },
+      need: { requiredCapabilities: ['functionCalling'] },
+    });
     const request = mocks.stream.mock.calls[0]?.[0] as {
       model: string;
       tools: Array<{ name: string }>;
@@ -240,7 +234,7 @@ describe('runProjectMemoryEdit', () => {
   });
 
   it('refuses when no route can call tools', async () => {
-    mocks.resolveRoute.mockReturnValue({ status: 'unavailable', code: 'no_route' });
+    mocks.admit.mockResolvedValue({ status: 'refused', reason: 'no_route', code: 'no_route' });
 
     await expect(runProjectMemoryEdit(input())).rejects.toBeInstanceOf(
       ProjectMemoryEditUnavailableError,
@@ -249,10 +243,9 @@ describe('runProjectMemoryEdit', () => {
   });
 
   it('finds no route when the training choice leaves no provider', async () => {
-    mocks.routingRequest.mockResolvedValue(null);
+    mocks.admit.mockResolvedValue({ status: 'refused', reason: 'no_training_route', code: null });
 
-    await expect(resolveProjectMemoryEditRoute(input().db, 'user-1')).resolves.toBeNull();
-    expect(mocks.resolveRoute).not.toHaveBeenCalled();
+    await expect(resolveProjectMemoryEditRoute(input().db, 'user-1', null)).resolves.toBeNull();
   });
 });
 

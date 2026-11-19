@@ -201,7 +201,12 @@ function baseInput(overrides: Partial<ContextCompactionInput> = {}): ContextComp
     conversationId: CONVERSATION_ID,
     isTemporary: false,
     planTier: 'pro',
-    resolveEconomyRoute: vi.fn(() => SELECTED_ROUTE) as never,
+    resolveEconomyRoute: async () =>
+      ({
+        status: 'admitted' as const,
+        route: SELECTED_ROUTE,
+        dispatchProvider: SELECTED_ROUTE.provider,
+      }) as never,
     ...overrides,
   };
 }
@@ -550,15 +555,11 @@ describe('compactContextWindow', () => {
   });
 
   it('falls back to the mechanical trim when no economy route is available', async () => {
-    const unavailableRoute = vi.fn(() => ({
-      status: 'unavailable' as const,
+    const unavailableRoute = async () => ({
+      status: 'refused' as const,
+      reason: 'no_route' as const,
       code: 'no_eligible_route' as const,
-      requestedSelection: 'auto',
-      requestedProfile: null,
-      effectiveProfile: null,
-      taskType: 'simple_chat',
-      reasons: ['no eligible route'],
-    }));
+    });
     const db = makeDb();
     const messages = buildMessages();
 

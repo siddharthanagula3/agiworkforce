@@ -76,7 +76,7 @@ async function handleGetEdit(request: NextRequest, context: RouteContext) {
   });
   const gateResponse = buildManagedComputeAccessGateResponse(access);
   if (gateResponse) return gateResponse;
-  if (!(await resolveProjectMemoryEditRoute(db, userId))) {
+  if (!(await resolveProjectMemoryEditRoute(db, userId, organizationId))) {
     throw createError.notFound(EDIT_UNAVAILABLE_MESSAGE);
   }
   const handshake: ProjectMemoryEditHandshake = {

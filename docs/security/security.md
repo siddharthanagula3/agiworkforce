@@ -654,18 +654,37 @@ revoking every connector grant and re-enrolling every 2FA user.
 
 ### What is encrypted, and with which key
 
-| Column                                             | Key env                                 | Key material  | Wire layout                   | `key_version` column       |
-| -------------------------------------------------- | --------------------------------------- | ------------- | ----------------------------- | -------------------------- |
-| `connector_oauth_grants.access_token_enc`          | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
-| `connector_oauth_grants.refresh_token_enc`         | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
-| `user_custom_connectors.auth_header_enc`           | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `auth_header_key_version`  |
-| `github_installations.access_token_enc`            | `GITHUB_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `access_token_key_version` |
-| `user_two_factor.totp_secret_enc`                  | `TOTP_ENCRYPTION_KEY`                   | ≥32 raw chars | base64(IV ‖ ciphertext ‖ tag) | `totp_secret_key_version`  |
-| `connector_oauth_authorizations.code_verifier_enc` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
+| Column                                              | Key env                                 | Key material                           | Wire layout                   | `key_version` column       |
+| --------------------------------------------------- | --------------------------------------- | -------------------------------------- | ----------------------------- | -------------------------- |
+| `connector_oauth_grants.access_token_enc`           | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
+| `connector_oauth_grants.refresh_token_enc`          | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
+| `user_custom_connectors.auth_header_enc`            | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `auth_header_key_version`  |
+| `github_installations.access_token_enc`             | `GITHUB_TOKEN_ENCRYPTION_KEY`           | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `access_token_key_version` |
+| `user_two_factor.totp_secret_enc`                   | `TOTP_ENCRYPTION_KEY`                   | ≥32 raw chars                          | base64(IV ‖ ciphertext ‖ tag) | `totp_secret_key_version`  |
+| `user_custom_connectors.oauth_client_secret_enc`    | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `mcp_oauth_clients.client_secret_enc`               | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `bank_account_items.access_token_enc`               | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `slack_installations.bot_token_enc`                 | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `developer_webhook_endpoints.secret_enc`            | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | HKDF per user                          | `v1.<keyId>.<iv>.<ct>.<tag>`  | none, not swept            |
+| `organization_audit_destinations.secret_ciphertext` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | HKDF per workspace without its own key | `v1.<keyId>.<iv>.<ct>.<tag>`  | none, not swept            |
+| `connector_oauth_authorizations.code_verifier_enc`  | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
+| `github_install_authorizations.code_verifier_enc`   | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
 
-The last row holds a minutes-lived value. Rotating its key strands in-flight
+The two `code_verifier_enc` rows hold a minutes-lived value. Rotating its key strands in-flight
 flows only: a user retries the connect and it works. It gets no bookkeeping
 column and the rotation sweep does not touch it.
+
+The rows marked "not swept" have no target in `scripts/reencrypt.mjs`, which
+finds the rows still to move by their `*_key_version` column. The four
+connector tables have no such column. The two HKDF rows are sealed under a ring
+derived from the connector key per user or per workspace, and re-sealing one
+needs that derived ring and the row's associated data, which the sweep does not
+build; `runOrganizationKeyRewrap` covers a workspace only once it has brought
+its own key. `scripts/reencrypt.test.mjs` names each unswept connector column
+and fails when a connector secret column has neither a target nor an entry
+there. Until a column has a target, a retired
+`CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` version has to stay on the ring (step 6
+of `Rotating a key`).
 
 `DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing: no module reads it and
 `apps/web/lib/validate-env.ts` does not require it. `device_authorization_codes`
@@ -696,15 +715,18 @@ column's CHECK constraint enforces, and no id may appear twice in one ring.
 
 ### Which readers understand the ring
 
-| Column                                   | Reader                           | Ring-aware |
-| ---------------------------------------- | -------------------------------- | ---------- |
-| `connector_oauth_grants.*_token_enc`     | `lib/custom-connector-crypto.ts` | yes        |
-| `user_custom_connectors.auth_header_enc` | `lib/custom-connector-crypto.ts` | yes        |
-| `github_installations.access_token_enc`  | `lib/github-app.ts`              | yes        |
-| `user_two_factor.totp_secret_enc`        | `lib/crypto/totp-envelope.ts`    | yes        |
+| Column                                              | Reader                                      | Ring-aware |
+| --------------------------------------------------- | ------------------------------------------- | ---------- |
+| `connector_oauth_grants.*_token_enc`                | `lib/custom-connector-crypto.ts`            | yes        |
+| `user_custom_connectors.auth_header_enc`            | `lib/custom-connector-crypto.ts`            | yes        |
+| `github_installations.access_token_enc`             | `lib/github-app.ts`                         | yes        |
+| `user_two_factor.totp_secret_enc`                   | `lib/crypto/totp-envelope.ts`               | yes        |
+| the four connector rows marked "not swept" above    | `lib/custom-connector-crypto.ts`            | yes        |
+| `developer_webhook_endpoints.secret_enc`            | `lib/services/developer-webhook-service.ts` | yes        |
+| `organization_audit_destinations.secret_ciphertext` | `lib/services/audit-streaming-service.ts`   | yes        |
 
 A ring-aware reader decrypts against every key on the ring, so rows the sweep
-has not reached yet are still readable with the retired key present. All four
+has not reached yet are still readable with the retired key present. The swept
 columns rotate with **no downtime**. They keep WRITING the legacy `iv:ct:tag`
 (or, for `totp_secret_enc`, `b64-iv-ct-tag`) layout so an instance of the
 previous build can read what a new instance wrote during a rolling deploy;
@@ -725,11 +747,11 @@ below runs the `Rotating a key` procedure end to end, with `scripts/reencrypt.mj
 sweep. Nothing here rotates itself; the date is a calendar obligation on the
 Owner named in the header.
 
-| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                |
-| --------------------------------------- | --------- | ---------- | --------------------------------------- | ----------------------- |
-| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none, ring-aware reader |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none, ring-aware reader |
-| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none, ring-aware reader |
+| Key env                                 | Interval  | Next due   | Sweep target                                                                                      | Downtime                |
+| --------------------------------------- | --------- | ---------- | ------------------------------------------------------------------------------------------------- | ----------------------- |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors`; six columns not swept, retired version stays on the ring | none, ring-aware reader |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                                                                            | none, ring-aware reader |
+| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                                                                                      | none, ring-aware reader |
 
 Rotate ahead of the date, not on it, whenever a key could have been read by
 someone who should not have it: a leaked deployment env, a departing operator
@@ -879,9 +901,21 @@ the baseline and the guard refuses their return.
    `openTotpSecret` refuses to decrypt and which belong to no key. They are
    reported, never stamped.
 
+   A connector secret goes back with the binding it came with: one sealed with
+   its purpose as associated data is re-sealed with it, and a legacy unbound
+   one stays unbound for `scripts/reseal-connector-secrets.mjs` to bind.
+
 6. **Drop `_RETIRED`** from the deployed env once the sweep reports `scanned=0`
    for every target, and redeploy. Keep the old key in a sealed record until the
    next rotation, it is the only way back if a restore predates the sweep.
+
+   Except for `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY`: leave its `_RETIRED` in
+   place. The rows marked "not swept" in the first table are still sealed under
+   the old version, and dropping it leaves every one of them unreadable, so
+   users would have to reconnect Slack, bank accounts, MCP clients and OAuth
+   connectors and re-create webhook and audit destination secrets. A rotation of
+   this key on suspected exposure therefore does not yet take the exposed key
+   out of service.
 
 7. **Verify** a live read of each rotated surface (connect a connector, load a
    GitHub PR review, complete a 2FA challenge) before ending the window.

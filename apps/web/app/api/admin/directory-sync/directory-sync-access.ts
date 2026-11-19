@@ -62,7 +62,7 @@ export async function requireDirectorySyncAdmin(
     memberships = await db.query<Pick<OrganizationMemberRow, 'organization_id' | 'role'>>(
       `select organization_id, role
          from organization_members
-        where user_id = $1 and role in ('owner', 'admin')
+        where user_id = $1 and role in ('owner', 'admin') and status = 'active'
         order by joined_at asc`,
       [userId],
     );

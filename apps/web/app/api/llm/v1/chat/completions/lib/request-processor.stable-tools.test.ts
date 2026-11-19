@@ -54,6 +54,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 import { CreditService } from '@/lib/services/credit-service';
 import { CLARIFY_TOOL_NAME } from '@/lib/services/clarify-tool-service';
 import { MAP_SEARCH_TOOL_NAME } from '@/lib/services/map-search-tool-service';
+import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
 import type { AuthGateSuccess } from './auth-gate';
 import { toCanonicalChatRequest } from './canonical-request';
 import { applyAnswerUiCapability, processRequest } from './request-processor';
@@ -239,6 +240,42 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
     });
   },
 );
+
+describe('the memory tools offer with Memory on', () => {
+  const MEMORY_TOOL_NAMES = memoryToolDefinitions().map((tool) => tool.function.name);
+
+  async function memoryTurn(key: string, message: string) {
+    mocks.loadPolicy.mockResolvedValue({ ...DISABLED_POLICY, enabled: true });
+    const result = await processRequest(chatRequest(`memory-${key}`, 'web', message), auth());
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('request was refused');
+    const inventory = result.llmRequest.messages.find(
+      (message) => (message as { name?: string }).name === 'managed_tool_inventory',
+    );
+    const inventoryLines = String(inventory?.content ?? '').split('\n');
+    return {
+      offered: toolNames(result.llmRequest.tools).filter((name) => isMemoryTool(name ?? '')),
+      toldModel: MEMORY_TOOL_NAMES.filter((name) => inventoryLines.includes(`- ${name}`)),
+    };
+  }
+
+  it('sends a plain message without the memory tools and without telling the model it has them', async () => {
+    const { offered, toldModel } = await memoryTurn('plain', 'Explain compound interest.');
+    expect(offered).toEqual([]);
+    expect(toldModel).toEqual([]);
+  });
+
+  it.each([
+    ['recalls something from Memory', 'What do you remember about my coffee order?'],
+    ['remembers something', 'Remember that I prefer metric units.'],
+    ['forgets something', 'Forget my old home address.'],
+    ['updates Memory', 'Update my memory: I moved to Austin last month.'],
+  ])('offers the memory tools and says so to a message that %s', async (_label, message) => {
+    const { offered, toldModel } = await memoryTurn(message.length.toString(), message);
+    expect(offered).toEqual(MEMORY_TOOL_NAMES);
+    expect(toldModel).toEqual(MEMORY_TOOL_NAMES);
+  });
+});
 
 describe('the answer UI tool offer', () => {
   function request(supported: string[] | undefined, stream = true) {

@@ -2879,6 +2879,33 @@ impl TurnHost for TurnHostAdapter<'_> {
                 continue;
             }
 
+            let workspace_root = self.session.workspace_root();
+            let approval_callback = self.session.recorded_approval_callback();
+            let policy_refusal = match crate::tools::workspace_policy_gate(
+                &tc.name,
+                &legacy_args,
+                workspace_root.as_deref(),
+                approval_callback.as_ref(),
+            )
+            .await
+            {
+                Ok(crate::tools::WorkspacePolicyGate::Refused(refusal)) => Some(refusal.output),
+                Err(error) => Some(format!("tool error: {error:#}")),
+                Ok(
+                    crate::tools::WorkspacePolicyGate::Unruled
+                    | crate::tools::WorkspacePolicyGate::Allowed
+                    | crate::tools::WorkspacePolicyGate::Approved,
+                ) => None,
+            };
+            if let Some(content) = policy_refusal {
+                result_blocks.push(ResultBlock {
+                    tool_use_id: tc.id.clone(),
+                    content,
+                    is_error: true,
+                });
+                continue;
+            }
+
             let prompt = effective_args
                 .get("prompt")
                 .and_then(|v| v.as_str())
@@ -3160,31 +3187,19 @@ impl TurnHost for TurnHostAdapter<'_> {
                 sa_display_status
             );
 
-            hooks::run_hooks(
-                &hcfg,
-                hooks::HookEvent::PostToolUse,
-                &hooks::HookInput {
-                    event: "PostToolUse".to_string(),
-                    session_id: Some(self.session.runtime_session_id.clone()),
-                    model: Some(self.session.model.clone()),
-                    tool_name: Some(tool_name.clone()),
-                    tool_args: Some(tool_args.clone()),
-                    tool_output: Some(tool_result.output.clone()),
-                    message: None,
-                    tool_execution: None,
-                },
-            )
-            .await;
-
-            let content = self
-                .persisted_tool_output(&hcfg, tool_name, tool_args, tool_result.output)
-                .await;
-
-            result_blocks.push(ResultBlock {
-                tool_use_id,
-                content,
-                is_error: !tool_result.success,
-            });
+            let call = ToolCallResponse {
+                id: tool_use_id,
+                name: tool_name,
+                arguments: tool_args.clone(),
+            };
+            let executed = ExecResult {
+                ok: tool_result.success,
+                output: tool_result.output,
+            };
+            result_blocks.push(
+                self.finish_sequential_tool(&call, tool_args, executed)
+                    .await,
+            );
         }
 
         result_blocks
@@ -5392,12 +5407,16 @@ mod tests {
     }
 
     fn batch_policy_session(decision: &str) -> (tempfile::TempDir, AgentSession) {
+        tool_policy_session("batch", decision)
+    }
+
+    fn tool_policy_session(tool: &str, decision: &str) -> (tempfile::TempDir, AgentSession) {
         let scratch = workspace_scratch();
         let policy_dir = scratch.path().join(".agiworkforce");
         std::fs::create_dir_all(&policy_dir).unwrap();
         std::fs::write(
             policy_dir.join("policy.toml"),
-            format!("[[rules]]\ntool = \"batch\"\ndecision = \"{decision}\"\n"),
+            format!("[[rules]]\ntool = \"{tool}\"\ndecision = \"{decision}\"\n"),
         )
         .unwrap();
         let mut session = live_session();
@@ -5618,6 +5637,62 @@ mod tests {
             content, "persist-scrubbed",
             "the storage transform is the last word before the result enters history"
         );
+    }
+
+    #[tokio::test]
+    async fn live_turn_refuses_a_subagent_the_policy_denies_before_spawning_it() {
+        let cases = [
+            (
+                "*",
+                "agent",
+                serde_json::json!({
+                    "action": "run",
+                    "name": "agi-fixture-missing-agent",
+                    "prompt": "do it"
+                }),
+            ),
+            (
+                "task",
+                "task",
+                serde_json::json!({"description": "survey", "prompt": "do it"}),
+            ),
+            (
+                "*",
+                "task",
+                serde_json::json!({"description": "survey", "prompt": "do it"}),
+            ),
+        ];
+        for (denied_tool, called_tool, arguments) in cases {
+            let (_scratch, mut session) = tool_policy_session(denied_tool, "deny");
+
+            run_live_turn(
+                &mut session,
+                LiveTurnTools {
+                    available: &[called_tool],
+                    concurrency_safe: &[],
+                    plan_mode_mutating: &[],
+                },
+                vec![
+                    live_completion(
+                        "delegating",
+                        vec![live_call("spawn-1", called_tool, arguments)],
+                    ),
+                    live_completion("done", vec![]),
+                ],
+            )
+            .await;
+
+            let (content, is_error) = committed_result(&session, "spawn-1");
+            assert!(
+                content.contains(&format!("Tool `{called_tool}` is denied by")),
+                "a policy denying `{denied_tool}` must refuse `{called_tool}`; got: {content}"
+            );
+            assert!(is_error);
+            assert!(
+                session.subagent_manager.is_none(),
+                "a refused `{called_tool}` must not start a subagent"
+            );
+        }
     }
 
     #[tokio::test]

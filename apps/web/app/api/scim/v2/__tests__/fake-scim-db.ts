@@ -395,7 +395,10 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     if (q.startsWith('select organization_id, role from organization_members')) {
       return state.organization_members
         .filter(
-          (row) => row['user_id'] === p[0] && (row['role'] === 'owner' || row['role'] === 'admin'),
+          (row) =>
+            row['user_id'] === p[0] &&
+            (row['role'] === 'owner' || row['role'] === 'admin') &&
+            (!q.includes("status = 'active'") || (row['status'] ?? 'active') === 'active'),
         )
         .map((row) => ({ organization_id: row['organization_id'], role: row['role'] }));
     }
@@ -404,7 +407,8 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
         (row) =>
           row['organization_id'] === p[0] &&
           row['user_id'] === p[1] &&
-          (row['role'] === 'owner' || row['role'] === 'admin'),
+          (row['role'] === 'owner' || row['role'] === 'admin') &&
+          (!q.includes("status = 'active'") || (row['status'] ?? 'active') === 'active'),
       );
     }
     if (q.startsWith('select role, provisioning_source from organization_members')) {
