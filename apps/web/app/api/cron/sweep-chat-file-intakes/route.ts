@@ -20,6 +20,7 @@ import {
   listIdleAwaitingPartsIntakes,
   listPrunableUnsealedSealingIntakes,
   listRedispatchableIntakes,
+  listSealedIntakesWithIdlePreparation,
   listStalledIntakes,
   listUnpurgedTerminalIntakes,
   pruneTerminalIntakes,
@@ -49,6 +50,7 @@ const PRUNE_BATCH_LIMIT = 500;
 interface SweepReport {
   redispatched: number;
   redispatchFailed: number;
+  idlePreparations: number;
   idleCancelled: number;
   stalled: number;
   purged: number;
@@ -123,8 +125,13 @@ async function sweep(db: DatabaseAdapter, nowMs: number): Promise<SweepReport> {
   const { intake, preparation } = CHAT_LARGE_FILE_POLICY;
 
   const due = await listRedispatchableIntakes(db, { nowMs, limit: REDISPATCH_BATCH_LIMIT });
+  const idlePreparations = await listSealedIntakesWithIdlePreparation(db, {
+    idleBeforeMs: nowMs - preparation.redispatchAfterMs,
+    stalledBeforeMs: nowMs - preparation.stallMs,
+    limit: REDISPATCH_BATCH_LIMIT,
+  });
   const dispatched = await dispatchChatFileIntakeWorkflows(
-    due.map((row) => ({
+    [...due, ...idlePreparations].map((row) => ({
       intakeId: row.id,
       userId: row.userId,
       organizationId: row.organizationId,
@@ -189,6 +196,7 @@ async function sweep(db: DatabaseAdapter, nowMs: number): Promise<SweepReport> {
   return {
     redispatched: dispatched.started,
     redispatchFailed: dispatched.failed,
+    idlePreparations: idlePreparations.length,
     idleCancelled,
     stalled,
     purged,

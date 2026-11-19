@@ -14,8 +14,9 @@ const MAX_INTAKE_STEPS = 5_000;
 
 /**
  * Inspect, scan, seal, prepare and index one large chat file. A run that stops
- * anywhere leaves its row leased, and the sweeper starts another at the step
- * the row's state names. The step caps every sleep at the scan's give-up
+ * before the seal leaves its row leased, and the sweeper starts another at the
+ * step the row's state names; one that stops while preparing leaves its
+ * preparation idle, and the sweeper starts another at prepare. The step caps every sleep at the scan's give-up
  * window, so a run always wakes to renew its lease before the lease passes.
  */
 export async function chatFileIntakeWorkflow(input: ChatFileIntakeWorkflowInput): Promise<void> {

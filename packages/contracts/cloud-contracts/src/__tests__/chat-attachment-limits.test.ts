@@ -264,6 +264,7 @@ describe('large chat file policy', () => {
       maxIndexedCharsPerUser: 200_000_000,
       embedChatFiles: false,
       preparerVersion: 1,
+      redispatchAfterMs: 900_000,
       stallMs: 7_200_000,
     });
     expect(CHAT_LARGE_FILE_POLICY.turnBudget).toEqual({

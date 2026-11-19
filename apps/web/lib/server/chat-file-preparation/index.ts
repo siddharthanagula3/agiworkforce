@@ -64,6 +64,7 @@ export {
   listOrphanedPreparations,
   PREPARATION_FAILURE_REASONS,
   PREPARATION_STATES,
+  preparationInProgress,
   recordPreparedIndexedChars,
   type OrphanedPreparation,
   type PreparationCoverage,

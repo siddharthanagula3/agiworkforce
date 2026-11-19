@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -23,7 +24,7 @@ vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
 }));
 
 import { CHAT_LARGE_FILE_POLICY } from '@/lib/chat-attachment-policy';
-import { failStalledPreparations } from '@/lib/server/chat-file-preparation';
+import { failStalledPreparations, preparationInProgress } from '@/lib/server/chat-file-preparation';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { insertScannedChatFileMediaAsset } from '@/lib/server/media-assets';
 import {
@@ -39,6 +40,7 @@ import {
   listIdleAwaitingPartsIntakes,
   listPrunableUnsealedSealingIntakes,
   listRedispatchableIntakes,
+  listSealedIntakesWithIdlePreparation,
   listStalledIntakes,
   listUnpurgedTerminalIntakes,
   markIntakeObjectsPurged,
@@ -118,6 +120,48 @@ async function uploadedIntake(tx: DatabaseAdapter, name: string, nowMs = NOW) {
   });
   if (!uploaded) throw new Error('markUploaded matched nothing');
   return uploaded;
+}
+
+async function sealedIntake(tx: DatabaseAdapter, name: string) {
+  const row = await uploadedIntake(tx, name);
+  for (const [to, from] of [
+    ['inspecting', ['uploaded']],
+    ['scanning', ['inspecting']],
+    ['sealing', ['scanning']],
+  ] as const) {
+    await claimIntakeState(tx, {
+      userId: OWNER,
+      intakeId: row.id,
+      runId: 'r',
+      to,
+      from,
+      nowMs: NOW,
+    });
+  }
+  const assetId = await insertScannedChatFileMediaAsset(
+    {
+      userId: OWNER,
+      organizationId: null,
+      kind: 'file',
+      mimeType: 'application/pdf',
+      byteSize: 40 * MIB,
+      storagePathname: `${row.stagingKey}.scanned`,
+      conversationId: null,
+      temporaryChat: false,
+      scannedSha256: createHash('sha256').update(name).digest('hex'),
+      metadata: { source: 'chat-attachment' },
+    },
+    tx,
+  );
+  const sealed = await completeSealing(tx, {
+    userId: OWNER,
+    intakeId: row.id,
+    runId: 'r',
+    mediaAssetId: assetId,
+    nowMs: NOW,
+  });
+  if (!sealed) throw new Error('completeSealing matched nothing');
+  return { id: row.id, assetId };
 }
 
 // llm-guardrail-allow: requires a local disposable _test database; every case applies 0422 inside a transaction it rolls back.
@@ -691,6 +735,44 @@ describe.skipIf(!connectionString)('chat file intake statements against PostgreS
         [stalled!]: ['prepare_failed', 'stalled'],
         [recent!]: ['preparing', null],
       });
+    });
+  });
+
+  it('lists a sealed intake whose preparation went idle, and none that advanced, finished or stalled', async () => {
+    await inRolledBackMigration(async (tx) => {
+      const { redispatchAfterMs, stallMs } = CHAT_LARGE_FILE_POLICY.preparation;
+      const [clock] = await tx.query<{ now_ms: string }>(
+        `select (extract(epoch from now()) * 1000)::bigint::text as now_ms`,
+      );
+      const nowMs = Number(clock!.now_ms);
+      const preparations = {
+        idle: { ageMs: redispatchAfterMs + 60_000, state: 'preparing' },
+        advanced: { ageMs: 60_000, state: 'preparing' },
+        stalled: { ageMs: stallMs + 60_000, state: 'preparing' },
+        finished: { ageMs: redispatchAfterMs + 60_000, state: 'ready' },
+      } as const;
+      const sealed: Record<string, { id: string; assetId: string }> = {};
+      for (const [name, { ageMs, state }] of Object.entries(preparations)) {
+        sealed[name] = await sealedIntake(tx, name);
+        await tx.query(
+          `insert into public.chat_file_preparations
+             (media_asset_id, user_id, kind, state, preparer_version, updated_at)
+           values ($1::uuid, $2, 'pdf', $3, 1, now() - ($4::bigint * interval '1 millisecond'))`,
+          [sealed[name]!.assetId, OWNER, state, ageMs],
+        );
+      }
+
+      const listed = await listSealedIntakesWithIdlePreparation(tx, {
+        idleBeforeMs: nowMs - redispatchAfterMs,
+        stalledBeforeMs: nowMs - stallMs,
+        limit: 10,
+      });
+
+      expect(listed).toEqual([
+        { id: sealed['idle']!.id, userId: OWNER, organizationId: null, state: 'sealed' },
+      ]);
+      expect(await preparationInProgress(tx, sealed['idle']!.assetId)).toBe(true);
+      expect(await preparationInProgress(tx, sealed['finished']!.assetId)).toBe(false);
     });
   });
 });

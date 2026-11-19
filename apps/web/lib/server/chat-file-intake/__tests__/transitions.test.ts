@@ -144,6 +144,35 @@ describe('an intake run', () => {
     expect(harness.store.row(row.id).attempts).toBe(1);
   });
 
+  it('a run started again for a sealed row whose preparation went idle prepares and indexes it', async () => {
+    const { row, staged } = await stagedRow();
+    const preparing = new Set<string>();
+    const prepared: string[] = [];
+    const harness = createIntakeHarness({
+      scanner: cleanScanner(row, staged, []),
+      rows: [row],
+      overrides: {
+        async prepare(assetId) {
+          prepared.push(assetId);
+          return { done: true };
+        },
+        preparing: async (assetId) => preparing.has(assetId),
+      },
+    });
+    await runInline(harness, { intakeId: row.id, runId: 'run-1' });
+    const assetId = harness.store.row(row.id).mediaAssetId;
+    if (!assetId) throw new Error('the first run did not seal the row');
+    preparing.add(assetId);
+
+    const again = await runInline(harness, { intakeId: row.id, runId: 'run-2' });
+
+    expect(again.last).toEqual({ next: 'end', reason: 'finished' });
+    expect(prepared).toEqual([assetId, assetId]);
+    expect(harness.reindexed).toEqual([assetId, assetId]);
+    expect(harness.seal.media).toHaveLength(1);
+    expect(harness.store.row(row.id)).toMatchObject({ state: 'sealed', attempts: 1 });
+  });
+
   it('a re-dispatched run for an inspecting row inspects again before it submits', async () => {
     const { row, staged } = await stagedRow({
       state: 'inspecting',
