@@ -560,23 +560,3 @@ export function InlineToolCall({
     </div>
   );
 }
-
-export interface InlineToolCallStackProps {
-  children: ReactNode;
-  className?: string;
-}
-
-export function InlineToolCallStack({ children, className }: InlineToolCallStackProps) {
-  return (
-    <div
-      className={cn(
-        'inline-tool-call-stack flex flex-col gap-2 ms-2 ps-3',
-        'border-s border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
-        className,
-      )}
-      data-tool-stack=""
-    >
-      {children}
-    </div>
-  );
-}
