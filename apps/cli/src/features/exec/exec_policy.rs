@@ -13,38 +13,19 @@
 //!
 //! The bash tool calls [`evaluate`] and hard-blocks any `Forbidden` command.
 
-use agiworkforce_execpolicy::{blocking_append_allow_prefix_rule, Decision, Policy, PolicyParser};
+use agiworkforce_execpolicy::{
+    blocking_append_allow_prefix_rule, never_run_policy, Decision, Policy, PolicyParser,
+};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 use crate::safety::{classify_command, CommandSafety};
 
-/// Catastrophic command prefixes that must never run, even with explicit user
-/// confirmation. Kept deliberately small and literal, broad heuristics live in
-/// `classify_command` (the [`evaluate`] fallback); this list is for the
-/// "no human should be able to approve this in an agent loop" cases.
-const FORBIDDEN_PREFIXES: &[&[&str]] = &[
-    &["rm", "-rf", "/"],
-    &["rm", "-rf", "/*"],
-    &["rm", "-rf", "--no-preserve-root", "/"],
-    &["mkfs.ext4", "/dev/sda"],
-    &["dd", "if=/dev/zero", "of=/dev/sda"],
-    &[":(){", ":|:&};:"], // classic fork bomb (best-effort literal match)
-];
-
 /// Build the default execution policy. Cheap to construct; the bash tool builds
 /// one per invocation, which keeps the gate stateless and the rule set easy to
 /// reason about.
 pub fn default_policy() -> Policy {
-    let mut policy = Policy::empty();
-    for prefix in FORBIDDEN_PREFIXES {
-        let owned: Vec<String> = prefix.iter().map(|s| (*s).to_string()).collect();
-        // add_prefix_rule only errors on an empty prefix; ours are all non-empty,
-        // so a failure here is a programming error worth surfacing in tests.
-        debug_assert!(!owned.is_empty());
-        let _ = policy.add_prefix_rule(&owned, Decision::Forbidden);
-    }
-    policy
+    never_run_policy()
 }
 
 /// Load the canonical user execution-policy rules and overlay them on the
@@ -1188,6 +1169,16 @@ mod tests {
     fn forbids_catastrophic_rm_rf_root() {
         let policy = default_policy();
         assert_eq!(evaluate(&policy, "rm -rf /"), Decision::Forbidden);
+    }
+
+    #[test]
+    fn every_never_run_floor_entry_is_forbidden_by_default() {
+        let policy = default_policy();
+        for prefix in agiworkforce_execpolicy::NEVER_RUN_FLOOR {
+            let argv: Vec<String> = prefix.iter().map(|token| (*token).to_string()).collect();
+            let evaluation = policy.check(&argv, &|_: &[String]| Decision::Allow);
+            assert_eq!(evaluation.decision, Decision::Forbidden, "{prefix:?}");
+        }
     }
 
     #[test]
