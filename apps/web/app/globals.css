@@ -1264,7 +1264,7 @@
   }
 } /*
  * Respect system contrast settings at the shipped CSS boundary, and give the
- * same treatment to the in-app High contrast switch (Settings → General), which
+ * same treatment to the in-app High contrast control (Settings → Appearance), which
  * stamps data-contrast="more" on <html>. `more` strengthens semantic text,
  * borders, and focus rings. Windows forced-colors uses system color keywords so
  * controls and selected states survive brand gradients and shadow removal.
@@ -1923,7 +1923,7 @@ html[data-contrast='more'] *:focus-visible {
  * In-app reduced motion.
  *
  * The eleven `prefers-reduced-motion` blocks above answer the OS setting. This
- * answers the Motion control in General settings, for someone who wants calm
+ * answers the Motion control in Appearance settings, for someone who wants calm
  * here without changing their whole machine. It is one blanket rule rather than
  * eleven duplicated blocks so a new animation cannot be added and silently
  * escape the toggle, the failure mode that makes a motion switch decorative.

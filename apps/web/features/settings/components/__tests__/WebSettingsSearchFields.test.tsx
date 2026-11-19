@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { SettingsModal } from '@agiworkforce/ui';
 
+import { AppearanceSection } from '../../sections/AppearanceSection';
 import { GeneralSection } from '../../sections/GeneralSection';
 import { HOSTED_SETTINGS_NAV_GROUPS, WEB_SETTINGS_NAV_GROUPS } from '../web-settings-navigation';
 
@@ -109,7 +110,11 @@ function WebSettingsSearchHarness() {
       activeSection={section}
       onSectionChange={setSection}
       navGroups={WEB_SETTINGS_NAV_GROUPS}
-      sectionContent={{ general: <GeneralSection />, billing: <p>Billing content</p> }}
+      sectionContent={{
+        general: <GeneralSection />,
+        appearance: <AppearanceSection />,
+        billing: <p>Billing content</p>,
+      }}
     />
   );
 }
@@ -146,9 +151,15 @@ function matchedFields(nav: HTMLElement): Record<string, string | null> {
   );
 }
 
-const GENERAL_FIELDS =
-  WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.key === 'general')
-    ?.fields ?? [];
+function navFields(key: string) {
+  return (
+    WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find((item) => item.key === key)
+      ?.fields ?? []
+  );
+}
+
+const GENERAL_FIELDS = navFields('general');
+const APPEARANCE_FIELDS = navFields('appearance');
 
 describe('web settings search reaches the chat font controls', () => {
   let scrollIntoView: MockInstance<HTMLElement['scrollIntoView']>;
@@ -172,14 +183,14 @@ describe('web settings search reaches the chat font controls', () => {
     ['text size', 'Chat text size'],
     ['Chat text size', 'Chat text size'],
     ['font size', 'Chat text size'],
-  ])('"%s" lists General and selecting it focuses %s', (query, control) => {
+  ])('"%s" lists Appearance and selecting it focuses %s', (query, control) => {
     render(<WebSettingsSearchHarness />);
     const nav = searchSettings(query);
 
-    expect(resultLabels(nav)).toEqual(['General']);
+    expect(resultLabels(nav)).toEqual(['Appearance']);
     expect(within(nav).queryByText('No matches.')).toBeNull();
 
-    fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+    fireEvent.click(within(nav).getByRole('button', { name: 'Appearance' }));
 
     const target = screen.getByRole('combobox', { name: control });
     expect(document.activeElement).toBe(target);
@@ -202,19 +213,54 @@ describe('web settings search reaches the chat font controls', () => {
     render(<GeneralSection />);
 
     expect(GENERAL_FIELDS.map((field) => field.label)).toEqual(
-      expect.arrayContaining(['Chat font', 'Chat text size']),
+      expect.arrayContaining(['Reasoning effort', 'New chats start in']),
     );
     for (const field of GENERAL_FIELDS) {
       expect(screen.getAllByLabelText(field.label).length).toBeGreaterThan(0);
     }
   });
 
+  it('indexes only controls the Appearance section really renders', () => {
+    render(<AppearanceSection />);
+
+    expect(APPEARANCE_FIELDS.map((field) => field.label)).toEqual([
+      'Theme',
+      'Accent colour',
+      'Contrast',
+      'Motion',
+      'Chat font',
+      'Chat text size',
+      'Wrap long code lines',
+      'Code theme',
+    ]);
+    for (const field of APPEARANCE_FIELDS) {
+      expect(screen.getAllByLabelText(field.label).length).toBeGreaterThan(0);
+    }
+  });
+
+  it.each([
+    'appearance',
+    'theme',
+    'dark mode',
+    'light mode',
+    'accent',
+    'contrast',
+    'motion',
+    'font',
+    'text size',
+    'code theme',
+  ])('"%s" lists Appearance and no longer lists General', (query) => {
+    render(<WebSettingsSearchHarness />);
+
+    expect(resultLabels(searchSettings(query))).toEqual(['Appearance']);
+  });
+
   it('shows the matched control under its section, and describes the result with it', () => {
     render(<WebSettingsSearchHarness />);
     const nav = searchSettings('text size');
 
-    expect(matchedFields(nav)).toEqual({ General: 'Chat text size' });
-    expect(within(nav).getByRole('button', { name: 'General' })).toHaveAccessibleDescription(
+    expect(matchedFields(nav)).toEqual({ Appearance: 'Chat text size' });
+    expect(within(nav).getByRole('button', { name: 'Appearance' })).toHaveAccessibleDescription(
       'Chat text size',
     );
   });
@@ -229,7 +275,7 @@ describe('web settings search reaches the chat font controls', () => {
   it('lists each section that holds a matching control, one best match per section', () => {
     render(<WebSettingsSearchHarness />);
 
-    expect(matchedFields(searchSettings('motion'))).toEqual({ General: 'Motion' });
+    expect(matchedFields(searchSettings('motion'))).toEqual({ Appearance: 'Motion' });
     expect(resultLabels(searchSettings('remo'))).toEqual([]);
     expect(matchedFields(searchSettings('language'))).toEqual({
       Personalization: 'Response language',
@@ -288,19 +334,22 @@ describe('web settings search reaches the chat font controls', () => {
 
     fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
 
-    expect(screen.getByRole('combobox', { name: 'Chat font' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeTruthy();
     expect(document.activeElement?.tagName).not.toBe('SELECT');
     expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center' });
   });
 
-  it('moves focus to no control when General is picked without a search', () => {
-    render(<WebSettingsSearchHarness />);
-    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+  it.each(['General', 'Appearance'])(
+    'moves focus to no control when %s is picked without a search',
+    (section) => {
+      render(<WebSettingsSearchHarness />);
+      const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
 
-    fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
+      fireEvent.click(within(nav).getByRole('button', { name: section }));
 
-    expect(screen.getByRole('combobox', { name: 'Chat font' })).toBeTruthy();
-    expect(document.activeElement?.tagName).not.toBe('SELECT');
-    expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center' });
-  });
+      expect(screen.getAllByRole('combobox').length).toBeGreaterThan(0);
+      expect(document.activeElement?.tagName).not.toBe('SELECT');
+      expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center' });
+    },
+  );
 });

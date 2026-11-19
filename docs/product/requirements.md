@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-19
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -1254,8 +1254,6 @@ General settings must include:
 - Work description.
 - Instructions for AGI.
 - Preferences.
-- Appearance.
-- Chat font.
 - Voice.
 - Voice speed.
 - Notifications.
@@ -1266,6 +1264,17 @@ General settings must include:
 - On the web.
 - Dispatch.
 - Dispatch messages.
+
+Appearance settings are their own page (owner decision, 2026-11-19) and must include:
+
+- Theme.
+- Accent colour.
+- Contrast.
+- Motion.
+- Chat font.
+- Chat text size.
+- Code wrapping.
+- Code theme.
 
 ### 16.2 Account
 

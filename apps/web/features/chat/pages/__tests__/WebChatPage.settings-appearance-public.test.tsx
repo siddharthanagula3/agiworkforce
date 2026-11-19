@@ -364,7 +364,7 @@ describe('public settings window appearance', () => {
     });
 
     cleanup();
-    mocks.queryString = 'settings=general';
+    mocks.queryString = 'settings=appearance';
     mocks.routerReplace.mockClear();
 
     render(
@@ -395,7 +395,7 @@ describe('public settings window appearance', () => {
     });
 
     cleanup();
-    mocks.queryString = 'settings=general';
+    mocks.queryString = 'settings=appearance';
     mocks.routerReplace.mockClear();
 
     render(
@@ -431,7 +431,7 @@ describe('public settings window appearance', () => {
     });
 
     cleanup();
-    mocks.queryString = 'settings=general';
+    mocks.queryString = 'settings=appearance';
     mocks.routerReplace.mockClear();
 
     render(

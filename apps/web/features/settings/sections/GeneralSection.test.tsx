@@ -5,33 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/app/i18n/index';
 import { saveDisplayName, savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { GeneralSection } from './GeneralSection';
-import { ACCENT_COLORS } from '@shared/stores/web-settings-store';
 import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
 import { safePlatform } from '@shared/utils/browser-utils';
-type ScanModule0 = typeof import('@shared/stores/web-settings-store');
 
 const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
-  setAccentColor: vi.fn(),
-  setHighContrast: vi.fn(),
-  setCodeTheme: vi.fn(),
-  setMotion: vi.fn(),
   setFollowUpBehavior: vi.fn(),
-  setTheme: vi.fn(),
   settings: {
-    accentColor: 'default' as string,
-    highContrast: false,
-    motion: 'system' as 'system' | 'reduced',
     followUpBehavior: 'queue' as 'queue' | 'steer',
   },
   tts: {
     isSupported: false,
     voices: [] as Array<{ voiceURI: string; name: string; lang: string }>,
   },
-}));
-
-vi.mock('@shared/hooks/useAppTheme', () => ({
-  useAppTheme: () => ({ theme: 'dark', setTheme: mocks.setTheme }),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -68,33 +54,17 @@ vi.mock('@shared/stores/thinking-store', () => ({
     selector({ enabled: false, effort: 'medium', setEnabled: vi.fn(), setEffort: vi.fn() }),
 }));
 
-vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
-  const actual = await importOriginal<ScanModule0>();
-  return {
-    ACCENT_COLORS: actual.ACCENT_COLORS,
-    useSettingsStore: (selector: (state: unknown) => unknown) =>
-      selector({
-        chatTextSize: 'default',
-        setChatTextSize: vi.fn(),
-        codeBlockWrap: false,
-        setCodeBlockWrap: vi.fn(),
-        codeTheme: 'github',
-        setCodeTheme: mocks.setCodeTheme,
-        motion: mocks.settings.motion,
-        hiddenNavIds: [],
-        setNavItemVisible: vi.fn(),
-        setMotion: mocks.setMotion,
-        accentColor: mocks.settings.accentColor,
-        setAccentColor: mocks.setAccentColor,
-        highContrast: mocks.settings.highContrast,
-        setHighContrast: mocks.setHighContrast,
-        sendWithEnter: true,
-        setSendWithEnter: vi.fn(),
-        followUpBehavior: mocks.settings.followUpBehavior,
-        setFollowUpBehavior: mocks.setFollowUpBehavior,
-      }),
-  };
-});
+vi.mock('@shared/stores/web-settings-store', () => ({
+  useSettingsStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      hiddenNavIds: [],
+      setNavItemVisible: vi.fn(),
+      sendWithEnter: true,
+      setSendWithEnter: vi.fn(),
+      followUpBehavior: mocks.settings.followUpBehavior,
+      setFollowUpBehavior: mocks.setFollowUpBehavior,
+    }),
+}));
 
 vi.mock('@/lib/hooks/useTTS', () => ({
   useTTS: () => ({
@@ -124,50 +94,8 @@ describe('GeneralSection preference hydration', () => {
   beforeEach(() => {
     mocks.fetchPreferences.mockReset();
     mocks.fetchPreferences.mockResolvedValue({});
-    mocks.setAccentColor.mockReset();
-    mocks.setHighContrast.mockReset();
-    mocks.settings.accentColor = 'default';
-    mocks.settings.highContrast = false;
-    mocks.settings.motion = 'system';
-    mocks.setMotion.mockReset();
-    mocks.setMotion.mockImplementation((value: 'system' | 'reduced') => {
-      mocks.settings.motion = value;
-    });
     mocks.tts.isSupported = false;
     mocks.tts.voices = [];
-  });
-
-  it('exposes the selected theme to assistive technology', () => {
-    render(<GeneralSection />);
-
-    expect(screen.getByRole('group', { name: 'Theme' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'System theme' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    expect(screen.getByRole('button', { name: 'Light theme' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    expect(screen.getByRole('button', { name: 'Dark theme' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-  });
-
-  it('offers the Motion preference beside the other appearance controls', async () => {
-    render(<GeneralSection />);
-
-    const group = screen.getByRole('group', { name: 'Motion' });
-    expect(group).toBeVisible();
-    expect(screen.getByRole('button', { name: 'System motion' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Reduced motion' }));
-
-    expect(mocks.setMotion).toHaveBeenCalledWith('reduced');
   });
 
   it('titles the section on phones like every other section, and only there', () => {
@@ -177,17 +105,6 @@ describe('GeneralSection preference hydration', () => {
     expect(title.className.split(/\s+/)).toEqual(
       expect.arrayContaining(['text-h1', 'font-medium', 'md:hidden']),
     );
-  });
-
-  it('keeps each accent swatch round and gives it a 44px touch target outside the circle', () => {
-    render(<GeneralSection />);
-
-    for (const swatch of screen.getAllByRole('button', { name: / accent$/ })) {
-      const classes = swatch.className.split(/\s+/);
-      expect(classes).toEqual(
-        expect.arrayContaining(['h-7', 'w-7', 'min-h-0', 'pointer-coarse:after:-inset-2']),
-      );
-    }
   });
 
   it('uses mobile-safe stacked rows for profile controls', () => {
@@ -213,109 +130,26 @@ describe('GeneralSection preference hydration', () => {
   });
 });
 
-describe('GeneralSection appearance controls', () => {
-  beforeEach(() => {
-    mocks.fetchPreferences.mockReset();
-    mocks.fetchPreferences.mockResolvedValue({});
-    mocks.setAccentColor.mockReset();
-    mocks.setHighContrast.mockReset();
-    mocks.settings.accentColor = 'default';
-    mocks.settings.highContrast = false;
-  });
-
-  it('offers every registered accent and marks the active one', () => {
+describe('GeneralSection switches', () => {
+  it('draws the follow-up suggestions switch as the shared switch, whose off state keeps a visible edge', () => {
     render(<GeneralSection />);
 
-    const group = screen.getByRole('group', { name: 'Accent colour' });
-    expect(group).toBeVisible();
-    for (const accent of ACCENT_COLORS) {
-      expect(screen.getByRole('button', { name: `${accent.label} accent` })).toBeVisible();
-    }
-    expect(screen.getByRole('button', { name: 'AGI amber accent' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(screen.getByRole('button', { name: 'Violet accent' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
+    const control = screen.getByRole('switch', { name: 'Show follow-up suggestions in chats' });
+    expect(control).toHaveAttribute('data-state');
+    expect(control.className).toContain(
+      'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
     );
   });
 
-  it('writes the chosen accent back to the store the stylesheet reads', async () => {
+  it('leaves the appearance controls to the Appearance page', () => {
     render(<GeneralSection />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Violet accent' }));
-
-    expect(mocks.setAccentColor).toHaveBeenCalledWith('violet');
-  });
-
-  it('carries the swatch attribute the stylesheet paints each colour from', () => {
-    render(<GeneralSection />);
-
-    expect(screen.getByRole('button', { name: 'Rose accent' })).toHaveAttribute(
-      'data-accent-swatch',
-      'rose',
-    );
-  });
-
-  it('offers Contrast as a System or High choice that follows the device on System', async () => {
-    render(<GeneralSection />);
-
-    expect(screen.queryByRole('switch', { name: 'High contrast' })).toBeNull();
-    const contrast = screen.getByRole('combobox', { name: 'Contrast' });
-    expect(contrast).toHaveValue('system');
-    expect(
-      within(contrast)
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['System', 'High']);
-    expect(screen.getByText('System follows your device setting.')).toBeVisible();
-
-    await userEvent.selectOptions(contrast, 'high');
-    expect(mocks.setHighContrast).toHaveBeenLastCalledWith(true);
-  });
-
-  it('reads a stored high contrast preference back as High and can return to System', async () => {
-    mocks.settings.highContrast = true;
-    render(<GeneralSection />);
-
-    const contrast = screen.getByRole('combobox', { name: 'Contrast' });
-    expect(contrast).toHaveValue('high');
-
-    await userEvent.selectOptions(contrast, 'system');
-    expect(mocks.setHighContrast).toHaveBeenLastCalledWith(false);
-  });
-
-  it('offers only code themes that stay readable and saves the one picked', async () => {
-    render(<GeneralSection />);
-
-    const select = screen.getByRole('combobox', { name: 'Code theme' });
-    expect(select).toHaveValue('github');
-    expect(
-      Array.from(select.querySelectorAll('option')).map((option) => option.textContent),
-    ).toEqual([
-      'GitHub',
-      'GitHub dimmed',
-      'GitHub high contrast',
-      'Catppuccin',
-      'Dracula soft',
-      'Everforest',
-    ]);
-
-    await userEvent.selectOptions(select, 'catppuccin');
-
-    expect(mocks.setCodeTheme).toHaveBeenCalledWith('catppuccin');
-  });
-
-  it('draws every on/off switch as the shared switch, whose off state keeps a visible edge', () => {
-    render(<GeneralSection />);
-
-    for (const name of ['Wrap long code lines', 'Show follow-up suggestions in chats']) {
-      const control = screen.getByRole('switch', { name });
-      expect(control).toHaveAttribute('data-state');
-      expect(control.className).toContain(
-        'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
-      );
+    expect(screen.queryByRole('group', { name: 'Theme' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Accent colour' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Motion' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Wrap long code lines' })).toBeNull();
+    for (const name of ['Contrast', 'Chat font', 'Chat text size', 'Code theme']) {
+      expect(screen.queryByRole('combobox', { name })).toBeNull();
     }
   });
 });
@@ -363,14 +197,6 @@ describe('GeneralSection row density', () => {
   beforeEach(() => {
     mocks.fetchPreferences.mockReset();
     mocks.fetchPreferences.mockResolvedValue({});
-  });
-
-  it('renders chat font as a select rather than a button group', () => {
-    render(<GeneralSection />);
-
-    const select = screen.getByRole('combobox', { name: 'Chat font' });
-    expect(select).toHaveValue('default');
-    expect(screen.queryByRole('button', { name: /chat font$/i })).toBeNull();
   });
 
   it('shows no loading text once preferences have resolved', async () => {
@@ -422,55 +248,12 @@ describe('GeneralSection profile save', () => {
   });
 });
 
-describe('GeneralSection composer and theme captions', () => {
+describe('GeneralSection composer captions', () => {
   beforeEach(() => {
     mocks.fetchPreferences.mockReset();
     mocks.fetchPreferences.mockResolvedValue({});
     mocks.settings.followUpBehavior = 'queue';
     mocks.setFollowUpBehavior.mockReset();
-    mocks.setTheme.mockClear();
-  });
-
-  it('shows the Appearance theme without changing the selected theme', () => {
-    render(<GeneralSection />);
-
-    expect(screen.getByText('Appearance')).toBeVisible();
-    const group = screen.getByRole('group', { name: 'Theme' });
-    expect(within(group).getByRole('button', { name: 'Dark theme' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    expect(within(group).getByRole('button', { name: 'Light theme' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    expect(within(group).getByRole('button', { name: 'System theme' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-    expect(mocks.setTheme).not.toHaveBeenCalled();
-  });
-
-  it('sets the Appearance theme to Light when that option is chosen', async () => {
-    render(<GeneralSection />);
-
-    await userEvent.click(
-      within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', {
-        name: 'Light theme',
-      }),
-    );
-
-    expect(mocks.setTheme).toHaveBeenCalledWith('light');
-  });
-
-  it('captions each theme option with its visible name', () => {
-    render(<GeneralSection />);
-
-    const group = screen.getByRole('group', { name: 'Theme' });
-    for (const name of ['System', 'Light', 'Dark']) {
-      const option = within(group).getByRole('button', { name: `${name} theme` });
-      expect(option).toHaveTextContent(name);
-    }
   });
 
   it('groups the send and follow-up controls under a Composer heading', () => {

@@ -1646,6 +1646,7 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
   });
 
   const SETTINGS_SWITCH_SURFACES = [
+    'apps/web/features/settings/sections/AppearanceSection.tsx',
     'apps/web/features/settings/sections/GeneralSection.tsx',
     'apps/web/features/settings/sections/VoiceSection.tsx',
     'apps/web/features/settings/sections/PrivacySection.tsx',

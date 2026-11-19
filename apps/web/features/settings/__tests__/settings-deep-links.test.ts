@@ -14,7 +14,6 @@ import {
 } from '../lib/web-settings-sections';
 
 const DESKTOP_ONLY_SECTIONS = [
-  'appearance',
   'models-keys',
   'agents',
   'connections',
@@ -56,7 +55,7 @@ describe('every settings section can be deep-linked', () => {
     expect(isSettingsNavKey('../admin')).toBe(false);
   });
 
-  // `isSettingsNavKey` admits all thirty nav keys, nine of which exist only on
+  // `isSettingsNavKey` admits every nav key, eight of which exist only on
   // Desktop. Routing on that answer opened a modal rendering the literal string
   // `No content for section "developer".` at the user.
   it.each(DESKTOP_ONLY_SECTIONS)('does not route the desktop-only %s section on web', (key) => {

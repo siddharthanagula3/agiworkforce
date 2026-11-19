@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-19
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -260,6 +260,7 @@ The account menu must include:
 Settings must converge on these sections:
 
 - General
+- Appearance
 - Account
 - Privacy
 - Billing
@@ -271,7 +272,9 @@ Settings must converge on these sections:
 - Extensions
 - Developer
 
-General settings must include profile, full name, what AGI should call the user, work description, instructions/preferences, appearance, chat font, voice, voice speed, notifications, response/completion/code settings, code permission requests, emails from AGI Code, web, dispatch, and dispatch messages.
+General settings must include profile, full name, what AGI should call the user, work description, instructions/preferences, voice, voice speed, notifications, response/completion/code settings, code permission requests, emails from AGI Code, web, dispatch, and dispatch messages.
+
+Appearance settings are their own page (owner decision, 2026-11-19) and must include theme, accent colour, contrast, motion, chat font, chat text size, code wrapping and code theme.
 
 Account settings must include logout all devices, delete account, subscription cancellation warning, organization ID when applicable, active sessions, device, location, created, and updated.
 
