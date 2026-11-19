@@ -1,0 +1,105 @@
+{
+  "scenario": "stripe out-of-order update",
+  "outcomes": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.updated (cancel at period end, newer)"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.updated (renewing, older)"
+    }
+  ],
+  "ledger": {
+    "billing_disputes": [],
+    "credit_transactions": [
+      {
+        "amount_cents": 1000,
+        "amount_microusd": 10000000,
+        "credit_account_id": "<id 1>",
+        "description": "initial credit allocation for billing period",
+        "id": "<id 2>",
+        "metadata": null,
+        "transaction_type": "allocation"
+      }
+    ],
+    "expiring_credit_purchases": [],
+    "mobile_iap_transactions": [],
+    "subscriptions": [
+      {
+        "apple_original_transaction_id": null,
+        "cancel_at_period_end": true,
+        "canceled_at": null,
+        "current_period_end": "T0+20d",
+        "current_period_start": "T0-10d",
+        "google_purchase_token": null,
+        "id": "<id 3>",
+        "last_stripe_event_at": "T0+120s",
+        "plan_catalog_version": 4,
+        "plan_tier": "pro",
+        "status": "active",
+        "stripe_customer_id": "cus_ledgerReplay",
+        "stripe_price_id": "price_ledgerReplayPro",
+        "stripe_subscription_id": "sub_ledgerReplay"
+      }
+    ],
+    "token_credits": [
+      {
+        "bonus_granted_cents": 0,
+        "credits_allocated_cents": 1000,
+        "credits_allocated_microusd": 10000000,
+        "credits_used_cents": 0,
+        "credits_used_microusd": 0,
+        "id": "<id 1>",
+        "period_end": "T0+20d",
+        "period_start": "T0-10d",
+        "plan_catalog_version": 4,
+        "subscription_id": "<id 3>",
+        "top_up_allocated_cents": 0,
+        "top_up_allocated_microusd": 0
+      }
+    ]
+  },
+  "outcomesDeliveredTwice": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.updated (cancel at period end, newer)"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.updated (cancel at period end, newer)"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.updated (renewing, older)"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.updated (renewing, older)"
+    }
+  ]
+}

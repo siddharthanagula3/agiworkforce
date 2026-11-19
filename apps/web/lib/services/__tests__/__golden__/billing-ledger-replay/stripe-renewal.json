@@ -1,0 +1,120 @@
+{
+  "scenario": "stripe renewal",
+  "outcomes": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "invoice.paid (renewal)"
+    }
+  ],
+  "ledger": {
+    "billing_disputes": [],
+    "credit_transactions": [
+      {
+        "amount_cents": 1000,
+        "amount_microusd": 10000000,
+        "credit_account_id": "<id 1>",
+        "description": "credit reset for new billing period",
+        "id": "<id 2>",
+        "metadata": {
+          "carried_top_up_cents": 0,
+          "carried_top_up_microusd": 0,
+          "from_credit_account_id": "<id 3>"
+        },
+        "transaction_type": "reset"
+      },
+      {
+        "amount_cents": 1000,
+        "amount_microusd": 10000000,
+        "credit_account_id": "<id 3>",
+        "description": "initial credit allocation for billing period",
+        "id": "<id 4>",
+        "metadata": null,
+        "transaction_type": "allocation"
+      }
+    ],
+    "expiring_credit_purchases": [],
+    "mobile_iap_transactions": [],
+    "subscriptions": [
+      {
+        "apple_original_transaction_id": null,
+        "cancel_at_period_end": false,
+        "canceled_at": null,
+        "current_period_end": "T0+30d",
+        "current_period_start": "T0",
+        "google_purchase_token": null,
+        "id": "<id 5>",
+        "last_stripe_event_at": "T0+60s",
+        "plan_catalog_version": 4,
+        "plan_tier": "pro",
+        "status": "active",
+        "stripe_customer_id": "cus_ledgerReplay",
+        "stripe_price_id": "price_ledgerReplayPro",
+        "stripe_subscription_id": "sub_ledgerReplay"
+      }
+    ],
+    "token_credits": [
+      {
+        "bonus_granted_cents": 0,
+        "credits_allocated_cents": 1000,
+        "credits_allocated_microusd": 10000000,
+        "credits_used_cents": 0,
+        "credits_used_microusd": 0,
+        "id": "<id 3>",
+        "period_end": "T0",
+        "period_start": "T0-30d",
+        "plan_catalog_version": 4,
+        "subscription_id": "<id 5>",
+        "top_up_allocated_cents": 0,
+        "top_up_allocated_microusd": 0
+      },
+      {
+        "bonus_granted_cents": 0,
+        "credits_allocated_cents": 1000,
+        "credits_allocated_microusd": 10000000,
+        "credits_used_cents": 0,
+        "credits_used_microusd": 0,
+        "id": "<id 1>",
+        "period_end": "T0+30d",
+        "period_start": "T0",
+        "plan_catalog_version": 4,
+        "subscription_id": "<id 5>",
+        "top_up_allocated_cents": 0,
+        "top_up_allocated_microusd": 0
+      }
+    ]
+  },
+  "outcomesDeliveredTwice": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "invoice.paid (renewal)"
+    },
+    {
+      "outcome": "ok",
+      "step": "invoice.paid (renewal)"
+    }
+  ]
+}

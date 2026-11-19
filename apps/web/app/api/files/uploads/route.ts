@@ -110,7 +110,6 @@ async function createChatLargeFileUpload(
     fileName: body.fileName,
     mimeType: body.mimeType,
     byteCount: body.byteCount,
-    temporaryChat,
   });
   const refund = () =>
     refundDailyLargeFileBytes({
@@ -166,7 +165,6 @@ async function createChatLargeFileUpload(
         db: tx,
         userId,
         organizationId,
-        temporaryChat,
         admitted,
       });
       return intake.id;

@@ -488,4 +488,10 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread delete params graph");
     agiworkforce_protocol::developer_session::ThreadDeleteResponse::export_all_to(dir)
         .expect("export developer-session thread delete graph");
+    std::fs::write(
+        dir.join("DeveloperSessionTable.ts"),
+        agiworkforce_protocol::developer_session::DeveloperSessionTable::current()
+            .render_typescript(),
+    )
+    .expect("export developer-session method and capability table");
 }

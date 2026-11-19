@@ -34,6 +34,7 @@ import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
 import { getObjectStore } from '@/lib/server/object-storage-runtime';
 import { defaultSealDeps, sealChatFile } from '../seal';
 import type { ChatFileIntakeRow } from '../store';
+import { createQueryDb } from './fake-query-db';
 import { createFakeScanner, type ScannerScriptReply } from './fake-scanner';
 import {
   createIntakeHarness,
@@ -242,7 +243,7 @@ describe('sealChatFile', () => {
     expect(await objectExists(row.stagingKey)).toBe(false);
   });
 
-  it('refuses storage_full when the person’s storage cannot take the file, but not in a temporary chat', async () => {
+  it('refuses storage_full when the person’s storage cannot take the file, in a temporary chat too', async () => {
     const { row, staged } = await sealingRow();
     const harness = createIntakeHarness({
       scanner: scannerAnswering(cleanReply(row, staged)),
@@ -260,7 +261,8 @@ describe('sealChatFile', () => {
       rows: [temporary.row],
     });
     second.seal.storageFull = true;
-    await expect(seal(second, temporary.row)).resolves.toMatchObject({ next: 'prepare' });
+    await expect(seal(second, temporary.row)).resolves.toEqual({ next: 'end', reason: 'rejected' });
+    expect(second.store.row(temporary.row.id).refusalCode).toBe('storage_full');
   });
 
   it('deletes its sealed copy when the intake row is gone by the time it commits', async () => {
@@ -585,6 +587,27 @@ describe('defaultSealDeps', () => {
     etag: '"etag"',
     ms: 10,
   };
+
+  it('asks for a duplicate by the conversation the intake belongs to, so a Keep since create counts', async () => {
+    const conversationId = '6c1f0a52-3b7e-4d2a-9f10-1a2b3c4d5e02';
+    const row = intakeRow({
+      state: 'sealing',
+      workflowRunId: RUN,
+      conversationId,
+      temporaryChat: true,
+    });
+    const { db, query } = createQueryDb(async () => []);
+
+    await expect(
+      defaultSealDeps(db as unknown as DatabaseAdapter).findAssetByHash(row, verdict.sha256),
+    ).resolves.toBeNull();
+
+    const [sql, params] = query.mock.calls[0]!;
+    expect(String(sql).replace(/\s+/g, ' ')).toContain(
+      'and temporary_chat = case when $5::uuid is null then $4::boolean else exists (',
+    );
+    expect(params).toEqual([row.userId, verdict.sha256, null, true, conversationId]);
+  });
 
   it('inserts the scanned media row and seals the intake in one transaction', async () => {
     const row = intakeRow({ state: 'sealing', workflowRunId: RUN });
