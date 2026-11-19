@@ -1,6 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CODE_ROUTES } from '../code-surface';
 import { CodeUsageDashboard } from './CodeUsageDashboard';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -68,6 +69,21 @@ describe('CodeUsageDashboard', () => {
     const { container } = render(<CodeUsageDashboard planTier={planTier} />);
     expect(container).toBeEmptyDOMElement();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('draws one link to the detailed usage page instead of the card when asked for a link only', () => {
+    render(<CodeUsageDashboard planTier="pro" linkOnly />);
+
+    const link = screen.getByRole('link', { name: 'Code usage' });
+    expect(link).toHaveAttribute('href', CODE_ROUTES.usage);
+    expect(screen.queryByTestId('code-usage-dashboard')).toBeNull();
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('draws no usage link on a plan without metered Code usage', () => {
+    const { container } = render(<CodeUsageDashboard planTier="free" linkOnly />);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('asks the server for Code usage only and shows its totals for the last 30 days', async () => {

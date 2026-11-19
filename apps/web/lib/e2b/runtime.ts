@@ -35,7 +35,10 @@ import {
 } from '@agiworkforce/types';
 import { CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
-import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
+import {
+  resolveEntitlementBundle,
+  usageAllowanceSubject,
+} from '@/lib/services/effective-subscription-service';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import {
   CODE_RUN_STOPPED_MESSAGE,
@@ -44,6 +47,7 @@ import {
   type E2BExecutor,
   type ExecutionResult,
   type SandboxFileEntry,
+  type StagedStorageRecord,
 } from './types';
 import { e2bExecutionEnabled } from './gate';
 import { e2bChatTemplate } from './chat-template';
@@ -72,6 +76,7 @@ import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cac
 import { mintProviderProxyToken } from './provider-proxy-token';
 import type { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import {
+  admittedSandboxLifetimeMs,
   getSandboxComputeMicrousdPerSecond,
   markSandboxComputeStarted,
   meterSandboxComputeInterval,
@@ -134,11 +139,11 @@ function resolveSandboxLimits(planTier: string | null | undefined): {
 async function resolveScopePlanTier(scope: E2BSessionScope): Promise<string | null> {
   if (scope.planTier) return scope.planTier;
   try {
-    const subscription = await resolveEffectiveSubscription(
+    const entitlement = await resolveEntitlementBundle(
       createClaimedUserScopedDb(getNeonDb(), { userId: scope.userId, organizationId: null }),
       scope.userId,
     );
-    return subscription?.plan_tier ?? 'free';
+    return usageAllowanceSubject(entitlement).tier;
   } catch (err) {
     logger.error(
       { err, userId: scope.userId },
@@ -312,6 +317,9 @@ function notebookOutputs(
   }
   return outputs;
 }
+
+const isTemplateError = (err: unknown): boolean =>
+  err instanceof Error && err.name === 'TemplateError';
 
 const fail = (err: unknown): ExecutionResult => ({
   ok: false,
@@ -843,8 +851,9 @@ export const getE2BExecutor = tracedCodeAction(
       }
     }
 
+    const planLifetimeMs = planTtlMs || E2B_CONVERSATION_TIMEOUT_MS;
     const plannedTimeoutMs = scope
-      ? planTtlMs || E2B_CONVERSATION_TIMEOUT_MS
+      ? admittedSandboxLifetimeMs(planLifetimeMs, scope.releaseByMs)
       : E2B_SANDBOX_TIMEOUT_MS;
     let sandboxTimeoutMs = plannedTimeoutMs;
     let lifetimeNotice: string | null = null;
@@ -881,8 +890,12 @@ export const getE2BExecutor = tracedCodeAction(
     const computeMicrousdPerSecond = provisioningRate > 0 ? provisioningRate : undefined;
 
     // A reconnect restarts the provider's timeout, so a resumed interval may only
-    // run for what its hold still funds; one that funds less than a minimum run
-    // is settled here and the sandbox is admitted again below.
+    // run for what its hold still funds. One that funds less than a minimum run,
+    // or ends before this caller releases the sandbox, is replaced: an interval a
+    // short caller left open must not time the sandbox out under a longer one.
+    // The replacement is admitted before the open interval is settled, so a
+    // refusal leaves the sandbox running only on the hold that already funds it.
+    let supersededInterval: E2BSession | null = null;
     const resumed = existingSession;
     if (scope && resumed?.activeSinceMs !== undefined && resumed.computeReservation) {
       const rate = resumed.computeMicrousdPerSecond ?? provisioningRate;
@@ -893,18 +906,21 @@ export const getE2BExecutor = tracedCodeAction(
             )
           : 0;
       const leftMs = fundedMs - (Date.now() - resumed.activeSinceMs);
-      if (leftMs < SANDBOX_MINIMUM_FUNDED_RUN_MS) {
-        await closeBillableInterval(scope, resumed, 'pause');
-        existingSession = await getE2BSession(scope);
+      const neededMs =
+        scope.releaseByMs === undefined ? SANDBOX_MINIMUM_FUNDED_RUN_MS : plannedTimeoutMs;
+      if (leftMs < neededMs) {
+        supersededInterval = resumed;
       } else {
-        sandboxTimeoutMs = Math.min(plannedTimeoutMs, leftMs);
+        sandboxTimeoutMs = Math.min(planLifetimeMs, leftMs);
       }
     }
 
     // Each active interval is admitted before create or reconnect. Pause settles
     // that interval, so a later resume needs a new hold even for the same sandbox.
     let computeReservation: SandboxComputeReservationRecord | undefined =
-      existingSession?.activeSinceMs === undefined ? undefined : existingSession.computeReservation;
+      supersededInterval || existingSession?.activeSinceMs === undefined
+        ? undefined
+        : existingSession.computeReservation;
     let reservationAdmittedForThisAttempt = false;
     const holdSandboxLifetime = async (): Promise<E2BUnavailableCause | null> => {
       const tier = planTier;
@@ -951,6 +967,10 @@ export const getE2BExecutor = tracedCodeAction(
       }
       return null;
     };
+    if (scope && supersededInterval) {
+      await closeBillableInterval(scope, supersededInterval, 'pause');
+      existingSession = await getE2BSession(scope);
+    }
 
     const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
     const extraHosts = scope?.extraHosts ?? existingSession?.extraHosts;
@@ -1029,6 +1049,7 @@ export const getE2BExecutor = tracedCodeAction(
     let sandbox: SandboxInstance;
     let sandboxId: string;
     const contexts: Record<string, StoredContext> = { ...(existingSession?.contexts ?? {}) };
+    let stagedStorage: StagedStorageRecord = { ...(existingSession?.stagedStorage ?? {}) };
 
     if (scope && existingSession) {
       try {
@@ -1050,6 +1071,7 @@ export const getE2BExecutor = tracedCodeAction(
         const replacementRefusal = await holdSandboxLifetime();
         if (replacementRefusal) return unavailable(replacementRefusal);
         for (const key of Object.keys(contexts)) delete contexts[key];
+        stagedStorage = {};
         const fresh = await createFresh();
         if (!fresh) return abandonReservation('sandbox_create_failed');
         sandbox = fresh;
@@ -1094,10 +1116,27 @@ export const getE2BExecutor = tracedCodeAction(
       }
     }
 
-    const activeSinceMs = Date.now();
+    // A caller that reuses an open interval continues it: its seconds are billed
+    // from when it was admitted, at the rate its hold was priced at, and what the
+    // hold still funds is measured from that same start.
+    const continuedInterval =
+      computeReservation && !reservationAdmittedForThisAttempt ? existingSession : null;
+    const activeSinceMs = continuedInterval?.activeSinceMs ?? Date.now();
+    const intervalMicrousdPerSecond =
+      continuedInterval?.computeMicrousdPerSecond ?? computeMicrousdPerSecond;
     let intervalHandedToPause = false;
-    async function persistSession(): Promise<void> {
+    async function mergeStagedStorage(forget: ReadonlySet<string>): Promise<void> {
+      if (!scope) return;
+      const stored = await getE2BSession(scope);
+      if (stored?.sandboxId !== sandboxId || !stored.stagedStorage) return;
+      const others = Object.fromEntries(
+        Object.entries(stored.stagedStorage).filter(([assetId]) => !forget.has(assetId)),
+      );
+      stagedStorage = { ...others, ...stagedStorage };
+    }
+    async function persistSession(forget: ReadonlySet<string> = new Set()): Promise<void> {
       if (!scope || intervalHandedToPause) return;
+      await mergeStagedStorage(forget);
       const session: E2BSession = {
         sandboxId,
         contexts,
@@ -1105,8 +1144,11 @@ export const getE2BExecutor = tracedCodeAction(
         ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
         ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
         ...(template ? { templateId: template } : {}),
-        ...(computeMicrousdPerSecond === undefined ? {} : { computeMicrousdPerSecond }),
+        ...(intervalMicrousdPerSecond === undefined
+          ? {}
+          : { computeMicrousdPerSecond: intervalMicrousdPerSecond }),
         ...(computeReservation === undefined ? {} : { computeReservation }),
+        ...(Object.keys(stagedStorage).length === 0 ? {} : { stagedStorage }),
       };
       await saveE2BSession(scope, session);
     }
@@ -1227,6 +1269,33 @@ export const getE2BExecutor = tracedCodeAction(
         } catch (err) {
           return fail(err);
         }
+      },
+      async writeFileStream({ path, content, signal }): Promise<ExecutionResult> {
+        try {
+          await sandbox.files.write(path, content, { signal });
+          return { ok: true, output: `Wrote ${path}` };
+        } catch (err) {
+          return isTemplateError(err) ? { ...fail(err), unavailable: true } : fail(err);
+        }
+      },
+      async removeFile(path, options): Promise<ExecutionResult> {
+        try {
+          if (options?.requestTimeoutMs === undefined) await sandbox.files.remove(path);
+          else await sandbox.files.remove(path, { requestTimeoutMs: options.requestTimeoutMs });
+          return { ok: true, output: `Removed ${path}` };
+        } catch (err) {
+          return fail(err);
+        }
+      },
+      storageStaging: {
+        async load() {
+          await mergeStagedStorage(new Set());
+          return { ...stagedStorage };
+        },
+        async save(record, forget = []) {
+          stagedStorage = { ...record };
+          await persistSession(new Set(forget));
+        },
       },
       async createFolder({ path }): Promise<ExecutionResult> {
         try {

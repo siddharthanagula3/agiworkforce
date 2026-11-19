@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 04f236c6f5dc22db52d9e04dc6f6572587e5e6eb6c6d12ecd4f7e0e0671d25ec -->
+<!-- ui-gaps-csv-sha256: 19d609d84b3f40b32060dd8263f6509c5a4e1869bcda3132533efbd1696a6326 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 52 P1, 105 P2, 34 P3.
+- Unresolved: 0 P0, 51 P1, 100 P2, 34 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  181 |
-| In Progress |   10 |
+| Open        |  174 |
+| In Progress |   11 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |  123 |
-| Not Planned |   27 |
+| Done        |  128 |
+| Not Planned |   28 |
 
 ## P0
 
@@ -740,24 +740,24 @@ Completed for Mobile and the shared Managed Cloud generation policy. Keep Local 
 
 - `claude_reference/128-claude-ios-settings-capabilities-memory-and-tool-access-radio.png`
 
-### GAP-032, Model-training opt-in is declined because customer-content training is always off
+### GAP-032, Model-improvement consent is a switch that is off by default; nothing uses customer content today
 
-- **Status:** Not Planned
+- **Status:** Done
 - **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Data controls
 
 **Gap**
 
-The reference offers customer conversations to a model-improvement program, but that is not an agiworkforce capability or policy. AGI does not train AGI-owned models on customer prompts, responses, or files, and no training-data collection or server consumer exists. Mobile now exposes Model training is always off as a first-class policy state in Data Controls and Cloud Privacy, replacing the ambiguous claim that training might occur after a missing consent flow. A persisted switch would be a dead privacy control and would falsely imply that turning it on changes data handling.
+The founder allowed the consent on 2026-11-13 (D-2026-11-13-03). Mobile Cloud Privacy and Web Privacy show two switches under Help improve AGI models, one for chats and one for voice recordings, both off until the user turns them on. The choice is stored in the privacy settings namespace and read through one server reader that treats unset, malformed and unreadable as no. No training, evaluation or fine-tuning path reads customer content, so the switches record a choice and change nothing yet. The published policy pages still say customer content is not used to train AGI-owned models, which is still true.
 
 **Evidence**
 
-docs/00-foundation/platform-constitution.md defines AGI as not a foundation-model company. apps/web/app/privacy/page.tsx and app/mobile/legal/page.tsx state that AGI-owned models are not trained on customer conversation content. The Web PrivacySection source deliberately excludes improveModelTraining because no training-data pipeline exists and calls a saved-but-unconsumed preference a dead control. Mobile data-controls/index.tsx now shows the non-optional policy before export/sync controls; cloud-privacy/index.tsx reports AGI model training: Always off and removes the unsupported without-consent claim. ModelTrainingPolicy.test.tsx verifies both screens expose the policy and no training switch.
+apps/web/lib/server/model-improvement-consent.ts and its test hold the reader. apps/web/app/api/settings/preferences/route.ts rejects anything but true or false for the two keys. apps/mobile/src/features/settings/cloud-privacy and apps/web/features/settings/sections/PrivacySection.tsx render the switches. scripts/check-model-improvement-eligibility.mjs fails any other file that names the keys and any training export or fine-tuning call.
 
 **Suggested fix**
 
-Not planned while the product policy and architecture prohibit customer-content training. Keep the always-off state visible and do not add consent persistence without a separately approved training purpose, data contract, minimization and deletion rules, server enforcement, legal text, revocation path, and end-to-end proof that the preference gates every collection consumer.
+Built; not yet checked on a signed-in device. Before any use starts: a lawyer reads the wording, the policy pages and store privacy declarations listed in audit/live-check/mobile-feature-gaps-2026-11-13.md get a new version, and every consumer is shown to read the server reader.
 
 **Reference screenshot(s)**
 
@@ -795,15 +795,15 @@ Completed. Keep every added Cloud content collection on an explicit user-facing 
 
 **Gap**
 
-Mobile now boots the shared i18next runtime before the navigator appears and exposes the active app language as the first row in General. The drill-in offers Match device plus all 12 shared locales, searchable by English name, native name, or code. Selection changes translated Mobile keys immediately and persists as a device-local encrypted preference; unsupported or unreadable stored values fail back to the device language. Voice recognition language remains explicitly separate. The shared corpus retains its existing honest English fallback wherever a Mobile-specific string has not yet adopted a translation key.
+The App language row was removed in commit 76396a64d6 and restored on 2026-11-13 (D-2026-11-13-04). Settings, General shows the active language; the page behind it offers Match device and the languages the app ships as reviewed. A choice changes translated keys at once and is kept on the device; an unsupported or unreadable stored value falls back to the device language.
 
 **Evidence**
 
-apps/mobile/src/i18n/index.ts owns device-language detection, preference validation, encrypted-MMKV read/write, the shared @agiworkforce/i18n corpus, and safe restoration. app/_layout.tsx awaits restoration after MMKV initialization so the first navigable frame uses the chosen language. settings/general/index.tsx renders the translated General, Language, and Storage labels plus active native language; settings/app-language/index.tsx renders the searchable Match device and 12-locale radio list. The authenticated drawer registers the hidden route and navigation types include it. app-language-settings.test.tsx verifies General navigation, default selection, explicit choice, and native-name search; mobile-i18n.test.ts verifies corpus translation, persistence, device fallback, and invalid-value handling.
+apps/mobile/src/i18n/index.ts owns device-language detection, validation, storage and restoration. apps/mobile/app/_layout.tsx restores the choice at boot. apps/mobile/src/features/settings/general/index.tsx renders the row and general/AppLanguageScreen.tsx the picker. apps/mobile/**tests**/AppLanguageSettings.test.tsx and mobile-i18n.test.ts cover selection, persistence and fallback.
 
 **Suggested fix**
 
-Completed for the shared language runtime and selector. Continue migrating Mobile-specific literals to shared translation keys as their screens change, preserve English fallback for missing keys, keep voice language separate, and add a locale only through the shared corpus so Web, Desktop, and Mobile do not drift.
+Built; not yet checked on a device (audit/live-check/mobile-feature-gaps-2026-11-13.md). Keep migrating Mobile-specific literals to shared translation keys as their screens change, keep voice language separate, and add a language only through the shared corpus.
 
 **Reference screenshot(s)**
 
@@ -832,7 +832,7 @@ Completed for channels the product can actually deliver. Keep Email non-interact
 
 - `chatgpt_reference/065-chatgpt-ios-settings-notifications-codex-chats-projects-usage.png`
 
-### GAP-036, Unsupported project usage and marketing notification categories are declined until delivery producers exist
+### GAP-036, Project, usage and tips notification categories are declined until delivery producers exist
 
 - **Status:** Open
 - **Owner:** web-push-delivery
@@ -841,15 +841,15 @@ Completed for channels the product can actually deliver. Keep Email non-interact
 
 **Gap**
 
-The reference exposes categories backed by its own project, usage-warning, tips, and marketing delivery systems. agiworkforce has no project notification event, usage-threshold dispatcher, product-tip scheduler, marketing sender, or consent/unsubscribe consumer in the repository. Adding toggles would store preferences no runtime reads. Mobile instead names its existing persisted task_updates lane Work Updates and states its actual scope: task results, schedule runs, and chat replies. That backwards-compatible lane gates the supported task_completed, agent_paused, schedule_triggered, and chat_message event vocabulary without inventing new state.
+The reference exposes categories backed by its own project, usage-warning and tips delivery systems. Since 2026-11-13 (D-2026-11-13-01) Mobile has a Scheduled tasks switch separate from task and approval updates, a Product updates switch that is off until turned on and has a sender behind it, and a reply-ready notice under Chat replies. agiworkforce still has no project notification event, usage-threshold dispatcher or product-tip scheduler, so those categories stay out: a switch there would store a preference no runtime reads.
 
 **Evidence**
 
-apps/mobile/services/notifications.ts defines the supported event vocabulary but no projects, usage limits, tips, or marketing event. apps/mobile/stores/notificationPrefsStore.ts maps task_completed, agent_paused, schedule_triggered, and chat_message to the backwards-compatible task_updates preference consumed by notificationAllowed and companion dispatch. categories.ts presents that lane as Work Updates with explicit task, schedule, and reply scope. Repository push infrastructure registers and unregisters device tokens, while companionNotifications.ts is the only local producer; searches of apps/web and services/api-gateway find no Expo push dispatcher for projects, usage, tips, or marketing. Web NotificationsSection.tsx independently removes dead email/mobile groups for the same no-consumer reason. notificationPrefs.test.ts pins every supported work event to the persisted lane and notification-category-settings.test.ts verifies the visible summary.
+apps/mobile/stores/notificationPrefsStore.ts and apps/mobile/src/features/settings/notifications/categories.ts define the groups. apps/web/lib/services/push-notification-service.ts honours them per device. apps/web/lib/services/product-update-notification-service.ts and apps/web/app/api/admin/product-updates/route.ts send a release note only to devices that turned Product updates on. No projects, usage-limit or tips event exists in apps/mobile/services/notifications.ts.
 
 **Suggested fix**
 
-Not planned for categories with no delivery producer. Keep the honest grouped Work Updates control. Add separate Responses, Projects, Schedules, Usage, Tips, or Marketing categories only alongside typed events, a real sender/trigger, deep-link handling, default and migration policy, delivery tests, and, for marketing, explicit opt-in, unsubscribe, and account-level consent enforcement.
+Check the new switches and the reply notice on a real phone (audit/live-check/mobile-feature-gaps-2026-11-13.md). Add Projects, Usage or Tips categories only alongside typed events, a real sender, deep-link handling, a default and migration policy and delivery tests.
 
 **Reference screenshot(s)**
 
@@ -1650,7 +1650,7 @@ The terminal reachability defect is fixed with a bottom dock, but the remaining 
 
 **Evidence**
 
-DesktopShellV3.tsx now mounts TerminalWorkspace in the conventional bottom dock. ExecutionSidecar, ExecutionDashboard, BrowserPanel, FilesPanel, and git review components remain contextual to their respective execution or review owners; no shared panel-state or run-artifact contract unifies them.
+DesktopShellV3.tsx now mounts TerminalWorkspace in the conventional bottom dock. ExecutionSidecar, ExecutionDashboard, BrowserPanel, FilesPanel, and git review components remain contextual to their respective execution or review owners; no shared panel-state or run-artifact contract unifies them. The public Electron Desktop has two more right panes in a local Code session, Browser (built in October, on main since 2026-11-13) and iOS Simulator (added 2026-11-13). Each has its own owner (apps/desktop/electron/browserPane.ts and apps/desktop/electron/runtime/simulatorService.ts) and its own button in apps/web/features/code/components/LocalSessionPanel.tsx; one pane docks at a time and the terminal stays in the bottom dock, so this is still not one shared rail.
 
 **Suggested fix**
 
@@ -2175,15 +2175,15 @@ Not planned until a typed vocabulary contract defines normalization, limits, per
 
 **Gap**
 
-Existing browser views, execution automation, system link opening, and the Chrome extension are separate capabilities. Desktop has no single cookie jar, autofill store, download manager, clear-data operation, or navigation-control policy to back the reference settings.
+Existing browser views, execution automation, system link opening, and the Chrome extension are separate capabilities. Desktop has no single cookie jar, autofill store, download manager, clear-data operation, or navigation-control policy to back the reference settings. Since 2026-11-13 main carries one owner for pages shown inside the Electron Desktop: the browser pane keeps them in a profile of its own that persists, asks before loading each new site, refuses every permission request, and has a settings section that lists allowed and blocked sites and clears the pane's data. There is still no autofill store, no download manager and no downloads-location contract.
 
 **Evidence**
 
-BrowserViewer, BrowserPanel, execution browser events, and the extension use different stores and trust boundaries. Repository searches find no Desktop-owned browsing-data inventory, cookie clear command, downloads-location contract, or browser autofill manager.
+BrowserViewer, BrowserPanel, execution browser events, and the extension use different stores and trust boundaries. Repository searches find no Desktop-owned browsing-data inventory, cookie clear command, downloads-location contract, or browser autofill manager. apps/desktop/electron/browserPane.ts owns the pane session (the persist:agi-browser-pane partition, permission and device handlers that refuse, a per-site allow and block list, a clear-data command, no download rule) and apps/web/features/desktop-host/components/BrowserPaneSettings.tsx is its settings section.
 
 **Suggested fix**
 
-Not planned until a dedicated browser service owns session isolation, storage, control enablement, navigation destination, clear-data scopes, downloads, autofill, retention, and audit semantics.
+Partly built: the pane has a site list and a clear-data command with a settings section. Still to decide and build: a download rule, retention, autofill and audit semantics. Cookie import waits on the owner (audit/decisions/founder-decisions.md).
 
 **Reference screenshot(s)**
 
@@ -2810,24 +2810,24 @@ Completed for the current voice runtime. Add persona, Model, Intelligence, Langu
 
 - `chatgpt_reference/131-chatgpt-web-settings-voice-spruce-voice-model-picker.png`
 
-### GAP-122, Chrome keeps the attach menu image-only until file and agent-mode contracts exist
+### GAP-122, Chrome attach menu offers images, PDFs, text and Markdown files beside page, tabs, link, skills and connectors
 
-- **Status:** Open
-- **Owner:** extension-attachment-upload
+- **Status:** Done
+- **Owner:** Extension
 - **Surface/type:** extension · missing-control
 - **Reference:** ChatGPT · Chrome extension · Composer '+' attach menu
 
 **Gap**
 
-Chrome exposes only the two attachment actions its Managed Chat contract can execute: a current-tab screenshot and user-selected images. The transport runtime-validates base64 PNG, JPEG, WebP, or GIF data URLs and has no generic-file asset upload, folder authorization, durable goal, plan-mode flag, or extension plugin registry. Adding the reference entries would either discard selected bytes, persist an objective no runner pursues, or imply Web catalogue capabilities run inside the browser extension.
+The '+' menu in the side panel offers Upload from device (PNG, JPEG, WebP, GIF, PDF, plain text and Markdown), Take a screenshot, Add the browser page, Attach tabs, link, video mode, Skills, Connectors and a temporary-chat toggle. Every picked file, screenshot included, is uploaded to the signed-in account's file store (presign, then complete) and the message carries only the asset reference; the server reads a PDF to text and fences extracted text as untrusted data before the model sees it. Limits are five files per message, 12 MiB per file and 12 MiB per message, and the file entry is hidden when the account's capability document denies uploads. The earlier image-only reading no longer holds. The reference's folders, goals and plan mode are not documented for either leader's Chrome extension (checked 2026-11-11), and plugins map to the existing Skills and Connectors entries.
 
 **Evidence**
 
-apps/extension/src/side_panel.ts builds Take a screenshot and Add an image and applies the eight-image attachment cap. managedChatHandler.ts and freeTrialClient.ts validate and serialize image-only attachments. chat-state.ts supplies image-specific fallback prompt copy. Repository searches find no Chrome generic-asset, folder-grant, background-goal, plan-mode, or plugin-runtime contract; the extension README keeps Chrome conversations browser-local and browser actions explicitly scoped.
+apps/extension/src/side_panel.ts: COMPOSER_ATTACHMENT_MIME_TYPES and COMPOSER_DOCUMENT_MIME_TYPES (lines 9673-9689), acceptIncomingComposerFiles (9895), admitComposerDocument (9762), uploadComposerDocument (9821), takeComposerDocuments (9879), the menu items (13817-14361) and the canUploadFiles gate (14364). The send path passes fileAttachments {assetId, mimeType} (9122); freeTrialClient.ts createMultimodalUserContent turns each into a file part with asset_id (line 510) and caps the count at MANAGED_CHAT_MAX_ATTACHMENTS = 5 (line 97). apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts resolves the asset to the model (test 'gives a PDF to the model as text'; 'fences extracted text as untrusted data'). apps/extension/**tests**/side_panel-attachment-caps.test.ts covers upload, caps, byte budget and denied uploads for images; no extension test admits a PDF, text or Markdown file through the picker. Leader pages read 2026-11-11: https://learn.chatgpt.com/docs/chrome-extension.md describes no attach menu and mentions file upload only as an allow-file-URLs troubleshooting step; https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome.md describes image upload, screenshots, shortcuts via '/', and skills, plugins and connectors in the side panel, and no folders, goals or plan mode (documented).
 
 **Suggested fix**
 
-Not planned on the current Chrome contract. Add generic files only with typed upload, MIME/size, ownership, retention/deletion, preview, and provider-admission support; add goals or plan mode only with a persisted runner and visible lifecycle; add plugins only after an extension-owned capability registry and permission review exist. Keep the menu limited to executable actions meanwhile.
+Completed for the shipped menu. Keep the menu limited to executable actions. Add goals or plan mode only with a persisted runner and visible lifecycle, and folders only with typed folder authorization, if a leader's Chrome extension documents them. Follow-up: add an extension test that admits a PDF, a text and a Markdown file through the picker and checks the notice for an unsupported type.
 
 **Reference screenshot(s)**
 
@@ -3686,24 +3686,24 @@ Extend ErrorView to render a numbered checklist component (reusing the StepRow p
 
 - `claude_reference/113-claude-ios-dispatch-pairing-failed-troubleshooting-checklist-try-again.png`
 
-### GAP-160, No user-facing toggle to opt in/out of using chats to train AI models
+### GAP-160, Chats-for-model-improvement switch exists in Cloud Privacy, off by default
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
 - **Reference:** Claude · iOS · Privacy, Help improve our AI models toggle
 
 **Gap**
 
-Reference gives users an explicit switch ('Help improve our AI models, Allow the use of your chats and coding sessions to train and improve Anthropic AI models') with a Learn More link, defaulting off. agiworkforce's Cloud Privacy screen instead shows a static, non-interactive card stating conversations are 'never used for training', with no consent control surfaced to the user at all.
+Cloud Privacy now shows Help improve AGI models with a Use my chats switch and a note that both choices are off unless turned on, that nothing is used today, and that they do not change which providers serve a chat (D-2026-11-13-03). The reference also offers a Learn More link; ours explains in the note and has no separate page.
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-privacy/index.tsx, PRIVACY_ITEMS is static text (no-training/telemetry/retention), no Switch component present; searched for 'Switch' and 'train' in the file, only descriptive text, no toggle.
+apps/mobile/src/features/settings/cloud-privacy renders the switches with shared load, save and error handling; apps/mobile/**tests**/ModelImprovementConsent.test.tsx covers the default, a failed load and a failed save. Server side: see GAP-032.
 
 **Suggested fix**
 
-If model-training consent is or becomes a real backend capability, surface it as an explicit toggle with explanatory copy and a Learn More link on this screen instead of only asserting a static policy.
+Built; not yet checked on a signed-in device (audit/live-check/mobile-feature-gaps-2026-11-13.md).
 
 **Reference screenshot(s)**
 
@@ -3732,24 +3732,24 @@ Complete in repository. Verify search with a populated Cloud account on a signed
 
 - `chatgpt_reference/046-chatgpt-ios-projects-list-empty-state-single-project.png`
 
-### GAP-162, No ownership filters (All / Created by you / Shared with you) on projects
+### GAP-162, Project ownership and archive filters exist in Cloud
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Projects list
 
 **Gap**
 
-Reference segments projects by ownership, which is the entry point for shared/collaborative projects. agiworkforce mobile has no notion of a project being shared with the user, cloud projects are filtered only by `deletedAt`/`isArchived`, and no sharing field or filter exists.
+In Cloud the Projects list has a filter beside the sort control: All, Created by you, Shared with you and Archived. Archived projects can be opened and restored. Local has no filter because nothing there can be shared or archived. A project can also be pinned, and the project page has a more-actions menu (D-2026-11-13-01).
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx lines filtering cloudProjectsRaw; grep 'Shared with you|sharedWithMe|shared_with' across apps/mobile and apps/web/features/projects, no match
+apps/mobile/src/features/projects/projectList.ts holds the filter and sort rules; apps/mobile/app/(app)/(tabs)/projects.tsx renders them; apps/mobile/src/features/projects/**tests**/ProjectsListPinFilter.test.tsx and projectList.test.ts cover them.
 
 **Suggested fix**
 
-If project sharing is on the roadmap, add an `ownership` field to the cloud project model and a three-chip filter row above the list; if not, at minimum add All/Active chips so the row is not an empty affordance.
+Built; not yet checked against a server (audit/live-check/mobile-feature-gaps-2026-11-13.md).
 
 **Reference screenshot(s)**
 
@@ -4054,24 +4054,24 @@ Add a 'Connector discovery' toggle at the top of the connectors screen that, whe
 
 - `claude_reference/129-claude-ios-settings-connectors-connector-discovery-toggle.png`
 
-### GAP-176, No separate consent for voice/audio recordings
+### GAP-176, Voice recordings have their own consent switch, off by default
 
-- **Status:** Open
+- **Status:** Done
 - **Owner:** Unassigned
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Settings > Data controls
 
 **Gap**
 
-Reference splits audio out of the general training consent ('Include audio recordings, Share audio from voice chats to train our models'), defaulted off. agiworkforce has a voice feature and voice-language settings but no audio-specific data control, so voice data is governed by nothing the user can see.
+Cloud Privacy now shows a Use my voice switch beside the chats switch under Help improve AGI models. The two are independent and both are off until turned on (D-2026-11-13-03). Nothing uses voice audio to improve a model today; transcription forwards audio to the provider and does not store it.
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx; grep -i 'audio recording|voice data|train' across apps/mobile/src/features/settings, only the cloud-privacy prose
+apps/mobile/src/features/settings/cloud-privacy; server side as GAP-032.
 
 **Suggested fix**
 
-Add a second, independently persisted toggle 'Include audio recordings' nested under the training consent, disabled (and visually subordinate) while the parent consent is off.
+Built; not yet checked on a signed-in device (audit/live-check/mobile-feature-gaps-2026-11-13.md).
 
 **Reference screenshot(s)**
 
@@ -4086,15 +4086,15 @@ Add a second, independently persisted toggle 'Include audio recordings' nested u
 
 **Gap**
 
-AGI Mobile provides Cloud Archived chats, Archive all chats, and Delete all chats with explicit Cloud scope and two-step confirmation. Local chats remain separate and are cleared with the device storage control; there is no Local archive feature.
+AGI Mobile provides Cloud Archived chats, Archive all chats and Delete all chats with explicit Cloud scope and two-step confirmation. Since 2026-11-13 Local mode has its own Delete all chats in Data Controls, which removes Local chats and their drafts and leaves memory, settings and downloaded models (D-2026-11-13-01). There is still no Local archive feature.
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/**tests**/DataControlsBulkChats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; ArchivedChatsScreen.test.tsx covers old-account rows and stale confirmations.
+apps/mobile/src/features/settings/data-controls/index.tsx gates the Cloud bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts; data-controls/deleteLocalChats.ts deletes Local chats only. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive and delete. apps/mobile/**tests**/DataControlsBulkChats.test.tsx and DataControlsLocalChats.test.tsx cover confirmations, errors, and mode and account switching.
 
 **Suggested fix**
 
-Verify Cloud archive/delete on a signed-in device once production routes are deployed. Decide whether Local archive is a supported product requirement; if so, add it to local storage and chat navigation without crossing the Cloud boundary.
+Verify Cloud archive and delete on a signed-in device once production routes are deployed, and Local delete on a device (audit/live-check/mobile-feature-gaps-2026-11-13.md). Decide whether Local archive is a supported product requirement; if so, add it to local storage and chat navigation without crossing the Cloud boundary.
 
 **Reference screenshot(s)**
 
@@ -4539,22 +4539,22 @@ Add session-state auto-classification and model-switch-on-flag toggles to the Ag
 
 ### GAP-197, No iOS Simulator integration or pull-request automation settings for AGI Code
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Claude Code settings > Mobile simulators + Pull requests
 
 **Gap**
 
-Reference offers an iOS Simulator toggle (agent drives the simulator, takes screenshots) and a Pull requests section: branch prefix field, create-PR-automatically toggle, autofix-PR-on-CI-failure toggle, and auto-archive-session-after-PR-merge toggle. agiworkforce's coding agent settings have none of these.
+Reference offers an iOS Simulator toggle (agent drives the simulator, takes screenshots) and a Pull requests section: branch prefix field, create-PR-automatically toggle, autofix-PR-on-CI-failure toggle, and auto-archive-session-after-PR-merge toggle. agiworkforce's coding agent settings have none of these. Since 2026-11-13 the Electron Desktop has an iOS Simulator pane in a local Code session on macOS: device picker, start and shut down, live screen, Home, screenshot, recording with a timer, mark up and add to chat, appearance, a clean status bar, clipboard both ways, zoom, expand and a floating card. It is gated by the simulator.control permission. Still missing: the agent driving the simulator, tap and type from the pane, rotate, the settings toggle, and every pull-request automation setting.
 
 **Evidence**
 
-grep -i 'ios simulator' across apps/ found only an unrelated mobile ChatInput.tsx match; grep -i 'pull request' across apps/desktop found only git/mcp API code, no settings UI
+grep -i 'ios simulator' across apps/ found only an unrelated mobile ChatInput.tsx match; grep -i 'pull request' across apps/desktop found only git/mcp API code, no settings UI 2026-11-13: apps/desktop/electron/runtime/simulatorService.ts (xcrun simctl only), the simulator_* commands in apps/desktop/electron/runtime/dispatcher.ts, apps/web/features/code/components/LocalSimulatorPane.tsx and their tests. The service was run against a live simulator inside an Electron process on 2026-11-13 (frames, screenshot, recording, appearance, clean status bar, Home, shut down, start); the pane screen has not been seen in the built app.
 
 **Suggested fix**
 
-Add Mobile simulators and Pull requests sections to AgiCode settings with the four PR-automation toggles and a branch-prefix text field.
+Decide how tap and type reach the simulator and whether the agent may drive it (audit/decisions/founder-decisions.md), then add the settings toggle. The Pull requests settings section is untouched and still to build.
 
 **Reference screenshot(s)**
 
@@ -6492,47 +6492,47 @@ Add an 'Advanced' popover to the composer bar (next to the autonomy chip) with a
 
 - `chatgpt_reference/153-chatgpt-web-extension-advanced-settings-effort-slider.png`
 
-### GAP-282, Full DevTools-Protocol browser control has no elevated-risk gate or disclosure
+### GAP-282, Full DevTools-Protocol browser control is gated per site with an explicit risk disclosure; a developer-mode toggle is declined
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension · missing-copy
 - **Reference:** Codex · macOS desktop · Settings › Browser (developer mode / CDP)
 
 **Gap**
 
-Reference isolates full CDP access behind a 'Developer mode' section marked 'Elevated risk', default off, with copy explaining CDP lets the model inspect and control sensitive browser internals. UPDATED 2026-08-21: the 'no risk disclosure anywhere' half of this row's evidence is no longer accurate -- the Permissions section now has a 'Browser control boundary' row with real explanatory copy, and access is gated by a per-site approved-sites list the user must opt into once per site, with 'ask before acting' on by default. What is still genuinely missing is the reference's specific pattern: a single, explicitly labelled 'Developer mode: Elevated risk' toggle, default off, rather than prose plus a site allowlist.
+The reference is a desktop app's developer-mode toggle labelled 'Elevated risk', default off. The extension reaches the same user outcome by a different pattern that fits a browser extension: no site is controlled until the user approves it, granting full control to a site is a separate confirmation headed 'This grants full DevTools-Protocol control' whose body says what the debugger can do (click, type, navigate, read the DOM, take screenshots inside the signed-in session), that Chrome shows a debugging banner, that Chrome asks for site access, how to withdraw it and that the user should grant it only on trusted sites. In the side panel a one-time or always choice card repeats the risk when a run first needs a site. A run refuses an origin without that confirmation and fails closed when the record cannot be read. Neither ChatGPT's nor Claude's Chrome extension offers a developer-mode CDP toggle, so no global switch is planned.
 
 **Evidence**
 
-apps/extension/src/options.ts lines ~1056-1069 (permSection's 'Browser control boundary' row: 'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site that you have separately granted full browser control, once, in the approved-sites list below... AGI does not expose an unrestricted CDP developer mode.'), followed by createSitePermissionPolicySection (the approved-sites list). No 'Elevated risk' badge or dedicated Developer-mode toggle exists anywhere in the file.
+apps/extension/src/features/computer-use/browserControlConsent.ts lines 7-15 (headline and body); apps/extension/src/options.ts: 'Browser access' row (1291-1302), 'How browser access works' details naming CDP and stating there is no unrestricted CDP developer mode (1304-1313), the consent prompt with the 'Grant full browser control' button (line 1376) and the approved-sites list with Remove. apps/extension/src/features/side-panel/bubbles.ts line 1381 renders spBrowserAccessActBody (_locales/en/messages.json line 4105: debugger, Chrome banner, screenshots and text sent to AGI Cloud, Auto and Ask first, one-time access ends with the task). apps/extension/**tests**/computer-use-browser-control-consent.test.ts: 'names the elevated risk and the exact place to grant it' (line 144), 'withholds consent for an origin that was never confirmed' (59), 'computer-use start refuses an unconfirmed origin' (153-167). The Chrome permission list itself is frozen by **tests**/manifest-contract.test.ts.
 
 **Suggested fix**
 
-Narrow scope: disclosure copy and a site-scoped access gate already exist. What remains is purely presentational -- add an 'Elevated risk' badge to the existing Browser control boundary row (or promote the approved-sites list into a labelled 'Developer mode' subsection) so the risk framing matches the reference, rather than building new gating logic from scratch.
+Not planned. A single global Developer-mode toggle belongs to a desktop settings pattern; the per-site confirmation, the side-panel access card and Chrome's own debugging banner already let a user understand, grant and withdraw the risk site by site. Reconsider only if a leader's Chrome extension ships a global CDP switch.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/114-codex-macos-settings-browser-permissions-developer-mode-cdp.png`
 
-### GAP-283, Conversation history is two clicks deep with no search, vs. one-click searchable dropdown
+### GAP-283, Recent chats are one click from the side panel header, with search
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Extension
 - **Surface/type:** extension · missing-ia
 - **Reference:** ChatGPT · Chrome extension · Side panel recent tasks dropdown
 
 **Gap**
 
-ChatGPT's side panel puts recent tasks directly under a 'New task' dropdown with an inline 'Search recent tasks' box, visible in one click. UPDATED 2026-08-21: the 'no search/filter input' half of this row shipped, predating this CSV's 2026-08-11 last edit by nine days -- there is now a real, wired 'Search recent chats' input that filters the history list live, with distinct empty states ('No saved conversations' vs 'No matching conversations'). The 'two clicks deep' half is unchanged: the search input and history list are still nested inside the same overflow drawer (chatActionsSection -> drawerHistoryBtn -> drawerHistoryList/drawerHistorySearch), so reaching either still requires opening the drawer first, unlike the reference's one-click 'New task' dropdown.
+The side panel header carries a Recent chats button (clock icon, accessible name 'Recent chats') that opens a modal sheet listing saved conversations directly; the history list no longer needs the overflow drawer. The sheet has a close button, an Archived toggle, Escape to close, a focus trap and focus return to the header button, and it moves focus to the search box when it is shown. The 'Search recent chats' input filters live and is shown once the list has more than ten conversations (RECENTS_SEARCH_THRESHOLD), so a short list shows no empty search box. The conversation title menu next to the title also offers rename, pin, move, archive and delete for the open chat.
 
 **Evidence**
 
-Search shipped in commit 7548314e7 (2026-08-02). apps/extension/src/side_panel.ts lines ~6269-6283 (drawerHistorySearch input, type=search, placeholder 'Search recent chats', wired via filterConversations(entries, drawerHistorySearch.value) in renderDrawerHistory, lines ~6285-6294). Lines ~6261-6421 confirm drawerHistoryBtn/drawerHistoryList/drawerHistorySearch are all children of chatActionsSection inside the drawer body, unchanged nesting from the original row.
+apps/extension/src/side_panel.ts: historyBtn is created in the header beside New chat and the more menu (lines 10986-10993), historyBtn.addEventListener('click', openRecents) (12317), the recents sheet with role=dialog and aria-modal (12319-12342), openRecents and closeRecents (12347-12372), the Tab focus trap and Escape handling (12394-12413), RECENTS_SEARCH_THRESHOLD = 10 (1095) and the search visibility rule (12151). Test path: apps/extension/**tests**/side-panel-chrome.test.ts opens a saved conversation by clicking #sp-history-btn and restoring the row (line 231), and checks the header buttons (276). Search shipped in commit 7548314e7 (2026-08-02).
 
 **Suggested fix**
 
-Narrow scope: search/filter is done. What remains is purely structural -- surface drawerHistoryList/drawerHistorySearch (or a subset) directly under a top-level 'New task'-style control instead of requiring the overflow drawer to be opened first.
+Completed. The reference's inline dropdown under a New task control is a different layout; the header button reaches the same list in one click.
 
 **Reference screenshot(s)**
 
@@ -7025,22 +7025,22 @@ Once the reusable FeatureAnnouncementScreen exists (see 103 fix), add a Cowork-s
 
 ### GAP-305, No top-level 'Remote' entry point in mobile primary navigation
 
-- **Status:** Done
+- **Status:** Not Planned
 - **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
 - **Reference:** ChatGPT · iOS · Home sidebar with 'Remote' nav entry
 
 **Gap**
 
-The mobile primary drawer already exposes Remote as a first-class destination next to other app sections; this audit row was stale. The row opens the mounted /(app)/companion screen and is feature-gated with the companion implementation.
+Declined by the founder on 2026-11-13 (D-2026-11-13-06): pairing and the paired computer's sessions live inside Code, so Remote is not a side panel row. The pairing page at /(app)/companion opens from a device row or Add device in Code and from a pairing link.
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/**tests**/DrawerContent.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
+apps/mobile/src/features/cloud-code/components/CodeDevicesSection.tsx renders the Devices section in Code; apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS has no Remote row; apps/mobile/**tests**/RemoteCodeSessionsSearch.test.tsx and DrawerContent.test.tsx hold both.
 
 **Suggested fix**
 
-Completed locally; verify navigation and status on a signed device before submission.
+None; reopen only if the founder asks for a separate Remote row again.
 
 **Reference screenshot(s)**
 

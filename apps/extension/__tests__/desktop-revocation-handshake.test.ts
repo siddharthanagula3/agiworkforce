@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NATIVE_BROWSER_POLL_MESSAGE, NATIVE_BROWSER_UNPAIR_MESSAGE } from '@agiworkforce/types';
+import { endEarlierWorkers } from './worker-timers';
 
 const harness = vi.hoisted(() => {
   const SESSION_SECRET = '5a'.repeat(32);
@@ -166,6 +167,8 @@ const harness = vi.hoisted(() => {
   return { localStore, posted, unpairAnswer, port };
 });
 
+const REVOKED_TOKEN = 'd'.repeat(64);
+
 async function settled(predicate: () => boolean): Promise<void> {
   for (let attempt = 0; attempt < 200 && !predicate(); attempt += 1)
     await new Promise((resolve) => setTimeout(resolve, 5));
@@ -173,11 +176,15 @@ async function settled(predicate: () => boolean): Promise<void> {
 
 describe('reconnecting while Desktop is still owed an unpair', () => {
   beforeEach(() => {
+    endEarlierWorkers();
     vi.resetModules();
     harness.posted.length = 0;
     harness.port.disconnect.mockClear();
     harness.localStore['connectedToDesktop'] = true;
-    harness.localStore['agi_pending_desktop_revocation'] = { id: 'revocation-1' };
+    harness.localStore['agi_pending_desktop_revocation'] = {
+      id: 'revocation-1',
+      token: REVOKED_TOKEN,
+    };
   });
 
   it('removes the pairing from Desktop before any browser command is polled', async () => {
@@ -199,6 +206,9 @@ describe('reconnecting while Desktop is still owed an unpair', () => {
 
     expect(harness.posted).toContain(NATIVE_BROWSER_UNPAIR_MESSAGE);
     expect(harness.posted).not.toContain(NATIVE_BROWSER_POLL_MESSAGE);
-    expect(harness.localStore['agi_pending_desktop_revocation']).toEqual({ id: 'revocation-1' });
+    expect(harness.localStore['agi_pending_desktop_revocation']).toEqual({
+      id: 'revocation-1',
+      token: REVOKED_TOKEN,
+    });
   });
 });

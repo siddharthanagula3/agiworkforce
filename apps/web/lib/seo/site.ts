@@ -2,7 +2,9 @@ import { COMPANY_SITE_NAME, PRODUCT_BRAND } from '@agiworkforce/types';
 
 import { CONTACT_EMAIL, LEGAL_ENTITY } from '@/lib/legal-constants';
 
-export const SITE_URL = (process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com').replace(
+export const CANONICAL_SITE_URL = 'https://agiworkforce.com';
+
+export const SITE_URL = (process.env['NEXT_PUBLIC_APP_URL'] ?? CANONICAL_SITE_URL).replace(
   /\/$/,
   '',
 );

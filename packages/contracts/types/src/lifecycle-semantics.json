@@ -658,6 +658,12 @@
       "table": "user_projects",
       "class": "ownership-check",
       "why": "The project hold function checks trusted caller or scoped ownership before evaluating holds, including retired projects. Filtering deleted_at would hide a hold during physical cleanup and permit destruction of protected content."
+    },
+    {
+      "file": "apps/web/app/api/chat/conversations/[id]/messages/lib/persist-message.ts",
+      "table": "web_messages",
+      "class": "write-path",
+      "why": "The title write asks whether the conversation ever held an earlier question or an answer and returns no message content. A regenerated or deleted answer still counts, or regenerating the first answer would let the title be rewritten."
     }
   ],
   "hardDeleteStores": {

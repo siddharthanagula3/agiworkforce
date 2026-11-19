@@ -4,6 +4,8 @@ import type { ThreadListParams, ThreadReadResponse, ThreadSummary } from '@agiwo
 import {
   CLI_NOT_EXECUTABLE_MARKER,
   CLI_NOT_FOUND_MARKER,
+  MANAGE_WORKSPACE_TRUST_COMMAND,
+  WorkspaceNotTrustedError,
   type LocalRuntimeClient,
   type ThreadSearchResults,
 } from '../../integrations/localRuntimeClient';
@@ -46,23 +48,29 @@ export class ConversationTreeErrorItem extends vscode.TreeItem {
   constructor(
     public readonly folderName: string,
     public readonly reason: string,
+    public readonly restricted = false,
   ) {
-    super(SESSION_LISTING_FAILURE_LABEL, vscode.TreeItemCollapsibleState.None);
+    const label = restricted ? t('webview.restrictedMode') : SESSION_LISTING_FAILURE_LABEL;
+    super(label, vscode.TreeItemCollapsibleState.None);
     this.description = folderName;
     this.tooltip = new vscode.MarkdownString(
-      `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions, so this list is incomplete. Select this item to open runtime setup.`,
+      restricted
+        ? `${reason}\n\nSelect this item to manage workspace trust.`
+        : `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions, so this list is incomplete. Select this item to open runtime setup.`,
     );
-    this.iconPath = new vscode.ThemeIcon('warning');
+    this.iconPath = new vscode.ThemeIcon(restricted ? 'shield' : 'warning');
     this.accessibilityInformation = {
-      label: `${SESSION_LISTING_FAILURE_LABEL} for ${folderName}: ${reason}`,
+      label: `${label} for ${folderName}: ${reason}`,
       role: 'treeitem',
     };
     this.contextValue = 'conversationListingFailure';
-    this.command = {
-      command: 'agi-workforce.openSettings',
-      title: 'Open Runtime Setup',
-      arguments: ['configuration'],
-    };
+    this.command = restricted
+      ? { command: MANAGE_WORKSPACE_TRUST_COMMAND, title: t('webview.manageTrust') }
+      : {
+          command: 'agi-workforce.openSettings',
+          title: 'Open Runtime Setup',
+          arguments: ['configuration'],
+        };
   }
 }
 
@@ -75,6 +83,7 @@ export interface ResolvedDeveloperSession {
 export interface SessionListingFailure {
   folderName: string;
   reason: string;
+  restricted?: boolean;
 }
 
 export type SessionSearchHit = ThreadSearchResults['hits'][number];
@@ -110,6 +119,8 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     vscode.TreeItem | undefined | null | void
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private readonly _onDidRemoveThread = new vscode.EventEmitter<string>();
+  readonly onDidRemoveThread = this._onDidRemoveThread.event;
   private readonly runtimeByThread = new Map<
     string,
     { runtime: LocalRuntimeClient; cwd: string }
@@ -131,17 +142,27 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     const threads = await this.getThreads();
     return [
       ...this.listingFailures.map(
-        (failure) => new ConversationTreeErrorItem(failure.folderName, failure.reason),
+        (failure) =>
+          new ConversationTreeErrorItem(
+            failure.folderName,
+            failure.reason,
+            failure.restricted === true,
+          ),
       ),
       ...threads.map((thread) => new ConversationTreeItem(thread)),
     ];
   }
 
   async getThreads(): Promise<ThreadSummary[]> {
+    return (await this.listThreads()).items;
+  }
+
+  async listThreads(): Promise<SessionListing<ThreadSummary>> {
     const folders = getAllWorkspaceFolders();
     this.runtimeByThread.clear();
-    this.listingFailures = [];
-    if (folders.length === 0) return [];
+    const failures: SessionListingFailure[] = [];
+    this.listingFailures = failures;
+    if (folders.length === 0) return { items: [], failures };
     const pages = await Promise.all(
       folders.map(async (folder) => {
         try {
@@ -171,15 +192,19 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
             `[${PRODUCT_NAMES.code}] failed to list sessions for ${folder.uri.fsPath}`,
             error,
           );
-          this.listingFailures.push({
+          failures.push({
             folderName: folder.name,
             reason: describeListingFailure(error),
+            ...(error instanceof WorkspaceNotTrustedError ? { restricted: true } : {}),
           });
           return [];
         }
       }),
     );
-    return pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    return {
+      items: pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+      failures,
+    };
   }
 
   async getArchivedThreads(): Promise<SessionListing<ThreadSummary>> {
@@ -329,6 +354,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     await owner.runtime.archiveThread(threadId);
     this.runtimeByThread.delete(threadId);
     this.refresh();
+    this._onDidRemoveThread.fire(threadId);
     return true;
   }
 
@@ -346,11 +372,13 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     await owner.runtime.deleteThread(threadId);
     this.runtimeByThread.delete(threadId);
     this.refresh();
+    this._onDidRemoveThread.fire(threadId);
     return true;
   }
 
   dispose(): void {
     this._onDidChangeTreeData.dispose();
+    this._onDidRemoveThread.dispose();
     this.runtimeByThread.clear();
   }
 }

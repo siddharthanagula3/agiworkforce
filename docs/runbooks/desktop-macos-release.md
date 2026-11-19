@@ -1,11 +1,14 @@
-# macOS Release Runbook
+# Tauri macOS Release Runbook
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
-Canonical procedure for the universal Developer ID distribution published by
-`.github/workflows/release-desktop.yml`.
+Canonical procedure for the universal Developer ID distribution of the retained
+Tauri app, published by `.github/workflows/release-desktop.yml`. The public
+Desktop is the Electron app; its procedure is
+`desktop-electron-macos-release.md`. The Tauri workflow is disabled in GitHub
+Actions as of 2026-11-11, so enable it before following the Release section.
 
 ## Release boundary
 

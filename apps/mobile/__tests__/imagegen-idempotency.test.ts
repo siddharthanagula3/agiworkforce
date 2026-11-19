@@ -11,6 +11,10 @@ jest.mock('@/services/api', () => ({
   ApiPaywallError: class extends Error {},
 }));
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { imageGen: true } }));
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
+}));
 jest.mock('expo-crypto', () => ({
   randomUUID: () => '12345678-abcd-4abc-8abc-1234567890ab',
 }));
@@ -98,6 +102,31 @@ describe('generateImage, idempotency', () => {
     expect(mockGet).toHaveBeenCalledWith(`/api/media/image/status?job_id=${jobId}`);
     expect(result.status).toBe('completed');
     expect(result.images?.[0]?.url).toBe('/api/files/0190a000-0000-4000-8000-000000000002');
+    jest.useRealTimers();
+  });
+
+  it('hands back the sentence and the retry answer of a job the server refused', async () => {
+    jest.useFakeTimers();
+    const jobId = '0190a000-0000-4000-8000-000000000001';
+    const sentence =
+      'Your prompt was flagged by our content safety filters. Please try a different prompt.';
+    mockPost.mockResolvedValue({ success: true, job_id: jobId, status: 'queued', images: [] });
+    mockGet.mockResolvedValueOnce({
+      success: false,
+      job_id: jobId,
+      status: 'failed',
+      retryable: false,
+      images: [],
+      error: sentence,
+    });
+
+    const pending = generateImage({ prompt: 'a red circle on white' });
+    await jest.advanceTimersByTimeAsync(2_000);
+    const result = await pending;
+
+    expect(result.status).toBe('failed');
+    expect(result.error).toBe(sentence);
+    expect(result.retryable).toBe(false);
     jest.useRealTimers();
   });
 

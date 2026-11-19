@@ -190,6 +190,22 @@ describe('cloud tasks tree', () => {
     provider.dispose();
   });
 
+  it('says there are no cloud tasks yet instead of showing an empty list', async () => {
+    const provider = new CloudTasksTreeProvider(() =>
+      Promise.resolve({
+        status: 'ready',
+        client: { listRuns: vi.fn().mockResolvedValue({ runs: [], nextCursor: null }) },
+      }),
+    );
+
+    const children = await provider.getChildren();
+
+    expect(children).toHaveLength(1);
+    expect(children[0]?.label).toBe('No cloud tasks yet');
+    expect(children[0]?.command?.command).toBe('agi-workforce.openCloudTasksOnWeb');
+    provider.dispose();
+  });
+
   it('polls only while the view is visible', () => {
     const provider = new CloudTasksTreeProvider(() => Promise.resolve({ status: 'signed-out' }));
     const changed = vi.fn();

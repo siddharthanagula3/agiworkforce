@@ -4,7 +4,6 @@ const mockGet = jest.fn();
 const mockPatch = jest.fn();
 const mockPush = jest.fn();
 const mockMarkDeviceRead = jest.fn();
-const mockOpenInAppBrowser = jest.fn();
 let mockDeviceItems: unknown[] = [];
 
 jest.mock('@/services/api', () => ({
@@ -15,10 +14,6 @@ jest.mock('@/services/api', () => ({
 }));
 
 jest.mock('@/lib/constants', () => ({ API_URL: 'https://agiworkforce.com' }));
-
-jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
-}));
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -100,21 +95,63 @@ beforeEach(() => {
   mockPatch.mockResolvedValue({ updated: 1 });
 });
 
+const SESSION_HREF_ID = '0190a000-0000-7000-8000-000000000033';
+
 describe('account notification destinations', () => {
-  it('opens product links and chats natively and everything else in the in-app browser', () => {
+  it('opens a code session in AGI Code', () => {
+    expect(accountNotificationDestination(`/code/${SESSION_HREF_ID}`)).toEqual({
+      kind: 'native',
+      route: `/(app)/cloud-code/${SESSION_HREF_ID}`,
+    });
+  });
+
+  it('opens research in Reports', () => {
+    expect(accountNotificationDestination('/open/research/report-1')).toEqual({
+      kind: 'native',
+      route: '/(app)/reports',
+    });
+  });
+
+  it('opens an approval on its AGI Work run', () => {
     expect(accountNotificationDestination(`/open/work/${RUN_ID}`)).toEqual({
       kind: 'native',
       route: `/(app)/tasks?runId=${RUN_ID}`,
     });
+  });
+
+  it('opens a chat on its conversation', () => {
     expect(accountNotificationDestination(`/chat/${CHAT_ID}`)).toEqual({
       kind: 'native',
       route: `/(app)/chat/${CHAT_ID}`,
     });
-    expect(accountNotificationDestination('/chat?settings=billing')).toEqual({
-      kind: 'web',
-      url: 'https://agiworkforce.com/chat?settings=billing',
+  });
+
+  it('opens a sign-in or security notice on the Security and login screen', () => {
+    expect(accountNotificationDestination('/chat?settings=security')).toEqual({
+      kind: 'native',
+      route: '/(app)/settings/account-security',
     });
+    expect(accountNotificationDestination('/chat?settings=account')).toEqual({
+      kind: 'native',
+      route: '/(app)/settings/account-security',
+    });
+  });
+
+  it('opens nothing for a target only the web or desktop can act on', () => {
+    expect(accountNotificationDestination('/chat?settings=billing')).toBeNull();
+    expect(accountNotificationDestination('/chat?settings=referrals')).toBeNull();
+    expect(accountNotificationDestination('/chat?settings=slack')).toBeNull();
+    expect(accountNotificationDestination('/chat?settings=')).toBeNull();
+    expect(accountNotificationDestination('/chat')).toBeNull();
+  });
+
+  it('opens nothing for an unknown or unsafe target', () => {
+    expect(accountNotificationDestination('/pricing')).toBeNull();
+    expect(accountNotificationDestination('/code/shared/token-1')).toBeNull();
+    expect(accountNotificationDestination('/code/%E0%A4%A')).toBeNull();
+    expect(accountNotificationDestination('/open/invoice/inv-1')).toBeNull();
     expect(accountNotificationDestination('//evil.example/x')).toBeNull();
+    expect(accountNotificationDestination('https://evil.example/x')).toBeNull();
     expect(accountNotificationDestination(null)).toBeNull();
   });
 });
@@ -155,6 +192,122 @@ describe('notifications inbox, account feed', () => {
     expect(screen.getByText('1 unread notification')).toBeTruthy();
   });
 
+  it.each([
+    'research_completed',
+    'code_session_completed',
+    'code_session_failed',
+    'code_session_needs_input',
+  ])('shows a %s notice once, from the account feed, and drops its device copy', async (type) => {
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ title: 'Recorded on the account' })],
+      unreadCount: 1,
+    });
+    mockDeviceItems = [
+      {
+        id: 'push-1',
+        title: 'Same notice on the device',
+        body: 'duplicate of the account row',
+        data: { type },
+        priority: 'normal',
+        receivedAt: '2026-09-29T10:00:01.000Z',
+        read: false,
+      },
+    ];
+
+    render(<NotificationCenterScreen />);
+
+    await waitFor(() => expect(screen.getByText('Recorded on the account')).toBeTruthy());
+    expect(screen.queryByText('Same notice on the device')).toBeNull();
+    expect(screen.getByText('1 unread notification')).toBeTruthy();
+  });
+
+  describe('a device row for a code session notice', () => {
+    const SESSION_ID = '0190a000-0000-7000-8000-000000000061';
+
+    const codeRow = (type: string, data: Record<string, unknown> = {}) => ({
+      id: 'push-code',
+      title: 'Session notice on the device',
+      body: 'Shown while the account feed has not loaded.',
+      data: { type, ...data },
+      priority: 'normal',
+      receivedAt: '2026-09-29T10:00:01.000Z',
+      read: false,
+    });
+
+    beforeEach(() => {
+      mockGet.mockRejectedValue(new Error('network'));
+    });
+
+    it.each(['code_session_completed', 'code_session_failed', 'code_session_needs_input'])(
+      'opens the session that %s names',
+      async (type) => {
+        mockDeviceItems = [codeRow(type, { codeSessionId: SESSION_ID })];
+
+        render(<NotificationCenterScreen />);
+        await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+        await act(async () => {
+          fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+        });
+
+        expect(mockMarkDeviceRead).toHaveBeenCalledWith('push-code');
+        expect(mockPush).toHaveBeenCalledWith(`/(app)/cloud-code/${SESSION_ID}`);
+      },
+    );
+
+    it('opens the AGI Code list when the notice carries no session id', async () => {
+      mockDeviceItems = [codeRow('code_session_completed', { codeSessionId: '' })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/cloud-code' });
+    });
+
+    it('opens the AGI Code list when the session id is only spaces', async () => {
+      mockDeviceItems = [codeRow('code_session_completed', { codeSessionId: '   ' })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/cloud-code' });
+    });
+
+    it('opens the session when the id carries surrounding spaces', async () => {
+      mockDeviceItems = [codeRow('code_session_completed', { codeSessionId: ` ${SESSION_ID} ` })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith(`/(app)/cloud-code/${SESSION_ID}`);
+    });
+
+    it('keeps an id from reaching the route unencoded', async () => {
+      mockDeviceItems = [codeRow('code_session_failed', { codeSessionId: 'a/b?c' })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith('/(app)/cloud-code/a%2Fb%3Fc');
+    });
+  });
+
   it('marks an account notification read on the server and opens its target', async () => {
     mockGet.mockResolvedValue({ notifications: [feedItem({})], unreadCount: 1 });
 
@@ -169,6 +322,64 @@ describe('notifications inbox, account feed', () => {
       ids: ['0190a000-0000-7000-8000-000000000041'],
     });
     expect(mockPush).toHaveBeenCalledWith(`/(app)/tasks?runId=${RUN_ID}`);
+    expect(useAccountNotificationFeed.getState().unreadCount).toBe(0);
+  });
+
+  it('opens a code session row in AGI Code', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [
+        feedItem({ title: 'Code session finished', href: `/code/${SESSION_HREF_ID}` }),
+      ],
+      unreadCount: 1,
+    });
+
+    render(<NotificationCenterScreen />);
+    await waitFor(() => expect(screen.getByText('Code session finished')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(/Unread, Code session finished/));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith(`/(app)/cloud-code/${SESSION_HREF_ID}`);
+  });
+
+  it('opens a sign-in notice on the Security and login screen', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [
+        feedItem({
+          category: 'security',
+          title: 'A new sign-in to your account',
+          href: '/chat?settings=security',
+        }),
+      ],
+      unreadCount: 1,
+    });
+
+    render(<NotificationCenterScreen />);
+    await waitFor(() => expect(screen.getByText('A new sign-in to your account')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(/Unread, A new sign-in to your account/));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
+  });
+
+  it('marks a row with no screen in the app read without opening the web', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ title: 'Connect Slack', href: '/chat?settings=slack' })],
+      unreadCount: 1,
+    });
+
+    render(<NotificationCenterScreen />);
+    await waitFor(() => expect(screen.getByText('Connect Slack')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(/Unread, Connect Slack/));
+    });
+
+    expect(mockPatch).toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
     expect(useAccountNotificationFeed.getState().unreadCount).toBe(0);
   });
 
@@ -241,6 +452,104 @@ const ID_B = '0190a000-0000-7000-8000-000000000052';
 const ID_C = '0190a000-0000-7000-8000-000000000053';
 
 describe('account notification feed read-state ownership', () => {
+  it('releases pagination when a refresh retires an older-page request', async () => {
+    const firstPage = Array.from({ length: 30 }, (_, index) =>
+      feedItem({
+        id: `0190a000-0000-7000-8000-0000000002${String(index).padStart(2, '0')}`,
+        createdAt: `2026-09-29T10:${String(59 - index).padStart(2, '0')}:00.000Z`,
+      }),
+    );
+    mockGet.mockResolvedValue({
+      notifications: firstPage,
+      unreadCount: 30,
+      nextCursor: 'cursor-1',
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    const olderPage = deferred();
+    mockGet.mockReturnValueOnce(olderPage.promise);
+    let stalePage: Promise<void> = Promise.resolve();
+    act(() => {
+      stalePage = useAccountNotificationFeed.getState().loadMore();
+    });
+    expect(useAccountNotificationFeed.getState().loadingMore).toBe(true);
+
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    expect(useAccountNotificationFeed.getState().loadingMore).toBe(false);
+
+    await act(async () => {
+      olderPage.reject(new Error('offline'));
+      await stalePage;
+    });
+    const state = useAccountNotificationFeed.getState();
+    expect(state.loadingMore).toBe(false);
+    expect(state.error).toBeNull();
+
+    mockGet.mockResolvedValueOnce({
+      notifications: [feedItem({ id: ID_C, createdAt: '2026-09-29T09:00:00.000Z' })],
+      unreadCount: 30,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().loadMore();
+    });
+    expect(useAccountNotificationFeed.getState().items.at(-1)?.id).toBe(ID_C);
+  });
+
+  it('pages with the server cursor so rows sharing a timestamp are never skipped', async () => {
+    const tied = '2026-09-29T10:00:00.000Z';
+    const firstPage = Array.from({ length: 30 }, (_, index) =>
+      feedItem({
+        id: `0190a000-0000-7000-8000-0000000003${String(index).padStart(2, '0')}`,
+        createdAt:
+          index < 28 ? `2026-09-29T11:${String(59 - index).padStart(2, '0')}:00.000Z` : tied,
+      }),
+    );
+    mockGet.mockResolvedValueOnce({
+      notifications: firstPage,
+      unreadCount: 31,
+      nextCursor: 'opaque-after-tied-row',
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    mockGet.mockResolvedValueOnce({
+      notifications: [feedItem({ id: ID_C, createdAt: tied })],
+      unreadCount: 31,
+      nextCursor: null,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().loadMore();
+    });
+
+    const [path] = mockGet.mock.calls.at(-1) as [string];
+    const query = new URLSearchParams(path.split('?')[1]);
+    expect(query.get('cursor')).toBe('opaque-after-tied-row');
+    expect(query.has('before')).toBe(false);
+    const state = useAccountNotificationFeed.getState();
+    expect(state.items).toHaveLength(31);
+    expect(state.items.at(-1)?.id).toBe(ID_C);
+    expect(state.hasMore).toBe(false);
+  });
+
+  it('stops paging when the server returns no cursor, even on a full page', async () => {
+    const fullPage = Array.from({ length: 30 }, (_, index) =>
+      feedItem({ id: `0190a000-0000-7000-8000-0000000004${String(index).padStart(2, '0')}` }),
+    );
+    mockGet.mockResolvedValueOnce({ notifications: fullPage, unreadCount: 30, nextCursor: null });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    expect(useAccountNotificationFeed.getState().hasMore).toBe(false);
+    mockGet.mockClear();
+    await act(async () => {
+      await useAccountNotificationFeed.getState().loadMore();
+    });
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
   it('does not restore a retired account feed when its mark-all request fails late', async () => {
     mockGet.mockResolvedValue({
       notifications: [feedItem({ id: ID_A, title: 'Account A notice' })],
@@ -282,7 +591,11 @@ describe('account notification feed read-state ownership', () => {
         createdAt: `2026-09-29T10:${String(59 - index).padStart(2, '0')}:00.000Z`,
       }),
     );
-    mockGet.mockResolvedValueOnce({ notifications: firstPage, unreadCount: 31 });
+    mockGet.mockResolvedValueOnce({
+      notifications: firstPage,
+      unreadCount: 31,
+      nextCursor: 'cursor-1',
+    });
     await act(async () => {
       await useAccountNotificationFeed.getState().refresh();
     });

@@ -6,7 +6,7 @@ import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLin
 const rootLayoutSource = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
 
 function pairingEffectSource(): string {
-  const guard = 'if (!url || !isClerkSignedIn || !isInitialized) return;';
+  const guard = 'if (!linkArrival || !isClerkSignedIn || !isInitialized) return;';
   const start = rootLayoutSource.lastIndexOf('useEffect(', rootLayoutSource.indexOf(guard));
   expect(rootLayoutSource.indexOf(guard)).toBeGreaterThan(-1);
   expect(start).toBeGreaterThan(-1);
@@ -18,12 +18,14 @@ function pairingEffectSource(): string {
 describe('pairing deep-link handler, reachability', () => {
   it('gates on the real Clerk sign-in signal, not the always-null legacy session', () => {
     const effect = pairingEffectSource();
-    expect(effect).toContain('if (!url || !isClerkSignedIn || !isInitialized) return;');
+    expect(effect).toContain('if (!linkArrival || !isClerkSignedIn || !isInitialized) return;');
     expect(effect).not.toMatch(/!session\b/u);
   });
 
   it('re-runs when the sign-in signal changes, so a cold-launch link is not lost', () => {
-    expect(pairingEffectSource()).toContain('}, [url, isClerkSignedIn, isInitialized, router]);');
+    expect(pairingEffectSource()).toContain(
+      '}, [linkArrival, isClerkSignedIn, isInitialized, router]);',
+    );
   });
 
   it('no longer subscribes to the legacy session field anywhere in the layout', () => {

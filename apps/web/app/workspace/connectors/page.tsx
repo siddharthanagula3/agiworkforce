@@ -12,7 +12,7 @@ export default function WorkspaceConnectorsPage() {
     <ConsolePage
       help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
       title="Connectors"
-      description="Which integrations members may use and which websites web search reads. Applied on the server, so a blocked connector is never offered to the model and a blocked site is never read, from chat, a scheduled task, or an agent run."
+      description="Integrations members may use and sites web search may read, enforced on the server."
     >
       <WorkspaceConnectorPolicy />
     </ConsolePage>

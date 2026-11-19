@@ -184,6 +184,10 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
 /// (e.g. the command for `run_command`, the path for file tools). Carries no
 /// full output, capped to one line of <=80 chars.
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
+    let shown_path = args
+        .get("path")
+        .and_then(|value| value.as_str())
+        .map(|value| crate::path_security::display_path(std::path::Path::new(value)));
     let raw = crate::runtime::tool_catalog::tool_status_line(name, |key| {
         args.get(key).and_then(|value| value.as_str()).map(|value| {
             if key == "path" {
@@ -195,9 +199,15 @@ fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     })
     .unwrap_or_default();
     let one_line = raw.replace('\n', " ");
+    let length = one_line.chars().count();
     if one_line.trim().is_empty() {
         format!("Running {}", name.replace(['_', '-'], " "))
-    } else if one_line.chars().count() > 80 {
+    } else if length > 80 && shown_path.as_deref() == Some(raw.as_str()) {
+        format!(
+            "…{}",
+            one_line.chars().skip(length - 79).collect::<String>()
+        )
+    } else if length > 80 {
         format!("{}…", one_line.chars().take(79).collect::<String>())
     } else {
         one_line
@@ -298,7 +308,7 @@ async fn run_pre_tool_use_hooks(
         },
     )
     .await;
-    let pre_t = hooks::aggregate_transformers(&pre_results);
+    let pre_t = hooks::aggregate_transformers_for(&pre_results, &tool_call.arguments);
     let effective_args = pre_t
         .updated_input
         .clone()
@@ -346,6 +356,9 @@ pub(crate) fn judge_generation(outcome: &agiworkforce_llm::ChatOutcome) -> Gener
         }
         Some(stop) if stop.is_output_limit() => {
             GenerationVerdict::Failed(IncompleteTurnCause::OutputLimitReached)
+        }
+        None if has_answer => {
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::StreamEndedEarly)
         }
         _ if has_answer => GenerationVerdict::Delivered,
         _ => GenerationVerdict::Failed(IncompleteTurnCause::NoResponse),
@@ -1054,6 +1067,20 @@ impl AgentSession {
         result
     }
 
+    pub(crate) fn settle_team_spend(&mut self) {
+        let Some(team) = self
+            .team_manager
+            .clone()
+            .filter(|_| self.team_identity.is_none())
+        else {
+            return;
+        };
+        team.settle_spend_into(&mut self.cost_ledger);
+        team.set_budget_headroom(self.max_budget_usd.map(|cap| {
+            crate::cost_ledger::CostBudget::new(cap, self.cost_ledger.total_usd).remaining_usd()
+        }));
+    }
+
     /// Send a user message and run the full agentic loop.
     ///
     /// Consent and the privacy boundary, context compaction, plan-mode
@@ -1067,6 +1094,7 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        self.settle_team_spend();
         #[cfg(unix)]
         let browser = if self.privacy_mode != super::PrivacyMode::Local
             && !matches!(
@@ -1654,11 +1682,13 @@ message -- revise and call `update_plan` again.\n\n",
         self.memory_window_due_at =
             std::time::Instant::now() + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL;
         let home = home.to_path_buf();
+        let project = self.system_prompt_parts.memory_cwd.clone();
         let config = config.clone();
         let route = crate::subagent::InheritedRoute::off_device(self);
         let task = tokio::spawn(async move {
             if let Err(error) = crate::memory_pipeline::MemoryPipeline::extract_session_summary(
                 &home,
+                project.as_deref(),
                 &window_id,
                 &window,
                 &config,
@@ -1807,14 +1837,14 @@ impl TurnHostAdapter<'_> {
                 session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: Some(tool_name),
-                tool_args: Some(tool_args),
+                tool_args: Some(tool_args.clone()),
                 tool_output: Some(output.clone()),
                 message: None,
                 tool_execution: None,
             },
         )
         .await;
-        hooks::aggregate_transformers(&persist_results)
+        hooks::aggregate_transformers_for(&persist_results, &tool_args)
             .updated_mcp_tool_output
             .unwrap_or(output)
     }
@@ -1865,6 +1895,7 @@ impl TurnHostAdapter<'_> {
             },
             None => None,
         };
+        self.session.settle_team_spend();
         let max_budget_usd = match self.session.max_budget_usd {
             Some(cap) => {
                 let left =
@@ -2065,7 +2096,7 @@ impl TurnHostAdapter<'_> {
                             .downcast_ref::<CliError>()
                             .map(|c| (c.kind(), chain.should_rotate(c)));
                         if let Some((kind, true)) = cli_err_kind {
-                            for fallback_model in chain.tail() {
+                            for fallback_model in chain.rotation_after(&self.session.model) {
                                 let prev_model = self.session.model.clone();
                                 let prev_provider = self.session.provider.clone();
                                 // Privacy-boundary guard: mutate provider/model and then
@@ -2575,6 +2606,83 @@ impl TurnHostAdapter<'_> {
             output: tool_result.output,
         }
     }
+
+    async fn run_captured_tool(
+        &mut self,
+        call: &ToolCallResponse,
+        args: serde_json::Value,
+    ) -> ExecResult {
+        let workspace_root = self.session.workspace_root();
+        self.session
+            .note_file_edit_started(&call.id, &call.name, &args, workspace_root.as_deref())
+            .await;
+        self.run_sequential_tool(call, args).await
+    }
+
+    async fn run_batch(&mut self, call: &ToolCallResponse, args: &serde_json::Value) -> ExecResult {
+        let legacy_args = value_to_legacy_args(args);
+        let workspace_root = self.session.workspace_root();
+        let approval_callback = self.session.recorded_approval_callback();
+        match crate::tools::workspace_policy_gate(
+            &call.name,
+            &legacy_args,
+            workspace_root.as_deref(),
+            approval_callback.as_ref(),
+        )
+        .await
+        {
+            Ok(crate::tools::WorkspacePolicyGate::Refused(refusal)) => {
+                return ExecResult {
+                    ok: false,
+                    output: refusal.output,
+                }
+            }
+            Err(error) => {
+                return ExecResult {
+                    ok: false,
+                    output: format!("tool error: {error:#}"),
+                }
+            }
+            Ok(
+                crate::tools::WorkspacePolicyGate::Unruled
+                | crate::tools::WorkspacePolicyGate::Allowed
+                | crate::tools::WorkspacePolicyGate::Approved,
+            ) => {}
+        }
+        let inner_calls = match crate::tools::batch_calls(&legacy_args) {
+            Ok(inner_calls) => inner_calls,
+            Err(output) => return ExecResult { ok: false, output },
+        };
+        let mut results = Vec::with_capacity(inner_calls.len());
+        for (position, inner) in inner_calls.into_iter().enumerate() {
+            let inner = ToolCallResponse {
+                id: format!("{}#{}", call.id, position + 1),
+                name: inner.name,
+                arguments: serde_json::Value::Object(inner.args),
+            };
+            let block = match self
+                .prepare_tool_inner(&inner, DispatchMode::Sequential)
+                .await
+            {
+                Prepared::Proceed { args } => {
+                    let executed = self.run_captured_tool(&inner, args.clone()).await;
+                    self.session.note_file_edit_finished(&inner.id, executed.ok);
+                    self.finish_sequential_tool(&inner, args, executed).await
+                }
+                Prepared::PreEmpted { block } => block,
+            };
+            results.push(Ok(crate::tools::ToolResult {
+                tool_name: inner.name,
+                success: !block.is_error,
+                output: block.content,
+            }));
+        }
+        let summary = crate::tools::batch_result(results);
+        ExecResult {
+            ok: summary.success,
+            output: summary.output,
+        }
+    }
 }
 
 fn declared_tool_timeout(tool_name: &str, mode: DispatchMode) -> Option<std::time::Duration> {
@@ -2766,6 +2874,33 @@ impl TurnHost for TurnHostAdapter<'_> {
                         "message": violation.reason,
                     })
                     .to_string(),
+                    is_error: true,
+                });
+                continue;
+            }
+
+            let workspace_root = self.session.workspace_root();
+            let approval_callback = self.session.recorded_approval_callback();
+            let policy_refusal = match crate::tools::workspace_policy_gate(
+                &tc.name,
+                &legacy_args,
+                workspace_root.as_deref(),
+                approval_callback.as_ref(),
+            )
+            .await
+            {
+                Ok(crate::tools::WorkspacePolicyGate::Refused(refusal)) => Some(refusal.output),
+                Err(error) => Some(format!("tool error: {error:#}")),
+                Ok(
+                    crate::tools::WorkspacePolicyGate::Unruled
+                    | crate::tools::WorkspacePolicyGate::Allowed
+                    | crate::tools::WorkspacePolicyGate::Approved,
+                ) => None,
+            };
+            if let Some(content) = policy_refusal {
+                result_blocks.push(ResultBlock {
+                    tool_use_id: tc.id.clone(),
+                    content,
                     is_error: true,
                 });
                 continue;
@@ -2988,6 +3123,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                             self.session
                                 .cost_ledger
                                 .record_subagent_run(&spent.model, spent.cost_usd);
+                            self.managed_request_ids.extend(spent.managed_request_ids);
                         }
                         if let Some(sa_result) = mgr.get_result(id).await {
                             crate::tools::ToolResult {
@@ -3051,31 +3187,19 @@ impl TurnHost for TurnHostAdapter<'_> {
                 sa_display_status
             );
 
-            hooks::run_hooks(
-                &hcfg,
-                hooks::HookEvent::PostToolUse,
-                &hooks::HookInput {
-                    event: "PostToolUse".to_string(),
-                    session_id: Some(self.session.runtime_session_id.clone()),
-                    model: Some(self.session.model.clone()),
-                    tool_name: Some(tool_name.clone()),
-                    tool_args: Some(tool_args.clone()),
-                    tool_output: Some(tool_result.output.clone()),
-                    message: None,
-                    tool_execution: None,
-                },
-            )
-            .await;
-
-            let content = self
-                .persisted_tool_output(&hcfg, tool_name, tool_args, tool_result.output)
-                .await;
-
-            result_blocks.push(ResultBlock {
-                tool_use_id,
-                content,
-                is_error: !tool_result.success,
-            });
+            let call = ToolCallResponse {
+                id: tool_use_id,
+                name: tool_name,
+                arguments: tool_args.clone(),
+            };
+            let executed = ExecResult {
+                ok: tool_result.success,
+                output: tool_result.output,
+            };
+            result_blocks.push(
+                self.finish_sequential_tool(&call, tool_args, executed)
+                    .await,
+            );
         }
 
         result_blocks
@@ -3168,8 +3292,14 @@ impl TurnHost for TurnHostAdapter<'_> {
         call: &ToolCallResponse,
         args: serde_json::Value,
     ) -> ExecResult {
-        let (result, notes) =
-            crate::tools::collect_approval_notes(self.run_sequential_tool(call, args)).await;
+        let (result, notes) = crate::tools::collect_approval_notes(async {
+            if call.name == "batch" {
+                self.run_batch(call, &args).await
+            } else {
+                self.run_captured_tool(call, args).await
+            }
+        })
+        .await;
         ExecResult {
             ok: result.ok,
             output: crate::tools::with_approval_notes(result.output, &notes),
@@ -3199,7 +3329,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         )
         .await;
 
-        let post_t = hooks::aggregate_transformers(&post_results);
+        let post_t = hooks::aggregate_transformers_for(&post_results, &args);
         let final_output = post_t.updated_mcp_tool_output.unwrap_or(result.output);
         if let Some(ctx) = post_t.additional_context {
             self.hook_additional_contexts.push(ctx);
@@ -3452,8 +3582,6 @@ impl TurnHost for TurnHostAdapter<'_> {
                 if let Ok(mut activity) = self.session.session_activity.lock() {
                     activity.tool_started(id, name, args, workspace_root.as_deref());
                 }
-                self.session
-                    .note_file_edit_started(id, name, args, workspace_root.as_deref());
                 let raw_input = args.to_string();
                 let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
@@ -3990,6 +4118,21 @@ mod tests {
             MAX_TOOL_EVENT_OUTPUT_CHARS + TOOL_EVENT_TRUNCATION_MARKER.chars().count()
         );
         assert!(output.ends_with(TOOL_EVENT_TRUNCATION_MARKER));
+    }
+
+    #[test]
+    fn a_long_path_summary_keeps_the_file_name_and_a_long_command_keeps_its_start() {
+        let path = format!("{}/é/the_file_name.rs", "deep/nested".repeat(9));
+        let summary = tool_event_summary("write_file", &serde_json::json!({ "path": path }));
+        assert_eq!(summary.chars().count(), 80);
+        assert!(summary.starts_with('…'), "{summary}");
+        assert!(summary.ends_with("é/the_file_name.rs"), "{summary}");
+
+        let command = format!("cargo test {}", "--flag ".repeat(20));
+        let summary = tool_event_summary("run_command", &serde_json::json!({ "command": command }));
+        assert_eq!(summary.chars().count(), 80);
+        assert!(summary.starts_with("cargo test --flag"), "{summary}");
+        assert!(summary.ends_with('…'), "{summary}");
     }
 
     #[test]
@@ -5200,6 +5343,159 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn live_turn_runs_each_batched_call_through_its_own_hooks_and_rewind_capture() {
+        let scratch = workspace_scratch();
+        let refused = scratch.path().join("refused.txt");
+        let created = scratch.path().join("created.txt");
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[(
+            "PreToolUse",
+            "input=$(cat); case \"$input\" in *refused.txt*) printf '%s' '{\"decision\":\"block\",\"reason\":\"guarded path\"}';; esac"
+                .to_string(),
+        )]);
+        for hook in session.hooks_config.hooks.values_mut().flatten() {
+            hook.matcher = Some("^write_file$".to_string());
+        }
+        session.save_checkpoint();
+
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["batch", "write_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "writing",
+                    vec![live_call(
+                        "batch-1",
+                        "batch",
+                        serde_json::json!({"calls": [
+                            {"name": "write_file", "args": {"path": refused, "content": "guarded"}},
+                            {"name": "write_file", "args": {"path": created, "content": "written"}}
+                        ]}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        assert!(
+            !refused.exists(),
+            "a blocking hook must stop the call inside the batch"
+        );
+        assert_eq!(std::fs::read_to_string(&created).unwrap(), "written");
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(
+            content.contains("blocked by hook: guarded path"),
+            "{content}"
+        );
+        assert!(is_error);
+
+        session
+            .rewind_to(0, crate::agent::RewindMode::Code)
+            .unwrap();
+        assert!(
+            !created.exists(),
+            "rewind must undo a write made inside the batch"
+        );
+    }
+
+    fn batch_policy_session(decision: &str) -> (tempfile::TempDir, AgentSession) {
+        tool_policy_session("batch", decision)
+    }
+
+    fn tool_policy_session(tool: &str, decision: &str) -> (tempfile::TempDir, AgentSession) {
+        let scratch = workspace_scratch();
+        let policy_dir = scratch.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).unwrap();
+        std::fs::write(
+            policy_dir.join("policy.toml"),
+            format!("[[rules]]\ntool = \"{tool}\"\ndecision = \"{decision}\"\n"),
+        )
+        .unwrap();
+        let mut session = live_session();
+        session.install_workspace_file_authority(
+            crate::path_security::WorkspaceFileAuthority::new(scratch.path()).expect("authority"),
+        );
+        (scratch, session)
+    }
+
+    async fn run_one_batched_write(session: &mut AgentSession, path: &std::path::Path) {
+        run_live_turn(
+            session,
+            LiveTurnTools {
+                available: &["batch", "write_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "writing",
+                    vec![live_call(
+                        "batch-1",
+                        "batch",
+                        serde_json::json!({"calls": [
+                            {"name": "write_file", "args": {"path": path, "content": "written"}}
+                        ]}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn live_turn_stops_a_batch_the_policy_denies_before_any_call_in_it_runs() {
+        let (scratch, mut session) = batch_policy_session("deny");
+        let written = scratch.path().join("written.txt");
+
+        run_one_batched_write(&mut session, &written).await;
+
+        assert!(!written.exists(), "a denied batch must not run its calls");
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(content.contains("Tool `batch` is denied by"), "{content}");
+        assert!(content.contains(".agiworkforce/policy.toml"), "{content}");
+        assert!(is_error);
+    }
+
+    #[tokio::test]
+    async fn live_turn_asks_once_for_a_batch_the_policy_asks_about() {
+        let (scratch, mut session) = batch_policy_session("ask");
+        let written = scratch.path().join("written.txt");
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = asked.clone();
+        let callback: crate::tools::ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen = seen.clone();
+            Box::pin(async move {
+                seen.lock().expect("asked").push(request.kind);
+                crate::tui::approval_broker::ApprovalDecision::Deny
+            })
+        });
+        session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
+
+        run_one_batched_write(&mut session, &written).await;
+
+        assert!(!written.exists(), "a refused batch must not run its calls");
+        assert!(matches!(
+            asked.lock().expect("asked").as_slice(),
+            [crate::tui::approval_broker::ApprovalRequestKind::WorkspacePolicy { tool_name, .. }]
+                if tool_name == "batch"
+        ));
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(
+            content.contains("was not approved under the workspace policy"),
+            "{content}"
+        );
+        assert!(is_error);
+    }
+
     #[tokio::test]
     async fn live_turn_parallel_batch_forwards_raw_output_without_hook_transforms() {
         let scratch = workspace_scratch();
@@ -5344,6 +5640,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_turn_refuses_a_subagent_the_policy_denies_before_spawning_it() {
+        let cases = [
+            (
+                "*",
+                "agent",
+                serde_json::json!({
+                    "action": "run",
+                    "name": "agi-fixture-missing-agent",
+                    "prompt": "do it"
+                }),
+            ),
+            (
+                "task",
+                "task",
+                serde_json::json!({"description": "survey", "prompt": "do it"}),
+            ),
+            (
+                "*",
+                "task",
+                serde_json::json!({"description": "survey", "prompt": "do it"}),
+            ),
+        ];
+        for (denied_tool, called_tool, arguments) in cases {
+            let (_scratch, mut session) = tool_policy_session(denied_tool, "deny");
+
+            run_live_turn(
+                &mut session,
+                LiveTurnTools {
+                    available: &[called_tool],
+                    concurrency_safe: &[],
+                    plan_mode_mutating: &[],
+                },
+                vec![
+                    live_completion(
+                        "delegating",
+                        vec![live_call("spawn-1", called_tool, arguments)],
+                    ),
+                    live_completion("done", vec![]),
+                ],
+            )
+            .await;
+
+            let (content, is_error) = committed_result(&session, "spawn-1");
+            assert!(
+                content.contains(&format!("Tool `{called_tool}` is denied by")),
+                "a policy denying `{denied_tool}` must refuse `{called_tool}`; got: {content}"
+            );
+            assert!(is_error);
+            assert!(
+                session.subagent_manager.is_none(),
+                "a refused `{called_tool}` must not start a subagent"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn live_turn_subagent_batch_rejects_an_unknown_named_agent_without_spawning() {
         let mut session = live_session();
 
@@ -5481,6 +5833,18 @@ mod tests {
                 GenerationVerdict::Continues,
             );
         }
+    }
+
+    #[test]
+    fn an_answer_whose_stream_closed_before_a_stop_is_kept_and_named() {
+        assert_eq!(
+            judge_generation(&outcome("Half an ans", None, vec![])),
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::StreamEndedEarly),
+        );
+        assert_eq!(
+            IncompleteTurnCause::StreamEndedEarly.code(),
+            agiworkforce_protocol::developer_session::TurnFailureCode::StreamInterrupted,
+        );
     }
 
     #[test]
@@ -6031,5 +6395,45 @@ mod tests {
                 .any(|notice| notice == &IncompleteTurnCause::OutputLimitReached.notice()),
             "the TUI must be told the answer was cut; queued: {queued:?}"
         );
+    }
+
+    fn teammate_turn(cost_usd: f64) -> crate::subagent::SubagentUsage {
+        crate::subagent::SubagentUsage {
+            model: "teammate-model".to_string(),
+            output_tokens: 10,
+            cost_usd,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_lead_counts_teammate_spend_and_shares_only_what_its_cap_leaves() {
+        let context = crate::context::gather_system_context();
+        let team = crate::teams::TeamManager::new();
+        let mut lead = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        lead.team_manager = Some(team.clone());
+        lead.max_budget_usd = Some(2.0);
+        lead.cost_ledger.total_usd = 0.5;
+        let mut teammate = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        teammate.team_manager = Some(team.clone());
+        teammate.team_identity = Some("researcher".to_string());
+
+        team.record_teammate_spend(teammate_turn(0.75));
+        teammate.settle_team_spend();
+        assert!(teammate.cost_ledger.total_usd.abs() < 1e-12);
+
+        lead.settle_team_spend();
+        assert!((lead.cost_ledger.total_usd - 1.25).abs() < 1e-12);
+        assert!((lead.cost_ledger.subagent_usd - 0.75).abs() < 1e-12);
+        let share = team
+            .turn_budget_usd(1)
+            .expect("the cap leaves headroom")
+            .expect("a capped lead caps its team");
+        assert!((share - 0.75).abs() < 1e-12);
+
+        team.record_teammate_spend(teammate_turn(0.75));
+        assert!(team.turn_budget_usd(1).is_err());
+        lead.settle_team_spend();
+        assert!((lead.cost_ledger.total_usd - 2.0).abs() < 1e-12);
     }
 }

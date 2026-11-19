@@ -9,9 +9,10 @@ import {
 } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { isAudioRoute, type AudioRoute } from '@/src/features/voice/services/audioRoute';
+import type { AccentToken } from '@/src/ui/theme/tokens';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
-export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
+export type AccentColor = AccentToken;
 export type FontPreference = 'default' | 'system' | 'dyslexic';
 export const LIST_ARRANGEMENTS = ['by-project', 'one-list'] as const;
 export type ListArrangement = (typeof LIST_ARRANGEMENTS)[number];
@@ -53,10 +54,13 @@ export interface SettingsState {
   voicePushToTalk: boolean;
   voiceOnboardingSeen: boolean;
   dictationOnboardingSeen: boolean;
+  voiceHintSeen: boolean;
   audioRoute: AudioRoute;
   isTemporaryChat: boolean;
   temporaryChatPersonalized: boolean;
   listArrangement: ListArrangement;
+  sidePanelMoreOpen: boolean;
+  sidePanelProjectsFolded: boolean;
 
   setToolApprovalPolicy: (policy: ToolApprovalPolicy) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -71,10 +75,13 @@ export interface SettingsState {
   setVoicePushToTalk: (enabled: boolean) => void;
   setVoiceOnboardingSeen: (seen: boolean) => void;
   setDictationOnboardingSeen: (seen: boolean) => void;
+  setVoiceHintSeen: (seen: boolean) => void;
   setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setTemporaryChatPersonalized: (personalized: boolean) => void;
   setListArrangement: (arrangement: ListArrangement) => void;
+  setSidePanelMoreOpen: (open: boolean) => void;
+  setSidePanelProjectsFolded: (folded: boolean) => void;
 }
 
 /**
@@ -125,10 +132,13 @@ export const useSettingsStore = create<SettingsState>()(
       voicePushToTalk: false,
       voiceOnboardingSeen: false,
       dictationOnboardingSeen: false,
+      voiceHintSeen: false,
       audioRoute: 'auto',
       isTemporaryChat: false,
       temporaryChatPersonalized: true,
       listArrangement: 'by-project',
+      sidePanelMoreOpen: false,
+      sidePanelProjectsFolded: false,
 
       setToolApprovalPolicy: (policy) => set({ toolApprovalPolicy: policy }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
@@ -143,17 +153,26 @@ export const useSettingsStore = create<SettingsState>()(
       setVoicePushToTalk: (enabled) => set({ voicePushToTalk: enabled }),
       setVoiceOnboardingSeen: (seen) => set({ voiceOnboardingSeen: seen }),
       setDictationOnboardingSeen: (seen) => set({ dictationOnboardingSeen: seen }),
+      setVoiceHintSeen: (seen) => set({ voiceHintSeen: seen }),
       setAudioRoute: (route) => set({ audioRoute: route }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setTemporaryChatPersonalized: (personalized) =>
         set({ temporaryChatPersonalized: personalized }),
       setListArrangement: (arrangement) => set({ listArrangement: arrangement }),
+      setSidePanelMoreOpen: (open) => set({ sidePanelMoreOpen: open }),
+      setSidePanelProjectsFolded: (folded) => set({ sidePanelProjectsFolded: folded }),
     }),
     {
       name: 'settings-store',
       storage: createJSONStorage(() => mmkvStorage),
       version: 3,
       migrate: migratePersistedSettings,
+      partialize: ({ isTemporaryChat: _sessionOnly, ...persisted }) => persisted,
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<SettingsState>),
+        isTemporaryChat: false,
+      }),
       skipHydration: true,
       onRehydrateStorage: () => (state, error) => {
         if (error) console.warn('[settingsStore] Hydration failed:', error);
@@ -163,6 +182,8 @@ export const useSettingsStore = create<SettingsState>()(
           }
           if (!isAudioRoute(state.audioRoute)) state.audioRoute = 'auto';
           if (!isListArrangement(state.listArrangement)) state.listArrangement = 'by-project';
+          state.sidePanelMoreOpen = state.sidePanelMoreOpen === true;
+          state.sidePanelProjectsFolded = state.sidePanelProjectsFolded === true;
         }
       },
     },

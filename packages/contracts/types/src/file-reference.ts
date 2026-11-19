@@ -1,4 +1,4 @@
-import attachmentPolicy from './attachment-policy.json';
+import attachmentPolicy from './attachment-policy.json' with { type: 'json' };
 /**
  * @file file-reference.ts
  * @module @agiworkforce/types/file-reference

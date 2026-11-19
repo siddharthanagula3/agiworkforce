@@ -374,8 +374,7 @@ export function LinkedDevicesPanel() {
           Linked devices
         </p>
         <p style={{ margin: '0 0 var(--space-2)', fontSize: 12, color: 'var(--text-3)' }}>
-          Unlinking revokes the device&apos;s stored credential and removes it from this list. The
-          app signs out the next time it reaches the server.
+          Unlinking revokes the device&apos;s credential. It signs out when it next connects.
         </p>
 
         {loading ? (

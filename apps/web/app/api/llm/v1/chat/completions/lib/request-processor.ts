@@ -26,7 +26,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { isAppError } from '@agiworkforce/utils';
 import { assertAssistantContinuationSeed } from '@/lib/server/assistant-content-edits';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
@@ -55,13 +55,7 @@ import {
   normalizeResearchDeliverable,
   RESEARCH_GUIDANCE_MAX_CHARS,
 } from '@agiworkforce/types';
-import {
-  DATA_REGIONS,
-  DEFAULT_DATA_REGION,
-  NON_US_VENDOR_TRANSPORTS,
-  allowedDeveloperJurisdictions,
-  excludedTransportsFor,
-} from '@agiworkforce/compliance';
+import { DEFAULT_DATA_REGION, allowedDeveloperJurisdictions } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
 import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
@@ -84,7 +78,12 @@ import {
 import { demoteLowConfidencePremiumSelection } from './route-selection';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
 import { readLockdown } from './connector-tool-permissions';
-import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
+import {
+  MAX_MESSAGE_LENGTH,
+  MAX_STATELESS_TOTAL_LENGTH,
+  ToolChoiceSchema,
+  ToolDefinitionSchema,
+} from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
@@ -105,10 +104,7 @@ import {
   webSearchToolDef,
   webSearchBackendConfigured,
 } from '@/lib/web-search/web-search-tool';
-import {
-  resolveUserRoutingPreferences,
-  type UserRoutingPreferences,
-} from '@/lib/services/user-routing-preferences';
+import { resolveUserRoutingPreferences } from '@/lib/services/user-routing-preferences';
 import { peekGroundingPool } from '@/lib/web-search/grounding-pool';
 import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
@@ -141,6 +137,11 @@ import {
   itineraryToolDefinition,
 } from '@/lib/places/itinerary-tool';
 import {
+  ANSWER_UI_CARD_KIND,
+  answerUiToolDefinition,
+  isAnswerUiTool,
+} from '@/lib/services/answer-ui-tool-service';
+import {
   PRODUCT_COMPARISON_CARD_KIND,
   asksForProductComparison,
   productComparisonToolDefinition,
@@ -166,7 +167,11 @@ import {
   hasExplicitWebSearchRequestOptOut as hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { MEMORY_COMMAND_KINDS, extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
+import {
+  MEMORY_COMMAND_KINDS,
+  extractCandidateMemoryFacts,
+  parseExplicitMemoryCommand,
+} from '@agiworkforce/agent-core';
 import {
   MEMORY_COMMAND_CLIENT_SURFACES,
   MEMORY_COMMAND_TURN_STATUSES,
@@ -174,7 +179,11 @@ import {
   memoryLearningText,
 } from '@/lib/services/memory-commands';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
-import { fileSearchToolDefinitions, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import {
+  OPEN_FILE_TOOL_NAME,
+  fileSearchToolDefinitions,
+  isFileSearchTool,
+} from '@/lib/server/tools/file-search-tool';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import {
   asksForSchedule,
@@ -216,7 +225,6 @@ import {
   listAvailableManagedProviderIds,
   resolveProviderFromModel,
 } from '@/lib/services/provider-adapter-service';
-import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
@@ -237,7 +245,7 @@ import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/li
 import {
   CLARIFY_TOOL_NAME,
   createClarifyToolDefinition,
-  shouldOfferClarifyTool,
+  turnWarrantsClarifyTool,
 } from '@/lib/services/clarify-tool-service';
 import {
   ANTHROPIC_THINKING_BUDGET,
@@ -292,11 +300,9 @@ import {
   isCredentialUnfunded,
   isRoutePolicyExcluded,
   MODEL_POLICY_UNAVAILABLE,
-  observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
   developerJurisdictionAllowed,
-  modelsPastDeprecationDate,
   resolveAutoRoute,
   runtimeProfileImplementsTask,
   speedFirstSlots,
@@ -304,7 +310,6 @@ import {
 } from '@agiworkforce/routing';
 import type {
   AutoRouteDecision,
-  AutoRoutingRequest,
   RoutingAttachment,
   RoutingRuntimeState,
   RoutingTaskType,
@@ -330,11 +335,22 @@ import { freeLaneObserves, resolveFreeLaneMode } from '@/lib/services/free-lane/
 import {
   resolveWebCloudRolloutInputs,
   resolveWithObservedCapabilities,
-  type WebCloudRolloutInputs,
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
+import {
+  MANAGED_CLOUD_RUNTIME_PROFILE_ID,
+  MANAGED_CLOUD_TRUST_MODE,
+  buildWebCloudAutoRoutingRequest,
+  resolveResidencyRegion,
+  resolveWebCloudModelRoute,
+} from '@/lib/server/managed-cloud-routing/routing-request';
+import {
+  admitManagedCloudRoute,
+  type ManagedCloudPolicySnapshot,
+} from '@/lib/server/managed-cloud-routing/admission';
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
+import { fillEmptyAssistantTurns } from '@/features/chat/lib/assistant-history-turn';
 import {
   productArtifactConnectors,
   productCapabilityFacts,
@@ -347,6 +363,7 @@ import {
 import { CHAT_SYSTEM_PROMPT_ID, chatSystemPromptSections } from '@/lib/prompts/chat-system-prompt';
 import {
   renderChatToolInventory,
+  type ChatSetup,
   type ChatTurnMemory,
 } from '@/lib/prompts/chat-system-prompt-assembly';
 import type { PromptId } from '@/lib/prompts/prompt-manifest';
@@ -455,7 +472,11 @@ import {
   resolveInteractiveTurnContext,
   type InteractiveTurnContext,
 } from '@/lib/services/turn-context-service';
-import type { PastChatCitation } from '@/lib/past-chat-citation';
+import {
+  surfacePublishesArtifactApps,
+  surfaceRendersWritingCards,
+} from '@/lib/chat-surface-rendering';
+import type { PastChatCitation } from '@agiworkforce/types';
 import {
   createSkillToolDefinition,
   formatSkillsForToolPrompt,
@@ -486,7 +507,6 @@ import {
   extractToolNames,
   resolveChatSystemPrompt,
   servingModelFor,
-  type ChatSetup,
   type ModelSelection,
 } from './capability-preamble';
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
@@ -496,11 +516,24 @@ import {
   MAP_SEARCH_TOOL_NAME,
 } from '@/lib/services/map-search-tool-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
+import {
+  applyAttachmentTurnStep,
+  attachmentTurnTokenLimitForRoute,
+  type AttachmentTurnLedgerState,
+} from './attachment-turn-budget';
+import {
+  appendLargeFileText,
+  attachedFilePassageSearch,
+  attachmentAssetIdsOf,
+  createPreparedAttachmentResolver,
+} from './prepared-attachments';
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   buildComputerUseSoftCapWarningHeader,
   buildQuotaWarningHeader,
+  getPlanUsageBudgetCents,
 } from '@/lib/server/managed-usage-policy';
+import { getAccountOverageMicrousd } from '@/lib/server/rolling-usage';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   enforceManagedContentSafetyPreference,
@@ -534,6 +567,7 @@ import {
   resolveTurnToolProhibition,
   type TurnToolProhibition,
 } from './turn-tool-prohibition';
+import { type TurnToolOffer, withheldToolNames, withheldToolsTurnNotice } from './turn-tool-offer';
 
 const ResearchDomainRulesSchema = z
   .array(
@@ -885,7 +919,13 @@ export type ImplicitManagedToolIntentContext = {
   prompt: string;
   taskType: RoutingTaskType;
   planTier: string | null | undefined;
+  surface?: CloudChatSurface;
 };
+
+// These clients run their own file and shell tools on the developer's machine.
+// A cloud sandbox offered on top of them repeats tool names such as read_file,
+// which the provider rejects, and moves a local task to Managed Cloud.
+const IMPLICIT_SANDBOX_EXCLUDED_SURFACES = new Set<CloudChatSurface>(['vscode', 'cli']);
 
 export type TurnWebDomainPolicy =
   | { ok: true; policy: ResearchDomainPolicy | null }
@@ -965,12 +1005,14 @@ export function applyImplicitManagedToolIntent(
       (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
         RE_DATA_EXECUTION_SUBJECT.test(context.prompt)));
 
-  if (request.code_execution === undefined && hasExplicitCodeExecutionIntent) {
+  if (
+    request.code_execution === undefined &&
+    hasExplicitCodeExecutionIntent &&
+    (context.surface === undefined || !IMPLICIT_SANDBOX_EXCLUDED_SURFACES.has(context.surface))
+  ) {
     request.code_execution = true;
   }
 }
-
-const WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID = 'web/cloud-chat';
 
 /**
  * The server never drives a browser or a desktop itself. A browser-control turn
@@ -983,7 +1025,7 @@ function taskTypeServedByWebRuntime(
   taskType: RoutingTaskType,
   request: Pick<ChatCompletionRequest, 'tools'>,
 ): RoutingTaskType {
-  if (runtimeProfileImplementsTask(WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID, taskType)) return taskType;
+  if (runtimeProfileImplementsTask(MANAGED_CLOUD_RUNTIME_PROFILE_ID, taskType)) return taskType;
   return (request.tools?.length ?? 0) > 0 ? 'agentic' : 'general';
 }
 
@@ -1071,6 +1113,13 @@ const AMBIENT_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSu
   'chrome',
 ]);
 
+const MEMORY_RECALL_OR_UPDATE_RE =
+  /\b(?:(?:do|did)\s+you\s+remember|what\s+(?:do\s+)?you\s+remember|(?:can|could)\s+you\s+recall|(?:my|your|saved)\s+memor(?:y|ies))\b/i;
+
+function asksForMemory(message: string): boolean {
+  return parseExplicitMemoryCommand(message) !== null || MEMORY_RECALL_OR_UPDATE_RE.test(message);
+}
+
 export function applyMemoryToolCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1079,6 +1128,7 @@ export function applyMemoryToolCapability(
     memoryEnabled: boolean;
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
+    userMessage: string;
   },
 ): void {
   if (
@@ -1090,7 +1140,8 @@ export function applyMemoryToolCapability(
     request.memory_enabled === false ||
     request.personalization === false ||
     request.memory_command !== undefined ||
-    !AMBIENT_TOOL_SURFACES.has(params.surface)
+    !AMBIENT_TOOL_SURFACES.has(params.surface) ||
+    !asksForMemory(params.userMessage)
   ) {
     return;
   }
@@ -1126,6 +1177,24 @@ export function applyFileSearchToolCapability(
   ];
 }
 
+export function scheduleToolSurfaceEligible(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): boolean {
+  return (
+    params.toolsCapable &&
+    params.ambientToolsAllowed &&
+    request.stream === true &&
+    !params.isTemporary &&
+    AMBIENT_TOOL_SURFACES.has(params.surface)
+  );
+}
+
 export function applyScheduleToolCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1134,22 +1203,35 @@ export function applyScheduleToolCapability(
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
     schedulesAllowed: boolean;
+    userMessage: string;
   },
-): void {
-  if (
-    !params.toolsCapable ||
-    !params.ambientToolsAllowed ||
-    !params.schedulesAllowed ||
-    !request.stream ||
-    params.isTemporary ||
-    !AMBIENT_TOOL_SURFACES.has(params.surface)
-  ) {
-    return;
-  }
+): TurnToolOffer {
+  if (!params.schedulesAllowed || !scheduleToolSurfaceEligible(request, params)) return null;
+  if (!asksForSchedule(params.userMessage)) return null;
+  const definition = scheduleToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
-    scheduleToolDefinition(),
+    definition,
   ];
+  return { name: definition.function.name, fitsTurn: true };
+}
+
+export function pluginDraftToolSurfaceEligible(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): boolean {
+  return (
+    params.toolsCapable &&
+    params.ambientToolsAllowed &&
+    request.stream === true &&
+    !params.isTemporary &&
+    PLUGIN_DRAFT_CARD_SURFACES.has(params.surface)
+  );
 }
 
 export function applyPluginDraftToolCapability(
@@ -1160,22 +1242,17 @@ export function applyPluginDraftToolCapability(
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
     pluginDraftsAllowed: boolean;
+    userMessage: string;
   },
-): void {
-  if (
-    !params.toolsCapable ||
-    !params.ambientToolsAllowed ||
-    !params.pluginDraftsAllowed ||
-    !request.stream ||
-    params.isTemporary ||
-    !PLUGIN_DRAFT_CARD_SURFACES.has(params.surface)
-  ) {
-    return;
-  }
+): TurnToolOffer {
+  if (!params.pluginDraftsAllowed || !pluginDraftToolSurfaceEligible(request, params)) return null;
+  if (!asksForPluginDraft(params.userMessage)) return null;
+  const definition = pluginDraftToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isPluginDraftTool(tool.function.name)),
-    pluginDraftToolDefinition(),
+    definition,
   ];
+  return { name: definition.function.name, fitsTurn: true };
 }
 
 export function applyManagedOfficeFileCreation(
@@ -1189,19 +1266,6 @@ export function applyManagedOfficeFileCreation(
   ];
 }
 
-/**
- * Offer the model a way to ask a real question, so an ambiguous request gets
- * the clarify card instead of prose asking the reader to describe their choice
- * in words. Offered, never forced: unlike the map tool this sets no
- * tool_choice, because most turns should just be answered.
- *
- * The tool's own description could not reliably keep a fast model from
- * calling it on a fully specified turn, so explicit intent is filtered
- * deterministically here: the tool is not even offered when the turn already
- * carries search/research, a long message, a URL, an attachment, a code
- * fence, or an opening verb naming the action to take. See
- * `shouldOfferClarifyTool`.
- */
 export function applyClarifyCardCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1210,25 +1274,45 @@ export function applyClarifyCardCapability(
     userMessage: string;
     hasAttachment: boolean;
   },
-): void {
+): TurnToolOffer {
   if (
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
+    request.research === true ||
     !request.x_interactive_cards?.supported.includes('clarify.v1') ||
-    !shouldOfferClarifyTool({
+    !turnWarrantsClarifyTool({
       userMessage: params.userMessage,
       hasAttachment: params.hasAttachment,
-      research: request.research === true,
+      research: false,
       agiWork: request.work_mode === 'agiwork',
     })
   ) {
-    return;
+    return null;
   }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== CLARIFY_TOOL_NAME),
     createClarifyToolDefinition(),
   ];
+  return { name: CLARIFY_TOOL_NAME, fitsTurn: true };
+}
+
+export function applyAnswerUiCapability(
+  request: ChatCompletionRequest,
+  params: { toolsCapable: boolean },
+): boolean {
+  if (
+    !params.toolsCapable ||
+    request.stream !== true ||
+    request.x_interactive_cards?.supported.includes(ANSWER_UI_CARD_KIND) !== true
+  ) {
+    return false;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isAnswerUiTool(tool.function.name)),
+    answerUiToolDefinition(),
+  ];
+  return true;
 }
 
 export function applyMapSearchCardCapability(
@@ -1246,16 +1330,16 @@ export function applyMapSearchCardCapability(
      */
     placesSearchOffered: boolean;
   },
-): void {
+): TurnToolOffer {
   if (
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
+    !request.x_interactive_cards?.supported.includes('map-search.v1') ||
     params.placesSearchOffered ||
-    !hasMapSearchIntent(params.userMessage) ||
-    !request.x_interactive_cards?.supported.includes('map-search.v1')
+    !hasMapSearchIntent(params.userMessage)
   ) {
-    return;
+    return null;
   }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MAP_SEARCH_TOOL_NAME),
@@ -1267,6 +1351,7 @@ export function applyMapSearchCardCapability(
       function: { name: MAP_SEARCH_TOOL_NAME },
     };
   }
+  return { name: MAP_SEARCH_TOOL_NAME, fitsTurn: true };
 }
 
 const CARD_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
@@ -1284,25 +1369,38 @@ export function applyItineraryToolCapability(
     userMessage: string;
     placesAvailable: boolean;
   },
-): boolean {
+): TurnToolOffer {
   if (
     !CARD_TOOL_SURFACES.has(params.surface) ||
     !params.toolsCapable ||
     !request.stream ||
     !params.placesAvailable ||
-    !asksForItinerary(params.userMessage) ||
-    !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND)
+    !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND) ||
+    !asksForItinerary(params.userMessage)
   ) {
-    return false;
+    return null;
   }
+  const definition = itineraryToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isItineraryTool(tool.function.name)),
-    itineraryToolDefinition(),
+    definition,
   ];
-  return true;
+  return { name: definition.function.name, fitsTurn: true };
 }
 
-export function shouldOfferProductComparison(
+export function placesToolOffer(params: {
+  surface: CloudChatSurface;
+  requirement: PlacesRequirement;
+  toolsCapable: boolean;
+  stream: boolean | undefined;
+  backendConfigured: boolean;
+}): TurnToolOffer {
+  if (!params.toolsCapable || params.stream !== true || !params.backendConfigured) return null;
+  if (!params.requirement.offered) return null;
+  return { name: placesSearchToolDef().function.name, fitsTurn: true };
+}
+
+export function productComparisonOffer(
   request: ChatCompletionRequest,
   params: {
     surface: CloudChatSurface;
@@ -1310,15 +1408,18 @@ export function shouldOfferProductComparison(
     userMessage: string;
     tools: readonly unknown[] | undefined;
   },
-): boolean {
-  return (
-    CARD_TOOL_SURFACES.has(params.surface) &&
-    params.toolsCapable &&
-    request.stream === true &&
-    classifyAttachedSearchTool(params.tools) !== null &&
-    asksForProductComparison(params.userMessage) &&
-    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) === true
-  );
+): TurnToolOffer {
+  if (
+    !CARD_TOOL_SURFACES.has(params.surface) ||
+    !params.toolsCapable ||
+    request.stream !== true ||
+    classifyAttachedSearchTool(params.tools) === null ||
+    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) !== true ||
+    !asksForProductComparison(params.userMessage)
+  ) {
+    return null;
+  }
+  return { name: productComparisonToolDefinition().function.name, fitsTurn: true };
 }
 
 export function imageToolsForTurn(
@@ -1433,6 +1534,16 @@ export function resolveManagedUsageLeaseSeconds(
   return canEnterToolLoop ? 86_400 : 900;
 }
 
+export type LargeFileTurn = AttachmentTurnLedgerState & {
+  assetIds: string[];
+  attachmentAssetIds: string[];
+  /**
+   * Set while the step processing built and charged is unsent: the file-tool
+   * allowance of that step, which the tool loop's first step uses as is.
+   */
+  pendingStepAllowance?: number;
+};
+
 export type ProcessedRequest = {
   toolSchemaState?: ToolSchemaState;
   requestId: string;
@@ -1536,6 +1647,8 @@ export type ProcessedRequest = {
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
   noTrainingOnly?: boolean;
+  /** Every per-account routing rule this turn read, for the calls that follow it. */
+  routingPolicy?: ManagedCloudPolicySnapshot;
   /** Eligibility and subject facts for any semantic decision this turn schedules. */
   decisionScope?: SemanticDecisionScope;
   secretRedactionCount?: number;
@@ -1567,6 +1680,7 @@ export type ProcessedRequest = {
   executionRequirement?: CodeExecutionRequirement;
   executionEnforcement?: RequiredExecutionEnforcement;
   turnToolProhibition?: TurnToolProhibition;
+  turnWithheldTools?: readonly string[];
   /**
    * The files attached to the turn being sent, with their bytes. Carried so the
    * tool loop can put them in the execution sandbox the moment it acquires one,
@@ -1574,6 +1688,12 @@ export type ProcessedRequest = {
    */
   turnAttachments?: readonly TurnAttachment[];
   truncatedAttachments?: readonly string[];
+  /**
+   * Present only in a turn where hydration resolved a file above the inline
+   * limit: the large files' ids and the turn ledger, carried through every
+   * checkpoint and continuation of the turn.
+   */
+  largeFileTurn?: LargeFileTurn;
   /**
    * Whether this turn is a place question, and how the places tool was
    * arranged. The tool loop reads it to release the forced choice after the
@@ -1649,6 +1769,12 @@ export type ProcessedRequest = {
      * key at the one place that knows both facts.
      */
     promptCacheScope?: PromptCacheScope;
+    /**
+     * Facts true only for this turn (the current time), placed after the first
+     * `afterMessages` messages so the system prompt and history stay
+     * byte-identical from one turn to the next.
+     */
+    turnContext?: { text: string; afterMessages: number };
   };
 };
 
@@ -1845,6 +1971,33 @@ export function extractTextContent(
     .join('\n');
 }
 
+/**
+ * Only the newest user message is held to a length here. Earlier messages of a
+ * saved chat are fitted to the model's context window by compaction, which then
+ * refuses a newest message that no fit can send.
+ */
+export function messageLengthRefusal(
+  messages: ReadonlyArray<{ role: string; content: Parameters<typeof extractTextContent>[0] }>,
+  conversationBound: boolean,
+): string | null {
+  let latestUserIndex = -1;
+  messages.forEach((message, index) => {
+    if (message.role === 'user') latestUserIndex = index;
+  });
+  let totalLength = 0;
+  for (const [index, message] of messages.entries()) {
+    const length = extractTextContent(message.content).length;
+    if (index === latestUserIndex && length > MAX_MESSAGE_LENGTH) {
+      return `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`;
+    }
+    totalLength += length;
+  }
+  if (!conversationBound && totalLength > MAX_STATELESS_TOTAL_LENGTH) {
+    return `Total message content exceeds maximum length of ${MAX_STATELESS_TOTAL_LENGTH} characters`;
+  }
+  return null;
+}
+
 export function collectManagedPromptMaterials(request: {
   messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
   tools?: readonly unknown[];
@@ -1854,13 +2007,97 @@ export function collectManagedPromptMaterials(request: {
   return materials;
 }
 
+const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
+
+/**
+ * The prompt a turn reserves usage for. Compaction fits the messages to the
+ * selected model's context window before anything is sent, so a long saved chat
+ * reserves no more than that window.
+ */
+export function estimateManagedPromptTokens(request: {
+  model: string;
+  messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
+  tools?: readonly unknown[];
+}): number {
+  return managedPromptTokensFor(rawManagedPromptTokens(request), request.model);
+}
+
+function rawManagedPromptTokens(request: {
+  messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
+  tools?: readonly unknown[];
+}): number {
+  return collectManagedPromptMaterials(request).reduce(
+    (sum, material) => sum + Math.ceil(material.length / 3.5) + 4,
+    0,
+  );
+}
+
+function managedPromptTokensFor(rawTokens: number, model: string): number {
+  const contextWindow = getModelMetadataById(model)?.contextWindow;
+  return Math.min(
+    rawTokens,
+    MAX_ESTIMATED_PROMPT_TOKENS,
+    contextWindow && contextWindow > 0 ? contextWindow : MAX_ESTIMATED_PROMPT_TOKENS,
+  );
+}
+
+/**
+ * Takes the current time out of the capability preamble. It changes every
+ * minute, so it travels as turn context after the conversation; left in the
+ * system prompt it would make every provider re-read the whole history.
+ */
+export function separateTurnTime(timedCapabilityPreamble: string | null): {
+  capabilityPreamble: string | null;
+  turnTime: string;
+} {
+  const split = timedCapabilityPreamble
+    ? splitSystemPromptCacheBoundary(timedCapabilityPreamble)
+    : undefined;
+  if (!split) return { capabilityPreamble: timedCapabilityPreamble, turnTime: '' };
+  return {
+    capabilityPreamble: `${split.stablePrefix}${SYSTEM_PROMPT_CACHE_BOUNDARY}`,
+    turnTime: split.dynamicSuffix,
+  };
+}
+
+/**
+ * Instructions that hold for this turn only go behind every leading system
+ * message and after the cache boundary, so the cached system prefix is the same
+ * bytes on the turns that carry them and on the turns that do not. Each stays a
+ * message of its own: context fitting may shorten a message that starts at the
+ * boundary, and a policy notice must reach the model whole.
+ */
+export function placeTurnSystemNotices(
+  messages: ProcessedRequest['llmRequest']['messages'],
+  notices: readonly string[],
+): void {
+  if (notices.length === 0) return;
+  const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
+  const insertIndex = firstNonSystemIndex === -1 ? messages.length : firstNonSystemIndex;
+  const boundaryPlaced = messages
+    .slice(0, insertIndex)
+    .some((message) => message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY));
+  const texts = boundaryPlaced ? notices : [SYSTEM_PROMPT_CACHE_BOUNDARY, ...notices];
+  messages.splice(
+    insertIndex,
+    0,
+    ...texts.map((content) => ({
+      role: 'system' as const,
+      content,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    })),
+  );
+}
+
 /**
  * Assembles the leading system message so the cacheable prefix (static
  * capability preamble + custom instructions) stays byte-identical across
  * turns of one conversation, with everything that varies per turn
- * (timestamp, matched skills, recalled memories) folded in after
+ * (matched skills, recalled memories) folded in after
  * `SYSTEM_PROMPT_CACHE_BOUNDARY`. `capabilityPreamble` already carries that
- * boundary ahead of its own dynamic time context; `dynamicSystemAddition`
+ * boundary ahead of any dynamic context of its own; `dynamicSystemAddition`
  * (skill/memory content) is inserted right after it, and
  * `customInstructionsPreamble` (static, per-user config) joins the stable
  * side. `projectInstruction` joins it too: the workspace sets it once, so it
@@ -2474,7 +2711,7 @@ export function buildTaskFamilySignals(
     estimatedInputTokens: context.estimatedInputTokens,
     messageCharCount: context.messageCharCount,
     priorTurnCount: context.priorTurnCount,
-    runtimeProfileId: WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID,
+    runtimeProfileId: MANAGED_CLOUD_RUNTIME_PROFILE_ID,
   };
 }
 
@@ -2563,7 +2800,6 @@ export async function resolveRouteHealthRuntimeState(
   };
 }
 
-const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';
 const AUTO_ROUTE_UNAVAILABLE_MESSAGE = `Auto could not find a model for this request on your plan. Choose a model from the picker. ${PAID_UPGRADE_ACCESS_NOTE}`;
 const EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE =
   'The selected model is not available for this task in Managed Web chat.';
@@ -2571,156 +2807,13 @@ const MODEL_NOT_AVAILABLE_IN_REGION_MESSAGE =
   'This model is not available in your region. Choose Auto or another model.';
 
 /**
- * Transports managed routing will not dispatch through.
- *
- * Not a vendor boycott. These are the endpoints the model vendors run
- * themselves, outside the United States, and every model reachable through one
- * is also carried by a gateway that re-hosts it at the same published price,
- * so excluding these transports costs no model, where excluding the models
- * themselves would cost the whole reasoning ladder.
- *
- * A model the user names is still served, through a permitted host: they chose
- * a model, not a datacentre.
- *
- * This is the home region's answer, which `DATA_REGIONS.us` states as an
- * exclusion set in `@agiworkforce/compliance`. A region that pins processing
- * inside its own territory states an ALLOW set instead, because a transport
- * whose processing location is unpublished cannot be assumed to sit inside it;
- * no such region is provisioned, so nothing selects one here yet.
- */
-const EXCLUDED_ROUTE_HOSTS: ReadonlySet<string> = excludedTransportsFor(
-  { mode: DATA_REGIONS.us.inferenceRouteSetMode, transports: new Set(NON_US_VENDOR_TRANSPORTS) },
-  NON_US_VENDOR_TRANSPORTS,
-);
-
-export function buildWebCloudAutoRoutingRequest(
-  model: string,
-  subscriptionTier: string | undefined,
-  taskType: RoutingTaskType,
-  usage?: {
-    budgetRemainingCents?: number;
-    estimatedInputTokens?: number;
-    estimatedOutputTokens?: number;
-    taskFamily?: TaskFamily | null;
-  },
-  /**
-   * Reorder-only slot preference for THIS request. Omitted on every call but
-   * the free lane's own, so nothing else can be moved by it.
-   */
-  preferSlots?: readonly string[],
-  /**
-   * Live route health, the route (if any) already warm for this
-   * conversation's cache, and the model the conversation is pinned to.
-   * `preferredRouteId` is reorder-only: `resolveAutoRoute` still requires the
-   * preferred route to already be admissible for the resolved model, so an
-   * exact-model selection can never be steered onto a different model by a
-   * stale preference. `currentModelKey`/`previousTaskType` reach
-   * `resolveAutoRoute`'s own session-stickiness gate instead, and only apply
-   * when `model` is an Auto alias, an explicit selection returns before that
-   * gate is ever reached.
-   */
-  routeHealth?: {
-    runtimeState?: RoutingRuntimeState | null;
-    unfundedRouteIds?: ReadonlySet<string>;
-    policyExcludedRouteIds?: ReadonlySet<string>;
-    preferredRouteId?: string | null;
-    currentModelKey?: string | null;
-    previousTaskType?: RoutingTaskType | null;
-  },
-  availableProviderIds?: ReadonlySet<string>,
-  zeroDataRetentionOnly?: boolean,
-  zeroDataRetentionProviders?: ReadonlySet<string>,
-  /**
-   * The workspace policy snapshot, so the resolver refuses a candidate the
-   * workspace may not run instead of the caller filtering the plan afterwards.
-   */
-  organizationPolicy?: ModelAccessPolicy | null,
-  /**
-   * The user's own saved routing preferences, as `/api/me/routing-preferences`
-   * stores them. `usOnly` is enforced by both resolvers and is threaded here
-   * the same way as `zeroDataRetentionOnly`.
-   */
-  userRoutingPreferences?: UserRoutingPreferences | null,
-  rollout?: WebCloudRolloutInputs,
-  /**
-   * The region the workspace has pinned its data to, when it has pinned one
-   * other than the region this deployment already processes in. Admission is
-   * fail-closed against it: every candidate must publish that region, so a
-   * route with no published residency answer is refused rather than assumed.
-   */
-  residencyRegion?: string | null,
-  requiredRouteId?: string | null,
-  noTrainingOnly?: boolean,
-): AutoRoutingRequest {
-  const gatewayFlagHarnessIds = admittedHarnessIds();
-  const developerJurisdictions = allowedDeveloperJurisdictions(
-    residencyRegion ?? rollout?.region ?? DEFAULT_DATA_REGION,
-  );
-  return {
-    selection: model,
-    taskType,
-    subscriptionTier,
-    trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
-    runtimeProfileId: WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID,
-    retiredModelKeys: modelsPastDeprecationDate(),
-    ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
-    ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
-    ...(usage?.budgetRemainingCents !== undefined
-      ? { budgetRemainingCents: usage.budgetRemainingCents }
-      : {}),
-    ...(usage?.estimatedInputTokens !== undefined
-      ? { estimatedInputTokens: usage.estimatedInputTokens }
-      : {}),
-    ...(usage?.estimatedOutputTokens !== undefined
-      ? { estimatedOutputTokens: usage.estimatedOutputTokens }
-      : {}),
-    ...(usage?.taskFamily !== undefined ? { taskFamily: usage.taskFamily } : {}),
-    ...(routeHealth?.runtimeState
-      ? {
-          runtimeState: routeHealth.runtimeState,
-          observedRouteHealth: observedRouteHealthFromSnapshots(
-            routeHealth.runtimeState.routeHealthSnapshots,
-            routeHealth.unfundedRouteIds,
-            routeHealth.policyExcludedRouteIds,
-          ),
-        }
-      : {}),
-    ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
-    ...(requiredRouteId ? { requiredRouteId } : {}),
-    ...(routeHealth?.currentModelKey ? { currentModelKey: routeHealth.currentModelKey } : {}),
-    ...(routeHealth?.previousTaskType ? { previousTaskType: routeHealth.previousTaskType } : {}),
-    ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
-    ...(zeroDataRetentionOnly ? { zeroDataRetentionOnly } : {}),
-    ...(zeroDataRetentionProviders && zeroDataRetentionProviders.size > 0
-      ? { zeroDataRetentionProviders }
-      : {}),
-    ...(noTrainingOnly ? { noTrainingOnly } : {}),
-    ...(organizationPolicy ? { organizationPolicy } : {}),
-    ...(userRoutingPreferences?.usOnly ? { usOnly: true } : {}),
-    ...(residencyRegion ? { residencyRegion } : {}),
-    excludedRouteHosts: EXCLUDED_ROUTE_HOSTS,
-    ...(developerJurisdictions ? { allowedDeveloperJurisdictions: developerJurisdictions } : {}),
-    ...(rollout
-      ? {
-          requestId: rollout.requestId,
-          region: rollout.region,
-          capabilitiesInUse: rollout.capabilitiesInUse,
-          shadowRequestsToday: rollout.shadowRequestsToday,
-          ...(rollout.enableObservedHealthRanking !== undefined
-            ? { enableObservedHealthRanking: rollout.enableObservedHealthRanking }
-            : {}),
-          ...(rollout.enableCanary !== undefined ? { enableCanary: rollout.enableCanary } : {}),
-          ...(rollout.enableShadow !== undefined ? { enableShadow: rollout.enableShadow } : {}),
-          ...(rollout.canaryCohorts ? { canaryCohorts: rollout.canaryCohorts } : {}),
-        }
-      : {}),
-  };
-}
-
-/**
  * Whether this turn may be prompt-cached, and under whose name.
  *
- * The client asks with `use_prompt_cache`; the privacy class decides. A
+ * A first-party surface is cached unless it sends `use_prompt_cache: false`:
+ * those clients resend the whole conversation on every call, and a client
+ * that never learned the flag would otherwise pay full input price for every
+ * repeated prefix. A developer API key still opts in, since a cache write is
+ * billed above the plain input price. The privacy class decides last. A
  * Temporary Chat promises nothing outlives the turn and a zero-retention
  * workspace promises the provider keeps nothing, so neither may leave a cached
  * prefix behind however the caller set the flag. The scope travels with the
@@ -2728,6 +2821,7 @@ export function buildWebCloudAutoRoutingRequest(
  */
 export function resolveTurnPromptCache(input: {
   requested: boolean | undefined;
+  surface: CloudChatSurface;
   temporaryChat: boolean;
   zeroDataRetentionOnly: boolean;
   organizationId: string | null;
@@ -2737,8 +2831,9 @@ export function resolveTurnPromptCache(input: {
     temporaryChat: input.temporaryChat,
     zeroDataRetentionOnly: input.zeroDataRetentionOnly,
   });
+  const requested = input.requested ?? input.surface !== 'api';
   return {
-    usePromptCache: input.requested === true && privacyClass === 'standard',
+    usePromptCache: requested && privacyClass === 'standard',
     promptCacheScope: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -2761,24 +2856,6 @@ export function turnMayBeShadowMirrored(input: {
   zeroDataRetentionOnly: boolean;
 }): boolean {
   return resolvePromptCachePrivacyClass(input) === 'standard';
-}
-
-/**
- * The residency region routing must admit against, or `null` when the workspace
- * has asked for nothing beyond the region this deployment already processes in.
- *
- * A workspace sitting in the deployment's own region is served from it by
- * construction, and `EXCLUDED_ROUTE_HOSTS` is that region's own answer about
- * which transports may carry its traffic. A workspace pinned elsewhere is a
- * promise routing has to keep, so its region is carried into admission, where
- * it is fail-closed.
- */
-export function resolveResidencyRegion(
-  workspaceRegion: string | null | undefined,
-  deploymentRegion: string | null,
-): string | null {
-  if (!workspaceRegion) return null;
-  return workspaceRegion === deploymentRegion ? null : workspaceRegion;
 }
 
 /**
@@ -2812,99 +2889,6 @@ export function autoModelMove(
   }
   if (priorModelKey === routeDecision.modelKey) return { movedFromModel: null, movedReason: null };
   return { movedFromModel: priorModelKey, movedReason: routeDecision.reason ?? null };
-}
-
-export function resolveWebCloudModelRoute(
-  model: string,
-  subscriptionTier: string | undefined,
-  taskType: RoutingTaskType,
-  usage?: {
-    budgetRemainingCents?: number;
-    estimatedInputTokens?: number;
-    estimatedOutputTokens?: number;
-    taskFamily?: TaskFamily | null;
-  },
-  preferSlots?: readonly string[],
-  routeHealth?: {
-    runtimeState?: RoutingRuntimeState | null;
-    preferredRouteId?: string | null;
-    currentModelKey?: string | null;
-    previousTaskType?: RoutingTaskType | null;
-  },
-  availableProviderIds?: ReadonlySet<string>,
-  zeroDataRetentionOnly?: boolean,
-  zeroDataRetentionProviders?: ReadonlySet<string>,
-  organizationPolicy?: ModelAccessPolicy | null,
-  userRoutingPreferences?: UserRoutingPreferences | null,
-  rollout?: WebCloudRolloutInputs,
-  residencyRegion?: string | null,
-  noTrainingOnly?: boolean,
-) {
-  return resolveAutoRoute(
-    buildWebCloudAutoRoutingRequest(
-      model,
-      subscriptionTier,
-      taskType,
-      usage,
-      preferSlots,
-      routeHealth,
-      availableProviderIds,
-      zeroDataRetentionOnly,
-      zeroDataRetentionProviders,
-      organizationPolicy,
-      userRoutingPreferences,
-      rollout,
-      residencyRegion,
-      undefined,
-      noTrainingOnly,
-    ),
-  );
-}
-
-/**
- * The route that summarises a conversation when it outgrows the window.
- *
- * This is a second provider call carrying the transcript itself, so it is
- * exactly the call a zero-retention workspace cannot afford to leak, so it
- * passes the same admission as the main turn: retention requirement, workspace
- * model policy, and the set of providers this deployment holds a credential
- * for.
- *
- * Named rather than inlined so the admission it passes is visible and testable.
- * Resolving nothing is safe here: the caller falls back to a mechanical trim,
- * which makes no provider call at all, so failing closed costs summary quality
- * and never leaks the transcript.
- */
-export interface CompactionAdmission {
-  availableProviderIds?: ReadonlySet<string>;
-  zeroDataRetentionOnly?: boolean;
-  zeroDataRetentionProviders?: ReadonlySet<string>;
-  organizationPolicy?: ModelAccessPolicy | null;
-  noTrainingOnly?: boolean;
-}
-
-export function buildCompactionRoutingRequest(admission: CompactionAdmission) {
-  return buildWebCloudAutoRoutingRequest(
-    'auto',
-    'free',
-    'simple_chat',
-    undefined,
-    undefined,
-    undefined,
-    admission.availableProviderIds,
-    admission.zeroDataRetentionOnly,
-    admission.zeroDataRetentionProviders,
-    admission.organizationPolicy,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    admission.noTrainingOnly,
-  );
-}
-
-export function resolveCompactionRoute(admission: CompactionAdmission) {
-  return resolveAutoRoute(buildCompactionRoutingRequest(admission));
 }
 
 function checkModelTierAccess(model: string, subscriptionTier: string): boolean {
@@ -2950,7 +2934,7 @@ function resolveProviderIdentities(
   let transport: string | null;
   try {
     transport = resolveProviderFromModel(model, routeId, {
-      trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+      trustMode: MANAGED_CLOUD_TRUST_MODE,
     });
   } catch {
     transport = null;
@@ -2994,14 +2978,14 @@ function modelPolicyDenialResponse(decision: ModelAccessDecision): NextResponse 
 function findCheaperFallbackModel(
   currentModel: string,
   currentProvider: string,
-  estimatedPromptTokens: number,
+  promptTokensFor: (model: string) => number,
   maxTokens: number,
   isPolicyAllowed: (model: string) => boolean,
 ): { model: string; provider: string } | null {
   const currentCost = LLMCostCalculator.estimateCost(
     currentProvider,
     currentModel,
-    estimatedPromptTokens,
+    promptTokensFor(currentModel),
     maxTokens,
   );
 
@@ -3016,7 +3000,7 @@ function findCheaperFallbackModel(
       LLMCostCalculator.estimateCost(
         fallback.provider,
         fallback.model,
-        estimatedPromptTokens,
+        promptTokensFor(fallback.model),
         maxTokens,
       ),
   });
@@ -3171,7 +3155,6 @@ async function freeTrialBudgetReachedResponse(
 }
 
 const MAX_BODY_BYTES = 2_000_000;
-const MAX_TOTAL_LENGTH = 1000000;
 
 function contextPolicyRestartResponse(): ProcessFailure {
   return {
@@ -3668,7 +3651,8 @@ async function processAdmittedRequest(
     applyFreeModelPromotion(chatRequest, promotionTurn.promotion);
   } else if (
     freeModelPromotionCoversPlan(subscription.plan_tier) &&
-    namesFreeModelPromotionModel(chatRequest.model)
+    namesFreeModelPromotionModel(chatRequest.model) &&
+    !isFreeTrialRequest({ requestedModel: chatRequest.model, planTier: subscription.plan_tier })
   ) {
     selectedModel = chatRequest.model;
     chatRequest.model = FREE_TRIAL_MODEL;
@@ -4174,6 +4158,19 @@ async function processAdmittedRequest(
       });
 
   const truncatedAttachments: string[] = [];
+  const attachmentAssetIds = attachmentAssetIdsOf(chatRequest.messages);
+  const preparedAttachments = createPreparedAttachmentResolver({
+    db: contextPolicyScope.db,
+    userId,
+    temporaryChat: conversationIsTemporary,
+    query: lastUserMessageText(chatRequest),
+    onTruncated: (filename) => truncatedAttachments.push(filename),
+    searchPassages: attachedFilePassageSearch({
+      db: contextPolicyScope.db,
+      userId,
+      organizationId: contextPolicyScope.organizationId,
+    }),
+  });
   const [hydration, managedMemoryPolicyRead] = await timePhase(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
@@ -4184,6 +4181,7 @@ async function processAdmittedRequest(
           (filename) => truncatedAttachments.push(filename),
           getPlanMaxAttachmentsPerMessage(subscription.plan_tier),
           contextPolicyScope.organizationId,
+          { resolveOversizeAttachment: preparedAttachments.resolve },
         ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),
@@ -4227,6 +4225,8 @@ async function processAdmittedRequest(
       ),
     };
   }
+  const largeFiles = preparedAttachments.largeFiles();
+  appendLargeFileText(chatRequest.messages, preparedAttachments.textSections());
 
   const dynamicSystemMessageRefs = new Map<object, InstructionLayer>();
 
@@ -4352,7 +4352,7 @@ async function processAdmittedRequest(
       response: NextResponse.json(
         {
           error: {
-            message: `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
+            message: `The Free plan includes the free models only. Select one in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'free_trial_model_only',
             ...(recovery ? { recovery } : {}),
@@ -4535,6 +4535,7 @@ async function processAdmittedRequest(
     prompt: lastUserText,
     taskType: resolvedTaskType,
     planTier: subscription.plan_tier,
+    surface: chatSurface,
   });
   const turnToolProhibition = mergeTurnToolProhibitions(
     resolveTurnToolProhibition(lastUserText, {
@@ -4705,6 +4706,13 @@ async function processAdmittedRequest(
   // region is already served from it, and `EXCLUDED_ROUTE_HOSTS` is that
   // region's own answer about which transports may carry its traffic.
   const residencyRegion = resolveResidencyRegion(workspaceRegion?.effective, rolloutInputs.region);
+  const routingPolicy: ManagedCloudPolicySnapshot = {
+    noTrainingOnly: trainingOptOut,
+    zeroDataRetentionOnly,
+    organizationPolicy: workspaceModelPolicy,
+    residencyRegion,
+    usOnly: userRoutingPreferences.usOnly,
+  };
   const scopedForAssessment = await scopedDbPromise;
   const semanticResponseAssessment = await timePhase(CHAT_TURN_PHASE.responseAssessment, () =>
     assessSemanticResponseBudget({
@@ -4794,6 +4802,7 @@ async function processAdmittedRequest(
         ? 'off'
         : resolveFreeLaneMode(),
     isFreePlan: isFreePlanTier(subscription.plan_tier),
+    requestedModel: chatRequest.model,
   });
   const freeLaneMode = freeLane.mode;
   // The slot preference rides this branch and no other, so it reaches the
@@ -4871,7 +4880,7 @@ async function processAdmittedRequest(
     userId,
     plan: subscription.plan_tier ?? null,
     surface: chatSurface,
-    privacyMode: canonicalPrivacyMode(MANAGED_WEB_CLOUD_TRUST_MODE),
+    privacyMode: canonicalPrivacyMode(MANAGED_CLOUD_TRUST_MODE),
     workspaceId: tracedWorkspaceId,
     zeroDataRetentionOnly,
     workspaceModelPolicy,
@@ -5324,13 +5333,13 @@ async function processAdmittedRequest(
     !checkModelTierAccess(chatRequest.model, subscription.plan_tier)
   ) {
     const requiredTierKey = getMinimumRequiredTier(chatRequest.model) ?? 'pro';
-    const requiredTier = requiredTierKey?.toUpperCase() ?? 'PRO';
+    const requiredPlan = BILLING_PLAN_PRICING[requiredTierKey].label;
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: `Model ${chatRequest.model} is on the ${requiredTier} plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,
+            message: `Model ${chatRequest.model} is on the ${requiredPlan} plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: requiredTierKey,
@@ -5366,6 +5375,11 @@ async function processAdmittedRequest(
         ...options,
       })
     ).filter((skill) => agentAllowsSkill(ownership.agentTurn?.config ?? null, skill.name));
+  const webSearchToolOfferPolicy = webSearchToolOfferPolicyFor({
+    model: chatRequest.model,
+    planTier: subscription.plan_tier,
+  });
+  const ambientToolsAllowed = webSearchToolOfferPolicy !== 'required_only';
   if (chatRequest.skill_name) {
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
@@ -5511,31 +5525,28 @@ async function processAdmittedRequest(
     backendConfigured: placesAvailable,
   });
 
-  const itineraryOffered = applyItineraryToolCapability(chatRequest, {
+  const itineraryOffer = applyItineraryToolCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     placesAvailable,
   });
+  const itineraryOffered = itineraryOffer?.fitsTurn === true;
 
-  applyMapSearchCardCapability(chatRequest, {
+  const mapSearchOffer = applyMapSearchCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     placesSearchOffered: placesRequirement.offered || itineraryOffered,
   });
 
-  const webSearchToolOfferPolicy = webSearchToolOfferPolicyFor({
-    model: chatRequest.model,
-    planTier: subscription.plan_tier,
-  });
-  const ambientToolsAllowed = webSearchToolOfferPolicy !== 'required_only';
   applyMemoryToolCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     memoryEnabled: managedMemoryPolicy.enabled,
     isTemporary: conversationIsTemporary,
     ambientToolsAllowed,
+    userMessage: lastUserText,
   });
 
   applyFileSearchToolCapability(chatRequest, {
@@ -5545,31 +5556,46 @@ async function processAdmittedRequest(
     projectHasKnowledgeFiles: ownership.projectHasKnowledgeFiles,
     ambientToolsAllowed,
   });
+  if (
+    largeFiles.length > 0 &&
+    chatRequest.stream &&
+    (resolvedModelCaps?.tools ?? true) &&
+    ambientToolsAllowed &&
+    AMBIENT_TOOL_SURFACES.has(chatSurface) &&
+    turnToolProhibition?.allTools !== true
+  ) {
+    chatRequest.tools = [
+      ...(chatRequest.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
+      ...fileSearchToolDefinitions({ largeFileTurn: true }),
+    ];
+  }
 
-  applyScheduleToolCapability(chatRequest, {
+  const ambientToolSurface = {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     isTemporary: conversationIsTemporary,
     ambientToolsAllowed,
+  };
+  const scheduleOffer = applyScheduleToolCapability(chatRequest, {
+    ...ambientToolSurface,
+    userMessage: lastUserText,
     schedulesAllowed:
-      asksForSchedule(lastUserText) &&
+      scheduleToolSurfaceEligible(chatRequest, ambientToolSurface) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
   });
 
-  applyPluginDraftToolCapability(chatRequest, {
-    surface: chatSurface,
-    toolsCapable: resolvedModelCaps?.tools ?? true,
-    isTemporary: conversationIsTemporary,
-    ambientToolsAllowed,
+  const pluginDraftOffer = applyPluginDraftToolCapability(chatRequest, {
+    ...ambientToolSurface,
+    userMessage: lastUserText,
     pluginDraftsAllowed:
       userSkillAuthoringEnabled() &&
-      asksForPluginDraft(lastUserText) &&
+      pluginDraftToolSurfaceEligible(chatRequest, ambientToolSurface) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'plugins', chatSurface)) === null &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'skills', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;
-  applyClarifyCardCapability(chatRequest, {
+  const clarifyOffer = applyClarifyCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
@@ -5577,12 +5603,14 @@ async function processAdmittedRequest(
       Array.isArray(lastUserContent) && lastUserContent.some((part) => part.type !== 'text'),
   });
 
+  applyAnswerUiCapability(chatRequest, { toolsCapable: resolvedModelCaps?.tools ?? true });
+
   const originalModel = chatRequest.model;
   let usedFallback = false;
   let fallbackReason: string | undefined;
 
   let provider = resolveProviderFromModel(chatRequest.model, routeDecision.routeId, {
-    trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+    trustMode: MANAGED_CLOUD_TRUST_MODE,
   });
 
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
@@ -5640,51 +5668,23 @@ async function processAdmittedRequest(
     }
   }
 
-  let totalLength = 0;
-  for (const msg of chatRequest.messages) {
-    const textContent = extractTextContent(msg.content);
-    if (textContent.length > MAX_MESSAGE_LENGTH) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          {
-            error: {
-              message: `Message content exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`,
-              type: 'invalid_request_error',
-            },
-          },
-          { status: 400 },
-        ),
-      };
-    }
-    totalLength += textContent.length;
-  }
-
-  if (totalLength > MAX_TOTAL_LENGTH) {
+  const lengthRefusal = messageLengthRefusal(
+    chatRequest.messages,
+    Boolean(chatRequest.conversation_id),
+  );
+  if (lengthRefusal) {
     return {
       ok: false,
       response: NextResponse.json(
-        {
-          error: {
-            message: `Total message content exceeds maximum length of ${MAX_TOTAL_LENGTH} characters`,
-            type: 'invalid_request_error',
-          },
-        },
+        { error: { message: lengthRefusal, type: 'invalid_request_error' } },
         { status: 400 },
       ),
     };
   }
 
-  const rawEstimatedPromptTokens = collectManagedPromptMaterials(chatRequest).reduce(
-    (sum, material) => {
-      const baseTokens = Math.ceil(material.length / 3.5);
-      const overheadTokens = 4;
-      return sum + baseTokens + overheadTokens;
-    },
-    0,
-  );
-  const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
-  const estimatedPromptTokens = Math.min(rawEstimatedPromptTokens, MAX_ESTIMATED_PROMPT_TOKENS);
+  const rawPromptTokens = rawManagedPromptTokens(chatRequest);
+  const promptTokensFor = (model: string) => managedPromptTokensFor(rawPromptTokens, model);
+  let estimatedPromptTokens = promptTokensFor(chatRequest.model);
 
   const providerLower = provider.toLowerCase();
 
@@ -6054,7 +6054,7 @@ async function processAdmittedRequest(
         : findCheaperFallbackModel(
             chatRequest.model,
             provider,
-            estimatedPromptTokens,
+            promptTokensFor,
             maxTokens,
             (candidate) =>
               fallbackAllowedByPolicy(candidate) &&
@@ -6069,7 +6069,7 @@ async function processAdmittedRequest(
         const forbidden = findCheaperFallbackModel(
           chatRequest.model,
           provider,
-          estimatedPromptTokens,
+          promptTokensFor,
           maxTokens,
           () => true,
         );
@@ -6084,15 +6084,16 @@ async function processAdmittedRequest(
       if (fallbackModel) {
         const fallbackRouteId = `${fallbackModel.provider}/${fallbackModel.model}`;
         const fallbackProvider = resolveProviderFromModel(fallbackModel.model, fallbackRouteId, {
-          trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
+          trustMode: MANAGED_CLOUD_TRUST_MODE,
         });
         if (trainingOptOut && !providerKeepsInputsOutOfTraining(fallbackProvider)) {
           return monthlyLimitRefusal();
         }
+        const fallbackPromptTokens = promptTokensFor(fallbackModel.model);
         const fallbackCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
           fallbackProvider,
           fallbackModel.model,
-          estimatedPromptTokens,
+          fallbackPromptTokens,
           maxTokens,
         );
 
@@ -6108,6 +6109,7 @@ async function processAdmittedRequest(
           fallbackReason = 'insufficient_credits';
           chatRequest.model = fallbackModel.model;
           provider = fallbackProvider;
+          estimatedPromptTokens = fallbackPromptTokens;
           estimatedCostMicrousd = fallbackCostMicrousd;
           fastTier = null;
         } else {
@@ -6194,8 +6196,20 @@ async function processAdmittedRequest(
       })) ??
       buildQuotaWarningHeader({
         planTier: subscription.plan_tier,
-        creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
-        creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
+        creditsUsedCents: ledgerCentsFromMicrousd(
+          Math.max(
+            0,
+            (existingBalance?.credits_used_microusd ?? 0) -
+              (existingBalance?.account_id
+                ? await getAccountOverageMicrousd(
+                    (await scopedDbPromise).db,
+                    userId,
+                    existingBalance.account_id,
+                  )
+                : 0),
+          ),
+        ),
+        creditsAllocatedCents: getPlanUsageBudgetCents(subscription.plan_tier),
         estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
       }) ??
       computerUseSoftCapWarning;
@@ -6206,9 +6220,9 @@ async function processAdmittedRequest(
     const layer = dynamicSystemMessageRefs.get(msg);
     if (layer) dynamicSystemBlocks.push({ layer, text: extractTextContent(msg.content) });
   }
-  const staticSourceMessages = chatRequest.messages.filter(
-    (msg) => !dynamicSystemMessageRefs.has(msg),
-  );
+  const staticSourceMessages = (
+    chatSurface === 'api' ? chatRequest.messages : fillEmptyAssistantTurns(chatRequest.messages)
+  ).filter((msg) => !dynamicSystemMessageRefs.has(msg));
   const internalMessages: ProcessedRequest['llmRequest']['messages'] = staticSourceMessages.map(
     (msg) => ({
       role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
@@ -6281,20 +6295,35 @@ async function processAdmittedRequest(
     }
   }
 
-  if (placesRequirement.offered) {
+  const placesOffer = placesToolOffer({
+    surface: chatSurface,
+    requirement: placesRequirement,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    stream: chatRequest.stream,
+    backendConfigured: placesAvailable,
+  });
+  if (placesOffer) {
     resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
   }
 
-  if (
-    shouldOfferProductComparison(chatRequest, {
-      surface: chatSurface,
-      toolsCapable: resolvedModelCaps?.tools ?? true,
-      userMessage: lastUserText,
-      tools: resolvedTools,
-    })
-  ) {
+  const productComparison = productComparisonOffer(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    userMessage: lastUserText,
+    tools: resolvedTools,
+  });
+  if (productComparison) {
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
+  const turnWithheldTools = withheldToolNames([
+    itineraryOffer,
+    mapSearchOffer,
+    scheduleOffer,
+    pluginDraftOffer,
+    clarifyOffer,
+    placesOffer,
+    productComparison,
+  ]);
 
   const imageIntent = classifyImageToolIntent(lastUserText);
   const imageSourceAvailable =
@@ -6339,16 +6368,13 @@ async function processAdmittedRequest(
     model: chatRequest.model,
     tools: resolvedTools,
   });
+  const turnSystemNotices: string[] = [];
   if (placesEnforcement.mode === 'nudge' || placesRequirement.unavailable) {
-    internalMessages.unshift({
-      role: 'system',
-      content: placesRequirement.unavailable
+    turnSystemNotices.push(
+      placesRequirement.unavailable
         ? PLACES_UNAVAILABLE_SYSTEM_NOTICE
         : REQUIRED_PLACES_SYSTEM_NUDGE,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    );
   }
 
   const searchEnforcement = resolveRequiredSearchEnforcement({
@@ -6359,13 +6385,7 @@ async function processAdmittedRequest(
     tools: resolvedTools,
   });
   if (searchEnforcement.mode === 'nudge') {
-    internalMessages.unshift({
-      role: 'system',
-      content: REQUIRED_SEARCH_SYSTEM_NUDGE,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    turnSystemNotices.push(REQUIRED_SEARCH_SYSTEM_NUDGE);
   }
 
   if (
@@ -6405,6 +6425,29 @@ async function processAdmittedRequest(
   }
   if (turnToolProhibition?.allTools) resolvedTools = undefined;
 
+  let largeFileTurn: LargeFileTurn | undefined;
+  if (largeFiles.length > 0) {
+    largeFileTurn = {
+      assetIds: [...new Set(largeFiles.map((file) => file.assetId))],
+      attachmentAssetIds,
+      limitTokens: attachmentTurnTokenLimitForRoute(chatRequest.model, routeDecision.routeId),
+      charged: 0,
+      readingClosed: false,
+      fileToolsOffered:
+        !researchMode &&
+        (resolvedTools ?? []).some(
+          (tool) =>
+            (tool as { function?: { name?: unknown } } | null)?.function?.name ===
+            OPEN_FILE_TOOL_NAME,
+        ),
+    };
+    const firstStep = applyAttachmentTurnStep(internalMessages, largeFileTurn);
+    largeFileTurn.pendingStepAllowance = firstStep.resultsAllowanceTokens;
+    for (const filename of firstStep.cutLiveFilenames) {
+      if (!truncatedAttachments.includes(filename)) truncatedAttachments.push(filename);
+    }
+  }
+
   const autoMemoryFactsRequireToolFreeTurn = !managedMemoryPolicy.allowToolAssistedGeneration;
   if (autoMemoryFactsRequireToolFreeTurn && isUnreportedToolAssistedTurn(chatRequest)) {
     autoMemoryFacts = [];
@@ -6413,6 +6456,7 @@ async function processAdmittedRequest(
 
   let connectorsAllowed: boolean | undefined;
   let managedToolInventoryVersion: number | undefined;
+  let turnTimeContext = '';
   if (chatSurface !== 'api') {
     const turnMemory = chatTurnMemoryFor({
       read: managedMemoryPolicyRead,
@@ -6470,7 +6514,7 @@ async function processAdmittedRequest(
       new Set(extractToolNames(callerToolFields.tools)),
     );
     managedToolInventoryVersion = toolInventory.__managedToolInventoryVersion;
-    const capabilityPreamble = buildCapabilityPreamble({
+    const timedCapabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       includeToolInventory: false,
       surface: chatSurface,
@@ -6484,6 +6528,9 @@ async function processAdmittedRequest(
         productCapabilities !== undefined &&
         productArtifactConnectors(subscription.plan_tier, productCapabilities),
       ...(productCapabilities ? { productCapabilities } : {}),
+      sourceLinks: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
+      writingCards: surfaceRendersWritingCards(chatSurface),
+      artifactApps: surfacePublishesArtifactApps(chatSurface),
       promptSelection: {
         variants: {
           ...promptSelection.variants,
@@ -6510,6 +6557,8 @@ async function processAdmittedRequest(
       }),
     });
 
+    const { capabilityPreamble, turnTime } = separateTurnTime(timedCapabilityPreamble);
+    turnTimeContext = turnTime;
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
@@ -6555,13 +6604,7 @@ async function processAdmittedRequest(
     );
   } else {
     if (dynamicTurnInstruction) {
-      internalMessages.unshift({
-        role: 'system',
-        content: dynamicTurnInstruction,
-        multimodal_content: undefined,
-        tool_calls: undefined,
-        tool_call_id: undefined,
-      });
+      turnSystemNotices.push(dynamicTurnInstruction);
     }
     if (ownership.conversationInstruction) {
       internalMessages.unshift({
@@ -6597,16 +6640,11 @@ async function processAdmittedRequest(
     planTier: subscription.plan_tier,
   });
   if (executionEnforcement.mode === 'nudge' || executionEnforcement.mode === 'plan-gated') {
-    internalMessages.unshift({
-      role: 'system',
-      content:
-        executionEnforcement.mode === 'plan-gated'
-          ? EXECUTION_PLAN_GATED_SYSTEM_NOTICE
-          : REQUIRED_EXECUTION_SYSTEM_NUDGE,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    turnSystemNotices.push(
+      executionEnforcement.mode === 'plan-gated'
+        ? EXECUTION_PLAN_GATED_SYSTEM_NOTICE
+        : REQUIRED_EXECUTION_SYSTEM_NUDGE,
+    );
   }
   const officeOutputFormat = chatRequest.office_creation ? chatRequest.office_format : undefined;
   const officeOutputToolChoice =
@@ -6617,16 +6655,13 @@ async function processAdmittedRequest(
       ? forcedFunctionToolChoice(MANAGED_OFFICE_FILE_TOOL_NAME)
       : undefined;
   if (officeOutputFormat) {
-    internalMessages.unshift({
-      role: 'system',
-      content: chatOutputFormatInstruction(officeOutputFormat),
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    turnSystemNotices.push(chatOutputFormatInstruction(officeOutputFormat));
   }
+  const withheldToolsNotice = resolvedTools ? withheldToolsTurnNotice(turnWithheldTools) : null;
+  if (withheldToolsNotice) turnSystemNotices.push(withheldToolsNotice);
+  placeTurnSystemNotices(internalMessages, turnSystemNotices);
   const responseFormat = requestedResponseFormat(chatRequest.response_format);
-  const llmRequest = {
+  const llmRequest: ProcessedRequest['llmRequest'] = {
     model: chatRequest.model,
     messages: internalMessages,
     temperature: chatRequest.temperature,
@@ -6648,6 +6683,7 @@ async function processAdmittedRequest(
     ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
+      surface: chatSurface,
       temporaryChat: conversationIsTemporary,
       zeroDataRetentionOnly,
       organizationId: scopedForPolicy.organizationId,
@@ -6658,7 +6694,9 @@ async function processAdmittedRequest(
   const scopedForCompaction = await scopedDbPromise;
   const referenceMessage = internalMessages.find(
     (message) =>
-      message.role === 'system' && message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY),
+      message.role === 'system' &&
+      message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY) &&
+      message.content.length > SYSTEM_PROMPT_CACHE_BOUNDARY.length,
   );
   const referenceBeforeFit = referenceMessage?.content;
   const contextTrim = await timePhase(CHAT_TURN_PHASE.contextCompaction, () =>
@@ -6673,12 +6711,14 @@ async function processAdmittedRequest(
       isTemporary: conversationIsTemporary,
       planTier: subscription.plan_tier,
       resolveEconomyRoute: () =>
-        resolveCompactionRoute({
-          availableProviderIds,
-          zeroDataRetentionOnly,
-          zeroDataRetentionProviders,
-          organizationPolicy: workspaceModelPolicy,
-          noTrainingOnly: trainingOptOut,
+        admitManagedCloudRoute({
+          kind: 'utility',
+          account: {
+            db: scopedForCompaction.db,
+            userId,
+            organizationId: scopedForCompaction.organizationId,
+          },
+          need: { turnPolicy: routingPolicy },
         }),
       ...(promotionTurn
         ? { sizing: freeModelPromotionContextSizing(promotionTurn.promotion, resolvedTools) }
@@ -6710,6 +6750,9 @@ async function processAdmittedRequest(
       });
     }
     return messageTooLongResponse();
+  }
+  if (turnTimeContext) {
+    llmRequest.turnContext = { text: turnTimeContext, afterMessages: llmRequest.messages.length };
   }
 
   const sentCitations =
@@ -6860,7 +6903,8 @@ async function processAdmittedRequest(
     autoMemoryIncludeSensitiveTopics: managedMemoryPolicy.includeSensitiveTopics === true,
     promptVariants: rolloutInputs.promptVariants,
     ...(dynamicSystemBlocks.some((block) => block.layer === 'untrusted_context') ||
-    contextTrim?.droppedUntrustedToolContent === true
+    contextTrim?.droppedUntrustedToolContent === true ||
+    attachmentAssetIds.length > 0
       ? { untrustedContextPresent: true }
       : {}),
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
@@ -6890,6 +6934,7 @@ async function processAdmittedRequest(
     // is outside the plan above and must answer to this same snapshot.
     modelPolicy: workspaceModelPolicy,
     ...(trainingOptOut ? { noTrainingOnly: true } : {}),
+    routingPolicy,
     subscriptionTier: subscription.plan_tier,
     routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,
@@ -6898,8 +6943,10 @@ async function processAdmittedRequest(
     executionRequirement,
     executionEnforcement,
     ...(turnToolProhibition ? { turnToolProhibition } : {}),
+    ...(resolvedTools && turnWithheldTools.length > 0 ? { turnWithheldTools } : {}),
     turnAttachments,
     truncatedAttachments,
+    ...(largeFileTurn ? { largeFileTurn } : {}),
     placesRequirement,
     placesEnforcement,
     classifierConfidence: classifierResult.confidence,

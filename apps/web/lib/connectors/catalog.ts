@@ -1,4 +1,10 @@
 import {
+  CONNECTOR_RISK_CLASSES,
+  type CatalogConnectorId,
+  type ConnectorPersonalSource,
+  type ConnectorRiskClass,
+} from '@agiworkforce/cloud-contracts';
+import {
   resolveConnectorHealth as resolveSharedConnectorHealth,
   type ConnectorHealth,
 } from '@agiworkforce/client-runtime';
@@ -29,7 +35,7 @@ export type ConnectorScopeSource =
 
 export type ConnectorSurface = 'cloud-web' | 'desktop-local';
 
-export type ConnectorRiskClass = 'read-only' | 'read-write' | 'high-impact';
+export type { ConnectorRiskClass };
 
 export type ConnectorReleaseState = 'generally-available' | 'operator-enabled' | 'desktop-only';
 
@@ -67,6 +73,7 @@ interface ConnectorCapabilityBase {
   readonly surfaces: readonly ConnectorSurface[];
   readonly riskClass: ConnectorRiskClass;
   readonly releaseState: ConnectorReleaseState;
+  readonly personalSources?: readonly ConnectorPersonalSource[];
 }
 
 export interface DeclaredActionsConnector extends ConnectorCapabilityBase {
@@ -96,9 +103,9 @@ const DESKTOP_LOCAL_SURFACES: readonly ConnectorSurface[] = Object.freeze(['desk
 type McpAuthScheme = Exclude<ConnectorAuthScheme, 'github-app' | 'device-local'>;
 
 function mcpConnector(
-  id: string,
+  id: CatalogConnectorId,
   authScheme: McpAuthScheme,
-  riskClass: ConnectorRiskClass,
+  personalSources?: readonly ConnectorPersonalSource[],
 ): DiscoveredActionsConnector {
   return {
     id,
@@ -109,12 +116,13 @@ function mcpConnector(
     actionSource: 'runtime-discovered',
     supportedActions: NO_DECLARED_ACTIONS,
     surfaces: CLOUD_WEB_SURFACES,
-    riskClass,
+    riskClass: CONNECTOR_RISK_CLASSES[id],
     releaseState: 'operator-enabled',
+    ...(personalSources ? { personalSources } : {}),
   };
 }
 
-function deviceLocalConnector(id: string): DiscoveredActionsConnector {
+function deviceLocalConnector(id: CatalogConnectorId): DiscoveredActionsConnector {
   return {
     id,
     implementation: 'device-local',
@@ -124,16 +132,16 @@ function deviceLocalConnector(id: string): DiscoveredActionsConnector {
     actionSource: 'device-local',
     supportedActions: NO_DECLARED_ACTIONS,
     surfaces: DESKTOP_LOCAL_SURFACES,
-    riskClass: 'high-impact',
+    riskClass: CONNECTOR_RISK_CLASSES[id],
     releaseState: 'desktop-only',
   };
 }
 
 function firstPartyConnector(
-  id: string,
+  id: CatalogConnectorId,
   authScheme: ConnectorAuthScheme,
-  riskClass: ConnectorRiskClass,
   supportedActions: readonly [string, ...string[]],
+  personalSources?: readonly ConnectorPersonalSource[],
 ): DeclaredActionsConnector {
   return {
     id,
@@ -144,126 +152,126 @@ function firstPartyConnector(
     actionSource: 'declared',
     supportedActions,
     surfaces: CLOUD_WEB_SURFACES,
-    riskClass,
+    riskClass: CONNECTOR_RISK_CLASSES[id],
     releaseState: 'operator-enabled',
+    ...(personalSources ? { personalSources } : {}),
   };
 }
 
 export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapabilityRecord>> = {
-  gmail: mcpConnector('gmail', 'oauth2', 'read-write'),
-  'google-calendar': mcpConnector('google-calendar', 'oauth2', 'read-write'),
-  'google-drive': mcpConnector('google-drive', 'oauth2', 'read-write'),
-  'google-contacts': mcpConnector('google-contacts', 'oauth2', 'read-only'),
-  notion: mcpConnector('notion', 'oauth2', 'read-write'),
-  slack: mcpConnector('slack', 'oauth2', 'read-write'),
-  github: firstPartyConnector('github', 'github-app', 'read-write', [
+  gmail: mcpConnector('gmail', 'oauth2', ['email']),
+  'google-calendar': mcpConnector('google-calendar', 'oauth2', ['calendar']),
+  'google-drive': mcpConnector('google-drive', 'oauth2'),
+  'google-contacts': mcpConnector('google-contacts', 'oauth2'),
+  notion: mcpConnector('notion', 'oauth2'),
+  slack: mcpConnector('slack', 'oauth2'),
+  github: firstPartyConnector('github', 'github-app', [
     'get_pull_request_diff',
     'post_issue_comment',
     'post_pull_request_review',
   ]),
-  'github-mcp': mcpConnector('github-mcp', 'oauth2', 'read-write'),
-  'google-sheets': mcpConnector('google-sheets', 'oauth2', 'read-write'),
-  outlook: firstPartyConnector('outlook', 'oauth2', 'read-write', [
-    'search_mail',
-    'read_mail',
-    'list_events',
-    'send_mail',
-    'create_event',
-  ]),
-  'microsoft-365': mcpConnector('microsoft-365', 'oauth2', 'read-only'),
-  onedrive: firstPartyConnector('onedrive', 'oauth2', 'read-only', ['search_files', 'read_file']),
-  linear: mcpConnector('linear', 'oauth2', 'read-write'),
-  jira: mcpConnector('jira', 'oauth2', 'read-write'),
-  teams: firstPartyConnector('teams', 'oauth2', 'read-only', [
+  'github-mcp': mcpConnector('github-mcp', 'oauth2'),
+  'google-sheets': mcpConnector('google-sheets', 'oauth2'),
+  outlook: firstPartyConnector(
+    'outlook',
+    'oauth2',
+    ['search_mail', 'read_mail', 'list_events', 'send_mail', 'create_event'],
+    ['email', 'calendar'],
+  ),
+  'microsoft-365': mcpConnector('microsoft-365', 'oauth2'),
+  onedrive: firstPartyConnector('onedrive', 'oauth2', ['search_files', 'read_file']),
+  linear: mcpConnector('linear', 'oauth2'),
+  jira: mcpConnector('jira', 'oauth2'),
+  teams: firstPartyConnector('teams', 'oauth2', [
     'list_chats',
     'read_chat_messages',
     'list_teams',
     'list_channels',
   ]),
-  confluence: mcpConnector('confluence', 'oauth2', 'read-write'),
-  asana: mcpConnector('asana', 'oauth2', 'read-write'),
-  zoom: mcpConnector('zoom', 'oauth2', 'read-write'),
-  hubspot: mcpConnector('hubspot', 'oauth2', 'read-write'),
-  salesforce: mcpConnector('salesforce', 'oauth2', 'read-write'),
-  calendly: mcpConnector('calendly', 'oauth2', 'read-write'),
-  intercom: mcpConnector('intercom', 'oauth2', 'read-write'),
-  'google-analytics': mcpConnector('google-analytics', 'oauth2', 'read-write'),
-  mailchimp: mcpConnector('mailchimp', 'oauth2', 'high-impact'),
-  stripe: mcpConnector('stripe', 'oauth2', 'high-impact'),
-  shopify: mcpConnector('shopify', 'oauth2', 'high-impact'),
-  linkedin: mcpConnector('linkedin', 'oauth2', 'read-write'),
-  twitter: mcpConnector('twitter', 'oauth2', 'read-write'),
-  discord: mcpConnector('discord', 'oauth2', 'read-write'),
-  openai: mcpConnector('openai', 'api-key', 'read-write'),
-  elevenlabs: mcpConnector('elevenlabs', 'api-key', 'read-write'),
+  confluence: mcpConnector('confluence', 'oauth2'),
+  asana: mcpConnector('asana', 'oauth2'),
+  zoom: mcpConnector('zoom', 'oauth2'),
+  hubspot: mcpConnector('hubspot', 'oauth2'),
+  salesforce: mcpConnector('salesforce', 'oauth2'),
+  calendly: mcpConnector('calendly', 'oauth2'),
+  intercom: mcpConnector('intercom', 'oauth2'),
+  'google-analytics': mcpConnector('google-analytics', 'oauth2'),
+  mailchimp: mcpConnector('mailchimp', 'oauth2'),
+  stripe: mcpConnector('stripe', 'oauth2'),
+  shopify: mcpConnector('shopify', 'oauth2'),
+  linkedin: mcpConnector('linkedin', 'oauth2'),
+  twitter: mcpConnector('twitter', 'oauth2'),
+  discord: mcpConnector('discord', 'oauth2'),
+  openai: mcpConnector('openai', 'api-key'),
+  elevenlabs: mcpConnector('elevenlabs', 'api-key'),
   'local-filesystem': deviceLocalConnector('local-filesystem'),
   terminal: deviceLocalConnector('terminal'),
   'browser-automation': deviceLocalConnector('browser-automation'),
   'screen-vision': deviceLocalConnector('screen-vision'),
   ollama: deviceLocalConnector('ollama'),
-  airtable: mcpConnector('airtable', 'oauth2', 'read-write'),
-  monday: mcpConnector('monday', 'oauth2', 'read-write'),
-  clickup: mcpConnector('clickup', 'oauth2', 'read-write'),
-  trello: mcpConnector('trello', 'api-key', 'read-write'),
-  todoist: mcpConnector('todoist', 'oauth2', 'read-write'),
-  basecamp: mcpConnector('basecamp', 'oauth2', 'read-write'),
-  evernote: mcpConnector('evernote', 'oauth2', 'read-write'),
-  vercel: mcpConnector('vercel', 'oauth2', 'high-impact'),
-  sentry: mcpConnector('sentry', 'oauth2', 'read-write'),
-  datadog: mcpConnector('datadog', 'oauth2', 'read-write'),
-  pagerduty: mcpConnector('pagerduty', 'oauth2', 'read-write'),
-  circleci: mcpConnector('circleci', 'api-key', 'read-write'),
-  gitlab: mcpConnector('gitlab', 'oauth2', 'read-write'),
-  bitbucket: mcpConnector('bitbucket', 'oauth2', 'read-write'),
-  telegram: mcpConnector('telegram', 'api-key', 'read-write'),
-  whatsapp: mcpConnector('whatsapp', 'api-key', 'high-impact'),
-  twilio: mcpConnector('twilio', 'api-key', 'high-impact'),
-  sendgrid: mcpConnector('sendgrid', 'api-key', 'high-impact'),
-  aws: mcpConnector('aws', 'api-key', 'high-impact'),
-  gcp: mcpConnector('gcp', 'oauth2', 'high-impact'),
-  azure: mcpConnector('azure', 'oauth2', 'high-impact'),
-  cloudflare: mcpConnector('cloudflare', 'oauth2', 'high-impact'),
-  digitalocean: mcpConnector('digitalocean', 'api-key', 'high-impact'),
-  snowflake: mcpConnector('snowflake', 'connection-string', 'high-impact'),
-  bigquery: mcpConnector('bigquery', 'oauth2', 'high-impact'),
-  databricks: mcpConnector('databricks', 'api-key', 'high-impact'),
-  elasticsearch: mcpConnector('elasticsearch', 'api-key', 'high-impact'),
-  pipedrive: mcpConnector('pipedrive', 'oauth2', 'read-write'),
-  zendesk: mcpConnector('zendesk', 'api-key', 'read-write'),
-  freshdesk: mcpConnector('freshdesk', 'api-key', 'read-write'),
-  figma: mcpConnector('figma', 'oauth2', 'read-write'),
-  canva: mcpConnector('canva', 'oauth2', 'read-write'),
-  adobe: mcpConnector('adobe', 'oauth2', 'read-write'),
-  quickbooks: mcpConnector('quickbooks', 'oauth2', 'high-impact'),
-  xero: mcpConnector('xero', 'oauth2', 'high-impact'),
-  paypal: mcpConnector('paypal', 'oauth2', 'high-impact'),
-  square: mcpConnector('square', 'oauth2', 'high-impact'),
-  plaid: mcpConnector('plaid', 'oauth2', 'high-impact'),
-  'bank-accounts': firstPartyConnector('bank-accounts', 'oauth2', 'high-impact', [
+  airtable: mcpConnector('airtable', 'oauth2'),
+  monday: mcpConnector('monday', 'oauth2'),
+  clickup: mcpConnector('clickup', 'oauth2'),
+  trello: mcpConnector('trello', 'api-key'),
+  todoist: mcpConnector('todoist', 'oauth2'),
+  basecamp: mcpConnector('basecamp', 'oauth2'),
+  evernote: mcpConnector('evernote', 'oauth2'),
+  vercel: mcpConnector('vercel', 'oauth2'),
+  sentry: mcpConnector('sentry', 'oauth2'),
+  datadog: mcpConnector('datadog', 'oauth2'),
+  pagerduty: mcpConnector('pagerduty', 'oauth2'),
+  circleci: mcpConnector('circleci', 'api-key'),
+  gitlab: mcpConnector('gitlab', 'oauth2'),
+  bitbucket: mcpConnector('bitbucket', 'oauth2'),
+  telegram: mcpConnector('telegram', 'api-key'),
+  whatsapp: mcpConnector('whatsapp', 'api-key'),
+  twilio: mcpConnector('twilio', 'api-key'),
+  sendgrid: mcpConnector('sendgrid', 'api-key'),
+  aws: mcpConnector('aws', 'api-key'),
+  gcp: mcpConnector('gcp', 'oauth2'),
+  azure: mcpConnector('azure', 'oauth2'),
+  cloudflare: mcpConnector('cloudflare', 'oauth2'),
+  digitalocean: mcpConnector('digitalocean', 'api-key'),
+  snowflake: mcpConnector('snowflake', 'connection-string'),
+  bigquery: mcpConnector('bigquery', 'oauth2'),
+  databricks: mcpConnector('databricks', 'api-key'),
+  elasticsearch: mcpConnector('elasticsearch', 'api-key'),
+  pipedrive: mcpConnector('pipedrive', 'oauth2'),
+  zendesk: mcpConnector('zendesk', 'api-key'),
+  freshdesk: mcpConnector('freshdesk', 'api-key'),
+  figma: mcpConnector('figma', 'oauth2'),
+  canva: mcpConnector('canva', 'oauth2'),
+  adobe: mcpConnector('adobe', 'oauth2'),
+  quickbooks: mcpConnector('quickbooks', 'oauth2'),
+  xero: mcpConnector('xero', 'oauth2'),
+  paypal: mcpConnector('paypal', 'oauth2'),
+  square: mcpConnector('square', 'oauth2'),
+  plaid: mcpConnector('plaid', 'oauth2'),
+  'bank-accounts': firstPartyConnector('bank-accounts', 'oauth2', [
     'get_account_balances',
     'get_transactions',
   ]),
-  dropbox: mcpConnector('dropbox', 'oauth2', 'read-write'),
-  box: mcpConnector('box', 'oauth2', 'read-write'),
-  docusign: mcpConnector('docusign', 'oauth2', 'high-impact'),
-  sharepoint: firstPartyConnector('sharepoint', 'oauth2', 'read-only', [
+  dropbox: mcpConnector('dropbox', 'oauth2'),
+  box: mcpConnector('box', 'oauth2'),
+  docusign: mcpConnector('docusign', 'oauth2'),
+  sharepoint: firstPartyConnector('sharepoint', 'oauth2', [
     'search_sites',
     'search_files',
     'read_file',
   ]),
-  instagram: mcpConnector('instagram', 'oauth2', 'read-write'),
-  facebook: mcpConnector('facebook', 'oauth2', 'read-write'),
-  youtube: mcpConnector('youtube', 'oauth2', 'read-write'),
-  posthog: mcpConnector('posthog', 'oauth2', 'read-write'),
-  segment: mcpConnector('segment', 'api-key', 'read-write'),
-  mixpanel: mcpConnector('mixpanel', 'api-key', 'read-write'),
-  huggingface: mcpConnector('huggingface', 'oauth2', 'read-write'),
-  wandb: mcpConnector('wandb', 'api-key', 'read-write'),
-  'anthropic-api': mcpConnector('anthropic-api', 'api-key', 'read-write'),
-  replicate: mcpConnector('replicate', 'api-key', 'read-write'),
-  'epic-fhir': mcpConnector('epic-fhir', 'oauth2', 'high-impact'),
-  cerner: mcpConnector('cerner', 'oauth2', 'high-impact'),
-  healthex: mcpConnector('healthex', 'oauth2', 'high-impact'),
+  instagram: mcpConnector('instagram', 'oauth2'),
+  facebook: mcpConnector('facebook', 'oauth2'),
+  youtube: mcpConnector('youtube', 'oauth2'),
+  posthog: mcpConnector('posthog', 'oauth2'),
+  segment: mcpConnector('segment', 'api-key'),
+  mixpanel: mcpConnector('mixpanel', 'api-key'),
+  huggingface: mcpConnector('huggingface', 'oauth2'),
+  wandb: mcpConnector('wandb', 'api-key'),
+  'anthropic-api': mcpConnector('anthropic-api', 'api-key'),
+  replicate: mcpConnector('replicate', 'api-key'),
+  'epic-fhir': mcpConnector('epic-fhir', 'oauth2'),
+  cerner: mcpConnector('cerner', 'oauth2'),
+  healthex: mcpConnector('healthex', 'oauth2'),
 };
 
 export function getConnectorCapability(connectorId: string): ConnectorCapabilityRecord | null {

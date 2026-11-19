@@ -186,7 +186,7 @@ function CreatedSecrets({ created }: { created: ManagedCloudEventTriggerCreated 
   return (
     <SectionCard
       title="Trigger added"
-      description="Copy these now. The signing secret is shown once and a new trigger gets a new one."
+      description="Copy these now. The signing secret is shown only once."
     >
       <MetaText>{`Webhook URL: ${url}`}</MetaText>
       <CopyableSecret label="webhook URL" value={url} />
@@ -358,7 +358,7 @@ export function ScheduleTriggersScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48, gap: 12 }}
       >
         <MetaText>
-          An event from one of these sources starts this task, with the event attached to the run.
+          An event from these sources starts this task and is attached to the run.
         </MetaText>
         {error ? <ErrorBanner message={error} /> : null}
         {created ? <CreatedSecrets created={created} /> : null}

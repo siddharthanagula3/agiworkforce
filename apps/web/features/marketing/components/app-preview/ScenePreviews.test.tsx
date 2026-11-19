@@ -575,7 +575,7 @@ describe('memory settings', () => {
       'md:h-[min(94vh,680px)] md:w-[min(96vw,860px)]',
       'md:w-[220px]',
       '<div ref={paneRef} className="mx-auto w-full max-w-[672px]">',
-      "?.scrollIntoView({ block: 'nearest' });",
+      "item.scrollIntoView({ block: 'nearest' });",
     ]);
     expectSource('apps/web/features/settings/sections/PersonalizationSection.tsx', [
       '<MemorySection />',
@@ -2620,7 +2620,7 @@ describe('the /web close-up and research steps are scaled pictures of the produc
       '<span className="font-medium">Sources{total > 3 ? ` · ${total}` : \'\'}</span>',
       'const preview = (cited.length > 0 ? cited : more).slice(0, 3);',
     ]);
-    expectSource('apps/web/features/chat/lib/researchReportSources.ts', [
+    expectSource('packages/ui/unified-chat/src/lib/report-sources.ts', [
       'Inline [n] citations stay; only the trailing block goes.',
     ]);
     expectSource('apps/web/features/chat/components/research/ResearchActivity.tsx', [

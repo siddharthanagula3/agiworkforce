@@ -1,9 +1,12 @@
 import { NativeModules } from 'react-native';
 import { getRemoteChatDisabledReason } from '@/services/remoteChatGate';
+import { API_URL } from '@/lib/constants';
 
 export const LIVE_VOICE_MESSAGE = {
   microphoneDenied: 'Microphone access was denied. Allow the microphone to use live voice.',
   unsupported: 'Live voice needs a native build of this app, so voice stays turn based here.',
+  insecureServer:
+    'Live voice needs a secure connection to AGI Cloud, so voice stays turn based on this server.',
   connectionFailed: 'The live voice connection could not be established.',
   connectionDropped: 'The live voice connection dropped.',
   sessionEnded: 'The live voice session ended.',
@@ -30,8 +33,17 @@ export function liveVoiceModeUnavailableReason(input: {
  * would construct its native event emitter in a build that has no native
  * module at all.
  */
-export function liveVoiceUnavailableReason(): string | null {
+export function liveVoiceUnavailableReason(serverUrl: string = API_URL): string | null {
   const nativeModule = (NativeModules as Record<string, unknown>)['WebRTCModule'];
   if (!nativeModule) return LIVE_VOICE_MESSAGE.unsupported;
+  if (!isSecureServer(serverUrl)) return LIVE_VOICE_MESSAGE.insecureServer;
   return null;
+}
+
+function isSecureServer(serverUrl: string): boolean {
+  try {
+    return new URL(serverUrl).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }

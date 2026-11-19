@@ -1,3 +1,4 @@
+import { CONNECTOR_DISPLAY_NAMES, type CatalogConnectorId } from '@agiworkforce/cloud-contracts';
 import {
   allowsPresentTenseCopy,
   getConnectorActionSource,
@@ -88,6 +89,8 @@ export function describeConnectorActions(connectorId: string): string {
 
 type ConnectorSeed = Omit<Connector, 'description' | 'riskClass' | 'actionCount'>;
 
+type CatalogSeed = Omit<ConnectorSeed, 'id' | 'name'> & { id: CatalogConnectorId };
+
 const FIRST_PARTY_DESCRIPTIONS: Readonly<Record<string, string>> = {
   github: 'Read PR diffs, comment on issues and PRs, and post PR reviews via the GitHub App.',
 };
@@ -112,10 +115,9 @@ export function buildConnectorDescription(seed: ConnectorSeed): string {
   return `Not available by default. An operator can connect ${seed.name} for ${seed.capabilitySummary}.`;
 }
 
-const CONNECTOR_SEEDS: ConnectorSeed[] = [
+const CATALOG_SEEDS: CatalogSeed[] = [
   {
     id: 'gmail',
-    name: 'Gmail',
     capabilitySummary: 'email search, reading, sending, and drafts',
     category: 'Productivity',
     authType: 'oauth',
@@ -126,7 +128,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'google-calendar',
-    name: 'Google Calendar',
     capabilitySummary: 'event creation, availability lookups, and invite management',
     category: 'Productivity',
     authType: 'oauth',
@@ -137,7 +138,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'google-drive',
-    name: 'Google Drive',
     capabilitySummary: 'file reads, writes, search, and uploads',
     category: 'Productivity',
     authType: 'oauth',
@@ -148,7 +148,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'google-contacts',
-    name: 'Google Contacts',
     capabilitySummary: 'contact and directory lookups for names, email addresses and phone numbers',
     category: 'Productivity',
     authType: 'oauth',
@@ -159,7 +158,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'notion',
-    name: 'Notion',
     capabilitySummary: 'page search, content edits, and database management',
     category: 'Productivity',
     authType: 'oauth',
@@ -170,7 +168,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'slack',
-    name: 'Slack',
     capabilitySummary: 'message posting, conversation search, and channel reads',
     category: 'Productivity',
     authType: 'oauth',
@@ -181,7 +178,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'github',
-    name: 'GitHub',
     capabilitySummary: 'pull request diffs, issue comments, and PR reviews',
     category: 'Developer',
     authType: 'oauth',
@@ -192,7 +188,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'github-mcp',
-    name: 'GitHub MCP',
     capabilitySummary: 'repository, issue, pull request, and Actions workflow management',
     category: 'Developer',
     authType: 'oauth',
@@ -203,7 +198,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'google-sheets',
-    name: 'Google Sheets',
     capabilitySummary: 'cell reads and writes, sheet creation, and formulas',
     category: 'Productivity',
     authType: 'oauth',
@@ -214,7 +208,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'outlook',
-    name: 'Outlook',
     capabilitySummary:
       'mail search and reading, calendar events, and sending mail or invites after you approve',
     category: 'Productivity',
@@ -226,7 +219,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'microsoft-365',
-    name: 'Microsoft 365',
     capabilitySummary: 'read-only Entra directory lookups for users, groups, devices, and licenses',
     category: 'Productivity',
     authType: 'oauth',
@@ -237,7 +229,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'onedrive',
-    name: 'OneDrive',
     capabilitySummary: 'file search and reading documents as text',
     category: 'Productivity',
     authType: 'oauth',
@@ -248,7 +239,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'linear',
-    name: 'Linear',
     capabilitySummary: 'issue, project, and cycle management',
     category: 'Developer',
     authType: 'oauth',
@@ -259,7 +249,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'jira',
-    name: 'Jira',
     capabilitySummary: 'issue, sprint, epic, and board management',
     category: 'Developer',
     authType: 'oauth',
@@ -271,7 +260,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'teams',
-    name: 'Microsoft Teams',
     capabilitySummary: 'reading your chats and listing your teams and channels',
     category: 'Productivity',
     authType: 'oauth',
@@ -282,7 +270,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'confluence',
-    name: 'Confluence',
     capabilitySummary: 'page search and creation, and space management',
     category: 'Productivity',
     authType: 'oauth',
@@ -293,7 +280,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'asana',
-    name: 'Asana',
     capabilitySummary: 'task, project, and workflow management',
     category: 'Productivity',
     authType: 'oauth',
@@ -304,7 +290,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'zoom',
-    name: 'Zoom',
     capabilitySummary: 'meeting scheduling, recording retrieval, and participant management',
     category: 'Productivity',
     authType: 'oauth',
@@ -316,7 +301,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'hubspot',
-    name: 'HubSpot',
     capabilitySummary: 'contact, company, deal, and note management',
     category: 'CRM',
     authType: 'oauth',
@@ -327,7 +311,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'salesforce',
-    name: 'Salesforce',
     capabilitySummary: 'CRM object reads and writes across leads, opportunities, and accounts',
     category: 'CRM',
     authType: 'oauth',
@@ -338,7 +321,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'calendly',
-    name: 'Calendly',
     capabilitySummary: 'meeting scheduling, event types, and booking history',
     category: 'CRM',
     authType: 'oauth',
@@ -349,7 +331,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'intercom',
-    name: 'Intercom',
     capabilitySummary: 'conversation, customer, and ticket management',
     category: 'CRM',
     authType: 'oauth',
@@ -361,7 +342,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'google-analytics',
-    name: 'Google Analytics',
     capabilitySummary: 'report, audience, conversion, and traffic queries',
     category: 'Marketing',
     authType: 'oauth',
@@ -372,7 +352,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'mailchimp',
-    name: 'Mailchimp',
     capabilitySummary: 'audience, campaign, template, and analytics management',
     category: 'Marketing',
     authType: 'oauth',
@@ -384,7 +363,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'stripe',
-    name: 'Stripe',
     capabilitySummary: 'payment, subscription, customer, and report management',
     category: 'Finance',
     authType: 'oauth',
@@ -395,7 +373,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'shopify',
-    name: 'Shopify',
     capabilitySummary: 'product, order, customer, and inventory management',
     category: 'Finance',
     authType: 'oauth',
@@ -407,7 +384,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'linkedin',
-    name: 'LinkedIn',
     capabilitySummary: 'content posting, profile management, and network engagement',
     category: 'Social',
     authType: 'oauth',
@@ -418,7 +394,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'twitter',
-    name: 'Twitter / X',
     capabilitySummary: 'post publishing, content search, and account management',
     category: 'Social',
     authType: 'oauth',
@@ -429,7 +404,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'discord',
-    name: 'Discord',
     capabilitySummary: 'message posting and server, channel, and community management',
     category: 'Social',
     authType: 'oauth',
@@ -441,7 +415,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'openai',
-    name: 'OpenAI',
     capabilitySummary: 'completions, assistant management, and model access',
     category: 'AI',
     authType: 'api_key',
@@ -452,7 +425,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'elevenlabs',
-    name: 'ElevenLabs',
     capabilitySummary: 'speech generation, voice cloning, and audio production',
     category: 'AI',
     authType: 'api_key',
@@ -464,7 +436,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'local-filesystem',
-    name: 'Local Filesystem',
     capabilitySummary: 'file reads and writes on your own computer',
     category: 'Exclusive',
     authType: 'pat',
@@ -476,7 +447,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'terminal',
-    name: 'Terminal / Shell',
     capabilitySummary: 'command execution, scripts, and process management',
     category: 'Exclusive',
     authType: 'pat',
@@ -488,7 +458,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'browser-automation',
-    name: 'Browser Automation',
     capabilitySummary:
       'Chrome, Firefox, and Safari control over CDP for form fill, scraping, and navigation',
     category: 'Exclusive',
@@ -501,7 +470,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'screen-vision',
-    name: 'Screen Vision',
     capabilitySummary: 'OCR, screenshots, and computer use on your own screen',
     category: 'Exclusive',
     authType: 'pat',
@@ -513,7 +481,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'ollama',
-    name: 'Local LLMs (Ollama)',
     capabilitySummary: 'local model routing across Llama, Mistral, Qwen, and more',
     category: 'Exclusive',
     authType: 'pat',
@@ -526,7 +493,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'airtable',
-    name: 'Airtable',
     capabilitySummary: 'table, record, and view management',
     category: 'Productivity',
     authType: 'oauth',
@@ -537,7 +503,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'monday',
-    name: 'Monday.com',
     capabilitySummary: 'board, item, and automation management',
     category: 'Productivity',
     authType: 'oauth',
@@ -548,7 +513,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'clickup',
-    name: 'ClickUp',
     capabilitySummary: 'task, doc, goal, and workspace management',
     category: 'Productivity',
     authType: 'oauth',
@@ -559,7 +523,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'trello',
-    name: 'Trello',
     capabilitySummary: 'card, board, and list management',
     category: 'Productivity',
     authType: 'api_key',
@@ -570,7 +533,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'todoist',
-    name: 'Todoist',
     capabilitySummary: 'task creation, project management, and inbox sync',
     category: 'Productivity',
     authType: 'oauth',
@@ -581,7 +543,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'basecamp',
-    name: 'Basecamp',
     capabilitySummary: 'project, to-do, message, and schedule access',
     category: 'Productivity',
     authType: 'oauth',
@@ -592,7 +553,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'evernote',
-    name: 'Evernote',
     capabilitySummary: 'note and notebook search, creation, and management',
     category: 'Productivity',
     authType: 'oauth',
@@ -604,7 +564,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'vercel',
-    name: 'Vercel',
     capabilitySummary: 'deployment triggers, log inspection, and project management',
     category: 'Developer',
     authType: 'oauth',
@@ -615,7 +574,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'sentry',
-    name: 'Sentry',
     capabilitySummary: 'error queries, issue management, and stack-trace inspection',
     category: 'Developer',
     authType: 'oauth',
@@ -626,7 +584,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'datadog',
-    name: 'Datadog',
     capabilitySummary: 'metric, log, and trace queries plus monitor and dashboard management',
     category: 'Developer',
     authType: 'oauth',
@@ -637,7 +594,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'pagerduty',
-    name: 'PagerDuty',
     capabilitySummary: 'incident acknowledgement, on-call schedules, and alert history',
     category: 'Developer',
     authType: 'oauth',
@@ -648,7 +604,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'circleci',
-    name: 'CircleCI',
     capabilitySummary: 'pipeline triggers, job results, and workflow management',
     category: 'Developer',
     authType: 'api_key',
@@ -659,7 +614,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'gitlab',
-    name: 'GitLab',
     capabilitySummary: 'repository, merge request, pipeline, and issue management',
     category: 'Developer',
     authType: 'oauth',
@@ -670,7 +624,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'bitbucket',
-    name: 'Bitbucket',
     capabilitySummary: 'pull request, pipeline, and repository management',
     category: 'Developer',
     authType: 'oauth',
@@ -682,7 +635,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'telegram',
-    name: 'Telegram',
     capabilitySummary: 'message sending, bot management, and channel interaction',
     category: 'Communication',
     authType: 'api_key',
@@ -693,7 +645,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'whatsapp',
-    name: 'WhatsApp Business',
     capabilitySummary: 'message and notification sending over the WhatsApp Business API',
     category: 'Communication',
     authType: 'api_key',
@@ -704,7 +655,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'twilio',
-    name: 'Twilio',
     capabilitySummary: 'SMS, WhatsApp messages, and voice calls',
     category: 'Communication',
     authType: 'api_key',
@@ -715,7 +665,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'sendgrid',
-    name: 'SendGrid',
     capabilitySummary: 'transactional and marketing email delivery',
     category: 'Communication',
     authType: 'api_key',
@@ -727,7 +676,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'aws',
-    name: 'Amazon Web Services',
     capabilitySummary: 'S3, Lambda, EC2, and other AWS API operations',
     category: 'Cloud',
     authType: 'api_key',
@@ -738,7 +686,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'gcp',
-    name: 'Google Cloud',
     capabilitySummary: 'Cloud Storage, Pub/Sub, BigQuery, and Cloud Run operations',
     category: 'Cloud',
     authType: 'oauth',
@@ -749,7 +696,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'azure',
-    name: 'Microsoft Azure',
     capabilitySummary: 'Blob Storage, Functions, VM, and other Azure service operations',
     category: 'Cloud',
     authType: 'oauth',
@@ -760,7 +706,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'cloudflare',
-    name: 'Cloudflare',
     capabilitySummary: 'DNS, Workers, Pages, KV, and CDN rule management',
     category: 'Cloud',
     authType: 'oauth',
@@ -771,7 +716,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'digitalocean',
-    name: 'DigitalOcean',
     capabilitySummary: 'Droplet, Spaces, database, and app management',
     category: 'Cloud',
     authType: 'api_key',
@@ -783,7 +727,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'snowflake',
-    name: 'Snowflake',
     capabilitySummary:
       "Cortex Analyst, Cortex Search, agents and SQL through your account's Snowflake-managed MCP server, added by its URL",
     category: 'Data',
@@ -795,7 +738,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'bigquery',
-    name: 'BigQuery',
     capabilitySummary: 'SQL queries and dataset management',
     category: 'Data',
     authType: 'oauth',
@@ -806,7 +748,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'databricks',
-    name: 'Databricks',
     capabilitySummary:
       "Genie spaces, SQL, AI search and Unity Catalog functions through your workspace's managed MCP servers, added by URL",
     category: 'Data',
@@ -818,7 +759,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'elasticsearch',
-    name: 'Elasticsearch',
     capabilitySummary: 'document indexing, full-text queries, and cluster management',
     category: 'Data',
     authType: 'api_key',
@@ -830,7 +770,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'pipedrive',
-    name: 'Pipedrive',
     capabilitySummary: 'deal, contact, and pipeline management',
     category: 'CRM',
     authType: 'oauth',
@@ -841,7 +780,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'zendesk',
-    name: 'Zendesk',
     capabilitySummary: 'ticket, user, and support workflow management',
     category: 'CRM',
     authType: 'api_key',
@@ -852,7 +790,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'freshdesk',
-    name: 'Freshdesk',
     capabilitySummary: 'ticket, contact, and agent management',
     category: 'CRM',
     authType: 'api_key',
@@ -864,7 +801,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'figma',
-    name: 'Figma',
     capabilitySummary: 'file reads, component inspection, and asset export',
     category: 'Design',
     authType: 'oauth',
@@ -875,7 +811,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'canva',
-    name: 'Canva',
     capabilitySummary: 'design creation, brand asset access, and template management',
     category: 'Design',
     authType: 'oauth',
@@ -886,7 +821,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'adobe',
-    name: 'Adobe Creative Cloud',
     capabilitySummary: 'Creative Cloud asset and font access',
     category: 'Design',
     authType: 'oauth',
@@ -898,7 +832,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'quickbooks',
-    name: 'QuickBooks',
     capabilitySummary: 'invoice, expense, and financial report management',
     category: 'Finance',
     authType: 'oauth',
@@ -909,7 +842,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'xero',
-    name: 'Xero',
     capabilitySummary: 'account, invoice, and payroll management',
     category: 'Finance',
     authType: 'oauth',
@@ -920,7 +852,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'paypal',
-    name: 'PayPal',
     capabilitySummary: 'payment sending, invoice management, and transaction queries',
     category: 'Finance',
     authType: 'oauth',
@@ -931,7 +862,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'square',
-    name: 'Square',
     capabilitySummary: 'payment, inventory, and customer management',
     category: 'Finance',
     authType: 'oauth',
@@ -942,7 +872,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'plaid',
-    name: 'Plaid Dashboard',
     capabilitySummary:
       "a Plaid customer's developer dashboard data, such as Link analytics and item debugging",
     category: 'Finance',
@@ -954,7 +883,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'bank-accounts',
-    name: 'Bank accounts',
     capabilitySummary:
       'read-only balances and transactions from your own bank accounts, connected with Plaid, in the United States',
     category: 'Finance',
@@ -967,7 +895,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'dropbox',
-    name: 'Dropbox',
     capabilitySummary: 'file uploads, downloads, and management',
     category: 'Storage',
     authType: 'oauth',
@@ -978,7 +905,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'box',
-    name: 'Box',
     capabilitySummary: 'file, folder, and collaboration management',
     category: 'Storage',
     authType: 'oauth',
@@ -989,7 +915,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'docusign',
-    name: 'Docusign',
     capabilitySummary: 'sending envelopes for signature, agreement search, and workflows',
     category: 'Productivity',
     authType: 'oauth',
@@ -1000,7 +925,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'sharepoint',
-    name: 'SharePoint',
     capabilitySummary: 'site and document search and reading documents as text',
     category: 'Storage',
     authType: 'oauth',
@@ -1012,7 +936,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'instagram',
-    name: 'Instagram',
     capabilitySummary: 'content posting, media management, and insights over the Graph API',
     category: 'Social',
     authType: 'oauth',
@@ -1023,7 +946,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'facebook',
-    name: 'Facebook',
     capabilitySummary: 'page, post, ad, and audience insight management',
     category: 'Social',
     authType: 'oauth',
@@ -1034,7 +956,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'youtube',
-    name: 'YouTube',
     capabilitySummary: 'video search, playlist management, and channel analytics',
     category: 'Social',
     authType: 'oauth',
@@ -1046,7 +967,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'posthog',
-    name: 'PostHog',
     capabilitySummary: 'event, funnel, feature flag, and analytics queries',
     category: 'Marketing',
     authType: 'oauth',
@@ -1057,7 +977,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'segment',
-    name: 'Segment',
     capabilitySummary: 'event tracking, audience management, and destination configuration',
     category: 'Marketing',
     authType: 'api_key',
@@ -1068,7 +987,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'mixpanel',
-    name: 'Mixpanel',
     capabilitySummary: 'event, funnel, and retention queries',
     category: 'Marketing',
     authType: 'api_key',
@@ -1080,7 +998,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'huggingface',
-    name: 'Hugging Face',
     capabilitySummary: 'hosted model inference and Hub browsing',
     category: 'AI',
     authType: 'oauth',
@@ -1091,7 +1008,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'wandb',
-    name: 'Weights and Biases',
     capabilitySummary: 'experiment logging, run comparison, and artifact management',
     category: 'AI',
     authType: 'api_key',
@@ -1102,7 +1018,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'anthropic-api',
-    name: 'Anthropic',
     capabilitySummary: 'Claude model calls and API usage reporting',
     category: 'AI',
     authType: 'api_key',
@@ -1113,7 +1028,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'replicate',
-    name: 'Replicate',
     capabilitySummary: 'hosted open-source model runs',
     category: 'AI',
     authType: 'api_key',
@@ -1125,7 +1039,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
 
   {
     id: 'epic-fhir',
-    name: 'Epic FHIR',
     capabilitySummary: 'patient record, appointment, and clinical data access over FHIR R4',
     category: 'Healthcare',
     authType: 'oauth',
@@ -1136,7 +1049,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'cerner',
-    name: 'Cerner',
     capabilitySummary: 'patient data, clinical event, and care plan queries over FHIR',
     category: 'Healthcare',
     authType: 'oauth',
@@ -1147,7 +1059,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
   },
   {
     id: 'healthex',
-    name: 'HealthEx',
     capabilitySummary:
       'read-only access to your own health records from your care providers, in the United States',
     category: 'Healthcare',
@@ -1158,6 +1069,12 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     iconEmoji: '🩺',
   },
 ];
+
+const CONNECTOR_SEEDS: ConnectorSeed[] = CATALOG_SEEDS.map(({ id, ...rest }) => ({
+  id,
+  name: CONNECTOR_DISPLAY_NAMES[id],
+  ...rest,
+}));
 
 export const CONNECTORS: Connector[] = CONNECTOR_SEEDS.map((seed) => ({
   ...seed,

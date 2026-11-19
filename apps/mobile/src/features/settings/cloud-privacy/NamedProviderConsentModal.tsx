@@ -3,10 +3,11 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { PRIVACY_POLICY_URL } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import type { ChineseHqProviderId } from '@/services/providerConsent';
 import { chineseHqProviderDisplayName } from '@/services/providerConsent';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const PROVIDER_CONSENT_CONFIRM_TEST_ID = 'provider-consent-confirm';
 export const PROVIDER_CONSENT_CANCEL_TEST_ID = 'provider-consent-cancel';
@@ -39,6 +40,7 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
       >
         <View
           style={{
+            ...contentColumn('form'),
             backgroundColor: colors.surfaceBase,
             borderRadius: 20,
             borderWidth: 1,
@@ -60,7 +62,7 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
             it.
           </Text>
           <PressableBox
-            onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
+            onPress={() => void openWebContentPage(PRIVACY_POLICY_URL)}
             accessibilityRole="link"
           >
             <Text style={{ color: colors.teal, fontSize: typeScale.subhead }}>

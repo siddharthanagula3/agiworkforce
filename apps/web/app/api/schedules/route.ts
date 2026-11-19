@@ -1,12 +1,15 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  buildWorkspaceAccessGateResponse,
+  buildWorkspaceFeatureGateResponse,
+} from '@/lib/managed-compute-gate';
+import { refuseBlockedSchedulePrompt } from './prompt-secret-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { createError } from '@/lib/errors';
+import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   ScheduleConflictError,
@@ -25,7 +28,8 @@ import {
   clampSchedulePageOffset,
   clampSchedulePageSize,
 } from '@agiworkforce/cloud-contracts';
-import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
+import { getNextUpgradeTier, getPlanMaxScheduledTasks } from '@agiworkforce/types';
+import { UPGRADE_HREF } from '@/lib/services/managed-usage-request-service';
 
 export const runtime = 'nodejs';
 
@@ -34,8 +38,21 @@ function integerQueryValue(value: string | null, fallback: number): number {
   return Number(value);
 }
 
+const SCHEDULES_NOT_IN_PLAN_CODE = 'schedules_not_in_plan';
+const SCHEDULE_LIMIT_REACHED_CODE = 'schedule_limit_reached';
+
+function scheduleLimitRefusal(error: ScheduleLimitError): AppError {
+  return new AppError(ErrorCode.SUBSCRIPTION_REQUIRED, error.message, 403, {
+    code: error.limit === 0 ? SCHEDULES_NOT_IN_PLAN_CODE : SCHEDULE_LIMIT_REACHED_CODE,
+    limit: error.limit,
+    ...(getNextUpgradeTier(error.planTier) === null
+      ? {}
+      : { recovery: { action: 'upgrade', href: UPGRADE_HREF } }),
+  }).asUserSafe();
+}
+
 function rethrowScheduleError(error: unknown): never {
-  if (error instanceof ScheduleLimitError) throw createError.forbidden(error.message).asUserSafe();
+  if (error instanceof ScheduleLimitError) throw scheduleLimitRefusal(error);
   if (error instanceof ScheduleValidationError) throw createError.validation(error.message);
   if (error instanceof ScheduleNotFoundError) throw createError.notFound('Schedule not found');
   if (error instanceof ScheduleConflictError) throw createError.conflict(error.message);
@@ -56,10 +73,13 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
 }
 
 async function handleGetSchedules(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, surface } = await getUserScopedDb(request);
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const url = new URL(request.url);
   const limit = clampSchedulePageSize(
@@ -74,7 +94,7 @@ async function handleGetSchedules(request: NextRequest) {
 }
 
 async function handleCreateSchedule(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, surface } = await getUserScopedDb(request);
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -95,10 +115,11 @@ async function handleCreateSchedule(request: NextRequest) {
     userId,
     request,
     'schedules',
-    resolveCloudChatSurface(request),
+    surface ?? 'unknown',
   );
   if (featureGate) return featureGate;
   const body = await requestObject(request);
+  await refuseBlockedSchedulePrompt(userId, body);
 
   try {
     const schedule = await db.transaction(async (tx) => {

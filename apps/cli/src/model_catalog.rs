@@ -461,6 +461,16 @@ struct SharedModelReasoning {
     capable: Option<bool>,
     #[serde(default, rename = "supportedEfforts")]
     supported_efforts: Vec<String>,
+    #[serde(default)]
+    request: Option<SharedReasoningRequest>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SharedReasoningRequest {
+    #[serde(default, rename = "effortPath")]
+    effort_path: Option<String>,
+    #[serde(default, rename = "budgetPath")]
+    budget_path: Option<String>,
 }
 
 static SHARED_CATALOG: OnceLock<Option<SharedModelsCatalog>> = OnceLock::new();
@@ -884,9 +894,9 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
 pub fn managed_plan_needed(model_id: &str) -> Option<&'static str> {
     let in_slot = |slot: &str| tier_allowed_models(slot).iter().any(|id| id == model_id);
     if in_slot("flagship_additions") {
-        Some("Max")
+        Some(crate::tier_cache::UserTier::Max.label())
     } else if in_slot("pro_additions") || in_slot("economy") {
-        Some("Pro")
+        Some(crate::tier_cache::UserTier::Pro.label())
     } else {
         None
     }
@@ -1447,6 +1457,37 @@ pub fn effort_support(model_id: &str) -> EffortSupport {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffortParameter {
+    OutputConfigEffort,
+    ReasoningEffort,
+    ThinkingLevel,
+}
+
+fn capable_reasoning_request(model_id: &str) -> Option<&'static SharedReasoningRequest> {
+    shared_catalog()
+        .and_then(|catalog| direct_model_for_any(catalog, model_id))
+        .and_then(|meta| meta.reasoning.as_ref())
+        .filter(|reasoning| reasoning.capable == Some(true))
+        .and_then(|reasoning| reasoning.request.as_ref())
+}
+
+pub fn effort_parameter(model_id: &str) -> Option<EffortParameter> {
+    match capable_reasoning_request(model_id)?
+        .effort_path
+        .as_deref()?
+    {
+        "output_config.effort" => Some(EffortParameter::OutputConfigEffort),
+        "reasoning_effort" => Some(EffortParameter::ReasoningEffort),
+        "thinkingConfig.thinkingLevel" => Some(EffortParameter::ThinkingLevel),
+        _ => None,
+    }
+}
+
+pub fn accepts_thinking_budget(model_id: &str) -> bool {
+    capable_reasoning_request(model_id).is_some_and(|request| request.budget_path.is_some())
+}
+
 const EFFORT_ORDER: [&str; 7] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 pub fn nearest_supported_effort<'a>(requested: &str, levels: &'a [String]) -> Option<&'a str> {
@@ -1890,6 +1931,37 @@ mod tests {
     }
 
     #[test]
+    fn every_effort_parameter_the_catalog_names_is_one_the_cli_can_send() {
+        let catalog = shared_catalog().expect("embedded catalog must deserialize");
+        let mut named = 0;
+        for model in catalog.models.values() {
+            let Some(request) = model
+                .reasoning
+                .as_ref()
+                .filter(|reasoning| reasoning.capable == Some(true))
+                .and_then(|reasoning| reasoning.request.as_ref())
+            else {
+                continue;
+            };
+            if let Some(path) = request.effort_path.as_deref() {
+                named += 1;
+                assert!(
+                    effort_parameter(&model.id).is_some(),
+                    "{} names {path}, which the CLI does not send",
+                    model.id
+                );
+            }
+            assert_eq!(
+                accepts_thinking_budget(&model.id),
+                request.budget_path.is_some(),
+                "{}",
+                model.id
+            );
+        }
+        assert!(named > 0);
+    }
+
+    #[test]
     fn api_wire_id_resolves_dotted_display_id_to_wire_id() {
         let catalog = shared_catalog().expect("embedded catalog must deserialize");
         for model in catalog.models.values() {
@@ -2260,5 +2332,25 @@ mod tests {
         let ds_src = include_str!("design_system.rs");
         let production_src = ds_src.split("#[cfg(test)]").next().unwrap_or(ds_src);
         assert_source_has_no_catalog_model_literals("design_system.rs", production_src);
+    }
+
+    #[test]
+    fn a_locked_model_names_the_plan_by_the_tier_label_the_cli_shows() {
+        use crate::tier_cache::UserTier;
+        let flagship = tier_allowed_models("flagship_additions");
+        let premium_model = ["pro_additions", "economy"]
+            .into_iter()
+            .flat_map(tier_allowed_models)
+            .find(|id| !flagship.contains(id))
+            .expect("catalog must list a model below the flagship slot");
+        let max_model = flagship
+            .first()
+            .expect("catalog must list a flagship model");
+        assert_eq!(
+            managed_plan_needed(&premium_model),
+            Some(UserTier::Pro.label())
+        );
+        assert_eq!(managed_plan_needed(max_model), Some(UserTier::Max.label()));
+        assert_eq!(managed_plan_needed("a-model-nobody-ships"), None);
     }
 }

@@ -70,7 +70,7 @@ export async function getOrgRole(
   organizationId: string,
 ): Promise<OrgRole | null> {
   const rows = await db.query<Pick<OrganizationMemberRow, 'role'>>(
-    'select role from organization_members where organization_id = $1 and user_id = $2 limit 1',
+    "select role from organization_members where organization_id = $1 and user_id = $2 and status = 'active' limit 1",
     [organizationId, userId],
   );
 

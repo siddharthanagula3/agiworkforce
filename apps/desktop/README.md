@@ -2,10 +2,11 @@
 
 Status: Current
 Owner: Desktop surface maintainers
-Last updated: 2026-11-09
+Last updated: 2026-11-11
 
-The existing desktop applications build from this directory and show different
-renderers. The repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
+Two desktop applications build from this directory, and they show different
+renderers. Electron is the public Desktop; Tauri is retained internal code, not
+a second public product. The repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
 of it are in `AGENTS.md`.
 
 ## Existing shells and the migration host
@@ -30,24 +31,24 @@ reachable from it.
 
 ## Commands
 
-| Task                      | Command                                                  |
-| ------------------------- | -------------------------------------------------------- |
-| Tauri dev                 | `pnpm --filter @agiworkforce/desktop dev`                |
-| Renderer only             | `pnpm --filter @agiworkforce/desktop dev:vite`           |
-| Tauri release build       | `pnpm --filter @agiworkforce/desktop build`              |
-| Tauri unsigned build      | `pnpm --filter @agiworkforce/desktop build:local`        |
-| Electron dev shell        | `pnpm --filter @agiworkforce/desktop dev:electron`       |
-| Electron installer        | `pnpm --filter @agiworkforce/desktop dist:electron`      |
-| GPUI development host     | `pnpm --filter @agiworkforce/desktop dev:gpui`           |
-| GPUI build                | `pnpm --filter @agiworkforce/desktop build:gpui`         |
-| GPUI compile check        | `pnpm --filter @agiworkforce/desktop check:gpui`         |
-| GPUI runtime tests        | `pnpm --filter @agiworkforce/desktop test:gpui`          |
-| GPUI license notices      | `pnpm --filter @agiworkforce/desktop notices:gpui`       |
-| Unit tests                | `pnpm --filter @agiworkforce/desktop test`               |
-| Typecheck (renderer)      | `pnpm --filter @agiworkforce/desktop typecheck`          |
-| Typecheck (Electron main) | `pnpm --filter @agiworkforce/desktop typecheck:electron` |
-| Rust tests                | `cargo test -p agiworkforce-desktop --lib`               |
-| WebdriverIO end to end    | `pnpm --filter @agiworkforce/desktop test:e2e`           |
+| Task                                     | Command                                                  |
+| ---------------------------------------- | -------------------------------------------------------- |
+| Tauri dev                                | `pnpm --filter @agiworkforce/desktop dev`                |
+| Renderer only                            | `pnpm --filter @agiworkforce/desktop dev:vite`           |
+| Tauri release build                      | `pnpm --filter @agiworkforce/desktop build`              |
+| Tauri unsigned build                     | `pnpm --filter @agiworkforce/desktop build:local`        |
+| Electron dev shell                       | `pnpm --filter @agiworkforce/desktop dev:electron`       |
+| Electron installer                       | `pnpm --filter @agiworkforce/desktop dist:electron`      |
+| GPUI development host                    | `pnpm --filter @agiworkforce/desktop dev:gpui`           |
+| GPUI build                               | `pnpm --filter @agiworkforce/desktop build:gpui`         |
+| GPUI compile check                       | `pnpm --filter @agiworkforce/desktop check:gpui`         |
+| GPUI runtime tests                       | `pnpm --filter @agiworkforce/desktop test:gpui`          |
+| GPUI license notices                     | `pnpm --filter @agiworkforce/desktop notices:gpui`       |
+| Unit tests                               | `pnpm --filter @agiworkforce/desktop test`               |
+| Typecheck (renderer, then Electron main) | `pnpm --filter @agiworkforce/desktop typecheck`          |
+| Typecheck (Electron main only)           | `pnpm --filter @agiworkforce/desktop typecheck:electron` |
+| Rust tests                               | `cargo test -p agiworkforce-desktop --lib`               |
+| WebdriverIO end to end                   | `pnpm --filter @agiworkforce/desktop test:e2e`           |
 
 `docs/agent-context/commands.json` is the machine-readable inventory; read it
 rather than guessing a filter.
@@ -235,7 +236,7 @@ session never starts, check the grant store before suspecting the code.
 
 ## Release
 
-`docs/qa/screenshots` holds QA captures. `docs/runbooks/desktop-electron-macos-release.md`
+`docs/runbooks/desktop-electron-macos-release.md`
 is the signing and notarisation procedure for the public Electron app, including a
 release built on a Mac, and `docs/runbooks/desktop-macos-release.md` is the one for
 the retained Tauri app. The release workflows themselves are

@@ -339,14 +339,14 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
             .map_err(|reason| anyhow!(reason))?;
     }
     let parsed = crate::diff_model::Diff::parse(patch);
-    let mut apply_command = git_apply(&cwd);
-    apply_command.args(["--apply", "--numstat", "-z", "--verbose", "-"]);
-    let apply = crate::process_tree::output(
-        apply_command,
-        Some(patch.as_bytes().to_vec()),
-        Some(GIT_APPLY_TIMEOUT),
-    )
-    .await?;
+    let mut apply = run_git_apply(&cwd, patch).await?;
+    if !apply.status.success() && !patch.contains('\r') && every_existing_target_uses_crlf(&targets)
+    {
+        let retried = run_git_apply(&cwd, &with_crlf_hunk_lines(patch)).await?;
+        if retried.status.success() {
+            apply = retried;
+        }
+    }
     let code = apply.status.code().unwrap_or(1);
     let mut applied = Vec::new();
     let mut conflicted = Vec::new();
@@ -393,20 +393,240 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
     })
 }
 
+async fn run_git_apply(cwd: &Path, patch: &str) -> std::io::Result<std::process::Output> {
+    let mut apply_command = git_apply(cwd);
+    apply_command.args(["--apply", "--numstat", "-z", "--verbose", "-"]);
+    crate::process_tree::output(
+        apply_command,
+        Some(patch.as_bytes().to_vec()),
+        Some(GIT_APPLY_TIMEOUT),
+    )
+    .await
+}
+
+fn every_existing_target_uses_crlf(targets: &[PatchTarget]) -> bool {
+    let mut found = false;
+    for target in targets {
+        match std::fs::read(&target.file) {
+            Ok(bytes) if bytes.windows(2).any(|pair| pair == b"\r\n") => found = true,
+            Ok(_) => return false,
+            Err(_) => {}
+        }
+    }
+    found
+}
+
+fn hunk_line_counts(header: &str) -> Option<(usize, usize)> {
+    let ranges = header.strip_prefix("@@ -")?;
+    let (old, rest) = ranges.split_once(" +")?;
+    let (new, _) = rest.split_once(" @@")?;
+    let count = |range: &str| -> Option<usize> {
+        match range.split_once(',') {
+            Some((_, length)) => length.parse().ok(),
+            None => Some(1),
+        }
+    };
+    Some((count(old)?, count(new)?))
+}
+
+/// A patch written with LF line endings, for files that use CRLF: git
+/// compares line endings, so the patch would never apply, and git's
+/// `--ignore-whitespace` writes the new lines with LF among CRLF ones.
+fn with_crlf_hunk_lines(patch: &str) -> String {
+    let lines: Vec<&str> = patch.split_inclusive('\n').collect();
+    let mut converted = String::with_capacity(patch.len() + lines.len());
+    let (mut old_left, mut new_left) = (0usize, 0usize);
+    for (index, line) in lines.iter().enumerate() {
+        if old_left == 0 && new_left == 0 {
+            if let Some((old, new)) = hunk_line_counts(bare_line(line)) {
+                old_left = old;
+                new_left = new;
+            }
+            converted.push_str(line);
+            continue;
+        }
+        match line.as_bytes().first() {
+            Some(b' ') => {
+                old_left = old_left.saturating_sub(1);
+                new_left = new_left.saturating_sub(1);
+            }
+            Some(b'-') => old_left = old_left.saturating_sub(1),
+            Some(b'+') => new_left = new_left.saturating_sub(1),
+            _ => {
+                converted.push_str(line);
+                continue;
+            }
+        }
+        let last_without_newline = lines
+            .get(index + 1)
+            .is_some_and(|next| next.starts_with('\\'));
+        match line.strip_suffix('\n') {
+            Some(body) if !last_without_newline => {
+                converted.push_str(body);
+                converted.push_str("\r\n");
+            }
+            _ => converted.push_str(line),
+        }
+    }
+    converted
+}
+
+const DIFF_HEADER_PREFIXES: [&str; 14] = [
+    "diff --git ",
+    "index ",
+    "new file mode ",
+    "deleted file mode ",
+    "old mode ",
+    "new mode ",
+    "similarity index ",
+    "dissimilarity index ",
+    "rename from ",
+    "rename to ",
+    "copy from ",
+    "copy to ",
+    "Binary files ",
+    "GIT binary patch",
+];
+
+fn bare_line(line: &str) -> &str {
+    line.trim_end_matches(['\r', '\n'])
+}
+
+fn is_unified_diff(text: &str) -> bool {
+    let lines: Vec<&str> = text.lines().collect();
+    lines.iter().any(|line| line.starts_with("diff --git "))
+        || lines.windows(3).any(|three| {
+            three[0].starts_with("--- ")
+                && three[1].starts_with("+++ ")
+                && three[2].starts_with("@@ ")
+        })
+}
+
+fn is_diff_line(line: &str) -> bool {
+    matches!(
+        line.as_bytes().first(),
+        Some(b' ' | b'+' | b'-' | b'@' | b'\\')
+    ) || DIFF_HEADER_PREFIXES
+        .iter()
+        .any(|prefix| line.starts_with(prefix))
+}
+
+fn is_fence(line: &str) -> bool {
+    line.starts_with("```") || line.starts_with("~~~")
+}
+
+fn loose_diff(text: &str) -> Option<String> {
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let start = (0..lines.len()).find(|&index| {
+        let line = bare_line(lines[index]);
+        line.starts_with("diff --git ")
+            || (line.starts_with("--- ")
+                && lines
+                    .get(index + 1)
+                    .is_some_and(|next| bare_line(next).starts_with("+++ ")))
+    })?;
+    let diff: String = lines[start..]
+        .iter()
+        .take_while(|line| is_diff_line(bare_line(line)))
+        .copied()
+        .collect();
+    is_unified_diff(&diff).then_some(diff)
+}
+
+/// Every unified diff in one reply, fenced or not, as one patch. A Markdown
+/// rule, a table or YAML front matter holds `---` and is not a diff.
+fn unified_diff_in(text: &str) -> Option<String> {
+    let mut blocks: Vec<String> = Vec::new();
+    let mut fenced: Option<String> = None;
+    let mut loose = String::new();
+    for line in text.split_inclusive('\n') {
+        if is_fence(bare_line(line)) {
+            match fenced.take() {
+                Some(block) => {
+                    if is_unified_diff(&block) {
+                        blocks.push(block);
+                    }
+                }
+                None => {
+                    blocks.extend(loose_diff(&loose));
+                    loose.clear();
+                    fenced = Some(String::new());
+                }
+            }
+            continue;
+        }
+        match fenced.as_mut() {
+            Some(block) => block.push_str(line),
+            None => loose.push_str(line),
+        }
+    }
+    if let Some(block) = fenced.filter(|block| is_unified_diff(block)) {
+        blocks.push(block);
+    }
+    blocks.extend(loose_diff(&loose));
+    for block in &mut blocks {
+        if !block.ends_with('\n') {
+            block.push('\n');
+        }
+    }
+    (!blocks.is_empty()).then(|| blocks.concat())
+}
+
+/// Apply the last unified diff the assistant wrote in `session_id`, in the
+/// current folder.
 pub async fn apply_from_session(session_id: &str) -> Result<PatchResult> {
     let conn = crate::sessions::open_db()?;
-    let messages = crate::sessions::load_session(&conn, session_id)?;
-    let diff = messages.iter().rev().find_map(|m| {
-        let t = m.text_content();
-        if t.contains("diff --git") || t.contains("---") {
-            Some(t)
-        } else {
-            None
+    let cwd = std::env::current_dir()?;
+    apply_session_diff(&conn, session_id, &cwd).await
+}
+
+/// Apply the last unified diff of the newest session started in `folder`.
+/// A session from another folder is never used: its diff was written for
+/// other files.
+pub async fn apply_latest_in_folder(folder: &Path) -> Result<PatchResult> {
+    let conn = crate::sessions::open_db()?;
+    apply_latest_in(&conn, folder).await
+}
+
+async fn apply_latest_in(conn: &crate::sessions::Connection, folder: &Path) -> Result<PatchResult> {
+    let Some(session_id) = crate::sessions::latest_session_in_folder(conn, folder)? else {
+        anyhow::bail!(
+            "No saved session was started in {}, so there is no diff to apply here. Name one with \
+             agi apply <session-id>, or pass a patch with agi apply --file <patch>.",
+            folder.display()
+        );
+    };
+    apply_session_diff(conn, &session_id, folder).await
+}
+
+async fn apply_session_diff(
+    conn: &crate::sessions::Connection,
+    session_id: &str,
+    cwd: &Path,
+) -> Result<PatchResult> {
+    let messages = crate::sessions::load_session(conn, session_id)?;
+    let mut refusal = None;
+    for patch in messages
+        .iter()
+        .rev()
+        .filter(|message| message.role == "assistant")
+        .filter_map(|message| unified_diff_in(&message.text_content()))
+    {
+        match patch_targets(&patch, cwd).await {
+            Ok(_) => return apply_git_patch(&patch, Some(cwd)).await,
+            Err(reason) => {
+                if refusal.is_none() {
+                    refusal = Some(reason);
+                }
+            }
         }
-    });
-    match diff {
-        Some(patch) => apply_git_patch(&patch, None).await,
-        None => anyhow::bail!("No diff found in session '{}'", session_id),
+    }
+    match refusal {
+        Some(reason) => anyhow::bail!(
+            "The latest diff in session '{session_id}' cannot be applied in {}: {reason}",
+            cwd.display()
+        ),
+        None => anyhow::bail!("No unified diff found in the replies of session '{session_id}'"),
     }
 }
 
@@ -848,6 +1068,133 @@ index 0000000..e69de29\n";
         let err = patch_targets(patch, workspace.path()).await.unwrap_err();
 
         assert!(err.contains("symbolic link creation"), "got: {err}");
+    }
+
+    #[test]
+    fn a_markdown_rule_a_table_or_front_matter_is_not_a_diff() {
+        use super::unified_diff_in;
+
+        for prose in [
+            "Done.\n\n---\n\nNext steps",
+            "---\ntitle: notes\n---\nbody\n",
+            "| a | b |\n|---|---|\n| 1 | 2 |\n",
+            "```yaml\n---\nkey: value\n```\n",
+        ] {
+            assert_eq!(unified_diff_in(prose), None, "{prose:?}");
+        }
+        let fenced = "Here:\n\n```diff\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n```\n\nThat is all.";
+        assert_eq!(
+            unified_diff_in(fenced).as_deref(),
+            Some("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n")
+        );
+        let loose = "Apply this:\ndiff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n\nThen check it.";
+        assert_eq!(
+            unified_diff_in(loose).as_deref(),
+            Some("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n")
+        );
+    }
+
+    fn session_with(
+        conn: &crate::sessions::Connection,
+        id: &str,
+        folder: &Path,
+        turns: &[(&str, &str)],
+    ) {
+        crate::sessions::save_session(conn, id, "Patch", "", &folder.to_string_lossy(), "")
+            .expect("session");
+        for &(role, text) in turns {
+            crate::sessions::save_message(conn, id, &crate::models::Message::text(role, text), 0)
+                .expect("message");
+        }
+    }
+
+    const X_DIFF: &str =
+        "Here it is:\n\n```diff\n--- a/x.txt\n+++ b/x.txt\n@@ -1 +1 @@\n-old\n+new\n```\n";
+
+    #[tokio::test]
+    async fn the_diff_applied_is_the_last_real_diff_not_a_later_markdown_rule() {
+        let store = tempfile::tempdir().expect("store");
+        let conn = crate::sessions::open_db_in(store.path()).expect("store");
+        let workspace = seeded_repo();
+        std::fs::write(workspace.path().join("x.txt"), "old\n").expect("seed");
+        session_with(
+            &conn,
+            "with-diff",
+            workspace.path(),
+            &[
+                ("user", "---\ntitle: front matter\n---\nchange x"),
+                ("assistant", X_DIFF),
+                ("assistant", "Done.\n\n---\n\nNext steps"),
+            ],
+        );
+
+        let result = super::apply_latest_in(&conn, workspace.path())
+            .await
+            .expect("apply");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("x.txt")).expect("read"),
+            "new\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn with_no_session_named_a_session_from_another_folder_is_never_applied() {
+        let store = tempfile::tempdir().expect("store");
+        let conn = crate::sessions::open_db_in(store.path()).expect("store");
+        let workspace = seeded_repo();
+        let elsewhere = tempfile::tempdir().expect("other project");
+        std::fs::write(workspace.path().join("x.txt"), "old\n").expect("seed");
+        session_with(
+            &conn,
+            "other-project",
+            elsewhere.path(),
+            &[("assistant", X_DIFF)],
+        );
+
+        let refusal = super::apply_latest_in(&conn, workspace.path())
+            .await
+            .expect_err("the newest session belongs to another folder");
+
+        assert!(
+            refusal
+                .to_string()
+                .contains("No saved session was started in"),
+            "{refusal}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(workspace.path().join("x.txt")).expect("read"),
+            "old\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_lf_patch_applies_to_a_crlf_file_and_keeps_its_line_endings() {
+        let workspace = seeded_repo();
+        let target = workspace.path().join("windows.txt");
+        std::fs::write(&target, "one\r\ntwo\r\nthree\r\n").expect("seed file");
+        let patch =
+            "--- a/windows.txt\n+++ b/windows.txt\n@@ -1,3 +1,3 @@\n one\n-two\n+TWO\n three\n";
+
+        let result = apply_git_patch(patch, Some(workspace.path()))
+            .await
+            .expect("apply lf patch");
+
+        assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
+        assert_eq!(
+            std::fs::read(&target).expect("read result"),
+            b"one\r\nTWO\r\nthree\r\n"
+        );
+    }
+
+    #[test]
+    fn crlf_conversion_touches_hunk_lines_only_and_keeps_a_missing_final_newline() {
+        let patch = "diff --git a/w b/w\n--- a/w\n+++ b/w\n@@ -1,2 +1,2 @@\n one\n-two\n+TWO\n\\ No newline at end of file\n";
+        assert_eq!(
+            super::with_crlf_hunk_lines(patch),
+            "diff --git a/w b/w\n--- a/w\n+++ b/w\n@@ -1,2 +1,2 @@\n one\r\n-two\r\n+TWO\n\\ No newline at end of file\n"
+        );
     }
 
     fn seeded_repo() -> tempfile::TempDir {

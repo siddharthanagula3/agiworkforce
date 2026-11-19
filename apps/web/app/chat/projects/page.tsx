@@ -162,10 +162,10 @@ export default function ProjectsPage() {
     <WebAppShell>
       <section
         data-design="agi"
+        className="px-8 py-12 max-md:px-4 max-md:pt-6"
         style={{
           minHeight: '100%',
           background: 'hsl(var(--background))',
-          padding: 'var(--space-7) var(--space-6)',
           color: 'hsl(var(--foreground))',
         }}
       >
@@ -198,6 +198,7 @@ export default function ProjectsPage() {
               }}
             >
               <h1
+                className="max-md:leading-[1.2]"
                 style={{
                   fontFamily: 'var(--sans)',
                   fontSize: 28,
@@ -217,9 +218,7 @@ export default function ProjectsPage() {
                   lineHeight: 1.55,
                 }}
               >
-                Group related conversations under a shared project. Each project can carry its own
-                files, instructions, and chat history. Projects sync securely across your Chat,
-                Mobile, and Desktop cloud sessions.
+                Keep related chats, files and instructions together.
               </p>
             </div>
 

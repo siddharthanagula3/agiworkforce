@@ -125,6 +125,8 @@ const allowedLiveNonMarkdownFiles = new Set([
   'docs/compliance/trust-claims.json',
   'docs/security/security-claims.json',
   'docs/product/surface-feature-matrix.json',
+  'docs/research/mobile-layout-2026-11-12/features.jsonl',
+  'docs/research/mobile-layout-2026-11-12/screens.jsonl',
 ]);
 
 const SCAN_ROOTS = [

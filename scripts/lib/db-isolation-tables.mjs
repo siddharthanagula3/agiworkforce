@@ -9,6 +9,8 @@ export const USER_OWNED_TABLES = new Set([
   'external_resource_references',
   'user_memories',
   'media_assets',
+  'chat_file_intakes',
+  'chat_file_preparations',
   'scheduled_tasks',
   'scheduled_task_runs',
   'scheduled_task_shares',

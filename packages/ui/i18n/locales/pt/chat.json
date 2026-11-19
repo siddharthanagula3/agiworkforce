@@ -450,6 +450,8 @@
     "videoModeAttachments_other": "A geração de vídeo usa apenas o seu prompt. Os arquivos anexados não são enviados ao modelo de vídeo. Saia do modo vídeo primeiro se quiser enviar estes arquivos ao modelo de chat.",
     "viewSources_one": "Ver {{count}} fonte",
     "viewSources_other": "Ver {{count}} fontes",
+    "viewSourcesSoFar_one": "Ver {{count}} fonte até agora",
+    "viewSourcesSoFar_other": "Ver {{count}} fontes até agora",
     "folderFilesLeftOut_one": "{{count}} arquivo em {{folder}} não foi anexado. Anexe-o a partir de uma pasta local.",
     "folderFilesLeftOut_other": "{{count}} arquivos em {{folder}} não foram anexados. Anexe-os a partir de uma pasta local.",
     "savedMemoriesUsed_one": "Usou {{count}} memória salva",

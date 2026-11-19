@@ -415,8 +415,7 @@ export function WorkspacePlugins() {
             Workspace plugins
           </h3>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Members find these under Plugins, from this workspace. Members cannot edit a workspace
-            plugin; publish a new version to change it.
+            Members find these under Plugins. Publish a new version to change one.
           </p>
         </div>
       </div>
@@ -555,10 +554,8 @@ export function WorkspacePlugins() {
             Publish a plugin or a skill
           </p>
           <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-            Upload a plugin .zip, or a .zip holding one skill and its SKILL.md. Every file is
-            scanned first. A skill starts on for everyone and each member can turn it off; a plugin
-            starts as available to install. Publishing the same one again replaces it and keeps its
-            settings.
+            Upload a plugin .zip, or a .zip with one skill and its SKILL.md. Files are scanned
+            first. Publishing again replaces it.
           </p>
           <input
             ref={fileInput}

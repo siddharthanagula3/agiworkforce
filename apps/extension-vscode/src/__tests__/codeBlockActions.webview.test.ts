@@ -171,4 +171,54 @@ describe('rendered Markdown code-block actions', () => {
     expect(applyButton?.textContent).toBe('Failed');
     expect(applyButton?.title).toBe('Open a file before applying this suggestion.');
   });
+
+  it('explains a code block without touching the typed draft or the staged files', () => {
+    const postMessage = vi.fn();
+    executeWebviewScript(postMessage);
+    const markdown = ['```typescript', 'const answer = 42;', '```'].join('\n');
+    window.dispatchEvent(
+      new MessageEvent('message', { data: { type: 'token', payload: { text: markdown } } }),
+    );
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'done', payload: {} } }));
+    const composer = document.getElementById('userInput') as HTMLTextAreaElement;
+    composer.value = 'my half-typed question';
+
+    document.querySelector<HTMLButtonElement>('.code-block-wrapper .explain-btn')?.click();
+
+    expect(composer.value).toBe('my half-typed question');
+    const sent = postMessage.mock.calls
+      .map(([message]) => message as { type: string; payload?: Record<string, unknown> })
+      .find((message) => message.type === 'sendMessage');
+    expect(sent?.payload).toEqual(
+      expect.objectContaining({
+        text: expect.stringContaining('Explain this code:'),
+        standalone: true,
+        browseWeb: false,
+      }),
+    );
+    expect(sent?.payload?.text).not.toContain('my half-typed question');
+  });
+
+  it('keeps Review changes only on the latest reply, the one whose changes it can show', () => {
+    executeWebviewScript(vi.fn());
+    const reply = (turnId: string): void => {
+      window.dispatchEvent(new MessageEvent('message', { data: { type: 'turnResumed' } }));
+      window.dispatchEvent(
+        new MessageEvent('message', { data: { type: 'token', payload: { text: 'Edited.' } } }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'done', payload: { turnId, changedFiles: 1 } },
+        }),
+      );
+    };
+
+    reply('turn-1');
+    reply('turn-2');
+
+    const reviews = document.querySelectorAll('.turn-changes__review');
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]?.closest('.turn-changes')?.getAttribute('data-turn-id')).toBe('turn-2');
+    expect(document.querySelectorAll('.turn-changes')).toHaveLength(2);
+  });
 });

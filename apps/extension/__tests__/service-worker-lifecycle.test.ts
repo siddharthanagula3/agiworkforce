@@ -215,8 +215,9 @@ describe('a computer-use run that dies with the worker ends visibly', () => {
 describe('a page load does not wake the worker on a site the user never approved', () => {
   it('gates both startup calls behind the approved-origin read', () => {
     expect(content).toMatch(
-      /void originApproved\.then\(\(approved\) => \{\s*if \(!approved\) return;\s*void checkConnectionStatus\(\);\s*void notifyTabReady\(\);/,
+      /function startApprovedFeatures\(\): void \{\s*if \(approvedStartupDone\) return;\s*approvedStartupDone = true;\s*void checkConnectionStatus\(\);\s*void notifyTabReady\(\);/,
     );
+    expect(content).toContain('if (access.approved) startApprovedFeatures();');
   });
 
   it('injects no UI of its own into an arbitrary page', () => {
@@ -225,7 +226,8 @@ describe('a page load does not wake the worker on a site the user never approved
   });
 
   it('decides an approved origin once per document rather than per call', () => {
-    expect(content).toContain('const originApproved: Promise<boolean>');
-    expect(content.match(/originApproved/g)?.length).toBeGreaterThan(1);
+    expect(content).toContain('const initialPageAccess: Promise<PageAccess>');
+    expect(content).toContain('void applyPageAccess(initialPageAccess);');
+    expect(content.match(/const initialPageAccess/g)).toHaveLength(1);
   });
 });

@@ -1,15 +1,30 @@
 import { useState, useCallback, useMemo } from 'react';
-import { View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  View,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
+import { Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { SUPPORT_EMAIL } from '@/src/features/support/contact';
+import { useNoMailAppAlert } from '@/src/features/support/useNoMailAppAlert';
+import { feedbackClientContext } from './clientContext';
+import { FEEDBACK_SCREEN_TITLE } from './presentation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -19,8 +34,15 @@ const FEEDBACK_TYPES: Array<{ type: FeedbackType; label: string; icon: typeof Bu
   { type: 'general', label: 'General Feedback', icon: MessageCircle },
 ];
 
-const SETTINGS_RETURN_PATH = '/(app)/(tabs)/settings' as const;
+const SETTINGS_RETURN_PATH = '/(app)/settings' as const;
 const ABOUT_RETURN_PATH = '/(app)/about' as const;
+
+export function feedbackMailtoUrl(type: FeedbackType, message: string): string {
+  const label = FEEDBACK_TYPES.find((entry) => entry.type === type)?.label ?? 'Feedback';
+  const subject = encodeURIComponent(label);
+  const body = encodeURIComponent(message);
+  return `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+}
 
 function resolveReturnTo(value: unknown): typeof SETTINGS_RETURN_PATH | typeof ABOUT_RETURN_PATH {
   if (value === ABOUT_RETURN_PATH) return ABOUT_RETURN_PATH;
@@ -59,6 +81,18 @@ export default function FeedbackScreen() {
   const [type, setType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const alertNoMailApp = useNoMailAppAlert();
+  const sendsByEmail = appMode !== 'cloud';
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setType('general');
+        setMessage('');
+      },
+      [],
+    ),
+  );
   const canSubmit = !sending && Boolean(message.trim());
 
   const handleSubmit = useCallback(async () => {
@@ -68,13 +102,25 @@ export default function FeedbackScreen() {
       return;
     }
 
+    if (sendsByEmail) {
+      try {
+        await Linking.openURL(feedbackMailtoUrl(type, trimmed));
+      } catch {
+        alertNoMailApp();
+      }
+      return;
+    }
+
     setSending(true);
     try {
       await api.post('/api/mobile/feedback', {
         type,
         message: trimmed,
+        client: feedbackClientContext(appMode),
         ...(appeal ? { context: appeal } : {}),
       });
+      setType('general');
+      setMessage('');
       Alert.alert('Thank You!', 'Your feedback has been submitted.', [
         {
           text: 'OK',
@@ -86,7 +132,7 @@ export default function FeedbackScreen() {
     } finally {
       setSending(false);
     }
-  }, [appeal, type, message, router, returnTo]);
+  }, [alertNoMailApp, appeal, appMode, type, message, router, returnTo, sendsByEmail]);
 
   const handleBack = useGoBack(returnTo);
 
@@ -97,42 +143,16 @@ export default function FeedbackScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View
-          style={{
-            height: 50,
-            paddingHorizontal: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <Pressable
-            onPress={handleBack}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-            hitSlop={8}
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-            })}
-          >
-            <ArrowLeft size={20} color={colors.textSecondary} />
-          </Pressable>
-          <Text
-            variant="subheading"
-            style={{ marginLeft: 4, color: colors.textPrimary, fontWeight: '700' }}
-          >
-            {appeal ? 'Report an incorrect refusal' : 'Send Feedback'}
-          </Text>
-        </View>
+        <ScreenHeader
+          title={appeal ? 'Report an incorrect refusal' : FEEDBACK_SCREEN_TITLE}
+          onBack={handleBack}
+        />
 
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
+            ...contentColumn('reading'),
             flexGrow: 1,
             paddingHorizontal: 16,
             paddingTop: 8,
@@ -251,7 +271,10 @@ export default function FeedbackScreen() {
             onPress={handleSubmit}
             disabled={!canSubmit}
             accessibilityRole="button"
-            accessibilityLabel={sending ? 'Sending feedback' : 'Submit feedback'}
+            accessibilityLabel={
+              sending ? 'Sending feedback' : sendsByEmail ? 'Email feedback' : 'Submit feedback'
+            }
+            accessibilityHint={sendsByEmail ? 'Opens your email app' : undefined}
             accessibilityState={{ disabled: !canSubmit }}
             style={{ width: '100%' }}
           >
@@ -280,7 +303,7 @@ export default function FeedbackScreen() {
                     fontWeight: '600',
                   }}
                 >
-                  {sending ? 'Sending...' : 'Submit Feedback'}
+                  {sending ? 'Sending...' : sendsByEmail ? 'Email Feedback' : 'Submit Feedback'}
                 </Text>
               </View>
             )}

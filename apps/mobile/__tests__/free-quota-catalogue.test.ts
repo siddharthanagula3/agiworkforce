@@ -141,7 +141,7 @@ describe('mobile provider-funded Free catalogue', () => {
     getMock.mockRejectedValueOnce(new Error('offline'));
     expect(await ensureReadyFreeQuotaChatOffering(offeringKey!)).toBeNull();
     expect(useFreeQuotaCatalogueStore.getState().error).toBe(
-      'Could not check provider-funded Free models. Check your connection and retry.',
+      'Could not check Free models. Check your connection and retry.',
     );
   });
 
@@ -186,9 +186,7 @@ describe('mobile provider-funded Free catalogue', () => {
 
     getMock.mockRejectedValueOnce(new ApiHttpError('Unauthorized', 401));
     await useFreeQuotaCatalogueStore.getState().refresh();
-    expect(useFreeQuotaCatalogueStore.getState().error).toBe(
-      'Sign in again to check provider-funded Free models.',
-    );
+    expect(useFreeQuotaCatalogueStore.getState().error).toBe('Sign in again to check Free models.');
   });
 
   it('explains plan and server availability failures without showing raw errors', async () => {
@@ -196,13 +194,13 @@ describe('mobile provider-funded Free catalogue', () => {
     getMock.mockRejectedValueOnce(new ApiHttpError('Internal plan detail', 403));
     await useFreeQuotaCatalogueStore.getState().refresh();
     expect(useFreeQuotaCatalogueStore.getState().error).toBe(
-      'Provider-funded Free models are unavailable on this plan.',
+      'Free models are unavailable on this plan.',
     );
 
     getMock.mockRejectedValueOnce(new ApiHttpError('Internal route detail', 404));
     await useFreeQuotaCatalogueStore.getState().refresh();
     expect(useFreeQuotaCatalogueStore.getState().error).toBe(
-      'Provider-funded Free models are unavailable from AGI Cloud right now.',
+      'Free models are unavailable from AGI Cloud right now.',
     );
   });
 

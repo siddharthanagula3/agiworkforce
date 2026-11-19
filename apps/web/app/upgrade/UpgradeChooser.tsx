@@ -13,10 +13,13 @@ import {
   planUsageComparisonLabel,
   type SelectablePaidPlan,
 } from '@features/billing/lib/plan-display';
-import { formatBillingDate } from '@features/billing/lib/billing-format';
+import { formatBillingDateFromSeconds } from '@features/billing/lib/billing-format';
 import {
+  billingOwnerPlanActionHref,
   billingOwnerPlanActionLabel,
   billingOwnerPlanChangeMessage,
+  planPeriodEndKind,
+  type PlanPeriodEndKind,
 } from '@features/billing/lib/subscription-owner-presentation';
 
 function priceLabel(usd: number | null): string {
@@ -25,12 +28,12 @@ function priceLabel(usd: number | null): string {
   return `${formatCatalogPrice(usd)}/month`;
 }
 
-type PeriodEndKind = 'renews' | 'trial' | 'ends';
-
-function periodEndLabel(kind: PeriodEndKind): string {
-  if (kind === 'trial') return 'Trial ends';
-  return kind === 'ends' ? 'Access ends' : 'Renews';
-}
+const PERIOD_END_LABEL: Record<PlanPeriodEndKind, string> = {
+  trial: 'Trial ends',
+  ends: 'Access ends',
+  renews: 'Renews',
+  period: 'Current period ends',
+};
 
 const secondaryLinkClassName =
   'font-medium underline underline-offset-2 transition-colors hover:text-foreground';
@@ -75,20 +78,17 @@ export function UpgradeChooser() {
     typeof rawUsedPercent === 'number' && Number.isFinite(rawUsedPercent)
       ? Math.max(0, Math.min(100, Math.round(rawUsedPercent)))
       : null;
-  const renewalDate = formatBillingDate(billing?.current_period_end ?? null);
-  const periodEndKind: PeriodEndKind =
-    billing?.status === 'canceled' || subscription?.cancel_at_period_end === true
-      ? 'ends'
-      : billing?.status === 'trialing'
-        ? 'trial'
-        : 'renews';
+  const periodEndKind = planPeriodEndKind(subscription);
+  const renewalDate = periodEndKind
+    ? formatBillingDateFromSeconds(subscription?.current_period_end ?? null)
+    : null;
   const endingPaidPlan = periodEndKind === 'ends' && !isFreeBillingPlanTier(currentPlan);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-6">
+    <div className="mx-auto w-full max-w-2xl px-6 max-md:px-4">
       <Link
         href="/chat"
-        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="text-sm text-muted-foreground transition-colors hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
       >
         ← Back
       </Link>
@@ -96,8 +96,7 @@ export function UpgradeChooser() {
       <h1 className="mt-6 text-display">Upgrade</h1>
       {showProrationNote ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          See what changes before you switch. An upgrade starts a new billing period today: you pay
-          the new plan&rsquo;s price, minus a credit for the unused time on your current plan.
+          Upgrading starts a new billing period today, with credit for unused time on your plan.
         </p>
       ) : null}
 
@@ -142,9 +141,9 @@ export function UpgradeChooser() {
               </div>
             ) : null}
 
-            {renewalDate ? (
+            {periodEndKind && renewalDate ? (
               <p className="mt-4 text-sm text-muted-foreground" data-testid="upgrade-renewal">
-                {periodEndLabel(periodEndKind)} {renewalDate}
+                {PERIOD_END_LABEL[periodEndKind]} {renewalDate}
               </p>
             ) : null}
             {endingPaidPlan && renewalDate ? (
@@ -158,17 +157,20 @@ export function UpgradeChooser() {
           {ownerBlocked ? (
             <section className="rounded-2xl border border-border bg-card p-5">
               <p className="text-sm text-foreground">
-                {billingOwnerPlanChangeMessage(subscription?.subscription_source)}
+                {billingOwnerPlanChangeMessage(subscription)}
               </p>
-              <Link href="/settings/billing" className={panelActionClassName}>
-                {billingOwnerPlanActionLabel(subscription?.subscription_source)}
+              <Link
+                href={billingOwnerPlanActionHref(subscription)}
+                className={panelActionClassName}
+              >
+                {billingOwnerPlanActionLabel(subscription)}
               </Link>
             </section>
           ) : paymentOverdue ? (
             <section className="rounded-2xl border border-border bg-card p-5">
               <p className="text-sm text-foreground">
-                Your last {currentDisplay.pricing.label} payment didn&rsquo;t go through. Pay the
-                open invoice or update your payment method in Billing, then come back to upgrade.
+                Your last {currentDisplay.pricing.label} payment didn&rsquo;t go through. Settle it
+                in Billing, then upgrade.
               </p>
               <Link href="/settings/billing" className={panelActionClassName}>
                 Open billing
@@ -177,8 +179,7 @@ export function UpgradeChooser() {
           ) : !nextTier || !nextDisplay ? (
             <section className="rounded-2xl border border-border bg-card p-5">
               <p className="text-sm text-foreground">
-                This is the top of our self-serve plans. Switch to a smaller plan, or manage or
-                cancel your subscription, any time in Billing.
+                You&rsquo;re on our top self-serve plan. Change or cancel it any time in Billing.
               </p>
               <Link href="/settings/billing" className={panelActionClassName}>
                 Manage billing

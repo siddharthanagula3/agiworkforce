@@ -438,7 +438,7 @@ export function TaskDetailPanel({
           <div className="space-y-1.5">
             <h2 className="text-h5 text-foreground">Select a task</h2>
             <p className="text-sm leading-5 text-muted-foreground">
-              Review progress, outputs, and durable context without leaving this page.
+              See its progress, outputs and context.
             </p>
           </div>
         </div>
@@ -776,8 +776,7 @@ export function TaskDetailPanel({
             </ul>
           ) : null}
           <p className="mt-3 text-xs text-muted-foreground">
-            The durable task record does not copy input filenames or folder paths. Review the source
-            conversation for the exact attachments and project context used.
+            This record does not copy input filenames or folder paths. See the source chat for them.
           </p>
           {run.conversationId ? (
             <Button
@@ -810,8 +809,7 @@ export function TaskDetailPanel({
 
       {truncated ? (
         <p className="border-t p-4 text-caption text-muted-foreground">
-          This unusually long journal is truncated after 4,000 events. Open the source chat for the
-          complete transcript.
+          Showing the first 4,000 events. Open the source chat for the rest.
         </p>
       ) : null}
 

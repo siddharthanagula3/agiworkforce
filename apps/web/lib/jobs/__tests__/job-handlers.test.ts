@@ -575,6 +575,7 @@ describe('the registry', () => {
         'file-processing.purge-upload-object',
         'media-generation.image-attempt',
         'notifications.deferred-push',
+        'notifications.product-update',
         'notifications.schedule-completed',
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',

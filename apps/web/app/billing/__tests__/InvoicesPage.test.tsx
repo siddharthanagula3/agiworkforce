@@ -101,3 +101,19 @@ describe('billing invoices page', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 });
+
+describe('billing invoices page on a phone', () => {
+  it('leads back to Settings, Billing from a 48px top row shown only below md', async () => {
+    mockInvoices({ invoices: [] });
+    const { default: BillingInvoicesPage } = await import('../invoices/page');
+
+    render(<BillingInvoicesPage />);
+
+    const back = screen.getByRole('link', { name: 'Back to billing' });
+    expect(back.getAttribute('href')).toBe('/settings/billing');
+    expect(back.className).toContain('min-h-11');
+    expect(back.parentElement!.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['h-12', 'md:hidden']),
+    );
+  });
+});

@@ -19,6 +19,7 @@ import {
 import {
   FREE_TRIAL_MODEL,
   type FreeTrialChunk,
+  type ManagedChatStreamOptions,
 } from '../src/features/cloud-bridge/freeTrialClient';
 import {
   chatBrowserToolDefinitions,
@@ -176,6 +177,92 @@ describe('executeChromeManagedChat', () => {
       ).toBe('success');
       expect(deps.onToolHandoff).toHaveBeenCalledTimes(steps);
       expect(deps.streamChat).toHaveBeenCalledTimes(steps + 1);
+    },
+  );
+
+  function memoryCustody() {
+    return {
+      admit: vi.fn(async () => undefined),
+      bindRun: vi.fn(async () => undefined),
+      claim: vi.fn(async () => null),
+      claimAction: vi.fn(async () => null),
+      completeAction: vi.fn(async (_checkpoint, result) => result),
+      complete: vi.fn(async (_checkpoint, receipt) => receipt),
+      finish: vi.fn(async () => undefined),
+    };
+  }
+
+  it('negotiates the durable caller protocol for a scoped turn and posts its receipt', async () => {
+    const handoff = callerCheckpoint();
+    const custody = memoryCustody();
+    const deps = dependencies({
+      callerCustody: custody,
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(handoff, { type: 'done' }))
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'Owner: Marisol Vance.' }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-negotiated',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+        callerToolContinuation: true,
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    const [first, second] = vi
+      .mocked(deps.streamChat)
+      .mock.calls.map((call) => call[2] as ManagedChatStreamOptions);
+    expect(first).toMatchObject({ callerToolContinuation: true });
+    expect(first?.callerResume).toBeUndefined();
+    expect(second?.callerToolContinuation).toBeUndefined();
+    expect(second?.callerResume).toMatchObject({
+      run_id: handoff.continuation.run_id,
+      tool_results: [{ tool_call_id: 'browser-call', content: 'Owner: Marisol Vance.' }],
+    });
+    expect(custody.complete).toHaveBeenCalledOnce();
+  });
+
+  it('does not negotiate the caller protocol unless the admission asks for it', async () => {
+    const deps = dependencies({ callerCustody: memoryCustody() });
+    await executeChromeManagedChat(
+      {
+        id: 'caller-legacy',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    const options = vi.mocked(deps.streamChat).mock.calls[0]![2] as Record<string, unknown>;
+    expect(options['callerToolContinuation']).toBeUndefined();
+  });
+
+  it.each(['no durable custody', 'no browser tools'] as const)(
+    'refuses to negotiate with %s before any request',
+    async (fault) => {
+      const deps = dependencies(
+        fault === 'no durable custody' ? {} : { callerCustody: memoryCustody() },
+      );
+      const result = await executeChromeManagedChat(
+        {
+          id: 'caller-unscoped',
+          text: 'Read this page.',
+          modelSelection: PAID_ECONOMY_MODEL,
+          ...(fault === 'no browser tools' ? {} : { tools: chatBrowserToolDefinitions('read') }),
+          callerToolContinuation: true,
+        },
+        deps,
+      );
+      expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+      expect(deps.streamChat).not.toHaveBeenCalled();
     },
   );
 

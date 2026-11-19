@@ -327,6 +327,31 @@ describe('desktop pairing rows', () => {
     expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');
   });
 
+  it('offers Pair again once the worker drops a pairing Desktop removed', async () => {
+    let released: () => void = () => undefined;
+    let current = state('paired', { fingerprint: 'ab:cd' });
+    const rows = createDesktopPairingRows({
+      loadPairingState: async () => current,
+      beginPairing: vi.fn(),
+      submitPairingCode: vi.fn(),
+      unpair: vi.fn(),
+      watchRelease: (onRelease) => {
+        released = onRelease;
+      },
+    });
+    await rows.loaded;
+    document.body.appendChild(rows.element);
+    expect(rows.element.querySelector<HTMLButtonElement>('#opt-pair-btn')!.hidden).toBe(true);
+
+    current = state('idle');
+    released();
+    await flush();
+
+    expect(rows.element.querySelector<HTMLButtonElement>('#opt-pair-btn')!.hidden).toBe(false);
+    expect(rows.element.querySelector<HTMLButtonElement>('#opt-unpair-btn')!.hidden).toBe(true);
+    expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');
+  });
+
   it('shows why Desktop still holds the pairing after an unpair it could not deliver', async () => {
     const notice = 'Desktop could not be reached to remove the pairing.';
     const rows = createDesktopPairingRows({
@@ -552,6 +577,43 @@ describe('shortcuts section', () => {
       actions,
       startUrl: 'https://shop.example.com',
     });
+  });
+
+  it('says the recording stopped when the page loaded a new address, and keeps its steps', async () => {
+    vi.useFakeTimers();
+    try {
+      const actions = [{ type: 'click', selector: '#next' }];
+      const send = vi.fn(async (message: Record<string, unknown>) => {
+        if (message['type'] === 'LIST_SHORTCUTS') return { success: true, shortcuts: [] };
+        if (message['type'] === 'GET_RECORDED_ACTIONS')
+          return { success: true, recording: false, stoppedBy: 'navigation', actions };
+        return { success: true };
+      });
+      const { section } = build({
+        send: send as never,
+        queryTabs: async () => [{ id: 7, url: 'https://shop.example.com/cart', lastAccessed: 5 }],
+      });
+      const button = section.element.querySelector<HTMLButtonElement>('#opt-record-btn')!;
+      button.click();
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(1_500);
+
+      expect(section.element.textContent).toContain('optRecordStoppedByNavigation');
+      expect(button.textContent).toBe('optRecordStart');
+      const form = section.element.querySelector<HTMLFormElement>('#opt-record-save')!;
+      expect(form.hidden).toBe(false);
+      (section.element.querySelector('#opt-record-name') as HTMLInputElement).value = 'Two steps';
+      form.dispatchEvent(new Event('submit', { cancelable: true }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(send).toHaveBeenCalledWith({
+        type: 'SAVE_SHORTCUT',
+        name: 'Two steps',
+        actions,
+        startUrl: 'https://shop.example.com',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not start recording when no website tab is open', async () => {

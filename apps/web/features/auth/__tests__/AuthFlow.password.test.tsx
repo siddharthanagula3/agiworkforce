@@ -484,6 +484,7 @@ describe('what the one-screen sign-in tells the scene', () => {
     await userEvent.click(reveal);
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(passwordField()).toHaveFocus());
+    await waitFor(() => expect(heard).toContain('mood error'));
     expect(client.signInWithPassword).toHaveBeenLastCalledWith(EMAIL, password);
 
     cleanup();
@@ -531,11 +532,11 @@ describe('what the one-screen sign-in tells the scene', () => {
     const store = renderFlow();
 
     await submitBoth();
-    expect(store.getSnapshot().mood).toBe('pending');
+    await waitFor(() => expect(store.getSnapshot().mood).toBe('pending'));
 
     gate.resolve(WRONG_PASSWORD);
     await screen.findByRole('alert');
-    expect(store.getSnapshot().mood).toBe('error');
+    await waitFor(() => expect(store.getSnapshot().mood).toBe('error'));
     await waitFor(() => expect(passwordField()).toHaveFocus());
     expect(store.getSnapshot().attention).toBe('masked');
     expect(store.readLeaningIn()).toBe(false);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { completeInlineTokens } from './completeInlineTokens';
+import { completeInlineTokens, dropOpenLinkDestination } from './completeInlineTokens';
 import { MARKDOWN_STREAM_CORPUS, lines } from './__fixtures__/markdownStreamCorpus';
 
 describe('completeInlineTokens, closes what the tail has left open', () => {
@@ -23,14 +23,14 @@ describe('completeInlineTokens, closes what the tail has left open', () => {
       repaired: 'Escaped ``a ` b``',
     },
     {
-      name: 'unterminated link destination',
+      name: 'unterminated link destination shows the label alone',
       tail: 'See [the spec](https://example.com/sp',
-      repaired: 'See [the spec](https://example.com/sp)',
+      repaired: 'See the spec',
     },
     {
       name: 'link destination not yet started',
       tail: 'See [the spec](',
-      repaired: 'See [the spec]()',
+      repaired: 'See the spec',
     },
     {
       name: 'strong opened before an unterminated code span',
@@ -38,9 +38,24 @@ describe('completeInlineTokens, closes what the tail has left open', () => {
       repaired: 'A **bold `cal`**',
     },
     {
+      name: 'link before an unterminated code span keeps its closing',
+      tail: 'See [x](https://exa `cal',
+      repaired: 'See [x](https://exa `cal`)',
+    },
+    {
+      name: 'link destination broken across lines keeps its closing',
+      tail: 'See [x](https://exa\nmore',
+      repaired: 'See [x](https://exa\nmore)',
+    },
+    {
+      name: 'an earlier finished link stays a link',
+      tail: 'Read [a](https://a.example) then [b](https://b.exa',
+      repaired: 'Read [a](https://a.example) then b',
+    },
+    {
       name: 'strong opened before an unterminated link',
       tail: 'A **bold [spec](https://exa',
-      repaired: 'A **bold [spec](https://exa)**',
+      repaired: 'A **bold spec**',
     },
   ];
 
@@ -77,5 +92,22 @@ describe('completeInlineTokens, leaves finished markdown alone', () => {
 
   it.each(MARKDOWN_STREAM_CORPUS)('$name is already complete', ({ source }) => {
     expect(completeInlineTokens(source)).toBe(source);
+  });
+});
+
+describe('dropOpenLinkDestination, for an answer that stopped mid-link', () => {
+  it('shows the cut-off link as its label', () => {
+    expect(dropOpenLinkDestination('See [the spec](https://example.com/sp')).toBe('See the spec');
+  });
+
+  it('leaves everything else as written', () => {
+    expect(dropOpenLinkDestination('A **bold `cal')).toBe('A **bold `cal');
+    expect(dropOpenLinkDestination('See [x](https://example.com/x).')).toBe(
+      'See [x](https://example.com/x).',
+    );
+    expect(dropOpenLinkDestination('![alt](https://exa')).toBe('![alt](https://exa');
+    expect(dropOpenLinkDestination(lines('```md', '[a](https://exa'))).toBe(
+      lines('```md', '[a](https://exa'),
+    );
   });
 });

@@ -11,3 +11,8 @@
 *.gz  binary
 *.jar binary
 
+
+# A unified diff marks a blank context line with a single space, and the
+# security gate pins these files byte for byte, so the whitespace check does
+# not apply to them.
+patches/*.patch -whitespace

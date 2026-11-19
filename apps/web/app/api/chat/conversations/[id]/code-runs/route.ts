@@ -2,7 +2,13 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ChatCodeRunRequestSchema, type ChatCodeRunResponse } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_CODE_RUN_APPROVAL_REQUIRED_CODE,
+  CHAT_CODE_RUN_APPROVAL_REQUIRED_MESSAGE,
+  ChatCodeRunRequestSchema,
+  type ChatCodeRunResponse,
+} from '@agiworkforce/cloud-contracts';
+import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
@@ -36,6 +42,13 @@ import {
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
+
+/**
+ * A rerun leaves the conversation's sandbox running for a turn or another rerun
+ * still using it, so the sandbox times out, and is held, only until this
+ * function could no longer be running the code it was asked to run.
+ */
+const CODE_RUN_FUNCTION_LIMIT_MS = maxDuration * 1_000;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -101,13 +114,30 @@ async function handleCodeRun(request: NextRequest, context: RouteContext) {
       .asUserSafe();
   }
 
+  const { approved, ...run } = parsed.data;
+  const approvalPolicy = await loadToolApprovalPolicy(db, userId);
+  if (approvalPolicy === 'ask_every_time' && approved !== true) {
+    return NextResponse.json(
+      {
+        error: {
+          code: CHAT_CODE_RUN_APPROVAL_REQUIRED_CODE,
+          message: CHAT_CODE_RUN_APPROVAL_REQUIRED_MESSAGE,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   const access = await evaluateManagedComputeAccess(db, userId, entitlement.subscription, surface, {
     request,
   });
   const accessGate = buildManagedComputeAccessGateResponse(access);
   if (accessGate) return accessGate;
 
-  const scope = managedCloudE2BSessionScope(userId, id);
+  const scope = {
+    ...managedCloudE2BSessionScope(userId, id),
+    releaseByMs: Date.now() + CODE_RUN_FUNCTION_LIMIT_MS,
+  };
   let cause: E2BUnavailableCause | null = null;
   let budgetRefusal: ManagedUsageRequestError | undefined;
   const executor = await getE2BExecutor(scope, (unavailable, refusal) => {
@@ -134,7 +164,24 @@ async function handleCodeRun(request: NextRequest, context: RouteContext) {
 
   const startedAt = Date.now();
   try {
-    const result = await executor.runCode({ ...parsed.data, signal: request.signal });
+    if (approved === true) {
+      await recordAuditEvent({
+        userId,
+        organizationId,
+        request,
+        surface,
+        eventType: 'tool_approval_decided',
+        detail: {
+          resourceType: 'tool',
+          resourceId: EXECUTE_CODE_TOOL,
+          resourceName: EXECUTE_CODE_TOOL,
+          status: 'approved',
+          source: 'code-run-again',
+          conversationId: id,
+        },
+      });
+    }
+    const result = await executor.runCode({ ...run, signal: request.signal });
     await recordAuditEvent({
       userId,
       organizationId,

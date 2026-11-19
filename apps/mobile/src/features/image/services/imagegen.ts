@@ -1,8 +1,11 @@
 import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
+import { isImageGenerationStopped, rememberStoppedImageGeneration } from './imageGenerationStops';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaImageGenerationRequest } from '@agiworkforce/cloud-contracts';
 import { IN_FLIGHT_IMAGE_JOB_STATUSES, type ImageJobStatus } from '@agiworkforce/types';
@@ -21,6 +24,7 @@ export interface ImageGenResponse {
   latency_ms?: number;
   persisted?: boolean;
   error?: string;
+  retryable?: boolean;
 }
 
 export interface GeneratedImage {
@@ -32,6 +36,13 @@ export interface GeneratedImage {
 const IMAGE_JOB_POLL_MS = 2_000;
 const IMAGE_JOB_MAX_WAIT_MS = 170_000;
 const PENDING_JOB_STATUSES: ReadonlySet<ImageJobStatus> = new Set(IN_FLIGHT_IMAGE_JOB_STATUSES);
+
+export class ImageGenerationStoppedError extends Error {
+  constructor() {
+    super('Image generation was stopped.');
+    this.name = 'ImageGenerationStoppedError';
+  }
+}
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,23 +63,34 @@ export async function generateImage(
     throw new Error('Image generation requires a non-empty prompt');
   }
 
+  await ensureCloudSendConsent();
   const operationId = options.operationId ?? Crypto.randomUUID();
+  if (isImageGenerationStopped(operationId)) throw new ImageGenerationStoppedError();
   const submitted = await api.post<ImageGenResponse>(
     '/api/media/image/generate',
     { ...request, async: true },
     { headers: { 'Idempotency-Key': imageIdempotencyKey(operationId) } },
   );
-  return followImageJob(submitted);
+  if (isImageGenerationStopped(operationId)) {
+    await cancelImageGeneration(operationId).catch(() => undefined);
+    throw new ImageGenerationStoppedError();
+  }
+  return followImageJob(submitted, operationId);
 }
 
-async function followImageJob(submitted: ImageGenResponse): Promise<ImageGenResponse> {
+async function followImageJob(
+  submitted: ImageGenResponse,
+  operationId: string,
+): Promise<ImageGenResponse> {
   let current = submitted;
   const deadline = Date.now() + IMAGE_JOB_MAX_WAIT_MS;
   while (current.job_id && current.status && PENDING_JOB_STATUSES.has(current.status)) {
+    if (isImageGenerationStopped(operationId)) throw new ImageGenerationStoppedError();
     if (Date.now() > deadline) {
       throw new Error('The image is still being made. It will appear in your Library when ready.');
     }
     await wait(IMAGE_JOB_POLL_MS);
+    if (isImageGenerationStopped(operationId)) throw new ImageGenerationStoppedError();
     current = await api.get<ImageGenResponse>(
       `/api/media/image/status?job_id=${encodeURIComponent(current.job_id)}`,
     );
@@ -80,10 +102,16 @@ function imageIdempotencyKey(operationId: string): string {
   return createManagedMediaIdempotencyKey({ surface: 'mobile', operation: 'image', operationId });
 }
 
-export async function cancelImageGeneration(operationId: string): Promise<void> {
-  await api.post('/api/media/image/cancel', {
-    idempotency_key: imageIdempotencyKey(operationId),
-  });
+export async function cancelImageGeneration(operationId: string): Promise<ImageGenResponse | null> {
+  rememberStoppedImageGeneration(operationId);
+  try {
+    return await api.post<ImageGenResponse>('/api/media/image/cancel', {
+      idempotency_key: imageIdempotencyKey(operationId),
+    });
+  } catch (error) {
+    if (error instanceof ApiHttpError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export function getGeneratedImageUri(image: GeneratedImage | undefined): string | null {
@@ -107,8 +135,15 @@ export function getDurableGeneratedImageAssetId(path: string): string | null {
   return candidate.slice(candidate.lastIndexOf('/') + 1).toLowerCase();
 }
 
+const DURABLE_IMAGE_THUMBNAIL_PATH =
+  /^\/api\/files\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/thumbnail$/i;
+
 export function resolveGeneratedImageUri(path: string): string | null {
   const candidate = path.trim();
-  if (!DURABLE_GENERATED_IMAGE_PATH.test(candidate)) return null;
+  if (
+    !DURABLE_GENERATED_IMAGE_PATH.test(candidate) &&
+    !DURABLE_IMAGE_THUMBNAIL_PATH.test(candidate)
+  )
+    return null;
   return `${API_URL.replace(/\/+$/, '')}${candidate}`;
 }

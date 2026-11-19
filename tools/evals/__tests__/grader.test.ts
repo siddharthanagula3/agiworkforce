@@ -89,6 +89,34 @@ describe('gradeCheck', () => {
     ).toBe(true);
   });
 
+  it('reads a typographic apostrophe as a straight one in includes and excludes checks', () => {
+    const curly = {
+      text: 'I don\u2019t know. I can\u2019t delete it, and I\u02bcve booked nothing.',
+    };
+    const straight = { text: "I don't know. I can't delete it." };
+
+    expect(gradeCheck({ kind: 'includesAny', values: ["don't know"] }, curly).passed).toBe(true);
+    expect(
+      gradeCheck({ kind: 'includesAll', values: ["don't know", "I've booked"] }, curly).passed,
+    ).toBe(true);
+    expect(gradeCheck({ kind: 'excludesAll', values: ["can't delete"] }, curly).passed).toBe(false);
+    expect(
+      gradeCheck({ kind: 'excludesAll', values: ['can\u2018t delete'] }, straight).passed,
+    ).toBe(false);
+    expect(gradeCheck({ kind: 'includesAny', values: ['don\u2019t know'] }, straight).passed).toBe(
+      true,
+    );
+  });
+
+  it('reads a typographic apostrophe as a straight one in a matches check', () => {
+    expect(
+      gradeCheck(
+        { kind: 'matches', pattern: "(don'?t|do not)\\s+have" },
+        { text: 'I don\u2019t have that memo.' },
+      ).passed,
+    ).toBe(true);
+  });
+
   it('grades matches case-insensitively', () => {
     expect(
       gradeCheck({ kind: 'matches', pattern: '^\\W*negative\\b' }, { text: 'Negative.' }).passed,

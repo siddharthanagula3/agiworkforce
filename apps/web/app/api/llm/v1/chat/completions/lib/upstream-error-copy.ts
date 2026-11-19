@@ -115,8 +115,10 @@ export { FREE_ALLOWANCE_EXHAUSTED_CODE };
 export const FREE_MODEL_PROMOTION_LIMIT_MESSAGE =
   'This conversation has grown past what one free promotional message can carry. Start a new chat, or send a shorter message, to keep going.';
 
-// The free plan has one model and no Auto, so its copy names the only move left.
-function isFreePlanModel(requestedModel: string | undefined): boolean {
+// Auto on the free plan resolves to this model, so offering Auto after it fails
+// offers the same model again. A free turn on the plan's other model keeps the
+// Auto wording, since Auto there reaches a different model.
+function isFreePlanDefaultModel(requestedModel: string | undefined): boolean {
   if (!requestedModel) return false;
   return (
     (normalizeModelId(requestedModel) ?? requestedModel) === getDefaultModelFor('free', 'chat')
@@ -281,7 +283,7 @@ function upstreamCopy(
   retryAfterSeconds: number | undefined,
 ): { status: number; type: string; code: string; message: string } {
   const onAuto = isAutoModeModelId(context?.requestedModel);
-  const onFreePlanModel = isFreePlanModel(context?.requestedModel);
+  const onFreePlanModel = isFreePlanDefaultModel(context?.requestedModel);
   const providerLabel = getProviderDisplayLabel(provider);
   switch (classified.category) {
     case 'aborted':

@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -267,13 +267,13 @@ export default function SubprocessorsPage() {
               Third parties that process customer data on our behalf.{' '}
               <strong>
                 This page is Annex III to our{' '}
-                <Link href="/dpa" className="agi-ds-link">
+                <PageLink href="/dpa" className="agi-ds-link">
                   data processing addendum
-                </Link>
+                </PageLink>
                 . When the list changes we update it here and record the change on{' '}
-                <Link href="/changelog" className="agi-ds-link">
+                <PageLink href="/changelog" className="agi-ds-link">
                   /changelog
-                </Link>
+                </PageLink>
                 , and customers have 30 days from publication to object.
               </strong>{' '}
               Last updated: {POLICY_LAST_UPDATED.subprocessors}.{' '}
@@ -299,9 +299,9 @@ export default function SubprocessorsPage() {
             </h2>
             <Prose>
               Additions and replacements are published on this page and recorded on{' '}
-              <Link href="/changelog" className="agi-ds-link">
+              <PageLink href="/changelog" className="agi-ds-link">
                 /changelog
-              </Link>
+              </PageLink>
               , which you can subscribe to. <strong>We do not promise emailed notice.</strong> The
               product sends email to one address at a time, the messages listed in the Resend row
               above, and none of those paths mails an arbitrary list of customers. Until something
@@ -309,9 +309,9 @@ export default function SubprocessorsPage() {
               perform. To object to a new subprocessor on reasonable data protection grounds, write
               to us within 30 days of publication. The objection and termination route is in section
               05 of the{' '}
-              <Link href="/dpa#s-05" className="agi-ds-link">
+              <PageLink href="/dpa#s-05" className="agi-ds-link">
                 DPA
-              </Link>
+              </PageLink>
               .
             </Prose>
           </Stack>
@@ -355,9 +355,9 @@ export default function SubprocessorsPage() {
               recipients listed above. We used to state the BYOK posture here without naming the
               surface, which invited exactly the wrong inference on the one surface where it does
               not hold. See{' '}
-              <Link href="/byok" className="agi-ds-link">
+              <PageLink href="/byok" className="agi-ds-link">
                 BYOK
-              </Link>{' '}
+              </PageLink>{' '}
               for the full posture.
             </Prose>
           </Stack>

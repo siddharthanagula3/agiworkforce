@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, ScrollView, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brain } from 'lucide-react-native';
@@ -8,6 +8,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn, contentColumnInset } from '@/src/shared/layout/contentColumn';
 
 export function memoryUsedLabel(citations: ManagedMemoryCitations): string {
   return `Memory · ${citations.count}`;
@@ -16,6 +17,8 @@ export function memoryUsedLabel(citations: ManagedMemoryCitations): string {
 export function MemoryUsedChip({ citations }: { citations: ManagedMemoryCitations }) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const dimsBesideSheet = contentColumnInset('reading', windowWidth) > 0;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const hidden = citations.count - citations.memories.length;
@@ -61,16 +64,26 @@ export function MemoryUsedChip({ citations }: { citations: ManagedMemoryCitation
         statusBarTranslucent
         onRequestClose={() => setOpen(false)}
       >
+        {dimsBesideSheet ? (
+          <Pressable
+            testID="memory-used-scrim"
+            accessible={false}
+            importantForAccessibility="no"
+            onPress={() => setOpen(false)}
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]}
+          />
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Close"
           onPress={() => setOpen(false)}
-          style={{ flex: 1, backgroundColor: colors.scrim }}
+          style={{ flex: 1, backgroundColor: dimsBesideSheet ? undefined : colors.scrim }}
         />
         <View
           accessibilityViewIsModal
           testID="memory-used-sheet"
           style={{
+            ...contentColumn('reading'),
             maxHeight: '70%',
             backgroundColor: colors.surfaceElevated,
             borderTopLeftRadius: 16,

@@ -283,6 +283,46 @@ describe('owned privacy preference persistence', () => {
     expect(hasTelemetryConsent()).toBe(false);
   });
 
+  it.each([
+    ['Use my chats to improve AGI models', 'allowChatsForModelImprovement'],
+    ['Use my voice recordings to improve AGI models', 'allowVoiceForModelImprovement'],
+  ])('saves "%s" as its own privacy choice, apart from provider training', async (name, key) => {
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: false }))
+      .mockResolvedValueOnce(json({ shareTelemetry: false, [key]: true }))
+      .mockResolvedValueOnce(json({ shareTelemetry: false, [key]: true }));
+    render(<PrivacySection />);
+    const control = () => screen.getByRole('switch', { name });
+    await waitFor(() => expect(control()).toBeEnabled());
+    expect(control()).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(control());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(JSON.parse(String(puts()[0]![1]!.body))).toEqual({
+      namespace: 'privacy',
+      patch: { [key]: true },
+    });
+    await waitFor(() => expect(control()).toHaveAttribute('aria-checked', 'true'));
+    expect(training()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('reports an unconfirmed model improvement save and keeps the stored choice', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: false }))
+      .mockResolvedValueOnce(Response.json({}, { status: 500 }))
+      .mockResolvedValueOnce(json({ shareTelemetry: false }));
+    render(<PrivacySection />);
+    const control = () =>
+      screen.getByRole('switch', { name: 'Use my chats to improve AGI models' });
+    await waitFor(() => expect(control()).toBeEnabled());
+    await userEvent.click(control());
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not confirm whether your change/),
+    );
+    expect(control()).toHaveAttribute('aria-checked', 'false');
+    expect(control()).toBeEnabled();
+    expect(puts()).toHaveLength(1);
+  });
+
   it('settles pending denial on authoritative false reconciliation and permits later passive true recovery', async () => {
     fetchMock
       .mockResolvedValueOnce(json({ shareTelemetry: true }))

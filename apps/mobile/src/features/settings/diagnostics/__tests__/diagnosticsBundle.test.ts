@@ -1,6 +1,6 @@
 jest.mock('expo-constants', () => ({
   __esModule: true,
-  default: { expoConfig: { version: '1.2.0' } },
+  default: { expoConfig: { version: '1.2.0' }, platform: { ios: { buildNumber: '57' } } },
 }));
 
 const mockApiFetch = jest.fn();
@@ -8,6 +8,8 @@ jest.mock('../../../../../services/api', () => ({
   apiFetch: (...args: unknown[]) => mockApiFetch(...args),
 }));
 
+import { supportDiagnosticsSchema } from '@agiworkforce/cloud-contracts/support';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { collectMobileDiagnostics, exportMobileDiagnostics } from '../diagnosticsBundle';
 
 const BUNDLE_FIELDS = [
@@ -17,6 +19,9 @@ const BUNDLE_FIELDS = [
   'releaseSha',
   'deployEnv',
   'platform',
+  'appBuild',
+  'deviceClass',
+  'appMode',
   'locale',
   'timeZone',
   'viewport',
@@ -39,6 +44,29 @@ describe('mobile diagnostics bundle', () => {
     expect(bundle.platform).toContain('ios');
     expect(bundle.viewport).not.toBeNull();
     expect(bundle.pagePath).toBe('/settings');
+  });
+
+  it('names the build, device class and app mode the feedback screen reports', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const bundle = collectMobileDiagnostics();
+    expect(bundle.appBuild).toBe('57');
+    expect(['phone', 'tablet']).toContain(bundle.deviceClass);
+    expect(bundle.appMode).toBe('cloud');
+
+    useChatAppModeStore.setState({ appMode: 'local' });
+    expect(collectMobileDiagnostics().appMode).toBe('local');
+  });
+
+  it('stays valid for the shared schema whether or not it names the client fields yet', () => {
+    const bundle = collectMobileDiagnostics();
+    const known = Object.keys(supportDiagnosticsSchema.shape);
+    const accepted = Object.fromEntries(
+      Object.entries(bundle).filter(([field]) => known.includes(field)),
+    );
+    expect(supportDiagnosticsSchema.safeParse(accepted).success).toBe(true);
+    if (known.includes('appBuild')) {
+      expect(supportDiagnosticsSchema.safeParse(bundle).success).toBe(true);
+    }
   });
 
   it('keeps only the newest events', () => {

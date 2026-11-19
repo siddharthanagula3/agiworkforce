@@ -4,6 +4,9 @@ import {
   isRenderableArtifact,
   detectArtifactType,
   extractArtifactTitle,
+  artifactKindLabel,
+  withoutArtifactMarker,
+  withoutTitleDirectives,
   computeDerivedArtifactId,
   deriveArtifacts,
   hasArtifacts,
@@ -336,6 +339,68 @@ describe('extractArtifactTitle, linear rewrite parity', () => {
     expect(extractArtifactTitle('\n\n# Fallback Heading\nmore')).toBe('Fallback Heading');
   });
 
+  it('never takes a fence line or a line inside a fence as the title', () => {
+    expect(extractArtifactTitle('~~~quiz\n{"title":"Cells"}\n~~~')).toBeUndefined();
+    expect(extractArtifactTitle('```js\nconst a = 1;\n```\nAfter the code')).toBe('After the code');
+    const [artifact] = deriveArtifacts(
+      '```markdown\n<!-- @artifact -->\n~~~quiz\n{"title":"Cells","questions":[]}\n~~~\n```',
+      { conversationId: 'c', messageId: 'm' },
+    );
+    expect(artifact?.title).toBe('Document');
+  });
+
+  it('names a document or deck with nothing to title it by its kind', () => {
+    const [document] = deriveArtifacts('```markdown\n<!-- @artifact -->\n```', {
+      conversationId: 'c',
+      messageId: 'm',
+    });
+    expect(document?.title).toBe('Document');
+    const [deck] = deriveArtifacts(
+      '```markdown\n<!-- @artifact -->\n<!-- deck -->\n~~~flashcards\n{"cards":[]}\n~~~\n```',
+      { conversationId: 'c', messageId: 'm' },
+    );
+    expect(deck?.type).toBe('presentation');
+    expect(deck?.title).toBe('Slides');
+    const [code] = deriveArtifacts('```html\n<!-- @artifact -->\n<div></div>\n```', {
+      conversationId: 'c',
+      messageId: 'm',
+    });
+    expect(code?.title).toBe('html snippet');
+  });
+
+  it('labels each artifact kind the way every surface shows it', () => {
+    expect(artifactKindLabel('react')).toBe('Code');
+    expect(artifactKindLabel('csv')).toBe('Spreadsheet');
+    expect(artifactKindLabel('presentation')).toBe('Slides');
+    expect(artifactKindLabel('email')).toBe('Email');
+    expect(artifactKindLabel('image')).toBe('Image');
+    expect(artifactKindLabel('document')).toBe('Document');
+    expect(artifactKindLabel('research')).toBe('Document');
+  });
+
+  it('prefers the first Markdown heading in a Markdown document', () => {
+    const content = 'Use this to revise.\n\n# Cell biology quiz\n\n~~~quiz\n{}\n~~~';
+    expect(extractArtifactTitle(content, 'markdown')).toBe('Cell biology quiz');
+    expect(extractArtifactTitle(content)).toBe('Use this to revise.');
+    expect(extractArtifactTitle('import os\n# Load the data', 'python')).toBe('import os');
+    const [artifact] = deriveArtifacts(
+      '```markdown\n<!-- @artifact -->\nUse this to revise.\n\n# Cell biology quiz\n```',
+      { conversationId: 'c', messageId: 'm' },
+    );
+    expect(artifact?.title).toBe('Cell biology quiz');
+  });
+});
+
+describe('withoutArtifactMarker', () => {
+  it('drops a first line that is an artifact marker and nothing else', () => {
+    expect(withoutArtifactMarker('<!-- @artifact -->\n# Notes')).toBe('# Notes');
+    expect(withoutArtifactMarker('  // @artifact  \ncode')).toBe('code');
+    expect(withoutArtifactMarker('%% @artifact')).toBe('');
+    expect(withoutArtifactMarker('# Notes\n<!-- @artifact -->')).toBe(
+      '# Notes\n<!-- @artifact -->',
+    );
+  });
+
   it('never names an artifact after its marker or its opening markup', () => {
     expect(extractArtifactTitle('<!-- @artifact -->\n<!doctype html>\n<html><body>')).toBe(
       undefined,
@@ -458,5 +523,242 @@ describe('marked markdown documents and decks', () => {
     expect(removeArtifactBlocks(message, artifacts, { include: 'explicit-renderable' })).toBe(
       'Here is the plan.\n\n\n\nTell me what to change.',
     );
+  });
+});
+
+describe('a marked document wrapped in an outer fence', () => {
+  const QUIZ = JSON.stringify(
+    {
+      title: 'Cell parts',
+      questions: [
+        {
+          type: 'multiple_choice',
+          question: 'Which organelle makes ATP?',
+          options: ['Nucleus', 'Mitochondrion'],
+          answer: 1,
+        },
+      ],
+    },
+    null,
+    2,
+  );
+  const CARDS = JSON.stringify(
+    { title: 'Cell terms', cards: [{ front: 'Osmosis', back: 'Water crossing a membrane' }] },
+    null,
+    2,
+  );
+  const BACKTICK_INNER = [
+    '```markdown',
+    '<!-- @artifact -->',
+    '```quiz',
+    QUIZ,
+    '```',
+    '',
+    '```flashcards',
+    CARDS,
+    '```',
+    '```',
+  ].join('\n');
+  const TILDE_INNER = [
+    'Here is your practice.',
+    '',
+    '```markdown',
+    '<!-- @artifact -->',
+    '~~~quiz',
+    QUIZ,
+    '~~~',
+    '',
+    '~~~flashcards',
+    CARDS,
+    '~~~',
+    '```',
+  ].join('\n');
+  const LONGER_OUTER = [
+    '````markdown',
+    '<!-- @artifact -->',
+    '# Review',
+    '',
+    '```quiz',
+    QUIZ,
+    '```',
+    '````',
+  ].join('\n');
+  const INNER_DOCUMENT = ['```quiz', QUIZ, '```', '', '```flashcards', CARDS, '```'].join('\n');
+
+  for (const include of ['code', 'renderable', 'explicit-renderable'] as const) {
+    it(`derives one document holding every inner block (${include})`, () => {
+      const artifacts = deriveArtifacts(BACKTICK_INNER, {
+        conversationId: 'c',
+        messageId: 'm',
+        include,
+      });
+      expect(artifacts).toHaveLength(1);
+      expect(artifacts[0]).toMatchObject({
+        type: 'document',
+        language: 'markdown',
+        title: 'Cell parts',
+        content: INNER_DOCUMENT,
+      });
+      expect(removeArtifactBlocks(BACKTICK_INNER, artifacts, { include })).toBe('');
+    });
+
+    it(`titles a tilde-inner document by the study set and a longer-fence one by its heading (${include})`, () => {
+      const [tilde] = deriveArtifacts(TILDE_INNER, { include });
+      const [longer] = deriveArtifacts(LONGER_OUTER, { include });
+      expect(tilde).toMatchObject({ type: 'document', title: 'Cell parts' });
+      expect(longer).toMatchObject({ type: 'document', title: 'Review' });
+      expect(longer!.content).toBe(['# Review', '', '```quiz', QUIZ, '```'].join('\n'));
+    });
+
+    it(`keeps the document heading over an untitled set with questions (${include})`, () => {
+      const untitledQuiz = QUIZ.replace('"title": "Cell parts",', '');
+      const guide = [
+        '```markdown',
+        '<!-- @artifact -->',
+        '# Photosynthesis study guide',
+        '',
+        'Light reactions happen in the thylakoid.',
+        '',
+        '~~~quiz',
+        untitledQuiz,
+        '~~~',
+        '```',
+      ].join('\n');
+      const [doc] = deriveArtifacts(guide, { include });
+      expect(doc).toMatchObject({ type: 'document', title: 'Photosynthesis study guide' });
+    });
+
+    it(`derives nothing from a longer-fence Markdown example around an html block (${include})`, () => {
+      const example = [
+        '````markdown',
+        'Paste this into your notes:',
+        '',
+        '```html',
+        '<!-- @artifact -->',
+        '<div>Hello</div>',
+        '```',
+        '````',
+      ].join('\n');
+      const artifacts = deriveArtifacts(example, { include });
+      expect(artifacts.some((artifact) => artifact.type === 'html')).toBe(false);
+      expect(artifacts.every((artifact) => artifact.language === 'markdown')).toBe(true);
+    });
+  }
+
+  it('titles a set only in a study fence or a marked document', () => {
+    const html = [
+      '```html',
+      '<!-- @artifact -->',
+      '<title>My page</title>',
+      '<pre>',
+      '~~~quiz',
+      QUIZ,
+      '~~~',
+      '</pre>',
+      '```',
+    ].join('\n');
+    expect(deriveArtifacts(html)[0]!.title).toBe('My page');
+    const untitledHtml = html.replace('<title>My page</title>\n', '');
+    expect(deriveArtifacts(untitledHtml)[0]!.title).toBe('html snippet');
+  });
+
+  it('falls back to the set label when the set title is too long for a title', () => {
+    const longQuiz = QUIZ.replace('Cell parts', 'Cell parts '.repeat(8).trim());
+    const [quiz] = deriveArtifacts(['```quiz', longQuiz, '```'].join('\n'), { include: 'code' });
+    expect(quiz!.title).toBe('Quiz');
+  });
+
+  it('drops a position counter the model wrote into a set title', () => {
+    const titled = (kind: 'quiz' | 'flashcards', title: string) => {
+      const source = kind === 'quiz' ? QUIZ : CARDS;
+      const named = source.replace(kind === 'quiz' ? 'Cell parts' : 'Cell terms', title);
+      return deriveArtifacts(['```' + kind, named, '```'].join('\n'), { include: 'code' })[0]!
+        .title;
+    };
+    expect(titled('quiz', 'Photosynthesis: Question 1 of 2')).toBe('Photosynthesis');
+    expect(titled('quiz', 'Question #1 of 2: Photosynthesis')).toBe('Photosynthesis');
+    expect(titled('quiz', 'Photosynthesis: Q1 of 2')).toBe('Photosynthesis');
+    expect(titled('quiz', 'Question 1 of 2')).toBe('Quiz');
+    expect(titled('quiz', 'Q3/4 planning review')).toBe('Q3/4 planning review');
+    expect(titled('quiz', 'Budget review Q2 of 2026')).toBe('Budget review Q2 of 2026');
+    expect(titled('flashcards', 'Terms: Card 1 of 3')).toBe('Terms');
+    expect(titled('flashcards', 'Terms: Question 1 of 2')).toBe('Terms: Question 1 of 2');
+    const long = 'Cell parts and the organelles of eukaryotic cells';
+    expect(titled('quiz', `${long} (Question 1 of 12)`)).toBe(long);
+    const [document] = deriveArtifacts(
+      BACKTICK_INNER.replace('Cell parts', 'Cell parts: Question 1 of 2'),
+    );
+    expect(document).toMatchObject({ type: 'document', title: 'Cell parts' });
+  });
+
+  it('names an untitled set Quiz or Flashcards and never a fence line', () => {
+    const untitledQuiz = QUIZ.replace('"title": "Cell parts",', '');
+    const untitledCards = CARDS.replace('"title":"Cell terms",', '').replace(
+      '"title": "Cell terms",',
+      '',
+    );
+    const [quiz] = deriveArtifacts(
+      ['```markdown', '<!-- @artifact -->', '```quiz', untitledQuiz, '```', '```'].join('\n'),
+    );
+    const [cards] = deriveArtifacts(
+      ['```md', '<!-- @artifact -->', '~~~flashcards', untitledCards, '~~~', '```'].join('\n'),
+    );
+    expect(quiz!.title).toBe('Quiz');
+    expect(cards!.title).toBe('Flashcards');
+    const [bare] = deriveArtifacts(['```flashcards', CARDS, '```'].join('\n'), {
+      include: 'code',
+    });
+    expect(bare).toMatchObject({ language: 'flashcards', title: 'Cell terms' });
+  });
+
+  it('keeps CommonMark pairing for a fence that is not a marked document', () => {
+    const md = ['```markdown', '# Example', '```js', 'run()', '```', 'after', '```'].join('\n');
+    const blocks = extractCodeBlocks(md);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]!.content).toBe('# Example\n```js\nrun()');
+    expect(extractTrailingUnclosedBlock(`${md}\n`, blocks)).toMatchObject({
+      language: 'text',
+      content: '',
+    });
+  });
+
+  it('streams the wrapped document as one open block until its own fence closes', () => {
+    const partial = BACKTICK_INNER.slice(0, BACKTICK_INNER.lastIndexOf('\n```'));
+    expect(extractCodeBlocks(partial)).toEqual([]);
+    const open = extractTrailingUnclosedBlock(partial);
+    expect(open).toMatchObject({ language: 'markdown', ordinal: 0, startIndex: 0 });
+    expect(open!.content).toBe(`<!-- @artifact -->\n${INNER_DOCUMENT}`);
+  });
+});
+
+describe('titles of tabular artifacts', () => {
+  const TABLE = 'Fruit,Price_USD,Colour\nApple,0.75,Red\nBanana,0.30,Yellow\nPear,0.90,Green';
+
+  it('never takes the header row of a table as its title', () => {
+    expect(extractArtifactTitle(TABLE, 'csv')).toBeUndefined();
+    expect(extractArtifactTitle(TABLE.replace(/,/g, '\t'), 'TSV')).toBeUndefined();
+    expect(extractArtifactTitle(`# @title: Fruit prices\n${TABLE}`, 'csv')).toBe('Fruit prices');
+  });
+
+  it('names an untitled table by its kind', () => {
+    const [table] = deriveArtifacts(['```csv', TABLE, '```'].join('\n'), {
+      conversationId: 'c',
+      messageId: 'm',
+      include: 'code',
+    });
+    expect(table?.title).toBe(artifactKindLabel('csv'));
+  });
+});
+
+describe('withoutTitleDirectives', () => {
+  it('drops the title directive lines the title is read from and keeps the rest', () => {
+    const component = '// @artifact\n// @title: Tiny Counter\nfunction App() {\n  return null;\n}';
+    expect(extractArtifactTitle(component)).toBe('Tiny Counter');
+    expect(withoutTitleDirectives(component)).toBe(
+      '// @artifact\nfunction App() {\n  return null;\n}',
+    );
+    expect(withoutTitleDirectives('<!-- @title Report -->\n<p>Hi</p>')).toBe('<p>Hi</p>');
+    expect(withoutTitleDirectives('  # @Title: Sheet\nx = 1')).toBe('x = 1');
+    expect(withoutTitleDirectives('const title = "@title";')).toBe('const title = "@title";');
   });
 });

@@ -1,7 +1,10 @@
 import { stripTrailingSlashes } from '@agiworkforce/types';
 import {
+  CHAT_ATTACHMENT_LIMITS,
+  CHAT_LARGE_FILE_POLICY,
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
+  MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   ManagedCloudChatAttachmentCompleteRequestSchema,
@@ -9,21 +12,31 @@ import {
   ManagedCloudChatAttachmentPresignRequestSchema,
   ManagedCloudChatAttachmentPresignResponseSchema,
   chatAttachmentSizeLabel,
+  chatAttachmentSizeRefusal,
+  chatLargeFileKindMaxBytes,
   isSupportedChatAttachment,
   resolveChatAttachmentMimeType,
+  type ChatAttachmentLimits,
   type ManagedCloudChatAttachment,
 } from './chat-attachments';
-import { sha256HexOfBlob } from './file-digest';
+import { sha256HexOfBlob, sha256HexOfBlobInSlices, type IncrementalSha256 } from './file-digest';
 import { managedUploadRequestOptions } from './managed-upload';
 import {
   ManagedCloudResumableUploadError,
+  RESUMABLE_UPLOAD_INTAKE_STATUS_UNREADABLE,
   createManagedCloudResumableUploadClient,
   isResumableUploadUnavailable,
+  type ManagedCloudResumableUploadClientConfig,
   type ResumableUploadSessionStore,
 } from './managed-cloud-resumable-upload-client';
-import { shouldUploadInParts } from './resumable-uploads';
+import { CHAT_LARGE_FILE_UPLOAD_KIND, shouldUploadInParts } from './resumable-uploads';
 
-export interface ManagedCloudChatAttachmentsClientConfig {
+export type { IncrementalSha256 } from './file-digest';
+
+export interface ManagedCloudChatAttachmentsClientConfig extends Pick<
+  ManagedCloudResumableUploadClientConfig,
+  'sleep' | 'partConcurrency' | 'visibility'
+> {
   baseUrl?: string;
   assertCurrent?: () => void;
   getHeaders?: () => HeadersInit | Promise<HeadersInit>;
@@ -31,6 +44,13 @@ export interface ManagedCloudChatAttachmentsClientConfig {
   fetchImpl?: typeof globalThis.fetch;
   uploadFetchImpl?: typeof globalThis.fetch;
   sessions?: ResumableUploadSessionStore | null;
+  /**
+   * The limits the server gave this client. They only ever lower the ceilings
+   * the client checks: the compiled inline ones, or the large file policy when
+   * an upload passes `largeFiles`.
+   */
+  limits?: ChatAttachmentLimits;
+  createSha256?: () => IncrementalSha256;
 }
 
 export interface ManagedCloudChatAttachmentUploadOptions {
@@ -39,6 +59,12 @@ export interface ManagedCloudChatAttachmentUploadOptions {
   conversationId?: string;
   /** The composer is in Temporary Chat, so the upload is not a Library file. */
   temporary?: boolean;
+  /**
+   * Set only when the server offered large files to this client: a file over
+   * the inline limit is then uploaded as a large chat file and checked before
+   * it resolves.
+   */
+  largeFiles?: boolean;
   onStatus?: (status: ManagedCloudChatAttachmentUploadStatus) => void;
 }
 
@@ -78,6 +104,16 @@ function assertNotAborted(signal?: AbortSignal): void {
   throw error;
 }
 
+function lowered(compiled: number, given: number | undefined): number {
+  return given !== undefined && Number.isFinite(given) && given >= 0
+    ? Math.min(compiled, given)
+    : compiled;
+}
+
+function takesLargeBranch(file: File, largeFiles: boolean): boolean {
+  return largeFiles && file.size > MAX_CHAT_ATTACHMENT_BYTES;
+}
+
 function normalizeBaseUrl(baseUrl: string): string {
   return stripTrailingSlashes(baseUrl);
 }
@@ -85,6 +121,11 @@ function normalizeBaseUrl(baseUrl: string): string {
 const TRANSIENT_HTTP_STATUSES: ReadonlySet<number> = new Set([408, 425, 429]);
 
 export function isRetryableAttachmentUploadError(error: unknown): boolean {
+  if (
+    error instanceof ManagedCloudResumableUploadError &&
+    error.code === RESUMABLE_UPLOAD_INTAKE_STATUS_UNREADABLE
+  )
+    return false;
   if (error instanceof ManagedCloudResumableUploadError && error.status === 0) return true;
   if (
     error instanceof ManagedCloudChatAttachmentHttpError ||
@@ -183,6 +224,93 @@ export function createManagedCloudChatAttachmentsClient(
     }
   }
 
+  function requireLargeFileHasher(file: File): () => IncrementalSha256 {
+    if (config.createSha256) return config.createSha256;
+    throw new Error(
+      `${file.name} is larger than ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)}, and this app cannot upload a file that large.`,
+    );
+  }
+
+  async function uploadLargeFile(
+    file: File,
+    mimeType: string,
+    options: ManagedCloudChatAttachmentUploadOptions,
+    onCompleting: () => void,
+  ): Promise<ManagedCloudChatAttachment> {
+    const { signal, conversationId, temporary } = options;
+    const createHasher = requireLargeFileHasher(file);
+    const completed = await resumable.upload({
+      file,
+      request: {
+        kind: CHAT_LARGE_FILE_UPLOAD_KIND,
+        fileName: file.name,
+        mimeType,
+        byteCount: file.size,
+        checksumSha256: await sha256HexOfBlobInSlices(file, createHasher, signal ? { signal } : {}),
+        ...(conversationId ? { conversationId } : {}),
+        ...(temporary ? { temporary } : {}),
+      },
+      ...(signal ? { signal } : {}),
+      onCompleting,
+    });
+    if (completed.kind !== 'chat-attachment') {
+      throw new ManagedCloudChatAttachmentHttpError(`Could not verify ${file.name}.`, 502);
+    }
+    return completed.attachment;
+  }
+
+  function assertMessageWithinLimits(files: File[], largeFiles: boolean): void {
+    const given = config.limits;
+    const ceilings = largeFiles ? CHAT_LARGE_FILE_POLICY.largeFiles : null;
+    const maxCount = lowered(
+      ceilings?.maxCount ?? MAX_CHAT_ATTACHMENT_COUNT,
+      given?.maxFilesPerMessage,
+    );
+    if (files.length > maxCount) {
+      throw new Error(`Attach at most ${maxCount} files per message.`);
+    }
+    const maxMessageBytes = lowered(
+      ceilings?.maxMessageBytes ?? MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+      given?.maxMessageBytes,
+    );
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+    if (totalBytes > maxMessageBytes) {
+      throw new Error(
+        `Chat attachments are limited to ${chatAttachmentSizeLabel(maxMessageBytes)} total per message.`,
+      );
+    }
+    if (!largeFiles) return;
+    const inlineMessageBytes = lowered(
+      MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+      given?.inlineMessageBytes,
+    );
+    const inlineBytes = files
+      .filter((file) => file.size <= MAX_CHAT_ATTACHMENT_BYTES)
+      .reduce((sum, file) => sum + file.size, 0);
+    if (inlineBytes > inlineMessageBytes) {
+      throw new Error(
+        `Chat attachments are limited to ${chatAttachmentSizeLabel(inlineMessageBytes)} total per message.`,
+      );
+    }
+  }
+
+  function largeFileSizeRefusal(
+    fileName: string,
+    mimeType: string,
+    byteCount: number,
+  ): string | null {
+    const kindMaxBytes = chatLargeFileKindMaxBytes(fileName, mimeType);
+    if (kindMaxBytes === null) {
+      return `${fileName} is not supported. Attach an image, PDF, or text/code file instead.`;
+    }
+    const maxFileBytes = lowered(kindMaxBytes, config.limits?.maxFileBytes);
+    return chatAttachmentSizeRefusal(fileName, mimeType, byteCount, {
+      ...CHAT_ATTACHMENT_LIMITS,
+      maxFileBytes,
+      maxImageBytes: Math.min(kindMaxBytes, CHAT_ATTACHMENT_LIMITS.maxImageBytes),
+    });
+  }
+
   async function post(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
     assertNotAborted(signal);
     const headers = await mutationHeaders();
@@ -199,15 +327,11 @@ export function createManagedCloudChatAttachmentsClient(
   return {
     async upload(files, options = {}) {
       const { signal, conversationId, temporary, onStatus } = options;
+      const largeFiles = options.largeFiles === true;
       assertNotAborted(signal);
-      if (files.length > MAX_CHAT_ATTACHMENT_COUNT) {
-        throw new Error(`Attach at most ${MAX_CHAT_ATTACHMENT_COUNT} files per message.`);
-      }
-      const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
-      if (totalBytes > MAX_CHAT_ATTACHMENT_MESSAGE_BYTES) {
-        throw new Error(
-          `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES)} total per message.`,
-        );
+      assertMessageWithinLimits(files, largeFiles);
+      for (const file of files) {
+        if (takesLargeBranch(file, largeFiles)) requireLargeFileHasher(file);
       }
 
       const uploaded: ManagedCloudChatAttachment[] = [];
@@ -220,6 +344,22 @@ export function createManagedCloudChatAttachmentsClient(
             throw new Error(
               `${file.name} is not supported. Attach an image, PDF, or text/code file instead.`,
             );
+          }
+          const large = takesLargeBranch(file, largeFiles);
+          const sizeRefusal = large
+            ? largeFileSizeRefusal(file.name, mimeType, file.size)
+            : chatAttachmentSizeRefusal(file.name, mimeType, file.size);
+          if (sizeRefusal) throw new Error(sizeRefusal);
+
+          if (large) {
+            reportStatus(onStatus, { index, fileName: file.name, phase: 'uploading' });
+            uploaded.push(
+              await uploadLargeFile(file, mimeType, options, () =>
+                reportStatus(onStatus, { index, fileName: file.name, phase: 'verifying' }),
+              ),
+            );
+            reportStatus(onStatus, { index, fileName: file.name, phase: 'complete' });
+            continue;
           }
 
           if (shouldUploadInParts(file.size)) {

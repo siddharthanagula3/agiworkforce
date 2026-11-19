@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 
 import {
   type AccountErasureReport,
+  advanceErasureTombstone,
   closeErasureTombstone,
   eraseProfileRow,
   eraseUserAccountData,
@@ -211,7 +212,7 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
     if (resurrected) {
       await erase(userId);
     } else {
-      const tombstone = await openErasureTombstone(userId);
+      const tombstone = await advanceErasureTombstone(userId);
       await invalidateAccountStatusCache(userId);
       if (!tombstone.recorded) {
         throw new ScheduledErasureError(
@@ -219,7 +220,10 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
           tombstone.error ?? 'The erasure tombstone could not be advanced',
         );
       }
-      const report = await eraseUserAccountData(userId, { retainProfile: true });
+      const report = await eraseUserAccountData(userId, {
+        retainProfile: true,
+        scope: 'tombstone',
+      });
       if (!report.complete) {
         throw new ScheduledErasureError(
           'erasure',

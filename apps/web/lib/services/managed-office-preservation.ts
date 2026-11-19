@@ -8,6 +8,7 @@ import { decompressionBudget, readArchiveMember } from '@/lib/security/archive-b
 import { MAX_GENERATED_FILE_BYTES } from '@/lib/server/generated-file-persist';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import type { E2BExecutor } from '@/lib/e2b/types';
+import { exactCellNumber, isNumericCellText } from './managed-workbook-builder';
 
 export class ManagedOfficeProcessingError extends Error {}
 
@@ -113,18 +114,11 @@ async function officeParts(data: Buffer, requiredPart: string): Promise<Map<stri
   return parts;
 }
 
+const DISALLOWED_XML_TEXT = /[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u;
+
 function assertXmlText(value: string): void {
-  for (const character of value) {
-    const code = character.codePointAt(0) ?? 0;
-    if (
-      (code < 32 && code !== 9 && code !== 10 && code !== 13) ||
-      (code >= 0xd800 && code <= 0xdfff) ||
-      code === 0xfffe ||
-      code === 0xffff
-    ) {
-      throw new ManagedOfficeProcessingError('The edit contains unsupported XML characters.');
-    }
-  }
+  if (DISALLOWED_XML_TEXT.test(value))
+    throw new ManagedOfficeProcessingError('The edit contains unsupported XML characters.');
 }
 
 function xmlText(value: string): string {
@@ -734,6 +728,10 @@ function withinRanges(address: string | undefined, ranges: readonly CellRange[])
   );
 }
 
+function comparableCellValue(value: string | number | undefined): string | number | undefined {
+  return typeof value === 'string' ? (exactCellNumber(value) ?? value) : value;
+}
+
 function withEvaluatedCache(cell: string, evaluated: string): string {
   const value = evaluated.match(/<v>([^<]+)<\/v>/)?.[0];
   const type = evaluated.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
@@ -835,7 +833,7 @@ export async function editManagedWorkbook(
               : type === 'str'
                 ? decodedXmlText(value)
                 : Number(value);
-      if (current !== edit.expected)
+      if (comparableCellValue(current) !== comparableCellValue(edit.expected))
         throw new ManagedOfficeProcessingError(
           'A workbook cell differs from the expected value; refresh the source before editing.',
         );
@@ -844,6 +842,9 @@ export async function editManagedWorkbook(
         .replace(/\s*\/?>$/, '>')
         .replace(/\s+t=["'][^"']*["']/, '');
       if (typeof edit.value === 'number') return open + `<v>${edit.value}</v></c>`;
+      const textCell =
+        formula === undefined && (type === 's' || type === 'inlineStr' || type === 'str');
+      if (!textCell && isNumericCellText(edit.value)) return open + `<v>${edit.value}</v></c>`;
       if (edit.value.startsWith('=')) return open + `<f>${xmlText(edit.value.slice(1))}</f></c>`;
       return (
         open.replace(/>$/, ' t="inlineStr">') +

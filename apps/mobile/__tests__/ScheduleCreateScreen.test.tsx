@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -23,6 +23,10 @@ jest.mock('expo-router', () => ({
     canGoBack: jest.fn(() => true),
   }),
   useLocalSearchParams: () => mockSearchParams,
+}));
+
+jest.mock('expo-router/react-navigation', () => ({
+  usePreventRemove: jest.fn(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -159,6 +163,31 @@ describe('Create schedule template handoff', () => {
     );
   });
 
+  it('draws the load-failure retry from theme colours so its label stays readable in every theme', async () => {
+    mockSearchParams = { id: 'missing-schedule' };
+    const fetchSchedules = useScheduleStore.getState().fetchSchedules;
+    useScheduleStore.setState({
+      fetchSchedules: jest.fn(async () => {
+        useScheduleStore.setState({ error: 'offline' });
+      }),
+    });
+
+    try {
+      const { findByLabelText } = render(<CreateScheduleScreen />);
+      const retry = await findByLabelText('Retry loading schedule');
+      const label = within(retry).getByText('Try Again');
+      const buttonStyle = StyleSheet.flatten(retry.props.style);
+      const labelStyle = StyleSheet.flatten(label.props.style);
+
+      expect(buttonStyle.backgroundColor).toBeTruthy();
+      expect(labelStyle.color).toBeTruthy();
+      expect(labelStyle.color).not.toBe(buttonStyle.backgroundColor);
+      expect(String(label.props.className ?? '')).not.toContain('text-black');
+    } finally {
+      useScheduleStore.setState({ fetchSchedules });
+    }
+  });
+
   it('keeps the edit screen open when deletion fails', async () => {
     mockSearchParams = { id: 'schedule-1' };
     useScheduleStore.setState({
@@ -174,6 +203,58 @@ describe('Create schedule template handoff', () => {
     await buttons?.find((button) => button.text === 'Delete')?.onPress?.();
 
     expect(mockBack).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('asks before Back discards an edited form and leaves only on Discard', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByLabelText } = render(<CreateScheduleScreen />);
+    const formProps = mockScheduleForm.mock.lastCall?.[0] as unknown as {
+      onDirtyChange: (dirty: boolean) => void;
+    };
+    act(() => formProps.onDirtyChange(true));
+
+    fireEvent.press(getByLabelText('Go back'));
+
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith(
+      'Discard changes?',
+      'You have unsaved changes.',
+      expect.any(Array),
+    );
+    const buttons = alert.mock.lastCall?.[2];
+    act(() => buttons?.find((button) => button.text === 'Discard')?.onPress?.());
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
+  });
+
+  it('leaves an untouched form without asking', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByLabelText } = render(<CreateScheduleScreen />);
+
+    fireEvent.press(getByLabelText('Go back'));
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    alert.mockRestore();
+  });
+
+  it('names what deleting a schedule removes instead of asking if the person is sure', () => {
+    mockSearchParams = { id: 'schedule-1' };
+    useScheduleStore.setState({
+      schedules: [{ id: 'schedule-1', name: 'Existing schedule' }] as never,
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    render(<CreateScheduleScreen />);
+    const formProps = mockScheduleForm.mock.lastCall?.[0] as unknown as { onDelete: () => void };
+    formProps.onDelete();
+
+    expect(alert).toHaveBeenCalledWith(
+      'Delete schedule?',
+      '"Existing schedule" stops running, and its run history and event triggers are deleted. This cannot be undone.',
+      expect.any(Array),
+    );
     alert.mockRestore();
   });
 });

@@ -1475,6 +1475,61 @@ describe('useChatStream', () => {
       expect(useChatStore.getState().isLoading).toBe(false);
     });
 
+    it.each(['partial', 'timed_out'] as const)(
+      'keeps %s as the stored state of the run reference when the run ends in it',
+      async (endState) => {
+        const base = {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: TEMP_CONVERSATION.id,
+          turnId: `turn-${endState}`,
+        };
+        const frame = (sequence: number, event: Record<string, unknown>) =>
+          `data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  content: sequence === 0 ? 'Stopped early.' : '',
+                  x_agent_event: { ...base, sequence, emittedAtMs: 1_000 + sequence, event },
+                },
+              },
+            ],
+          })}\n\n`;
+        const body =
+          frame(0, {
+            type: 'task-state-changed',
+            taskId: base.turnId,
+            state: endState,
+            previousState: 'running',
+            summary: 'Stopped before finishing.',
+          }) +
+          frame(1, { type: 'stop', reason: 'end-turn' }) +
+          'data: [DONE]\n\n';
+        const encoder = new TextEncoder();
+        vi.mocked(fetch).mockResolvedValueOnce(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(body));
+                controller.close();
+              },
+            }),
+            { status: 200, headers: managedRunHeaders() },
+          ),
+        );
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('finish this', {
+            conversationId: TEMP_CONVERSATION.id,
+            workMode: 'agiwork',
+          });
+        });
+
+        const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+        expect(assistant?.metadata?.cloudAgentRun?.state).toBe(endState);
+      },
+    );
+
     it('replays only missing journal events when the initial SSE connection drops', async () => {
       const base = {
         schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
@@ -2856,6 +2911,70 @@ describe('useChatStream', () => {
   });
 
   describe('reasoning (thinking) accumulation + persistence', () => {
+    const reasoningFrame = (
+      sequence: number,
+      event: Record<string, unknown>,
+      content?: string,
+    ): Record<string, unknown> => ({
+      choices: [
+        {
+          delta: {
+            ...(content !== undefined ? { content } : {}),
+            x_agent_event: {
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: TEMP_CONVERSATION.id,
+              turnId: 'turn-reasoning',
+              sequence,
+              emittedAtMs: 2_000 + sequence,
+              event,
+            },
+          },
+        },
+      ],
+    });
+
+    it('shows reasoning that arrives only as reasoning events, as the durable route sends it', async () => {
+      mockSseStream([
+        reasoningFrame(0, { type: 'reasoning-delta', delta: 'Checking the ' }),
+        reasoningFrame(1, { type: 'reasoning-delta', delta: 'arithmetic.' }),
+        reasoningFrame(2, { type: 'text-delta', delta: 'It is 42.' }, 'It is 42.'),
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('what is six times seven', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.thinkingContent).toBe('Checking the arithmetic.');
+      expect(assistantMsg?.metadata?.isThinkingStreaming).toBe(false);
+      expect(assistantMsg?.content).toBe('It is 42.');
+    });
+
+    it('shows reasoning once when it arrives both tagged and as events', async () => {
+      mockSseStream([
+        { choices: [{ delta: { content: '<thinking>' } }] },
+        reasoningFrame(0, { type: 'reasoning-delta', delta: 'one pass' }, 'one pass'),
+        { choices: [{ delta: { content: '</thinking>' } }] },
+        reasoningFrame(1, { type: 'text-delta', delta: 'Answer.' }, 'Answer.'),
+        { choices: [{ delta: {}, finish_reason: 'stop' }] },
+      ]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('think once', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const assistantMsg = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistantMsg?.metadata?.thinkingContent).toBe('one pass');
+      expect(assistantMsg?.content).toBe('Answer.');
+    });
+
     it('keeps thinkingContent after the block closes (no metadata wipe) and leaves single-block turns un-segmented', async () => {
       mockSseStream([
         { choices: [{ delta: { content: '<thinking>reasoning here</thinking>' } }] },

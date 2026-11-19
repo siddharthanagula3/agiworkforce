@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 const mockListSupportTickets = jest.fn();
 let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: string | null } = {
@@ -9,9 +10,37 @@ let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: s
   clerkUserId: 'user_a',
 };
 
+const mockPush = jest.fn();
+const mockSetAppMode = jest.fn();
+let mockAppMode = 'cloud';
+const mockFocusEffects: Array<{ blur: () => void; focus: () => void }> = [];
+const mockOpenSupportTicket = jest.fn();
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    useEffect(() => {
+      let cleanup: (() => void) | undefined;
+      const blur = () => {
+        cleanup?.();
+        cleanup = undefined;
+      };
+      const focus = () => {
+        blur();
+        const next = callback();
+        cleanup = typeof next === 'function' ? next : undefined;
+      };
+      const entry = { blur, focus };
+      mockFocusEffects.push(entry);
+      focus();
+      return () => {
+        blur();
+        mockFocusEffects.splice(mockFocusEffects.indexOf(entry), 1);
+      };
+    }, [callback]);
+  },
 }));
 
 jest.mock('lucide-react-native', () => {
@@ -43,14 +72,30 @@ jest.mock('@/src/features/auth/store', () => ({
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (state: { appMode: string }) => unknown) =>
-    selector({ appMode: 'cloud' }),
+  useChatAppModeStore: (
+    selector: (state: { appMode: string; setAppMode: typeof mockSetAppMode }) => unknown,
+  ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
 }));
 
 jest.mock('@/src/features/settings/Common', () => {
   const { Pressable, Text, View } = require('react-native');
   return {
-    CloudAccountRequired: () => null,
+    CloudAccountRequired: ({ onSignIn }: { onSignIn: () => void }) => (
+      <Pressable accessibilityLabel="Sign in to AGI Cloud" onPress={onSignIn}>
+        <Text>Sign in to AGI Cloud</Text>
+      </Pressable>
+    ),
+    CloudSyncBlockedBanner: ({
+      message,
+      onSwitchToCloud,
+    }: {
+      message: string;
+      onSwitchToCloud: () => void;
+    }) => (
+      <Pressable accessibilityLabel="Switch to AGI Cloud" onPress={onSwitchToCloud}>
+        <Text>{message}</Text>
+      </Pressable>
+    ),
     SettingsGroup: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
     SettingsInfo: ({ body }: { body: string }) => <Text>{body}</Text>,
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
@@ -73,7 +118,7 @@ jest.mock('@/src/features/settings/Common', () => {
 
 jest.mock('../src/features/support/service', () => ({
   listSupportTickets: (...args: unknown[]) => mockListSupportTickets(...args),
-  openSupportTicket: jest.fn(),
+  openSupportTicket: (...args: unknown[]) => mockOpenSupportTicket(...args),
 }));
 
 import { SupportTicketsScreen } from '../src/features/support/SupportTicketsScreen';
@@ -93,6 +138,32 @@ describe('SupportTicketsScreen ticket history', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth = { isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user_a' };
+    mockAppMode = 'cloud';
+  });
+
+  it('offers a signed-in Local Mode account a switch to Cloud instead of another sign-in', () => {
+    mockAppMode = 'local';
+    const screen = render(<SupportTicketsScreen />);
+
+    expect(screen.queryByLabelText('Sign in to AGI Cloud')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Switch to AGI Cloud'));
+
+    expect(mockSetAppMode).toHaveBeenCalledWith('cloud');
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockListSupportTickets).not.toHaveBeenCalled();
+  });
+
+  it('signs a signed-out person in with a Cloud intent that returns to Support', () => {
+    mockAuth = { isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null };
+    const screen = render(<SupportTicketsScreen />);
+
+    fireEvent.press(screen.getByLabelText('Sign in to AGI Cloud'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-support' },
+    });
+    expect(mockListSupportTickets).not.toHaveBeenCalled();
   });
 
   it('reaches tickets beyond the first window through the page continuation', async () => {
@@ -140,7 +211,7 @@ describe('SupportTicketsScreen ticket history', () => {
     mockListSupportTickets.mockResolvedValueOnce({ tickets: [], nextOffset: null });
     const screen = render(<SupportTicketsScreen />);
 
-    expect(await screen.findByText(/also by email to your account address/)).toBeTruthy();
+    expect(await screen.findByText(/Support replies here and by email/)).toBeTruthy();
     expect(screen.queryByText(/not emailed/i)).toBeNull();
   });
 
@@ -173,5 +244,54 @@ describe('SupportTicketsScreen ticket history', () => {
 
     expect(screen.queryByText('First account ticket')).toBeNull();
     expect(screen.getByLabelText('Loading your tickets')).toBeTruthy();
+  });
+
+  describe('a draft ticket', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    function leaveAndReturn() {
+      act(() => {
+        for (const effect of mockFocusEffects) effect.blur();
+      });
+      act(() => {
+        for (const effect of mockFocusEffects) effect.focus();
+      });
+    }
+
+    it('is kept while the person stays on the screen after a failed send', async () => {
+      mockListSupportTickets.mockResolvedValue({ tickets: [], nextOffset: null });
+      mockOpenSupportTicket.mockRejectedValue(new Error('offline'));
+      jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const screen = render(<SupportTicketsScreen />);
+
+      fireEvent.press(await screen.findByLabelText('New ticket'));
+      fireEvent.changeText(screen.getByLabelText('Subject'), 'Cannot sign in');
+      fireEvent.changeText(screen.getByLabelText('What happened'), 'The code never arrives');
+      fireEvent.press(screen.getByText('Raise ticket'));
+
+      await waitFor(() =>
+        expect(Alert.alert).toHaveBeenCalledWith('That ticket was not raised', expect.any(String)),
+      );
+      expect(screen.getByDisplayValue('Cannot sign in')).toBeTruthy();
+      expect(screen.getByDisplayValue('The code never arrives')).toBeTruthy();
+    });
+
+    it('is gone when the person comes back to Support later by another path', async () => {
+      mockListSupportTickets.mockResolvedValue({ tickets: [], nextOffset: null });
+      const screen = render(<SupportTicketsScreen />);
+
+      fireEvent.press(await screen.findByLabelText('New ticket'));
+      fireEvent.changeText(screen.getByLabelText('Subject'), 'Abandoned subject');
+      fireEvent.changeText(screen.getByLabelText('What happened'), 'Abandoned description');
+
+      leaveAndReturn();
+
+      expect(screen.queryByDisplayValue('Abandoned subject')).toBeNull();
+      expect(screen.queryByLabelText('Subject')).toBeNull();
+      fireEvent.press(screen.getByLabelText('New ticket'));
+      expect(screen.getByLabelText('Subject').props.value).toBe('');
+      expect(screen.getByLabelText('What happened').props.value).toBe('');
+      expect(screen.getByLabelText('Attach diagnostics').props.value).toBe(true);
+    });
   });
 });

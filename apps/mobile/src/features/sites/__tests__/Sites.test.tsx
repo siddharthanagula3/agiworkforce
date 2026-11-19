@@ -250,6 +250,11 @@ describe('published sites on mobile', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const screen = render(<SiteDetailScreen />);
     expect(screen.queryByLabelText('Site name')).toBeNull();
+    expect(screen.getByText('Sites are available in AGI Cloud')).toBeTruthy();
+    expect(
+      screen.getByText('Sites live in AGI Cloud; switching won’t upload your local chats.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Published sites/)).toBeNull();
     expect(mockGet).not.toHaveBeenCalled();
   });
 
@@ -354,16 +359,24 @@ describe('published sites on mobile', () => {
     },
   );
 
-  it('keeps optional read failure fallbacks in a current view', async () => {
+  it('says so when the history and data reads fail, and reads them again on retry', async () => {
+    let failing = true;
     mockGet.mockImplementation((path: string) =>
-      path === DETAIL_PATH
+      path === DETAIL_PATH || !failing
         ? routeGet(path)
         : Promise.reject(new Error('optional read unavailable')),
     );
     const screen = render(<SiteDetailScreen />);
     await screen.findByLabelText('Site name');
-    expect(screen.queryByText('Publish history')).toBeNull();
+    expect(screen.getByText('Could not load the publish history.')).toBeTruthy();
+    expect(screen.getByText('Could not load what visitors saved.')).toBeTruthy();
     expect(screen.queryByText('Clear shared data')).toBeNull();
+
+    failing = false;
+    fireEvent.press(screen.getAllByLabelText('Try again')[0]!);
+    await screen.findByLabelText('Put version 1 live');
+    expect(screen.queryByText('Could not load the publish history.')).toBeNull();
+    expect(screen.getByText('Clear shared data')).toBeTruthy();
   });
 
   it.each(['token', 'mode', 'account', 'unmount'] as const)(
@@ -498,6 +511,11 @@ describe('published sites on mobile', () => {
       pathname: '/(app)/sites/[token]',
       params: { token: 'aaaaaaaaaaaaaaaaaaaaaaaa' },
     });
+  });
+
+  it('writes shared data sizes in B, KB and MB like every other file size', async () => {
+    const screen = render(<SiteDetailScreen />);
+    expect(await screen.findByText('1 shared entry, 12 B of 1 MB')).toBeTruthy();
   });
 
   it('limits a site to the workspace and renames it', async () => {

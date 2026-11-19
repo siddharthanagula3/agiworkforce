@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 import {
+  CLOUD_CODE_PAGE_ROUTE,
   isProductLinkId,
   parseProductLinkPath,
   type NotificationFeedItem,
@@ -12,8 +13,11 @@ import {
   type NotificationMarkReadRequest,
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
-import { API_URL } from '@/lib/constants';
-import { nativeRouteForProductLink } from './productLinks';
+import {
+  nativeRouteForCodeSession,
+  nativeRouteForProductLink,
+  nativeRouteForSettingsSection,
+} from './productLinks';
 
 export const ACCOUNT_NOTIFICATIONS_PATH = NOTIFICATIONS_PATH;
 const PAGE_SIZE = 30;
@@ -22,11 +26,13 @@ function isFeedItem(value: unknown): value is NotificationFeedItem {
   return NotificationFeedItemSchema.safeParse(value).success;
 }
 
-export async function fetchAccountNotifications(
-  before?: string,
-): Promise<NotificationFeedResponse> {
+export interface AccountNotificationPage extends NotificationFeedResponse {
+  nextCursor: string | null;
+}
+
+export async function fetchAccountNotifications(cursor?: string): Promise<AccountNotificationPage> {
   const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
-  if (before) query.set('before', before);
+  if (cursor) query.set('cursor', cursor);
   const response = await api.get<Partial<NotificationFeedResponse>>(
     `${ACCOUNT_NOTIFICATIONS_PATH}?${query.toString()}`,
   );
@@ -37,7 +43,11 @@ export async function fetchAccountNotifications(
     typeof response.unreadCount === 'number' && response.unreadCount >= 0
       ? response.unreadCount
       : notifications.filter((item) => !item.read).length;
-  return { notifications, unreadCount };
+  const nextCursor =
+    typeof response.nextCursor === 'string' && response.nextCursor.length > 0
+      ? response.nextCursor
+      : null;
+  return { notifications, unreadCount, nextCursor };
 }
 
 export async function markAccountNotificationsRead(
@@ -46,31 +56,49 @@ export async function markAccountNotificationsRead(
   await api.patch(ACCOUNT_NOTIFICATIONS_PATH, selection);
 }
 
-export type AccountNotificationDestination =
-  { kind: 'native'; route: string } | { kind: 'web'; url: string };
+export interface AccountNotificationDestination {
+  kind: 'native';
+  route: string;
+}
+
+const SETTINGS_HREF_PATH = '/chat';
+const SETTINGS_HREF_KEY = 'settings';
+
+function decodedSegment(segment: string): string | null {
+  try {
+    const value = decodeURIComponent(segment);
+    return isProductLinkId(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 export function accountNotificationDestination(
   href: string | null,
 ): AccountNotificationDestination | null {
   if (!href || !href.startsWith('/') || href.startsWith('//')) return null;
+  const route = nativeRouteForAccountHref(href);
+  return route ? { kind: 'native', route } : null;
+}
+
+function nativeRouteForAccountHref(href: string): string | null {
   const productLink = parseProductLinkPath(href);
-  if (productLink) {
-    const route = nativeRouteForProductLink(productLink);
-    return route
-      ? { kind: 'native', route }
-      : { kind: 'web', url: new URL(href, API_URL).toString() };
+  if (productLink) return nativeRouteForProductLink(productLink);
+  const [path = '', query = ''] = href.split('#')[0]?.split('?') ?? [];
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 2 && `/${segments[0]}` === CLOUD_CODE_PAGE_ROUTE) {
+    const sessionId = decodedSegment(segments[1] ?? '');
+    return sessionId ? nativeRouteForCodeSession(sessionId) : null;
   }
-  const chat = /^\/chat\/([^/?#]+)$/u.exec(href);
-  if (chat?.[1]) {
-    let id: string;
-    try {
-      id = decodeURIComponent(chat[1]);
-    } catch {
-      return null;
-    }
-    if (isProductLinkId(id)) return { kind: 'native', route: `/(app)/chat/${id}` };
+  if (segments.length === 2 && segments[0] === 'chat') {
+    const id = decodedSegment(segments[1] ?? '');
+    return id ? `/(app)/chat/${id}` : null;
   }
-  return { kind: 'web', url: new URL(href, API_URL).toString() };
+  if (path === SETTINGS_HREF_PATH) {
+    const section = new URLSearchParams(query).get(SETTINGS_HREF_KEY);
+    return section ? nativeRouteForSettingsSection(section) : null;
+  }
+  return null;
 }
 
 interface AccountFeedState {
@@ -79,6 +107,7 @@ interface AccountFeedState {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
+  nextCursor: string | null;
   error: string | null;
   refresh: () => Promise<void>;
   loadMore: () => Promise<void>;
@@ -93,6 +122,7 @@ const EMPTY_FEED = {
   loading: false,
   loadingMore: false,
   hasMore: false,
+  nextCursor: null as string | null,
   error: null as string | null,
 };
 
@@ -134,7 +164,7 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
 
     refresh: async () => {
       const generation = ++feedGeneration;
-      set({ loading: true, error: null });
+      set({ loading: true, loadingMore: false, error: null });
       try {
         const page = await fetchAccountNotifications();
         if (generation !== feedGeneration) return;
@@ -142,7 +172,8 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
         set({
           items: page.notifications,
           unreadCount: page.unreadCount,
-          hasMore: page.notifications.length === PAGE_SIZE,
+          hasMore: page.nextCursor !== null,
+          nextCursor: page.nextCursor,
           loading: false,
         });
       } catch {
@@ -152,20 +183,20 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
     },
 
     loadMore: async () => {
-      const { items, hasMore, loading, loadingMore } = get();
-      const last = items.at(-1);
-      if (!hasMore || loading || loadingMore || !last) return;
+      const { hasMore, loading, loadingMore, nextCursor } = get();
+      if (!hasMore || loading || loadingMore || !nextCursor) return;
       const generation = feedGeneration;
-      set({ loadingMore: true });
+      set({ loadingMore: true, error: null });
       try {
-        const page = await fetchAccountNotifications(last.createdAt);
+        const page = await fetchAccountNotifications(nextCursor);
         if (generation !== feedGeneration) return;
         const known = new Set(get().items.map((item) => item.id));
         unreadSyncRevision += 1;
         set({
           items: [...get().items, ...page.notifications.filter((item) => !known.has(item.id))],
           unreadCount: page.unreadCount,
-          hasMore: page.notifications.length === PAGE_SIZE,
+          hasMore: page.nextCursor !== null,
+          nextCursor: page.nextCursor,
           loadingMore: false,
         });
       } catch {

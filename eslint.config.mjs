@@ -353,6 +353,8 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      'no-redeclare': 'off',
+      '@typescript-eslint/no-redeclare': 'error',
       'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
@@ -678,6 +680,31 @@ export default [
     files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
     rules: {
       '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+
+  {
+    files: ['apps/mobile/**/*.ts', 'apps/mobile/**/*.tsx'],
+    ignores: [
+      'apps/mobile/**/*.test.ts',
+      'apps/mobile/**/*.test.tsx',
+      'apps/mobile/**/__tests__/**',
+      'apps/mobile/**/__mocks__/**',
+      'apps/mobile/jest.setup.js',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@react-navigation/*'],
+              message:
+                'expo-router ships its own copy of React Navigation and its screens provide context from that copy; hooks from @react-navigation/* read a different context and throw at render. Import from expo-router/react-navigation.',
+            },
+          ],
+        },
+      ],
     },
   },
 

@@ -163,18 +163,6 @@
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
     },
     {
-      "file": "apps/mobile/services/cloudSyncEngine.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/mobile/services/cloudSyncEngine.ts",
-      "symbol": "TOOL_STATUSES",
-      "family": "tool support",
-      "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
-    },
-    {
       "file": "apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
@@ -182,12 +170,6 @@
     },
     {
       "file": "apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",
       "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."

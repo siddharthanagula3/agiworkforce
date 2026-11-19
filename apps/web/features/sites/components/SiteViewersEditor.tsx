@@ -200,7 +200,7 @@ function SiteViewersSession({ token }: { token: string }) {
         </div>
       ) : viewers?.length === 0 ? (
         <p className="text-sm text-[var(--chat-text-secondary)]">
-          Nobody yet. Add the email address each person signs in with, then send them the link.
+          Nobody yet. Add each person's sign-in email, then send them the link.
         </p>
       ) : (
         <ul

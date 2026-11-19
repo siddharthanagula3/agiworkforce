@@ -6,11 +6,15 @@ import { Config } from '../platform/config';
 import { tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
 import { latestTerminalOutput } from './terminalOutput';
+import { workingTextEditor } from '../platform/lastTextEditor';
 import {
+  gitWithholdReason,
   isGitIgnored,
   settingsWithholdReason,
   resolvedContextWithholdReason,
   resolveContextFile,
+  type ContextFileResolution,
+  type ContextFileResolver,
   type ContextWithholdReason,
 } from './contextExclusion';
 
@@ -71,13 +75,14 @@ async function shareableSelection(): Promise<ContextAttachment | { withheld: tru
   };
 }
 
-async function resolveContextEditor(
+export async function resolveContextEditor(
   editor: EditorContextSource,
+  resolve: ContextFileResolver = resolveContextFile,
 ): Promise<EditorContextSource | ContextWithholdReason> {
   const filePath = editor.document.uri.fsPath;
   try {
     if (editor.document.isUntitled) return settingsWithholdReason(filePath) ?? editor;
-    const resolved = await resolveContextFile(filePath);
+    const resolved = await resolve(filePath);
     if (!resolved.ok) return resolved.reason;
     return {
       document:
@@ -355,8 +360,16 @@ const WITHHELD_BECAUSE: Record<ContextWithholdReason, string> = {
   credential: 'matches the credential-file policy',
   excluded: 'matches the files.exclude or search.exclude setting',
   gitignored: 'is ignored by git',
+  unchecked: 'could not be checked against the git ignore rules',
   unavailable: 'could not be safely resolved inside the workspace',
 };
+
+export function withheldEditorFileNotice(
+  relativePath: string,
+  reason: ContextWithholdReason,
+): string {
+  return `${relativePath} is open in the editor. Its contents are withheld from this conversation because the file ${WITHHELD_BECAUSE[reason]}.`;
+}
 
 function pathOnlyContext(
   keepFile: boolean,
@@ -373,15 +386,16 @@ function pathOnlyContext(
       },
     ],
     contextFiles: [],
-    texts: [
-      `${relativePath} is open in the editor. Its contents are withheld from this conversation because the file ${WITHHELD_BECAUSE[reason]}.`,
-    ],
+    texts: [withheldEditorFileNotice(relativePath, reason)],
   };
 }
 
 export async function withholdGitIgnoredContext(
   snapshot: EditorContextSnapshot,
-  ignoredByGit: (filePath: string) => Promise<boolean> = isGitIgnored,
+  ignoreReason: (
+    filePath: string,
+  ) => Promise<'gitignored' | 'unchecked' | undefined> = gitWithholdReason,
+  resolve: ContextFileResolver = resolveContextFile,
 ): Promise<EditorContextSnapshot> {
   const source = snapshot.source;
   if (source === undefined) return snapshot;
@@ -390,13 +404,13 @@ export async function withholdGitIgnoredContext(
     const reason = settingsWithholdReason(source.filePath);
     return reason === undefined ? snapshot : pathOnlyContext(keepFile, source.relativePath, reason);
   }
-  const resolved = await resolveContextFile(source.filePath);
+  const resolved = await resolve(source.filePath);
   if (!resolved.ok) return pathOnlyContext(keepFile, source.relativePath, resolved.reason);
   if (snapshot.texts.length > 0 && resolved.resolvedPath !== source.filePath) {
     return pathOnlyContext(keepFile, source.relativePath, 'unavailable');
   }
-  if (await ignoredByGit(source.filePath))
-    return pathOnlyContext(keepFile, source.relativePath, 'gitignored');
+  const ignored = await ignoreReason(source.filePath);
+  if (ignored !== undefined) return pathOnlyContext(keepFile, source.relativePath, ignored);
   return {
     ...snapshot,
     contextFiles: snapshot.contextFiles.map((file) =>
@@ -406,17 +420,43 @@ export async function withholdGitIgnoredContext(
   };
 }
 
+function resolvedIgnoreReason(
+  resolution: ContextFileResolution,
+): 'gitignored' | 'unchecked' | undefined {
+  if (resolution.ok) return undefined;
+  return resolution.reason === 'gitignored' || resolution.reason === 'unchecked'
+    ? resolution.reason
+    : undefined;
+}
+
+function resolveEachPathOnce(resolve: ContextFileResolver): ContextFileResolver {
+  const seen = new Map<string, Promise<ContextFileResolution>>();
+  return (filePath) => {
+    const known = seen.get(filePath);
+    if (known !== undefined) return known;
+    const resolution = resolve(filePath);
+    seen.set(filePath, resolution);
+    return resolution;
+  };
+}
+
 export async function captureEditorContext(
   dismissed: ReadonlySet<string>,
+  resolve: ContextFileResolver = resolveContextFile,
 ): Promise<EditorContextSnapshot> {
-  const editor = vscode.window.activeTextEditor;
+  const editor = workingTextEditor();
   if (editor === undefined || !Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const relative = vscode.workspace.asRelativePath(editor.document.uri);
   const keepFile = !dismissed.has(editorContextChipId('active-file', relative));
+  const resolveOnce = resolveEachPathOnce(resolve);
   try {
-    const resolved = await resolveContextEditor(editor);
+    const resolved = await resolveContextEditor(editor, resolveOnce);
     if (typeof resolved === 'string') return pathOnlyContext(keepFile, relative, resolved);
-    return withholdGitIgnoredContext(resolveEditorContext(dismissed, resolved));
+    return withholdGitIgnoredContext(
+      resolveEditorContext(dismissed, resolved),
+      async (filePath) => resolvedIgnoreReason(await resolveOnce(filePath)),
+      resolveOnce,
+    );
   } catch {
     return pathOnlyContext(keepFile, relative, 'unavailable');
   }

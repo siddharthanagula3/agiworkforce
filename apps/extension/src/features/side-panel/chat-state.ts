@@ -10,10 +10,13 @@ import type {
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import { type AgentEventSource, type InteractiveCard } from '@agiworkforce/types';
-import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { AgentEventEnvelope, AgentEventStopReason } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import { browserActivityEnvelope } from '../computer-use/browserTurnActivity';
 import { t, tPlural } from '../../i18n';
+import type { CallerBrowserContext } from '../cloud-bridge/callerBrowserContext';
+import type { FormObservationReference } from '../browser-tools/documentBridge';
 
 export interface SidePanelMessageAttachment {
   kind: 'image' | 'file';
@@ -54,8 +57,8 @@ export interface SidePanelChatMessage {
   agentEvents?: AgentEventEnvelope[];
   browserActivity?: AgentActivityState;
   browserSource?: PageContextSource;
-  browserContext?: import('../cloud-bridge/callerBrowserContext').CallerBrowserContext;
-  browserObservation?: import('../browser-tools/documentBridge').FormObservationReference;
+  browserContext?: CallerBrowserContext;
+  browserObservation?: FormObservationReference;
   browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
@@ -195,6 +198,37 @@ export function applyBrowserActivityEvent(
   );
 }
 
+export function settleBrowserActivity(
+  message: SidePanelChatMessage,
+  reason: Extract<AgentEventStopReason, 'end-turn' | 'error' | 'cancelled'>,
+  emittedAtMs = Date.now(),
+): boolean {
+  const activity = message.browserActivity;
+  if (!activity || isAgentActivityTerminal(activity.status)) return false;
+  applyBrowserActivityEvent(
+    message,
+    browserActivityEnvelope(activity, message.id, { type: 'stop', reason }, emittedAtMs),
+  );
+  return true;
+}
+
+export function reopenBrowserActivity(message: SidePanelChatMessage): void {
+  if (!message.browserEvents?.length) return;
+  message.browserActivity = projectCanonicalAgentActivity(message.browserEvents);
+}
+
+export function settleFailedAgentActivity(
+  message: SidePanelChatMessage,
+  completedAtMs = Date.now(),
+): void {
+  const activity = message.agentActivity;
+  if (!activity || isAgentActivityTerminal(activity.status)) return;
+  message.agentActivity = finishAgentActivityLocally(activity, {
+    status: 'failed',
+    completedAtMs: Math.max(activity.updatedAtMs, completedAtMs),
+  });
+}
+
 export function reconcileManagedRunActivity(
   message: SidePanelChatMessage,
   completedAtMs = Date.now(),
@@ -297,6 +331,8 @@ export function hydrateStoredChatMessage(
       hydrated.agentActivity?.completedAtMs ?? message.timestamp,
       hydrated.agentActivity?.status,
     );
+  if (hydrated.error && hydrated.streamCancellation === undefined)
+    settleFailedAgentActivity(hydrated, message.timestamp);
   return hydrated;
 }
 

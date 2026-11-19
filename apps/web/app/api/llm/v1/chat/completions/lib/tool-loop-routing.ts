@@ -6,6 +6,11 @@ import { isWebSearchTool } from '@/lib/web-search/web-search-tool';
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { isManagedOfficeFileTool } from '@/lib/services/managed-office-file-service';
 import { isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import { isAnswerUiTool } from '@/lib/services/answer-ui-tool-service';
+import { isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { isMemoryTool } from '@/lib/server/tools/memory-tools';
+import { isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
+import { isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import {
   ITINERARY_TOOL_NAME,
   PLACES_SEARCH_TOOL_NAME,
@@ -30,8 +35,13 @@ export interface ToolLoopInputClassification {
   hasMapSearchTools: boolean;
   hasPlaceTools: boolean;
   hasProductComparisonTools: boolean;
+  hasAnswerUiTools: boolean;
   hasImageTools: boolean;
   hasDeviceStepTools: boolean;
+  hasFileSearchTools: boolean;
+  hasScheduleTools: boolean;
+  hasPluginDraftTools: boolean;
+  hasMemoryTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
 }
@@ -57,6 +67,13 @@ function anyToolNeedsApproval(names: readonly string[], policy: ToolApprovalPoli
   return names.some((name) => !policyAutoApprovesTool(policy, name));
 }
 
+export function withoutAnswerUiTool<T>(tools: T[] | undefined): T[] | undefined {
+  if (!tools) return tools;
+  const kept = tools.filter((tool) => !isAnswerUiTool(functionToolName(tool)));
+  if (kept.length === tools.length) return tools;
+  return kept.length > 0 ? kept : undefined;
+}
+
 export function classifyToolLoopInputs(
   mcpTools: WebMcpToolDef[],
   requestTools: unknown[] | undefined,
@@ -75,11 +92,16 @@ export function classifyToolLoopInputs(
     (name) => name === PLACES_SEARCH_TOOL_NAME || name === ITINERARY_TOOL_NAME,
   );
   const hasProductComparisonTools = names.includes(PRODUCT_COMPARISON_TOOL_NAME);
+  const hasAnswerUiTools = names.some(isAnswerUiTool);
   const hasImageTools = names.some(isImageChatToolName);
   // A device step is carried out by the user's own machine while the loop is
   // suspended. Without the loop there is nothing to suspend, and the raw tool
   // call would reach the client as a call nobody runs.
   const hasDeviceStepTools = names.some(isDeviceStepTool);
+  const hasFileSearchTools = names.some(isFileSearchTool);
+  const hasScheduleTools = names.some(isScheduleTool);
+  const hasPluginDraftTools = names.some(isPluginDraftTool);
+  const hasMemoryTools = names.some(isMemoryTool);
 
   return {
     hasMcpTools,
@@ -91,8 +113,13 @@ export function classifyToolLoopInputs(
     hasMapSearchTools,
     hasPlaceTools,
     hasProductComparisonTools,
+    hasAnswerUiTools,
     hasImageTools,
     hasDeviceStepTools,
+    hasFileSearchTools,
+    hasScheduleTools,
+    hasPluginDraftTools,
+    hasMemoryTools,
     shouldRun:
       options.callerContinuation === true ||
       hasMcpTools ||
@@ -106,6 +133,10 @@ export function classifyToolLoopInputs(
       hasProductComparisonTools ||
       hasImageTools ||
       hasDeviceStepTools ||
+      hasFileSearchTools ||
+      hasScheduleTools ||
+      hasPluginDraftTools ||
+      hasMemoryTools ||
       // A provider-run search is not a function tool, so nothing above sees it.
       // The loop is the only place a required search the model skipped is asked
       // for again, so a required one has to run there.

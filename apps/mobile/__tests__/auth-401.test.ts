@@ -9,6 +9,15 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+jest.mock('../src/platform/webContentPage', () => ({
+  openWebContentPage: jest.fn(),
+}));
+
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+}));
+
 jest.mock('../lib/constants', () => ({
   API_URL: 'https://api.test.local',
   TIMEOUTS: { DEFAULT: 8_000 },
@@ -30,11 +39,19 @@ jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
   clearLocalCloudAccountState: jest.fn(),
 }));
 
+jest.mock('../src/features/auth/services/rememberedAccount', () => ({
+  forgetRememberedAccount: jest.fn(async () => undefined),
+}));
+
 jest.mock('../src/platform/platformHeaders', () => ({
   platformRequestHeaders: () => ({}),
 }));
 
 import { api, resetApiAccountState } from '../services/api';
+import {
+  readAnswerDraft,
+  writeAnswerDraft,
+} from '../src/features/chat/components/answerDraftStore';
 import {
   clearAuthSession,
   getAuthHeaders,
@@ -227,16 +244,27 @@ describe('a refusal the refresh cannot recover', () => {
   });
 });
 
-describe('an account the server refuses outright', () => {
-  it('ends the session quietly and owes the person a sign-in', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, {}));
+describe('a 403 on the account check', () => {
+  it('keeps the session and reports the reason the server gave', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, {
+        error: {
+          code: 'workspace_access_denied',
+          message: 'You are not a member of that workspace.',
+        },
+      }),
+    );
 
-    await expect(api.get('/api/me')).rejects.toThrow('can no longer be used');
+    await expect(api.get('/api/me?surface=mobile')).rejects.toMatchObject({
+      status: 403,
+      code: 'workspace_access_denied',
+      message: 'You are not a member of that workspace.',
+    });
 
-    expect(invalidateCloudAccount).toHaveBeenCalledTimes(1);
-    expect(clearLocalCloudAccountState).toHaveBeenCalledTimes(1);
-    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
-    expect(isSignInOwedForEndedSession()).toBe(true);
+    expect(invalidateCloudAccount).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(isSignInOwedForEndedSession()).toBe(false);
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
@@ -366,5 +394,13 @@ describe('HTTP method helpers', () => {
 
     const init = fetchSpy.mock.calls[0]?.[1] as RequestInit;
     expect(init.method).toBe('DELETE');
+  });
+});
+
+describe('account switch', () => {
+  it('drops unsaved answer drafts held in memory for the previous account', () => {
+    writeAnswerDraft('message-1:form', { repo: 'acme/app' });
+    resetApiAccountState();
+    expect(readAnswerDraft('message-1:form')).toBeUndefined();
   });
 });

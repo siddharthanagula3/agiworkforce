@@ -3,12 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ResearchReport } from '@agiworkforce/types';
 
-import {
-  ResearchReportView,
-  researchReportFilename,
-  researchReportFollowUpPrompt,
-  researchReportToMarkdown,
-} from './ResearchReportView';
+import { researchReportToMarkdown } from '@agiworkforce/unified-chat/research-report';
+
+import { ResearchReportView } from './ResearchReportView';
 
 function makeReport(overrides: Partial<ResearchReport> = {}): ResearchReport {
   return {
@@ -40,34 +37,6 @@ function makeReport(overrides: Partial<ResearchReport> = {}): ResearchReport {
     ...overrides,
   };
 }
-
-describe('researchReportToMarkdown', () => {
-  it('assembles title, summary, findings, body, and numbered sources', () => {
-    const markdown = researchReportToMarkdown(makeReport());
-    expect(markdown).toContain('# Node.js release status');
-    expect(markdown).toContain('Node 24 is the active LTS line.');
-    expect(markdown).toContain('## Key findings\n- v24.18.0 is LTS\n- v26.5.0 is Current');
-    expect(markdown).toContain('## Overview');
-    expect(markdown).toContain(
-      '## Sources\n1. [nodejs.org releases](https://nodejs.org/en/about/previous-releases)',
-    );
-  });
-
-  it('omits sections the report does not have instead of emitting empty ones', () => {
-    const markdown = researchReportToMarkdown(
-      makeReport({ summary: '', keyFindings: [], citations: [] }),
-    );
-    expect(markdown).not.toContain('## Key findings');
-    expect(markdown).not.toContain('## Sources');
-  });
-});
-
-describe('researchReportFilename', () => {
-  it('slugifies the report title and falls back when it is empty', () => {
-    expect(researchReportFilename(makeReport())).toBe('node-js-release-status');
-    expect(researchReportFilename(makeReport({ title: '   ' }))).toBe('research-report');
-  });
-});
 
 describe('ResearchReportView', () => {
   it('renders the report title, findings, content, and citation list', () => {
@@ -233,16 +202,5 @@ describe('ResearchReportView follow-up', () => {
     expect(screen.getByTestId('research-report-follow-up-send')).toBeDisabled();
     await userEvent.type(screen.getByLabelText('Ask a follow-up about this report'), '   {Enter}');
     expect(onAskFollowUp).not.toHaveBeenCalled();
-  });
-});
-
-describe('researchReportFollowUpPrompt', () => {
-  it('declares the cut when the report is too long to carry whole', () => {
-    const prompt = researchReportFollowUpPrompt(
-      makeReport({ content: 'x'.repeat(9_000) }),
-      'and then?',
-    );
-    expect(prompt).toContain('[report truncated after 8000 characters]');
-    expect(prompt).toContain('and then?');
   });
 });

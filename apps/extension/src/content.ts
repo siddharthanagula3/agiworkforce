@@ -36,18 +36,23 @@ import {
   autofillLever,
   autofillLinkedIn,
   autofillAshby,
-  loadAutofillProfile,
   resolveProfileValue,
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
-import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
+import {
+  discoverAllTools,
+  callTool,
+  startToolChangeReporting,
+  stopWatchingToolChanges,
+} from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import { isDomSmallEnoughToRead } from './dom-helpers';
 import {
   fillPageFields,
   findPageElements,
+  isSensitiveField,
   watchPasswordFields,
   pageElementSignature,
 } from './features/content/pageElements';
@@ -58,9 +63,20 @@ import {
   MAX_WEBMCP_SCHEMA_BYTES,
   normalizeWebMCPToolsUpdate,
 } from './background/policy';
-import { evaluateSiteAccess } from './features/site-policy/store';
+import {
+  requestAutofillProfile,
+  requestPageAccess,
+  type PageAccess,
+} from './features/content/workerAccess';
 import { selectOptionElement } from './features/content/selectOption';
 import { BROWSER_COMMAND_TIMEOUT_MS } from '@agiworkforce/types';
+import type {
+  FillFieldsMessage,
+  FindElementsMessage,
+  SetRecordingValueCaptureMessage,
+  WebMCPCallToolMessage,
+  WebMCPCancelToolMessage,
+} from './types';
 
 function extractPageHtmlSafely(): string {
   try {
@@ -98,24 +114,76 @@ const automationState: AutomationState = {
   captureValues: false,
 };
 
+const NO_PAGE_ACCESS: PageAccess = { approved: false, inPagePanel: false };
+
+function documentIsPrerendering(): boolean {
+  return (document as Document & { prerendering?: boolean }).prerendering === true;
+}
+
 /**
- * Whether this page's origin carries the user's approval.
- *
- * Read once per document and shared, because every startup call this gates
- * wakes the service worker. Ungated, an extension declaring `http://*\/*`
- * content scripts woke the worker twice on every page load of every site the
- * user visits, and on a site the user never approved, both wakes could only
- * end in the allowlist rejection.
+ * A prerendered page's outermost frame carries a non-zero frame id until the
+ * user navigates to it, and the service worker answers only the outermost frame
+ * of the active page, so a prerendered document asks after it is activated.
  */
-const originApproved: Promise<boolean> = (async () => {
-  if (!/^https?:/.test(location.protocol)) return false;
+function whenPageIsActive(): Promise<void> {
+  if (!documentIsPrerendering()) return Promise.resolve();
+  return new Promise((resolve) => {
+    document.addEventListener('prerenderingchange', () => resolve(), { once: true });
+  });
+}
+
+async function askPageAccess(): Promise<PageAccess> {
+  if (!/^https?:/.test(location.protocol)) return NO_PAGE_ACCESS;
+  await whenPageIsActive();
+  return requestPageAccess();
+}
+
+/**
+ * Whether this page's origin carries the user's approval, asked of the service
+ * worker once the document is active: extension storage is closed to content
+ * scripts, and every other startup call waits on this answer. The worker asks
+ * again through PAGE_ACCESS_CHANGED when the approved sites or the in-page
+ * panel preference change.
+ */
+const initialPageAccess: Promise<PageAccess> = askPageAccess();
+let pageAccessGeneration = 0;
+let approvedStartupDone = false;
+
+function startApprovedFeatures(): void {
+  if (approvedStartupDone) return;
+  approvedStartupDone = true;
+  void checkConnectionStatus();
+  void notifyTabReady();
+
   try {
-    return (await evaluateSiteAccess(window.location.href, 'automation')).allowed;
+    initWebMCP();
   } catch (err) {
-    logger.debug('Could not read the site policy, treating this origin as unapproved', err);
-    return false;
+    logger.debug('initWebMCP failed (non-fatal)', err);
   }
-})();
+}
+
+function stopApprovedFeatures(): void {
+  if (!approvedStartupDone) return;
+  approvedStartupDone = false;
+  if (webmcpStartTimer !== null) {
+    clearTimeout(webmcpStartTimer);
+    webmcpStartTimer = null;
+  }
+  stopWatchingToolChanges();
+}
+
+async function applyPageAccess(request: Promise<PageAccess>): Promise<void> {
+  const generation = ++pageAccessGeneration;
+  const access = await request;
+  if (generation !== pageAccessGeneration) return;
+  await setupInPagePanel(access, logger);
+  if (access.approved) startApprovedFeatures();
+  else stopApprovedFeatures();
+}
+
+function refreshPageAccess(): Promise<void> {
+  return applyPageAccess(askPageAccess());
+}
 
 interface ContentScriptScope {
   __agiWorkforceContentScriptReady?: boolean;
@@ -131,20 +199,11 @@ function initialize(): void {
 
   watchPasswordFields();
   initializeEditableSelection();
-  void setupInPagePanel(originApproved, logger);
+  void applyPageAccess(initialPageAccess);
 
   chrome.runtime.onMessage.addListener(handleMessage);
-
-  void originApproved.then((approved) => {
-    if (!approved) return;
-    void checkConnectionStatus();
-    void notifyTabReady();
-
-    try {
-      initWebMCP();
-    } catch (err) {
-      logger.debug('initWebMCP failed (non-fatal)', err);
-    }
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) void refreshPageAccess();
   });
 }
 
@@ -167,7 +226,8 @@ function handleMessage(
       msg?.type === 'FILL_OBSERVED_FORM' ||
       msg?.type === 'CAPTURE_EDITABLE_SELECTION' ||
       msg?.type === 'APPLY_EDITABLE_SELECTION' ||
-      msg?.type === 'UNDO_EDITABLE_SELECTION') &&
+      msg?.type === 'UNDO_EDITABLE_SELECTION' ||
+      msg?.type === 'PAGE_ACCESS_CHANGED') &&
     sender.tab
   ) {
     sendResponse({
@@ -254,10 +314,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleAutoFillJobApplication(message as AutoFillJobApplicationMessage);
 
     case 'FIND_ELEMENTS':
-      return handleFindElements(message as import('./types').FindElementsMessage);
+      return handleFindElements(message as FindElementsMessage);
 
     case 'FILL_FIELDS':
-      return handleFillFields(message as import('./types').FillFieldsMessage);
+      return handleFillFields(message as FillFieldsMessage);
 
     case 'GET_ACCESSIBILITY_TREE':
     case 'BUILD_ACCESSIBILITY_TREE':
@@ -279,10 +339,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleWebMCPDiscoverTools();
 
     case 'WEBMCP_CALL_TOOL':
-      return handleWebMCPCallTool(message as import('./types').WebMCPCallToolMessage);
+      return handleWebMCPCallTool(message as WebMCPCallToolMessage);
 
     case 'WEBMCP_CANCEL_TOOL': {
-      const cancel = message as import('./types').WebMCPCancelToolMessage;
+      const cancel = message as WebMCPCancelToolMessage;
       if (cancel.pageInstanceId !== webmcpPageInstanceId)
         return { success: false, error: 'The site-tool document changed.' };
       const pending = webmcpBrowserCalls.get(cancel.browserAgentCallId);
@@ -303,6 +363,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       }
       return { success: true } as ExtensionResponse;
     }
+
+    case 'PAGE_ACCESS_CHANGED':
+      await refreshPageAccess();
+      return { success: true } as ExtensionResponse;
 
     case 'AGI_CU_WATCH_INPUT':
       watchUserInput(message.watching === true);
@@ -383,6 +447,13 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       return { type: actionType, success: true, url };
     }
     case 'click': {
+      const matches = selectorMatchCount(action.selector ?? '');
+      if (matches > 1)
+        return {
+          type: actionType,
+          success: false,
+          error: `The recorded click matches ${matches} elements on this page, so nothing was clicked. Record this shortcut again.`,
+        };
       const response = (await handleClick({
         type: 'CLICK',
         selector: action.selector ?? '',
@@ -889,12 +960,7 @@ const AUTOFILL_ORIGIN_BLOCKED_ERROR =
   'Autofill is blocked here, this site is not on your approved-site allowlist';
 
 async function isAutofillOriginAllowed(): Promise<boolean> {
-  try {
-    return (await evaluateSiteAccess(window.location.href, 'automation')).allowed;
-  } catch (err) {
-    logger.debug('Could not read the site policy for autofill gating', err);
-    return false;
-  }
+  return (await requestPageAccess()).approved;
 }
 
 async function handleAutoFillJobApplication(
@@ -941,10 +1007,11 @@ async function handleAutoFillJobApplication(
 
 async function handleRunAutofill(): Promise<ExtensionResponse> {
   try {
-    if (!(await isAutofillOriginAllowed())) {
-      return { success: false, error: AUTOFILL_ORIGIN_BLOCKED_ERROR } as ExtensionResponse;
+    const profileReply = await requestAutofillProfile();
+    if ('error' in profileReply) {
+      return { success: false, error: profileReply.error } as ExtensionResponse;
     }
-    const profile = await loadAutofillProfile();
+    const { profile } = profileReply;
     const detection = detectJobApplication();
 
     if (!detection.isJobApplication || !detection.platform) {
@@ -1003,7 +1070,7 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
   }
 }
 
-function handleFindElements(message: import('./types').FindElementsMessage): ExtensionResponse {
+function handleFindElements(message: FindElementsMessage): ExtensionResponse {
   try {
     const query = typeof message.query === 'string' ? message.query : undefined;
     return { success: true, elements: findPageElements(query) } as ExtensionResponse;
@@ -1012,7 +1079,7 @@ function handleFindElements(message: import('./types').FindElementsMessage): Ext
   }
 }
 
-function handleFillFields(message: import('./types').FillFieldsMessage): ExtensionResponse {
+function handleFillFields(message: FillFieldsMessage): ExtensionResponse {
   try {
     const fields = Array.isArray(message.fields)
       ? message.fields.filter(
@@ -1107,19 +1174,19 @@ const _userRecordedActions: UserRecordedAction[] = [];
 function sanitizeRecordedValue(
   target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
 ): string | null {
-  if (target instanceof HTMLInputElement && target.type === 'password') {
-    return null;
-  }
-  const autocomplete = (target.getAttribute('autocomplete') ?? '').toLowerCase();
-  if (
-    /^cc-/.test(autocomplete) ||
-    autocomplete === 'current-password' ||
-    autocomplete === 'new-password' ||
-    autocomplete === 'one-time-code'
-  ) {
-    return '[REDACTED]';
-  }
+  if (isSensitiveField(target)) return null;
   return redactSecrets(target.value ?? '');
+}
+
+function reportRecordedAction(action: UserRecordedAction): void {
+  chrome.runtime.sendMessage({ type: 'RECORDING_ACTION', action }).catch(() => {
+    logger.debug('The recorded step did not reach the extension');
+  });
+}
+
+function recordAction(action: UserRecordedAction): void {
+  _userRecordedActions.push(action);
+  reportRecordedAction(action);
 }
 
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
@@ -1128,7 +1195,7 @@ let _recordingScrollListener: (() => void) | null = null;
 let _recordingNavListener: (() => void) | null = null;
 let _recordingIndicatorHost: HTMLElement | null = null;
 
-function buildCssSelector(el: Element): string {
+function simpleCssSelector(el: Element): string {
   if (el.id) {
     return `#${CSS.escape(el.id)}`;
   }
@@ -1143,6 +1210,47 @@ function buildCssSelector(el: Element): string {
   const base = el.tagName.toLowerCase();
   const firstClass = el.classList[0] ? `.${CSS.escape(el.classList[0])}` : '';
   return `${base}${firstClass}`;
+}
+
+function selectorMatchCount(selector: string): number {
+  try {
+    return document.querySelectorAll(selector).length;
+  } catch {
+    return 0;
+  }
+}
+
+function selectsOnly(selector: string, el: Element): boolean {
+  return selectorMatchCount(selector) === 1 && document.querySelector(selector) === el;
+}
+
+/**
+ * A selector that matches this element and no other, so replay cannot land on
+ * a sibling. The readable form is kept when it is already unique; otherwise
+ * the path climbs by position until it is.
+ */
+function buildCssSelector(el: Element): string {
+  const simple = simpleCssSelector(el);
+  if (selectsOnly(simple, el)) return simple;
+  const steps: string[] = [];
+  for (let node: Element | null = el; node && node !== document.documentElement;) {
+    const parent: Element | null = node.parentElement;
+    const tag = node.tagName;
+    const position = parent
+      ? Array.from(parent.children)
+          .filter((child) => child.tagName === tag)
+          .indexOf(node) + 1
+      : 1;
+    steps.unshift(`${tag.toLowerCase()}:nth-of-type(${position})`);
+    const path = steps.join(' > ');
+    if (parent?.id) {
+      const anchored = `#${CSS.escape(parent.id)} > ${path}`;
+      if (selectsOnly(anchored, el)) return anchored;
+    }
+    if (selectsOnly(path, el)) return path;
+    node = parent;
+  }
+  return simple;
 }
 
 function showRecordingIndicator(): void {
@@ -1205,7 +1313,7 @@ function attachRecordingListeners(): void {
     if (!automationState.isRecording) return;
     const target = e.target;
     if (!(target instanceof Element)) return;
-    _userRecordedActions.push({
+    recordAction({
       type: 'click',
       selector: buildCssSelector(target),
       timestamp: Date.now(),
@@ -1236,7 +1344,7 @@ function attachRecordingListeners(): void {
             : sanitizedValue;
       }
     }
-    _userRecordedActions.push(action);
+    recordAction(action);
   };
 
   let _lastScrollTs = 0;
@@ -1245,7 +1353,7 @@ function attachRecordingListeners(): void {
     const now = Date.now();
     if (now - _lastScrollTs < 500) return;
     _lastScrollTs = now;
-    _userRecordedActions.push({
+    recordAction({
       type: 'scroll',
       selector: 'window',
       value: `${window.scrollX},${window.scrollY}`,
@@ -1255,7 +1363,7 @@ function attachRecordingListeners(): void {
 
   _recordingNavListener = () => {
     if (!automationState.isRecording) return;
-    _userRecordedActions.push({
+    recordAction({
       type: 'navigate',
       selector: 'window.location',
       value: window.location.href,
@@ -1289,7 +1397,7 @@ function detachRecordingListeners(): void {
 }
 
 function handleSetRecordingValueCapture(
-  message: import('./types').SetRecordingValueCaptureMessage,
+  message: SetRecordingValueCaptureMessage,
 ): ExtensionResponse {
   const enabled = message.enabled === true;
   automationState.captureValues = enabled;
@@ -1319,21 +1427,19 @@ function handleStopRecording(): ExtensionResponse {
   detachRecordingListeners();
   hideRecordingIndicator();
 
-  const actions = [..._userRecordedActions];
-  chrome.runtime
-    .sendMessage({
-      type: 'STOP_RECORDING',
-      actions,
-    })
-    .catch(() => {
-      // Background may not be listening, not fatal
-    });
-
-  return { success: true, recording: false, actions } as ExtensionResponse;
+  return {
+    success: true,
+    recording: false,
+    actions: [..._userRecordedActions],
+  } as ExtensionResponse;
 }
 
 function handleGetRecordedActions(): ExtensionResponse {
-  return { success: true, actions: _userRecordedActions } as ExtensionResponse;
+  return {
+    success: true,
+    recording: automationState.isRecording,
+    actions: _userRecordedActions,
+  } as ExtensionResponse;
 }
 
 async function checkConnectionStatus(): Promise<void> {
@@ -1364,8 +1470,11 @@ function sendWebMCPTools(tools: WebMCPToolInfo[], url: string): void {
     });
 }
 
+let webmcpStartTimer: ReturnType<typeof setTimeout> | null = null;
+
 function initWebMCP(): void {
-  setTimeout(() => {
+  webmcpStartTimer = setTimeout(() => {
+    webmcpStartTimer = null;
     let discoveredTools: WebMCPToolInfo[] = [];
     try {
       const discovery = discoverAllTools();
@@ -1413,9 +1522,7 @@ function handleWebMCPDiscoverTools(): ExtensionResponse {
   } as ExtensionResponse;
 }
 
-async function handleWebMCPCallTool(
-  message: import('./types').WebMCPCallToolMessage,
-): Promise<ExtensionResponse> {
+async function handleWebMCPCallTool(message: WebMCPCallToolMessage): Promise<ExtensionResponse> {
   const { toolName, arguments: args } = message;
   const binding = message.browserAgentBinding;
   const callId = message.browserAgentCallId;
@@ -1509,6 +1616,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'FILL_APPLICATION_CONTACT',
   'AGI_CU_WATCH_INPUT',
   'AGI_CU_SHOW_ACTION',
+  'PAGE_ACCESS_CHANGED',
 ]);
 
 const ACTION_POINT_VISIBLE_MS = 900;

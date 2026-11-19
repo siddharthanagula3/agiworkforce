@@ -42,7 +42,7 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
   {
     surface: 'projects',
     effect: 'partitioned',
-    tables: ['user_projects', 'organization_project_access'],
+    tables: ['user_projects', 'organization_project_access', 'project_knowledge_objects'],
     transferable: false,
     copyable: false,
     exportable: true,
@@ -208,6 +208,14 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     exportable: true,
   },
   {
+    surface: 'chat_file_uploads',
+    effect: 'partitioned',
+    tables: ['chat_file_intakes', 'chat_file_preparations'],
+    transferable: false,
+    copyable: false,
+    exportable: true,
+  },
+  {
     surface: 'external_references',
     effect: 'partitioned',
     tables: ['external_resource_references'],
@@ -267,6 +275,7 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     effect: 'partitioned',
     tables: [
       'cloud_code_sessions',
+      'cloud_code_environments',
       'cloud_code_agent_turns',
       'cloud_code_terminal_entries',
       'notebook_runs',

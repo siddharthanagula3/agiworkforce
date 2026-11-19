@@ -410,7 +410,7 @@
       "checks": [
         {
           "kind": "matches",
-          "pattern": "memory (is|was|has been|.s) (off|turned off|disabled|not on)|(not|never) (been )?(saved|stored|kept)|nothing (was|is|has been|.s been) (saved|stored|kept)|(isn.?t|wasn.?t|aren.?t|weren.?t) (being )?(saved|stored)|(don.?t|do not|didn.?t|did not) (save|store|keep)"
+          "pattern": "memory (is|was|has been|.s) (off|turned off|disabled|not on)|(not|never) (been )?(saved|stored|kept)|nothing (was|is|has been|.s been) (saved|stored|kept)|(isn.?t|wasn.?t|aren.?t|weren.?t) (being )?(saved|stored)|(don.?t|do not|didn.?t|did not) (save|store|keep)|(haven.?t|hasn.?t|have not|has not) (been )?(saved|stored|kept)"
         },
         {
           "kind": "excludesAll",

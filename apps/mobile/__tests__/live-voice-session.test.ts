@@ -635,6 +635,14 @@ describe('LiveVoiceSession', () => {
     }
   });
 
+  it('names an insecure server instead of failing voice with a generic connection error', () => {
+    expect(liveVoiceUnavailableReason('http://localhost:3000')).toBe(
+      LIVE_VOICE_MESSAGE.insecureServer,
+    );
+    expect(liveVoiceUnavailableReason('not a url')).toBe(LIVE_VOICE_MESSAGE.insecureServer);
+    expect(liveVoiceUnavailableReason('https://agiworkforce.com')).toBeNull();
+  });
+
   it('keeps Local Mode and a signed-out session on the turn-based path', () => {
     expect(liveVoiceModeUnavailableReason({ executionMode: 'local', signedIn: true })).toBe(
       LIVE_VOICE_LOCAL_MODE_REASON,

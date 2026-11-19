@@ -8,13 +8,27 @@ const EMBEDDING_MODEL = getModels({ modelTypes: ['embedding'] })[0]!;
 const CHAT_MODEL_ID = requireProviderDefaultModel('anthropic');
 const IDEMPOTENCY_KEY = 'test.embeddings-contract.request-key';
 
-const mocks = vi.hoisted(() => ({
-  requireUser: vi.fn(async () => 'user-1'),
-  reserve: vi.fn(async () => ({ reservationId: 'reservation-1' })),
-  finalize: vi.fn(async () => ({})),
-  getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
-  fetch: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const markStarted = vi.fn(async (_reservation: { reservationId?: string }) => undefined);
+  return {
+    requireUser: vi.fn(async () => 'user-1'),
+    reserve: vi.fn(async () => ({ reservationId: 'reservation-1' })),
+    markStarted,
+    // finalize_managed_usage_request_microusd refuses to complete a request the
+    // provider was never marked as started on, and the service throws on that.
+    finalize: vi.fn(async (input: { reservationId?: string; outcome: string }) => {
+      const started = markStarted.mock.calls.some(
+        ([reservation]) => reservation.reservationId === input.reservationId,
+      );
+      if (input.outcome === 'completed' && !started) {
+        throw new Error('Managed usage billing returned an invalid finalization.');
+      }
+      return {};
+    }),
+    getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
+    fetch: vi.fn(),
+  };
+});
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-chat', () => ({
@@ -50,6 +64,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
       (mocks.reserve as unknown as (...a: unknown[]) => unknown)(...args),
     finalizeManagedUsageRequest: (...args: unknown[]) =>
       (mocks.finalize as unknown as (...a: unknown[]) => unknown)(...args),
+    markManagedUsageProviderStarted: (...args: unknown[]) =>
+      (mocks.markStarted as unknown as (...a: unknown[]) => unknown)(...args),
   };
 });
 

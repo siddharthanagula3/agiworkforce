@@ -14,7 +14,7 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 import { MessageBubble } from '../MessageBubble';
-import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '../../../lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '@agiworkforce/cloud-contracts';
 
 const CONVERSATION_ID = 'conv-1';
 

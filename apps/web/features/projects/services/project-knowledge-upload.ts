@@ -1,7 +1,7 @@
 import {
   ManagedCloudProjectKnowledgeReindexResponseSchema,
   createManagedCloudProjectKnowledgeClient,
-  managedCloudProjectKnowledgeFilePath,
+  managedCloudProjectKnowledgeReindexPath,
   type ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
 import type { ProjectKnowledgeIndexState } from '@agiworkforce/types';
@@ -38,14 +38,11 @@ export async function reindexProjectKnowledgeFile(
   projectId: string,
   fileId: string,
 ): Promise<ProjectKnowledgeIndexState | null> {
-  const response = await fetch(
-    `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/reindex`,
-    {
-      method: 'POST',
-      headers: { 'x-csrf-token': await getCsrfToken() },
-      credentials: 'include',
-    },
-  );
+  const response = await fetch(managedCloudProjectKnowledgeReindexPath(projectId, fileId), {
+    method: 'POST',
+    headers: { 'x-csrf-token': await getCsrfToken() },
+    credentials: 'include',
+  });
   if (!response.ok) throw new Error(`Reindex failed (${response.status})`);
   return ManagedCloudProjectKnowledgeReindexResponseSchema.parse(await response.json()).indexing;
 }

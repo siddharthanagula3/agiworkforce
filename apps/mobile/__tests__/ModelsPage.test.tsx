@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 
 let lastModelPickerProps: { modelScope?: 'local' | 'cloud' | 'all' } | null = null;
 
@@ -48,6 +48,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 jest.mock('../src/ui/theme', () => ({
+  spacing: jest.requireActual('../src/ui/theme/tokens').spacing,
   useThemeColors: () => ({
     surfaceBase: '#fff',
     border: '#ddd',
@@ -123,6 +124,20 @@ describe('Models screen', () => {
       inviteCode: undefined,
       cloudUnlockedAt: undefined,
     });
+  });
+
+  it('keeps the cards and the browse button reachable by scrolling, with the picker outside', () => {
+    const fav = LOCAL_MODEL_LIST[0];
+    useModelStore.setState({ favorites: [fav.id], recentModels: [fav.id] });
+
+    const { getByTestId } = render(<ModelsScreen />);
+    const scroll = getByTestId('models-scroll');
+
+    expect(within(scroll).getByLabelText('Change model')).toBeTruthy();
+    expect(within(scroll).getAllByLabelText(`Select ${fav.name}`).length).toBe(2);
+    expect(within(scroll).getByLabelText('Browse all models')).toBeTruthy();
+    expect(within(scroll).queryByTestId('model-picker-sheet')).toBeNull();
+    expect(getByTestId('model-picker-sheet')).toBeTruthy();
   });
 
   it('opens the model picker in local scope when Cloud is locked', () => {

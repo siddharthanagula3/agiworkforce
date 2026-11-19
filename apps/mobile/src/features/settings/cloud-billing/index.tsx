@@ -25,6 +25,7 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { SUBSCRIPTION_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import {
   MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES,
   canUseBillingPlanCapability,
@@ -32,16 +33,19 @@ import {
   getBillingPlanPricing,
   getMobileIapProductDefinition,
   getNextUpgradeTier,
+  isEnterprisePlanTier,
   isEntitledSubscriptionStatus,
   isSelfServeIndividualPlanTier,
+  isTeamPlanTier,
   mobileIapPlanChangeDirection,
   type MobileIapCatalogProduct,
   type MobileIapProductKey,
 } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
+import { planCheckOf } from '@/src/features/billing/planCheck';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
-import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -122,6 +126,7 @@ export default function CloudBillingScreen() {
   const billingPeriodEnd = useTierStore((s) => s.billingPeriodEnd);
   const billingCancelsAtPeriodEnd = useTierStore((s) => s.billingCancelsAtPeriodEnd);
   const refreshTier = useTierStore((s) => s.refreshTier);
+  const planCheck = useTierStore(planCheckOf);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
@@ -130,18 +135,41 @@ export default function CloudBillingScreen() {
   });
   const webBillingLinksAllowed = useWebBillingLinksAllowed();
 
+  const [planCheckAttempted, setPlanCheckAttempted] = useState(false);
+  const checkPlan = useCallback(() => {
+    void refreshTier().finally(() => setPlanCheckAttempted(true));
+  }, [refreshTier]);
+
   useEffect(() => {
-    if (isClerkSignedIn && isCloudModeActive) void refreshTier();
-  }, [isClerkSignedIn, isCloudModeActive, refreshTier]);
+    if (isClerkSignedIn && isCloudModeActive) checkPlan();
+  }, [isClerkSignedIn, isCloudModeActive, checkPlan]);
 
   const [portalLoading, setPortalLoading] = useState(false);
   const paywallSheetRef = useRef<BottomSheet>(null);
 
+  const planUnconfirmed = planCheck !== 'confirmed';
+  const planChecking =
+    planCheck === 'checking' || (planUnconfirmed && isCloudModeActive && !planCheckAttempted);
+  const canRetryPlanCheck = planUnconfirmed && !planChecking && isCloudModeActive;
   const tierLabel = getBillingPlanPricing(billingTier).label;
   const isFreeTier = billingTier === 'free';
   const isEntitled = isEntitledSubscriptionStatus(billingStatus);
   const isTrialing = billingStatus === 'trialing';
   const statusLabel = billingStatus.replaceAll('_', ' ');
+  const planSummary = planUnconfirmed
+    ? planChecking
+      ? 'Checking your plan…'
+      : isCloudModeActive
+        ? 'We couldn’t read your plan just now. Your subscription has not changed.'
+        : 'Your plan is read from your account once chat is set to Cloud.'
+    : isFreeTier || isEntitled
+      ? `You are on the ${tierLabel} plan.`
+      : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`;
+  const planHeading = planUnconfirmed
+    ? planChecking
+      ? 'Checking your plan…'
+      : 'Plan not confirmed'
+    : `${tierLabel} plan`;
   const periodEndLabel =
     billingPeriodEnd === null
       ? null
@@ -150,7 +178,16 @@ export default function CloudBillingScreen() {
           day: 'numeric',
           year: 'numeric',
         });
+  const planGivenWithoutPurchase = billingSource === 'manual';
+  const periodEndLabelShown =
+    periodEndLabel !== null &&
+    (!planGivenWithoutPurchase || billingCancelsAtPeriodEnd || isTrialing)
+      ? periodEndLabel
+      : null;
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
+  const billedByOrganization =
+    billingSource === 'manual' &&
+    (isTeamPlanTier(billingTier) || isEnterprisePlanTier(billingTier));
   const nextUpgradeTier = getNextUpgradeTier(tier);
   const subscriptionGuard = getSubscriptionOwnerGuard(
     billingSource,
@@ -185,6 +222,7 @@ export default function CloudBillingScreen() {
   const managedElsewhere = subscriptionGuard.blocked && billingSource !== nativeSubscriptionSource;
   const plansWithheldReason = nativeIap.catalog?.subscriptionsUnavailableReason ?? null;
   const canBuyNativeSubscription =
+    !planUnconfirmed &&
     nativeIap.catalog?.enabled === true &&
     !isWorkspacePlan &&
     plansWithheldReason === null &&
@@ -304,7 +342,7 @@ export default function CloudBillingScreen() {
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
-      <SettingsScreenShell title="Billing">
+      <SettingsScreenShell title={SUBSCRIPTION_SCREEN_TITLE}>
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
       </SettingsScreenShell>
     );
@@ -312,41 +350,40 @@ export default function CloudBillingScreen() {
 
   if (!NATIVE_PURCHASES_AVAILABLE) {
     return (
-      <SettingsScreenShell title="Plan">
-        <SettingsInfo
-          title="Your plan"
-          body={
-            isFreeTier
-              ? 'You are on the Free plan.'
-              : isEntitled
-                ? `You are on the ${tierLabel} plan.`
-                : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`
-          }
-          icon={CreditCard}
-        />
+      <SettingsScreenShell title={SUBSCRIPTION_SCREEN_TITLE}>
+        <SettingsInfo title="Your plan" body={planSummary} icon={CreditCard} />
         {!isCloudModeActive && (
           <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
         )}
         <SettingsGroup>
-          <SettingsRow label="Current plan" value={tierLabel} icon={CreditCard} />
-          {!isFreeTier && isEntitled && periodEndLabel ? (
+          <SettingsRow
+            label="Current plan"
+            value={planUnconfirmed ? (planChecking ? 'Checking…' : 'Not confirmed') : tierLabel}
+            icon={CreditCard}
+          />
+          {canRetryPlanCheck ? (
+            <SettingsRow label="Try again" icon={RefreshCw} onPress={checkPlan} />
+          ) : null}
+          {!planUnconfirmed && !isFreeTier && isEntitled && periodEndLabelShown ? (
             <SettingsRow
               label={
                 billingCancelsAtPeriodEnd ? 'Access ends' : isTrialing ? 'Trial ends' : 'Renews'
               }
-              value={periodEndLabel}
+              value={periodEndLabelShown}
               icon={Clock}
             />
           ) : null}
-          {!isFreeTier ? (
+          {!planUnconfirmed && !isFreeTier ? (
             <SettingsRow
               label="Billing"
               value={
-                billingSource === 'manual'
+                billedByOrganization
                   ? 'By your organization'
-                  : billingSource === 'stripe'
-                    ? 'Managed on the web'
-                    : 'Managed where you subscribed'
+                  : billingSource === 'manual'
+                    ? 'Included with your account'
+                    : billingSource === 'stripe'
+                      ? 'Managed on the web'
+                      : 'Managed where you subscribed'
               }
               icon={CreditCard}
             />
@@ -384,20 +421,18 @@ export default function CloudBillingScreen() {
   }
 
   return (
-    <SettingsScreenShell title="Billing">
+    <SettingsScreenShell title={SUBSCRIPTION_SCREEN_TITLE}>
       <SettingsInfo
         title="Your plan, usage, and payment details"
-        body={
-          isFreeTier
-            ? 'You are on the Free plan.'
-            : isEntitled
-              ? `You are on the ${tierLabel} plan.`
-              : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`
-        }
+        body={planSummary}
         icon={CreditCard}
       />
 
-      {nextUpgradeTier && !isWorkspacePlan && !canChangePlanInApp && !nativeIap.loading ? (
+      {!planUnconfirmed &&
+      nextUpgradeTier &&
+      !isWorkspacePlan &&
+      !canChangePlanInApp &&
+      !nativeIap.loading ? (
         <SettingsInfo
           title={
             isFreeTier
@@ -459,9 +494,9 @@ export default function CloudBillingScreen() {
             <Text
               style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
             >
-              {isFreeTier ? 'Free plan' : `${tierLabel} plan`}
+              {planHeading}
             </Text>
-            {isFreeTier && (
+            {!planUnconfirmed && isFreeTier && (
               <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
                 Try AGI Cloud
               </Text>
@@ -478,13 +513,15 @@ export default function CloudBillingScreen() {
                 {statusLabel}
               </Text>
             )}
-            {!isFreeTier && isEntitled && periodEndLabel ? (
+            {!isFreeTier && isEntitled && periodEndLabelShown ? (
               <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
                 {billingCancelsAtPeriodEnd
-                  ? `Access ends ${periodEndLabel}. You keep ${tierLabel} until then.`
+                  ? `Access ends ${periodEndLabelShown}. You keep ${tierLabel} until then.`
                   : isTrialing
-                    ? `Free trial ends ${periodEndLabel}, then renews unless you cancel.`
-                    : `Renews ${periodEndLabel}`}
+                    ? planGivenWithoutPurchase
+                      ? `Free trial ends ${periodEndLabelShown}.`
+                      : `Free trial ends ${periodEndLabelShown}, then renews unless you cancel.`
+                    : `Renews ${periodEndLabelShown}`}
               </Text>
             ) : null}
           </View>
@@ -497,7 +534,10 @@ export default function CloudBillingScreen() {
             borderTopColor: colors.border,
           }}
         >
-          {nextUpgradeTier && !isWorkspacePlan ? (
+          {canRetryPlanCheck ? (
+            <SettingsRow label="Try again" icon={RefreshCw} onPress={checkPlan} />
+          ) : null}
+          {!planUnconfirmed && nextUpgradeTier && !isWorkspacePlan ? (
             <SettingsRow
               label={isFreeTier ? 'Upgrade plan' : isEntitled ? 'Adjust plan' : 'Choose plan'}
               icon={ShoppingBag}
@@ -546,7 +586,13 @@ export default function CloudBillingScreen() {
             <SettingsRow
               label="Billing"
               icon={CreditCard}
-              value={billingSource === 'manual' ? 'By your organization' : 'Managed on the web'}
+              value={
+                billedByOrganization
+                  ? 'By your organization'
+                  : billingSource === 'manual'
+                    ? 'Included with your account'
+                    : 'Managed on the web'
+              }
               isLast
             />
           ) : null}
@@ -678,12 +724,12 @@ export default function CloudBillingScreen() {
                 <SettingsRow
                   label="Terms of Use"
                   icon={ExternalLink}
-                  onPress={() => void openExternalUrl(new URL('/terms', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/terms')}
                 />
                 <SettingsRow
                   label="Privacy Policy"
                   icon={ExternalLink}
-                  onPress={() => void openExternalUrl(new URL('/privacy', API_URL).toString())}
+                  onPress={() => void openWebContentPage('/privacy')}
                   isLast
                 />
               </SettingsGroup>

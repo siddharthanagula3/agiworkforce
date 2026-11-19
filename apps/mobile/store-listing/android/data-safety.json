@@ -4,8 +4,8 @@
   "dataDeletionEndpoint": "apps/web/app/api/user/delete-account/route.ts",
   "allDataEncryptedInTransit": true,
   "usesAdvertisingId": false,
-  "sharingBasis": "Messages, photos, files and voice sent in AGI Cloud are forwarded to the model provider serving the request. On the Free plan some of those providers' terms allow training on what they receive, which is use for their own purposes, so these four types are declared shared (Play's User Data policy covers third-party AI providers since 2026-07-15). Identity data goes only to Clerk and push delivery only to the push service, both acting on AGI's behalf, so those stay not shared. Subprocessors: https://agiworkforce.com/subprocessors. No analytics, crash-reporting or ad SDK is in apps/mobile/package.json.",
-  "optionalityBasis": "Every entry is optional because Cloud sign-in is optional. A signed-out user who has completed onboarding lands in Local Mode and is never redirected to a sign-in wall (apps/mobile/app/_layout.tsx), and Local Mode is prevented from reaching AGI hosts by apps/mobile/lib/egressGuard.ts.",
+  "sharingBasis": "Google defines sharing as transferring user data collected from the app to a third party, and exempts a transfer to a service provider that processes it on the developer's behalf (Data safety help, https://support.google.com/googleplay/android-developer/answer/10787469, read 2026-11-15). Messages, photos, files, voice, calendar events and search queries sent in AGI Cloud reach the model, voice or embedding provider serving the request. On the Free plan some of those providers' terms allow training on what they receive, which is use for their own purposes, so the service-provider exception cannot be shown to apply from the repository and these six types are declared shared, the cautious answer. Whether the providers' data-processing terms let them count as service providers is for the owner and counsel. Identity data goes only to Clerk, push delivery only to the push service, Expo's update service receives its own per-install client ID and launch errors (Expo says it acts as the developer's service provider, https://docs.expo.dev/eas-update/store-privacy-declarations/), and Google's ML Kit SDKs send diagnostics and per-installation identifiers to Google (\"ML Kit does not transfer this data to third-parties\", https://developers.google.com/ml-kit/android-data-disclosure); those types are declared not shared. apps/mobile/package.json has no ad, analytics or crash-reporting SDK, but the Android build links Google ML Kit through Gradle (apps/mobile/native/android/withAGIVisionOCR.cjs, withAGITranslate.cjs, withAGIAICore.cjs) and expo-updates contacts Expo on every launch. Subprocessors: https://agiworkforce.com/subprocessors.",
+  "optionalityBasis": "Google lets a type be optional only if every user can choose not to provide it. Types sent only after a Cloud sign-in, or only by a feature the person chooses, are optional: a signed-out user who has completed onboarding lands in Local Mode and is never redirected to a sign-in wall (apps/mobile/app/_layout.tsx), and Local Mode is prevented from reaching AGI hosts by apps/mobile/lib/egressGuard.ts. Device or other IDs, Diagnostics and Crash logs are required, because SDKs send them on installs that never sign in: expo-updates asks Expo for an update on every launch (apps/mobile/app.config.js sets updates.url and no checkAutomatically, and Expo's default is to check on load), and ML Kit sends diagnostics when on-device text recognition, translation or the Android system model runs, which includes reading text from an image attached in Local Mode (apps/mobile/stores/chat/chatExecutionStore.ts, localImageOcrText). The app gives no control over either.",
   "collectedData": [
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeEmailAddress",
@@ -41,7 +41,7 @@
       "optional": true,
       "ephemeral": false,
       "usedForTracking": false,
-      "backedBy": "Cloud-mode chat content, uploaded to AGI Cloud and processed by the model provider serving the request. Local Mode uploads nothing."
+      "backedBy": "Cloud-mode chat content, uploaded to AGI Cloud and processed by the model provider serving the request. Local Mode chats are not uploaded. In Local Mode, only a content report the person chooses to send, which uploads the reported answer to AGI (services/contentReport.ts, consentedReport in lib/egressGuard.ts)."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypePhotosorVideos",
@@ -63,9 +63,9 @@
       "sharedWithThirdParties": true,
       "purposes": ["App functionality"],
       "optional": true,
-      "ephemeral": true,
+      "ephemeral": false,
       "usedForTracking": false,
-      "backedBy": "Live voice mode in a Cloud chat streams the microphone to AGI Cloud over WebRTC for the session (apps/mobile/src/features/voice/services/liveVoiceSession.ts) and saves the transcript to that chat. Dictation and the turn-based voice companion transcribe on the device (apps/mobile/src/features/voice/services/voiceInput.ts) and upload no audio. Local Mode has no live voice."
+      "backedBy": "Live voice mode in a Cloud chat: AGI Cloud sets up the call by passing the phone's WebRTC offer to the voice provider and returning the provider's answer (apps/mobile/src/features/voice/services/liveVoiceSession.ts, apps/web/app/api/voice/live/sessions/route.ts), then the audio streams directly between the device and the voice provider, as the app's Privacy, Data use & access screen says (apps/mobile/src/features/settings/cloud-privacy/DataUseScreen.tsx); the transcript is saved to that chat. Not marked ephemeral, because the voice provider's retention has not been established. Dictation and the turn-based voice companion transcribe on the device (apps/mobile/src/features/voice/services/voiceInput.ts) and upload no audio. Local Mode has no live voice."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",
@@ -78,6 +78,30 @@
       "ephemeral": false,
       "usedForTracking": false,
       "backedBy": "A document attached to a Cloud message through expo-document-picker (apps/mobile/app/(app)/chat/[id].tsx:703, apps/mobile/app/(app)/(tabs)/chat.tsx:596). Apple has no separate documents type, so it maps onto the same NSPrivacyCollectedDataTypeOtherUserContent entry the privacy manifest already declares for message content; Play has a distinct type and needs its own row."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherUserContent",
+      "playCategory": "Calendar",
+      "playDataType": "Calendar events",
+      "collected": true,
+      "sharedWithThirdParties": true,
+      "purposes": ["App functionality"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "When a Cloud chat asks about the person's schedule and the calendar permission is granted, the phone reads the events in the asked range, with title, start, end, location, notes (up to 200 characters) and calendar name (apps/mobile/src/features/integrations/services/phoneDeviceSteps.ts), and returns them to the cloud run as tool results (apps/mobile/stores/chat/chatExecutionStore.ts, streamDeviceStepResume), which pass them to the model provider. The app's Privacy screen says the same. Apple has no calendar type, so it maps onto Other User Content."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeSearchHistory",
+      "playCategory": "App activity",
+      "playDataType": "In-app search history",
+      "collected": true,
+      "sharedWithThirdParties": true,
+      "purposes": ["App functionality"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "Chat search in Cloud mode and past-chat context send the query to /api/search (apps/mobile/stores/chat/chatViewStore.ts, apps/mobile/src/features/memory/services/pastChatContext.ts). The server records it in search_history through track_search (apps/web/app/api/search/route.ts) and, when the account has indexed content, sends it to the embedding provider to rank results (apps/web/lib/services/retrieval-search-service.ts, queryEmbedding)."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeUserID",
@@ -97,11 +121,11 @@
       "playDataType": "Device or other IDs",
       "collected": true,
       "sharedWithThirdParties": false,
-      "purposes": ["App functionality"],
-      "optional": true,
+      "purposes": ["App functionality", "Analytics"],
+      "optional": false,
       "ephemeral": false,
       "usedForTracking": false,
-      "backedBy": "An app-generated UUID from apps/mobile/lib/deviceId.ts, registered with the push token by apps/mobile/services/notifications.ts. Created only when push is enabled; it is not an advertising identifier."
+      "backedBy": "Three sources, none an advertising identifier. (1) An app-generated install ID (apps/mobile/lib/deviceId.ts), sent with the device name, OS version and app version on every active session while signed in to AGI Cloud to list the device in the account (useDeviceRegistryHeartbeat in apps/mobile/app/(app)/_layout.tsx, apps/mobile/src/features/device-registry/heartbeat.ts), and registered with the push token when notifications are allowed (apps/mobile/services/notifications.ts). (2) expo-updates sends Expo's random per-install client ID with the update check on every launch, signed in or not. (3) On Android, Google's ML Kit SDKs send per-installation identifiers for diagnostics and usage analytics, and Translate uses Firebase installations."
     },
     {
       "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeProductInteraction",
@@ -114,6 +138,42 @@
       "ephemeral": false,
       "usedForTracking": false,
       "backedBy": "apps/mobile/services/productAnalytics.ts sends event names from the shared vocabulary to AGI Cloud only in cloud mode and only when the account's product analytics consent allows it; the server drops them otherwise (apps/web/lib/server/product-analytics.ts)."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeCustomerSupport",
+      "playCategory": "Messages",
+      "playDataType": "Other in-app messages",
+      "collected": true,
+      "sharedWithThirdParties": true,
+      "purposes": ["App functionality"],
+      "optional": true,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "In Cloud mode the support tickets and replies (apps/mobile/src/features/support/service.ts, /api/support/tickets) and the in-app feedback (apps/mobile/src/features/feedback/index.tsx, /api/mobile/feedback) the user writes are stored against the account; in Local Mode feedback opens the device mail app. Play has no customer support type, so this maps onto the Other in-app messages row, and Play records one sharing answer per type: that answer is shared because of chat content. The support routes forward this content to no model provider."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+      "playCategory": "App info and performance",
+      "playDataType": "Diagnostics",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["App functionality", "Analytics"],
+      "optional": false,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "(1) A Cloud support ticket attaches a diagnostics bundle unless the person turns off Attach diagnostics, which is on by default (apps/mobile/src/features/support/SupportTicketsScreen.tsx): app version and build, platform and OS version, device class, app mode, locale, time zone and screen size (apps/mobile/src/features/settings/diagnostics/diagnosticsBundle.ts), stored with the ticket (apps/web/lib/support/tickets/store.ts). (2) On Android, Google's ML Kit SDKs for text recognition, translation and the on-device prompt API send device information, app information and performance metrics for diagnostics and usage analytics, encrypted in transit, including in Local Mode; Google says ML Kit does not transfer this data to third parties. This source makes the type required."
+    },
+    {
+      "iosPrivacyManifestType": "NSPrivacyCollectedDataTypeCrashData",
+      "playCategory": "App info and performance",
+      "playDataType": "Crash logs",
+      "collected": true,
+      "sharedWithThirdParties": false,
+      "purposes": ["Analytics"],
+      "optional": false,
+      "ephemeral": false,
+      "usedForTracking": false,
+      "backedBy": "expo-updates sends the text of the last error that stopped the app from launching (up to 1,024 characters) and the IDs of updates that failed to launch with the update check on every launch, signed in or not (apps/mobile/app.config.js registers expo-updates with updates.url and no checkAutomatically). Expo's declaration guidance lists this as Crash logs, purpose Analytics, required. Remove this row only together with a build that turns update checks off."
     }
   ]
 }

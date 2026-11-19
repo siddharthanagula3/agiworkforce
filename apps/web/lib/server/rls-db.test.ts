@@ -229,9 +229,7 @@ describe('getUserScopedDb with an API-key principal', () => {
 
   it('propagates an explicit workspace rejection instead of falling back to personal data', async () => {
     const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
-    const refusal = Object.assign(new Error('You are not a member of that workspace'), {
-      statusCode: 403,
-    });
+    const refusal = createError.forbidden('You are not a member of that workspace');
     vi.mocked(resolveActiveOrganizationId).mockRejectedValue(refusal);
     const request = apiKeyRequest();
     request.headers.set('x-agi-organization-id', '11111111-1111-4111-8111-111111111111');
@@ -239,6 +237,20 @@ describe('getUserScopedDb with an API-key principal', () => {
       await expect(getUserScopedDb(request, { apiKeyScope: 'inference:write' })).rejects.toBe(
         refusal,
       );
+      expect(rlsWithOrg).not.toHaveBeenCalled();
+    } finally {
+      vi.mocked(resolveActiveOrganizationId).mockResolvedValue(null);
+    }
+  });
+
+  it('answers a workspace lookup that fails outright as unavailable, never as signed out', async () => {
+    const { resolveActiveOrganizationId } = await import('@/lib/services/active-workspace-service');
+    vi.mocked(resolveActiveOrganizationId).mockRejectedValue(new Error('connection terminated'));
+    try {
+      const error = await getUserScopedDb(apiKeyRequest(), {
+        apiKeyScope: 'inference:write',
+      }).catch((caught: unknown) => caught);
+      expect(isAppError(error) && error.statusCode).toBe(503);
       expect(rlsWithOrg).not.toHaveBeenCalled();
     } finally {
       vi.mocked(resolveActiveOrganizationId).mockResolvedValue(null);

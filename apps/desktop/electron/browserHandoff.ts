@@ -26,7 +26,7 @@ async function pasteImage(win: BrowserWindow, png: Buffer): Promise<void> {
     win.webContents.paste();
     await delay(CLIPBOARD_RESTORE_MS);
   } finally {
-    takeCaptureBackFromClipboard(priorText, captureFingerprint);
+    await takeCaptureBackFromClipboard(priorText, captureFingerprint);
   }
 }
 

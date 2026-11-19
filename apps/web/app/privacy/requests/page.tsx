@@ -1,7 +1,7 @@
 import { headers } from 'next/headers';
 
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -48,16 +48,16 @@ const SELF_SERVE: readonly LedgerRow[] = [
   {
     label: 'Delete your account',
     value:
-      'Request it from account settings. Erasure is scheduled 24 hours out and then performed by a daily job, which also deletes your identity at our authentication provider. You get no confirmation email, but cancellation is self-serve: sign back in and cancel from Settings > Account any time inside that window.',
+      'Request it from account settings. Erasure is scheduled 24 hours out and then carried out by a daily job, which also deletes your identity at our authentication provider. If an active legal hold covers your account, erasure waits until the hold is released. You get no confirmation email, but cancellation is self-serve: sign back in and cancel from Settings > Account any time inside that window.',
   },
   {
     label: 'Turn analytics off',
     value: (
       <>
         The cookie preferences dialog, reachable from{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.cookies} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.cookies} className="agi-ds-link">
           /cookies
-        </Link>
+        </PageLink>
         . Analytics is off until you turn it on, and the gate fails closed.
       </>
     ),
@@ -80,13 +80,13 @@ export default async function DataRightsPage() {
               Each control on this page says whether it is self-serve or needs a person, and what
               happens when you use it. Last updated: {POLICY_LAST_UPDATED.dataRights}. The notice
               that explains what we collect and why is at{' '}
-              <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
+              <PageLink href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
                 /privacy/india
-              </Link>{' '}
+              </PageLink>{' '}
               for India, and{' '}
-              <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+              <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                 /privacy
-              </Link>{' '}
+              </PageLink>{' '}
               generally. <PolicyVersionsLink policy="dataRights" />
             </>
           }

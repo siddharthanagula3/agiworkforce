@@ -78,6 +78,10 @@ impl SessionActivity {
         session.validations = self.validations.clone();
     }
 
+    pub fn has_records(&self) -> bool {
+        !self.approvals.is_empty() || !self.file_changes.is_empty() || !self.validations.is_empty()
+    }
+
     pub fn file_changes(&self) -> &[ManagedSessionFileChange] {
         &self.file_changes
     }

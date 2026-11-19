@@ -137,10 +137,31 @@ describe('Chats and tasks page', () => {
     expect(state.push).toHaveBeenCalledWith('/chat');
   });
 
-  it('focuses the inline search on load', () => {
+  const stubPointer = (fine: boolean) =>
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(pointer: fine)' ? fine : false,
+        media: query,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    );
+
+  it('focuses the inline search on load with a mouse or trackpad', () => {
+    stubPointer(true);
     render(<ChatsAndTasksList />);
     const search = screen.getByRole('searchbox', { name: 'Search chats and tasks' });
     expect(document.activeElement).toBe(search);
+    vi.unstubAllGlobals();
+  });
+
+  it('leaves the inline search unfocused on a touch screen, so the keyboard does not open over the list', () => {
+    stubPointer(false);
+    render(<ChatsAndTasksList />);
+    const search = screen.getByRole('searchbox', { name: 'Search chats and tasks' });
+    expect(document.activeElement).not.toBe(search);
+    vi.unstubAllGlobals();
   });
 
   it('lists chats and tasks together, newest first, without archived ones', () => {

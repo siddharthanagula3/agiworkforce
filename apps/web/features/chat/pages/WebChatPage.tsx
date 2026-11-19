@@ -5,10 +5,11 @@ import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-spac
 import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicator';
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { useWindowEdgeOffset } from '@/features/chat/hooks/use-window-edge-offset';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { isKeepableChatMessage } from '@/lib/chat-kept-messages';
 import { clientProvisionalTitle } from '@/lib/chat-title';
-import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
+import { readPersistedRouteLane, readRouteLane } from '@agiworkforce/cloud-contracts';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
 import {
   CHAT_SLASH_DONE,
@@ -18,7 +19,7 @@ import {
 } from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { persistAssistantFenceEdit } from '../lib/assistant-fence-persistence';
-import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '../lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_EDIT_METADATA_KEY } from '@agiworkforce/cloud-contracts';
 import {
   applyAssistantFenceEdit,
   type AssistantFenceEdit,
@@ -64,11 +65,12 @@ import {
   InteractiveCardResumeProvider,
   saveMessageToDb,
 } from '@/lib/hooks/useChatStream';
-import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
+import { interactiveCardNeedsResume } from '@agiworkforce/cloud-contracts';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { conversationUnavailableToastOptions } from '@/lib/conversation-load-error';
 import { useConversations } from '@/lib/hooks/useConversations';
 import {
+  MAX_CHAT_ATTACHMENT_BYTES,
   ManagedCloudAgentRunHttpError,
   createManagedCloudAgentRunClient,
   managedCloudConversationPath,
@@ -208,7 +210,7 @@ import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
 import { DraftConflictDialog } from '../components/DraftConflictDialog';
 import { useExplicitMemoryCommands } from '../hooks/use-explicit-memory-commands';
-import { uploadChatAttachments } from '../services/chat-attachment-upload';
+import { uploadChatAttachments, type KeptAfterCancel } from '../services/chat-attachment-upload';
 import { useFocusFollowUp, focusFollowUpComposer } from '../hooks/use-focus-follow-up';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
@@ -355,6 +357,7 @@ import {
   type ResearchRunActionHandler,
   type ResearchRunControls,
 } from '../components/research/research-run-controls';
+import { AnswerUiFollowUpProvider } from '../components/messages/cards/answer-ui/answer-ui-follow-up';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
@@ -506,6 +509,25 @@ type AttachmentUploadAttempt = ComposerAttachmentUploadAttempt & {
   meta?: SendMeta;
   ownerConversationId: string | null;
 };
+
+/** A file whose copy the server kept after its cancel came too late. */
+type KeptAttachment = {
+  file: File;
+  kept: KeptAfterCancel;
+  status: ComposerAttachmentUploadAttempt['statuses'][number];
+  ownerConversationId: string | null;
+  authority: RequestAuthority;
+};
+
+type KeptCopy = Pick<KeptAttachment, 'kept' | 'authority'>;
+
+/** Only a large file the handshake offered can have a copy that outlives its cancel. */
+function mayOutliveCancel(file: File): boolean {
+  return (
+    useBillingStore.getState().attachmentLimits?.largeFilesAvailable === true &&
+    file.size > MAX_CHAT_ATTACHMENT_BYTES
+  );
+}
 
 type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'status'> & {
   temporary: boolean;
@@ -1125,6 +1147,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const appHeaderRef = useRef<HTMLElement>(null);
+  useWindowEdgeOffset(appHeaderRef);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const shellLayout = useShellLayout();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -1377,6 +1401,107 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   >([]);
   const handleRestoredAttachmentsConsumed = useCallback(() => setRestoredAttachments(null), []);
   const attachmentUploadControllersRef = useRef(new Map<string, AbortController>());
+  const [keptAttachments, setKeptAttachments] = useState<KeptAttachment[]>([]);
+  const keptAttachmentsRef = useRef(keptAttachments);
+  const changeKeptAttachments = useCallback(
+    (change: (rows: KeptAttachment[]) => KeptAttachment[]) => {
+      keptAttachmentsRef.current = change(keptAttachmentsRef.current);
+      setKeptAttachments(keptAttachmentsRef.current);
+    },
+    [],
+  );
+  const keptCopiesRef = useRef(new WeakMap<File, KeptCopy>());
+  const heldBackFilesRef = useRef(new Map<string, File[]>());
+
+  const showKeptCopies = useCallback(
+    (files: readonly File[], ownerConversationId: string | null, replaceRows: boolean) => {
+      const shown = files.flatMap((file): KeptAttachment[] => {
+        const copy = keptCopiesRef.current.get(file);
+        if (!copy) return [];
+        if (!replaceRows && keptAttachmentsRef.current.some((row) => row.file === file)) return [];
+        return [
+          {
+            file,
+            kept: copy.kept,
+            status: { phase: copy.kept.attachment ? 'ready' : 'verifying' },
+            ownerConversationId,
+            authority: copy.authority,
+          },
+        ];
+      });
+      if (shown.length === 0) return;
+      changeKeptAttachments((current) => [
+        ...current.filter((row) => !shown.some((entry) => entry.file === row.file)),
+        ...shown,
+      ]);
+      for (const row of shown) {
+        if (row.status.phase !== 'verifying') continue;
+        row.kept.settle(row.authority).then(
+          (outcome) => {
+            const stillShown = (entry: KeptAttachment) =>
+              entry.file === row.file && entry.kept === row.kept;
+            if (!keptAttachmentsRef.current.some(stillShown)) return;
+            if (outcome.state === 'refused') toast.error(outcome.message);
+            changeKeptAttachments((current) =>
+              current.map((entry): KeptAttachment =>
+                !stillShown(entry)
+                  ? entry
+                  : {
+                      ...entry,
+                      status:
+                        outcome.state === 'ready'
+                          ? { phase: 'ready' }
+                          : { phase: 'failed', error: outcome.message, retryable: false },
+                    },
+              ),
+            );
+          },
+          () =>
+            changeKeptAttachments((current) =>
+              current.filter((entry) => entry.file !== row.file || entry.kept !== row.kept),
+            ),
+        );
+      }
+    },
+    [changeKeptAttachments],
+  );
+
+  const showKeptAttachments = useCallback(
+    (
+      kept: readonly KeptAfterCancel[],
+      ownerConversationId: string | null,
+      authority: RequestAuthority,
+    ) => {
+      for (const entry of kept) keptCopiesRef.current.set(entry.file, { kept: entry, authority });
+      showKeptCopies(
+        kept.map((entry) => entry.file),
+        ownerConversationId,
+        true,
+      );
+    },
+    [showKeptCopies],
+  );
+
+  /** Kept copies go back as their own rows, so removing one deletes it; the rest are returned. */
+  const keepCopiesAsRows = useCallback(
+    (files: readonly File[], ownerConversationId: string | null): File[] => {
+      showKeptCopies(files, ownerConversationId, false);
+      return files.filter((file) => !keptCopiesRef.current.has(file));
+    },
+    [showKeptCopies],
+  );
+
+  const discardKeptCopy = useCallback((file: File) => {
+    const copy = keptCopiesRef.current.get(file);
+    if (!copy) return;
+    keptCopiesRef.current.delete(file);
+    copy.kept.discard(copy.authority).catch((error: unknown) => {
+      if (!copy.authority.isCurrent()) return;
+      toast.error(
+        toUserMessage(error, `Could not delete ${file.name}. Delete it in your Library.`),
+      );
+    });
+  }, []);
 
   const updateAttachmentUploadStatus = useCallback(
     (attemptId: string, status: ManagedCloudChatAttachmentUploadStatus) => {
@@ -1599,10 +1724,28 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * A's Stop button in B's composer.
    */
   const displayedConversationId = urlConversationId ?? bareChatSessionId;
-  const attachmentUploadAttempt =
+  const liveAttachmentUploadAttempt =
     attachmentUploadAttempts.find(
       (attempt) => attempt.ownerConversationId === displayedConversationId,
     ) ?? null;
+  const displayedKeptAttachments = useMemo(
+    () => keptAttachments.filter((row) => row.ownerConversationId === displayedConversationId),
+    [displayedConversationId, keptAttachments],
+  );
+  const keptAttachmentAttempt = useMemo<AttachmentUploadAttempt | null>(
+    () =>
+      displayedKeptAttachments.length === 0
+        ? null
+        : {
+            id: `kept-attachments-${displayedConversationId ?? 'new-chat'}`,
+            content: '',
+            files: displayedKeptAttachments.map((row) => row.file),
+            statuses: displayedKeptAttachments.map((row) => row.status),
+            ownerConversationId: displayedConversationId,
+          },
+    [displayedConversationId, displayedKeptAttachments],
+  );
+  const attachmentUploadAttempt = liveAttachmentUploadAttempt ?? keptAttachmentAttempt;
   const displayedImageTranscriptRecoveries = useMemo(
     () =>
       Object.values(imageTranscriptRecoveries).filter(
@@ -2346,7 +2489,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           content,
           blockedConversation ? blockedConversation.isTemporary === true : temporaryIntent,
         );
-        if (options.attachments?.length) setRestoredAttachments(options.attachments);
+        const returned = options.attachments?.length
+          ? keepCopiesAsRows(
+              options.attachments,
+              options.conversationId || urlConversationId || bareChatSessionId || null,
+            )
+          : [];
+        if (returned.length > 0) setRestoredAttachments(returned);
         toast.error(BLOCKED_SEND_TOAST);
         lastSendGuardBlockedRef.current = true;
         return false;
@@ -2401,13 +2550,26 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
         if (!survived) {
           parkUnsentDraft(targetConversationId, content);
-          if (options.attachments?.length && attachmentsUploaded) {
-            if (shouldActivate()) setRestoredAttachments(options.attachments);
-          } else if (options.attachments?.length && !options.attachmentUploadAttemptId) {
-            if (shouldActivate()) setRestoredAttachments(options.attachments);
+          if (
+            options.attachments?.length &&
+            (attachmentsUploaded || !options.attachmentUploadAttemptId)
+          ) {
+            const returned = keepCopiesAsRows(
+              options.attachments,
+              resolvedFreshConvId ?? targetConversationId,
+            );
+            if (returned.length > 0 && shouldActivate()) setRestoredAttachments(returned);
           }
         }
         return false;
+      };
+      const returnHeldBackFiles = () => {
+        if (!uploadAttemptId) return;
+        const held = heldBackFilesRef.current.get(uploadAttemptId);
+        heldBackFilesRef.current.delete(uploadAttemptId);
+        if (!held || (authority && !authority.isCurrent())) return;
+        const returned = keepCopiesAsRows(held, resolvedFreshConvId ?? targetConversationId);
+        if (returned.length > 0 && shouldActivate()) setRestoredAttachments(returned);
       };
       let clientConvId: string | null = null;
       let resolvedFreshConvId: string | null = null;
@@ -2433,6 +2595,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ),
           );
         }
+        const placeholderId = clientConvId;
+        changeKeptAttachments((current) =>
+          current.map((row) =>
+            row.ownerConversationId === placeholderId ? { ...row, ownerConversationId: null } : row,
+          ),
+        );
       };
       try {
         authority?.assertCurrent();
@@ -2521,6 +2689,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   ? {
                       onStatus: (status) =>
                         updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
+                    }
+                  : {}),
+                ...(session
+                  ? {
+                      onKeptAfterCancel: (kept: readonly KeptAfterCancel[]) =>
+                        showKeptAttachments(
+                          kept,
+                          targetConversationId,
+                          createRequestAuthority(session),
+                        ),
                     }
                   : {}),
               },
@@ -2651,6 +2829,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         releaseSendGuard();
         releaseSendWindow();
         releaseUploadController();
+        returnHeldBackFiles();
         if (authority) prestreamAuthoritiesRef.current.delete(authority);
         if (!handedOff) authority?.retire();
       }
@@ -2674,13 +2853,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       claimSendWindow,
       failAttachmentUploadAttempt,
       updateAttachmentUploadStatus,
+      showKeptAttachments,
+      keepCopiesAsRows,
+      changeKeptAttachments,
       runExplicitMemoryCommand,
     ],
   );
 
   const handleRetryAttachmentUpload = useCallback(
     (_index: number) => {
-      const attempt = attachmentUploadAttempt;
+      const attempt = liveAttachmentUploadAttempt;
       if (!attempt || !attempt.statuses.some((status) => status.phase === 'failed')) return;
       setAttachmentUploadAttempts((current) =>
         current.map((candidate) =>
@@ -2697,24 +2879,48 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         attachmentUploadAttemptId: attempt.id,
       });
     },
-    [attachmentUploadAttempt, sendContent],
+    [liveAttachmentUploadAttempt, sendContent],
   );
 
   const handleRemoveAttachmentUpload = useCallback(
     (index: number) => {
-      if (!attachmentUploadAttempt) return;
-      if (!attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')) {
-        const controller = attachmentUploadControllersRef.current.get(attachmentUploadAttempt.id);
+      const attempt = liveAttachmentUploadAttempt;
+      if (!attempt) {
+        const row = displayedKeptAttachments[index];
+        if (!row) return;
+        changeKeptAttachments((current) => current.filter((entry) => entry.file !== row.file));
+        discardKeptCopy(row.file);
+        return;
+      }
+      const inFlight = !attempt.statuses.some((status) => status.phase === 'failed');
+      if (inFlight) {
+        const controller = attachmentUploadControllersRef.current.get(attempt.id);
         if (!controller) return;
         controller.abort();
       }
-      const remaining = attachmentUploadAttempt.files.filter((_, fileIndex) => fileIndex !== index);
-      setAttachmentUploadAttempts((current) =>
-        current.filter((attempt) => attempt.id !== attachmentUploadAttempt.id),
+      const removed = attempt.files[index];
+      if (removed) discardKeptCopy(removed);
+      const remaining = attempt.files.filter((_, fileIndex) => fileIndex !== index);
+      const heldBack = inFlight
+        ? remaining.filter((file) => !keptCopiesRef.current.has(file) && mayOutliveCancel(file))
+        : [];
+      if (heldBack.length > 0) heldBackFilesRef.current.set(attempt.id, heldBack);
+      const returned = keepCopiesAsRows(
+        remaining.filter((file) => !heldBack.includes(file)),
+        attempt.ownerConversationId,
       );
-      setRestoredAttachments(remaining.length > 0 ? remaining : null);
+      setAttachmentUploadAttempts((current) =>
+        current.filter((candidate) => candidate.id !== attempt.id),
+      );
+      setRestoredAttachments(returned.length > 0 ? returned : null);
     },
-    [attachmentUploadAttempt],
+    [
+      changeKeptAttachments,
+      discardKeptCopy,
+      displayedKeptAttachments,
+      keepCopiesAsRows,
+      liveAttachmentUploadAttempt,
+    ],
   );
 
   // The project-detail composer is itself a Send control, not a prefill
@@ -4334,6 +4540,26 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       isCurrent?: () => boolean,
     ): ComposerSendResult | Promise<ComposerSendResult> => {
       if (isCurrent && !isCurrent()) return false;
+      const kept =
+        localModelSelection === null
+          ? keptAttachmentsRef.current.filter(
+              (row) =>
+                row.ownerConversationId === displayedConversationId &&
+                row.status.phase !== 'failed',
+            )
+          : [];
+      if (kept.length > 0) {
+        const result = handleSend(
+          content,
+          [...kept.map((row) => row.file), ...(attachments ?? [])],
+          skillId,
+          meta,
+        );
+        if (result !== false && result !== SEND_GUARD_BLOCKED) {
+          changeKeptAttachments((current) => current.filter((row) => !kept.includes(row)));
+        }
+        return result;
+      }
       const providerMode = getProviderModeForModel(activeModelId);
       const typedImage =
         !attachments?.length &&
@@ -4386,14 +4612,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     },
     [
       activeModelId,
+      displayedConversationId,
       displayedMessages,
       billingPolicyReady,
+      changeKeptAttachments,
+      localModelSelection,
       subscriptionTier,
       handleSend,
       handleOpenUpgradeDialog,
       captureSessionSnapshot,
       userId,
     ],
+  );
+
+  const sendAnswerUiFollowUp = useCallback(
+    (text: string) => {
+      handleSend(text);
+    },
+    [handleSend],
   );
 
   const handleAcceptProviderNotice = useCallback(async () => {
@@ -4513,6 +4749,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   }, []);
 
   const handleNewChat = useCallback(() => {
+    const failedHere = liveAttachmentUploadAttempt?.statuses.some(
+      (status) => status.phase === 'failed',
+    )
+      ? liveAttachmentUploadAttempt
+      : null;
+    if (failedHere) keepCopiesAsRows(failedHere.files, failedHere.ownerConversationId);
     setAttachmentUploadAttempts((current) =>
       current.filter((attempt) => attempt.ownerConversationId !== displayedConversationId),
     );
@@ -4531,7 +4773,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     // the sidebar project row (/chat?projectId=...) or the composer picker.
     setActiveProject(null);
     router.push(surfaceRootHref);
-  }, [displayedConversationId, router, setActiveConversation, setActiveProject, surfaceRootHref]);
+  }, [
+    displayedConversationId,
+    keepCopiesAsRows,
+    liveAttachmentUploadAttempt,
+    router,
+    setActiveConversation,
+    setActiveProject,
+    surfaceRootHref,
+  ]);
 
   const handleToggleSidebar = useCallback(
     () => setSidebarCollapsed(!sidebarCollapsed),
@@ -4769,8 +5019,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
+  const firstAnswerStreaming = displayedMessages[1]?.isStreaming === true;
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
+    if (firstAnswerStreaming) return;
     const conversationId = displayedConversationId;
     if (autoTitledConversationsRef.current.has(conversationId)) return;
     const convo = conversations.find((c) => c.id === conversationId);
@@ -4822,6 +5074,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     displayedMessages.length,
+    firstAnswerStreaming,
     displayedConversationId,
     conversations,
     localModelSelection,
@@ -5123,8 +5376,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (!convo) return;
       void toggleConversationArchive(
         convo.isArchived ?? false,
-        (archived) => updateConversation(id, { archived }),
+        (archived, pinned) =>
+          updateConversation(id, pinned === undefined ? { archived } : { archived, pinned }),
         () => openSettings('archived'),
+        convo.isPinned ?? false,
       );
     },
     [conversations, openSettings, updateConversation],
@@ -6407,6 +6662,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const voiceModeActive = useVoiceModeActive();
   useEffect(() => () => releaseVoiceSessionOnPageExit(), []);
+  const emptyStateExtras =
+    !compact && !voiceModeActive ? (
+      <>
+        {composerToggles?.workMode === AGI_WORK_MODE && (
+          <>
+            <HomeActiveTasks />
+            <AgiWorkIntroDialog />
+          </>
+        )}
+        <NewChatConnectorSuggestions
+          show={
+            !isConversationSidebarPending && conversations.length === 0 && !conversationListError
+          }
+        />
+      </>
+    ) : null;
   const voiceFocusMode = useVoiceSessionStore((state) => state.focusMode);
   const voiceActivityMessageId = useVoiceSessionStore((state) => state.activityMessageId);
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
@@ -6443,6 +6714,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       router,
       surfaceConversationHref,
     ],
+  );
+
+  const handleVoiceDiscardConversation = useCallback(
+    (conversationId: string) => {
+      void deleteConversation(conversationId).then((deleted) => {
+        if (!deleted) return;
+        setBareChatSessionId(null);
+        setActiveConversation(null);
+        router.replace(surfaceRootHref);
+      });
+    },
+    [deleteConversation, setActiveConversation, router, surfaceRootHref],
   );
 
   const handleVoiceTranscript = useCallback(
@@ -6556,6 +6839,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     onSend: handleVoiceSend,
     onStartWorkTask: handleVoiceStartWorkTask,
     onEnsureConversation: handleVoiceEnsureConversation,
+    onDiscardConversation: handleVoiceDiscardConversation,
     onTranscript: handleVoiceTranscript,
     onNewChat: handleNewChat,
     onOpenLibrary: handleVoiceOpenLibrary,
@@ -6960,6 +7244,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               {...sharedSidebarProps}
               collapsed={false}
               width={MOBILE_NAV_DRAWER_WIDTH}
+              className="max-w-full"
               onToggleCollapse={() => setMobileNavOpen(false)}
             />
           </SheetContent>
@@ -7006,9 +7291,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : null
           ) : (
             <header
+              ref={appHeaderRef}
               data-app-header=""
+              data-window-edge="offset"
               className={cn(
-                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4 max-md:ps-2',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -7035,7 +7322,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ms-1 h-8 w-8 shrink-0 p-0 pointer-coarse:h-11 pointer-coarse:w-11"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0 max-md:ms-0 pointer-coarse:h-11 pointer-coarse:w-11"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -7339,7 +7626,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : isEmptyChat ? (
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
-                <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
+                <div
+                  className={cn(
+                    'flex min-h-full w-full flex-col items-center justify-center-safe gap-6',
+                    !voiceModeActive &&
+                      'max-md:pb-[env(safe-area-inset-bottom,0px)] max-md:[&>*]:mt-auto',
+                  )}
+                >
                   {!compact && !voiceModeActive && (
                     <GreetingBanner
                       showWorkspace
@@ -7347,6 +7640,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     />
                   )}
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
+                    {isNarrowViewport && (
+                      <div className="mb-3 empty:hidden">{emptyStateExtras}</div>
+                    )}
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
@@ -7402,23 +7698,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           : {})}
                       />
                     )}
-                    {!compact &&
-                      !voiceModeActive &&
-                      composerToggles?.workMode === AGI_WORK_MODE && (
-                        <>
-                          <HomeActiveTasks />
-                          <AgiWorkIntroDialog />
-                        </>
-                      )}
-                    {!compact && !voiceModeActive && (
-                      <NewChatConnectorSuggestions
-                        show={
-                          !isConversationSidebarPending &&
-                          conversations.length === 0 &&
-                          !conversationListError
-                        }
-                      />
-                    )}
+                    {!isNarrowViewport && emptyStateExtras}
                   </div>
                 </div>
               </div>
@@ -7437,50 +7717,52 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
-                              <ChatMessageList
-                                messages={chatMessages}
-                                transcriptPatch={chatMessageProjection.patch}
-                                currentTier={currentTier}
-                                conversationId={displayedConversationId}
-                                isLoading={isLoading && !isStreaming}
-                                isUserTyping={isUserTyping}
-                                onRegenerate={handleRegenerateMessage}
-                                onScheduleTurn={handleScheduleTurn}
-                                onRetryResearch={handleRetryResearch}
-                                onResearchPlanDecision={handleResearchPlanDecision}
-                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                                retryingResearchMessageId={retryingResearchMessageId}
-                                onContinue={handleContinueMessage}
-                                onEdit={handleEditMessage}
-                                onFenceEdit={handleFenceEdit}
-                                onDelete={handleDeleteMessage}
-                                onDeleteVariant={handleDeleteVariant}
-                                countVariantFollowers={countVariantFollowers}
-                                onReact={handleReactMessage}
-                                onPin={handlePinMessage}
-                                branchGroupsByMessageId={branchGroupsByMessageId}
-                                branchingMessageId={branchingMessageId}
-                                onBranch={createBranch}
-                                onSwitchBranch={switchBranch}
-                                variantInfoByMessageId={variantInfoByMessageId}
-                                onSelectVariant={handleSelectVariant}
-                                activeLeafId={activeLeafId}
-                                variantAnchorMessageId={variantAnchorMessageId}
-                                isConversationStreaming={isStreaming}
-                                onRegenerateImage={handleRegenerateImageInPlace}
-                                onResumeVideo={handleResumeVideo}
-                                onRetryVideo={handleRetryVideo}
-                                onSendMessage={setComposerPrefill}
-                                onSubmitPrompt={handleSubmitPrompt}
-                                onPaywallUpgrade={handlePaywallRecovery}
-                                onPaywallDismiss={handlePaywallDismiss}
-                                onRegenerateWithModel={handleRegenerateWithModel}
-                                regenerateModelOptions={regenerateModelOptions}
-                                turnErrorActive={turnErrorNotice !== null}
-                                temporaryChat={temporaryChatActive}
-                              />
-                            </ProjectAnswerSaveProvider>
+                            <AnswerUiFollowUpProvider value={sendAnswerUiFollowUp}>
+                              <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                                <ChatMessageList
+                                  messages={chatMessages}
+                                  transcriptPatch={chatMessageProjection.patch}
+                                  currentTier={currentTier}
+                                  conversationId={displayedConversationId}
+                                  isLoading={isLoading && !isStreaming}
+                                  isUserTyping={isUserTyping}
+                                  onRegenerate={handleRegenerateMessage}
+                                  onScheduleTurn={handleScheduleTurn}
+                                  onRetryResearch={handleRetryResearch}
+                                  onResearchPlanDecision={handleResearchPlanDecision}
+                                  onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                  retryingResearchMessageId={retryingResearchMessageId}
+                                  onContinue={handleContinueMessage}
+                                  onEdit={handleEditMessage}
+                                  onFenceEdit={handleFenceEdit}
+                                  onDelete={handleDeleteMessage}
+                                  onDeleteVariant={handleDeleteVariant}
+                                  countVariantFollowers={countVariantFollowers}
+                                  onReact={handleReactMessage}
+                                  onPin={handlePinMessage}
+                                  branchGroupsByMessageId={branchGroupsByMessageId}
+                                  branchingMessageId={branchingMessageId}
+                                  onBranch={createBranch}
+                                  onSwitchBranch={switchBranch}
+                                  variantInfoByMessageId={variantInfoByMessageId}
+                                  onSelectVariant={handleSelectVariant}
+                                  activeLeafId={activeLeafId}
+                                  variantAnchorMessageId={variantAnchorMessageId}
+                                  isConversationStreaming={isStreaming}
+                                  onRegenerateImage={handleRegenerateImageInPlace}
+                                  onResumeVideo={handleResumeVideo}
+                                  onRetryVideo={handleRetryVideo}
+                                  onSendMessage={setComposerPrefill}
+                                  onSubmitPrompt={handleSubmitPrompt}
+                                  onPaywallUpgrade={handlePaywallRecovery}
+                                  onPaywallDismiss={handlePaywallDismiss}
+                                  onRegenerateWithModel={handleRegenerateWithModel}
+                                  regenerateModelOptions={regenerateModelOptions}
+                                  turnErrorActive={turnErrorNotice !== null}
+                                  temporaryChat={temporaryChatActive}
+                                />
+                              </ProjectAnswerSaveProvider>
+                            </AnswerUiFollowUpProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>
@@ -7488,7 +7770,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   </ToolApprovalProvider>
                 </div>
 
-                <div className="shrink-0 pb-4">
+                <div className="shrink-0 pb-4 max-md:pb-[env(safe-area-inset-bottom,0px)]">
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}

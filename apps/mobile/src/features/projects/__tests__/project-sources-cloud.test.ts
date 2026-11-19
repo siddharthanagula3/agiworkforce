@@ -62,6 +62,7 @@ import {
 } from 'expo-file-system/legacy';
 import { api } from '@/services/api';
 import { ownerHandler } from '@/test-utils/ownerProps';
+import { sitsInColumn } from '@/test-utils/sheetColumn';
 import { getAuthHeaders } from '@/services/authSession';
 import {
   activateCloudAccount,
@@ -736,6 +737,23 @@ describe('source picker ownership before preparation', () => {
       if (change !== 'unmount') screen.unmount();
     },
   );
+
+  it('keeps the add text sheet in the reading column on a wide window', async () => {
+    primeHappyPath();
+    (api.get as jest.Mock).mockResolvedValue({ files: [] });
+    const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
+    await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Add text'));
+
+    expect(
+      sitsInColumn(
+        screen.getByPlaceholderText('Paste or type the text this project should use'),
+        'reading',
+      ),
+    ).toBe(true);
+    screen.unmount();
+  });
 
   it('does not upload text whose cache write outlives its account', async () => {
     primeHappyPath();

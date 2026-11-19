@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { MessageSquareText, Plug, Sparkles } from '@agiworkforce/icons';
 import type { MessageMetadata } from '@shared/stores/web-chat-store';
-import { mcpServerLabel } from '@/features/connectors/lib/mcp-tool-name';
+import { mcpServerLabel } from '@agiworkforce/cloud-contracts';
 
 const CHIP_CLASS =
   'inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-border/50 bg-muted/40 px-2.5 py-1 text-xs text-foreground';

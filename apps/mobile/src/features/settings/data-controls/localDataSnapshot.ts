@@ -202,6 +202,8 @@ export async function resetLocalInMemoryState(): Promise<void> {
   useModelStore.setState({
     selectedModel: DEFAULT_LOCAL_MODEL_ID,
     selectedProvider: 'local',
+    newChatModels: { local: null, cloud: null },
+    conversationModelShown: false,
     favorites: [],
     recentModels: [],
     thinkingModeEnabled: false,

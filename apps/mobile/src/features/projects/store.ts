@@ -37,6 +37,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import { markProjectForSync } from '@/services/cloudSyncEngine';
 
 export interface ProjectSource {
@@ -54,17 +55,29 @@ export interface Project {
   description: string;
   instructions: string;
   sources?: ProjectSource[];
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateProjectOptions {
+  usesGlobalMemory?: boolean;
 }
 
 interface ProjectState {
   projects: Project[];
   activeProjectId: string | null;
 
-  createProject: (name: string, description: string, instructions: string) => string;
+  createProject: (
+    name: string,
+    description: string,
+    instructions: string,
+    options?: CreateProjectOptions,
+  ) => string;
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void;
   deleteProject: (id: string) => void;
+  setProjectPinned: (id: string, pinned: boolean) => void;
+  setProjectArchived: (id: string, archived: boolean) => void;
   setActiveProject: (id: string | null) => void;
   addSource: (
     projectId: string,
@@ -374,12 +387,18 @@ export const useProjectStore = create<ProjectState>()(
       projects: [],
       activeProjectId: null,
 
-      createProject: (name, description, instructions) => {
+      createProject: (name, description, instructions, options) => {
         const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
 
         if (isCloud) {
           const id = uuidv7();
           const now = new Date().toISOString();
+          if (options?.usesGlobalMemory === false) {
+            useProjectSyncStateStore.getState().markProjectOnlyMemoryPending(id);
+            useCloudProjectStore.getState().patchCloudProjectDetails(id, {
+              usesGlobalMemory: false,
+            });
+          }
           useCloudProjectStore.getState().upsertCloudProject({
             id,
             name: name.trim(),
@@ -466,6 +485,40 @@ export const useProjectStore = create<ProjectState>()(
           projects: state.projects.filter((p) => p.id !== id),
           activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
         }));
+      },
+
+      setProjectPinned: (id, pinned) => {
+        const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+
+        if (isCloud) {
+          const existing = useCloudProjectStore.getState().projects.find((p) => p.id === id);
+          if (existing && existing.deletedAt === null) {
+            useCloudProjectStore.getState().upsertCloudProject({
+              ...existing,
+              metadata: { ...existing.metadata, starred: pinned },
+            });
+            markProjectForSync(id);
+          }
+          return;
+        }
+
+        set((state) => ({
+          projects: state.projects.map((p) => (p.id === id ? { ...p, pinned } : p)),
+        }));
+      },
+
+      setProjectArchived: (id, archived) => {
+        if (useChatAppModeStore.getState().appMode !== 'cloud') return;
+        const existing = useCloudProjectStore.getState().projects.find((p) => p.id === id);
+        if (!existing || existing.deletedAt !== null) return;
+        useCloudProjectStore.getState().upsertCloudProject({
+          ...existing,
+          isArchived: archived,
+        });
+        if (archived && useCloudProjectStore.getState().activeProjectId === id) {
+          useCloudProjectStore.getState().setActiveCloudProject(null);
+        }
+        markProjectForSync(id);
       },
 
       setActiveProject: (id) => {
@@ -558,6 +611,15 @@ export const useProjectStore = create<ProjectState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[projectStore] Hydration failed:', error);
       },
+      // activeProjectId scopes one new chat started from a project; persisting it
+      // would put every later chat into that project.
+      partialize: (state) => ({
+        projects: state.projects,
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        projects: (persisted as Partial<ProjectState> | undefined)?.projects ?? current.projects,
+      }),
     },
   ),
 );

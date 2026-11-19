@@ -23,6 +23,7 @@ import { logger } from '@/lib/logger';
 import { recordNotificationDelivery } from '@/lib/observability/metrics';
 import { sendScheduleCompletionEmail } from '@/lib/services/notification-email-service';
 import { resumeDeferredPush, type PushMessage } from '@/lib/services/push-notification-service';
+import { deliverProductUpdatePage } from '@/lib/services/product-update-notification-service';
 import { recordResearchReportSettledCost } from '@/lib/services/research-report-service';
 import {
   loadSchedulePreferences,
@@ -348,6 +349,9 @@ export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'webhooks.identity-account-status': retryAccountProviderStep,
   'notifications.schedule-completed': announceScheduleCompletion,
   'notifications.deferred-push': deliverDeferredPush,
+  'notifications.product-update': async (context) => ({
+    ...(await deliverProductUpdatePage(context)),
+  }),
   'email.schedule-completed': sendScheduleCompletionEmailJob,
   'webhooks.audit-stream-delivery': deliverAuditStream,
   'webhooks.developer-delivery': deliverDeveloperWebhookJob,

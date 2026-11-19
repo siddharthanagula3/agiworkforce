@@ -265,7 +265,7 @@
       "doc": "tool-approvals",
       "section": "The account-wide default",
       "kind": "prose",
-      "sentence": "Anything that writes, deletes, sends, buys, changes credentials, or runs on your own machine still asks, and so does every connector tool AGI does not know.",
+      "sentence": "Anything that writes, deletes, sends, spends money, changes credentials, or runs on your own machine still asks, and so does every connector tool AGI does not know.",
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
       ],
@@ -794,7 +794,7 @@
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/app/api/feedback/route.ts#storedMessage",
-        "apps/web/app/api/feedback/response-rating-contract.ts#WEB_RESPONSE_RATING_MESSAGE",
+        "packages/contracts/cloud-contracts/src/response-rating.ts#WEB_RESPONSE_RATING_MESSAGE",
         "apps/web/lib/server/account-erasure.ts"
       ],
       "proof": [
@@ -1113,7 +1113,7 @@
       "doc": "workspace-policy",
       "section": "What policy controls",
       "kind": "prose",
-      "sentence": "All are on by default.",
+      "sentence": "All are on by default except Fast mode, which stays off until an administrator turns it on.",
       "implementation": [
         "packages/contracts/types/src/enterprise/workspace-controls.ts#DEFAULT_WORKSPACE_FEATURE_ACCESS"
       ],
@@ -1122,6 +1122,11 @@
           "kind": "test",
           "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
           "name": "returns the workspace defaults when nothing overrides them"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "holds fast mode off until the workspace turns it on"
         }
       ]
     },
@@ -1265,7 +1270,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
-          "name": "states that no training opt-in exists"
+          "name": "states that customer content is not used to improve AGI-owned models"
         }
       ]
     },
@@ -1417,13 +1422,53 @@
       "doc": "delete-your-account",
       "section": "How deletion works",
       "kind": "prose",
-      "sentence": "The dialog states what happens: your account and all associated data are permanently deleted, you are signed out now, and erasure runs 24 hours after you confirm.",
+      "sentence": "The dialog states what happens: your account and its Cloud data are scheduled for permanent deletion, and erasure starts after a cancellation deadline 24 hours later.",
       "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
           "name": "schedules deletion when the update touches the profile row"
+        }
+      ]
+    },
+    {
+      "id": "delete-dialog-says-what-is-kept",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "It also says that anything the law or an active legal hold requires us to keep is kept.",
+      "implementation": ["apps/web/features/settings/sections/AccountSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/AccountSection.tsx",
+          "text": "an active legal hold requires us to keep is kept"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/AccountSection.delete.test.tsx",
+          "name": "says before confirming that what the law or a legal hold requires is kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-waits-for-legal-hold",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "If an active legal hold covers your account, for example one your workspace has placed, nothing is erased until the hold is released.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases nothing and never seals the profile fence while a legal hold is active"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "applies the same organization-scoped hold semantics as retention"
         }
       ]
     },
@@ -1481,6 +1526,24 @@
       ]
     },
     {
+      "id": "delete-cancel-restores-renewal",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "If deleting the account stops your web plan from renewing, cancelling the deletion turns its renewal back on.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/cancel/route.ts",
+        "apps/web/lib/server/account-deletion-plan-renewal.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "turns renewal back on after the cancellation commits and says so"
+        }
+      ]
+    },
+    {
       "id": "delete-sole-owner-is-refused",
       "doc": "delete-your-account",
       "section": "Before you confirm",
@@ -1492,6 +1555,77 @@
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
           "name": "refuses while the account is the only owner of a workspace, and deletes nothing"
+        }
+      ]
+    },
+    {
+      "id": "delete-stops-web-renewal",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If your plan is billed on the web and still renews, deleting your account turns its renewal off, so you are not charged again.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/route.ts",
+        "apps/web/lib/server/account-deletion-plan-renewal.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion and sets the plan to end at period end, tagged with the deadline"
+        }
+      ]
+    },
+    {
+      "id": "delete-store-plan-keeps-billing",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If you bought the plan from Apple or Google, deleting your account does not cancel it: the confirmation says so and links to the page where you cancel it with the store.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion for a renewing %s plan and says billing continues there"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancelled-plan-ends-at-erasure",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "A plan you have already cancelled does not block deletion: it ends when erasure runs, and its unused time is not refunded.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/route.ts",
+        "apps/web/lib/server/scheduled-account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion at once for a %s plan that is already cancelled, and says what ends"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "cancels the live Stripe subscription before any row is touched"
+        }
+      ]
+    },
+    {
+      "id": "delete-refused-while-payment-collected",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "While a payment on the plan is still being collected, the request is refused and nothing is scheduled.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "still refuses a renewing past-due %s plan while its payment is collected"
         }
       ]
     },
@@ -1532,6 +1666,171 @@
           "kind": "test",
           "file": "apps/web/features/settings/components/BulkConversationControls.test.tsx",
           "name": "reserves one count and exact confirmation, including repeated confirm and cancel callbacks"
+        }
+      ]
+    },
+    {
+      "id": "delete-without-sign-in-uses-privacy-request",
+      "doc": "delete-your-account",
+      "section": "Delete your account on the web",
+      "kind": "prose",
+      "sentence": "If you cannot sign in, email [{{CONTACT.email}}](mailto:{{CONTACT.email}}?subject=Privacy%20request) from your account address with the subject line \"Privacy request\", or use the form at [agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests), which gives you a reference.",
+      "implementation": [
+        "apps/web/app/api/privacy/requests/route.ts",
+        "apps/web/app/privacy/requests/RightsRequestForm.tsx",
+        "apps/web/lib/legal-constants.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/legal-constants.ts",
+          "text": "privacy: 'Privacy request'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/agent/corpus/index.ts",
+          "text": "'CONTACT.email': CONTACT_EMAIL"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/page.tsx",
+          "text": "from your account address with the subject line"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/requests/RightsRequestForm.tsx",
+          "text": "label: 'Erasure: delete personal data you hold about me'"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/privacy/requests/route.test.ts",
+          "name": "still returns the reference but records the failure when the alert cannot be delivered"
+        }
+      ]
+    },
+    {
+      "id": "delete-erases-records-objects-and-identity",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "The daily job erases your user-scoped records and stored objects and deletes your identity at our authentication provider.",
+      "implementation": [
+        "apps/web/lib/server/scheduled-account-erasure.ts",
+        "apps/web/lib/server/account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "tombstones before erasing, settles the tombstone, then deletes the identity and profile"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases every listed table, anonymizes shared rows, and removes the profile last"
+        }
+      ]
+    },
+    {
+      "id": "delete-security-audit-log-kept-90-days",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "The security audit log keeps an entry for 90 days.",
+      "implementation": ["apps/web/app/api/cron/purge-security-audit-logs/route.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/db/neon/0020_functions.sql",
+          "text": "Deletes security_audit_logs rows older than 90 days."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/privacy/__tests__/retention-claims-match-crons.test.ts",
+          "name": "has the audit-log purge cron the policy now cites"
+        }
+      ]
+    },
+    {
+      "id": "delete-erasure-keeps-audit-entries",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Erasure does not purge them.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts", "apps/web/app/privacy/page.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/page.tsx",
+          "text": "Erasure does not purge them."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/help/__tests__/DeleteYourAccountArticle.test.tsx",
+          "name": "quotes the privacy policy on how long organisation audit log entries are kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-organisation-audit-log-no-automatic-end",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Organisation audit log entries have no automatic end date: a separate privileged routine exists to purge them, and it is not part of the automatic path.",
+      "implementation": ["apps/web/app/privacy/page.tsx", "vercel.json"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/page.tsx",
+          "text": "a separate privileged routine exists to purge them, and it is not part of the automatic path."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/help/__tests__/DeleteYourAccountArticle.test.tsx",
+          "name": "quotes the privacy policy on how long organisation audit log entries are kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-erasure-record-survives",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "A record that you were erased, so the system can tell that you must stay erased.",
+      "implementation": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/scheduled-account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "erases NOTHING when the tombstone cannot be written"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/tombstone-resweep.test.ts",
+          "name": "erases the residual rows, settles the tombstone and leaves the identity provider alone"
+        }
+      ]
+    },
+    {
+      "id": "delete-organisation-rows-keep-without-you",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Rows that belong to an organisation rather than to you, such as its billing ledger row with your user id removed.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-erasure.ts",
+          "text": "table: 'organization_usage_ledger'"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases every listed table, anonymizes shared rows, and removes the profile last"
         }
       ]
     },
@@ -1612,7 +1911,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat’s link from the result state"
+          "name": "revokes the chat\u2019s link from the result state"
         },
         {
           "kind": "copy",
@@ -1698,7 +1997,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat’s link in place, keeping its address and expiry"
+          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -1845,7 +2144,7 @@
       "doc": "workspace-administration",
       "section": "Creating a workspace",
       "kind": "prose",
-      "sentence": "When the seat count cannot be read, nothing is created: \"Your purchased seats could not be verified. No organization was created; please try again.\" A workspace that is created opens straight away, and the app reloads inside it.",
+      "sentence": "When the seat count cannot be read, nothing is created: \"Your purchased seats could not be verified. No organization was created; please try again.\"",
       "implementation": [
         "apps/web/app/api/settings/organization/route.ts#handleCreate",
         "apps/web/features/settings/hooks/use-settings-queries.ts#useCreateOrganization"
@@ -2998,7 +3297,7 @@
       "doc": "troubleshooting",
       "section": "A model is missing from the picker",
       "kind": "prose",
-      "sentence": "The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not live yet), or **Unavailable right now** (live but not answering).",
+      "sentence": "The badge says which case it is: **Coming soon** (not live yet) or **Unavailable right now** (live but not answering).",
       "implementation": ["apps/web/features/chat/components/Composer/ComposerFooter.tsx"],
       "proof": [
         {
@@ -3010,7 +3309,17 @@
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
           "text": "Unavailable right now"
-        },
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-upgrade-badge",
+      "doc": "troubleshooting",
+      "section": "A model is missing from the picker",
+      "kind": "prose",
+      "sentence": "**Upgrade** means your plan does not include the model.",
+      "implementation": ["apps/web/features/chat/components/Composer/ComposerFooter.tsx"],
+      "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
@@ -3161,13 +3470,13 @@
       "doc": "troubleshooting",
       "section": "Search did not run",
       "kind": "prose",
-      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search failed. Please try again.\" If the search window itself cannot open, it shows \"Search unavailable\" instead; close it and open it again.",
+      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search could not be completed\" with a Retry button and never as no matches; if the search window itself cannot open, it shows \"Search unavailable\" instead, so close it and open it again.",
       "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-          "text": "toast.error('Search failed. Please try again.')"
+          "text": "<p className=\"text-sm text-muted-foreground\">Search could not be completed</p>"
         },
         {
           "kind": "copy",
@@ -3204,13 +3513,13 @@
       "doc": "troubleshooting",
       "section": "The CLI will not sign in",
       "kind": "prose",
-      "sentence": "If the wait stops with \"Device code expired. Please run /login again.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
+      "sentence": "If the wait stops with \"The sign-in code expired.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
       "implementation": ["apps/cli/src/oauth.rs#device_code_login"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/cli/src/oauth.rs",
-          "text": "Device code expired. Please run /login again."
+          "text": "The sign-in code expired."
         },
         {
           "kind": "copy",
@@ -3307,7 +3616,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -3387,7 +3696,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"Extension\""
+          "text": "\"name\": \"AGI Extension\""
         },
         {
           "kind": "test",
@@ -3479,7 +3788,7 @@
       "doc": "chrome-extension",
       "section": "Managed cloud from the extension",
       "kind": "prose",
-      "sentence": "Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}} included, and spends the same credits as the web app.",
+      "sentence": "Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}} included, and is metered the same way as the web app.",
       "implementation": [
         "apps/web/lib/free-chat-surface-policy.ts#getCloudChatSurfaceCapability",
         "packages/contracts/types/src/billing-catalog.ts#CLOUD_CHAT_TIERS",
@@ -3532,6 +3841,29 @@
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "states the same contract on the Desktop, Local, and BYOK pages"
+        }
+      ]
+    },
+    {
+      "id": "glossary-desktop-windows-linux-not-published",
+      "doc": "glossary",
+      "section": "Platform and surface names",
+      "kind": "prose",
+      "sentence": "Windows and Linux installers have not been published.",
+      "implementation": [
+        "apps/web/lib/surface-status.ts#SURFACE_PLATFORMS",
+        "apps/web/app/download/DesktopDownloadAvailability.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/download/__tests__/DesktopDownloadSurface.test.tsx",
+          "name": "names Windows and Linux as unavailable rather than leaving them out"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/surface-status.test.ts",
+          "name": "adds a platform only when a surface that runs on it is released"
         }
       ]
     },
@@ -3685,7 +4017,7 @@
     {
       "id": "glossary-allowance-is-managed-capacity",
       "doc": "glossary",
-      "section": "Usage and billing terms",
+      "section": "Usage terms",
       "kind": "prose",
       "sentence": "**Allowance** is the metered capacity a plan carries for managed cloud.",
       "implementation": [
@@ -3707,9 +4039,9 @@
     {
       "id": "glossary-allowance-exhausted-stops-managed-requests",
       "doc": "glossary",
-      "section": "Usage and billing terms",
+      "section": "Usage terms",
       "kind": "prose",
-      "sentence": "When it runs out, managed requests stop until it resets, unless **Keep going after a usage limit** is on and you have credits; Local and BYOK are unaffected.",
+      "sentence": "When it runs out, managed requests stop until it resets; Local and BYOK are unaffected.",
       "implementation": [
         "apps/web/lib/services/managed-usage-request-service.ts#reserveManagedUsageRequest",
         "apps/web/lib/server/spendable-credits.ts#overage_enabled"
@@ -3740,7 +4072,7 @@
     {
       "id": "glossary-credits-are-a-separate-prepaid-balance",
       "doc": "glossary",
-      "section": "Usage and billing terms",
+      "section": "Usage terms",
       "kind": "prose",
       "sentence": "**Credits** are a prepaid balance, separate from the allowance, that managed usage can draw on once the allowance is exhausted.",
       "implementation": [
@@ -3762,7 +4094,7 @@
     {
       "id": "glossary-concurrency-ceiling-clears-when-a-response-ends",
       "doc": "glossary",
-      "section": "Usage and billing terms",
+      "section": "Usage terms",
       "kind": "prose",
       "sentence": "Reaching that ceiling is not the same as exhausting an allowance: it clears as soon as an in-flight response finishes.",
       "implementation": [
@@ -3790,7 +4122,7 @@
     {
       "id": "glossary-free-lane-capacity-not-guaranteed",
       "doc": "glossary",
-      "section": "Usage and billing terms",
+      "section": "Usage terms",
       "kind": "prose",
       "sentence": "Where the free lane is offered, it appears as Auto (free), and its capacity is not guaranteed.",
       "implementation": [
@@ -4109,13 +4441,24 @@
       "doc": "account-security",
       "section": "Second factors",
       "kind": "prose",
-      "sentence": "Setting up an authenticator app (TOTP) and replacing backup codes can be switched off for a time: while it is, Settings, Security shows **Temporarily unavailable** where you would set one up or replace your backup codes, and a workspace cannot start requiring multi-factor authentication until they return.",
+      "sentence": "Setting up an authenticator app (TOTP) and replacing backup codes can be switched off for a time: while it is, Settings, Security on the web shows **Temporarily unavailable** where you would set one up or replace your backup codes, the AGI Mobile app leaves out those options, and a workspace cannot start requiring multi-factor authentication until they return.",
       "implementation": [
         "apps/web/lib/authenticator-enrollment.ts#authenticatorEnrollmentAvailable",
         "apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx",
-        "apps/web/app/api/settings/organization/policy/route.ts"
+        "apps/web/app/api/settings/organization/policy/route.ts",
+        "apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx"
       ],
       "proof": [
+        {
+          "kind": "test",
+          "file": "apps/mobile/__tests__/AccountSecurityScreen.test.tsx",
+          "name": "draws nothing for the section when enrolment is unavailable and two-factor is off"
+        },
+        {
+          "kind": "test",
+          "file": "apps/mobile/__tests__/AccountSecurityScreen.test.tsx",
+          "name": "keeps only working rows for an enrolled account while enrolment is unavailable"
+        },
         {
           "kind": "copy",
           "file": "apps/web/lib/authenticator-enrollment.ts",
@@ -4140,6 +4483,11 @@
           "kind": "copy",
           "file": "apps/web/app/api/settings/organization/policy/route.ts",
           "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
+          "name": "keeps unavailable enrollment controls disabled for enabled=%s"
         }
       ]
     },
@@ -4866,7 +5214,7 @@
       "doc": "search",
       "section": "Deep Research",
       "kind": "prose",
-      "sentence": "It is not available on every model: choosing one that cannot do it says \"Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research.\" Availability also depends on your plan, and an ineligible plan shows \"Upgrade to use Deep Research\".",
+      "sentence": "It is not available on every model: choosing one that cannot do it says \"Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research.\" Availability also depends on your plan.",
       "implementation": ["apps/web/features/chat/components/Composer/ChatComposerNew.tsx"],
       "proof": [
         {
@@ -5181,6 +5529,26 @@
           "kind": "copy",
           "file": "apps/cli/src/config.rs",
           "text": "`AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`"
+        }
+      ]
+    },
+    {
+      "id": "config-repository-layer-only-narrows",
+      "doc": "configuration",
+      "section": "Which setting wins",
+      "kind": "prose",
+      "sentence": "The repository's file can only narrow your own privacy mode, permission mode and model route: a looser value is ignored and the session says so when it starts.",
+      "implementation": ["apps/cli/src/config.rs#fn narrow_repository_layer"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_layer_can_only_narrow_privacy_and_permissions"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_model_that_leaves_a_local_boundary_is_not_applied"
         }
       ]
     },
@@ -5515,7 +5883,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5536,7 +5904,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5593,7 +5961,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5614,7 +5982,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5710,7 +6078,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -6040,13 +6408,60 @@
       "doc": "managed-cloud",
       "section": "Training",
       "kind": "prose",
-      "sentence": "AGI does not use customer conversation content to train AGI-owned models. {{POSITIONING.trustBoundary}}",
+      "sentence": "AGI does not use customer conversation content to train AGI-owned models.",
       "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
-          "name": "states that no training opt-in exists"
+          "name": "states that customer content is not used to improve AGI-owned models"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-uses-seatbelt-or-bubblewrap",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "`agi review` reviews changes, `agi apply` applies the latest diff as a git patch, and `agi sandbox` runs a command under the operating system's sandbox: Seatbelt on macOS, and bubblewrap on Linux, where the `bubblewrap` package must be installed.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#SandboxType::MacosSeatbelt",
+        "apps/cli/src/sandbox.rs#SandboxType::LinuxBubblewrap",
+        "apps/cli/src/sandbox.rs#missing_sandbox_message"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "missing_linux_sandbox_message_names_bubblewrap_and_how_to_install_it"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/sandbox.rs",
+          "text": "Sandboxed exec is unsupported on Windows"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-refuses-without-a-backend",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "Without that sandbox it refuses to run the command, and `agi doctor` says what to install.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#missing_sandbox_message",
+        "apps/cli/src/doctor.rs#crate::sandbox::missing_sandbox_message(std::env::consts::OS)"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "exec_without_a_detected_sandbox_tells_the_user_what_to_install"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "a_wrapped_program_refuses_an_unavailable_backend"
         }
       ]
     },
@@ -6081,17 +6496,78 @@
       ]
     },
     {
+      "id": "cli-installer-glibc-floor",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "The installer refuses an older glibc or a musl-based Linux such as Alpine before it downloads anything.",
+      "implementation": ["apps/web/public/install.sh#MIN_GLIBC_VERSION"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "a glibc below the floor is refused before anything is downloaded"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "musl Linux is refused before anything is downloaded, even though its ldd exits 1"
+        }
+      ]
+    },
+    {
+      "id": "cli-installer-adds-install-dir-to-path",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "When `~/.agi/bin` is not already on your `PATH`, the installer adds it to your shell's startup file (`~/.zshrc` for zsh, `~/.bashrc` for bash on Linux, your existing `~/.bash_profile`, `~/.bash_login` or `~/.profile` for bash on macOS, `config.fish` for fish) and names the file.",
+      "implementation": ["apps/web/public/install.sh#profile_for_shell"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "stock macOS zsh with no .zshrc gets one that puts agi on PATH, once"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "Debian or Ubuntu bash appends to the existing .bashrc and says how to use agi now"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "macOS bash with only a .profile writes there instead of hiding it behind a new .bash_profile"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "fish gets a config.fish line in its own syntax"
+        }
+      ]
+    },
+    {
       "id": "privacy-free-plan-providers-may-train",
       "doc": "privacy-controls",
       "section": "What is stored where",
       "kind": "prose",
-      "sentence": "The {{PLAN.free}} plan is served by free capacity from model providers, AGI picks the provider for the default model, and some of those providers' terms may allow training on what you send; to keep your chats out of training, turn on **Only use models that do not train on your chats** in Settings, Privacy.",
+      "sentence": "On the {{PLAN.free}} plan, AGI picks the provider for the default model, a chat on another model the plan includes goes to that model's provider, and some providers' terms may allow training on what you send; to keep your chats out of training, turn on **Only use models that do not train on your chats** in Settings, Privacy.",
       "implementation": [
         "packages/contracts/compliance/src/free-plan-training-disclosure.ts#FREE_PLAN_TRAINING_SIGNUP_STATEMENT",
         "apps/web/features/settings/sections/PrivacySection.tsx",
-        "apps/web/lib/services/free-lane/free-quota-fallback.ts#serveFreeQuotaFirst"
+        "apps/web/lib/services/free-lane/free-quota-fallback.ts#serveFreeQuotaFirst",
+        "packages/ai/model-registry/catalog/routing-policies.json#fast_anthropic"
       ],
       "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/api/model-tiers.test.ts",
+          "name": "gives Free the fast OpenAI and fast Anthropic models, with Auto still on the fast OpenAI one"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.free-model-promotion.test.ts",
+          "name": "answers a Free pick of the fast Anthropic model on that model, metered on the Free windows, once the promotion refuses it"
+        },
         {
           "kind": "copy",
           "file": "packages/contracts/compliance/src/free-plan-training-disclosure.ts",
@@ -6410,7 +6886,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
-          "name": "prints crisis numbers and admits that no crisis feature exists"
+          "name": "prints crisis numbers and keeps crisis copy off the web chat page"
         },
         {
           "kind": "test",
@@ -6420,14 +6896,15 @@
       ]
     },
     {
-      "id": "crisis-nothing-special-happens",
+      "id": "crisis-no-scanning-or-alerts",
       "doc": "crisis-resources",
       "section": "What AGI does when a message is about self-harm",
       "kind": "prose",
-      "sentence": "Nothing special, and you should know that before you rely on it.",
+      "sentence": "Apart from the Reduce sensitive content check below, AGI does not scan chats for messages about suicide or self-harm, and a message about self-harm alerts no person at AGI.",
       "implementation": [
         "apps/web/lib/moderation/text-classifier.ts",
-        "apps/web/lib/moderation/index.ts"
+        "apps/web/lib/moderation/index.ts",
+        "apps/mobile/stores/chat/chatExecutionStore.ts"
       ],
       "proof": [
         {
@@ -6439,6 +6916,35 @@
           "kind": "test",
           "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
           "name": "has no rule that matches"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "adds a helpline to a refused self-harm request on the phone, Local mode included, and not on the web"
+        }
+      ]
+    },
+    {
+      "id": "crisis-no-banner-except-phone-refusal",
+      "doc": "crisis-resources",
+      "section": "What AGI does when a message is about self-harm",
+      "kind": "prose",
+      "sentence": "AGI adds no crisis banner or pop-up to a chat, and the only crisis note it adds is in the phone refusal described below.",
+      "implementation": [
+        "apps/web/features/chat/pages/WebChatPage.tsx",
+        "apps/mobile/lib/contentFilter.ts",
+        "apps/mobile/stores/chat/chatExecutionStore.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "prints crisis numbers and keeps crisis copy off the web chat page"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "adds a helpline to a refused self-harm request on the phone, Local mode included, and not on the web"
         }
       ]
     },
@@ -6447,7 +6953,7 @@
       "doc": "crisis-resources",
       "section": "What AGI does when a message is about self-harm",
       "kind": "prose",
-      "sentence": "When it is on, AGI refuses a short list of explicit or harmful how-to prompts before they reach a Managed Cloud model, and requests for suicide or self-harm methods are on that list.",
+      "sentence": "When it is on, AGI refuses a short list of explicit or harmful how-to prompts before they reach a Managed Cloud model, and requests for a method, means or dose of suicide or self-harm are on that list.",
       "implementation": [
         "packages/contracts/types/src/content-safety.ts",
         "apps/web/lib/services/managed-content-safety-service.ts"
@@ -6462,6 +6968,67 @@
           "kind": "test",
           "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
           "name": "answers with a refusal that names the setting and no helpline"
+        }
+      ]
+    },
+    {
+      "id": "crisis-reduce-sensitive-content-lets-help-through",
+      "doc": "crisis-resources",
+      "section": "What AGI does when a message is about self-harm",
+      "kind": "prose",
+      "sentence": "A message about how you feel, or a request for help for yourself or someone else, is not refused.",
+      "implementation": ["packages/contracts/types/src/content-safety.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "lets a message about feelings or a request for help through"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/content-safety.test.ts",
+          "name": "is not refused: %s"
+        }
+      ]
+    },
+    {
+      "id": "crisis-local-mode-adds-no-self-harm-instruction",
+      "doc": "crisis-resources",
+      "section": "What AGI does when a message is about self-harm",
+      "kind": "prose",
+      "sentence": "In Local mode in the AGI Mobile app, a small model runs on your phone, and AGI does not add an instruction about self-harm to what it sends that model.",
+      "implementation": [
+        "apps/mobile/stores/chat/localSystemPrompt.ts",
+        "apps/mobile/stores/chat/chatExecutionStore.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "sends a Local mode chat on the phone no self-harm instruction"
+        },
+        {
+          "kind": "test",
+          "file": "apps/mobile/__tests__/LocalSafetyFloor.test.ts",
+          "name": "sends the default prompt as the first message and no self-harm instruction"
+        }
+      ]
+    },
+    {
+      "id": "crisis-phone-refusal-adds-helpline",
+      "doc": "crisis-resources",
+      "section": "What AGI does when a message is about self-harm",
+      "kind": "prose",
+      "sentence": "In the AGI Mobile app the same check runs on the phone before a chat message you type or dictate reaches any model, in Local mode as well, and when it refuses a request about suicide or self-harm, the pop-up that says so adds a note that points to a crisis line and your local emergency number.",
+      "implementation": [
+        "apps/mobile/lib/contentFilter.ts",
+        "apps/mobile/stores/chat/chatExecutionStore.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/published-safety-claims.test.ts",
+          "name": "adds a helpline to a refused self-harm request on the phone, Local mode included, and not on the web"
         }
       ]
     },
@@ -6620,7 +7187,7 @@
       "id": "mcp-connection-count-by-plan",
       "doc": "mcp-connections",
       "section": "Limits",
-      "sentence": "How many custom MCP connections you can keep depends on your plan; the pricing page lists the figures once connectors are open.",
+      "sentence": "How many custom MCP connections you can keep depends on your plan.",
       "implementation": [
         "packages/contracts/types/src/billing-catalog.ts#BILLING_PLAN_PRODUCT_LIMITS",
         "apps/web/features/billing/lib/plan-display.ts#getBillingPlanDisplay",
@@ -7202,7 +7769,7 @@
       "doc": "models-and-reasoning",
       "section": "What the badges mean",
       "kind": "prose",
-      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "sentence": "**Auto (free) \u00b7 community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
       "implementation": [
         "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
       ],
@@ -7210,7 +7777,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) \u00b7 community models, capacity varies';"
         },
         {
           "kind": "test",
@@ -7554,6 +8121,15 @@
   ],
   "narrative": [
     {
+      "id": "delete-vendor-logs-and-snapshots",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Platform logs and database or object-storage snapshots, retained according to our hosting vendors' own configuration.",
+      "implementation": ["apps/web/app/privacy/page.tsx"],
+      "why": "external-fact"
+    },
+    {
       "id": "privacy-settings-gathers-the-controls",
       "doc": "privacy-controls",
       "section": "Your data in the product",
@@ -7761,15 +8337,6 @@
       "sentence": "Connecting is not the same as granting scopes.",
       "implementation": ["apps/web/features/connectors/components/ToolPermissionsPanel.tsx"],
       "why": "editorial-rule"
-    },
-    {
-      "kind": "prose",
-      "id": "schedules-pricing-figures",
-      "doc": "schedules-and-triggers",
-      "section": "Limits",
-      "sentence": "The pricing page carries the current per-plan figures.",
-      "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
-      "why": "reader-instruction"
     },
     {
       "id": "enterprise-roadmap-carries-no-date",

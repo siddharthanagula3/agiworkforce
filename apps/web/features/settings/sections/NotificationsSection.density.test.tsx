@@ -41,6 +41,20 @@ describe('NotificationsSection row density', () => {
     expect(document.querySelector('[style*="border-radius: var(--radius-lg)"]')).toBeNull();
   });
 
+  it('leaves row text and select sizes to the stylesheet, where phones raise them', async () => {
+    render(<NotificationsSection />);
+
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    const section = screen.getByTestId('notification-preferences');
+    const inlineSmallText = Array.from(section.querySelectorAll<HTMLElement>('[style]')).filter(
+      (node) => node.style.fontSize === '12px' || node.style.fontSize === '13px',
+    );
+    expect(inlineSmallText).toEqual([]);
+    for (const select of Array.from(section.querySelectorAll('select'))) {
+      expect(select.style.height).toBe('');
+    }
+  });
+
   it('shows a saved state only after an actual change', async () => {
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());

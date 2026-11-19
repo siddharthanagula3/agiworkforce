@@ -171,7 +171,7 @@ describe('OrganizationSharingSection', () => {
   it('tells a personal account how to get an organization instead of showing an error', () => {
     mockOverview.mockReturnValue({ isLoading: false, isError: false, error: null, data: null });
     renderSection();
-    expect(screen.getByText(/not in an organization yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/Create an organization in Team/i)).toBeInTheDocument();
   });
 
   it('lists what is shared and states that sharing is read-only', () => {
@@ -270,7 +270,7 @@ describe('OrganizationSharingSection', () => {
 
     const addAccess = screen.getByLabelText('Access for the people you add') as HTMLSelectElement;
     expect(addAccess.value).toBe('write');
-    const note = /can be given Can view but not Can edit/;
+    const note = /Viewers can only get Can view/;
     expect(screen.getByText(note)).toBeInTheDocument();
 
     await userEvent.selectOptions(addAccess, 'none');
@@ -561,7 +561,7 @@ describe('shared artifacts', () => {
     renderSection();
 
     expect(
-      await screen.findByText(/only the publisher or a workspace sharing manager can withdraw it/),
+      await screen.findByText(/Only the publisher or a sharing manager can withdraw it/),
     ).toBeInTheDocument();
   });
 
@@ -638,9 +638,7 @@ describe('shared conversations', () => {
     renderSection();
 
     expect(
-      await screen.findByText(
-        /only the person who shared it or a workspace sharing manager can withdraw it/,
-      ),
+      await screen.findByText(/only the sharer or a sharing manager can withdraw it/),
     ).toBeInTheDocument();
   });
 

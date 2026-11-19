@@ -13,6 +13,11 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import * as DocumentPicker from 'expo-document-picker';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { FileText, Plus, Trash2, Type } from 'lucide-react-native';
+import {
+  isKnowledgeIndexInProgress,
+  managedCloudProjectKnowledgeFilePath,
+} from '@agiworkforce/cloud-contracts';
+import type { ProjectKnowledgeIndexState } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { ALLOWED_ATTACHMENT_MIME_PREFIXES, IMAGE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
@@ -29,13 +34,20 @@ import {
   isCloudAccountEpochCurrent,
   subscribeCloudAccountEpochChange,
 } from '@/src/features/auth/services/cloudAccountSession';
-import { formatBytes } from '@agiworkforce/utils/format';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { FileViewerScreen } from '@/src/features/chat/components/artifact-viewers/FileViewerScreen';
+import type { FileViewerSource } from '@/src/features/chat/components/artifact-viewers/viewerKind';
+import { API_URL } from '@/lib/constants';
+import { reindexProjectKnowledgeFile } from '../projectKnowledge';
 
 interface ProjectSourcesTabProps {
   projectId: string;
+  openFileId?: string;
+  openPage?: number;
 }
 
 interface DisplaySource {
@@ -43,6 +55,35 @@ interface DisplaySource {
   name: string;
   size: number;
   addedAt: string;
+  mimeType: string;
+  url: string;
+  indexing?: ProjectKnowledgeIndexState | null;
+}
+
+type SourceIndexStatus = { label: string; failed: boolean } | null;
+
+export function sourceIndexStatus(
+  indexing: ProjectKnowledgeIndexState | null | undefined,
+  retrying = false,
+): SourceIndexStatus {
+  if (!indexing) return null;
+  if (retrying || isKnowledgeIndexInProgress(indexing)) return { label: 'Indexing', failed: false };
+  if (indexing.status === 'failed') return { label: 'Couldn’t read', failed: true };
+  return null;
+}
+
+export function projectSourceFileUrl(projectId: string, fileId: string): string {
+  return `${API_URL.replace(/\/+$/, '')}${managedCloudProjectKnowledgeFilePath(projectId, fileId)}`;
+}
+
+function viewerSourceOf(source: DisplaySource): FileViewerSource {
+  return {
+    title: source.name,
+    fileName: source.name,
+    mimeType: source.mimeType,
+    url: source.url,
+    byteCount: source.size,
+  };
 }
 
 /** Derived from the shared attachment allowlist the upload path and the server both enforce. */
@@ -77,12 +118,19 @@ export function projectSourceErrorMessage(error: unknown, fallback: string): str
 
 function SourceRow({
   source,
+  retrying,
+  onOpen,
   onRemove,
+  onRetryIndexing,
 }: {
   source: DisplaySource;
+  retrying: boolean;
+  onOpen: (source: DisplaySource) => void;
   onRemove: (id: string) => void;
+  onRetryIndexing: (id: string) => void;
 }) {
   const colors = useThemeColors();
+  const indexStatus = sourceIndexStatus(source.indexing, retrying);
 
   const handleRemove = useCallback(() => {
     onRemove(source.id);
@@ -90,37 +138,68 @@ function SourceRow({
 
   return (
     <View
-      className="flex-row items-center gap-3 px-4 py-3 rounded-xl mb-2"
+      className="flex-row items-center gap-3 pl-4 pr-1 py-2 rounded-xl mb-2"
       style={{
         backgroundColor: colors.surfaceElevated,
         borderWidth: 1,
         borderColor: colors.border,
       }}
     >
-      <View
-        className="w-9 h-9 rounded-lg items-center justify-center"
-        style={{ backgroundColor: `${colors.teal}18` }}
+      <PressableBox
+        testID={`project-source-open-${source.id}`}
+        onPress={() => onOpen(source)}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${source.name}`}
+        className="flex-1 flex-row items-center gap-3"
+        style={{ minHeight: 44 }}
       >
-        <FileText size={18} color={colors.teal} />
-      </View>
-
-      <View className="flex-1">
-        <Text
-          className="text-[14px] font-medium"
-          style={{ color: colors.textPrimary }}
-          numberOfLines={1}
+        <View
+          className="w-9 h-9 rounded-lg items-center justify-center"
+          style={{ backgroundColor: `${colors.teal}18` }}
         >
-          {source.name}
-        </Text>
-        <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
-          {formatBytes(source.size)} · {formatRelativeTime(source.addedAt)}
-        </Text>
-      </View>
+          <FileText size={18} color={colors.teal} />
+        </View>
+
+        <View className="flex-1">
+          <Text
+            className="text-[14px] font-medium"
+            style={{ color: colors.textPrimary }}
+            numberOfLines={1}
+          >
+            {source.name}
+          </Text>
+          <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
+            {formatAttachmentSize(source.size)} · {formatRelativeTime(source.addedAt)}
+          </Text>
+          {indexStatus ? (
+            <Text
+              testID={`project-source-index-${source.id}`}
+              className="text-sm mt-0.5"
+              style={{ color: indexStatus.failed ? colors.agentError : colors.textMuted }}
+            >
+              {indexStatus.label}
+            </Text>
+          ) : null}
+        </View>
+      </PressableBox>
+
+      {indexStatus?.failed ? (
+        <PressableBox
+          testID={`project-source-retry-index-${source.id}`}
+          onPress={() => onRetryIndexing(source.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Retry indexing ${source.name}`}
+          className="min-h-[44px] items-center justify-center px-2"
+        >
+          <Text className="text-sm font-semibold" style={{ color: colors.textPrimary }}>
+            Retry
+          </Text>
+        </PressableBox>
+      ) : null}
 
       <PressableBox
         onPress={handleRemove}
-        className="p-2 rounded-lg"
-        style={{ backgroundColor: `${colors.agentError}10` }}
+        className="min-h-[44px] min-w-[44px] items-center justify-center"
         accessibilityLabel={`Remove ${source.name}`}
         accessibilityRole="button"
       >
@@ -201,8 +280,11 @@ function Notice({ title, body }: { title: string; body: string }) {
   );
 }
 
-export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
+export function ProjectSourcesTab({ projectId, openFileId, openPage }: ProjectSourcesTabProps) {
   const colors = useThemeColors();
+  const [viewing, setViewing] = useState<{ source: FileViewerSource; page?: number } | null>(null);
+  const [retryingIndex, setRetryingIndex] = useState<ReadonlySet<string>>(() => new Set());
+  const openedRequestRef = useRef<string | null>(null);
   const target = useProjectSourceTarget(projectId);
   const projects = useProjectStore((s) => s.projects);
   const addSource = useProjectStore((s) => s.addSource);
@@ -302,6 +384,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
       setCloudSources(EMPTY_SOURCES);
       setLoadError(null);
       setUploadProgress(null);
+      setViewing(null);
       resetTextEditor();
       setBusy(false);
     });
@@ -311,6 +394,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
     uploadRef.current?.abort();
     uploadRef.current = null;
     setUploadProgress(null);
+    setViewing(null);
     resetTextEditor();
     return () => {
       uploadRef.current?.abort();
@@ -337,6 +421,8 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
         name: source.name,
         size: source.size,
         addedAt: source.addedAt,
+        mimeType: source.mimeType,
+        url: source.uri,
       })),
     [projectId, projects],
   );
@@ -355,6 +441,9 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           name: file.fileName,
           size: file.byteCount,
           addedAt: file.addedAt,
+          mimeType: file.mimeType,
+          url: projectSourceFileUrl(projectId, file.id),
+          indexing: file.indexing ?? null,
         })),
       );
       setLoadError(null);
@@ -380,6 +469,56 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
   }, [target, refreshCloudSources]);
 
   const sources = target === 'cloud' ? cloudSources : localSources;
+
+  useEffect(() => {
+    if (!openFileId) return;
+    const request = `${projectId}:${openFileId}:${openPage ?? ''}`;
+    if (openedRequestRef.current === request) return;
+    const source = sources.find((candidate) => candidate.id === openFileId);
+    if (!source) return;
+    openedRequestRef.current = request;
+    setViewing({ source: viewerSourceOf(source), ...(openPage ? { page: openPage } : {}) });
+  }, [openFileId, openPage, projectId, sources]);
+
+  const handleOpenSource = useCallback((source: DisplaySource) => {
+    setViewing({ source: viewerSourceOf(source) });
+  }, []);
+
+  const handleRetryIndexing = useCallback(
+    async (fileId: string) => {
+      const context = captureContext();
+      if (!context.isCurrent() || target !== 'cloud') return;
+      setRetryingIndex((current) => new Set(current).add(fileId));
+      try {
+        const indexing = await reindexProjectKnowledgeFile(
+          projectId,
+          fileId,
+          context.accountEpoch ?? null,
+        );
+        if (!context.isCurrent()) return;
+        setCloudSources((current) =>
+          current.map((source) =>
+            source.id === fileId ? { ...source, indexing: indexing ?? source.indexing } : source,
+          ),
+        );
+      } catch (error) {
+        if (!context.isCurrent()) return;
+        Alert.alert(
+          'Could not retry indexing',
+          projectSourceErrorMessage(error, 'Check your connection and try again.'),
+        );
+      } finally {
+        if (context.isCurrent()) {
+          setRetryingIndex((current) => {
+            const next = new Set(current);
+            next.delete(fileId);
+            return next;
+          });
+        }
+      }
+    },
+    [captureContext, projectId, target],
+  );
 
   const handleAddSources = useCallback(async () => {
     if (target === 'unknown') {
@@ -623,6 +762,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
         >
           <View
             style={{
+              ...contentColumn('reading'),
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,
@@ -730,15 +870,28 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
         />
       ) : (
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           className="flex-1"
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
           {sources.map((source) => (
-            <SourceRow key={source.id} source={source} onRemove={handleRemovePress} />
+            <SourceRow
+              key={source.id}
+              source={source}
+              retrying={retryingIndex.has(source.id)}
+              onOpen={handleOpenSource}
+              onRemove={handleRemovePress}
+              onRetryIndexing={(fileId) => void handleRetryIndexing(fileId)}
+            />
           ))}
         </ScrollView>
       )}
+      <FileViewerScreen
+        source={viewing?.source ?? null}
+        {...(viewing?.page ? { page: viewing.page } : {})}
+        onClose={() => setViewing(null)}
+      />
     </View>
   );
 }

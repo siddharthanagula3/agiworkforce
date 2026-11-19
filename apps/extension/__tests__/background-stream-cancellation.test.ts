@@ -407,6 +407,51 @@ describe('background stream cancellation', () => {
     ).toEqual(FIXTURE_CONVERSATION_CONTEXT);
   });
 
+  it.each([
+    ['a proven chat, workspace and page', {}, true],
+    ['no acknowledged account conversation', { scope: false }, false],
+    ['no readable page document', { document: false }, false],
+  ] as const)(
+    'negotiates durable browser continuation only for %s',
+    async (_label, fault: { scope?: boolean; document?: boolean }, expected) => {
+      const page = {
+        tabId: 17,
+        windowId: 3,
+        url: 'https://example.test/application',
+        ...(fault.document === false ? {} : { documentId: 'negotiated-document' }),
+      };
+      harness.chromeMock.tabs.get.mockResolvedValue({
+        id: 17,
+        windowId: 3,
+        url: page.url,
+        status: 'complete',
+      });
+      harness.chromeMock.scripting.executeScript.mockResolvedValue([
+        { documentId: 'negotiated-document', result: page.url },
+      ]);
+      if (fault.scope !== false)
+        harness.captureCallerContext.mockResolvedValueOnce(FIXTURE_CONVERSATION_CONTEXT);
+      harness.executeChat.mockImplementationOnce(async () => ({ status: 'success' }));
+      await dispatch({
+        type: 'CHAT_MESSAGE',
+        id: `negotiation-${String(expected)}-${Object.keys(fault).join('-') || 'proven'}`,
+        owner,
+        text: 'Read this page and send the update',
+        browserToolTier: 'read',
+        browserContext: page,
+        historyConversationId: 'fixture-local',
+        conversationId: FIXTURE_CONVERSATION_CONTEXT.id,
+      });
+      await vi.waitFor(() => expect(harness.executeChat).toHaveBeenCalledOnce());
+      const [request, deps] = harness.executeChat.mock.calls[0] as [
+        ChromeManagedChatRequest,
+        ChromeManagedChatDependencies,
+      ];
+      expect(request.callerToolContinuation === true).toBe(expected);
+      if (expected) expect(deps.callerCustody).toBeDefined();
+    },
+  );
+
   it('refuses a different local chat even when a saved run is marked completed', async () => {
     const custody = createChromeCallerToolCustody(
       {

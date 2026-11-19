@@ -3,10 +3,20 @@ import * as vscode from 'vscode';
 import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
 
 import { setupCommands } from '../core/commandSetup';
+import { LocalRuntimeClient } from '../integrations/localRuntimeClient';
+import { t } from '../l10n';
 import { Config } from '../platform/config';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
 import type { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
+
+type RemoteEnvironmentModule = typeof import('../platform/remoteEnvironment');
+
+vi.mock('../platform/remoteEnvironment', async (importOriginal) => ({
+  ...(await importOriginal<RemoteEnvironmentModule>()),
+  runCliVersion: vi.fn(async () => 'agi 1.0.0'),
+  resolveCliPath: vi.fn(() => ({ ok: true, path: '/home/dev/.agi/bin/agi' })),
+}));
 
 interface Terminal {
   name: string;
@@ -167,6 +177,31 @@ describe('taking a session somewhere else', () => {
     expect(sidebar.resetConversation).not.toHaveBeenCalled();
   });
 
+  it('answers a session link in a Restricted Mode folder by offering trust, starting nothing', async () => {
+    const spawn = vi.fn();
+    const client = new LocalRuntimeClient({
+      cliPath: '/home/dev/.agi/bin/agi',
+      workspaceTrusted: () => false,
+      cwd: '/repo',
+      clientVersion: '0.3.0',
+      spawn,
+    });
+    runtime.listThreads.mockImplementation((params) => client.listThreads(params));
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      t('webview.manageTrust') as never,
+    );
+
+    await handlers.get('agi-workforce.continueCliSession')?.('thread-cli');
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(runtime.handOffThread).not.toHaveBeenCalled();
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toContain(
+      'Restricted Mode',
+    );
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.trust.manage');
+  });
+
   it('opens the accepted CLI session in the sidebar instead of leaving another thread selected', async () => {
     const issuedAt = new Date().toISOString();
     runtime.listThreads.mockResolvedValue({
@@ -192,6 +227,45 @@ describe('taking a session somewhere else', () => {
 
     expect(runtime.acceptHandoff).toHaveBeenCalledOnce();
     expect(sidebar.resumeConversation).toHaveBeenCalledWith('thread-cli');
+  });
+
+  it('records the handoff only once it is accepted and opened, so a failed attempt can be retried', async () => {
+    const handoff = {
+      protocolVersion: DEVELOPER_SESSION_PROTOCOL_VERSION,
+      threadId: 'thread-cli',
+      origin: 'developer_session',
+      issuedBy: 'cli',
+      issuedAt: new Date().toISOString(),
+      fromEnvironment: 'local',
+      toEnvironment: 'local',
+      workspace: { cwd: vscode.Uri.file('/repo').fsPath },
+      posture: { agentMode: 'agent', trustMode: 'local', permissionProfileId: 'default' },
+    };
+    runtime.listThreads.mockResolvedValue({
+      threads: [{ id: 'thread-cli', updatedAt: '2026-09-20T12:00:00.000Z' }],
+    });
+    runtime.handOffThread.mockResolvedValue(handoff);
+    runtime.acceptHandoff.mockRejectedValueOnce(new Error('runtime handshake failed'));
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Continue here' as never);
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(sidebar.resumeConversation).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showErrorMessage).mock.calls.at(-1)?.[0]).toContain(
+      'runtime handshake failed',
+    );
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(runtime.acceptHandoff).toHaveBeenCalledTimes(2);
+    expect(sidebar.resumeConversation).toHaveBeenCalledWith('thread-cli');
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(runtime.acceptHandoff).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(vscode.window.showWarningMessage).mock.calls.at(-1)?.[0]).toContain(
+      'already taken that session',
+    );
   });
 
   it('does not touch the sidebar thread when the handoff review is declined', async () => {

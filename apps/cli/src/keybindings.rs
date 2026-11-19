@@ -210,6 +210,11 @@ pub fn validate_config(custom: &BTreeMap<String, String>) -> Result<(), String> 
                 "ui.keybindings.{name} must use ctrl, alt, shift, or super for character keys"
             ));
         }
+        if chord.modifiers.is_empty() && composer_owns(chord.code, action) {
+            return Err(format!(
+                "ui.keybindings.{name}: `{binding}` alone already edits, sends or rewinds in the composer, so it could never run this action; add ctrl, alt, shift, or super"
+            ));
+        }
     }
 
     let mut seen = HashSet::new();
@@ -226,6 +231,23 @@ pub fn validate_config(custom: &BTreeMap<String, String>) -> Result<(), String> 
         }
     }
     Ok(())
+}
+
+fn composer_owns(code: KeyCode, action: KeybindingAction) -> bool {
+    match code {
+        KeyCode::Esc => action != KeybindingAction::Quit,
+        KeyCode::Enter
+        | KeyCode::Tab
+        | KeyCode::Backspace
+        | KeyCode::Delete
+        | KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Up
+        | KeyCode::Down
+        | KeyCode::Home
+        | KeyCode::End => true,
+        _ => false,
+    }
 }
 
 fn title_case_chord(display: &str) -> String {
@@ -418,6 +440,35 @@ mod tests {
             ("redraw".to_string(), "ctrl+x".to_string()),
         ]))
         .is_err());
+    }
+
+    #[test]
+    fn a_bare_key_the_composer_handles_first_is_refused() {
+        for (action, key) in [
+            ("clear_chat", "esc"),
+            ("cycle_mode", "escape"),
+            ("redraw", "enter"),
+            ("clear_input", "backspace"),
+            ("cycle_model", "up"),
+            ("quit", "down"),
+        ] {
+            let custom = BTreeMap::from([(action.to_string(), key.to_string())]);
+            assert!(
+                validate_config(&custom).is_err(),
+                "{action} = {key} could never fire"
+            );
+        }
+        for (action, key) in [
+            ("quit", "esc"),
+            ("clear_chat", "ctrl+esc"),
+            ("redraw", "f5"),
+        ] {
+            let custom = BTreeMap::from([(action.to_string(), key.to_string())]);
+            assert!(
+                validate_config(&custom).is_ok(),
+                "{action} = {key} can fire"
+            );
+        }
     }
 
     #[test]

@@ -7,6 +7,7 @@ import {
   decideComposerPaste,
   filesFromDataTransfer,
   looksLikePastedCode,
+  pastedBlocksToAttach,
   pastedCodeFence,
 } from '../composerPaste';
 
@@ -191,5 +192,38 @@ describe('code paste', () => {
 
   it('defers to the large-paste attachment', () => {
     expect(pastedCodeFence(codeTransfer(`${source}\n${'// pad\n'.repeat(2000)}`))).toBeNull();
+  });
+});
+
+describe('pasted blocks that must travel as files', () => {
+  const cap = 100_000;
+
+  it('keeps every block inline while the joined message fits', () => {
+    const blocks = ['a'.repeat(60_000), 'b'.repeat(39_000)];
+    expect(pastedBlocksToAttach(blocks, 'hi', cap)).toEqual(new Set());
+  });
+
+  it('counts the separators and the typed text toward the cap', () => {
+    const blocks = ['a'.repeat(99_990)];
+    expect(pastedBlocksToAttach(blocks, 'hello there', cap)).toEqual(new Set([0]));
+    expect(pastedBlocksToAttach(blocks, 'hello', cap)).toEqual(new Set());
+  });
+
+  it('attaches a single block that is over the cap', () => {
+    expect(pastedBlocksToAttach(['x'.repeat(150_000)], 'summarize', cap)).toEqual(new Set([0]));
+  });
+
+  it('attaches the largest block first and stops once the rest fits', () => {
+    const blocks = ['a'.repeat(30_000), 'b'.repeat(90_000), 'c'.repeat(40_000)];
+    expect(pastedBlocksToAttach(blocks, 'q', cap)).toEqual(new Set([1]));
+  });
+
+  it('attaches more blocks when one is not enough', () => {
+    const blocks = ['a'.repeat(70_000), 'b'.repeat(80_000), 'c'.repeat(70_000)];
+    expect(pastedBlocksToAttach(blocks, '', cap)).toEqual(new Set([1, 0]));
+  });
+
+  it('leaves nothing to attach when there are no blocks', () => {
+    expect(pastedBlocksToAttach([], 'x'.repeat(200_000), cap)).toEqual(new Set());
   });
 });

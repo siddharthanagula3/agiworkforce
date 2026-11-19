@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
 import {
@@ -12,7 +13,7 @@ import {
 } from '@/src/features/legal';
 import { translatePlural } from '@/src/i18n/plural';
 
-const MONOSPACE = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+const MONOSPACE = codeFontFamily;
 
 function formatGeneratedAt(value: string): string {
   const date = new Date(value);

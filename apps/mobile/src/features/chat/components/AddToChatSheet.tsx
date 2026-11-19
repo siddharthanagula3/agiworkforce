@@ -1,6 +1,15 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView } from 'react-native';
+import {
+  Children,
+  forwardRef,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { View, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -14,15 +23,19 @@ import {
   FolderPlus,
   Palette,
   Link,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
+  FilePlus,
+  Settings,
   Lock,
-  Bot,
   Film,
   Check,
   Sparkles,
   BookOpen,
   Globe,
   ClipboardPaste,
+  Terminal,
   MonitorPlay,
   FileSpreadsheet,
 } from 'lucide-react-native';
@@ -36,6 +49,7 @@ import {
   getModelMetadataById,
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
+  isAutoModeModelId,
   providerLabels,
   videoGenerationCostMicrousd,
   type ModelMetadata,
@@ -47,6 +61,7 @@ import {
   type ChatOutputFormat,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
+import { isWebSearchAvailable } from '@agiworkforce/search';
 import { supportedVideoDurationSecs } from '@/src/features/video/services/videogen';
 import { Text } from '@/components/ui/Text';
 import { Switch } from '@/components/ui/Switch';
@@ -67,10 +82,11 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { getShortDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { radii, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
@@ -79,39 +95,74 @@ import {
   type LibraryPickerScope,
 } from '@/src/features/library/useLibraryPickerScope';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
+import { useLibraryThumbnail } from '@/src/features/library/useLibraryThumbnail';
 import { useCapability } from '@/src/lib/Capabilities';
+import {
+  useBottomSheetPresence,
+  useHardwareBackDismiss,
+  useSystemScreenSheet,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
+import { AuthorizedImage } from '@/src/features/image/components/AuthorizedImage';
 import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
   destinationKey: string;
-  onCamera: () => void;
-  onPhotos: () => void;
+  onCamera: () => void | Promise<void>;
+  onPhotos: () => void | Promise<void>;
   onPasteImage?: () => void;
-  onFile: () => void;
+  onFile: () => void | Promise<void>;
   onOpenCloudAccess: () => void;
   onOpenStyleSelector: () => void;
-  onOpenModelPicker: () => void;
   onOpenProjectPicker: () => void;
   onAttachFromLibrary: (attachment: Attachment) => void;
   onOpenSkills?: () => void;
+  onStartComposerRoundTrip?: () => void;
   offersOutputFormat?: boolean;
+  conversationProjectId?: string | null;
 }
 
-const SNAP_POINTS = ['75%'];
+const MAX_SHEET_HEIGHT_FRACTION = 0.85;
+const NESTED_ROW_INDENT = 28;
 const LIBRARY_PICKER_SIZE = 12;
+const LIBRARY_PICK_HEIGHT = 70;
+export const LOCAL_ATTACH_NOTE =
+  'On-device models read the text in photos, not the picture itself.';
 const CLOUD_ATTACH_RETENTION_NOTE =
-  'Files you attach are uploaded to AGI Cloud and kept in your Library until you delete them.';
+  'Uploaded to AGI Cloud and kept in your Library until you delete them.';
 const TEMPORARY_ATTACH_RETENTION_NOTE =
-  'Files you attach to a temporary chat stay out of your Library and are deleted with the chat.';
+  'Kept out of your Library and deleted with this temporary chat.';
 
 interface LibraryPick {
   id: string;
   fileName: string;
   subtitle: string;
   isImage: boolean;
+  thumbnailUri?: string;
   attachment: Attachment;
+}
+
+function LibraryPickPicture({ pick }: { pick: LibraryPick }) {
+  const { uri, fallBackToFullFile } = useLibraryThumbnail({
+    id: pick.id,
+    uri: pick.attachment.uri,
+    thumbnailUri: pick.thumbnailUri,
+  });
+  const handleUnavailableChange = useCallback(
+    (unavailable: boolean) => {
+      if (unavailable) fallBackToFullFile();
+    },
+    [fallBackToFullFile],
+  );
+  return (
+    <AuthorizedImage
+      uri={uri}
+      name={pick.attachment.fileName}
+      onUnavailableChange={handleUnavailableChange}
+      style={{ width: '100%', height: '100%' }}
+    />
+  );
 }
 
 type CloudLibraryState =
@@ -135,16 +186,19 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onFile,
     onOpenCloudAccess,
     onOpenStyleSelector,
-    onOpenModelPicker,
     onOpenProjectPicker,
     onAttachFromLibrary,
     onOpenSkills,
+    onStartComposerRoundTrip,
     offersOutputFormat = false,
+    conversationProjectId,
   },
   ref,
 ) {
   const router = useRouter();
   const { colors: themeColors } = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
+  const { contentWidth } = useResponsiveLayout();
   const cameraAllowed = useCapability('canUseCamera');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
@@ -179,17 +233,39 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
+  const genericWebSearchAvailable = useTierStore((s) => s.genericWebSearchAvailable);
   const showWebSearchToggle =
-    FEATURES.webSearch && appMode === 'cloud' && grantedCapabilities.includes('canUseWebSearch');
-  const showToolSection = showResearchToggle || showWebSearchToggle;
+    FEATURES.webSearch &&
+    appMode === 'cloud' &&
+    grantedCapabilities.includes('canUseWebSearch') &&
+    (isAutoModeModelId(selectedModel) ||
+      isWebSearchAvailable({
+        provider: selectedModelMetadata?.provider,
+        modelSupportsNativeSearch: selectedModelMetadata?.capabilities?.search,
+        modelSupportsTools: selectedModelMetadata?.capabilities?.tools,
+        genericBackendConfigured: genericWebSearchAvailable,
+      }));
+  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
+  const showRunCodeToggle =
+    FEATURES.codeExecution &&
+    appMode === 'cloud' &&
+    features.codeExecution &&
+    selectedModelMetadata?.capabilities?.codeExecution === true &&
+    codeExecutionAvailable &&
+    grantedCapabilities.includes('canUseCloudExecution');
   const sourcesKey = useChatViewStore((s) => s.styleConversationId) ?? NEW_CHAT_STYLE_KEY;
   const disabledConnectorIds = useChatViewStore(
     (s) => s.disabledConnectorIdsByConversation[sourcesKey],
   );
   const toggleChatConnector = useChatViewStore((s) => s.toggleChatConnector);
-  const chatConnectors = useChatConnectorOptions(
-    appMode === 'cloud' && FEATURES.connectors && grantedCapabilities.includes('canUseConnectors'),
-  );
+  const runCodeOn = useChatViewStore((s) => s.runCodeByConversation[sourcesKey] === true);
+  const setRunCode = useChatViewStore((s) => s.setRunCode);
+  const showConnectors =
+    appMode === 'cloud' && FEATURES.connectors && grantedCapabilities.includes('canUseConnectors');
+  const chatConnectors = useChatConnectorOptions(showConnectors);
+  const enabledConnectorCount = chatConnectors.filter(
+    (connector) => !(disabledConnectorIds ?? []).includes(connector.connectorId),
+  ).length;
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
   const imageModelSupportsReference = supportsManagedMediaImageEdit(
@@ -264,8 +340,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     videoModelId !== null &&
     grantedCapabilities.includes('canUseVideoGeneration') &&
     canUseBillingPlanCapability(tier, 'video_generation');
-  const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
-  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
   const outputFormat = useOutputFormatStore((s) => s.format);
   const setOutputFormat = useOutputFormatStore((s) => s.setFormat);
   const showOutputSection =
@@ -273,6 +347,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     appMode === 'cloud' &&
     mediaMode === 'text' &&
     FEATURES.codeExecution &&
+    features.codeExecution &&
     selectedModelMetadata?.capabilities?.tools === true &&
     codeExecutionAvailable &&
     grantedCapabilities.includes('canUseCloudExecution');
@@ -282,10 +357,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const localProjects = useProjectStore((s) => s.projects);
   const cloudActiveProjectId = useCloudProjectStore((s) => s.activeProjectId);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
-  const activeProjectId = appMode === 'cloud' ? cloudActiveProjectId : localActiveProjectId;
+  const scopedProjectId = appMode === 'cloud' ? cloudActiveProjectId : localActiveProjectId;
+  const activeProjectId =
+    conversationProjectId === undefined ? scopedProjectId : conversationProjectId;
   const activeProject = activeProjectId
     ? ((appMode === 'cloud' ? cloudProjects : localProjects).find(
-        (p) => p.id === activeProjectId,
+        (p) => p.id === activeProjectId && !('deletedAt' in p && p.deletedAt !== null),
       ) ?? null)
     : null;
   const localLibraryPicks = useMemo((): LibraryPick[] => {
@@ -333,6 +410,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               fileName: asset.fileName,
               subtitle: asset.sourceLabel,
               isImage: asset.kind === 'image',
+              ...(asset.thumbnailUri ? { thumbnailUri: asset.thumbnailUri } : {}),
               attachment: {
                 id: `library-${asset.id}`,
                 uri: asset.uri,
@@ -375,24 +453,46 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     }
   }, [hapticsEnabled]);
 
+  // Handing off to another sheet keeps this one on screen while it animates
+  // out, so without this the tapped row sat inert for the whole handoff and
+  // read as a dead control.
+  const [handoff, setHandoff] = useState<'style' | 'project' | null>(null);
+  const [expanded, setExpanded] = useState<'file' | 'connectors' | null>(null);
+
+  const sheetRef = useRef<BottomSheet>(null);
   const closeSheet = useCallback(() => {
     libraryRequest.current += 1;
-    if (ref && 'current' in ref && ref.current) {
-      ref.current.close();
-    }
-  }, [ref]);
+    sheetRef.current?.close();
+  }, []);
+  const [presented, sheetPresence] = useBottomSheetPresence();
+  useHardwareBackDismiss(presented, closeSheet);
+  const handleSheetClosed = useCallback(() => {
+    libraryRequest.current += 1;
+    setHandoff(null);
+    setExpanded(null);
+  }, []);
+  const handleSheetUnmount = useCallback(() => {
+    sheetPresence.onClose();
+    setIsOpen(false);
+    handleSheetClosed();
+  }, [handleSheetClosed, sheetPresence]);
+  const sheet = useSystemScreenSheet({
+    forwardedRef: ref,
+    sheetRef,
+    closeSheet,
+    onUnmount: handleSheetUnmount,
+  });
+  const launchSystemScreen = sheet.launch;
 
   const handleCamera = useCallback(() => {
     haptic();
-    closeSheet();
-    onCamera();
-  }, [haptic, closeSheet, onCamera]);
+    launchSystemScreen(onCamera);
+  }, [haptic, launchSystemScreen, onCamera]);
 
   const handlePhotos = useCallback(() => {
     haptic();
-    closeSheet();
-    onPhotos();
-  }, [haptic, closeSheet, onPhotos]);
+    launchSystemScreen(onPhotos);
+  }, [haptic, launchSystemScreen, onPhotos]);
 
   const [clipboardImage, setClipboardImage] = useState(false);
   useEffect(() => {
@@ -414,9 +514,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const handleFile = useCallback(() => {
     haptic();
-    closeSheet();
-    onFile();
-  }, [haptic, closeSheet, onFile]);
+    launchSystemScreen(onFile);
+  }, [haptic, launchSystemScreen, onFile]);
 
   const handleAttachFromLibrary = useCallback(
     (pick: LibraryPick, request?: number) => {
@@ -429,22 +528,19 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [appMode, closeSheet, haptic, onAttachFromLibrary, pickerScope],
   );
 
-  // Handing off to another sheet keeps this one on screen while it animates
-  // out, so without this the tapped row sat inert for the whole handoff and
-  // read as a dead control.
-  const [handoff, setHandoff] = useState<'style' | 'model' | 'project' | null>(null);
+  const toggleExpanded = useCallback(
+    (section: 'file' | 'connectors') => {
+      haptic();
+      setExpanded((current) => (current === section ? null : section));
+    },
+    [haptic],
+  );
 
   const handleOpenStyleSelector = useCallback(() => {
     haptic();
     setHandoff('style');
     onOpenStyleSelector();
   }, [haptic, onOpenStyleSelector]);
-
-  const handleOpenModelPicker = useCallback(() => {
-    haptic();
-    setHandoff('model');
-    onOpenModelPicker();
-  }, [haptic, onOpenModelPicker]);
 
   const handleOpenProjectPicker = useCallback(() => {
     haptic();
@@ -488,8 +584,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const handleStudy = useCallback(() => {
     haptic();
     closeSheet();
+    onStartComposerRoundTrip?.();
     router.push('/(app)/study');
-  }, [haptic, closeSheet, router]);
+  }, [haptic, closeSheet, onStartComposerRoundTrip, router]);
 
   const handleConnectors = useCallback(() => {
     haptic();
@@ -498,8 +595,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       return;
     }
     closeSheet();
+    onStartComposerRoundTrip?.();
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [haptic, onOpenCloudAccess, closeSheet, router]);
+  }, [haptic, onOpenCloudAccess, closeSheet, onStartComposerRoundTrip, router]);
 
   const renderBackdrop = useCallback(
     (props: React.ComponentProps<typeof BottomSheetBackdrop>) => (
@@ -510,23 +608,28 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const cardBg = themeColors.neutralSurface;
   const dividerColor = themeColors.borderLight;
+  if (!sheet.mounted) return null;
   return (
     <BottomSheet
-      ref={ref}
-      index={-1}
+      key={sheet.generation}
+      ref={sheetRef}
+      index={sheet.index}
       accessible={false}
+      style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
+      onAnimate={sheetPresence.onAnimate}
+      onClose={sheetPresence.onClose}
       onChange={(index) => {
+        sheetPresence.onChange(index);
         setIsOpen(index >= 0);
         if (index < 0) {
-          libraryRequest.current += 1;
-          setHandoff(null);
+          handleSheetClosed();
           return;
         }
         if (onPasteImage) void clipboardHasImage().then(setClipboardImage);
       }}
-      snapPoints={SNAP_POINTS}
       enablePanDownToClose
-      enableDynamicSizing={false}
+      enableDynamicSizing
+      maxDynamicContentSize={Math.round(windowHeight * MAX_SHEET_HEIGHT_FRACTION)}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
       android_keyboardInputMode="adjustResize"
@@ -540,39 +643,44 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     >
       <BottomSheetScrollView
         testID="add-to-chat-sheet"
+        stickyHeaderIndices={[0]}
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 20,
-            paddingBottom: 16,
-          }}
-        >
-          <View style={{ width: 28 }} />
-          <Text
+        {/* A sticky header's own style is moved onto the scroll view's wrapper,
+            so the row layout has to sit on an inner view to survive. */}
+        <View style={{ backgroundColor: themeColors.surfaceElevated }}>
+          <View
             style={{
-              fontSize: typeScale.callout,
-              fontWeight: '600',
-              color: themeColors.textPrimary,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 20,
+              paddingBottom: 16,
             }}
           >
-            Add to Chat
-          </Text>
-          <PressableBox
-            onPress={closeSheet}
-            testID="add-to-chat-close"
-            accessible
-            style={{ padding: 4 }}
-            accessibilityLabel="Close Add to Chat"
-            accessibilityRole="button"
-            hitSlop={8}
-          >
-            <X size={20} color={themeColors.textMuted} />
-          </PressableBox>
+            <View style={{ width: 28 }} />
+            <Text
+              style={{
+                fontSize: typeScale.callout,
+                fontWeight: '600',
+                color: themeColors.textPrimary,
+              }}
+            >
+              Add to Chat
+            </Text>
+            <PressableBox
+              onPress={closeSheet}
+              testID="add-to-chat-close"
+              accessible
+              style={{ padding: 4 }}
+              accessibilityLabel="Close Add to Chat"
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <X size={20} color={themeColors.textMuted} />
+            </PressableBox>
+          </View>
         </View>
 
         <View
@@ -619,20 +727,22 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           ) : null}
         </View>
 
-        {appMode === 'cloud' ? (
-          <Text
-            style={{
-              paddingHorizontal: 20,
-              marginTop: -8,
-              paddingBottom: 16,
-              fontSize: typeScale.caption,
-              lineHeight: 17,
-              color: themeColors.textMuted,
-            }}
-          >
-            {isTemporaryChat ? TEMPORARY_ATTACH_RETENTION_NOTE : CLOUD_ATTACH_RETENTION_NOTE}
-          </Text>
-        ) : null}
+        <Text
+          style={{
+            paddingHorizontal: 20,
+            marginTop: -8,
+            paddingBottom: 16,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            color: themeColors.textMuted,
+          }}
+        >
+          {appMode !== 'cloud'
+            ? LOCAL_ATTACH_NOTE
+            : isTemporaryChat
+              ? TEMPORARY_ATTACH_RETENTION_NOTE
+              : CLOUD_ATTACH_RETENTION_NOTE}
+        </Text>
 
         {libraryPicks.length > 0 ||
         (appMode === 'cloud' &&
@@ -645,7 +755,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 fontSize: typeScale.caption,
                 fontWeight: '600',
                 color: themeColors.textMuted,
-                textTransform: 'uppercase',
               }}
             >
               Attach from Library
@@ -707,543 +816,580 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 20, gap: 10 }}
               >
-                {libraryPicks.map((pick) => (
-                  <PressableBox
-                    key={pick.id}
-                    onPress={() =>
-                      handleAttachFromLibrary(
-                        pick,
-                        cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
-                      )
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={`Attach ${pick.fileName} from Library`}
-                    style={{
-                      width: 176,
-                      minHeight: 70,
-                      padding: 12,
-                      borderRadius: 14,
-                      backgroundColor: cardBg,
-                      borderWidth: 1,
-                      borderColor: dividerColor,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
-                  >
-                    <View
+                {libraryPicks.map((pick) =>
+                  pick.isImage ? (
+                    <PressableBox
+                      key={pick.id}
+                      testID={`add-to-chat-library-image-${pick.id}`}
+                      onPress={() =>
+                        handleAttachFromLibrary(
+                          pick,
+                          cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Attach ${pick.fileName} from Library`}
                       style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 11,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: themeColors.accentSurface,
+                        width: LIBRARY_PICK_HEIGHT,
+                        height: LIBRARY_PICK_HEIGHT,
+                        borderRadius: 14,
+                        overflow: 'hidden',
+                        backgroundColor: cardBg,
+                        borderWidth: 1,
+                        borderColor: dividerColor,
                       }}
                     >
-                      {pick.isImage ? (
-                        <ImageIcon size={18} color={themeColors.teal} />
-                      ) : (
+                      <LibraryPickPicture pick={pick} />
+                    </PressableBox>
+                  ) : (
+                    <PressableBox
+                      key={pick.id}
+                      onPress={() =>
+                        handleAttachFromLibrary(
+                          pick,
+                          cloudLibrary.status === 'ready' ? cloudLibrary.request : undefined,
+                        )
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Attach ${pick.fileName} from Library`}
+                      style={{
+                        width: 176,
+                        minHeight: LIBRARY_PICK_HEIGHT,
+                        padding: 12,
+                        borderRadius: 14,
+                        backgroundColor: cardBg,
+                        borderWidth: 1,
+                        borderColor: dividerColor,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 11,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: themeColors.accentSurface,
+                        }}
+                      >
                         <FileText size={18} color={themeColors.teal} />
-                      )}
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text
-                        numberOfLines={2}
-                        style={{
-                          color: themeColors.textPrimary,
-                          fontSize: typeScale.footnote,
-                          fontWeight: '600',
-                        }}
-                      >
-                        {pick.fileName}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={{
-                          color: themeColors.textMuted,
-                          fontSize: typeScale.caption,
-                          marginTop: 3,
-                        }}
-                      >
-                        {pick.subtitle}
-                      </Text>
-                    </View>
-                  </PressableBox>
-                ))}
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          numberOfLines={2}
+                          style={{
+                            color: themeColors.textPrimary,
+                            fontSize: typeScale.footnote,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {pick.fileName}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: themeColors.textMuted,
+                            fontSize: typeScale.caption,
+                            marginTop: 3,
+                          }}
+                        >
+                          {pick.subtitle}
+                        </Text>
+                      </View>
+                    </PressableBox>
+                  ),
+                )}
               </ScrollView>
             )}
           </View>
         ) : null}
 
-        <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-
-        {/* Model sits directly under the attachment cards and ABOVE Create:
-            it is the most-tapped row in this sheet, so it gets the shortest
-            thumb travel rather than sitting at the bottom with the rarely
-            touched config links (founder 2026-08-07). In a media mode the
-            Create section below owns the model choice, so this row would be a
-            second, conflicting control, it is hidden there. */}
-        {mediaMode === 'text' ? (
-          <>
-            <View style={{ paddingHorizontal: 20, paddingVertical: 4 }}>
-              <ConfigLink
-                icon={<Bot size={18} color={themeColors.textMuted} />}
-                label="Model"
-                value={getShortDisplayName(selectedModel, tier)}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-                pending={handoff === 'model'}
-                onPress={handleOpenModelPicker}
-              />
-            </View>
-            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-          </>
-        ) : null}
-
-        {/* Section 2: Create, output kind.
+        <View style={{ paddingHorizontal: 20, gap: 16 }}>
+          {/* Section 2: Create, output kind.
             Image and video are MODES, not flags: picking one switches the
             selected model to the registry's media model for that slot (founder
             2026-08-06), replacing the old boolean toggles that sat on top of a
             text model the send path never actually used. AGI Work moved out of
             this sheet to the drawer in the same pass, it is a session-wide
             stance, not a per-message attachment. */}
-        {showImageOption || showVideoOption ? (
-          <>
-            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-              <Text
-                style={{
-                  fontSize: typeScale.caption,
-                  fontWeight: '600',
-                  color: themeColors.textMuted,
-                  letterSpacing: 0,
-                  textTransform: 'uppercase',
-                  marginBottom: 4,
-                }}
-              >
-                Create
-              </Text>
-
-              {showImageOption ? (
-                <MediaModeRow
-                  icon={
-                    <Paintbrush
-                      size={18}
-                      color={mediaMode === 'image' ? themeColors.teal : themeColors.textMuted}
-                    />
-                  }
-                  label="Image"
-                  description="Generate images in this chat"
-                  active={mediaMode === 'image'}
-                  onPress={handleSelectImageMode}
-                  textColor={themeColors.textPrimary}
-                  mutedColor={themeColors.textMuted}
-                  activeColor={themeColors.teal}
-                />
-              ) : null}
-              {showVideoOption ? (
-                <MediaModeRow
-                  icon={
-                    <Film
-                      size={18}
-                      color={mediaMode === 'video' ? themeColors.teal : themeColors.textMuted}
-                    />
-                  }
-                  label="Video"
-                  description={'Generate video in this chat'}
-                  active={mediaMode === 'video'}
-                  onPress={handleSelectVideoMode}
-                  textColor={themeColors.textPrimary}
-                  mutedColor={themeColors.textMuted}
-                  activeColor={themeColors.teal}
-                />
-              ) : null}
-              {/* Model catalog for the ACTIVE kind. Picking Image or Video is
+          <SheetGroup>
+            {showImageOption ? (
+              <MediaModeRow
+                icon={
+                  <Paintbrush
+                    size={18}
+                    color={mediaMode === 'image' ? themeColors.teal : themeColors.textMuted}
+                  />
+                }
+                label="Create image"
+                hint="Switches this chat to image generation"
+                active={mediaMode === 'image'}
+                onPress={handleSelectImageMode}
+                textColor={themeColors.textPrimary}
+                activeColor={themeColors.teal}
+              />
+            ) : null}
+            {showVideoOption ? (
+              <MediaModeRow
+                icon={
+                  <Film
+                    size={18}
+                    color={mediaMode === 'video' ? themeColors.teal : themeColors.textMuted}
+                  />
+                }
+                label="Create video"
+                hint="Switches this chat to video generation"
+                active={mediaMode === 'video'}
+                onPress={handleSelectVideoMode}
+                textColor={themeColors.textPrimary}
+                activeColor={themeColors.teal}
+              />
+            ) : null}
+            {/* Model catalog for the ACTIVE kind. Picking Image or Video is
                   only half the decision, the catalog carries several models
                   per kind at very different prices, so the choice belongs to
                   the user. */}
-              {mediaMode !== 'text' ? (
-                <View style={{ paddingTop: 4, paddingBottom: 2 }}>
-                  <Text
-                    style={{
-                      fontSize: typeScale.caption,
-                      fontWeight: '600',
-                      color: themeColors.textMuted,
-                      textTransform: 'uppercase',
-                      paddingHorizontal: 4,
-                      marginBottom: 2,
-                    }}
-                  >
-                    {mediaMode === 'video' ? 'Video model' : 'Image model'}
-                  </Text>
-                  {listMediaModels(mediaMode).map((candidateId) => (
-                    <MediaModelRow
-                      key={candidateId}
-                      modelId={candidateId}
-                      selected={
-                        candidateId === (mediaMode === 'video' ? videoModelId : imageModelId)
-                      }
-                      onPress={() => {
-                        haptic();
-                        setMediaModel(mediaMode, candidateId);
-                      }}
-                      textColor={themeColors.textPrimary}
-                      mutedColor={themeColors.textMuted}
-                      activeColor={themeColors.teal}
-                    />
-                  ))}
-
-                  {mediaMode === 'image' ? (
-                    <Text
-                      testID="image-reference-hint"
-                      style={{
-                        fontSize: typeScale.caption,
-                        color: themeColors.textMuted,
-                        paddingHorizontal: 4,
-                        marginTop: 6,
-                      }}
-                    >
-                      {imageModelSupportsReference
-                        ? 'Attach up to 4 photos above: the first is edited with your prompt and the others guide it.'
-                        : 'This model generates from text only. Attach a photo and pick an editing model to edit it.'}
-                    </Text>
-                  ) : null}
-
-                  {/* Image output shape. Same treatment as video: the managed
-                      image route has always accepted and validated
-                      `aspect_ratio`, but no surface offered one, so every
-                      generated image took the route's legacy square default. */}
-                  {mediaMode === 'image' && imageAspectOptions.length > 1 ? (
-                    <>
-                      <Text
-                        style={{
-                          fontSize: typeScale.caption,
-                          fontWeight: '600',
-                          color: themeColors.textMuted,
-                          textTransform: 'uppercase',
-                          paddingHorizontal: 4,
-                          marginTop: 10,
-                          marginBottom: 2,
-                        }}
-                      >
-                        Aspect ratio
-                      </Text>
-                      {imageAspectOptions.map((option) => (
-                        <MediaOptionRow
-                          key={option.id}
-                          label={option.label}
-                          selected={option.id === effectiveImageAspectRatio}
-                          onPress={() => {
-                            haptic();
-                            setImageAspectRatio(option.id);
-                          }}
-                          textColor={themeColors.textPrimary}
-                          mutedColor={themeColors.textMuted}
-                          activeColor={themeColors.teal}
-                        />
-                      ))}
-                    </>
-                  ) : null}
-
-                  {mediaMode === 'image' && imageModelSupportsReference ? (
-                    <MediaOptionRow
-                      label="Transparent background"
-                      hint="Return the image without a background"
-                      selected={imageTransparentBackground}
-                      onPress={() => {
-                        haptic();
-                        setImageTransparentBackground(!imageTransparentBackground);
-                      }}
-                      textColor={themeColors.textPrimary}
-                      mutedColor={themeColors.textMuted}
-                      activeColor={themeColors.teal}
-                    />
-                  ) : null}
-
-                  {/* Video output shape. Options come from the shared model
-                      catalog, so a model without a published 4k tuple never
-                      offers 4k here, and quality is scoped BY aspect because
-                      the two are not independent, a resolution can exist in
-                      landscape and not in portrait. */}
-                  {mediaMode === 'video' && videoAspectOptions.length > 1 ? (
-                    <>
-                      <Text
-                        style={{
-                          fontSize: typeScale.caption,
-                          fontWeight: '600',
-                          color: themeColors.textMuted,
-                          textTransform: 'uppercase',
-                          paddingHorizontal: 4,
-                          marginTop: 10,
-                          marginBottom: 2,
-                        }}
-                      >
-                        Aspect ratio
-                      </Text>
-                      {videoAspectOptions.map((option) => (
-                        <MediaOptionRow
-                          key={option.id}
-                          label={option.label}
-                          selected={option.id === effectiveVideoAspectRatio}
-                          onPress={() => {
-                            haptic();
-                            setVideoAspectRatio(option.id);
-                          }}
-                          textColor={themeColors.textPrimary}
-                          mutedColor={themeColors.textMuted}
-                          activeColor={themeColors.teal}
-                        />
-                      ))}
-                    </>
-                  ) : null}
-
-                  {mediaMode === 'video' && videoQualityOptions.length > 1 ? (
-                    <>
-                      <Text
-                        style={{
-                          fontSize: typeScale.caption,
-                          fontWeight: '600',
-                          color: themeColors.textMuted,
-                          textTransform: 'uppercase',
-                          paddingHorizontal: 4,
-                          marginTop: 10,
-                          marginBottom: 2,
-                        }}
-                      >
-                        Quality
-                      </Text>
-                      {videoQualityOptions.map((option) => (
-                        <MediaOptionRow
-                          key={option.id}
-                          label={option.label}
-                          hint={
-                            option.durationSecs
-                              ? `${option.durationSecs.join('/')}s only`
-                              : undefined
-                          }
-                          selected={option.id === effectiveVideoResolution}
-                          onPress={() => {
-                            haptic();
-                            setVideoResolution(option.id);
-                          }}
-                          textColor={themeColors.textPrimary}
-                          mutedColor={themeColors.textMuted}
-                          activeColor={themeColors.teal}
-                        />
-                      ))}
-                    </>
-                  ) : null}
-
-                  {mediaMode === 'video' && videoDurationOptions.length > 1 ? (
-                    <>
-                      <Text
-                        style={{
-                          fontSize: typeScale.caption,
-                          fontWeight: '600',
-                          color: themeColors.textMuted,
-                          textTransform: 'uppercase',
-                          paddingHorizontal: 4,
-                          marginTop: 10,
-                          marginBottom: 2,
-                        }}
-                      >
-                        Length
-                      </Text>
-                      {videoDurationOptions.map((secs) => (
-                        <MediaOptionRow
-                          key={secs}
-                          label={`${secs} seconds`}
-                          selected={secs === videoOutputSelection.durationSecs}
-                          onPress={() => {
-                            haptic();
-                            setVideoDurationSecs(secs);
-                          }}
-                          textColor={themeColors.textPrimary}
-                          mutedColor={themeColors.textMuted}
-                          activeColor={themeColors.teal}
-                        />
-                      ))}
-                    </>
-                  ) : null}
-
-                  {mediaMode === 'video' && videoEstimate ? (
-                    <Text
-                      testID="video-cost-estimate"
-                      accessibilityRole="text"
-                      style={{
-                        fontSize: typeScale.caption,
-                        color: themeColors.textMuted,
-                        paddingHorizontal: 4,
-                        marginTop: 8,
-                      }}
-                    >
-                      {`About ${formatCredits(videoEstimate.credits, {
-                        maximumFractionDigits: videoEstimate.credits < 10 ? 1 : 0,
-                      })} for a ${videoEstimate.durationSecs}-second clip; a failed video costs nothing.`}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
-
-              {mediaMode !== 'text' ? (
-                <PressableBox
-                  onPress={handleBackToText}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to text chat"
-                  style={{ paddingVertical: 10, paddingHorizontal: 4 }}
+            {mediaMode !== 'text' ? (
+              <View style={{ paddingTop: 4, paddingBottom: 2 }}>
+                <Text
+                  style={{
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                    color: themeColors.textMuted,
+                    paddingHorizontal: 4,
+                    marginBottom: 2,
+                  }}
                 >
-                  <Text style={{ fontSize: typeScale.footnote, color: themeColors.teal }}>
-                    Back to text chat
-                  </Text>
-                </PressableBox>
-              ) : null}
-            </View>
-
-            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-          </>
-        ) : null}
-
-        {showOutputSection ? (
-          <>
-            <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-              <Text
-                style={{
-                  fontSize: typeScale.caption,
-                  fontWeight: '600',
-                  color: themeColors.textMuted,
-                  textTransform: 'uppercase',
-                  marginBottom: 4,
-                }}
-              >
-                Output
-              </Text>
-              {CHAT_OUTPUT_FORMATS.map((format) => {
-                const FormatIcon = OUTPUT_FORMAT_ICON[format];
-                const selected = outputFormat === format;
-                return (
-                  <MediaOptionRow
-                    key={format}
-                    icon={
-                      <FormatIcon
-                        size={18}
-                        color={selected ? themeColors.teal : themeColors.textMuted}
-                      />
-                    }
-                    label={CHAT_OUTPUT_FORMAT_LABEL[format]}
-                    selected={selected}
+                  {mediaMode === 'video' ? 'Video model' : 'Image model'}
+                </Text>
+                {listMediaModels(mediaMode).map((candidateId) => (
+                  <MediaModelRow
+                    key={candidateId}
+                    modelId={candidateId}
+                    selected={candidateId === (mediaMode === 'video' ? videoModelId : imageModelId)}
                     onPress={() => {
                       haptic();
-                      setOutputFormat(selected ? null : format);
+                      setMediaModel(mediaMode, candidateId);
                     }}
                     textColor={themeColors.textPrimary}
                     mutedColor={themeColors.textMuted}
                     activeColor={themeColors.teal}
                   />
-                );
-              })}
-            </View>
-            <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-          </>
-        ) : null}
+                ))}
 
-        {showToolSection ? (
-          <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
+                {mediaMode === 'image' ? (
+                  <Text
+                    testID="image-reference-hint"
+                    style={{
+                      fontSize: typeScale.caption,
+                      color: themeColors.textMuted,
+                      paddingHorizontal: 4,
+                      marginTop: 6,
+                    }}
+                  >
+                    {imageModelSupportsReference
+                      ? 'Attach up to 4 photos. The first is edited; the rest guide it.'
+                      : 'This model uses text only. Pick an editing model to edit a photo.'}
+                  </Text>
+                ) : null}
+
+                {/* Image output shape. Same treatment as video: the managed
+                      image route has always accepted and validated
+                      `aspect_ratio`, but no surface offered one, so every
+                      generated image took the route's legacy square default. */}
+                {mediaMode === 'image' && imageAspectOptions.length > 1 ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 10,
+                        marginBottom: 2,
+                      }}
+                    >
+                      Aspect ratio
+                    </Text>
+                    {imageAspectOptions.map((option) => (
+                      <MediaOptionRow
+                        key={option.id}
+                        label={option.label}
+                        selected={option.id === effectiveImageAspectRatio}
+                        onPress={() => {
+                          haptic();
+                          setImageAspectRatio(option.id);
+                        }}
+                        textColor={themeColors.textPrimary}
+                        mutedColor={themeColors.textMuted}
+                        activeColor={themeColors.teal}
+                      />
+                    ))}
+                  </>
+                ) : null}
+
+                {mediaMode === 'image' && imageModelSupportsReference ? (
+                  <MediaOptionRow
+                    label="Transparent background"
+                    hint="Return the image without a background"
+                    selected={imageTransparentBackground}
+                    onPress={() => {
+                      haptic();
+                      setImageTransparentBackground(!imageTransparentBackground);
+                    }}
+                    textColor={themeColors.textPrimary}
+                    mutedColor={themeColors.textMuted}
+                    activeColor={themeColors.teal}
+                  />
+                ) : null}
+
+                {/* Video output shape. Options come from the shared model
+                      catalog, so a model without a published 4k tuple never
+                      offers 4k here, and quality is scoped BY aspect because
+                      the two are not independent, a resolution can exist in
+                      landscape and not in portrait. */}
+                {mediaMode === 'video' && videoAspectOptions.length > 1 ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 10,
+                        marginBottom: 2,
+                      }}
+                    >
+                      Aspect ratio
+                    </Text>
+                    {videoAspectOptions.map((option) => (
+                      <MediaOptionRow
+                        key={option.id}
+                        label={option.label}
+                        selected={option.id === effectiveVideoAspectRatio}
+                        onPress={() => {
+                          haptic();
+                          setVideoAspectRatio(option.id);
+                        }}
+                        textColor={themeColors.textPrimary}
+                        mutedColor={themeColors.textMuted}
+                        activeColor={themeColors.teal}
+                      />
+                    ))}
+                  </>
+                ) : null}
+
+                {mediaMode === 'video' && videoQualityOptions.length > 1 ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 10,
+                        marginBottom: 2,
+                      }}
+                    >
+                      Quality
+                    </Text>
+                    {videoQualityOptions.map((option) => (
+                      <MediaOptionRow
+                        key={option.id}
+                        label={option.label}
+                        hint={
+                          option.durationSecs ? `${option.durationSecs.join('/')}s only` : undefined
+                        }
+                        selected={option.id === effectiveVideoResolution}
+                        onPress={() => {
+                          haptic();
+                          setVideoResolution(option.id);
+                        }}
+                        textColor={themeColors.textPrimary}
+                        mutedColor={themeColors.textMuted}
+                        activeColor={themeColors.teal}
+                      />
+                    ))}
+                  </>
+                ) : null}
+
+                {mediaMode === 'video' && videoDurationOptions.length > 1 ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: typeScale.caption,
+                        fontWeight: '600',
+                        color: themeColors.textMuted,
+                        paddingHorizontal: 4,
+                        marginTop: 10,
+                        marginBottom: 2,
+                      }}
+                    >
+                      Length
+                    </Text>
+                    {videoDurationOptions.map((secs) => (
+                      <MediaOptionRow
+                        key={secs}
+                        label={`${secs} seconds`}
+                        selected={secs === videoOutputSelection.durationSecs}
+                        onPress={() => {
+                          haptic();
+                          setVideoDurationSecs(secs);
+                        }}
+                        textColor={themeColors.textPrimary}
+                        mutedColor={themeColors.textMuted}
+                        activeColor={themeColors.teal}
+                      />
+                    ))}
+                  </>
+                ) : null}
+
+                {mediaMode === 'video' && videoEstimate ? (
+                  <Text
+                    testID="video-cost-estimate"
+                    accessibilityRole="text"
+                    style={{
+                      fontSize: typeScale.caption,
+                      color: themeColors.textMuted,
+                      paddingHorizontal: 4,
+                      marginTop: 8,
+                    }}
+                  >
+                    {`About ${formatCredits(videoEstimate.credits, {
+                      maximumFractionDigits: videoEstimate.credits < 10 ? 1 : 0,
+                    })} for a ${videoEstimate.durationSecs}-second clip; a failed video costs nothing.`}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {mediaMode !== 'text' ? (
+              <PressableBox
+                onPress={handleBackToText}
+                accessibilityRole="button"
+                accessibilityLabel="Back to text chat"
+                style={{ paddingVertical: 10, paddingHorizontal: 4 }}
+              >
+                <Text style={{ fontSize: typeScale.footnote, color: themeColors.teal }}>
+                  Back to text chat
+                </Text>
+              </PressableBox>
+            ) : null}
+            {showOutputSection ? (
+              <View>
+                <ConfigLink
+                  icon={<FilePlus size={18} color={themeColors.textMuted} />}
+                  label="Create file"
+                  value={outputFormat ? CHAT_OUTPUT_FORMAT_LABEL[outputFormat] : undefined}
+                  expanded={expanded === 'file'}
+                  textColor={themeColors.textPrimary}
+                  mutedColor={themeColors.textMuted}
+                  onPress={() => toggleExpanded('file')}
+                />
+                {expanded === 'file' ? (
+                  <View style={{ paddingLeft: NESTED_ROW_INDENT, paddingBottom: 4 }}>
+                    {CHAT_OUTPUT_FORMATS.map((format) => {
+                      const FormatIcon = OUTPUT_FORMAT_ICON[format];
+                      const selected = outputFormat === format;
+                      return (
+                        <MediaOptionRow
+                          key={format}
+                          icon={
+                            <FormatIcon
+                              size={18}
+                              color={selected ? themeColors.teal : themeColors.textMuted}
+                            />
+                          }
+                          label={CHAT_OUTPUT_FORMAT_LABEL[format]}
+                          selected={selected}
+                          onPress={() => {
+                            haptic();
+                            setOutputFormat(selected ? null : format);
+                          }}
+                          textColor={themeColors.textPrimary}
+                          mutedColor={themeColors.textMuted}
+                          activeColor={themeColors.teal}
+                        />
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
             {showWebSearchToggle ? (
               <CapabilityRow
-                icon={<Globe size={18} color={themeColors.teal} />}
+                icon={<Globe size={18} color={themeColors.textMuted} />}
                 label="Web search"
-                description="Let answers look things up on the web"
                 enabled={features.webSearch}
                 onToggle={(value) => setFeature('webSearch', value)}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
             ) : null}
-            {chatConnectors.map((connector) => (
-              <CapabilityRow
-                key={connector.connectorId}
-                icon={<Link size={18} color={themeColors.teal} />}
-                label={connector.label}
-                description="Connected app this chat can use"
-                enabled={!(disabledConnectorIds ?? []).includes(connector.connectorId)}
-                onToggle={() => toggleChatConnector(sourcesKey, connector.connectorId)}
-                textColor={themeColors.textPrimary}
-                mutedColor={themeColors.textMuted}
-              />
-            ))}
             {showResearchToggle ? (
               <CapabilityRow
-                icon={<Telescope size={18} color={themeColors.teal} />}
+                icon={<Telescope size={18} color={themeColors.textMuted} />}
                 label="Deep research"
-                description="Multi-step research with cited sources"
                 enabled={features.research}
                 onToggle={handleResearchToggle}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />
             ) : null}
-          </View>
-        ) : null}
+            {showRunCodeToggle ? (
+              <CapabilityRow
+                icon={<Terminal size={18} color={themeColors.textMuted} />}
+                label="Run code"
+                enabled={runCodeOn}
+                onToggle={(value) => {
+                  haptic();
+                  setRunCode(sourcesKey, value);
+                }}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : null}
+            {appMode === 'cloud' ? (
+              <ConfigLink
+                icon={<BookOpen size={18} color={themeColors.textMuted} />}
+                label="Study and learn"
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+                onPress={handleStudy}
+              />
+            ) : null}
+          </SheetGroup>
 
-        {showToolSection ? (
-          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-        ) : null}
-
-        <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
-          {/* Project assignment for the current chat -- both modes. The picker
+          <SheetGroup>
+            {/* Project assignment for the current chat -- both modes. The picker
               itself is ProjectSelectorBar's modal, opened by the host screen;
               it reads the local or cloud project store per active mode. */}
-          <ConfigLink
-            icon={<FolderPlus size={18} color={themeColors.textMuted} />}
-            label="Project"
-            value={activeProject?.name ?? 'Choose'}
-            textColor={themeColors.textPrimary}
-            mutedColor={themeColors.textMuted}
-            pending={handoff === 'project'}
-            onPress={handleOpenProjectPicker}
-          />
-          <ConfigLink
-            icon={<Palette size={18} color={themeColors.textMuted} />}
-            label="Choose style"
-            value={chatStyle.charAt(0).toUpperCase() + chatStyle.slice(1)}
-            textColor={themeColors.textPrimary}
-            mutedColor={themeColors.textMuted}
-            pending={handoff === 'style'}
-            onPress={handleOpenStyleSelector}
-          />
-          {appMode === 'cloud' && FEATURES.skills && onOpenSkills ? (
             <ConfigLink
-              icon={<Sparkles size={18} color={themeColors.textMuted} />}
-              label="Skills"
-              value={selectedSkillName ?? 'Choose'}
+              icon={<FolderPlus size={18} color={themeColors.textMuted} />}
+              label="Project"
+              value={activeProject?.name ?? 'Choose'}
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
-              onPress={handleOpenSkills}
+              pending={handoff === 'project'}
+              onPress={handleOpenProjectPicker}
             />
-          ) : null}
-          {appMode === 'cloud' ? (
+            {showConnectors ? (
+              <View>
+                <ConfigLink
+                  icon={<Link size={18} color={themeColors.textMuted} />}
+                  label="Connectors"
+                  value={
+                    chatConnectors.length === 0
+                      ? undefined
+                      : enabledConnectorCount === 0
+                        ? 'Off'
+                        : `${enabledConnectorCount} on`
+                  }
+                  expanded={chatConnectors.length > 0 ? expanded === 'connectors' : undefined}
+                  textColor={themeColors.textPrimary}
+                  mutedColor={themeColors.textMuted}
+                  onPress={
+                    chatConnectors.length > 0
+                      ? () => toggleExpanded('connectors')
+                      : handleConnectors
+                  }
+                />
+                {expanded === 'connectors' && chatConnectors.length > 0 ? (
+                  <View style={{ paddingLeft: NESTED_ROW_INDENT, paddingBottom: 4 }}>
+                    {chatConnectors.map((connector) => (
+                      <CapabilityRow
+                        key={connector.connectorId}
+                        icon={<Link size={18} color={themeColors.textMuted} />}
+                        label={connector.label}
+                        enabled={!(disabledConnectorIds ?? []).includes(connector.connectorId)}
+                        onToggle={() => toggleChatConnector(sourcesKey, connector.connectorId)}
+                        textColor={themeColors.textPrimary}
+                        mutedColor={themeColors.textMuted}
+                      />
+                    ))}
+                    <ConfigLink
+                      icon={<Settings size={18} color={themeColors.textMuted} />}
+                      label="Manage connectors"
+                      textColor={themeColors.textPrimary}
+                      mutedColor={themeColors.textMuted}
+                      onPress={handleConnectors}
+                    />
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+            {appMode === 'cloud' && FEATURES.skills && onOpenSkills ? (
+              <ConfigLink
+                icon={<Sparkles size={18} color={themeColors.textMuted} />}
+                label="Skills"
+                value={selectedSkillName ?? 'Choose'}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+                onPress={handleOpenSkills}
+              />
+            ) : null}
             <ConfigLink
-              icon={<BookOpen size={18} color={themeColors.textMuted} />}
-              label="Study and learn"
+              icon={<Palette size={18} color={themeColors.textMuted} />}
+              label="Choose style"
+              value={chatStyle.charAt(0).toUpperCase() + chatStyle.slice(1)}
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
-              onPress={handleStudy}
+              pending={handoff === 'style'}
+              onPress={handleOpenStyleSelector}
             />
-          ) : null}
-          {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
-            <ConfigLink
-              icon={<Link size={18} color={themeColors.textMuted} />}
-              label="Connectors"
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-              onPress={handleConnectors}
-            />
-          ) : null}
+          </SheetGroup>
         </View>
       </BottomSheetScrollView>
     </BottomSheet>
   );
 });
+
+function SheetGroup({ title, children }: { title?: string; children: React.ReactNode }) {
+  const colors = useThemeColors();
+  const rows = Children.toArray(children);
+  if (rows.length === 0) return null;
+
+  return (
+    <View>
+      {title ? (
+        <Text
+          style={{
+            fontSize: typeScale.caption,
+            fontWeight: '600',
+            color: colors.textMuted,
+            paddingHorizontal: 4,
+            marginBottom: 6,
+          }}
+        >
+          {title}
+        </Text>
+      ) : null}
+      <View
+        style={{
+          borderRadius: radii.xl,
+          backgroundColor: colors.neutralSurface,
+          paddingHorizontal: 12,
+        }}
+      >
+        {rows.map((row, index) => (
+          <View
+            key={isValidElement(row) && row.key !== null ? row.key : index}
+            style={
+              index > 0
+                ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.neutralBorder }
+                : undefined
+            }
+          >
+            {row}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 function AttachmentCard({
   icon,
@@ -1267,7 +1413,7 @@ function AttachmentCard({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 14,
-        borderRadius: 14,
+        borderRadius: radii.xl,
         backgroundColor: bg,
         gap: 6,
       }}
@@ -1285,20 +1431,18 @@ function AttachmentCard({
 function MediaModeRow({
   icon,
   label,
-  description,
+  hint,
   active,
   onPress,
   textColor,
-  mutedColor,
   activeColor,
 }: {
   icon: React.ReactNode;
   label: string;
-  description: string;
+  hint: string;
   active: boolean;
   onPress: () => void;
   textColor: string;
-  mutedColor: string;
   activeColor: string;
 }) {
   return (
@@ -1308,29 +1452,23 @@ function MediaModeRow({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${label}${active ? ', selected' : ''}`}
-      accessibilityHint={active ? undefined : `Switches this chat to ${label.toLowerCase()}`}
+      accessibilityHint={active ? undefined : hint}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 10,
+        paddingVertical: 12,
         paddingHorizontal: 4,
-        minHeight: 52,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
         {icon}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ fontSize: typeScale.body, color: active ? activeColor : textColor }}>
-            {label}
-          </Text>
-          <Text
-            style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}
-            numberOfLines={2}
-          >
-            {description}
-          </Text>
-        </View>
+        <Text
+          style={{ flex: 1, fontSize: typeScale.body, color: active ? activeColor : textColor }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
       </View>
       {active ? <Check size={18} color={activeColor} /> : null}
     </PressableBox>
@@ -1390,7 +1528,7 @@ function MediaModelRow({
         justifyContent: 'space-between',
         paddingVertical: 8,
         paddingHorizontal: 4,
-        paddingLeft: 28,
+        paddingLeft: NESTED_ROW_INDENT,
         minHeight: 44,
       }}
     >
@@ -1412,7 +1550,6 @@ function MediaModelRow({
 type CapabilityRowBaseProps = {
   icon: React.ReactNode;
   label: string;
-  description: string;
   badge?: string;
   enabled: boolean;
   statusTone?: 'waitlist' | 'desktop' | 'neutral';
@@ -1433,31 +1570,23 @@ type CapabilityRowProps =
     });
 
 function CapabilityRow(props: CapabilityRowProps) {
-  const {
-    icon,
-    label,
-    description,
-    badge,
-    enabled,
-    statusTone = 'neutral',
-    textColor,
-    mutedColor,
-  } = props;
+  const { icon, label, badge, enabled, statusTone = 'neutral', textColor, mutedColor } = props;
 
   const leadingContent = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
       {icon}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: typeScale.body, color: textColor }}>{label}</Text>
-          {badge && <StatusPill label={badge} tone="danger" />}
-        </View>
-        <Text
-          style={{ fontSize: typeScale.caption, color: mutedColor, marginTop: 1 }}
-          numberOfLines={2}
-        >
-          {description}
-        </Text>
+      <View
+        style={{
+          flex: 1,
+          minWidth: 0,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Text style={{ fontSize: typeScale.body, color: textColor }}>{label}</Text>
+        {badge && <StatusPill label={badge} tone="danger" />}
       </View>
     </View>
   );
@@ -1466,9 +1595,9 @@ function CapabilityRow(props: CapabilityRowProps) {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'space-between' as const,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 4,
-    minHeight: 52,
+    minHeight: 48,
   };
 
   if ('status' in props && props.status !== undefined) {
@@ -1556,6 +1685,7 @@ function ConfigLink({
   textColor,
   mutedColor,
   pending = false,
+  expanded,
   onPress,
 }: {
   icon: React.ReactNode;
@@ -1565,8 +1695,10 @@ function ConfigLink({
   textColor: string;
   mutedColor: string;
   pending?: boolean;
+  expanded?: boolean;
   onPress: () => void;
 }) {
+  const Disclosure = expanded === undefined ? ChevronRight : expanded ? ChevronUp : ChevronDown;
   return (
     <PressableBox
       onPress={onPress}
@@ -1580,7 +1712,7 @@ function ConfigLink({
       }}
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityState={{ busy: pending }}
+      accessibilityState={{ busy: pending, expanded }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {icon}
@@ -1597,7 +1729,7 @@ function ConfigLink({
               ) : (
                 <StatusPill label={value} tone={statusTone} />
               ))}
-            <ChevronRight size={16} color={mutedColor} />
+            <Disclosure size={16} color={mutedColor} />
           </>
         )}
       </View>
@@ -1637,7 +1769,7 @@ function MediaOptionRow({
         justifyContent: 'space-between',
         paddingVertical: 8,
         paddingHorizontal: 4,
-        paddingLeft: icon ? 4 : 28,
+        paddingLeft: icon ? 4 : NESTED_ROW_INDENT,
         minHeight: 44,
         gap: 10,
       }}

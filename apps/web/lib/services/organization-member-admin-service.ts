@@ -168,7 +168,7 @@ export async function resolveAuthority(
     return { actorId: administrator.actorId, role: null, permissions: administrator.scopes };
   }
   const requester = await readMemberRow(tx, organizationId, administrator.userId);
-  if (!requester) {
+  if (!requester || requester.status !== 'active') {
     throw createError.forbidden('You are not a member of this organization');
   }
   const permissions = await requireMemberPermission(

@@ -1,16 +1,27 @@
 type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
+type OriginalMediaStorageModule = typeof import('@/lib/server/media-storage');
 type OriginalProjectKnowledgeObjectStorageModule =
   typeof import('@/lib/server/project-knowledge-object-storage');
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import {
+  MemoryObjectStore,
+  OBJECT_STORAGE_ACCESS_KEY_ID_ENV,
+  OBJECT_STORAGE_BUCKET_ENV,
+  OBJECT_STORAGE_ENDPOINT_ENV,
+  OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
+  OBJECT_STORAGE_PROVIDER_ENV,
+  OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV,
+} from '@agiworkforce/object-storage';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  chatFileSchemaPresent: false,
   deleteStoredMediaObjects: vi.fn(),
   deleteObject: vi.fn(),
   deletePrivateObject: vi.fn(),
@@ -38,21 +49,30 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
   withCorsAndSecurityHeaders: vi.fn((response: unknown) => response),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
+vi.mock('@/lib/server/neon-db', async () => {
+  const { createSchemaAbsentDb } =
+    await import('@/lib/server/chat-file-intake/__tests__/schema-absent-db');
+  const adapter = () => ({
     query: (...args: unknown[]) => mocks.query(...args),
     execute: (...args: unknown[]) => mocks.execute(...args),
-    transaction: async (fn: (tx: unknown) => unknown) =>
+    transaction: async (fn: (tx: never) => unknown) =>
       fn({
         query: (...args: unknown[]) => mocks.query(...args),
         execute: (...args: unknown[]) => mocks.execute(...args),
-      }),
-  })),
-}));
-vi.mock('@/lib/server/media-storage', () => ({
+      } as never),
+  });
+  return {
+    getNeonDb: vi.fn(() =>
+      mocks.chatFileSchemaPresent ? adapter() : createSchemaAbsentDb(adapter() as never),
+    ),
+  };
+});
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
   extForMime: vi.fn(),
   streamStoredMedia: vi.fn(),
+  sealedChatAttachmentPathname: (await importOriginal<OriginalMediaStorageModule>())
+    .sealedChatAttachmentPathname,
 }));
 vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   ...(await importOriginal<OriginalObjectStorageModule>()),
@@ -112,6 +132,9 @@ import {
 import { POST as refreshDeviceSession } from '@/app/api/auth/device/refresh/route';
 import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 import { DATA_EXPORT_BUILD_ARCHIVE_JOB } from '@/lib/server/data-export-archive';
+import { getObjectStore } from '@/lib/server/object-storage-runtime';
+import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
+import { relaySegmentKey } from '@/app/api/files/uploads/relay-segments';
 
 const SCOPE_COLUMNS = new Set([
   'user_id',
@@ -180,6 +203,8 @@ function userScopedSchemaTables(): Map<string, Set<string>> {
 interface ErasureFixture {
   mediaRows?: Array<{ id: string; storage_pathname: string | null }>;
   knowledgeRows?: Array<{ storage_uri: string | null }>;
+  untrackedLedgerKeys?: string[];
+  unsettledLedgerRows?: number;
   avatarUrl?: string | null;
   feedbackScreenshotKeys?: Array<string | null>;
   failStatementMatching?: string;
@@ -192,10 +217,67 @@ interface ErasureFixture {
   liveDataFence?: boolean;
   underLegalHold?: boolean;
   legalHoldError?: Error;
+  chatFiles?: ChatFileRows;
+}
+
+interface ChatFileRows {
+  intakes: Array<{
+    id: string;
+    user_id: string;
+    staging_key: string;
+    multipart_upload_id: string | null;
+    state: string;
+    sealing_entered_at: string | null;
+  }>;
+  preparations: Array<{
+    id: string;
+    user_id: string;
+    derived_keys: string[];
+    updated_at: string;
+  }>;
+}
+
+function answerChatFileStatement(
+  rows: ChatFileRows,
+  sql: string,
+  params: unknown[] | undefined,
+): unknown[] | undefined {
+  if (sql.includes('to_regclass(')) {
+    return [{ intakes_table: true, preparations_table: true, scanned_sha256_column: true }];
+  }
+  const table:
+    Array<ChatFileRows['intakes'][number] | ChatFileRows['preparations'][number]> | undefined =
+    sql.includes('public.chat_file_intakes')
+      ? rows.intakes
+      : sql.includes('public.chat_file_preparations')
+        ? rows.preparations
+        : undefined;
+  if (table === undefined) return undefined;
+  if (sql.includes('count(*)')) return [{ remaining: table.length }];
+  if (sql.trimStart().startsWith('delete')) {
+    const [id, , , ...readAs] = params ?? [];
+    const unchanged = (row: (typeof table)[number]): boolean =>
+      'staging_key' in row
+        ? row.state === readAs[0] &&
+          (row.sealing_entered_at === null) === readAs[1] &&
+          row.multipart_upload_id === readAs[2]
+        : JSON.stringify(row.derived_keys) === JSON.stringify(readAs[0]) &&
+          row.updated_at === readAs[1];
+    const removed = new Set(
+      table.filter((row) => row.id === id && unchanged(row)).map((row) => row.id),
+    );
+    table.splice(0, table.length, ...table.filter((row) => !removed.has(row.id)));
+    return [...removed].map((removedId) => ({ id: removedId }));
+  }
+  return table.map((row) => ({ ...row }));
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
-  mocks.query.mockImplementation(async (sql: string) => {
+  mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+    const chatFileAnswer = fixture.chatFiles
+      ? answerChatFileStatement(fixture.chatFiles, sql, params)
+      : undefined;
+    if (chatFileAnswer !== undefined) return chatFileAnswer;
     if (sql.includes('public.legal_holds')) {
       if (fixture.legalHoldError) throw fixture.legalHoldError;
       return [{ held: fixture.underLegalHold ?? false }];
@@ -222,6 +304,10 @@ function primeDb(fixture: ErasureFixture = {}): void {
       ];
     }
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
+    if (sql.includes('from public.project_knowledge_objects ledger')) {
+      return (fixture.untrackedLedgerKeys ?? []).map((object_key) => ({ object_key }));
+    }
+    if (sql.includes('as unsettled')) return [{ unsettled: fixture.unsettledLedgerRows ?? 0 }];
     if (sql.includes('project_knowledge_files')) return fixture.knowledgeRows ?? [];
     if (sql.includes('avatar_url')) return [{ avatar_url: fixture.avatarUrl ?? null }];
     if (sql.includes("metadata->>'screenshot_key'")) {
@@ -236,6 +322,8 @@ function primeDb(fixture: ErasureFixture = {}): void {
     return 1;
   });
 }
+
+const CHAT_FILE_TABLES = new Set(['chat_file_intakes', 'chat_file_preparations']);
 
 function executedStatements(): string[] {
   return mocks.execute.mock.calls.map((call) => String(call[0]).replace(/\s+/gu, ' ').trim());
@@ -376,6 +464,7 @@ describe('account erasure inventory', () => {
 describe('eraseUserAccountData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.chatFileSchemaPresent = false;
     mocks.objectStorageConfigured.mockReturnValue(true);
     mocks.objectKeyFromStorageUri.mockReset();
     mocks.objectKeyFromStorageUri.mockImplementation((value: string) => value);
@@ -652,7 +741,7 @@ describe('eraseUserAccountData', () => {
 
   it('retains the feedback rows when private storage is not configured to delete from', async () => {
     primeDb({ feedbackScreenshotKeys: ['feedback/user-1/1_a.png'] });
-    mocks.privateObjectStorageConfigured.mockReturnValueOnce(false);
+    mocks.privateObjectStorageConfigured.mockReturnValue(false);
 
     const report = await eraseUserAccountData('user-1');
 
@@ -695,6 +784,19 @@ describe('eraseUserAccountData', () => {
     expect(report.complete).toBe(false);
   });
 
+  it('erases the relay pairings that name the account in their metadata', async () => {
+    primeDb({});
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes("delete from public.signaling_sessions where metadata ->> 'userId' = $1"),
+      ),
+    ).toBe(true);
+    expect(report.tables['signaling_sessions']).toEqual({ deleted: true });
+  });
+
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {
     primeDb({
       knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }],
@@ -709,9 +811,17 @@ describe('eraseUserAccountData', () => {
     expect(mocks.deleteObject).toHaveBeenCalledWith('av.png');
 
     const statements = executedStatements();
-    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
+    for (const { table, column, alsoColumn, jsonKey } of USER_SCOPED_TABLES) {
+      if (CHAT_FILE_TABLES.has(table)) {
+        expect(report.tables[table], `${table} is erased by eraseChatFiles`).toEqual({
+          deleted: true,
+        });
+        expect(statements.some((sql) => sql.includes(`public.${table}`))).toBe(false);
+        continue;
+      }
+      const target = jsonKey === undefined ? column : `${column} ->> '${jsonKey}'`;
       const subject =
-        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
+        alsoColumn === undefined ? `${target} = $1` : `(${target} = $1 or ${alsoColumn} = $1)`;
       expect(
         statements.some((sql) => sql.includes(`delete from public.${table} where ${subject}`)),
         `${table}.${column} still names an account that no longer exists`,
@@ -747,6 +857,266 @@ describe('eraseUserAccountData', () => {
       ).toBe(true);
     }
     expect(statements.at(-1)).toContain('delete from public.profiles');
+  });
+
+  describe('chat files', () => {
+    const bucket = 'chat-files-private-test';
+    const stagingKey = 'chat-attachments/user-1/1_scanning.pdf';
+    const unsealedKey = 'chat-attachments/user-1/2_sealing.pdf';
+    const uploadKey = 'chat-attachments/user-1/3_awaiting.pdf';
+    const derivedKey = 'chat-derived/user-1/preparation-1/v1/text/0001.txt';
+
+    function memoryStore(): MemoryObjectStore {
+      const store = getObjectStore();
+      if (!(store instanceof MemoryObjectStore))
+        throw new Error('The test store is not in memory.');
+      return store;
+    }
+
+    async function seedChatFiles(): Promise<ChatFileRows> {
+      vi.stubEnv(OBJECT_STORAGE_PROVIDER_ENV, 'memory');
+      vi.stubEnv(OBJECT_STORAGE_ENDPOINT_ENV, 'http://127.0.0.1:1');
+      vi.stubEnv(OBJECT_STORAGE_ACCESS_KEY_ID_ENV, 'test-access-key');
+      vi.stubEnv(OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV, 'test-secret-key');
+      vi.stubEnv(OBJECT_STORAGE_BUCKET_ENV, 'chat-files-public-test');
+      vi.stubEnv(OBJECT_STORAGE_PRIVATE_BUCKET_ENV, bucket);
+      mocks.chatFileSchemaPresent = true;
+      const store = memoryStore();
+      store.clear();
+      const unsealed = sealedChatAttachmentPathname(unsealedKey);
+      for (const key of [stagingKey, unsealedKey, unsealed, derivedKey]) {
+        await store.put({ bucket, key, body: new Uint8Array([1]), contentType: 'text/plain' });
+      }
+      const upload = await store.createMultipartUpload({
+        bucket,
+        key: uploadKey,
+        contentType: 'application/pdf',
+      });
+      return {
+        intakes: [
+          {
+            id: 'intake-1',
+            user_id: 'user-1',
+            staging_key: stagingKey,
+            multipart_upload_id: null,
+            state: 'scanning',
+            sealing_entered_at: null,
+          },
+          {
+            id: 'intake-2',
+            user_id: 'user-1',
+            staging_key: unsealedKey,
+            multipart_upload_id: null,
+            state: 'sealing',
+            sealing_entered_at: '2026-11-15T10:00:00.000Z',
+          },
+          {
+            id: 'intake-3',
+            user_id: 'user-1',
+            staging_key: uploadKey,
+            multipart_upload_id: upload.uploadId,
+            state: 'awaiting_parts',
+            sealing_entered_at: null,
+          },
+        ],
+        preparations: [
+          {
+            id: 'preparation-1',
+            user_id: 'user-1',
+            derived_keys: [derivedKey],
+            updated_at: '2026-11-15 10:00:00.123456+00',
+          },
+        ],
+      };
+    }
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllEnvs();
+    });
+
+    it('with the schema absent, completes and reports both chat file tables deleted', async () => {
+      primeDb({});
+
+      const report = await eraseUserAccountData('user-1');
+
+      expect(report.complete).toBe(true);
+      expect(report.profileRetained).toBe(false);
+      expect(report.tables['chat_file_intakes']).toEqual({ deleted: true });
+      expect(report.tables['chat_file_preparations']).toEqual({ deleted: true });
+      const chatFileStatements = [...mocks.query.mock.calls, ...mocks.execute.mock.calls].filter(
+        (call) => /chat_file_|scanned_sha256/.test(String(call[0])),
+      );
+      expect(chatFileStatements).toEqual([]);
+    });
+
+    it('with the schema present, removes every object and open upload before the rows', async () => {
+      const rows = await seedChatFiles();
+      primeDb({ chatFiles: rows });
+
+      const report = await eraseUserAccountData('user-1');
+
+      expect(report.complete).toBe(true);
+      expect(report.profileRetained).toBe(false);
+      expect(report.tables['chat_file_intakes']).toEqual({ deleted: true });
+      expect(report.tables['chat_file_preparations']).toEqual({ deleted: true });
+      expect(rows.intakes).toEqual([]);
+      expect(rows.preparations).toEqual([]);
+      const store = memoryStore();
+      for (const key of [
+        stagingKey,
+        unsealedKey,
+        sealedChatAttachmentPathname(unsealedKey),
+        derivedKey,
+      ]) {
+        expect(await store.head(bucket, key), key).toBeNull();
+      }
+      expect(await store.listPendingMultipartUploads(bucket, 'chat-attachments/')).toEqual([]);
+      expect(
+        executedStatements().some((sql) => sql.includes('delete from public.chat_file_')),
+      ).toBe(false);
+    });
+
+    describe('relayed upload segments', () => {
+      const personal = relaySegmentKey(
+        { userId: 'user-1', organizationId: null, uploadId: 'upload-a' },
+        1,
+        0,
+      );
+      const inWorkspace = relaySegmentKey(
+        {
+          userId: 'user-1',
+          organizationId: '11111111-1111-4111-8111-111111111111',
+          uploadId: 'upload-b',
+        },
+        2,
+        0,
+      );
+      const someoneElse = relaySegmentKey(
+        { userId: 'user-10', organizationId: null, uploadId: 'upload-c' },
+        1,
+        0,
+      );
+
+      async function seedSegments(): Promise<MemoryObjectStore> {
+        await seedChatFiles();
+        mocks.chatFileSchemaPresent = false;
+        const store = memoryStore();
+        for (const key of [personal, inWorkspace, someoneElse]) {
+          await store.put({
+            bucket,
+            key,
+            body: new Uint8Array([7]),
+            contentType: 'application/octet-stream',
+          });
+        }
+        return store;
+      }
+
+      it("removes every segment the person relayed, in every workspace, and no one else's", async () => {
+        const store = await seedSegments();
+        primeDb({});
+
+        const report = await eraseUserAccountData('user-1');
+
+        expect(report.complete).toBe(true);
+        expect(await store.head(bucket, personal)).toBeNull();
+        expect(await store.head(bucket, inWorkspace)).toBeNull();
+        expect(await store.head(bucket, someoneElse)).not.toBeNull();
+      });
+
+      it('keeps the account open for retry while a segment survives', async () => {
+        const store = await seedSegments();
+        primeDb({});
+        const realDelete = store.delete.bind(store);
+        vi.spyOn(store, 'delete').mockImplementation(async (target, key) => {
+          if (key === inWorkspace) throw new Error('storage unavailable');
+          return realDelete(target, key);
+        });
+
+        const report = await eraseUserAccountData('user-1');
+
+        expect(report.complete).toBe(false);
+        expect(report.profileRetained).toBe(true);
+        expect(report.tables['chat_file_intakes']).toEqual({
+          deleted: false,
+          retainedForRetry: true,
+          error: 'Relayed upload segments could not all be removed',
+        });
+        expect(
+          executedStatements().some((sql) => sql.includes('delete from public.profiles')),
+        ).toBe(false);
+      });
+    });
+
+    it('keeps the account open for retry while a chat file object survives', async () => {
+      const rows = await seedChatFiles();
+      primeDb({ chatFiles: rows });
+      const store = memoryStore();
+      const realDelete = store.delete.bind(store);
+      vi.spyOn(store, 'delete').mockImplementation(async (target, key) => {
+        if (key === stagingKey) throw new Error('storage unavailable');
+        return realDelete(target, key);
+      });
+
+      const report = await eraseUserAccountData('user-1');
+
+      expect(report.complete).toBe(false);
+      expect(report.profileRetained).toBe(true);
+      expect(report.tables['chat_file_intakes']).toEqual({
+        deleted: false,
+        retainedForRetry: true,
+      });
+      expect(rows.intakes.map((row) => row.id)).toEqual(['intake-1']);
+      expect(executedStatements().some((sql) => sql.includes('delete from public.profiles'))).toBe(
+        false,
+      );
+    });
+
+    it('erases the media row of a seal that commits while the chat files are being erased', async () => {
+      const rows = await seedChatFiles();
+      primeDb({ chatFiles: rows });
+      const sealedPath = sealedChatAttachmentPathname(unsealedKey);
+      const lateMedia = {
+        id: '33333333-3333-4333-8333-333333333333',
+        storage_pathname: sealedPath,
+      };
+      let sealCommitted = false;
+      const store = memoryStore();
+      const realDelete = store.delete.bind(store);
+      vi.spyOn(store, 'delete').mockImplementation(async (target, key) => {
+        if (key === unsealedKey && !sealCommitted) {
+          sealCommitted = true;
+          rows.intakes.find((row) => row.id === 'intake-2')!.state = 'sealed';
+        }
+        return realDelete(target, key);
+      });
+      const query = mocks.query.getMockImplementation()!;
+      const mediaRowDeletes: unknown[] = [];
+      mocks.query.mockImplementation(async (sql: string, params?: unknown[]) => {
+        if (sql.includes('select id, storage_pathname from public.media_assets')) {
+          return sealCommitted ? [lateMedia] : [];
+        }
+        if (sql.includes('delete from public.media_assets')) {
+          mediaRowDeletes.push(params?.[0]);
+          return [{ id: lateMedia.id }];
+        }
+        return query(sql, params);
+      });
+      mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 1, failedPathnames: [] });
+
+      const report = await eraseUserAccountData('user-1');
+
+      expect(mocks.deleteStoredMediaObjects).toHaveBeenCalledWith([sealedPath]);
+      expect(mediaRowDeletes).toEqual([[lateMedia.id]]);
+      expect(report.mediaRowsDeleted).toBe(1);
+      expect(report.tables['chat_file_intakes']).toMatchObject({
+        deleted: false,
+        retainedForRetry: true,
+      });
+      expect(report.profileRetained).toBe(true);
+      expect(rows.intakes.map((row) => row.id)).toEqual(['intake-2']);
+    });
   });
 
   it('touches no bytes, jobs, billing, or profile while a provider video is active', async () => {
@@ -985,6 +1355,70 @@ describe('eraseUserAccountData', () => {
     expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
     expect(
       executedStatements().some((sql) => sql.includes('delete from public.user_projects')),
+    ).toBe(false);
+  });
+
+  it('deletes the bytes of untracked ledger rows and settles them once the projects are gone', async () => {
+    const backfilled = 'knowledge-files/projects/p1/1_backfilled.txt';
+    primeDb({
+      knowledgeRows: [{ storage_uri: 'knowledge-files/projects/p1/2_live.txt' }],
+      untrackedLedgerKeys: [backfilled, 'knowledge-files/projects/p1/2_live.txt'],
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteObject).toHaveBeenCalledWith(backfilled);
+    expect(mocks.deleteObject).toHaveBeenCalledTimes(2);
+    expect(report.anonymized['project_knowledge_objects']).toEqual({ updated: true });
+    expect(report.complete).toBe(true);
+    const statements = executedStatements();
+    const projects = statements.findIndex((sql) =>
+      sql.includes('delete from public.user_projects where user_id = $1'),
+    );
+    const settle = statements.findIndex((sql) =>
+      sql.includes("update public.project_knowledge_objects set state = 'deleted'"),
+    );
+    expect(projects).toBeGreaterThan(-1);
+    expect(settle).toBeGreaterThan(projects);
+    expect(statements[settle]).toContain(
+      'object_key = null, user_id = null, organization_id = null',
+    );
+    expect(statements[settle]).toContain('and not origin_known');
+    const settleCall = mocks.execute.mock.calls.find((call) =>
+      String(call[0]).includes("set state = 'deleted'"),
+    );
+    expect(settleCall?.[1]).toEqual([
+      'user-1',
+      ['knowledge-files/projects/p1/2_live.txt', backfilled],
+    ]);
+  });
+
+  it('keeps the profile while an untracked ledger row is left unsettled', async () => {
+    primeDb({
+      untrackedLedgerKeys: ['knowledge-files/projects/p1/1_a.txt'],
+      unsettledLedgerRows: 1,
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.anonymized['project_knowledge_objects']).toMatchObject({ updated: false });
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    expect(executedStatements().some((sql) => sql.includes('delete from public.profiles'))).toBe(
+      false,
+    );
+  });
+
+  it('settles no ledger row while the projects are kept for a failed byte deletion', async () => {
+    primeDb({ untrackedLedgerKeys: ['knowledge-files/projects/p1/1_a.txt'] });
+    mocks.deleteObject.mockRejectedValue(new Error('R2 unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(report.anonymized['project_knowledge_objects']).toBeUndefined();
+    expect(
+      executedStatements().some((sql) => sql.includes('update public.project_knowledge_objects')),
     ).toBe(false);
   });
 

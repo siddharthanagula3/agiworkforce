@@ -18,7 +18,7 @@ const MS_PER_SECOND = 1000;
 
 const HEADING = 'Connector health';
 const EXPLANATION =
-  'Measured from this account’s own recent calls: how many ran, how many failed, and how long the provider took. A connector whose last calls all failed is paused with a backoff before it is called again.';
+  'From your recent calls. A connector whose recent calls all failed pauses before retrying.';
 const LOADING_COPY = 'Reading connector health';
 const FAILED_COPY = 'Connector health could not be read.';
 const EMPTY_COPY = 'No connector has been called in the last hour, so there is nothing to measure.';

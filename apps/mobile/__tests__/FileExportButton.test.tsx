@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Share } from 'react-native';
+import { copyToClipboard } from '@/lib/clipboard';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('@/src/ui/theme', () => {
@@ -54,6 +55,19 @@ jest.mock('@/lib/clipboard', () => ({
 }));
 
 import { FileExportButton } from '@/src/features/chat/components/FileExportButton';
+import { sitsInColumn } from '../test-utils/sheetColumn';
+import { answerClipboardText, answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
+
+const RICH_ANSWER = [
+  'Quarterly **summary**.',
+  '',
+  '```email',
+  'To: team@example.com',
+  'Subject: Numbers',
+  '',
+  'Revenue grew.',
+  '```',
+].join('\n');
 
 describe('FileExportButton', () => {
   it('renders the export sheet content when visible (not clipped by a list-item ancestor)', () => {
@@ -140,5 +154,61 @@ describe('FileExportButton', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Export Failed', expect.any(String)));
     expect(queryByText('Done!')).toBeNull();
     alertSpy.mockRestore();
+  });
+
+  it('exports the answer as the plain text a reader sees, not its Markdown and fences', async () => {
+    mockShareFile.mockReset();
+    mockExportToText.mockReset();
+    mockExportToText.mockResolvedValue({ uri: 'file://export.txt' });
+    mockShareFile.mockResolvedValue(undefined);
+    const { getByLabelText, findByText } = render(
+      <FileExportButton content={RICH_ANSWER} title="Answer" visible onClose={jest.fn()} />,
+    );
+
+    fireEvent.press(getByLabelText('Export as Text'));
+
+    await findByText('Done!');
+    expect(mockExportToText).toHaveBeenCalledWith(answerPlainText(RICH_ANSWER), 'Answer');
+    expect(mockExportToText.mock.calls[0][0]).not.toContain('```');
+  });
+
+  it('copies the answer text without its fences', async () => {
+    jest.mocked(copyToClipboard).mockReset();
+    jest.mocked(copyToClipboard).mockResolvedValue(true);
+    const { getByLabelText, findByText } = render(
+      <FileExportButton content={RICH_ANSWER} visible onClose={jest.fn()} />,
+    );
+
+    fireEvent.press(getByLabelText('Copy to Clipboard'));
+
+    await findByText('Done!');
+    expect(copyToClipboard).toHaveBeenLastCalledWith(answerClipboardText(RICH_ANSWER));
+  });
+
+  it('shares the answer as text and reports Done only when it was sent', async () => {
+    const share = jest
+      .spyOn(Share, 'share')
+      .mockResolvedValueOnce({ action: Share.dismissedAction })
+      .mockResolvedValueOnce({ action: Share.sharedAction });
+    const { getByLabelText, queryByText, findByText } = render(
+      <FileExportButton content={RICH_ANSWER} visible onClose={jest.fn()} />,
+    );
+
+    fireEvent.press(getByLabelText('Share Text'));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    expect(queryByText('Done!')).toBeNull();
+
+    fireEvent.press(getByLabelText('Share Text'));
+    await findByText('Done!');
+    expect(share).toHaveBeenLastCalledWith({ message: answerPlainText(RICH_ANSWER) });
+    share.mockRestore();
+  });
+
+  it('stops the export sheet at the reading column on a wide window', () => {
+    const { getByText } = render(
+      <FileExportButton content="Hello world" visible onClose={jest.fn()} />,
+    );
+
+    expect(sitsInColumn(getByText('Export Message'), 'reading')).toBe(true);
   });
 });

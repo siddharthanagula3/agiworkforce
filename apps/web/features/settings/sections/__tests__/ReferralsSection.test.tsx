@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { PRODUCT_BRAND, getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/client/csrf');
 type ScanModule1 = typeof import('@shared/utils/browser-utils');
 
@@ -79,7 +79,7 @@ describe('ReferralsSection', () => {
     expect(await screen.findByRole('textbox', { name: 'Invite link' })).toHaveValue(LINK);
     expect(
       screen.getByText(
-        `Invite friends to ${PRODUCT_BRAND}. They get 7 days of ${getBillingPlanPricing('pro').label} free, and when their first payment goes through you each get 500 credits.`,
+        `Friends get 7 days of ${getBillingPlanPricing('pro').label} free. You each get 500 credits after their first payment.`,
       ),
     ).toBeInTheDocument();
     const progress = within(screen.getByRole('region', { name: 'Your progress' }));

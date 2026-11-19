@@ -29,12 +29,15 @@ import {
   SHOW_SESSION_ACTIVITY_COMMAND,
   showSessionReceipt,
 } from './features/sidebar-webview/sessionReceipt';
-import { resolveCloudCodeAgentModel, PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
+import { resolveCloudCodeAgentModel, PRODUCT_NAMES } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
-import { Config } from './platform/config';
+import { Config, optOutSettingFor, resolveConfiguredCli } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
-import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
+import {
+  normalizeConfiguredModelId,
+  normalizeSelectableConfiguredModelId,
+} from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
 import { buildExtensionStatusBarText } from './core/statusBar';
@@ -47,16 +50,13 @@ import {
 import { setupCommands } from './core/commandSetup';
 import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostNotices';
 import { markInUse, whenInUse } from './core/startupWork';
+import { trackLastTextEditor } from './platform/lastTextEditor';
 import { activateProductAnalytics } from './features/analytics/productAnalytics';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
-import {
-  describeRemoteEnvironment,
-  nodeCliResolutionHost,
-  resolveCliPath,
-} from './platform/remoteEnvironment';
+import { describeRemoteEnvironment } from './platform/remoteEnvironment';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
 import {
   buildPullRequestReviewPrompt,
@@ -126,7 +126,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
-        cliPath: () => resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
+        cliPath: resolveConfiguredCli,
+        workspaceTrusted: () => vscode.workspace.isTrusted,
         memoryEnabled: () => Config.memoryEnabled(),
         bypassPermissionsAvailable: () => Config.agentMode() === 'bypass',
         workspaceConsentAtMs: () => workspaceConsent.consentAtMs(cwd),
@@ -397,7 +398,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
-    const model = normalizeConfiguredModelId(sidebarProvider?.activeModel() ?? Config.model());
+    const active = sidebarProvider?.activeModel() ?? Config.model();
+    const model = normalizeSelectableConfiguredModelId(active) ?? active;
     statusBar.text = buildExtensionStatusBarText(model, Config.agentMode());
     statusBar.show();
   }
@@ -435,7 +437,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       const runtimeSetting = e.affectsConfiguration('agiWorkforce.cliPath')
         ? 'the CLI path'
-        : e.affectsConfiguration('agiWorkforce.memory.enabled')
+        : e.affectsConfiguration('agiWorkforce.memory.enabled') ||
+            e.affectsConfiguration(optOutSettingFor('memory.enabled'))
           ? 'the memory setting'
           : undefined;
       if (runtimeSetting !== undefined) {
@@ -464,7 +467,10 @@ export function activate(context: vscode.ExtensionContext): void {
         sidebarProvider?.pushUsageMeter();
       }
 
-      if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
+        e.affectsConfiguration(optOutSettingFor('inlineCompletions.enabled'))
+      ) {
         syncInlineCompletionProvider?.();
         void validateAdvancedFeatureFlags(context);
       }
@@ -493,9 +499,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  void checkInlineCompletionsFirstRun(context);
-
   watchAccountTierInvalidation(context);
+  context.subscriptions.push(trackLastTextEditor());
   whenInUse(() => {
     void refreshAccountTierCache(context).catch(() => {});
   });
@@ -507,27 +512,4 @@ export async function deactivate(): Promise<void> {
   const localRuntimes = activeLocalRuntimes;
   activeLocalRuntimes = undefined;
   await localRuntimes?.shutdownAll();
-}
-
-async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
-  if (!Config.inlineCompletionsEnabled()) return;
-
-  const inspected = vscode.workspace
-    .getConfiguration()
-    .inspect('agiWorkforce.inlineCompletions.enabled');
-  if (inspected?.globalValue !== undefined) return;
-
-  const alreadyShown = context.globalState.get<boolean>('inlineCompletions.firstRunNoticeShown');
-  if (alreadyShown === true) return;
-
-  await vscode.window.showInformationMessage(
-    `${PRODUCT_NAMES.code} inline completions are now active. On each keystroke, up to ` +
-      `~100 lines of surrounding code are sent to the ${PRODUCT_BRAND} API for ` +
-      'suggestion. Files in the sensitive-file denylist (.env, .pem, .ssh/, ' +
-      'credentials, secrets.json, etc.) are automatically excluded. Manage in ' +
-      `Settings → ${PRODUCT_NAMES.code}.`,
-    'Got it',
-  );
-
-  await context.globalState.update('inlineCompletions.firstRunNoticeShown', true);
 }

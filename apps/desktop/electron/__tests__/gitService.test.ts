@@ -5,8 +5,10 @@ import path from 'node:path';
 import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  branchSlug,
   findRepositoryRoot,
   hostGitInvocation,
+  pushLocalBranch,
   readGitState,
   readWorkingTreeDiff,
   readWorkspaceGit,
@@ -461,5 +463,42 @@ describe('host git hardening', () => {
     await fs.writeFile(outside, '[core]\n\tautocrlf = false\n');
     git(dir, 'config', 'include.path', outside);
     expect((await readGitState(dir))?.branch).toBe('main');
+  });
+});
+
+describe('opening a pull request from changes on no branch', () => {
+  it('turns a title into a short branch-safe slug', () => {
+    expect(branchSlug('Fix the sign-in screen!')).toBe('fix-the-sign-in-screen');
+    expect(branchSlug('  Café  déjà vu  ')).toBe('cafe-deja-vu');
+    expect(branchSlug('???')).toBe('changes');
+    expect(branchSlug('a'.repeat(80))).toHaveLength(48);
+  });
+
+  it('creates a prefixed branch at HEAD, pushes it, and never reuses a taken name', async () => {
+    const dir = await committedRepo('detached-push');
+    const remote = path.join(sandbox, 'detached-remote.git');
+    git(sandbox, 'init', '-q', '--bare', remote);
+    git(dir, 'remote', 'add', 'origin', remote);
+    git(dir, 'push', '-q', 'origin', 'main');
+    git(dir, 'checkout', '-q', '--detach');
+
+    const first = await pushLocalBranch(dir, { title: 'Fix sign-in', prefix: 'agi/' });
+    expect(first.branch).toBe('agi/fix-sign-in');
+    expect(execFileSync('git', ['ls-remote', '--heads', remote], { encoding: 'utf8' })).toContain(
+      'refs/heads/agi/fix-sign-in',
+    );
+
+    git(dir, 'checkout', '-q', '--detach');
+    const second = await pushLocalBranch(dir, { title: 'Fix sign-in', prefix: 'agi/' });
+    expect(second.branch).toBe('agi/fix-sign-in-2');
+  });
+
+  it('still refuses changes on no branch when no new branch was asked for', async () => {
+    const dir = await committedRepo('detached-refuse');
+    const remote = path.join(sandbox, 'detached-refuse.git');
+    git(sandbox, 'init', '-q', '--bare', remote);
+    git(dir, 'remote', 'add', 'origin', remote);
+    git(dir, 'checkout', '-q', '--detach');
+    await expect(pushLocalBranch(dir)).rejects.toThrow('Check out a branch');
   });
 });

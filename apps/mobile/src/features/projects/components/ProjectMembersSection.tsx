@@ -24,6 +24,8 @@ import { refreshCloudProjectDetails } from '@/src/features/projects/service';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { useActionMenu } from '@/src/shared/hooks/useActionMenu';
 
 const AUDIENCE_LABELS: Readonly<Record<ProjectShareAudience, string>> = {
   workspace: 'Everyone in the workspace can view',
@@ -87,6 +89,7 @@ export function ProjectMembersSection({
   const [overview, setOverview] = useState<ProjectSharingOverview | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const accessMenu = useActionMenu();
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -139,8 +142,7 @@ export function ProjectMembersSection({
           marginBottom: 24,
         }}
       >
-        {error ??
-          'Only you can open this project. Projects in a workspace can be shared with its members.'}
+        {error ?? 'Only you can open this project. Workspace projects can be shared.'}
       </Text>
     );
   }
@@ -154,17 +156,19 @@ export function ProjectMembersSection({
     const options: ProjectMemberAccess[] = member.canEditProjects
       ? ['read', 'write', 'none']
       : ['read', 'none'];
-    Alert.alert(memberName(member), `Choose what ${memberName(member)} can do in ${projectName}.`, [
-      ...options.map((access) => ({
-        text: ACCESS_LABELS[access],
-        onPress: () =>
+    accessMenu.open(
+      memberName(member),
+      options.map((access) => ({
+        key: `access-${access}`,
+        label: ACCESS_LABELS[access],
+        run: () =>
           run(
             () => setProjectMemberAccess(projectId, member.userId, access),
             'Could not change their access. Try again.',
           ),
       })),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
+      `Choose what ${memberName(member)} can do in ${projectName}.`,
+    );
   };
 
   const confirmStopSharing = () =>
@@ -259,9 +263,7 @@ export function ProjectMembersSection({
           <Text
             style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}
           >
-            {
-              'Only you can open this project; sharing includes its instructions and files, not chats.'
-            }
+            {'Only you can open this. Sharing includes instructions and files, not chats.'}
           </Text>
           <View style={{ gap: 8 }}>
             <OutlineButton
@@ -284,7 +286,7 @@ export function ProjectMembersSection({
         </>
       ) : (
         <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
-          This project is not shared. Your workspace role does not let you share your work.
+          Not shared. Your workspace role doesn’t allow sharing.
         </Text>
       )}
       {error ? (
@@ -295,6 +297,7 @@ export function ProjectMembersSection({
           {error}
         </Text>
       ) : null}
+      <ActionMenuSheet menu={accessMenu.menu} dismissLabel="Dismiss access choices" />
     </View>
   );
 }

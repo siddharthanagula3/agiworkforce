@@ -21,7 +21,7 @@ import {
   liveVoicePaceInstruction,
   type LiveVoiceReasoning,
 } from '@agiworkforce/types/live-voices';
-import type { RequestAuthority } from '@/lib/identity/request-authority';
+import type { RequestAuthority, SessionAuthority } from '@/lib/identity/request-authority';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
 import {
@@ -322,16 +322,16 @@ function waitForIceGathering(peer: RTCPeerConnection, signal: AbortSignal): Prom
 
 async function closeCreatedVoiceSession(
   sessionId: string,
-  capturedToken: string,
+  session: SessionAuthority,
   body: Record<string, unknown>,
 ): Promise<void> {
-  if (!capturedToken.trim() || !sessionId)
-    throw new Error('Voice cleanup authority is unavailable');
+  const token = await session.getToken();
+  if (!token?.trim() || !sessionId) throw new Error('Voice cleanup authority is unavailable');
   const response = await fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(sessionId)}/close`, {
     method: 'POST',
     credentials: 'omit',
     keepalive: true,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${capturedToken}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -358,7 +358,6 @@ export class LiveVoiceSession {
   private speaking = false;
   private started = false;
   private readonly authority: RequestAuthority;
-  private readonly cleanupToken: string;
   private releaseSetup: (() => void) | null = null;
   private settlementPromise: Promise<void> | null = null;
   private closing = false;
@@ -395,10 +394,8 @@ export class LiveVoiceSession {
     created: CreateSessionResponse,
     callbacks: LiveVoiceSessionCallbacks,
     authority: RequestAuthority,
-    cleanupToken: string,
   ) {
     this.authority = authority;
-    this.cleanupToken = cleanupToken;
     this.microphone = microphone;
     this.peer = peer;
     this.channel = channel;
@@ -450,7 +447,7 @@ export class LiveVoiceSession {
     if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       throw new LiveVoiceSessionError(LIVE_SESSION_MESSAGE.unsupported, 'unsupported');
     }
-    const cleanupToken = await authority.getToken();
+    await authority.getToken();
     authority.assertCurrent();
     let microphone: MediaStream | null = null;
     let peer: RTCPeerConnection | null = null;
@@ -558,7 +555,6 @@ export class LiveVoiceSession {
         created,
         options.callbacks,
         authority,
-        cleanupToken,
       );
       session.releaseSetup = () => {
         authority.signal.removeEventListener('abort', abort);
@@ -579,7 +575,7 @@ export class LiveVoiceSession {
       if (session) session.dispose();
       release();
       if (created?.sessionId) {
-        void closeCreatedVoiceSession(created.sessionId, cleanupToken, {
+        void closeCreatedVoiceSession(created.sessionId, authority.session, {
           seconds: session?.lastUsageSeconds ?? 0,
           reason: 'setup_failed',
         }).catch((cleanupError: unknown) => {
@@ -593,7 +589,7 @@ export class LiveVoiceSession {
   }
 
   settle(closed: LiveSessionClosed): Promise<void> {
-    this.settlementPromise ??= closeCreatedVoiceSession(this.sessionId, this.cleanupToken, {
+    this.settlementPromise ??= closeCreatedVoiceSession(this.sessionId, this.authority.session, {
       seconds: closed.seconds ?? this.lastUsageSeconds ?? 0,
       reason: closed.reason,
       ...(this.lastTurnId ? { lastTurnId: this.lastTurnId } : {}),

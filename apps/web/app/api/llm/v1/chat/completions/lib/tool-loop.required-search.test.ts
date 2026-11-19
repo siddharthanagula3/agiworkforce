@@ -43,11 +43,21 @@ vi.mock('@/lib/web-search/search-budget', async () => {
   };
 });
 
-import { runToolLoop, type ToolLoopApprovalCheckpoint } from './tool-loop';
+import {
+  runToolLoop,
+  type ConnectorToolExecutor,
+  type ToolLoopApprovalCheckpoint,
+} from './tool-loop';
+import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { logger } from '@/lib/logger';
 import { REQUIRED_SEARCH_RETRY_DIRECTIVE } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
 import { getDefaultModelFor, getModelMetadataById } from '@agiworkforce/types';
+import {
+  DECLINED_WEB_SEARCH_ANSWER,
+  WEB_SEARCH_NOT_PERFORMED_CODE,
+} from '@agiworkforce/cloud-contracts';
 
 const FREE_PLAN_TIER = 'free';
 const freePlanModel = getModelMetadataById(getDefaultModelFor(FREE_PLAN_TIER, 'chat'));
@@ -153,6 +163,55 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   let out = '';
   for await (const value of gen) out += decoder.decode(value);
   return out;
+}
+
+function wireDeltas(output: string): Array<Record<string, unknown>> {
+  return output
+    .split('\n')
+    .filter((line) => line.startsWith('data: ') && line !== 'data: [DONE]')
+    .map((line) => JSON.parse(line.slice('data: '.length)) as Record<string, unknown>)
+    .map(
+      (payload) =>
+        ((payload['choices'] as Array<{ delta?: Record<string, unknown> }> | undefined)?.[0]
+          ?.delta ?? {}) as Record<string, unknown>,
+    );
+}
+
+function agentEventsOf(output: string): Array<Record<string, unknown>> {
+  return wireDeltas(output)
+    .map(
+      (delta) => (delta['x_agent_event'] as { event?: Record<string, unknown> } | undefined)?.event,
+    )
+    .filter((event): event is Record<string, unknown> => event !== undefined);
+}
+
+function expectDeclinedSearchAnswer(output: string): void {
+  const events = agentEventsOf(output);
+  const deltas = wireDeltas(output);
+  const answer = deltas
+    .map((delta) => (typeof delta['content'] === 'string' ? delta['content'] : ''))
+    .join('');
+  expect(answer).toBe(DECLINED_WEB_SEARCH_ANSWER);
+  expect(
+    events.filter((event) => event['type'] === 'text-delta').map((event) => event['delta']),
+  ).toEqual([DECLINED_WEB_SEARCH_ANSWER]);
+  expect(events.find((event) => event['type'] === 'tool-execution-end')).toMatchObject({
+    isError: false,
+  });
+  expect(
+    deltas.find((delta) => delta['x_tool_result'] !== undefined)?.['x_tool_result'],
+  ).toMatchObject({
+    is_error: false,
+  });
+  expect(events.some((event) => event['type'] === 'error')).toBe(false);
+  expect(deltas.some((delta) => delta['x_stream_error'] !== undefined)).toBe(false);
+  expect(output).not.toContain(WEB_SEARCH_NOT_PERFORMED_CODE);
+  expect(
+    events.filter((event) => event['type'] === 'task-state-changed').map((event) => event['state']),
+  ).not.toContain('failed');
+  expect(
+    events.filter((event) => event['type'] === 'stop').map((event) => event['reason']),
+  ).toEqual(['end-turn']);
 }
 
 function stepRequests(): Array<Record<string, unknown>> {
@@ -538,7 +597,8 @@ describe('runToolLoop, required web search', () => {
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     expect(mockExecuteWebSearch).not.toHaveBeenCalled();
     expect(output).not.toContain('Unsourced answer.');
-    expect(output).toContain('web_search_not_performed');
+    expect(output).not.toContain('not approved or available');
+    expectDeclinedSearchAnswer(output);
   });
 
   it('does not ask for a second search after a model-requested search is denied', async () => {
@@ -582,7 +642,8 @@ describe('runToolLoop, required web search', () => {
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     expect(mockExecuteWebSearch).not.toHaveBeenCalled();
     expect(onSecondApprovalCheckpoint).not.toHaveBeenCalled();
-    expect(output).toContain('web_search_not_performed');
+    expect(output).toContain('"decision":"denied"');
+    expectDeclinedSearchAnswer(output);
   });
 
   it('answers plainly when a server-owned search succeeds with no results', async () => {
@@ -816,5 +877,177 @@ describe('runToolLoop, required web search', () => {
 
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     expect(output).toContain('An ordinary answer');
+  });
+});
+
+describe('runToolLoop, a declined required search beside other work', () => {
+  const NOTES_TOOL = 'mcp__notes__read_note';
+  const NOTES_MCP_TOOLS: WebMcpToolDef[] = [
+    {
+      qualifiedName: NOTES_TOOL,
+      serverId: 'notes',
+      toolName: 'read_note',
+      description: 'read_note',
+      origin: 'connector',
+      inputSchema: { type: 'object' },
+    },
+  ];
+  const connectorExecutor: ConnectorToolExecutor = vi.fn(async () => ({
+    handled: true,
+    content: 'Saved note: the headline desk opens at nine.',
+    isError: false,
+  }));
+
+  function processedAwaitingDecisions(): ProcessedRequest {
+    const processed = makeProcessed({
+      enforcement: { mode: 'nudge', attachedTool: 'generic-function' },
+    });
+    processed.llmRequest.messages = [
+      { role: 'user', content: "today's top headline" },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_search',
+            type: 'function',
+            function: { name: WEB_SEARCH_TOOL, arguments: JSON.stringify({ query: 'headline' }) },
+          },
+          {
+            id: 'call_note',
+            type: 'function',
+            function: { name: NOTES_TOOL, arguments: JSON.stringify({ id: 'desk' }) },
+          },
+        ],
+      },
+    ] as ProcessedRequest['llmRequest']['messages'];
+    return processed;
+  }
+
+  function stepMessages(callIndex: number): Array<Record<string, unknown>> {
+    return (
+      mockBuildToolLoopStream.mock.calls[callIndex]?.[2] as {
+        messages: Array<Record<string, unknown>>;
+      }
+    ).messages;
+  }
+
+  function offeredToolNames(callIndex: number): string[] {
+    const request = mockBuildToolLoopStream.mock.calls[callIndex]?.[2] as
+      { tools?: Array<{ function?: { name?: string } }> } | undefined;
+    return (request?.tools ?? []).map((tool) => tool.function?.name ?? '');
+  }
+
+  beforeEach(() => {
+    mockBuildToolLoopStream.mockReset();
+    mockExecuteWebSearch.mockReset();
+    vi.mocked(connectorExecutor).mockClear();
+  });
+
+  it('runs the approved sibling call and lets the model answer with its result', async () => {
+    const info = vi.spyOn(logger, 'info');
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      memoryAnswerStep('Your note says the desk opens at nine.'),
+    );
+
+    const output = await drain(
+      runToolLoop(processedAwaitingDecisions(), {
+        approvalMode: 'manual',
+        userId: 'user-1',
+        mcpTools: NOTES_MCP_TOOLS,
+        connectorExecutor,
+        resume: {
+          approvals: [
+            { toolCallId: 'call_search', decision: 'rejected' },
+            { toolCallId: 'call_note', decision: 'approved' },
+          ],
+        },
+      }),
+    );
+
+    expect(mockExecuteWebSearch).not.toHaveBeenCalled();
+    expect(connectorExecutor).toHaveBeenCalledTimes(1);
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(offeredToolNames(0)).not.toContain(WEB_SEARCH_TOOL);
+    expect(
+      stepMessages(0).find((message) => message['tool_call_id'] === 'call_note')?.['content'],
+    ).toContain('the headline desk opens at nine');
+    const events = agentEventsOf(output);
+    expect(
+      events.find(
+        (event) => event['type'] === 'tool-execution-end' && event['toolCallId'] === 'call_note',
+      ),
+    ).toMatchObject({ isError: false });
+    expect(output).toContain('Your note says the desk opens at nine.');
+    expect(output).not.toContain(DECLINED_WEB_SEARCH_ANSWER);
+    expect(output).not.toContain(WEB_SEARCH_NOT_PERFORMED_CODE);
+    expect(
+      events.filter((event) => event['type'] === 'stop').map((event) => event['reason']),
+    ).toEqual(['end-turn']);
+    const adherence = info.mock.calls
+      .map(([fields]) => fields as unknown as Record<string, unknown>)
+      .find((fields) => fields?.['event'] === 'web_search_adherence');
+    info.mockRestore();
+    expect(adherence).toMatchObject({ search_invoked: false, search_declined: true });
+  });
+
+  it('adds the guidance given with the decline and lets the model answer from it', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      memoryAnswerStep('Going by what you know, here is a summary.'),
+    );
+
+    const output = await drain(
+      runToolLoop(processedAwaitingDecisions(), {
+        approvalMode: 'manual',
+        userId: 'user-1',
+        mcpTools: NOTES_MCP_TOOLS,
+        connectorExecutor,
+        resume: {
+          approvals: [
+            { toolCallId: 'call_search', decision: 'rejected' },
+            { toolCallId: 'call_note', decision: 'rejected' },
+          ],
+          guidance: 'Answer from what you already know',
+        },
+      }),
+    );
+
+    expect(mockExecuteWebSearch).not.toHaveBeenCalled();
+    expect(connectorExecutor).not.toHaveBeenCalled();
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(stepMessages(0).at(-1)).toMatchObject({
+      role: 'user',
+      content: 'Answer from what you already know',
+    });
+    expect(output).toContain('Going by what you know, here is a summary.');
+    expect(output).not.toContain(DECLINED_WEB_SEARCH_ANSWER);
+    expect(output).not.toContain(WEB_SEARCH_NOT_PERFORMED_CODE);
+    expect(output).not.toContain(REQUIRED_SEARCH_RETRY_DIRECTIVE);
+  });
+
+  it('ends with the declined sentence when nothing was approved and no guidance was given', async () => {
+    const output = await drain(
+      runToolLoop(processedAwaitingDecisions(), {
+        approvalMode: 'manual',
+        userId: 'user-1',
+        mcpTools: NOTES_MCP_TOOLS,
+        connectorExecutor,
+        resume: {
+          approvals: [
+            { toolCallId: 'call_search', decision: 'rejected' },
+            { toolCallId: 'call_note', decision: 'rejected' },
+          ],
+        },
+      }),
+    );
+
+    expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
+    expect(connectorExecutor).not.toHaveBeenCalled();
+    expect(output).toContain(DECLINED_WEB_SEARCH_ANSWER);
+    expect(
+      agentEventsOf(output)
+        .filter((event) => event['type'] === 'stop')
+        .map((event) => event['reason']),
+    ).toEqual(['end-turn']);
   });
 });

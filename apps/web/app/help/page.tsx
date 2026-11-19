@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { redirect } from 'next/navigation';
 
 import { buildMetadata } from '@/lib/seo/metadata';
@@ -16,8 +16,10 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared'
 import { HelpSearch } from '@/features/support/components/HelpSearch';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
+import { embeddedPageHref } from '@/lib/embedded-page';
 import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
 import { supportCollectionIndex } from './collections';
+import { hasPhoneMarker, type HelpSearchParams } from './phone-request';
 
 export const metadata = buildMetadata({
   title: 'Help: every collection in the help centre',
@@ -28,15 +30,19 @@ export const metadata = buildMetadata({
 export default async function HelpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[]; topic?: string | string[] }>;
+  searchParams: Promise<HelpSearchParams>;
 }) {
-  const { q, topic: topicParam } = await searchParams;
+  const params = await searchParams;
+  const { q, topic: topicParam } = params;
+  const fromPhone = hasPhoneMarker(params);
+  const view = fromPhone ? 'phone' : 'web';
   const topic = readTopicParam(topicParam);
-  const topicPath = topic ? resolveDocTopic(topic) : null;
-  if (topicPath) redirect(topicPath);
+  const topicPath = topic ? resolveDocTopic(topic, view) : null;
+  const topicTarget = topicPath && fromPhone ? embeddedPageHref(topicPath) : topicPath;
+  if (topicTarget) redirect(topicTarget);
   const initialQuery =
     (Array.isArray(q) ? q[0] : q)?.slice(0, 200) ?? topic?.replace(/-/g, ' ') ?? '';
-  const { collections, articleCount } = supportCollectionIndex();
+  const { collections, articleCount } = supportCollectionIndex(view);
 
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -47,7 +53,11 @@ export default async function HelpPage({
           eyebrow="Help"
           title="Get unstuck, fast."
           em="fast."
-          lede={`Search every help article, or browse the help centre by collection. For anything else, email ${CONTACT_EMAIL}; no response time is promised unless your plan says otherwise.`}
+          lede={
+            fromPhone
+              ? `Search every help article, or browse the help centre by collection. For anything else, email ${CONTACT_EMAIL}.`
+              : `Search every help article, or browse the help centre by collection. For anything else, email ${CONTACT_EMAIL}; no response time is promised unless your plan says otherwise.`
+          }
           ctas={[]}
         >
           <HelpSearch initialQuery={initialQuery} />
@@ -66,17 +76,17 @@ export default async function HelpPage({
                 caption="Help collections"
                 rows={collections.map((collection) => ({
                   label: (
-                    <Link href={`/help/collections/${collection.id}`} className="agi-ds-link">
+                    <PageLink href={`/help/collections/${collection.id}`} className="agi-ds-link">
                       {collection.label}
-                    </Link>
+                    </PageLink>
                   ),
                   value: (
                     <ul className="agi-ds-linkgrid">
                       {collection.articles.map((article) => (
                         <li key={article.docId}>
-                          <Link href={article.href} className="agi-ds-link">
+                          <PageLink href={article.href} className="agi-ds-link">
                             {article.title}
-                          </Link>
+                          </PageLink>
                         </li>
                       ))}
                     </ul>
@@ -97,8 +107,9 @@ export default async function HelpPage({
               Still stuck? Contact support.
             </h2>
             <Prose>
-              The FAQ covers the questions that come up most, and support explains what each tier
-              can expect. Email lands in the same inbox either way.
+              {fromPhone
+                ? 'Contact support from the support page or by email. Both reach the same inbox.'
+                : 'The FAQ covers the questions that come up most, and support explains what each tier can expect. Email lands in the same inbox either way.'}
             </Prose>
             <ButtonRow>
               <Button href="/faq">Read the FAQ</Button>

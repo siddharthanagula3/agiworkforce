@@ -96,14 +96,16 @@ export default function MemoryExclusionsScreen() {
 
   const retryLoad = useCallback(() => setLoadAttempt((attempt) => attempt + 1), []);
 
-  const persist = useCallback(async (next: MemoryExclusions) => {
+  const persist = useCallback(async (next: MemoryExclusions): Promise<boolean> => {
     setSaving(true);
     try {
       await patchPreferenceNamespace(PREFERENCE_NAMESPACE, next);
       setExclusions(next);
       setError(null);
+      return true;
     } catch (cause) {
       setError(toUserMessage(cause, 'Could not save that change.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -125,8 +127,11 @@ export default function MemoryExclusionsScreen() {
       setError(`You can store up to ${MAX_TERMS} exclusions.`);
       return;
     }
-    setDraft('');
-    void persist({ ...exclusions, excludedTerms: [...exclusions.excludedTerms, term] });
+    void persist({ ...exclusions, excludedTerms: [...exclusions.excludedTerms, term] }).then(
+      (saved) => {
+        if (saved) setDraft((current) => (current.trim().toLowerCase() === term ? '' : current));
+      },
+    );
   }, [draft, exclusions, persist]);
 
   const removeTerm = useCallback(
@@ -156,7 +161,7 @@ export default function MemoryExclusionsScreen() {
     <SettingsScreenShell title="Never remember" backHref="/(app)/settings/memory">
       <SettingsInfo
         title="Cloud account memory"
-        body="New memories containing these terms aren’t saved; existing ones stay until you delete them."
+        body="New memories with these terms aren’t saved. Existing ones stay."
         icon={Ban}
       />
 
@@ -249,7 +254,7 @@ export default function MemoryExclusionsScreen() {
             marginBottom: 24,
           }}
         >
-          No exclusions yet. Everything the assistant learns is eligible to be remembered.
+          No exclusions yet.
         </Text>
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
@@ -317,7 +322,7 @@ export default function MemoryExclusionsScreen() {
               marginBottom: 24,
             }}
           >
-            Turn a source off to keep its memories out of answers without deleting them.
+            Off keeps a source out of answers without deleting it.
           </Text>
         </>
       ) : null}

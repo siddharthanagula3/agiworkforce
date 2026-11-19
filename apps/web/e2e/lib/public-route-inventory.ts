@@ -498,6 +498,7 @@ function supportSourceSnapshot(supportDirectory: string, corpusFile: string) {
     corpusFile,
     path.join(WEB_ROOT, 'scripts/build-support-corpus.mjs'),
     path.join(WEB_ROOT, 'scripts/lib/support-frontmatter.mjs'),
+    path.join(WEB_ROOT, 'scripts/lib/support-purchase-passages.mjs'),
     ...readdirSync(supportDirectory)
       .filter((name) => name.endsWith('.md'))
       .sort(compare)

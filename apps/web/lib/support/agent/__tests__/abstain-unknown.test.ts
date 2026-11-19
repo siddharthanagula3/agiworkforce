@@ -6,6 +6,10 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return { ...actual, resolveAutoRoute: modelMocks.resolveAutoRoute };
 });
+vi.mock('@/lib/server/managed-cloud-routing/policy-source', async () => {
+  const { supportPolicySource } = await import('./fixtures/model-mocks');
+  return { productionPolicySource: supportPolicySource };
+});
 vi.mock('@/lib/services/provider-adapter-service', async () => {
   const { modelMocks } = await import('./fixtures/model-mocks');
   return {

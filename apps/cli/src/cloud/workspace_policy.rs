@@ -857,21 +857,22 @@ fn remember(owner: &str, policy: &EffectiveWorkspacePolicy, fetched_at: u64) {
     }
 }
 
-fn refresh_due(last: Option<&RefreshRead>, owner: &str) -> Option<bool> {
+fn refresh_due(last: Option<&RefreshRead>, owner: &str, now: Instant) -> Option<bool> {
     match last {
         None => Some(true),
         Some(read) if read.owner != owner => Some(true),
-        Some(read) if read.at.elapsed() >= REFRESH_INTERVAL => Some(false),
+        Some(read) if now.saturating_duration_since(read.at) >= REFRESH_INTERVAL => Some(false),
         Some(_) => None,
     }
 }
 
 fn claim_refresh(owner: &str) -> Option<bool> {
     let mut last = LAST_REFRESH.lock().ok()?;
-    let first = refresh_due(last.as_ref(), owner)?;
+    let now = Instant::now();
+    let first = refresh_due(last.as_ref(), owner, now)?;
     *last = Some(RefreshRead {
         owner: owner.to_string(),
-        at: Instant::now(),
+        at: now,
     });
     Some(first)
 }
@@ -882,18 +883,26 @@ mod refresh_owner_tests {
 
     #[test]
     fn another_session_does_not_inherit_the_refresh_delay() {
+        let read_at = Instant::now();
         let recent = RefreshRead {
             owner: "session_a".to_string(),
-            at: Instant::now(),
+            at: read_at,
         };
-        assert_eq!(refresh_due(Some(&recent), "session_a"), None);
-        assert_eq!(refresh_due(Some(&recent), "session_b"), Some(true));
-        assert_eq!(refresh_due(None, "session_a"), Some(true));
-        let expired = RefreshRead {
-            owner: "session_a".to_string(),
-            at: Instant::now() - REFRESH_INTERVAL,
-        };
-        assert_eq!(refresh_due(Some(&expired), "session_a"), Some(false));
+        assert_eq!(refresh_due(Some(&recent), "session_a", read_at), None);
+        assert_eq!(refresh_due(Some(&recent), "session_b", read_at), Some(true));
+        assert_eq!(refresh_due(None, "session_a", read_at), Some(true));
+        assert_eq!(
+            refresh_due(
+                Some(&recent),
+                "session_a",
+                read_at + REFRESH_INTERVAL - Duration::from_secs(1)
+            ),
+            None
+        );
+        assert_eq!(
+            refresh_due(Some(&recent), "session_a", read_at + REFRESH_INTERVAL),
+            Some(false)
+        );
     }
 }
 

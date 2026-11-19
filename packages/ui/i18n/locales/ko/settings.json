@@ -98,6 +98,9 @@
     "voice": "음성",
     "desktop": "일반",
     "computer-use": "컴퓨터 사용",
+    "browser-pane": "브라우저",
+    "local-mcp": "개발자",
+    "storage": "저장 공간",
     "groupSettings": "설정",
     "groupCustomize": "맞춤 설정",
     "groupDesktop": "데스크톱 앱"

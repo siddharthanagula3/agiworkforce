@@ -170,8 +170,7 @@ export function RecurrencePicker({
         <Text className="text-sm text-white/40 mt-2 leading-5">{MOBILE_SCHEDULE_CADENCE_NOTE}</Text>
         {!isMobileScheduleRecurrenceSupported(value) ? (
           <Text className="text-sm text-amber-400 mt-2 leading-5">
-            This cadence cannot be edited on Mobile. Choose Once, Daily, Weekly, or Monthly before
-            saving.
+            This cadence cannot be edited on Mobile. Pick Once, Daily, Weekly or Monthly.
           </Text>
         ) : null}
       </View>
@@ -184,6 +183,7 @@ export function RecurrencePicker({
               const selected = daysOfWeek.includes(idx);
               return (
                 <PressableBox
+                  hitSlop={4}
                   key={idx}
                   onPress={() => handleDayToggle(idx)}
                   className={`w-9 h-9 rounded-full items-center justify-center ${
@@ -219,6 +219,7 @@ export function RecurrencePicker({
               const selected = dayOfMonth === day;
               return (
                 <PressableBox
+                  hitSlop={4}
                   key={day}
                   onPress={() => handleDayOfMonthChange(day)}
                   className={`w-9 h-9 rounded-lg items-center justify-center ${

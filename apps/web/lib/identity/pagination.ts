@@ -20,6 +20,15 @@ export interface KeysetCursor {
 export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 200;
 
+export const MICROSECOND_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+
+const MICROSECOND_SORT_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/u;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
+export function isTimestampUuidCursor(cursor: KeysetCursor): boolean {
+  return MICROSECOND_SORT_KEY_PATTERN.test(cursor.sortValue) && UUID_PATTERN.test(cursor.id);
+}
+
 export function clampPageSize(requested: number | null | undefined): number {
   if (requested === null || requested === undefined || !Number.isFinite(requested)) {
     return DEFAULT_PAGE_SIZE;

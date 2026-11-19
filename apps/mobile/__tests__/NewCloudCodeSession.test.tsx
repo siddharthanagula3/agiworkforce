@@ -25,6 +25,15 @@ jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), back: jest.fn() }),
 }));
+jest.mock('react-native-webrtc', () => ({
+  RTCPeerConnection: jest.fn(),
+  RTCSessionDescription: jest.fn(),
+  RTCIceCandidate: jest.fn(),
+}));
+jest.mock('@/src/features/companion/remote-code/service', () => ({
+  listCodeSessions: jest.fn(),
+  startCodeSession: jest.fn(),
+}));
 
 import {
   NewCloudCodeSessionSheet,
@@ -91,6 +100,40 @@ describe('new cloud code session', () => {
     expect(onCreated).toHaveBeenCalledWith(session, 'Add a dark mode toggle');
   });
 
+  it('keeps a session created after the sheet was closed from navigating or starting its task', async () => {
+    const session = { id: 'session-2', state: 'provisioning' };
+    let finishCreate: (value: unknown) => void = () => undefined;
+    mockCloudCodeApi.create.mockReturnValue(
+      new Promise((resolve) => {
+        finishCreate = resolve;
+      }),
+    );
+    const onCreated = jest.fn();
+    const onCreatedInBackground = jest.fn();
+    const sheet = (visible: boolean) => (
+      <NewCloudCodeSessionSheet
+        visible={visible}
+        onClose={jest.fn()}
+        onCreated={onCreated}
+        onCreatedInBackground={onCreatedInBackground}
+      />
+    );
+    const { getByTestId, rerender } = render(sheet(true));
+
+    fireEvent.changeText(getByTestId('new-cloud-code-task'), 'Add a dark mode toggle');
+    await act(async () => {
+      fireEvent.press(getByTestId('new-cloud-code-start'));
+    });
+    rerender(sheet(false));
+    rerender(sheet(true));
+    await act(async () => {
+      finishCreate({ session, terminalEntries: [] });
+    });
+
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onCreatedInBackground).toHaveBeenCalledWith(session);
+  });
+
   it('does not start without a task', async () => {
     const { getByTestId } = render(
       <NewCloudCodeSessionSheet visible onClose={jest.fn()} onCreated={jest.fn()} />,
@@ -155,5 +198,37 @@ describe('new cloud code session', () => {
     expect(getByText('GitHub could not be connected')).toBeTruthy();
     expect(getByText('Connect GitHub')).toBeTruthy();
     expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it('lists a harness with its summary and credential note without a stray full stop', async () => {
+    const { getByText } = render(
+      <NewCloudCodeSessionSheet
+        visible
+        onClose={jest.fn()}
+        onCreated={jest.fn()}
+        runtimes={[
+          {
+            id: 'droid',
+            name: 'Droid',
+            kind: 'harness',
+            summary: 'Factory’s software engineering agent.',
+            agentCommand: 'droid',
+            cpuCount: 0,
+            memoryMB: 0,
+            diskSizeMB: 0,
+            isPublic: true,
+            needsUserCredential: true,
+          },
+        ]}
+      />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    expect(
+      getByText('Droid, Factory’s software engineering agent, needs your own API key'),
+    ).toBeTruthy();
   });
 });

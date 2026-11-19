@@ -1,20 +1,26 @@
 use crate::cloud::{chat, CloudClient, CloudError};
+use crate::platform::runtime::session::PrivacyMode;
 use agiworkforce_app_server::DeveloperSessionHostError;
 use agiworkforce_protocol::account_cloud::{
     CloudHistoryListParams, CloudHistoryListResponse, CloudHistoryReadParams,
     CloudHistoryReadResponse,
 };
 
-pub(super) fn connect(
+pub(super) type Connection = (
+    CloudClient,
+    crate::tier_cache::ManagedRequestContext,
+    String,
+);
+
+pub(super) fn connect(expected: Option<&str>) -> Result<Connection, DeveloperSessionHostError> {
+    connect_under(crate::account_privacy_mode(), expected)
+}
+
+fn connect_under(
+    privacy: PrivacyMode,
     expected: Option<&str>,
-) -> Result<
-    (
-        CloudClient,
-        crate::tier_cache::ManagedRequestContext,
-        String,
-    ),
-    DeveloperSessionHostError,
-> {
+) -> Result<Connection, DeveloperSessionHostError> {
+    CloudClient::admit(privacy).map_err(failure)?;
     let context = CloudClient::policy_context().map_err(failure)?;
     let client = CloudClient::from_managed_context(&context).map_err(failure)?;
     let scope = context
@@ -194,4 +200,24 @@ pub(super) async fn save_draft(
         return Err(changed());
     }
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_account_connection_outside_cloud_mode_is_refused_before_any_request() {
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let Err(refused) = connect_under(mode, None) else {
+                panic!("an account connection must be refused outside Cloud mode");
+            };
+            assert!(
+                refused
+                    .to_string()
+                    .contains(&CloudError::NotManaged(mode).to_string()),
+                "{refused}"
+            );
+        }
+    }
 }

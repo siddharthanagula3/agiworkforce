@@ -2296,10 +2296,9 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 4,
+      "files": 1,
       "roles": {
-        "config": 2,
-        "source": 2
+        "config": 1
       }
     },
     {
@@ -2361,12 +2360,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 354,
+      "files": 355,
       "roles": {
         "config": 1,
         "doc": 6,
         "other": 3,
-        "source": 313,
+        "source": 314,
         "test": 31
       }
     },
@@ -2412,22 +2411,22 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1931,
+      "files": 1941,
       "roles": {
         "asset": 59,
         "config": 22,
         "doc": 1,
-        "other": 23,
-        "source": 1176,
+        "other": 24,
+        "source": 1180,
         "style": 2,
-        "test": 648
+        "test": 653
       }
     },
     {
       "path": "apps/extension",
       "name": "@agiworkforce/extension",
       "kind": "app",
-      "purpose": "Managed Cloud chat, approved-site browser context, and automation for AGI",
+      "purpose": "An AI side panel that reads the page you are on and, on sites you approve, clicks and types for you.",
       "owner": "Extension lead",
       "trustBoundary": null,
       "status": null,
@@ -2458,22 +2457,22 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 558,
+      "files": 610,
       "roles": {
-        "asset": 5,
-        "config": 5,
+        "asset": 12,
+        "config": 6,
         "doc": 3,
-        "other": 29,
-        "source": 226,
-        "style": 2,
-        "test": 288
+        "other": 31,
+        "source": 243,
+        "style": 3,
+        "test": 312
       }
     },
     {
       "path": "apps/extension-vscode",
       "name": "agi-workforce",
       "kind": "app",
-      "purpose": "Multi-provider AI coding assistant for VS Code",
+      "purpose": "AI pair programming in VS Code, run by the AGI CLI on your machine with local models, your own provider keys, or AGI Cloud.",
       "owner": "Extension lead",
       "trustBoundary": null,
       "status": null,
@@ -2505,14 +2504,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 386,
+      "files": 398,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
-        "source": 187,
-        "test": 179
+        "source": 191,
+        "test": 187
       }
     },
     {
@@ -2552,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1662,
+      "files": 2477,
       "roles": {
         "asset": 4,
-        "config": 11,
+        "config": 14,
         "doc": 4,
         "generated": 1,
-        "other": 46,
-        "source": 906,
+        "other": 49,
+        "source": 1225,
         "style": 1,
-        "test": 689
+        "test": 1179
       }
     },
     {
@@ -2616,17 +2615,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8300,
+      "files": 8570,
       "roles": {
-        "asset": 57,
-        "config": 76,
+        "asset": 58,
+        "config": 94,
         "doc": 51,
         "generated": 2,
-        "migration": 742,
+        "migration": 752,
         "other": 37,
-        "source": 3521,
-        "style": 35,
-        "test": 3779
+        "source": 3604,
+        "style": 37,
+        "test": 3935
       }
     },
     {
@@ -2643,11 +2642,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 356,
+      "files": 359,
       "roles": {
         "asset": 20,
         "config": 37,
-        "doc": 284,
+        "doc": 287,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2695,12 +2694,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 226,
+      "files": 249,
       "roles": {
         "asset": 1,
-        "config": 19,
-        "doc": 158,
-        "generated": 47,
+        "config": 21,
+        "doc": 181,
+        "generated": 45,
         "other": 1
       }
     },
@@ -2798,7 +2797,8 @@
         "apps/extension-vscode",
         "apps/mobile",
         "apps/web",
-        "packages/ai/provider-runtime"
+        "packages/ai/provider-runtime",
+        "packages/ai/providers/anthropic"
       ],
       "lanes": [],
       "files": 10,
@@ -2887,11 +2887,11 @@
       "lanes": [
         "provider-routing"
       ],
-      "files": 37,
+      "files": 40,
       "roles": {
         "config": 3,
-        "source": 19,
-        "test": 15
+        "source": 21,
+        "test": 16
       }
     },
     {
@@ -2974,6 +2974,7 @@
         "scripts/check-no-hardcoded-models.sh"
       ],
       "dependsOn": [
+        "packages/ai/agent-core",
         "packages/ai/provider-protocol",
         "packages/ai/provider-runtime",
         "packages/contracts/types"
@@ -3419,11 +3420,11 @@
       "lanes": [
         "provider-routing"
       ],
-      "files": 37,
+      "files": 39,
       "roles": {
         "config": 3,
         "source": 11,
-        "test": 23
+        "test": 25
       }
     },
     {
@@ -4007,11 +4008,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 176,
+      "files": 217,
       "roles": {
         "config": 13,
-        "source": 102,
-        "test": 61
+        "source": 120,
+        "test": 84
       }
     },
     {
@@ -4131,11 +4132,11 @@
         "packages/platform/utils"
       ],
       "lanes": [],
-      "files": 45,
+      "files": 50,
       "roles": {
         "config": 4,
-        "source": 26,
-        "test": 15
+        "source": 29,
+        "test": 17
       }
     },
     {
@@ -4267,12 +4268,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 961,
+      "files": 972,
       "roles": {
         "config": 29,
         "generated": 629,
-        "source": 173,
-        "test": 130
+        "source": 177,
+        "test": 137
       }
     },
     {
@@ -4369,16 +4370,17 @@
         "apps/extension-vscode",
         "apps/mobile",
         "apps/web",
-        "packages/client/sync"
+        "packages/client/sync",
+        "packages/ui/unified-chat"
       ],
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 15,
+      "files": 19,
       "roles": {
         "config": 3,
-        "source": 7,
-        "test": 5
+        "source": 9,
+        "test": 7
       }
     },
     {
@@ -4540,11 +4542,11 @@
         "apps/mobile"
       ],
       "lanes": [],
-      "files": 22,
+      "files": 24,
       "roles": {
         "config": 3,
-        "source": 10,
-        "test": 9
+        "source": 11,
+        "test": 10
       }
     },
     {
@@ -4665,11 +4667,11 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 76,
+      "files": 79,
       "roles": {
         "config": 5,
         "source": 42,
-        "test": 29
+        "test": 32
       }
     },
     {
@@ -4921,13 +4923,13 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 188,
+      "files": 190,
       "roles": {
         "asset": 1,
         "config": 3,
-        "source": 106,
+        "source": 107,
         "style": 1,
-        "test": 77
+        "test": 78
       }
     },
     {
@@ -4940,23 +4942,78 @@
       "status": "active",
       "entry": [
         ".",
+        "./activity-kinds",
+        "./activity-status",
         "./agi-work-progress",
+        "./answer-document",
+        "./answer-form-model",
+        "./answer-surfaces",
+        "./answer-ui",
+        "./artifact-download",
+        "./artifact-edit-request",
         "./artifact-sandbox",
+        "./artifact-selection-request",
         "./assistant-fence",
         "./assistant-fence-edits",
         "./capabilities",
+        "./checklist-labels",
+        "./citation-markers",
+        "./citation-publisher",
+        "./code-execution-result",
+        "./code-file-name",
+        "./compact-tool-summary",
+        "./complete-inline-tokens",
         "./composer-editor",
         "./composer-editor.css",
+        "./connector-step-sentence",
         "./continuation-seam",
+        "./continue-generation",
+        "./deck-insights",
+        "./deck-model",
+        "./deck-request",
+        "./filename",
+        "./follow-ups",
+        "./highlight-languages",
+        "./html-entities",
         "./ime-composition",
         "./markdown-document",
+        "./markdown-headings",
+        "./markdown-image-sources",
         "./math-markup",
+        "./mcp-app",
+        "./message-format",
+        "./message-format-cards",
+        "./message-sources",
+        "./model-escalation",
+        "./model-info",
         "./model-picker",
         "./network-error",
+        "./place-facts",
+        "./preprocess-math",
+        "./presentation-slides",
+        "./react-preview-document",
+        "./regenerate-replay",
+        "./report-sources",
+        "./research-plan",
+        "./research-report",
+        "./rich-blocks",
+        "./sanitize-svg",
         "./shiki-highlighter",
+        "./split-markdown-blocks",
         "./src/index.ts",
+        "./stream-tail-context",
+        "./streaming-table-hold",
+        "./study-set",
+        "./svg-gallery",
         "./tabular",
-        "./task-display"
+        "./task-display",
+        "./task-list",
+        "./text-direction",
+        "./tool-failure",
+        "./turn-citations",
+        "./web-search-notice",
+        "./workbook-cell-formats",
+        "./workbook-number-formats"
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [
@@ -4972,6 +5029,7 @@
         "packages/ai/search",
         "packages/client/client-runtime",
         "packages/contracts/types",
+        "packages/platform/artifacts",
         "packages/platform/utils",
         "packages/ui/design-tokens",
         "packages/ui/ui"
@@ -4986,12 +5044,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 450,
+      "files": 529,
       "roles": {
         "config": 3,
-        "source": 208,
+        "source": 245,
         "style": 3,
-        "test": 236
+        "test": 278
       }
     },
     {
@@ -5008,11 +5066,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 24,
+      "files": 19,
       "roles": {
-        "config": 2,
-        "other": 19,
-        "source": 3
+        "config": 1,
+        "other": 17,
+        "source": 1
       }
     },
     {
@@ -5029,13 +5087,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 724,
+      "files": 731,
       "roles": {
-        "config": 67,
+        "config": 68,
         "doc": 1,
         "other": 21,
-        "source": 378,
-        "test": 257
+        "source": 381,
+        "test": 260
       }
     },
     {
@@ -5057,13 +5115,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 79,
+      "files": 93,
       "roles": {
         "config": 6,
         "doc": 1,
         "other": 4,
-        "source": 28,
-        "test": 40
+        "source": 31,
+        "test": 51
       }
     },
     {
@@ -5088,13 +5146,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 23,
+      "files": 32,
       "roles": {
         "config": 3,
         "doc": 1,
         "other": 5,
-        "source": 7,
-        "test": 7
+        "source": 10,
+        "test": 13
       }
     },
     {
@@ -5111,10 +5169,10 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 256,
+      "files": 274,
       "roles": {
         "asset": 2,
-        "config": 157,
+        "config": 175,
         "doc": 9,
         "other": 14,
         "source": 50,

@@ -14,6 +14,7 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_COPY, CODE_LIMITS } from '../code-surface';
 import { LOCAL_CODE_COPY, LOCAL_PANEL_COPY, localTerminalTabLabel } from '../local-code';
+import { LocalPtyTerminal } from './LocalPtyTerminal';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -263,6 +264,8 @@ export interface LocalTerminalDockProps {
   rootId: string;
   folder: string;
   open: boolean;
+  /** The CLI hosts a real shell, so each tab is a terminal instead of a command line. */
+  pty?: boolean;
   onClose: () => void;
   onCommandFinished: () => void;
   onBackgroundStarted: () => void;
@@ -274,6 +277,7 @@ export function LocalTerminalDock({
   rootId,
   folder,
   open,
+  pty = false,
   onClose,
   onCommandFinished,
   onBackgroundStarted,
@@ -290,7 +294,9 @@ export function LocalTerminalDock({
   useEffect(() => {
     if (!open) return;
     panelsRef.current
-      ?.querySelector<HTMLInputElement>(`[data-terminal-tab="${activeId}"] input:not(:disabled)`)
+      ?.querySelector<HTMLElement>(
+        `[data-terminal-tab="${activeId}"] input:not(:disabled), [data-terminal-tab="${activeId}"] textarea`,
+      )
       ?.focus();
   }, [open, activeId]);
 
@@ -438,13 +444,17 @@ export function LocalTerminalDock({
             data-terminal-tab={tab.id}
             hidden={tab.id !== activeId}
           >
-            <LocalTerminal
-              rootId={rootId}
-              folder={folder}
-              onCommandFinished={onCommandFinished}
-              onBackgroundStarted={onBackgroundStarted}
-              onRunningChange={(command) => reportRunning(tab.id, command)}
-            />
+            {pty ? (
+              <LocalPtyTerminal rootId={rootId} />
+            ) : (
+              <LocalTerminal
+                rootId={rootId}
+                folder={folder}
+                onCommandFinished={onCommandFinished}
+                onBackgroundStarted={onBackgroundStarted}
+                onRunningChange={(command) => reportRunning(tab.id, command)}
+              />
+            )}
           </div>
         ))}
       </div>

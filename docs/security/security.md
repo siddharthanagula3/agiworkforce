@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-11-10
+Last updated: 2026-11-13
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -90,6 +90,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `ask_clarifying_questions`     | asks                   | runs                           | read, reversible                                                                 |
 | `plan_itinerary`               | asks                   | runs                           | read, reversible                                                                 |
 | `compare_products`             | asks                   | runs                           | read, reversible                                                                 |
+| `render_answer_ui`             | asks                   | runs                           | read, reversible                                                                 |
 | `url_fetch`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `execute_code`                 | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
 | `run_command`                  | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |
@@ -516,10 +517,12 @@ Two consequences worth stating plainly rather than implying otherwise:
 
 ### Enforcement
 
-`apps/web/lib/connectors/oauth-scope-allowlist.ts` holds
-`CONNECTOR_OAUTH_SCOPE_CEILINGS`, one entry per connector id.
-`filterConnectorScopes(connectorId, requested)` splits an operator's requested
-list into the scopes on the ceiling and the ones above it.
+`packages/contracts/cloud-contracts/src/connector-scopes.ts` holds
+`CONNECTOR_OAUTH_SCOPE_CEILINGS`, one entry per connector id, and
+`apps/web/lib/connectors/oauth-scope-allowlist.ts` re-exports it.
+`filterConnectorScopes(connectorId, requested)` in `oauth-scope-allowlist.ts`
+splits an operator's requested list into the scopes on the ceiling and the
+ones above it.
 
 `loadConnectorOAuthRegistry()` in `oauth-registry.ts` calls it for every
 descriptor it admits. Scopes above the ceiling are dropped from the provider
@@ -542,22 +545,23 @@ all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one
 survives, that the authorization URL carries only the survivors, that every
 `oauth2` connector in the catalog has an entry, and that no enforced ceiling
 admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in
-`oauth-scope-allowlist.ts` (`admin`, `full`, `default`,
+`connector-scopes.ts` (`admin`, `full`, `default`,
 `https://mail.google.com/`, the bare Google `drive`, `calendar`, or
 `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and
 `Mail.ReadWrite`). Removing the enforcement or widening a ceiling to include
 one of those fails CI.
 
 `pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into
-`pnpm check:llm-operability`) statically parses the manifest and
-`scope-descriptions.ts` on every run, independent of the vitest suite, and
+`pnpm check:llm-operability`) statically parses the manifest,
+`connector-scopes.ts`, which also holds `SCOPE_DESCRIPTIONS`, on every run,
+independent of the vitest suite, and
 fails the build if a ceiling admits a forbidden scope, a ceiling scope has no
 description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced
 ceiling is declared a second time anywhere else under
 `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or
 `apps/web/lib/user-connector-tools.ts`. That last check is what keeps
 "the manifest is the only place a scope may be added" true going forward
-rather than as a one-time fact: nothing outside `oauth-scope-allowlist.ts` can
+rather than as a one-time fact: nothing outside `connector-scopes.ts` can
 introduce a scope string without the guard catching the duplicate.
 
 ### Ceiling table
@@ -650,18 +654,37 @@ revoking every connector grant and re-enrolling every 2FA user.
 
 ### What is encrypted, and with which key
 
-| Column                                             | Key env                                 | Key material  | Wire layout                   | `key_version` column       |
-| -------------------------------------------------- | --------------------------------------- | ------------- | ----------------------------- | -------------------------- |
-| `connector_oauth_grants.access_token_enc`          | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
-| `connector_oauth_grants.refresh_token_enc`         | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
-| `user_custom_connectors.auth_header_enc`           | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `auth_header_key_version`  |
-| `github_installations.access_token_enc`            | `GITHUB_TOKEN_ENCRYPTION_KEY`           | 64 hex chars  | `iv:ciphertext:tag` (hex)     | `access_token_key_version` |
-| `user_two_factor.totp_secret_enc`                  | `TOTP_ENCRYPTION_KEY`                   | ≥32 raw chars | base64(IV ‖ ciphertext ‖ tag) | `totp_secret_key_version`  |
-| `connector_oauth_authorizations.code_verifier_enc` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars  | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
+| Column                                              | Key env                                 | Key material                           | Wire layout                   | `key_version` column       |
+| --------------------------------------------------- | --------------------------------------- | -------------------------------------- | ----------------------------- | -------------------------- |
+| `connector_oauth_grants.access_token_enc`           | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
+| `connector_oauth_grants.refresh_token_enc`          | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `token_key_version`        |
+| `user_custom_connectors.auth_header_enc`            | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `auth_header_key_version`  |
+| `github_installations.access_token_enc`             | `GITHUB_TOKEN_ENCRYPTION_KEY`           | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | `access_token_key_version` |
+| `user_two_factor.totp_secret_enc`                   | `TOTP_ENCRYPTION_KEY`                   | ≥32 raw chars                          | base64(IV ‖ ciphertext ‖ tag) | `totp_secret_key_version`  |
+| `user_custom_connectors.oauth_client_secret_enc`    | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `mcp_oauth_clients.client_secret_enc`               | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `bank_account_items.access_token_enc`               | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `slack_installations.bot_token_enc`                 | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, not swept            |
+| `developer_webhook_endpoints.secret_enc`            | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | HKDF per user                          | `v1.<keyId>.<iv>.<ct>.<tag>`  | none, not swept            |
+| `organization_audit_destinations.secret_ciphertext` | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | HKDF per workspace without its own key | `v1.<keyId>.<iv>.<ct>.<tag>`  | none, not swept            |
+| `connector_oauth_authorizations.code_verifier_enc`  | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
+| `github_install_authorizations.code_verifier_enc`   | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 64 hex chars                           | `iv:ciphertext:tag` (hex)     | none, expires in minutes   |
 
-The last row holds a minutes-lived value. Rotating its key strands in-flight
+The two `code_verifier_enc` rows hold a minutes-lived value. Rotating its key strands in-flight
 flows only: a user retries the connect and it works. It gets no bookkeeping
 column and the rotation sweep does not touch it.
+
+The rows marked "not swept" have no target in `scripts/reencrypt.mjs`, which
+finds the rows still to move by their `*_key_version` column. The four
+connector tables have no such column. The two HKDF rows are sealed under a ring
+derived from the connector key per user or per workspace, and re-sealing one
+needs that derived ring and the row's associated data, which the sweep does not
+build; `runOrganizationKeyRewrap` covers a workspace only once it has brought
+its own key. `scripts/reencrypt.test.mjs` names each unswept connector column
+and fails when a connector secret column has neither a target nor an entry
+there. Until a column has a target, a retired
+`CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` version has to stay on the ring (step 6
+of `Rotating a key`).
 
 `DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing: no module reads it and
 `apps/web/lib/validate-env.ts` does not require it. `device_authorization_codes`
@@ -692,15 +715,18 @@ column's CHECK constraint enforces, and no id may appear twice in one ring.
 
 ### Which readers understand the ring
 
-| Column                                   | Reader                           | Ring-aware |
-| ---------------------------------------- | -------------------------------- | ---------- |
-| `connector_oauth_grants.*_token_enc`     | `lib/custom-connector-crypto.ts` | yes        |
-| `user_custom_connectors.auth_header_enc` | `lib/custom-connector-crypto.ts` | yes        |
-| `github_installations.access_token_enc`  | `lib/github-app.ts`              | yes        |
-| `user_two_factor.totp_secret_enc`        | `lib/crypto/totp-envelope.ts`    | yes        |
+| Column                                              | Reader                                      | Ring-aware |
+| --------------------------------------------------- | ------------------------------------------- | ---------- |
+| `connector_oauth_grants.*_token_enc`                | `lib/custom-connector-crypto.ts`            | yes        |
+| `user_custom_connectors.auth_header_enc`            | `lib/custom-connector-crypto.ts`            | yes        |
+| `github_installations.access_token_enc`             | `lib/github-app.ts`                         | yes        |
+| `user_two_factor.totp_secret_enc`                   | `lib/crypto/totp-envelope.ts`               | yes        |
+| the four connector rows marked "not swept" above    | `lib/custom-connector-crypto.ts`            | yes        |
+| `developer_webhook_endpoints.secret_enc`            | `lib/services/developer-webhook-service.ts` | yes        |
+| `organization_audit_destinations.secret_ciphertext` | `lib/services/audit-streaming-service.ts`   | yes        |
 
 A ring-aware reader decrypts against every key on the ring, so rows the sweep
-has not reached yet are still readable with the retired key present. All four
+has not reached yet are still readable with the retired key present. The swept
 columns rotate with **no downtime**. They keep WRITING the legacy `iv:ct:tag`
 (or, for `totp_secret_enc`, `b64-iv-ct-tag`) layout so an instance of the
 previous build can read what a new instance wrote during a rolling deploy;
@@ -721,11 +747,11 @@ below runs the `Rotating a key` procedure end to end, with `scripts/reencrypt.mj
 sweep. Nothing here rotates itself; the date is a calendar obligation on the
 Owner named in the header.
 
-| Key env                                 | Interval  | Next due   | Sweep target                            | Downtime                |
-| --------------------------------------- | --------- | ---------- | --------------------------------------- | ----------------------- |
-| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors` | none, ring-aware reader |
-| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                  | none, ring-aware reader |
-| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                            | none, ring-aware reader |
+| Key env                                 | Interval  | Next due   | Sweep target                                                                                      | Downtime                |
+| --------------------------------------- | --------- | ---------- | ------------------------------------------------------------------------------------------------- | ----------------------- |
+| `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` | 12 months | 2027-08-17 | `connector-grants`, `custom-connectors`; six columns not swept, retired version stays on the ring | none, ring-aware reader |
+| `GITHUB_TOKEN_ENCRYPTION_KEY`           | 12 months | 2027-08-17 | `github-installations`                                                                            | none, ring-aware reader |
+| `TOTP_ENCRYPTION_KEY`                   | 12 months | 2027-08-17 | `two-factor`                                                                                      | none, ring-aware reader |
 
 Rotate ahead of the date, not on it, whenever a key could have been read by
 someone who should not have it: a leaked deployment env, a departing operator
@@ -875,9 +901,21 @@ the baseline and the guard refuses their return.
    `openTotpSecret` refuses to decrypt and which belong to no key. They are
    reported, never stamped.
 
+   A connector secret goes back with the binding it came with: one sealed with
+   its purpose as associated data is re-sealed with it, and a legacy unbound
+   one stays unbound for `scripts/reseal-connector-secrets.mjs` to bind.
+
 6. **Drop `_RETIRED`** from the deployed env once the sweep reports `scanned=0`
    for every target, and redeploy. Keep the old key in a sealed record until the
    next rotation, it is the only way back if a restore predates the sweep.
+
+   Except for `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY`: leave its `_RETIRED` in
+   place. The rows marked "not swept" in the first table are still sealed under
+   the old version, and dropping it leaves every one of them unreadable, so
+   users would have to reconnect Slack, bank accounts, MCP clients and OAuth
+   connectors and re-create webhook and audit destination secrets. A rotation of
+   this key on suspected exposure therefore does not yet take the exposed key
+   out of service.
 
 7. **Verify** a live read of each rotated surface (connect a connector, load a
    GitHub PR review, complete a 2FA challenge) before ending the window.
@@ -1067,10 +1105,10 @@ there, and `agi update --install` verifies it against the same pins, which
 A `v-cli-*` tag stops in `validate-version`, before the build matrix runs,
 unless every key pinned there is a readable P-256 public key.
 
-| Location                                            | Role               | Holder     |
-| --------------------------------------------------- | ------------------ | ---------- |
-| GitHub Actions secret `AGI_CLI_RELEASE_SIGNING_KEY` | deployment copy    | CI         |
-| _unfilled_, offline escrow                          | recovery authority | _unfilled_ |
+| Location                                                       | Role               | Holder     |
+| -------------------------------------------------------------- | ------------------ | ---------- |
+| `cli-release` environment secret `AGI_CLI_RELEASE_SIGNING_KEY` | deployment copy    | CI         |
+| _unfilled_, offline escrow                                     | recovery authority | _unfilled_ |
 
 `BLOCKED_BY_HUMAN`: the key pair does not exist yet, so every install and every
 `agi update --install` refuses until the owner generates it offline, stores the

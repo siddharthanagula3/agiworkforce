@@ -404,12 +404,13 @@ describe('WEB-CONNECTORS-NO-RUNTIME-EFFECT-01 · connectors reach the turn', () 
     expect(offeredConnectorTools()).toEqual([]);
   });
 
-  it('skips connector discovery and account tool-policy reads after the client confirms none are enabled', async () => {
+  it('skips connector discovery and connector permission reads after the client confirms none are enabled', async () => {
     await POST(makeRequest(undefined, false, 'Hello'));
 
     expect(connectorCatalogMocks.load).not.toHaveBeenCalled();
-    expect(toolPolicyMocks.loadTurn).not.toHaveBeenCalled();
-    expect(toolPolicyMocks.loadPolicy).not.toHaveBeenCalled();
+    for (const call of toolPolicyMocks.loadTurn.mock.calls) {
+      expect(call[2]).toMatchObject({ connectorPermissionsRequired: false });
+    }
     expect(offeredConnectorTools()).toEqual([]);
   });
 

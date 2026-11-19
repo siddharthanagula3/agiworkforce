@@ -81,6 +81,8 @@ pub enum IncompleteTurnCause {
     RefusedBySafety,
     /// The answer was cut at the model's output limit.
     OutputLimitReached,
+    /// The stream closed before the provider said the answer was finished.
+    StreamEndedEarly,
 }
 
 impl IncompleteTurnCause {
@@ -92,6 +94,7 @@ impl IncompleteTurnCause {
             Self::OutputLimitReached => {
                 "The answer reached this model's maximum length and stopped there."
             }
+            Self::StreamEndedEarly => "The connection closed before the answer finished.",
         }
     }
 
@@ -101,6 +104,7 @@ impl IncompleteTurnCause {
             Self::NoResponse => "Send it again, or rephrase your message.",
             Self::RefusedBySafety => "Rephrase the request and send it again.",
             Self::OutputLimitReached => "Ask for a shorter answer, or split the request.",
+            Self::StreamEndedEarly => "Send it again to get the whole answer.",
         }
     }
 
@@ -116,6 +120,7 @@ impl IncompleteTurnCause {
             Self::NoResponse => "empty_response",
             Self::RefusedBySafety => "refused_by_safety",
             Self::OutputLimitReached => "output_limit_reached",
+            Self::StreamEndedEarly => "stream_ended_early",
         }
     }
 
@@ -135,6 +140,7 @@ impl IncompleteTurnCause {
             Self::NoResponse => TurnFailureCode::ProviderUnavailable,
             Self::RefusedBySafety => TurnFailureCode::RefusedBySafety,
             Self::OutputLimitReached => TurnFailureCode::OutputLimitReached,
+            Self::StreamEndedEarly => TurnFailureCode::StreamInterrupted,
         }
     }
 }
@@ -336,11 +342,19 @@ impl fmt::Display for CliError {
                 model,
                 token_count,
                 limit,
-            } => write!(
-                f,
-                "Context overflow for model '{}': {} tokens exceeds limit of {}",
-                model, token_count, limit
-            ),
+            } => match (*token_count, *limit) {
+                (0, 0) => write!(f, "Context overflow for model '{}'", model),
+                (0, limit) => write!(
+                    f,
+                    "Context overflow for model '{}': the request exceeds its {} token window",
+                    model, limit
+                ),
+                (token_count, limit) => write!(
+                    f,
+                    "Context overflow for model '{}': {} tokens exceeds limit of {}",
+                    model, token_count, limit
+                ),
+            },
             CliError::RateLimited { provider, .. } => {
                 write!(f, "[{}] {}", provider, self.detail())
             }
@@ -505,6 +519,14 @@ impl CliError {
             } if (500..600).contains(status) => format!(
                 "{provider} returned HTTP {status}. Retry the request, or run again with \
                  `--fallback-model <model>`."
+            ),
+            CliError::Api {
+                provider,
+                status: 404,
+                ..
+            } => format!(
+                "{provider} does not offer this model to your account. Pick another with \
+                 `/model` or `agi models list`."
             ),
             CliError::Api {
                 provider, status, ..
@@ -1068,6 +1090,14 @@ impl CliError {
         match self {
             CliError::RateLimited {
                 retry_after: Some(secs),
+                ..
+            } => Duration::from_secs(*secs),
+            CliError::StreamError {
+                detail:
+                    StreamFailureDetail {
+                        retry_after: Some(secs),
+                        ..
+                    },
                 ..
             } => Duration::from_secs(*secs),
             _ => Duration::from_secs(DEFAULT_RETRY_DELAY_SECS),
@@ -1657,6 +1687,46 @@ mod tests {
     }
 
     #[test]
+    fn a_stated_in_stream_wait_is_honoured() {
+        let err = CliError::stream_failure(
+            "managed_cloud",
+            "busy",
+            true,
+            StreamFailureDetail {
+                retry_after: Some(42),
+                ..StreamFailureDetail::default()
+            },
+        );
+        assert_eq!(err.retry_delay(), Duration::from_secs(42));
+        let unstated = CliError::stream_failure(
+            "managed_cloud",
+            "busy",
+            true,
+            StreamFailureDetail::default(),
+        );
+        assert_eq!(
+            unstated.retry_delay(),
+            Duration::from_secs(DEFAULT_RETRY_DELAY_SECS)
+        );
+    }
+
+    #[test]
+    fn a_missing_model_points_to_the_model_list() {
+        let hint = CliError::api("openai", 404, "Model not found or not available").hint();
+        assert!(hint.contains("agi models list"), "{hint}");
+        assert!(!hint.contains("auth-status"), "{hint}");
+    }
+
+    #[test]
+    fn a_context_overflow_without_figures_prints_none() {
+        let text = CliError::context_overflow("fixture-overflow-model", 0, 0).to_string();
+        assert!(!text.contains("0 tokens"), "{text}");
+        let text = CliError::context_overflow("fixture-overflow-model", 0, 32_000).to_string();
+        assert!(text.contains("32000 token window"), "{text}");
+        assert!(!text.contains("0 tokens"), "{text}");
+    }
+
+    #[test]
     fn retry_delay_rate_limit_no_header() {
         let err = CliError::rate_limited("openai", None);
         assert_eq!(
@@ -2049,6 +2119,10 @@ mod tests {
             (
                 IncompleteTurnCause::OutputLimitReached,
                 TurnFailureCode::OutputLimitReached,
+            ),
+            (
+                IncompleteTurnCause::StreamEndedEarly,
+                TurnFailureCode::StreamInterrupted,
             ),
         ] {
             assert_eq!(cause.code(), code);

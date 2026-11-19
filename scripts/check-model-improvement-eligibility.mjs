@@ -11,11 +11,12 @@ const rootIndex = process.argv.indexOf('--root');
 const scanRoot = rootIndex >= 0 ? path.resolve(process.argv[rootIndex + 1]) : repoRoot;
 
 /**
- * The product makes one promise about model improvement: it does not happen.
- * The eligibility contract is therefore that nothing is eligible, and that is
- * only true while no surface offers the choice and no path carries content to
- * a training sink. Both halves are checked here, because a promise on a page
- * that code has quietly outgrown is worse than no promise.
+ * Customer content is not used for model improvement today. A user may record,
+ * per account, whether chats and voice recordings may be used if that changes;
+ * both choices default to off. The promise holds only while no path carries
+ * content to a training sink and every reader of the choice goes through the one
+ * reader that fails closed. All three halves are checked here, because a promise
+ * on a page that code has quietly outgrown is worse than no promise.
  */
 const CLAIM_PAGES = [
   {
@@ -25,12 +26,31 @@ const CLAIM_PAGES = [
   {
     file: 'apps/web/features/settings/sections/PrivacySection.tsx',
     must: [
-      /There\s+is\s+no\s+training\s+opt-in,\s+because\s+that\s+data\s+path\s+does\s+not\s+exist/i,
+      /we\s+do\s+not\s+use\s+your\s+prompts,\s+responses,\s+files\s+or\s+voice\s+recordings\s+to\s+train\s+or\s+improve\s+AGI-owned\s+models/i,
     ],
   },
 ];
 
-const SCAN_ROOTS = ['apps/web/app', 'apps/web/lib', 'apps/web/features', 'apps/web/shared'];
+const CONSENT_READER = 'apps/web/lib/server/model-improvement-consent.ts';
+
+/** The account choice, which only these files may name: the reader, and the settings that write it. */
+const CONSENT_KEYS = /\b(?:allowChatsForModelImprovement|allowVoiceForModelImprovement)\b/;
+const CONSENT_OWNERS = new Set([
+  CONSENT_READER,
+  'apps/web/features/settings/services/privacy-preferences-client.ts',
+  'apps/web/features/settings/sections/PrivacySection.tsx',
+  'apps/mobile/src/features/settings/cloud-privacy/trainingPreferences.ts',
+]);
+
+const SCAN_ROOTS = [
+  'apps/web/app',
+  'apps/web/lib',
+  'apps/web/features',
+  'apps/web/shared',
+  'apps/mobile',
+  'packages',
+  'services',
+];
 
 /** A control that would make content eligible, or a path that would ship it. */
 const ELIGIBILITY_SURFACES = [
@@ -60,7 +80,7 @@ const NOT_A_CONTROL = [
     file: 'apps/web/features/settings/sections/PrivacySection.tsx',
     surface: 'training-preference',
     reason:
-      'The name appears only in the comment that records why the toggle was removed: it persisted correctly and had no consumer, so it was a switch that saved and changed nothing. Removing the comment would invite the next author to add it back.',
+      'The name appears only in the comment that records why the retired key is never reused: values saved under it were given for a switch with other wording, so they are not consent to the current choices. Removing the comment would invite the next author to read it again.',
   },
 ];
 
@@ -91,6 +111,12 @@ for (const root of SCAN_ROOTS) {
     scanned += 1;
     const relative = path.relative(scanRoot, file).split(path.sep).join('/');
     const source = fs.readFileSync(file, 'utf8');
+    if (CONSENT_KEYS.test(source) && !CONSENT_OWNERS.has(relative)) {
+      failures.push(
+        `${relative} names the model improvement choice directly. Read it only through ` +
+          `readModelImprovementConsent in ${CONSENT_READER}, which is off by default and on any error.`,
+      );
+    }
     for (const surface of ELIGIBILITY_SURFACES) {
       if (!surface.pattern.test(source)) continue;
       const allowed = NOT_A_CONTROL.find(
@@ -106,6 +132,16 @@ for (const root of SCAN_ROOTS) {
       );
     }
   }
+}
+
+const reader = path.join(scanRoot, CONSENT_READER);
+if (
+  !fs.existsSync(reader) ||
+  !/export\s+async\s+function\s+readModelImprovementConsent\b/.test(fs.readFileSync(reader, 'utf8'))
+) {
+  failures.push(
+    `${CONSENT_READER} no longer exports readModelImprovementConsent; the choice has no fail-closed reader`,
+  );
 }
 
 if (scanned === 0) failures.push('no source files scanned; the check would pass vacuously');

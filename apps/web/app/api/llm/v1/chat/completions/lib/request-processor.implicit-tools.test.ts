@@ -34,6 +34,7 @@ type ApplyImplicitManagedToolIntent = (
     prompt: string;
     taskType: RoutingTaskType;
     planTier: BillingPlanTier;
+    surface?: string;
   },
 ) => void;
 
@@ -100,6 +101,23 @@ describe('implicit managed-tool intent', () => {
 
     expect(chatRequest.code_execution).toBe(true);
   });
+
+  it.each(['vscode', 'cli'])(
+    'leaves execution to the %s client, whose own file tools a sandbox would shadow',
+    (surface) => {
+      const chatRequest = request();
+
+      applyImplicitManagedToolIntent()(chatRequest, {
+        prompt:
+          'Explain this javascript code and run a test of it.\n\n```javascript\nconst x = 1;\n```',
+        taskType: 'coding',
+        planTier: 'pro',
+        surface,
+      });
+
+      expect(chatRequest.code_execution).toBeUndefined();
+    },
+  );
 
   it('does not turn a coding discussion into a paid sandbox run', () => {
     const chatRequest = request();

@@ -393,9 +393,9 @@ export class LiveVoiceSession {
             console.warn('[liveVoice] The created session close was not recorded:', cleanupError);
           });
       }
-      throw error instanceof LiveVoiceSessionError || !authority.isCurrent()
-        ? error
-        : new LiveVoiceSessionError(LIVE_VOICE_MESSAGE.connectionFailed, 'connection_failed');
+      if (error instanceof LiveVoiceSessionError || !authority.isCurrent()) throw error;
+      console.warn('[liveVoice] Setup failed:', error);
+      throw new LiveVoiceSessionError(LIVE_VOICE_MESSAGE.connectionFailed, 'connection_failed');
     }
   }
 

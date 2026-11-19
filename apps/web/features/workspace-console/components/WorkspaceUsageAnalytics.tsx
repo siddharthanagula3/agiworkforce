@@ -289,8 +289,7 @@ export function WorkspaceUsageAnalytics() {
             Managed cloud usage
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Completed, settled requests only. Requests still processing or awaiting settlement are
-            not included yet; totals may change when they settle.
+            Settled requests only. Totals may change as pending ones settle.
           </p>
         </div>
         <div
@@ -341,22 +340,21 @@ export function WorkspaceUsageAnalytics() {
             No settled Cloud usage in this window
           </p>
           <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            This view reports settled Cloud usage. Local and BYOK activity is not included in these
-            cloud totals.
+            Settled Cloud usage only. Local and BYOK activity is not included.
           </p>
         </div>
       ) : (
         <>
           <BreakdownTable
             title="By member"
-            caption="Who is using credits, most first. Volume and credits only, this surface never carries what anyone asked the model."
+            caption="Credits by member, most first. What anyone asked is never shown."
             rows={usage.byMember}
             omitted={usage.omitted.byMember}
             ranked
           />
           <BreakdownTable
             title="By product area"
-            caption="Chat, Work, Deep Research, Code and browser tasks. Turns settled before product areas were recorded show as not attributed."
+            caption="Chat, Work, Deep Research, Code and browser tasks. Older turns show as not attributed."
             rows={usage.byWorkload}
             omitted={usage.omitted.byWorkload}
             labelFor={usageWorkloadLabel}

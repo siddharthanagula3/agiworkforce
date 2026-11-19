@@ -1,5 +1,5 @@
 import { approvalRequirement } from '../computer-use/approvalPolicy';
-import { isCrucialAction } from '../computer-use/crucialActions';
+import { asksInAutoMode } from '../computer-use/crucialActions';
 import { sanitizePageText } from '../../background/policy';
 import {
   fillPageFields,
@@ -83,8 +83,7 @@ function refusal(
     pageUrl: expectedUrl,
     targetSignature: field.signature,
   });
-  if (isCrucialAction(requirement) || requirement.reason === 'unidentified_input')
-    return 'This field requires separate approval.';
+  if (asksInAutoMode(requirement)) return 'This field requires separate approval.';
   if (!replaceExisting && !retained(element, field.value)) {
     const answered = toggle
       ? element.checked ||

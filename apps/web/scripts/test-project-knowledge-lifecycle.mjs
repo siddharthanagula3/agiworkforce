@@ -195,14 +195,6 @@ async function organizations(connection) {
   );
   assert(statement);
   await connection.query(statement[0]);
-  const membershipStatus = fs
-    .readFileSync(
-      path.join(root, 'apps/web/db/neon/0234_workspaces_membership_status_and_installations.sql'),
-      'utf8',
-    )
-    .match(/alter table public\.organization_members\s+add column if not exists status [\s\S]*?;/i);
-  assert(membershipStatus, 'Missing authoritative membership status columns');
-  await connection.query(membershipStatus[0]);
 }
 function normalizationDb(connection, observe = async () => {}) {
   return {
@@ -341,14 +333,34 @@ try {
     create policy fixture_custodian_service on legal_hold_custodians to lifecycle_owner using(true) with check(true)`);
   await db.query('grant select on legal_holds, organization_members to app_rls');
   await db.query(holdsMigration.match(/CREATE POLICY legal_holds_admin_read[\s\S]*?;/)[0]);
-  await admin.query('set check_function_bodies = off');
-  await admin.query(helper('0314_workspace_managed_groups.sql', 'organization_member_permissions'));
-  await admin.query(helper('0200_organization_permission_grid.sql', 'app_has_org_permission'));
-  await admin.query(helper('0272_active_membership_authorization.sql', 'app_row_is_visible'));
-  await admin.query('reset check_function_bodies');
+  await db.query(
+    fs
+      .readFileSync(
+        path.join(root, 'apps/web/db/neon/0234_workspaces_membership_status_and_installations.sql'),
+        'utf8',
+      )
+      .match(
+        /alter table public\.organization_members\s+add column if not exists status[\s\S]*?;/i,
+      )[0],
+  );
+  await db.query('set check_function_bodies = off');
+  await db.query(helper('0314_workspace_managed_groups.sql', 'organization_member_permissions'));
+  await db.query(helper('0200_organization_permission_grid.sql', 'app_has_org_permission'));
+  await db.query(helper('0272_active_membership_authorization.sql', 'app_row_is_visible'));
+  await db.query('reset check_function_bodies');
+  const legalHoldPreserves = fs.readFileSync(
+    path.join(root, 'apps/web/db/neon/0416_legal_hold_preserves.sql'),
+    'utf8',
+  );
   await admin.query(helper('0416_legal_hold_preserves.sql', 'legal_hold_preserves'));
   await admin.query(
-    'revoke all on function public.legal_hold_preserves(uuid, text, text) from public; grant execute on function public.legal_hold_preserves(uuid, text, text) to app_rls, lifecycle_owner',
+    legalHoldPreserves.match(/revoke all on function public\.legal_hold_preserves[\s\S]*?;/i)[0],
+  );
+  await admin.query(
+    legalHoldPreserves.match(/grant execute on function public\.legal_hold_preserves[\s\S]*?;/i)[0],
+  );
+  await admin.query(
+    'grant execute on function public.legal_hold_preserves(uuid, text, text) to lifecycle_owner',
   );
   await db.query(`alter table user_projects enable row level security; alter table user_projects force row level security;
     alter table project_knowledge_files enable row level security; alter table project_knowledge_files force row level security;
@@ -975,6 +987,7 @@ try {
       transaction: normalizationDb(connection, observe).transaction,
     };
   }
+  await db.query('reset role');
   const queue = queueDb(db);
   const otherRegion = DATA_REGION_IDS.find((region) => region !== DEFAULT_DATA_REGION);
   assert(otherRegion);
@@ -1689,6 +1702,8 @@ try {
     const retentionSelected = new Promise((resolve) => {
       retentionSelectionObserved = resolve;
     });
+    await left.query('reset role');
+    await right.query('reset role');
     const firstRetention = retention.sweepBatch(
       queueDb(left, async (sql) => {
         if (sql.includes('for update of p skip locked')) {

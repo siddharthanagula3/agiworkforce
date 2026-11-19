@@ -11,6 +11,7 @@ mod shimmer;
 #[allow(dead_code, unused_imports)]
 pub(crate) mod terminal_palette;
 pub(crate) mod transcript_cell;
+mod turn_transcript;
 
 mod composer_edits;
 pub(crate) mod markdown_renderer;
@@ -22,6 +23,12 @@ pub use tui_app::run;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use ratatui::text::{Line, Span};
+
+pub(crate) const MODE_DEFAULT: &str = "Default";
+pub(crate) const MODE_PLAN: &str = "Plan";
+pub(crate) const MODE_AUTO: &str = "Auto";
+pub(crate) const MODE_BYPASS: &str = "Bypass";
+pub(crate) const MODE_FULL_AUTO: &str = "FullAuto";
 
 /// True while the full-screen ratatui TUI owns the terminal (alternate screen +
 /// raw mode). Lower layers (e.g. the streaming dispatcher) check this to avoid

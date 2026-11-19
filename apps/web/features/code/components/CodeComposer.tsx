@@ -19,6 +19,7 @@ import {
   Plus,
   Search,
   Square,
+  Terminal,
   X,
 } from '@agiworkforce/icons';
 import {
@@ -45,6 +46,7 @@ import {
   CLOUD_CODE_GOAL_COMMANDS,
   CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
+  describeCloudCodeRuntime,
   isBillingPlanTier,
   isCloudCodeTurnStepBound,
   isFreeBillingPlanTier,
@@ -76,7 +78,12 @@ import {
 } from '@/lib/hooks/useManagedUsageSummary';
 import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { openUpgrade } from '@shared/lib/app-commands';
-import { listLocalBranches, switchLocalBranch } from '@/features/desktop-host';
+import {
+  listLocalBranches,
+  switchLocalBranch,
+  useDeveloperCapabilities,
+} from '@/features/desktop-host';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   fetchPreferenceNamespace,
@@ -122,7 +129,7 @@ import {
   type LocalProviderSetup,
 } from '../local-code';
 import { LocalModelChip } from './LocalModelChip';
-import { describeRuntime, runtimeHelpText, type HarnessModelChoice } from '../code-runtime';
+import { runtimeHelpText, type HarnessModelChoice } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
 import { useCodeBranches } from '../hooks/use-code-branches';
 import {
@@ -322,7 +329,7 @@ function EnvironmentSettings({
             <optgroup label={CODE_COPY.harnessGroup}>
               {harnesses.map((runtime) => (
                 <option key={runtime.id} value={runtime.id}>
-                  {describeRuntime(runtime)}
+                  {describeCloudCodeRuntime(runtime)}
                 </option>
               ))}
             </optgroup>
@@ -331,7 +338,7 @@ function EnvironmentSettings({
             <optgroup label={CODE_COPY.imageGroup}>
               {images.map((runtime) => (
                 <option key={runtime.id} value={runtime.id}>
-                  {describeRuntime(runtime)}
+                  {describeCloudCodeRuntime(runtime)}
                 </option>
               ))}
             </optgroup>
@@ -1488,7 +1495,11 @@ function ApprovalModeControl({
   );
 }
 
+const DEVELOPER_SETTINGS_SECTION = 'local-mcp';
+
 function AttachMenu() {
+  const localMcp = useDeveloperCapabilities().has('mcp_servers');
+  const { openSettings } = useSettingsModal();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1507,6 +1518,12 @@ function AttachMenu() {
             <span className={styles['menuRowLabel']}>{CODE_COPY.addConnectors}</span>
           </Link>
         </DropdownMenuItem>
+        {localMcp && (
+          <DropdownMenuItem onSelect={() => openSettings(DEVELOPER_SETTINGS_SECTION)}>
+            <Terminal size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            <span className={styles['menuRowLabel']}>{CODE_COPY.mcpServers}</span>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1867,6 +1884,7 @@ export function CodeComposer({
 
         <div
           id="chat-composer"
+          data-testid="code-composer-field"
           className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}
         >
           <SlashCommandMenu

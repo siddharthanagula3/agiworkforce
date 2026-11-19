@@ -1,0 +1,438 @@
+{
+  "key": "dataUse",
+  "route": "/data-use",
+  "date": "2026-11-11",
+  "replacedOn": "2026-11-13",
+  "commit": "5c4066e828125b731dcd9212976b61f46ac892a1",
+  "committedAt": "2026-11-12T18:08:54-06:00",
+  "title": "How we use your data.",
+  "blocks": [
+    {
+      "type": "eyebrow",
+      "content": [
+        {
+          "text": "Legal"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 1,
+      "anchor": "agi-data-use-title",
+      "content": [
+        {
+          "text": "How we use your data."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "The privacy policy is the document that governs. "
+        },
+        {
+          "text": "This page answers common questions about your data and links to the part of the policy that governs each answer.",
+          "strong": true
+        },
+        {
+          "text": " Where the two ever disagree, the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": " wins: this page is a guide to it, not a replacement for it. Last updated: 2026-11-11. "
+        },
+        {
+          "text": "Previous versions",
+          "href": "/legal/archive/data-use"
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "questions",
+      "content": [
+        {
+          "text": "Common questions about your data."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Do you train AI models on my conversations?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "No.",
+          "strong": true
+        },
+        {
+          "text": " AGI does not train AGI-owned models on your prompts, responses or files. One thing to understand: in Cloud we send your prompt to the model provider serving the model you picked, and what "
+        },
+        {
+          "text": "they",
+          "em": true
+        },
+        {
+          "text": " do with it is governed by their terms, not ours. On the Free plan, a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on AGI’s own key at its international endpoint in Singapore, or OpenAI. Which one answers depends on what is available for that turn, and the reply shows the model that answered. We make no promise on their behalf, as section 02 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": " states."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Who at AGI can read my chats?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "In Cloud your conversations are stored by us, so people at AGI can access them, but access is limited to people who need it to operate or support the service, and two layers of access control scope every request to the account that owns it. What those layers are, and where they stop, is section 01 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": " and the measures table in the "
+        },
+        {
+          "text": "DPA",
+          "href": "/dpa"
+        },
+        {
+          "text": ", which states the limit of each control next to the control."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Does it depend on how I run it?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Yes.",
+          "strong": true
+        },
+        {
+          "text": " There are three modes, and they give different answers. In "
+        },
+        {
+          "text": "Local",
+          "strong": true
+        },
+        {
+          "text": ", the conversation runs on your machine and we receive nothing. In "
+        },
+        {
+          "text": "BYOK",
+          "strong": true
+        },
+        {
+          "text": ", the request goes from your client straight to the provider on your own key and we are not in the path. In "
+        },
+        {
+          "text": "Cloud",
+          "strong": true
+        },
+        {
+          "text": ", it goes through us and we store it. Note that Local is part of the CLI, while BYOK is part of the CLI and is coming soon to VS Code. "
+        },
+        {
+          "text": "Web and Desktop chat use Cloud",
+          "strong": true
+        },
+        {
+          "text": "; a Desktop local coding session runs the CLI and can also use Local or BYOK. The full comparison is section 00 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Do you sell my data?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "No.",
+          "strong": true
+        },
+        {
+          "text": " We do not sell personal data and we do not share it for cross-context behavioural advertising. We run no advertising and set no advertising cookies. The list of third parties that do receive data, and exactly what each one gets, is at "
+        },
+        {
+          "text": "/subprocessors",
+          "href": "/subprocessors"
+        },
+        {
+          "text": ". That page also lists its past corrections at the bottom."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "How long do you keep things?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "It differs by the kind of data. Section 05 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": " gives a row per category with the job that enforces it. Where no automatic expiry exists, it says so instead of quoting a number, and it has a table of what is kept after you delete your account."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "How do I get my data out, or delete all of it?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Both are self-serve in account settings: export returns your data as a download, and deletion is scheduled 24 hours out and then carried out by a daily job, unless an active legal hold covers your account, in which case it waits until the hold is released. You get no confirmation email, but cancellation is self-serve too: sign back in and cancel from Settings > Account any time before the 24 hours are up. Everything else (access, correction, deleting an address we hold without an account) goes through "
+        },
+        {
+          "text": "/privacy/requests",
+          "href": "/privacy/requests"
+        },
+        {
+          "text": ", which works whether or not you have an account."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "What do I have to consent to, and can I take it back?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Almost nothing. Running your account and the assistant does not run on consent: it runs on the agreement you made when you signed up, which is why there is no cookie wall here. Consent is asked for exactly three things: crash reporting, analytics, and email you asked us to send. All three are off until you turn them on, each is asked separately, and each can be withdrawn on its own at "
+        },
+        {
+          "text": "/privacy/requests",
+          "href": "/privacy/requests"
+        },
+        {
+          "text": " without affecting the others or your access to anything."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Where is my data physically?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "AGI stores it in the United States.",
+          "strong": true
+        },
+        {
+          "text": " We do not offer data residency in the EU, the UK or India, so using Cloud means your data is transferred there. If you require data residency, we do not currently meet that requirement. A chat is also processed where the model provider that answers it runs that model: on the Free plan’s default model that can be Alibaba Cloud Model Studio’s international endpoint in Singapore, as described above. The transfer mechanisms are section 08 of the "
+        },
+        {
+          "text": "privacy policy",
+          "href": "/privacy"
+        },
+        {
+          "text": " and section 06 of the "
+        },
+        {
+          "text": "DPA",
+          "href": "/dpa"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "What happens to my data if I stop paying, or you shut down?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Cancelling a subscription does not delete your account or your content. The account continues on the free tier and your data stays until you delete it. We make no commitment about your data if the service shuts down. Export is available today, and you can use it at any time to keep your own copy. The billing mechanics themselves are on "
+        },
+        {
+          "text": "the refund policy",
+          "href": "/refund-policy"
+        },
+        {
+          "text": "."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "content": [
+        {
+          "text": "Are you GDPR or DPDP compliant?"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Compliance with either is not a single yes or no, so we publish a per-regime status ledger with dates and what would prove each line at "
+        },
+        {
+          "text": "/trust",
+          "href": "/trust"
+        },
+        {
+          "text": ", the India-specific notice at "
+        },
+        {
+          "text": "/privacy/india",
+          "href": "/privacy/india"
+        },
+        {
+          "text": ", and a security page that lists what we have "
+        },
+        {
+          "text": "not",
+          "em": true
+        },
+        {
+          "text": " done at "
+        },
+        {
+          "text": "/security",
+          "href": "/security"
+        },
+        {
+          "text": ". We hold no SOC 2 report and no ISO 27001 certificate."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "anchor": "why",
+      "content": [
+        {
+          "text": "The governing documents."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "text": "Each answer above is a summary. The privacy policy governs, and the pages below set out retention, recipients, your rights and compliance status in full."
+        }
+      ]
+    },
+    {
+      "type": "list",
+      "items": [
+        [
+          {
+            "text": "Privacy policy",
+            "href": "/privacy"
+          }
+        ],
+        [
+          {
+            "text": "Exercise your rights",
+            "href": "/privacy/requests"
+          }
+        ],
+        [
+          {
+            "text": "Who receives data",
+            "href": "/subprocessors"
+          }
+        ],
+        [
+          {
+            "text": "Compliance status",
+            "href": "/trust"
+          }
+        ]
+      ]
+    }
+  ]
+}

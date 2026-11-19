@@ -79,6 +79,12 @@ export const AccountDeletionScheduleReceiptSchema = z.object({
   scheduledFor: z.string().datetime({ offset: true }),
   status: z.literal('pending'),
   statusReason: z.string().trim().min(1),
+  storeBilling: z
+    .object({
+      store: z.enum(['apple', 'google']),
+      manageUrl: z.url({ protocol: /^https$/ }),
+    })
+    .optional(),
   error: z.never().optional(),
   reason: z.never().optional(),
 });
@@ -94,6 +100,7 @@ export function parseAccountDeletionScheduleReceipt(
 export const AccountDeletionCancellationReceiptSchema = z.object({
   message: z.string().trim().min(1),
   cancelled: z.boolean(),
+  planRenewal: z.enum(['restored', 'not_restored']).optional(),
   error: z.never().optional(),
   reason: z.never().optional(),
 });

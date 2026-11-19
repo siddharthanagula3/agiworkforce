@@ -124,6 +124,21 @@ describe('Action approvals settings screen', () => {
     expect(useSettingsStore.getState().toolApprovalPolicy).toBe('autonomous');
   });
 
+  it('names the safest setting in the Safety default box and never presents Skip approvals as the default', () => {
+    const ASK = TOOL_APPROVAL_POLICY_OPTIONS.find((option) => option.policy === 'ask_every_time')!;
+    const { getByLabelText, getByText, queryByText } = render(<AutoApproveScreen />);
+
+    expect(getByText('Safety default')).toBeTruthy();
+    expect(getByText(`${ASK.label} is the safest setting, and it is on.`)).toBeTruthy();
+
+    fireEvent.press(getByLabelText(rowLabel(AUTONOMOUS)));
+
+    expect(
+      getByText(`${ASK.label} is the safest setting. Your account is set to ${AUTONOMOUS.label}.`),
+    ).toBeTruthy();
+    expect(queryByText(/Current setting/)).toBeNull();
+  });
+
   it('loads and writes the account default through the server preference namespace', async () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });

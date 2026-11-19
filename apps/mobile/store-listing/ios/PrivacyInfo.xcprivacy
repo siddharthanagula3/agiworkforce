@@ -18,11 +18,21 @@
   entries to your privacy manifest") and the per-category index at
   https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api
 
-  AGI Local Mode collects no personal data by default. Signing in to
-  AGI Cloud (public alpha, open to any signed-in user, no invite gate)
-  collects email address, optional name, the account identifier, the
-  conversation content and attachments the user sends, and a device
-  identifier for push delivery, all for app-functionality purposes.
+  What this manifest declares. In every mode, signed in or not,
+  expo-updates sends Expo a per-install client ID and the last launch
+  error with each update check (Device ID, Crash Data). AGI Local Mode
+  uploads no chat content; the one exception is a content report the
+  person chooses to send, which uploads the reported answer to AGI.
+  Signing in to AGI Cloud (public alpha, open to any signed-in user,
+  no invite gate) collects email address, optional name, the account
+  identifier, the conversation content and attachments the user sends,
+  the search queries the user runs, the support tickets and feedback
+  the user writes with their diagnostics bundle, and an app-generated
+  install identifier that lists the device in the account and routes
+  push notifications. Product Interaction carries the Analytics
+  purpose, Device ID carries App Functionality and Analytics, every
+  other type App Functionality. Only Crash Data is not linked to the
+  account.
   NSPrivacyTracking is false. AGI does not include the AdSupport /
   IDFA APIs.
 
@@ -142,7 +152,8 @@
           conversation itself. services/streaming.ts posts the full
           message list to the cloud chat endpoint, and the provider
           serving the selected model receives it (see
-          agiworkforce.com/subprocessors). Local Mode sends nothing.
+          agiworkforce.com/subprocessors). Local Mode sends only a
+          content report the person chooses to send.
         -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>
@@ -158,10 +169,12 @@
         </dict>
 
         <!--
-          Audio Data: live voice mode in an AGI Cloud chat streams the
-          microphone to AGI Cloud over WebRTC for the duration of the
-          session (src/features/voice/services/liveVoiceSession.ts) and
-          saves the transcript to that chat. Dictation and the turn-based
+          Audio Data: in live voice mode in an AGI Cloud chat, AGI Cloud
+          sets up the WebRTC call with the voice provider, then the audio
+          streams directly between the device and that provider for the
+          duration of the session
+          (src/features/voice/services/liveVoiceSession.ts); the transcript
+          is saved to that chat. Dictation and the turn-based
           voice companion transcribe on the device and upload no audio.
           Local Mode has no live voice.
         -->
@@ -215,9 +228,12 @@
 
         <!--
           Device ID: an app-generated random UUID (lib/deviceId.ts,
-          kept in the keychain, device-only) plus the push token are
-          registered against the account at /api/mobile/push-token so
-          notifications reach the right install. Not an advertising
+          kept in the keychain) is sent while signed in to AGI Cloud
+          to list the device in the account, and with the push token
+          at /api/mobile/push-token so notifications reach the right
+          install (App Functionality). expo-updates also sends Expo
+          its own random per-install client ID with every update
+          check, signed in or not (Analytics). Not an advertising
           identifier, AGI links no IDFA and ships no AdSupport.
         -->
         <dict>
@@ -230,6 +246,7 @@
             <key>NSPrivacyCollectedDataTypePurposes</key>
             <array>
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+                <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
             </array>
         </dict>
         <dict>
@@ -242,6 +259,80 @@
             <key>NSPrivacyCollectedDataTypePurposes</key>
             <array>
                 <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+            </array>
+        </dict>
+
+        <!--
+          Customer Support: in AGI Cloud, the support tickets and replies
+          (/api/support/tickets) and the in-app feedback (/api/mobile/feedback)
+          the user writes are stored against the account.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeCustomerSupport</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          Search History: Cloud chat search and past-chat context send
+          the query to /api/search, which records it against the
+          account and may send it to the embedding provider.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeSearchHistory</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          Other Diagnostic Data: a Cloud support ticket attaches a
+          diagnostics bundle (app version and build, OS version, device
+          class, locale, time zone, screen size) unless the person turns
+          it off.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherDiagnosticData</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+          Crash Data: with each update check, signed in or not,
+          expo-updates sends Expo the text of the last error that
+          stopped the app from launching and the IDs of updates that
+          failed to launch. Not linked to the account.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeCrashData</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
             </array>
         </dict>
     </array>

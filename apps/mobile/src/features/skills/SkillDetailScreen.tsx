@@ -30,7 +30,9 @@ import {
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useTheme } from '@/src/ui/theme';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { formatConnectorName } from '@/src/features/settings/cloud-connectors/connectorStatus';
 import { NewSkillSheet } from './NewSkillSheet';
 import {
   SKILL_ENTRY_FILE,
@@ -61,6 +63,7 @@ interface SkillDetail {
   body: string | null;
   files: SkillFileEntry[];
   connected: ReadonlySet<string>;
+  connectorNames: ReadonlyMap<string, string>;
 }
 
 async function loadSkillDetail(name: string, signal: AbortSignal): Promise<SkillDetail | null> {
@@ -86,6 +89,15 @@ async function loadSkillDetail(name: string, signal: AbortSignal): Promise<Skill
           (id): id is string => typeof id === 'string',
         ),
       ),
+    ),
+    connectorNames: new Map(
+      (directory?.connectors ?? []).flatMap((connection) => {
+        const name = connection.name?.trim();
+        if (!name) return [];
+        return [connection.connectorId, connection.toolConnectorId]
+          .filter((id): id is string => typeof id === 'string')
+          .map((id): [string, string] => [id, name]);
+      }),
     ),
   };
 }
@@ -211,6 +223,14 @@ export function SkillDetailScreen() {
 
   const authored = skill ? isAuthoredSkill(skill) : false;
   const pluginOwned = skill ? isPluginOwnedSkill(skill) : false;
+  const skillMeta = skill
+    ? [
+        skill.version ? `Version ${skill.version}` : null,
+        skill.lifecycle === 'draft' ? 'Coming later' : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }}>
@@ -234,14 +254,7 @@ export function SkillDetailScreen() {
             >
               {skill.description || 'No description provided.'}
             </Text>
-            <MetaText>
-              {[
-                skill.version ? `Version ${skill.version}` : null,
-                skill.lifecycle === 'draft' ? 'Coming later' : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || 'Version unknown'}
-            </MetaText>
+            {skillMeta ? <MetaText>{skillMeta}</MetaText> : null}
             {pluginOwned ? <MetaText>{pluginOwnedNote(skill)}</MetaText> : null}
             {skill.lifecycle === 'included' && !authored && !pluginOwned ? (
               <ToggleRow
@@ -262,6 +275,8 @@ export function SkillDetailScreen() {
               ) : null}
               {skill.requiredConnectors?.map((connector) => {
                 const connected = detail.connected.has(connector);
+                const connectorName =
+                  detail.connectorNames.get(connector) ?? formatConnectorName(connector);
                 return (
                   <View
                     key={connector}
@@ -269,7 +284,7 @@ export function SkillDetailScreen() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
-                        {connector}
+                        {connectorName}
                       </Text>
                       <MetaText>
                         {connectorReleased(connector)
@@ -284,7 +299,7 @@ export function SkillDetailScreen() {
                         title="Connect"
                         size="sm"
                         variant="outline"
-                        accessibilityLabel={`Connect ${connector}`}
+                        accessibilityLabel={`Connect ${connectorName}`}
                         onPress={() =>
                           router.push({
                             pathname: '/(app)/connectors/[id]' as const,
@@ -324,9 +339,7 @@ export function SkillDetailScreen() {
                     >
                       {file.path}
                     </Text>
-                    <MetaText>
-                      {file.size < 1024 ? `${file.size} B` : `${Math.round(file.size / 1024)} KB`}
-                    </MetaText>
+                    <MetaText>{formatAttachmentSize(file.size)}</MetaText>
                   </PressableBox>
                 );
               })}

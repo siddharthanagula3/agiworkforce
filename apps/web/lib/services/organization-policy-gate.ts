@@ -167,7 +167,14 @@ async function evaluateFundingOrganizationBillingHold(
 }
 
 function withRequestCountry(ask: PolicyAsk, request: ScopedRequest | undefined): PolicyAsk {
-  if (ask.resource !== 'managed_compute' && ask.resource !== 'feature') return ask;
+  if (
+    ask.resource !== 'managed_compute' &&
+    ask.resource !== 'feature' &&
+    ask.resource !== 'workspace_access' &&
+    ask.resource !== 'chat_sync'
+  ) {
+    return ask;
+  }
   if (ask.country !== undefined) return ask;
   return { ...ask, country: request?.headers.get(REQUEST_COUNTRY_HEADER) ?? null };
 }

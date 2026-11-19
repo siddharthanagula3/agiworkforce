@@ -633,6 +633,12 @@
     },
     {
       "from": "packages/ai/providers/anthropic",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/anthropic",
       "to": "packages/ai/provider-protocol",
       "type": "depends_on",
       "via": "typescript"
@@ -1276,6 +1282,12 @@
     {
       "from": "packages/ui/unified-chat",
       "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/platform/artifacts",
       "type": "depends_on",
       "via": "typescript"
     },

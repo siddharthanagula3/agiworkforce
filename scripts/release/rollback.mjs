@@ -3,9 +3,10 @@
 // anything, and appends the act to the release audit trail. Independent of the
 // run that deployed: it needs only a Vercel token and the database URL.
 
+import { readFileSync } from 'node:fs';
 import process from 'node:process';
 import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { Client } from 'pg';
 
@@ -14,6 +15,9 @@ import { missingEnvironment, reportNotRun } from '../lib/ci-prerequisites.mjs';
 const API_ORIGIN = 'https://api.vercel.com';
 const DEPLOYMENT_PAGE_SIZE = 20;
 const REQUIRED_ENVIRONMENT = ['VERCEL_TOKEN', 'VERCEL_ORG_ID', 'VERCEL_PROJECT_ID'];
+const ROLLBACK_FLOOR_PATH = fileURLToPath(
+  new URL('../config/rollback-floor.json', import.meta.url),
+);
 
 export class RollbackError extends Error {
   constructor(message, details = []) {
@@ -96,14 +100,83 @@ export async function listProductionDeployments(fetchImpl, config) {
   return Array.isArray(body?.deployments) ? body.deployments : [];
 }
 
+const MAX_EPOCH_MILLISECONDS = 8.64e15;
+
+function parseCreatedAt(value) {
+  if (Number.isSafeInteger(value) && value > 0 && value <= MAX_EPOCH_MILLISECONDS) return value;
+  return null;
+}
+
+// The oldest web deployment production may be rolled back to. It is recorded in
+// scripts/config/rollback-floor.json by the deploy that first carries a stored
+// size check, and a file that cannot be read as that record stops the rollback
+// instead of being treated as "no floor". createdAt is epoch milliseconds, the
+// provider's own unit; chooseRollbackTarget checks it against the listing.
+export function parseRollbackFloor(document) {
+  const web = document?.web;
+  if (web === null) return null;
+  const createdAt = parseCreatedAt(web?.createdAt);
+  if (
+    typeof web?.deploymentId !== 'string' ||
+    web.deploymentId.trim() === '' ||
+    typeof web?.reason !== 'string' ||
+    web.reason.trim() === '' ||
+    createdAt === null
+  ) {
+    throw new RollbackError(
+      'scripts/config/rollback-floor.json must hold {"web": null} or {"web": {"deploymentId", "createdAt", "reason"}}',
+    );
+  }
+  return { deploymentId: web.deploymentId.trim(), createdAt, reason: web.reason.trim() };
+}
+
+export function readRollbackFloor(path = ROLLBACK_FLOOR_PATH) {
+  let document;
+  try {
+    document = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    throw new RollbackError(
+      `The rollback floor could not be read from ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return parseRollbackFloor(document);
+}
+
+export function describeRollbackFloor(floor) {
+  return floor
+    ? `rollback floor ${floor.deploymentId} created ${new Date(floor.createdAt).toISOString()} (${floor.reason})`
+    : 'no rollback floor recorded';
+}
+
+function belowFloor(deployment, floor) {
+  return floor !== null && !(Number(deployment.createdAt) >= floor.createdAt);
+}
+
+function floorRefusal(subject, floor) {
+  return new RollbackError(
+    `${subject} was created before the rollback floor ${floor.deploymentId}: ${floor.reason}. Production is never rolled back below it.`,
+  );
+}
+
 // The newest READY production deployment created before the one serving now.
 // "Newest ready" alone is wrong after a previous rollback: the build that was
 // rolled back away from stays READY and is newer than the one now serving.
-export function chooseRollbackTarget(current, deployments, requestedId = null) {
+export function chooseRollbackTarget(current, deployments, requestedId = null, floor = null) {
   const identify = (deployment) => deployment?.uid ?? deployment?.id ?? null;
   const ready = deployments.filter(
     (deployment) => identify(deployment) !== null && deployment.readyState === 'READY',
   );
+
+  if (floor !== null) {
+    const listedFloor = deployments.find(
+      (deployment) => identify(deployment) === floor.deploymentId,
+    );
+    if (listedFloor && Number(listedFloor.createdAt) !== floor.createdAt) {
+      throw new RollbackError(
+        `The rollback floor ${floor.deploymentId} is recorded as created at ${floor.createdAt} but the provider reports ${listedFloor.createdAt}. Fix scripts/config/rollback-floor.json before rolling back.`,
+      );
+    }
+  }
 
   if (requestedId) {
     const match = ready.find((deployment) => identify(deployment) === requestedId);
@@ -115,6 +188,7 @@ export function chooseRollbackTarget(current, deployments, requestedId = null) {
     if (current && identify(match) === current.id) {
       throw new RollbackError('That deployment is the one already serving production');
     }
+    if (belowFloor(match, floor)) throw floorRefusal(requestedId, floor);
     return match;
   }
 
@@ -126,8 +200,13 @@ export function chooseRollbackTarget(current, deployments, requestedId = null) {
     .filter((deployment) => Number(deployment.createdAt ?? 0) < Number(current.createdAt ?? 0))
     .sort((left, right) => Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0));
 
-  const target = olderThanCurrent[0];
+  const target = olderThanCurrent.find((deployment) => !belowFloor(deployment, floor));
   if (!target) {
+    if (olderThanCurrent.length > 0) {
+      throw new RollbackError(
+        `Every earlier ready production deployment was created before the rollback floor ${floor.deploymentId}: ${floor.reason}. Production is never rolled back below it.`,
+      );
+    }
     throw new RollbackError('No earlier ready production deployment exists to roll back to');
   }
   return target;
@@ -191,6 +270,7 @@ export async function runRollback({
   fetchImpl = fetch,
   recordEventImpl = recordEvent,
   report = reportNotRun,
+  readFloor = readRollbackFloor,
 }) {
   const options = parseArguments(argv);
   const missing = missingEnvironment(REQUIRED_ENVIRONMENT, env);
@@ -207,15 +287,16 @@ export async function runRollback({
     return { rolledBack: false, notRun: true, missing };
   }
   const config = readEnvironment(env);
+  const floor = readFloor();
 
   const current = await readProductionTarget(fetchImpl, config);
   const deployments = await listProductionDeployments(fetchImpl, config);
-  const target = chooseRollbackTarget(current, deployments, options.to);
+  const target = chooseRollbackTarget(current, deployments, options.to, floor);
   const targetId = target.uid ?? target.id;
 
   if (options.dryRun) {
     console.log(
-      `resolved rollback target ${targetId} (currently serving ${current?.id ?? 'nothing'})`,
+      `resolved rollback target ${targetId} (currently serving ${current?.id ?? 'nothing'}; ${describeRollbackFloor(floor)})`,
     );
     if (options.drill) {
       await recordEventImpl(config, {
@@ -230,7 +311,11 @@ export async function runRollback({
         previousDeploymentId: current?.id ?? null,
         reason: options.reason,
         runUrl: options.runUrl,
-        detail: { resolvedWithoutActing: true, readyProductionDeployments: deployments.length },
+        detail: {
+          resolvedWithoutActing: true,
+          readyProductionDeployments: deployments.length,
+          rollbackFloor: floor,
+        },
       });
     }
     return { rolledBack: false, targetId, currentId: current?.id ?? null };

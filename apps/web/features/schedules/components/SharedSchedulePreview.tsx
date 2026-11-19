@@ -45,8 +45,7 @@ export function SharedSchedulePreview({
           </div>
         </dl>
         <p className="mt-6 text-sm text-muted-foreground">
-          Adding it creates your own schedule from this copy. You review the instructions, time and
-          model before it is saved, and it runs on your account.
+          Adding it makes your own copy to review first. It runs on your account.
         </p>
         <Link
           href={addHref}

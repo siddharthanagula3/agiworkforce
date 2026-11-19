@@ -37,6 +37,10 @@ import { CONTENT_REPORT_PATH } from '@/lib/egressGuard';
 import { api } from '@/services/api';
 import type { ReportAsset } from '@/services/contentReportAsset';
 import { SUPPORT_EMAIL } from '@/src/features/support/contact';
+import {
+  MAX_CONTENT_REPORT_SUBJECT_ID_LENGTH,
+  type ContentReportSubject,
+} from '@agiworkforce/cloud-contracts';
 
 export type ReportCategory =
   'harmful' | 'inaccurate' | 'offensive' | 'misinformation' | 'privacy' | 'other';
@@ -48,6 +52,8 @@ export type SharedReportItem = {
   id: string;
   sharerId: string;
 };
+
+export type ReportSubject = ContentReportSubject;
 
 export type ContentReport = {
   id: string;
@@ -61,6 +67,7 @@ export type ContentReport = {
   serverAcknowledged: boolean;
   asset?: ReportAsset;
   sharedItem?: SharedReportItem;
+  subject?: ReportSubject;
   /** The user agreed to send this one report after it could not be sent at once. */
   uploadConsented?: boolean;
 };
@@ -85,6 +92,32 @@ export type SaveContentReportResult = {
 const MMKV_KEY = 'content-reports:v1';
 const MAX_EXCERPT_LEN = 500;
 const MAX_STORED_REPORTS = 100;
+
+function reportSubjectFor(params: {
+  messageId: string;
+  subject?: ReportSubject;
+  asset?: ReportAsset;
+  sharedItem?: SharedReportItem;
+}): ReportSubject | undefined {
+  const subject =
+    params.subject ??
+    (params.sharedItem
+      ? { kind: 'shared-item' as const, id: params.sharedItem.id }
+      : params.asset
+        ? { kind: params.asset.kind, id: params.messageId }
+        : undefined);
+  const id = subject?.id.trim().slice(0, MAX_CONTENT_REPORT_SUBJECT_ID_LENGTH);
+  return subject && id ? { kind: subject.kind, id } : undefined;
+}
+
+function isQueued(report: ContentReport): boolean {
+  return report.uploadConsented === true && !report.serverAcknowledged;
+}
+
+function capHistory(reports: ContentReport[]): ContentReport[] {
+  let history = 0;
+  return reports.filter((report) => isQueued(report) || ++history <= MAX_STORED_REPORTS);
+}
 
 function readReports(): ContentReport[] {
   const raw = storage.getString(MMKV_KEY);
@@ -121,6 +154,7 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
       `Category: ${report.category}`,
       `Message ID: ${report.messageId}`,
       `Conversation ID: ${report.conversationId}`,
+      ...(report.subject ? [`Reported item: ${report.subject.kind} ${report.subject.id}`] : []),
       ...(report.asset ? [`Asset: ${report.asset.kind} ${report.asset.url}`] : []),
       ...(report.sharedItem
         ? [
@@ -140,8 +174,6 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
   const mailto = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
 
   try {
-    const canOpen = await Linking.canOpenURL(mailto);
-    if (!canOpen) return false;
     await Linking.openURL(mailto);
   } catch {
     return false;
@@ -172,6 +204,7 @@ async function submitReportToServer(report: ContentReport): Promise<boolean> {
     userNote: report.userNote,
     ...(report.asset ? { asset: report.asset } : {}),
     ...(report.sharedItem ? { sharedItem: report.sharedItem } : {}),
+    ...(report.subject ? { subject: report.subject } : {}),
   };
   try {
     if (report.uploadConsented) {
@@ -201,7 +234,9 @@ export async function saveContentReport(params: {
   sendEmail: boolean;
   asset?: ReportAsset;
   sharedItem?: SharedReportItem;
+  subject?: ReportSubject;
 }): Promise<SaveContentReportResult> {
+  const subject = reportSubjectFor(params);
   const report: ContentReport = {
     id: `rpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     messageId: params.messageId,
@@ -214,10 +249,11 @@ export async function saveContentReport(params: {
     serverAcknowledged: false,
     ...(params.asset ? { asset: params.asset } : {}),
     ...(params.sharedItem ? { sharedItem: params.sharedItem } : {}),
+    ...(subject ? { subject } : {}),
   };
 
   const existing = readReports();
-  const updated = [report, ...existing].slice(0, MAX_STORED_REPORTS);
+  const updated = capHistory([report, ...existing]);
   writeReports(updated);
 
   // Primary sink: the server trust-and-safety intake. Falls back to on-device
@@ -274,7 +310,7 @@ export async function sendStoredContentReport(reportId: string): Promise<ReportD
 }
 
 export function queuedContentReports(): ContentReport[] {
-  return readReports().filter((entry) => entry.uploadConsented && !entry.serverAcknowledged);
+  return readReports().filter(isQueued);
 }
 
 let flushing: Promise<number> | null = null;

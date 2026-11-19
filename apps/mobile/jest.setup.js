@@ -134,6 +134,18 @@ jest.mock('expo-speech-recognition', () => ({
   ExpoSpeechRecognitionModule: {
     requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
     getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+    getSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue({
+      status: 'undetermined',
+      granted: false,
+      canAskAgain: true,
+      expires: 'never',
+    }),
+    requestSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue({
+      status: 'undetermined',
+      granted: false,
+      canAskAgain: true,
+      expires: 'never',
+    }),
     supportsOnDeviceRecognition: jest.fn().mockReturnValue(true),
     start: jest.fn(),
     stop: jest.fn(),

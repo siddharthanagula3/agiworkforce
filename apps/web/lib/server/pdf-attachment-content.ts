@@ -8,6 +8,11 @@ import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 const MAX_TEXT_PAGES = 250;
 const MAX_IMAGE_PAGES = 30;
+
+export interface PdfAttachmentContentOptions {
+  maxTextPages?: number;
+  maxImagePages?: number;
+}
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MIN_TEXT_CHARS = 16;
 
@@ -23,7 +28,7 @@ export interface PdfAttachmentContent {
   pages: string[];
   pageImages: { mimeType: 'image/png'; base64: string; page: number }[];
   /**
-   * The document has more pages than `MAX_TEXT_PAGES`, so `text` covers only
+   * The document has more pages than the text page cap, so `text` covers only
    * the first of them. A chat turn lives with that; a store that keeps the
    * document as its only record of the file refuses instead of holding a
    * silently partial copy.
@@ -147,7 +152,7 @@ function boundText(value: string): string | null {
  * turn died with nothing on screen. Text comes out as text; a scan with no
  * text layer comes out as page images, which every vision route accepts.
  */
-type PdfDocumentProxy = Awaited<
+export type PdfDocumentProxy = Awaited<
   ReturnType<(typeof import('pdfjs-dist/legacy/build/pdf.mjs'))['getDocument']>['promise']
 >;
 
@@ -188,19 +193,42 @@ async function renderPageImage(
   return null;
 }
 
+export type PdfjsModule = typeof import('pdfjs-dist/legacy/build/pdf.mjs');
+type PdfPageProxy = Awaited<ReturnType<PdfDocumentProxy['getPage']>>;
+
+export async function loadPdfjs(): Promise<PdfjsModule> {
+  // pdf.mjs loads its worker through an import() the function file tracer cannot
+  // follow, so the deployed bundle has no worker file. Importing it here by name
+  // ships it and registers globalThis.pdfjsWorker, which pdf.mjs uses instead.
+  await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
+  return import('pdfjs-dist/legacy/build/pdf.mjs');
+}
+
+export async function pdfPageText(page: PdfPageProxy): Promise<string> {
+  const content = await page.getTextContent();
+  return content.items
+    .map((item) => ('str' in item && typeof item.str === 'string' ? item.str : ''))
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+export function isPdfPasswordError(error: unknown): boolean {
+  return error instanceof Error && error.name === PDF_PASSWORD_EXCEPTION;
+}
+
 export async function extractPdfAttachmentContent(
   data: Buffer,
   filename: string,
+  options: PdfAttachmentContentOptions = {},
 ): Promise<PdfAttachmentContent> {
   if (!data.subarray(0, 5).equals(Buffer.from('%PDF-'))) {
     throw new PdfAttachmentUnreadableError(filename);
   }
 
-  // pdf.mjs loads its worker through an import() the function file tracer cannot
-  // follow, so the deployed bundle has no worker file. Importing it here by name
-  // ships it and registers globalThis.pdfjsWorker, which pdf.mjs uses instead.
-  await import('pdfjs-dist/legacy/build/pdf.worker.mjs');
-  const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const maxTextPages = options.maxTextPages ?? MAX_TEXT_PAGES;
+  const maxImagePages = options.maxImagePages ?? MAX_IMAGE_PAGES;
+  const { getDocument, OPS } = await loadPdfjs();
   const loadingTask = getDocument({
     data: new Uint8Array(data),
     useWorkerFetch: false,
@@ -209,18 +237,11 @@ export async function extractPdfAttachmentContent(
 
   try {
     const document = await loadingTask.promise;
-    const pagesOmitted = document.numPages > MAX_TEXT_PAGES;
-    const pageCount = Math.min(document.numPages, MAX_TEXT_PAGES);
+    const pagesOmitted = document.numPages > maxTextPages;
+    const pageCount = Math.min(document.numPages, maxTextPages);
     const pages: string[] = [];
     for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      const page = await document.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const text = content.items
-        .map((item) => ('str' in item && typeof item.str === 'string' ? item.str : ''))
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-      pages.push(text);
+      pages.push(await pdfPageText(await document.getPage(pageNumber)));
     }
 
     const hasTextLayer = boundText(pages.filter(Boolean).join('\n\n')) !== null;
@@ -232,7 +253,7 @@ export async function extractPdfAttachmentContent(
     const scannedPagesOmitted: number[] = [];
     let imageBytes = 0;
     for (const pageNumber of imageCandidates) {
-      if (pageImages.length >= MAX_IMAGE_PAGES) {
+      if (pageImages.length >= maxImagePages) {
         scannedPagesOmitted.push(pageNumber);
         continue;
       }
@@ -272,7 +293,7 @@ export async function extractPdfAttachmentContent(
     };
   } catch (error) {
     if (error instanceof PdfAttachmentUnreadableError) throw error;
-    if (error instanceof Error && error.name === PDF_PASSWORD_EXCEPTION) {
+    if (isPdfPasswordError(error)) {
       throw new PdfAttachmentUnreadableError(filename, 'encrypted');
     }
     logger.warn({ err: error, filename }, '[pdf] attachment content extraction failed');

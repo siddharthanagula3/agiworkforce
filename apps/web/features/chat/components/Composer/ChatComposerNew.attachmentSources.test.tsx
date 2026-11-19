@@ -4,10 +4,17 @@ import userEvent from '@testing-library/user-event';
 import { ChatComposerNew } from './ChatComposerNew';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
-import { chatAttachmentAcceptAttribute } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_ATTACHMENT_LIMITS,
+  MAX_CHAT_ATTACHMENT_COUNT,
+  chatAttachmentAcceptAttribute,
+} from '@agiworkforce/cloud-contracts';
 import { getPlanMaxAttachmentsPerMessage } from '@agiworkforce/types';
 
-const PRO_ATTACHMENTS_PER_MESSAGE = getPlanMaxAttachmentsPerMessage('pro');
+const PRO_ATTACHMENTS_PER_MESSAGE = Math.min(
+  MAX_CHAT_ATTACHMENT_COUNT,
+  getPlanMaxAttachmentsPerMessage('pro'),
+);
 import {
   PICTURE_NEEDLE,
   bytesOf,
@@ -177,7 +184,7 @@ function pasteImage(field: HTMLElement, file: File): void {
 
 describe('ChatComposerNew attachment sources', () => {
   beforeEach(() => {
-    useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
+    useBillingStore.setState({ subscription: PRO_SUBSCRIPTION, attachmentLimits: null });
     useChatStore.setState({ draftsByConversation: {}, draftContent: '' });
   });
 
@@ -234,6 +241,21 @@ describe('ChatComposerNew attachment sources', () => {
         `"page-${PRO_ATTACHMENTS_PER_MESSAGE + 1}.png" (over the ${PRO_ATTACHMENTS_PER_MESSAGE}-file limit)`,
         { exact: false },
       ),
+    ).toBeTruthy();
+  });
+
+  it('holds a drop to the files per message the server published for this account', async () => {
+    useBillingStore.setState({
+      attachmentLimits: { ...CHAT_ATTACHMENT_LIMITS, maxFilesPerMessage: 3 },
+    });
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    dropOnWindow(Array.from({ length: 5 }, (_, index) => onePixelPng(`scan-${index}.png`)));
+
+    expect(await screen.findByRole('button', { name: 'Remove scan-2.png' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove scan-3.png' })).toBeNull();
+    expect(
+      await screen.findByText('"scan-3.png" (over the 3-file limit)', { exact: false }),
     ).toBeTruthy();
   });
 

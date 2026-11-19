@@ -15,6 +15,12 @@ vi.stubGlobal('chrome', {
 });
 
 import { resolveApprovalRequirement } from '../src/features/computer-use/agentLoop';
+import { readsWithoutActing } from '../src/features/computer-use/approvalPolicy';
+import {
+  actionNeedsApproval,
+  DEFAULT_BROWSER_PERMISSION_MODE,
+} from '../src/features/computer-use/askBeforeActing';
+import { isCrucialAction } from '../src/features/computer-use/crucialActions';
 import { getBrowserToolDefinitions } from '../src/features/computer-use/browserToolDefinitions';
 import { BrowserAgentSiteTools } from '../src/features/tools/browserAgentSiteTools';
 
@@ -55,6 +61,16 @@ describe('browser site tools use the canonical approval path', () => {
 
       expect(prepare).toHaveBeenCalledWith(args);
       expect(requirement).toEqual({ alwaysAsk: true, reason: 'site_tool' });
+      await expect(
+        actionNeedsApproval({
+          alwaysAsk: requirement.alwaysAsk,
+          crucial: isCrucialAction(requirement),
+          mode: DEFAULT_BROWSER_PERMISSION_MODE,
+          allowedForTask: false,
+          readsOnly: readsWithoutActing('call_site_tool'),
+          siteApproved: async () => true,
+        }),
+      ).resolves.toBe(true);
     },
   );
 

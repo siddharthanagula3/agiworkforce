@@ -109,6 +109,8 @@ pub struct MemoryPushResponse {
 /// The account's memory as this device last saw it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct MemoryCache {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
     #[serde(default)]
     pub entries: Vec<CachedMemory>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -137,6 +139,17 @@ pub struct CachedMemory {
 }
 
 impl MemoryCache {
+    pub fn owned_by(self, owner: &str) -> Self {
+        if self.owner.as_deref() == Some(owner) {
+            self
+        } else {
+            Self {
+                owner: Some(owner.to_string()),
+                ..Self::default()
+            }
+        }
+    }
+
     pub fn apply(&mut self, deltas: &[MemoryDelta]) {
         for delta in deltas {
             self.entries.retain(|entry| entry.id != delta.id);
@@ -419,6 +432,33 @@ mod tests {
         assert_eq!(cache.entries[0].content, "second");
         cache.apply(&[delta("m1", "second", "3", true)]);
         assert!(cache.entries.is_empty());
+    }
+
+    #[test]
+    fn another_accounts_cache_is_dropped_before_this_accounts_pull_merges_into_it() {
+        let mut cached = MemoryCache::default().owned_by("account-a");
+        cached.apply(&[delta("a1", "account a secret", "1", false)]);
+        cached.synced_through = Some("1".to_string());
+
+        let mut pulled = cached.clone().owned_by("account-b");
+        pulled.adopt(&MemoryPullResponse {
+            memories: vec![delta("b1", "account b fact", "1", false)],
+            cursor: "1".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        });
+        assert_eq!(pulled.owner.as_deref(), Some("account-b"));
+        assert_eq!(
+            pulled
+                .entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b1"]
+        );
+
+        let kept = cached.clone().owned_by("account-a");
+        assert_eq!(kept, cached);
     }
 
     #[test]

@@ -6,8 +6,7 @@ import {
   classifyTaskLocally,
   detectIndicScript,
   evaluateModelAccess,
-  resolveAutoRoute,
-  type AutoRoutingRequest,
+  MODEL_POLICY_UNAVAILABLE,
 } from '@agiworkforce/routing';
 import {
   billingPlanCapabilityPlanLabels,
@@ -23,8 +22,8 @@ import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter
 import {
   buildCapabilityPreamble,
   servingModelFor,
-  type ServingModel,
 } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import type { ServingModel } from '@/lib/prompts/chat-system-prompt-assembly';
 import {
   resolveManagedUsageLeaseSeconds,
   type ChatCompletionRequest,
@@ -44,10 +43,8 @@ import {
   type InstructionBlock,
 } from '@/lib/prompts/instruction-precedence';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
-import {
-  sideCallRoutingRequest,
-  sideCallTrainingOptOut,
-} from '@/lib/server/side-call-training-policy';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -329,31 +326,30 @@ function buildProcessedRequest(input: {
 async function selectRoute(input: {
   db: DatabaseAdapter;
   userId: string;
+  organizationId: string | null;
   runId: string;
   taskType: ReturnType<typeof classifyTaskLocally>['type'];
   subscriptionTier: string;
-  modelPolicy: Awaited<ReturnType<typeof readModelPolicy>>;
 }): Promise<ScheduledRunRoute | SlackTurnOutcome> {
-  const baseRouting: AutoRoutingRequest = {
-    selection: 'auto',
-    taskType: input.taskType,
-    subscriptionTier: input.subscriptionTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-    organizationPolicy: input.modelPolicy,
-    requestId: `slack-run-${input.runId}`,
-  };
-  const routing = await sideCallRoutingRequest(input.db, input.userId, baseRouting);
-  if (!routing) return refused('no_training_model_available', NO_TRAINING_MODEL_MESSAGE);
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    return routing === baseRouting
-      ? refused(
-          'model_unavailable',
-          'No model your workspace allows is available right now, so this message was not answered.',
-        )
-      : refused('no_training_model_available', NO_TRAINING_MODEL_MESSAGE);
+  const admission = await admitManagedCloudRoute({
+    kind: 'unattended',
+    account: { db: input.db, userId: input.userId, organizationId: input.organizationId },
+    planTier: input.subscriptionTier,
+    need: { taskType: input.taskType, requestId: `slack-run-${input.runId}` },
+  });
+  if (admission.status === 'refused') {
+    if (admission.reason === 'policy_unreadable') {
+      return refused(MODEL_POLICY_UNAVAILABLE.code, MODEL_POLICY_UNAVAILABLE.reason);
+    }
+    if (admission.reason === 'no_training_route') {
+      return refused('no_training_model_available', NO_TRAINING_MODEL_MESSAGE);
+    }
+    return refused(
+      'model_unavailable',
+      'No model your workspace allows is available right now, so this message was not answered.',
+    );
   }
+  const { route } = admission;
   if (route.harnessId.endsWith('/media')) {
     return refused(
       'model_unavailable',
@@ -465,10 +461,10 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
     const selected = await selectRoute({
       db,
       userId,
+      organizationId,
       runId,
       taskType,
       subscriptionTier: entitlement.plan,
-      modelPolicy,
     });
     if ('kind' in selected) return selected;
     route = selected;

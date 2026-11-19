@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 jest.mock('../src/features/chat/components/MathBlock', () => ({
@@ -44,6 +44,20 @@ describe('code-card header row', () => {
     const label = screen.getByText('ts');
     expect(label.parent).toBeTruthy();
     expect(copy.parent).toBeTruthy();
+  });
+
+  it('draws Download and Copy as bare symbols with no box behind them, each with a full-size tap area', () => {
+    const screen = renderFence('```ts\nconst x = 1;\n```');
+
+    for (const label of ['Download code.ts', 'Copy code']) {
+      const control = screen.getByLabelText(label);
+      const style = StyleSheet.flatten(control.props.style) ?? {};
+      expect(style.backgroundColor).toBeUndefined();
+      expect(style.borderWidth).toBeUndefined();
+      expect(style.borderRadius).toBeUndefined();
+      expect(style.minWidth).toBeGreaterThanOrEqual(44);
+      expect(style.minHeight).toBeGreaterThanOrEqual(44);
+    }
   });
 
   it('renders the code body itself unchanged beneath the header', () => {

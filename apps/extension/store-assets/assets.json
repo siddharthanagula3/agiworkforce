@@ -1,0 +1,47 @@
+{
+  "assets": [
+    { "path": "icons/icon128.png", "width": 128, "height": 128, "kind": "icon" },
+    {
+      "path": "store-assets/screenshot-1-chat-answer.png",
+      "width": 1280,
+      "height": 800,
+      "kind": "screenshot"
+    },
+    {
+      "path": "store-assets/screenshot-2-page-summary.png",
+      "width": 1280,
+      "height": 800,
+      "kind": "screenshot"
+    },
+    {
+      "path": "store-assets/screenshot-3-approval.png",
+      "width": 1280,
+      "height": 800,
+      "kind": "screenshot"
+    },
+    {
+      "path": "store-assets/screenshot-4-site-permissions.png",
+      "width": 1280,
+      "height": 800,
+      "kind": "screenshot"
+    },
+    {
+      "path": "store-assets/screenshot-5-tasks.png",
+      "width": 1280,
+      "height": 800,
+      "kind": "screenshot"
+    },
+    {
+      "path": "store-assets/promo-small-440x280.png",
+      "width": 440,
+      "height": 280,
+      "kind": "promo-small"
+    },
+    {
+      "path": "store-assets/promo-marquee-1400x560.png",
+      "width": 1400,
+      "height": 560,
+      "kind": "promo-marquee"
+    }
+  ]
+}

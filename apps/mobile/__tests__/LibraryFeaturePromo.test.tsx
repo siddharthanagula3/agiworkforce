@@ -29,10 +29,11 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: jest.fn().mockResolvedValue(true),
+  openInAppBrowser: jest.fn().mockResolvedValue(true),
 }));
 
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 import {
   LibraryFeaturePromoSheet,
@@ -92,7 +93,7 @@ describe('Library feature promo sheet', () => {
 
     fireEvent.press(screen.getByLabelText('Learn more'));
 
-    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('library'));
+    expect(openInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('library'));
     expect(helpArticleUrl('library')).toMatch(/\/help\/library\?from=mobile$/);
     expect(screen.queryByText(LIBRARY_PROMO_TITLE)).toBeNull();
   });
@@ -101,5 +102,11 @@ describe('Library feature promo sheet', () => {
     const { existsSync } = require('fs');
     const { join } = require('path');
     expect(existsSync(join(__dirname, '../../web/content/support/library.md'))).toBe(true);
+  });
+
+  it('stops the sheet at the reading column on a wide window', () => {
+    const screen = render(<LibraryFeaturePromoSheet />);
+
+    expect(sitsInColumn(screen.getByTestId('library-promo-sheet'), 'reading')).toBe(true);
   });
 });

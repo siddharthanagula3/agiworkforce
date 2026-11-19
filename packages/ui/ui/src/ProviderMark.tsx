@@ -12,7 +12,6 @@ import {
   siOllama,
   siPerplexity,
   siQwen,
-  siX,
   siZdotai,
 } from 'simple-icons';
 
@@ -32,8 +31,6 @@ const ICON_BY_PROVIDER: Record<string, SimpleIcon> = {
   ollama: siOllama,
   perplexity: siPerplexity,
   qwen: siQwen,
-  xai: siX,
-  grok: siX,
   zhipu: siZdotai,
 };
 

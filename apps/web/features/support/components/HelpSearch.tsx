@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { EMBEDDED_PAGE_PARAM, EMBEDDED_PAGE_PARAM_VALUE } from '@agiworkforce/types';
 import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 import ReactMarkdown from 'react-markdown';
 
 import { Prose, Stack } from '@/features/marketing/components/system';
 import { LinkGrid } from '@/features/marketing/components/pages/features/Shared';
+import { useEmbeddedPage } from '@shared/components/layout/EmbeddedPage';
 
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
@@ -28,36 +30,45 @@ export function HelpSearch({ initialQuery = '' }: { initialQuery?: string }) {
   const [query, setQuery] = useState(initialQuery);
   const [state, setState] = useState<SearchState>({ kind: 'idle' });
   const inFlight = useRef<AbortController | null>(null);
+  const embeddedMarker = useEmbeddedPage()
+    ? `&${EMBEDDED_PAGE_PARAM}=${EMBEDDED_PAGE_PARAM_VALUE}`
+    : '';
 
-  const run = useCallback(async (text: string) => {
-    inFlight.current?.abort();
-    const controller = new AbortController();
-    inFlight.current = controller;
-    setState({ kind: 'searching' });
+  const run = useCallback(
+    async (text: string) => {
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
+      setState({ kind: 'searching' });
 
-    try {
-      const response = await fetch(`/api/help/search?q=${encodeURIComponent(text)}`, {
-        signal: controller.signal,
-        headers: { accept: 'application/json' },
-      });
-      if (controller.signal.aborted) return;
-      if (response.status === 503) {
-        setState({ kind: 'unavailable' });
-        return;
-      }
-      if (!response.ok) {
+      try {
+        const response = await fetch(
+          `/api/help/search?q=${encodeURIComponent(text)}${embeddedMarker}`,
+          {
+            signal: controller.signal,
+            headers: { accept: 'application/json' },
+          },
+        );
+        if (controller.signal.aborted) return;
+        if (response.status === 503) {
+          setState({ kind: 'unavailable' });
+          return;
+        }
+        if (!response.ok) {
+          setState({ kind: 'error' });
+          return;
+        }
+        const body = (await response.json()) as { results?: HelpSearchResult[] };
+        if (controller.signal.aborted) return;
+        const results = body.results ?? [];
+        setState(results.length > 0 ? { kind: 'results', results } : { kind: 'empty' });
+      } catch (error) {
+        if (controller.signal.aborted) return;
         setState({ kind: 'error' });
-        return;
       }
-      const body = (await response.json()) as { results?: HelpSearchResult[] };
-      if (controller.signal.aborted) return;
-      const results = body.results ?? [];
-      setState(results.length > 0 ? { kind: 'results', results } : { kind: 'empty' });
-    } catch (error) {
-      if (controller.signal.aborted) return;
-      setState({ kind: 'error' });
-    }
-  }, []);
+    },
+    [embeddedMarker],
+  );
 
   useEffect(() => {
     inFlight.current?.abort();

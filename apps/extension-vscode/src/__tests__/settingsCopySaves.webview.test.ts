@@ -136,6 +136,37 @@ describe('settings instruction saves', () => {
     expect(saveButton('workspace').disabled).toBe(true);
   });
 
+  it('keeps an unsaved draft when the save fails', () => {
+    boot();
+    type('workspaceCustomInstructions', 'Run the workspace smoke suite first.');
+    saveButton('workspace').click();
+    saveButton('workspace').focus();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'settings.error', message: 'The workspace file is read-only.' },
+      }),
+    );
+
+    expect(
+      (document.getElementById('workspaceCustomInstructions') as HTMLTextAreaElement).value,
+    ).toBe('Run the workspace smoke suite first.');
+    expect(saveButton('workspace').disabled).toBe(false);
+  });
+
+  it('keeps an unsaved draft when another setting refreshes the snapshot', () => {
+    boot();
+    type('hostCustomInstructions', 'Prefer integration tests.');
+    saveButton('host').focus();
+
+    snapshot({ values: { ...baseState.values, contextLines: 80 } });
+
+    expect((document.getElementById('hostCustomInstructions') as HTMLTextAreaElement).value).toBe(
+      'Prefer integration tests.',
+    );
+    expect(saveButton('host').disabled).toBe(false);
+  });
+
   it('treats the host snapshot as the new saved value', () => {
     boot();
     snapshot({

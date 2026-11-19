@@ -14,14 +14,10 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import {
-  remoteControlPlanRefusal,
-  remoteControlRefusal,
-} from '@/lib/feature-flags/remote-control-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { remoteControlStandingRefusal } from '@/lib/feature-flags/remote-control-gate';
 import { readRequestingDeviceId } from '@/lib/device-steps/requesting-device';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
@@ -54,8 +50,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   let db: DatabaseAdapter;
   let userId: string;
+  let surface: CloudChatSurface | undefined;
   try {
-    ({ db, userId } = await getUserScopedDb(request));
+    ({ db, userId, surface } = await getUserScopedDb(request));
   } catch (authError) {
     if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
@@ -66,19 +63,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const rateLimited = await withRateLimit(request, 'device-link', userId);
   if (rateLimited) return rateLimited;
 
-  const featureGate = await buildWorkspaceFeatureGateResponse(
-    userId,
-    request,
-    'remote_control',
-    resolveCloudChatSurface(request),
-  );
-  if (featureGate) return featureGate;
-
-  const planRefusal = await remoteControlPlanRefusal(db, userId);
-  if (planRefusal) return planRefusal;
-
-  const switchedOff = await remoteControlRefusal(request, userId);
-  if (switchedOff) return switchedOff;
+  const refusal = await remoteControlStandingRefusal(db, userId, request, surface ?? 'unknown');
+  if (refusal) return refusal.response;
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];

@@ -10,13 +10,16 @@ import {
   CRATE_BINDINGS_DIR,
   TOOL_PRIMITIVE,
   checkProtocolTypes,
+  cliReadsOwnedWindowCredits,
   compareTrees,
   compareVocabulary,
   collectModules,
   fieldsOfGeneratedType,
+  lineReadPlanWindowCredits,
   normalizeDeclaration,
   runtimeListing,
   stringUnionMembers,
+  tsPlanWindowCredits,
   zodObjectKeys,
 } from './check-protocol-types.mjs';
 
@@ -208,4 +211,57 @@ test('an empty canonical tree is a failure rather than a vacuous pass', () => {
 
   assert.equal(problems.length, 1);
   assert.match(problems[0], /holds no generated modules/);
+});
+
+const USAGE_LIMITS_FIXTURE = `export const MANAGED_USAGE_LIMITS: Readonly<Record<string, object>> =
+  Object.freeze({
+    free: {
+      monthlyCredits: 20,
+      weeklyCredits: 15,
+      fiveHourCredits: 2,
+      dailyCredits: 0,
+    },
+    max_15x: {
+      monthlyCredits: 20_000,
+      weeklyCredits: 5_000,
+      fiveHourCredits: null,
+      dailyCredits: 0,
+    },
+    enterprise: { unlimited: true },
+  });
+`;
+
+test('the cli counts as reading the owner only when it embeds the owner file', () => {
+  assert.equal(
+    cliReadsOwnedWindowCredits(
+      'const C: &str = include_str!("../../../packages/contracts/types/src/managed-usage-limits.ts");',
+    ),
+    true,
+  );
+  assert.equal(
+    cliReadsOwnedWindowCredits('const C: &str = include_str!("../../../other/limits.ts");'),
+    false,
+  );
+  assert.equal(cliReadsOwnedWindowCredits('const PLAN_WINDOW_CREDITS: [u32; 0] = [];'), false);
+});
+
+test('the line reader the cli uses sees the same windows as the owner table', () => {
+  const owned = tsPlanWindowCredits(USAGE_LIMITS_FIXTURE);
+  const read = lineReadPlanWindowCredits(USAGE_LIMITS_FIXTURE);
+
+  assert.deepEqual([...read], [...owned]);
+  assert.deepEqual(
+    [...read],
+    [
+      ['free', '2/15/20'],
+      ['max_15x', 'none/5000/20000'],
+    ],
+  );
+});
+
+test('a plan the line reader cannot see is a difference, not a silent pass', () => {
+  const reflowed = USAGE_LIMITS_FIXTURE.replace('    free: {', "    'free': {");
+
+  assert.equal(tsPlanWindowCredits(reflowed).has('free'), true);
+  assert.equal(lineReadPlanWindowCredits(reflowed).has('free'), false);
 });

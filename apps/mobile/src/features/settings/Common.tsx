@@ -8,18 +8,21 @@ import { ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { Switch } from '@/components/ui/Switch';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
 
 export function SettingsScreenShell({
   title,
   children,
-  backHref = '/(app)/(tabs)/settings',
+  backHref = '/(app)/settings',
   help,
   refreshControl,
   overlay,
+  scrollRef,
 }: {
   title: string;
   children: React.ReactNode;
@@ -27,6 +30,7 @@ export function SettingsScreenShell({
   help?: { docId: MobileHelpArticleId; label: string };
   refreshControl?: React.ReactElement<RefreshControlProps>;
   overlay?: React.ReactNode;
+  scrollRef?: React.Ref<ScrollView>;
 }) {
   const { colors, statusBarStyle } = useTheme();
   const goBack = useGoBack(backHref);
@@ -36,8 +40,11 @@ export function SettingsScreenShell({
       <StatusBar style={statusBarStyle} />
       <ScreenHeader title={title} onBack={goBack} />
       <ScrollView
+        ref={scrollRef}
         className="flex-1"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
+          ...contentColumn('reading'),
           flexGrow: 1,
           paddingHorizontal: 16,
           paddingTop: 8,
@@ -53,19 +60,42 @@ export function SettingsScreenShell({
   );
 }
 
-export function SettingsGroup({ children }: { children: React.ReactNode }) {
+export function SettingsGroup({
+  children,
+  footnote,
+}: {
+  children: React.ReactNode;
+  footnote?: string;
+}) {
   const colors = useThemeColors();
-  return (
+  const group = (
     <View
       style={{
         borderRadius: cardRadius,
         backgroundColor: colors.surfaceElevated,
         overflow: 'hidden',
-        marginBottom: 24,
+        marginBottom: footnote ? 8 : 24,
       }}
     >
       {children}
     </View>
+  );
+  if (!footnote) return group;
+  return (
+    <>
+      {group}
+      <Text
+        style={{
+          color: colors.textMuted,
+          fontSize: typeScale.footnote,
+          lineHeight: 19,
+          marginBottom: 24,
+          paddingHorizontal: 14,
+        }}
+      >
+        {footnote}
+      </Text>
+    </>
   );
 }
 
@@ -149,6 +179,7 @@ export function CloudAccountRequired({
         Your plan and Cloud data need an account; Local Mode works without one.
       </Text>
       <Pressable
+        hitSlop={{ top: 1, bottom: 1 }}
         onPress={onSignIn}
         accessibilityRole="button"
         accessibilityLabel="Sign in to AGI Cloud"
@@ -237,11 +268,14 @@ export function SettingsRow({
   destructive?: boolean;
 }) {
   const colors = useThemeColors();
+  const stacked = useLargeTextRows();
+  const labelColor = destructive ? colors.agentError : colors.textPrimary;
   const content = (
     <View
       style={{
         minHeight: 52,
         paddingHorizontal: 14,
+        paddingVertical: 8,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
@@ -250,24 +284,43 @@ export function SettingsRow({
       }}
     >
       <Icon size={19} color={destructive ? colors.agentError : colors.textSecondary} />
-      <Text
-        numberOfLines={1}
-        style={{
-          flex: 1,
-          color: destructive ? colors.agentError : colors.textPrimary,
-          fontSize: typeScale.body,
-        }}
-      >
-        {label}
-      </Text>
-      {value ? (
-        <Text
-          numberOfLines={1}
-          style={{ color: colors.textMuted, fontSize: typeScale.footnote, maxWidth: 140 }}
-        >
-          {value}
-        </Text>
-      ) : null}
+      {stacked ? (
+        <View testID={`settings-row-text-${label}`} style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            maxFontSizeMultiplier={ROW_LABEL_TEXT_SCALE_LIMIT}
+            style={{ color: labelColor, fontSize: typeScale.body }}
+          >
+            {label}
+          </Text>
+          {value ? (
+            <Text
+              numberOfLines={2}
+              style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}
+            >
+              {value}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <>
+          <Text numberOfLines={2} style={{ flex: 1, color: labelColor, fontSize: typeScale.body }}>
+            {label}
+          </Text>
+          {value ? (
+            <Text
+              numberOfLines={2}
+              style={{
+                color: colors.textMuted,
+                fontSize: typeScale.footnote,
+                maxWidth: 150,
+                textAlign: 'right',
+              }}
+            >
+              {value}
+            </Text>
+          ) : null}
+        </>
+      )}
       {onPress && !destructive ? <ChevronRight size={17} color={colors.textMuted} /> : null}
     </View>
   );
@@ -306,6 +359,7 @@ export function SettingsSwitchRow({
   testID?: string;
 }) {
   const colors = useThemeColors();
+  const stacked = useLargeTextRows();
   const resolvedIconColor = iconColor ?? colors.textSecondary;
 
   return (
@@ -313,7 +367,7 @@ export function SettingsSwitchRow({
       style={{
         minHeight: description ? 76 : 56,
         paddingHorizontal: 14,
-        paddingVertical: description ? 12 : 0,
+        paddingVertical: description ? 12 : stacked ? 8 : 0,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
@@ -337,14 +391,14 @@ export function SettingsSwitchRow({
       </View>
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
         <Text
-          numberOfLines={1}
+          numberOfLines={stacked ? undefined : 2}
           style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {label}
         </Text>
         {description ? (
           <Text
-            numberOfLines={2}
+            numberOfLines={stacked ? undefined : 4}
             style={{
               color: colors.textMuted,
               fontSize: typeScale.footnote,

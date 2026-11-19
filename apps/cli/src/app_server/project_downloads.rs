@@ -295,6 +295,7 @@ impl Entry {
                 "The download's account or deployment changed".into(),
             ));
         }
+        CloudClient::admit(crate::account_privacy_mode())?;
         CloudClient::from_managed_context(&self.context)?
             .with_workspace(Some(&self.review.download.file.project.workspace))
     }

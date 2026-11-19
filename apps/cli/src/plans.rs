@@ -12,14 +12,49 @@ const PLAN_ORDER: [&str; 8] = [
     "enterprise",
 ];
 
-const PLAN_WINDOW_CREDITS: [(&str, u32, u32, u32); 6] = [
-    ("free", 2, 15, 20),
-    ("basic", 10, 100, 400),
-    ("pro", 50, 500, 2_000),
-    ("max", 250, 2_500, 10_000),
-    ("team", 50, 500, 2_000),
-    ("team_premium", 250, 2_500, 10_000),
-];
+const USAGE_LIMITS_CONTRACT: &str =
+    include_str!("../../../packages/contracts/types/src/managed-usage-limits.ts");
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WindowCredits {
+    five_hour: Option<u32>,
+    weekly: u32,
+    monthly: u32,
+}
+
+fn contract_credits(value: &str) -> Option<u32> {
+    value.replace('_', "").parse().ok()
+}
+
+fn plan_window_credits(plan: &str) -> Option<WindowCredits> {
+    let table = &USAGE_LIMITS_CONTRACT
+        [USAGE_LIMITS_CONTRACT.find("export const MANAGED_USAGE_LIMITS:")?..];
+    let heading = format!("{plan}: {{");
+    let mut lines = table.lines().skip_while(|line| line.trim() != heading);
+    lines.next()?;
+    let (mut five_hour, mut weekly, mut monthly) = (None, None, None);
+    for line in lines {
+        let line = line.trim();
+        if line.starts_with('}') {
+            break;
+        }
+        let Some((key, value)) = line.trim_end_matches(',').split_once(": ") else {
+            continue;
+        };
+        match key {
+            "fiveHourCredits" if value == "null" => five_hour = Some(None),
+            "fiveHourCredits" => five_hour = Some(Some(contract_credits(value)?)),
+            "weeklyCredits" => weekly = Some(contract_credits(value)?),
+            "monthlyCredits" => monthly = Some(contract_credits(value)?),
+            _ => {}
+        }
+    }
+    Some(WindowCredits {
+        five_hour: five_hour?,
+        weekly: weekly?,
+        monthly: monthly?,
+    })
+}
 
 const PER_SEAT_PLANS: [&str; 2] = ["team", "team_premium"];
 
@@ -126,18 +161,23 @@ fn plan_label(plan: &str) -> String {
         .unwrap_or_else(|| plan.to_string())
 }
 
+fn window_phrase(credits: WindowCredits) -> String {
+    let five_hour = credits.five_hour.map_or_else(
+        || "no 5-hour limit".to_string(),
+        |five_hour| credit_amount(f64::from(five_hour)),
+    );
+    format!(
+        "{five_hour} / {} / {} credits",
+        credit_amount(f64::from(credits.weekly)),
+        credit_amount(f64::from(credits.monthly))
+    )
+}
+
 fn credits_phrase(plan: &str) -> String {
-    let Some((_, five_hour, weekly, monthly)) =
-        PLAN_WINDOW_CREDITS.iter().find(|(id, _, _, _)| *id == plan)
-    else {
+    let Some(credits) = plan_window_credits(plan) else {
         return "usage set by your contract".to_string();
     };
-    let window = format!(
-        "{} / {} / {} credits",
-        credit_amount(f64::from(*five_hour)),
-        credit_amount(f64::from(*weekly)),
-        credit_amount(f64::from(*monthly))
-    );
+    let window = window_phrase(credits);
     if plan == "free" {
         format!("{window}, free models only")
     } else if PER_SEAT_PLANS.contains(&plan) {
@@ -210,16 +250,8 @@ mod tests {
     use super::*;
 
     fn window_credits(plan: &str) -> String {
-        let (_, five_hour, weekly, monthly) = PLAN_WINDOW_CREDITS
-            .iter()
-            .copied()
-            .find(|(id, _, _, _)| *id == plan)
-            .unwrap_or_else(|| panic!("{plan} states no window credits"));
-        format!(
-            "{} / {} / {} credits",
-            credit_amount(f64::from(five_hour)),
-            credit_amount(f64::from(weekly)),
-            credit_amount(f64::from(monthly))
+        window_phrase(
+            plan_window_credits(plan).unwrap_or_else(|| panic!("{plan} states no window credits")),
         )
     }
 
@@ -299,7 +331,7 @@ mod tests {
                 format!("    Includes: {}", labels(&plan_capabilities("free"))).as_str(),
             )
         );
-        assert_eq!(rows[4].0, "  Ultra: usage set by your contract");
+        assert_eq!(rows[4].0, format!("  Ultra: {}", window_credits("max_15x")));
         assert_eq!(
             rows[5].0,
             format!("  Team: {} per seat", window_credits("team"))
@@ -369,7 +401,10 @@ mod tests {
     fn a_max_20x_account_sees_itself_marked_under_its_catalog_label() {
         let lines = render_plans(Some(&UserTier::Max15x));
         let rows = plan_rows(&lines);
-        assert_eq!(rows[4].0, "  Ultra (your plan): usage set by your contract");
+        assert_eq!(
+            rows[4].0,
+            format!("  Ultra (your plan): {}", window_credits("max_15x"))
+        );
         assert_eq!(rows[3].1, "    No features beyond Ultra");
         assert_eq!(
             rows[7].1,
@@ -378,6 +413,27 @@ mod tests {
                 labels(&["team_admin", "enterprise_controls"])
             )
         );
+    }
+
+    #[test]
+    fn every_plan_but_enterprise_reads_its_credits_from_the_shared_usage_limits() {
+        for plan in PLAN_ORDER {
+            assert_eq!(
+                plan_window_credits(plan).is_some(),
+                plan != "enterprise",
+                "{plan}"
+            );
+        }
+        let ultra = plan_window_credits("max_15x").expect("Ultra credits");
+        assert_eq!(ultra.five_hour, None);
+        assert!(
+            ultra.weekly > 0 && ultra.monthly > ultra.weekly,
+            "{ultra:?}"
+        );
+        assert!(credits_phrase("max_15x").starts_with("no 5-hour limit / "));
+        assert!(plan_window_credits("free")
+            .and_then(|credits| credits.five_hour)
+            .is_some());
     }
 
     #[test]

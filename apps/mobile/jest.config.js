@@ -1,10 +1,13 @@
 module.exports = {
   preset: 'jest-expo',
+  // CI runs this suite beside the web and desktop suites on one runner, where
+  // a screen test that waits out a debounce can pass 5 s without being stuck.
+  testTimeout: 20000,
   testPathIgnorePatterns: ['/node_modules/', 'scripts/screenshots/specs/'],
   setupFiles: ['./jest.setup.js'],
   setupFilesAfterEnv: ['./jest.after-setup.js'],
   transformIgnorePatterns: [
-    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/artifacts|@agiworkforce/cloud-contracts|@agiworkforce/sync|@agiworkforce/trust-boundaries|uuid|decode-uri-component))',
+    'node_modules/(?!(?:.pnpm/[^/]+/node_modules/)?(?:(?:jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|standard-navigation|@shopify/flash-list|@gorhom/bottom-sheet|nativewind|lucide-react-native|react-native-svg|react-native-reanimated|react-native-gesture-handler|react-native-screens|react-native-safe-area-context|react-native-mmkv|zustand|@agiworkforce/design-tokens|@agiworkforce/artifacts|@agiworkforce/cloud-contracts|@agiworkforce/sync|@agiworkforce/trust-boundaries|uuid|decode-uri-component|unified|bail|devlop|is-plain-obj|trough|vfile|vfile-message|unist-[^/]+|remark-[^/]+|mdast-[^/]+|micromark[^/]*|decode-named-character-reference|character-entities[^/]*|character-reference-invalid|ccount|escape-string-regexp|markdown-table|longest-streak|zwitch))',
   ],
   moduleNameMapper: {
     '^mermaid/dist/mermaid\\.min\\.js$': '<rootDir>/__mocks__/mermaidBuild.js',
@@ -20,6 +23,10 @@ module.exports = {
       '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
     '^@agiworkforce/unified-chat/assistant-fence$':
       '<rootDir>/../../packages/ui/unified-chat/src/components/markdown/assistantFence.ts',
+    '^@agiworkforce/unified-chat/continue-generation$':
+      '<rootDir>/../../packages/ui/unified-chat/src/lib/continue-generation.ts',
+    '^@agiworkforce/unified-chat/continuation-seam$':
+      '<rootDir>/../../packages/ui/unified-chat/src/lib/continuation-seam.ts',
     '^expo-audio$': '<rootDir>/__mocks__/expo-audio.js',
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',

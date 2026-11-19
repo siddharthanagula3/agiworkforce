@@ -61,10 +61,11 @@ pub async fn invite(privacy: PrivacyMode) -> Result<Invite, CloudError> {
 
 pub fn invite_text(invite: &Invite) -> String {
     format!(
-        "{}\n\nFriends who join with this link get {} days of Pro free. When their first payment \
+        "{}\n\nFriends who join with this link get {} days of {} free. When their first payment \
          goes through, they get {} bonus credits, and you get {} bonus credits {} days later.",
         invite.link,
         invite.program.friend_trial_days,
+        crate::tier_cache::UserTier::Pro.label(),
         invite.program.reward_credits,
         invite.program.reward_credits,
         invite.program.hold_days,

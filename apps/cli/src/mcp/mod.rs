@@ -333,14 +333,49 @@ fn provider_safe_name_part(part: &str) -> String {
         .collect()
 }
 
+/// OpenAI's Chat Completions API rejects a function name longer than 64
+/// characters, the shortest limit among the providers a session can route to.
+const PROVIDER_TOOL_NAME_MAX: usize = 64;
+
 /// The model-visible name of an MCP tool, in the `mcp__<server>__<tool>`
-/// convention the rest of the product already reads.
+/// convention the rest of the product already reads. A name over
+/// [`PROVIDER_TOOL_NAME_MAX`] keeps the server prefix, shortens the tool
+/// part and ends in a hash of the full pair, so two long names stay apart.
 pub fn mcp_tool_name(server_name: &str, tool_name: &str) -> String {
-    format!(
-        "mcp__{}__{}",
-        provider_safe_name_part(server_name),
-        provider_safe_name_part(tool_name)
-    )
+    let server = provider_safe_name_part(server_name);
+    let full = format!("mcp__{server}__{}", provider_safe_name_part(tool_name));
+    if full.len() <= PROVIDER_TOOL_NAME_MAX {
+        return full;
+    }
+    let tag = tool_name_tag(server_name, tool_name);
+    let prefix = format!("mcp__{server}__");
+    let room = PROVIDER_TOOL_NAME_MAX.saturating_sub(prefix.len() + 1 + tag.len());
+    if room > 0 {
+        let tool = full
+            .get(prefix.len()..prefix.len() + room)
+            .unwrap_or_default();
+        return format!("{prefix}{tool}_{tag}");
+    }
+    let keep = PROVIDER_TOOL_NAME_MAX - "mcp__".len() - 1 - tag.len();
+    let rest = full
+        .get("mcp__".len().."mcp__".len() + keep)
+        .unwrap_or_default();
+    format!("mcp__{rest}_{tag}")
+}
+
+fn tool_name_tag(server_name: &str, tool_name: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(format!("{server_name}\0{tool_name}").as_bytes());
+    let bytes: &[u8] = &digest;
+    crate::hex::encode(&bytes[..4])
+}
+
+fn with_collision_suffix(base: &str, suffix: usize) -> String {
+    let tail = format!("_{suffix}");
+    let keep = base
+        .len()
+        .min(PROVIDER_TOOL_NAME_MAX.saturating_sub(tail.len()));
+    format!("{}{tail}", base.get(..keep).unwrap_or(base))
 }
 
 /// MCP tool discovered from a server.
@@ -1029,7 +1064,7 @@ fn has_credential_header(headers: &HashMap<String, String>) -> bool {
     })
 }
 
-fn credential_state(config: &McpServerConfig) -> McpCredentialState {
+pub(crate) fn credential_state(config: &McpServerConfig) -> McpCredentialState {
     match config.as_transport() {
         McpTransport::Stdio { .. } => McpCredentialState::Configured,
         McpTransport::Sse { url, headers } => remote_credential_state(&url, &headers),
@@ -1538,61 +1573,61 @@ impl McpConnection {
         changes
     }
 
-    /// Discover tools from the MCP server, validated and namespaced.
+    /// Discover tools from the MCP server, validated and namespaced, across
+    /// every page the server returns. A tool whose entry is invalid is left
+    /// out with a warning; the rest of the server's tools still load.
     pub async fn list_tools(&mut self) -> Result<Vec<McpTool>> {
-        let response = self
-            .client
-            .request("tools/list", None, self.timeouts.list_tools)
-            .await?;
+        let listed = self.list_every_page("tools/list", "tools").await?;
+        Ok(listed
+            .iter()
+            .filter_map(|tool| match listed_tool(&self.server_name, tool) {
+                Ok(tool) => Some(tool),
+                Err(error) => {
+                    tracing::warn!(server = %self.server_name, "MCP: skipped a tool: {error:#}");
+                    None
+                }
+            })
+            .collect())
+    }
 
-        let tools_json = response
-            .and_then(|r| r.get("tools").cloned())
-            .and_then(|t| t.as_array().cloned())
-            .unwrap_or_default();
-
-        let mut tools = Vec::new();
-        for tool in tools_json {
-            let name = tool
-                .get("name")
-                .and_then(|n| n.as_str())
-                .filter(|name| !name.trim().is_empty())
-                .with_context(|| {
-                    format!("[{}] MCP tool missing non-empty name", self.server_name)
-                })?;
-            let description = tool
-                .get("description")
-                .and_then(|d| d.as_str())
-                .unwrap_or_default();
-            let input_schema = tool.get("inputSchema").cloned().with_context(|| {
-                format!(
-                    "[{}] MCP tool '{}' missing inputSchema",
-                    self.server_name, name
-                )
-            })?;
-            let schema_object = input_schema.as_object().with_context(|| {
-                format!(
-                    "[{}] MCP tool '{}' inputSchema must be a JSON object",
-                    self.server_name, name
-                )
-            })?;
-            if schema_object.get("type").and_then(|v| v.as_str()) != Some("object") {
-                bail!(
-                    "[{}] MCP tool '{}' inputSchema.type must be \"object\"",
-                    self.server_name,
-                    name
-                );
+    /// [`Self::list_tools`], or no tools for a server whose tool listing
+    /// failed while it still offers prompts or resources, so those stay
+    /// reachable.
+    async fn list_tools_keeping_other_offers(&mut self) -> Result<Vec<McpTool>> {
+        match self.list_tools().await {
+            Err(error) if offers_beyond_tools(&self.negotiated().capabilities) => {
+                tracing::warn!(server = %self.server_name, "MCP: tools unavailable, prompts and resources kept: {error:#}");
+                Ok(Vec::new())
             }
-
-            tools.push(McpTool {
-                namespaced_name: mcp_tool_name(&self.server_name, name),
-                original_name: name.to_string(),
-                server_name: self.server_name.clone(),
-                description: description.to_string(),
-                input_schema,
-            });
+            listed => listed,
         }
+    }
 
-        Ok(tools)
+    async fn list_every_page(&mut self, method: &str, key: &str) -> Result<Vec<serde_json::Value>> {
+        let mut items = Vec::new();
+        let mut cursor: Option<String> = None;
+        for _ in 0..MCP_LIST_PAGE_LIMIT {
+            let params = cursor
+                .as_ref()
+                .map(|cursor| serde_json::json!({ "cursor": cursor }));
+            let response = self
+                .client
+                .request(method, params, self.timeouts.list_tools)
+                .await?;
+            if let Some(page) = response
+                .as_ref()
+                .and_then(|response| response.get(key))
+                .and_then(serde_json::Value::as_array)
+            {
+                items.extend(page.iter().cloned());
+            }
+            cursor = next_page_cursor(response.as_ref(), cursor.as_deref());
+            if cursor.is_none() {
+                return Ok(items);
+            }
+        }
+        tracing::warn!(server = %self.server_name, method, "MCP: stopped listing after {MCP_LIST_PAGE_LIMIT} pages");
+        Ok(items)
     }
 
     /// Discover prompts from the MCP server.
@@ -1612,11 +1647,11 @@ impl McpConnection {
     }
 
     pub async fn list_prompts(&mut self) -> Result<Vec<McpPrompt>> {
-        let response = self
-            .client
-            .request("prompts/list", None, self.timeouts.list_tools)
-            .await?;
-        Ok(parse_prompts_response(&self.server_name, response.as_ref()))
+        let prompts = self.list_every_page("prompts/list", "prompts").await?;
+        Ok(parse_prompts_response(
+            &self.server_name,
+            Some(&serde_json::json!({ "prompts": prompts })),
+        ))
     }
 
     pub async fn get_prompt(
@@ -1687,9 +1722,28 @@ pub struct McpConfigLoadOptions {
     pub strict: bool,
 }
 
+static RESTART_OPTIONS: std::sync::Mutex<Option<McpConfigLoadOptions>> =
+    std::sync::Mutex::new(None);
+
 impl McpConfigLoadOptions {
     pub fn has_explicit_sources(&self) -> bool {
         self.strict || !self.explicit_paths.is_empty()
+    }
+
+    /// Keep these launch options as the ones `/mcp restart` loads with, so a
+    /// restart keeps `--mcp-config` files and `--strict-mcp-config`.
+    pub fn remember_for_restart(&self) {
+        if let Ok(mut remembered) = RESTART_OPTIONS.lock() {
+            *remembered = Some(self.clone());
+        }
+    }
+
+    pub fn for_restart() -> Self {
+        RESTART_OPTIONS
+            .lock()
+            .ok()
+            .and_then(|remembered| remembered.as_ref().cloned())
+            .unwrap_or_default()
     }
 }
 
@@ -1957,11 +2011,17 @@ fn load_default_mcp_configs(
 /// folder name. They run outside the sandbox unless an entry says
 /// `"sandbox": true`: no sandboxed command can rewrite that folder.
 fn user_servers() -> HashMap<String, McpServerConfig> {
+    crate::config::CliConfig::config_dir()
+        .map(|config_dir| user_servers_in(&config_dir))
+        .unwrap_or_default()
+}
+
+/// `mcp.json`, the file `agi mcp add` writes, wins a name `.mcp.json` also
+/// uses, as it does in a project folder.
+fn user_servers_in(config_dir: &std::path::Path) -> HashMap<String, McpServerConfig> {
     let mut servers = HashMap::new();
-    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-        for filename in [".mcp.json", "mcp.json"] {
-            load_mcp_config_file_into(&config_dir.join(filename), &mut servers, false);
-        }
+    for filename in [".mcp.json", "mcp.json"] {
+        load_mcp_config_file_into(&config_dir.join(filename), &mut servers, true);
     }
     servers
         .into_iter()
@@ -2011,6 +2071,16 @@ fn load_explicit_mcp_configs(
         load_mcp_config_file_into_result(path, configs, true, true)?;
     }
     Ok(())
+}
+
+/// Why a server did not connect, on stderr, or while the full-screen TUI owns
+/// the terminal as a notice in its transcript.
+fn report_server_problem(quiet: bool, line: String) {
+    if quiet {
+        crate::tui::push_tui_notice(line);
+    } else {
+        eprintln!("  {line}");
+    }
 }
 
 /// An untrusted workspace does not get servers started for it: `.mcp.json` is
@@ -2140,9 +2210,7 @@ impl McpManager {
         if let Some(notice) =
             untrusted_autostart_notice(configs.len(), crate::trust::restrictions().mcp_autostart)
         {
-            if !quiet {
-                eprintln!("  {notice}");
-            }
+            report_server_problem(quiet, notice);
             return Ok(());
         }
         // Sorted, so a name a collision forced apart is the same name on the
@@ -2155,12 +2223,13 @@ impl McpManager {
                 self.remote_servers.insert(name.clone());
             }
             if !mcp_transport_allowed(config, privacy_mode) {
-                if !quiet {
-                    eprintln!(
-                        "  MCP server '{}': blocked in Local privacy mode; use an explicit BYOK or Managed continuation before connecting a remote MCP server",
-                        name
-                    );
-                }
+                report_server_problem(
+                    quiet,
+                    format!(
+                        "MCP server '{}': blocked in Local privacy mode; use an explicit BYOK or Managed continuation before connecting a remote MCP server",
+                        crate::terminal_text::sanitize_terminal_text(name)
+                    ),
+                );
                 continue;
             }
             match McpConnection::connect_with_elicitation(
@@ -2171,7 +2240,7 @@ impl McpManager {
             )
             .await
             {
-                Ok(mut conn) => match conn.list_tools().await {
+                Ok(mut conn) => match conn.list_tools_keeping_other_offers().await {
                     Ok(tools) => {
                         let count = tools.len();
                         self.register_discovered_tools(tools);
@@ -2205,31 +2274,33 @@ impl McpManager {
                         self.connections.insert(name.clone(), conn);
                     }
                     Err(e) => {
-                        if !quiet {
-                            eprintln!(
-                                "  MCP server '{}': failed to list tools: {}",
+                        report_server_problem(
+                            quiet,
+                            format!(
+                                "MCP server '{}': failed to list tools: {}",
                                 crate::terminal_text::sanitize_terminal_text(name),
                                 crate::terminal_text::sanitize_terminal_text(&e.to_string())
-                            );
-                        }
+                            ),
+                        );
                         let _ = conn.shutdown().await;
                     }
                 },
                 Err(e) => {
-                    if !quiet {
-                        let name = crate::terminal_text::sanitize_terminal_text(name);
+                    let name = crate::terminal_text::sanitize_terminal_text(name);
+                    report_server_problem(
+                        quiet,
                         if needs_sign_in(&e) {
-                            eprintln!(
-                                "  MCP server '{name}': needs sign-in, run `agi mcp login {name}`"
-                            );
+                            format!(
+                                "MCP server '{name}': needs sign-in, run `agi mcp login {name}`"
+                            )
                         } else {
-                            eprintln!(
-                                "  MCP server '{}': failed to connect: {}",
+                            format!(
+                                "MCP server '{}': failed to connect: {}",
                                 name,
                                 crate::terminal_text::sanitize_terminal_text(&format!("{e:#}"))
-                            );
-                        }
-                    }
+                            )
+                        },
+                    );
                 }
             }
         }
@@ -2289,7 +2360,7 @@ impl McpManager {
             let identity = (tool.server_name.clone(), tool.original_name.clone());
             let mut suffix = 2usize;
             while self.alias_is_taken(&tool.namespaced_name, &identity) {
-                tool.namespaced_name = format!("{base}_{suffix}");
+                tool.namespaced_name = with_collision_suffix(&base, suffix);
                 suffix += 1;
             }
             self.alias_owners
@@ -2563,6 +2634,54 @@ impl McpManager {
     }
 }
 
+const MCP_LIST_PAGE_LIMIT: usize = 100;
+
+fn listed_tool(server_name: &str, tool: &serde_json::Value) -> Result<McpTool> {
+    let name = tool
+        .get("name")
+        .and_then(|n| n.as_str())
+        .filter(|name| !name.trim().is_empty())
+        .with_context(|| format!("[{server_name}] MCP tool missing non-empty name"))?;
+    let description = tool
+        .get("description")
+        .and_then(|d| d.as_str())
+        .unwrap_or_default();
+    let input_schema = tool
+        .get("inputSchema")
+        .cloned()
+        .with_context(|| format!("[{server_name}] MCP tool '{name}' missing inputSchema"))?;
+    let schema_object = input_schema.as_object().with_context(|| {
+        format!("[{server_name}] MCP tool '{name}' inputSchema must be a JSON object")
+    })?;
+    if schema_object.get("type").and_then(|v| v.as_str()) != Some("object") {
+        bail!("[{server_name}] MCP tool '{name}' inputSchema.type must be \"object\"");
+    }
+    Ok(McpTool {
+        namespaced_name: mcp_tool_name(server_name, name),
+        original_name: name.to_string(),
+        server_name: server_name.to_string(),
+        description: description.to_string(),
+        input_schema,
+    })
+}
+
+/// The cursor for the next page of a list response, or `None` on the last
+/// page or when a server hands back the cursor it was just given.
+fn next_page_cursor(
+    response: Option<&serde_json::Value>,
+    previous: Option<&str>,
+) -> Option<String> {
+    response
+        .and_then(|response| response.get("nextCursor"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|cursor| !cursor.is_empty() && Some(*cursor) != previous)
+        .map(str::to_string)
+}
+
+fn offers_beyond_tools(capabilities: &serde_json::Value) -> bool {
+    capabilities.get("prompts").is_some() || capabilities.get("resources").is_some()
+}
+
 fn parse_prompts_response(
     server_name: &str,
     response: Option<&serde_json::Value>,
@@ -2631,22 +2750,100 @@ fn parse_mcp_prompt_invocation(input: &str) -> Option<(&str, &str)> {
         .then_some((command, args.trim()))
 }
 
+/// Arguments for an MCP prompt, written as the palette shows them
+/// (`name=value`, a value running on until the next named argument), as a
+/// JSON object, or as one bare value for a prompt with one required argument.
 fn mcp_prompt_arguments_from_text(
-    _prompt: &McpPrompt,
+    prompt: &McpPrompt,
     arg_text: &str,
 ) -> Result<serde_json::Map<String, serde_json::Value>> {
     let trimmed = arg_text.trim();
-    if trimmed.is_empty() {
-        return Ok(serde_json::Map::new());
+    let arguments = if trimmed.is_empty() {
+        serde_json::Map::new()
+    } else if trimmed.starts_with('{') {
+        let value: serde_json::Value = serde_json::from_str(trimmed)
+            .context("MCP prompt arguments written as JSON must be an object")?;
+        value
+            .as_object()
+            .cloned()
+            .context("MCP prompt arguments written as JSON must be an object")?
+    } else if let Some(named) = named_prompt_arguments(prompt, trimmed) {
+        named
+    } else {
+        let mut required = prompt.arguments.iter().filter(|argument| argument.required);
+        let only = match (
+            required.next(),
+            required.next(),
+            prompt.arguments.as_slice(),
+        ) {
+            (Some(argument), None, _) => argument,
+            (None, _, [argument]) => argument,
+            _ => bail!(
+                "/{} takes its arguments as name=value: {}",
+                prompt.command_name,
+                prompt_argument_hint(prompt)
+            ),
+        };
+        let mut single = serde_json::Map::new();
+        single.insert(
+            only.name.clone(),
+            serde_json::Value::String(trimmed.to_string()),
+        );
+        single
+    };
+    let missing: Vec<String> = prompt
+        .arguments
+        .iter()
+        .filter(|argument| argument.required && !arguments.contains_key(&argument.name))
+        .map(|argument| format!("{}=<value>", argument.name))
+        .collect();
+    if !missing.is_empty() {
+        bail!("/{} needs {}", prompt.command_name, missing.join(" "));
     }
+    Ok(arguments)
+}
 
-    let value: serde_json::Value =
-        serde_json::from_str(trimmed).context("MCP prompt arguments must be a JSON object")?;
-    let object = value
-        .as_object()
-        .cloned()
-        .context("MCP prompt arguments must be a JSON object")?;
-    Ok(object)
+fn named_prompt_arguments(
+    prompt: &McpPrompt,
+    text: &str,
+) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let declared = |key: &str| {
+        prompt.arguments.is_empty() || prompt.arguments.iter().any(|argument| argument.name == key)
+    };
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for token in text.split_whitespace() {
+        match token.split_once('=') {
+            Some((key, value)) if !key.is_empty() && declared(key) => {
+                pairs.push((key.to_string(), value.to_string()));
+            }
+            _ => {
+                let (_, value) = pairs.last_mut()?;
+                value.push(' ');
+                value.push_str(token);
+            }
+        }
+    }
+    Some(
+        pairs
+            .into_iter()
+            .map(|(key, value)| (key, serde_json::Value::String(value)))
+            .collect(),
+    )
+}
+
+fn prompt_argument_hint(prompt: &McpPrompt) -> String {
+    prompt
+        .arguments
+        .iter()
+        .map(|argument| {
+            if argument.required {
+                format!("{}=<value>", argument.name)
+            } else {
+                format!("[{}=<value>]", argument.name)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn extract_prompt_text(response: Option<&serde_json::Value>) -> Result<String> {
@@ -2918,6 +3115,119 @@ mod tests {
             mcp_tool_name("io.github/acme", "files:read"),
             "mcp__io_github_acme__files_read"
         );
+    }
+
+    #[test]
+    fn a_long_mcp_tool_name_fits_the_provider_limit_and_stays_distinct() {
+        let first = mcp_tool_name(
+            "github-enterprise",
+            "list_pull_request_review_comments_for_repository",
+        );
+        let second = mcp_tool_name(
+            "github-enterprise",
+            "list_pull_request_review_comments_for_organization",
+        );
+        for name in [&first, &second] {
+            assert!(name.len() <= PROVIDER_TOOL_NAME_MAX, "{name}");
+            assert!(name.starts_with(&mcp_tool_name("github-enterprise", "")));
+            assert!(name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+        }
+        assert_ne!(first, second);
+        assert_eq!(
+            first,
+            mcp_tool_name(
+                "github-enterprise",
+                "list_pull_request_review_comments_for_repository"
+            ),
+            "the same pair always gets the same name"
+        );
+
+        let long_server = mcp_tool_name(&"s".repeat(90), "search");
+        assert!(long_server.len() <= PROVIDER_TOOL_NAME_MAX, "{long_server}");
+        assert_ne!(long_server, mcp_tool_name(&"s".repeat(91), "search"));
+
+        let suffixed = with_collision_suffix(&first, 12);
+        assert!(suffixed.len() <= PROVIDER_TOOL_NAME_MAX);
+        assert!(suffixed.ends_with("_12"));
+        assert_eq!(
+            with_collision_suffix("mcp__docs__search_web", 2),
+            "mcp__docs__search_web_2"
+        );
+    }
+
+    #[test]
+    fn list_pages_follow_next_cursor_until_the_last_page() {
+        let first = serde_json::json!({"tools": [], "nextCursor": "page-2"});
+        assert_eq!(
+            next_page_cursor(Some(&first), None).as_deref(),
+            Some("page-2")
+        );
+        assert_eq!(next_page_cursor(Some(&first), Some("page-2")), None);
+        let last = serde_json::json!({"tools": []});
+        assert_eq!(next_page_cursor(Some(&last), Some("page-2")), None);
+        let empty = serde_json::json!({"tools": [], "nextCursor": ""});
+        assert_eq!(next_page_cursor(Some(&empty), None), None);
+        assert_eq!(next_page_cursor(None, None), None);
+    }
+
+    #[test]
+    fn one_invalid_tool_does_not_drop_the_rest_of_a_server() {
+        let listed = [
+            serde_json::json!({"name": "search", "inputSchema": {"type": "object"}}),
+            serde_json::json!({"name": "broken"}),
+            serde_json::json!({"name": "list", "inputSchema": {"type": "string"}}),
+        ];
+        let kept: Vec<String> = listed
+            .iter()
+            .filter_map(|tool| listed_tool("docs", tool).ok())
+            .map(|tool| tool.namespaced_name)
+            .collect();
+        assert_eq!(kept, vec!["mcp__docs__search".to_string()]);
+        assert!(format!("{:#}", listed_tool("docs", &listed[1]).unwrap_err()).contains("broken"));
+    }
+
+    #[test]
+    fn a_server_with_prompts_or_resources_but_no_tools_is_kept() {
+        assert!(offers_beyond_tools(&serde_json::json!({"prompts": {}})));
+        assert!(offers_beyond_tools(
+            &serde_json::json!({"resources": {"subscribe": true}})
+        ));
+        assert!(!offers_beyond_tools(&serde_json::json!({"tools": {}})));
+        assert!(!offers_beyond_tools(&serde_json::Value::Null));
+    }
+
+    #[test]
+    fn the_registry_file_wins_a_name_the_other_user_file_also_uses() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(".mcp.json"),
+            r#"{"mcpServers": {"github": {"command": "old-github"}, "notes": {"command": "notes"}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("mcp.json"),
+            r#"{"mcpServers": {"github": {"command": "new-github"}}}"#,
+        )
+        .unwrap();
+        let servers = user_servers_in(dir.path());
+        let command = |name: &str| match servers.get(name).map(McpServerConfig::as_transport) {
+            Some(McpTransport::Stdio { command, .. }) => command,
+            other => panic!("{name}: expected a stdio server, got {other:?}"),
+        };
+        assert_eq!(command("github"), "new-github");
+        assert_eq!(command("notes"), "notes");
+    }
+
+    #[test]
+    fn restart_reloads_with_the_launch_mcp_options() {
+        let launch = McpConfigLoadOptions {
+            explicit_paths: vec![std::path::PathBuf::from("ci-tools.json")],
+            strict: true,
+        };
+        launch.remember_for_restart();
+        assert_eq!(McpConfigLoadOptions::for_restart(), launch);
     }
 
     #[cfg(target_os = "macos")]
@@ -3908,8 +4218,52 @@ mod tests {
         assert_eq!(keyed.get("base").and_then(|v| v.as_str()), Some("main"));
         assert_eq!(keyed.get("depth").and_then(|v| v.as_str()), Some("high"));
 
-        let positional = mcp_prompt_arguments_from_text(&prompt, "release branch");
-        assert!(positional.is_err());
+        let positional = mcp_prompt_arguments_from_text(&prompt, "release branch")
+            .expect("one bare value fills the one required argument");
+        assert_eq!(
+            positional.get("base").and_then(|v| v.as_str()),
+            Some("release branch")
+        );
+    }
+
+    #[test]
+    fn mcp_prompt_arguments_take_the_name_value_form_the_palette_shows() {
+        let argument = |name: &str, required: bool| McpPromptArgument {
+            name: name.to_string(),
+            description: String::new(),
+            required,
+        };
+        let prompt = McpPrompt {
+            command_name: "mcp:github:review".to_string(),
+            original_name: "review".to_string(),
+            server_name: "github".to_string(),
+            description: "Review".to_string(),
+            arguments: vec![
+                argument("base", true),
+                argument("depth", false),
+                argument("focus", false),
+            ],
+        };
+
+        let named = mcp_prompt_arguments_from_text(
+            &prompt,
+            "base=main depth=high focus=error handling paths",
+        )
+        .expect("name=value pairs parse");
+        assert_eq!(named.get("base").and_then(|v| v.as_str()), Some("main"));
+        assert_eq!(named.get("depth").and_then(|v| v.as_str()), Some("high"));
+        assert_eq!(
+            named.get("focus").and_then(|v| v.as_str()),
+            Some("error handling paths")
+        );
+
+        let missing = mcp_prompt_arguments_from_text(&prompt, "depth=high").unwrap_err();
+        assert!(
+            format!("{missing:#}").contains("base=<value>"),
+            "{missing:#}"
+        );
+        let empty = mcp_prompt_arguments_from_text(&prompt, "").unwrap_err();
+        assert!(format!("{empty:#}").contains("base=<value>"), "{empty:#}");
     }
 
     #[test]

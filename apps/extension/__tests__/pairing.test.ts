@@ -17,10 +17,6 @@ import {
   _resetStateForTesting,
 } from '../src/features/native-bridge/pairing';
 
-type StorageCallback = (items: Record<string, unknown>) => void;
-type RemoveCallback = () => void;
-type SetCallback = () => void;
-
 const sessionStore: Record<string, unknown> = {};
 const localStore: Record<string, unknown> = {};
 
@@ -29,22 +25,20 @@ const DESKTOP_PAIR_TOKEN = `pair${'fedcba9876543210'.repeat(4)}`.slice(0, 64);
 
 function makeStorageArea(store: Record<string, unknown>) {
   return {
-    get(keys: string | string[], callback: StorageCallback) {
+    async get(keys: string | string[]) {
       const result: Record<string, unknown> = {};
       const keyList = typeof keys === 'string' ? [keys] : keys;
       for (const k of keyList) {
         if (k in store) result[k] = store[k];
       }
-      callback(result);
+      return result;
     },
-    set(items: Record<string, unknown>, callback?: SetCallback) {
+    async set(items: Record<string, unknown>) {
       Object.assign(store, items);
-      callback?.();
     },
-    remove(keys: string | string[], callback?: RemoveCallback) {
+    async remove(keys: string | string[]) {
       const keyList = typeof keys === 'string' ? [keys] : keys;
       for (const k of keyList) delete store[k];
-      callback?.();
     },
   };
 }
@@ -63,6 +57,23 @@ const chromeMock = {
 
 function seedBridgeSecret(token: string = BRIDGE_SECRET): void {
   sessionStore['agi_bridge_secret'] = token;
+}
+
+function seedPairing(
+  accountId: string | null = null,
+  fingerprint = 'ab12',
+  token: string = DESKTOP_PAIR_TOKEN,
+): void {
+  localStore['connectedToDesktop'] = true;
+  localStore['agi_paired_desktop'] = { fingerprint, accountId, token };
+}
+
+function storedPairing(): { fingerprint?: string; accountId?: string | null; token?: string } {
+  return (localStore['agi_paired_desktop'] ?? {}) as {
+    fingerprint?: string;
+    accountId?: string | null;
+    token?: string;
+  };
 }
 
 function pairResponse(overrides: Record<string, unknown> = {}) {
@@ -116,19 +127,19 @@ describe('loadPairingState', () => {
     expect(state.phase).toBe('idle');
   });
 
-  it('returns paired when token exists in session storage', async () => {
-    sessionStore['agi_pair_token'] = 'tok123';
-    sessionStore['agi_pairing_fingerprint'] = 'tok1';
+  it('returns paired when this profile holds the pair token', async () => {
+    seedPairing(null, 'tok1');
     const state = await loadPairingState();
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe('tok1');
   });
 
-  it('returns paired with null fingerprint when only token exists', async () => {
-    sessionStore['agi_pair_token'] = 'tok456';
-    const state = await loadPairingState();
-    expect(state.phase).toBe('paired');
-    expect(state.fingerprint).toBeNull();
+  it('is not paired when the record has no usable token, whatever the connection flag says', async () => {
+    localStore['connectedToDesktop'] = true;
+    localStore['agi_paired_desktop'] = { fingerprint: 'tok1', accountId: null };
+    expect((await loadPairingState()).phase).toBe('idle');
+    localStore['agi_paired_desktop'] = { fingerprint: 'tok1', accountId: null, token: 'short' };
+    expect((await loadPairingState()).phase).toBe('idle');
   });
 });
 
@@ -141,47 +152,40 @@ describe('a pairing is a credential of the signed-in account', () => {
     });
   }
 
-  function seedPairedTo(accountId: string): void {
-    sessionStore['agi_pair_token'] = DESKTOP_PAIR_TOKEN;
-    sessionStore['agi_pairing_fingerprint'] = 'ab12';
-    sessionStore['agi_pair_account'] = accountId;
-    localStore['connectedToDesktop'] = true;
-  }
-
-  it('is released when the account signs out', async () => {
-    seedPairedTo('acct_1');
+  it('is released, with the unpair owed to Desktop, when the account signs out', async () => {
+    seedPairing('acct_1');
     chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
 
     const state = await loadPairingState();
 
     expect(state.phase).toBe('idle');
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
-    expect(sessionStore['agi_pair_account']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
     expect(localStore['connectedToDesktop']).toBeUndefined();
+    expect((await readPendingDesktopRevocation())?.token).toBe(DESKTOP_PAIR_TOKEN);
   });
 
   it('never carries over to a different account', async () => {
-    seedPairedTo('acct_1');
+    seedPairing('acct_1');
     signedInAs('acct_2');
 
     expect((await loadPairingState()).phase).toBe('idle');
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 
   it('survives a session refresh, which rotates the incarnation but not the account', async () => {
-    seedPairedTo('acct_1');
+    seedPairing('acct_1');
     signedInAs('acct_1', 'sess_rotated');
 
     expect((await loadPairingState()).phase).toBe('paired');
-    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
+    expect(storedPairing().token).toBe(DESKTOP_PAIR_TOKEN);
   });
 
   it('is left alone when the background cannot say who is signed in', async () => {
-    seedPairedTo('acct_1');
+    seedPairing('acct_1');
     chromeMock.runtime.sendMessage.mockRejectedValue(new Error('worker asleep'));
 
     expect((await loadPairingState()).phase).toBe('paired');
-    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
+    expect(storedPairing().token).toBe(DESKTOP_PAIR_TOKEN);
   });
 
   it('binds a pairing issued while signed in, so the next sign-out releases it', async () => {
@@ -190,26 +194,31 @@ describe('a pairing is a credential of the signed-in account', () => {
 
     await confirmPairing(token, 'ab12');
 
-    expect(sessionStore['agi_pair_account']).toBe('acct_1');
+    expect(storedPairing().accountId).toBe('acct_1');
   });
 
-  it('adopts a pairing that predates the binding rather than dropping it', async () => {
-    sessionStore['agi_pair_token'] = DESKTOP_PAIR_TOKEN;
+  it('binds a pairing made while signed out to the next account on disk, so a restart keeps it', async () => {
+    seedPairing(null);
     signedInAs('acct_1');
 
     expect((await loadPairingState()).phase).toBe('paired');
-    expect(sessionStore['agi_pair_account']).toBe('acct_1');
+    expect(storedPairing().accountId).toBe('acct_1');
+
+    for (const k of Object.keys(sessionStore)) delete sessionStore[k];
+    _resetStateForTesting();
+    chromeMock.runtime.sendMessage.mockResolvedValue({ success: true });
+    expect((await loadPairingState()).phase).toBe('idle');
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 });
 
 describe('confirmPairing', () => {
-  it('stores token in session storage and transitions to paired', async () => {
+  it('stores the token with this profile and transitions to paired', async () => {
     const token = 'secret-token-' + 'a'.repeat(28);
     const state = await confirmPairing(token, 'ab12');
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe('ab12');
-    expect(sessionStore['agi_pair_token']).toBe(token);
-    expect(sessionStore['agi_pairing_fingerprint']).toBe('ab12');
+    expect(storedPairing()).toMatchObject({ token, fingerprint: 'ab12' });
   });
 
   it('derives fingerprint from first 4 chars when not provided', async () => {
@@ -233,16 +242,14 @@ describe('confirmPairing', () => {
 });
 
 describe('unpair', () => {
-  it('removes token from session storage and returns idle', async () => {
-    sessionStore['agi_pair_token'] = 'tok';
-    sessionStore['agi_pairing_fingerprint'] = 'to12';
+  it('removes the stored pairing and returns idle', async () => {
+    seedPairing(null, 'to12');
     await loadPairingState();
 
     const state = await unpair();
     expect(state.phase).toBe('idle');
     expect(state.fingerprint).toBeNull();
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
-    expect(sessionStore['agi_pairing_fingerprint']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 
   it('is safe to call when already idle', async () => {
@@ -254,10 +261,7 @@ describe('unpair', () => {
     async function pairThenLoseDesktop(
       answer: () => Promise<unknown>,
     ): Promise<ReturnType<typeof unpair>> {
-      sessionStore['agi_pair_token'] = 'tok';
-      sessionStore['agi_pairing_fingerprint'] = 'to12';
-      localStore['connectedToDesktop'] = true;
-      localStore['agi_paired_desktop'] = { fingerprint: 'to12', accountId: null };
+      seedPairing(null, 'to12');
       chromeMock.runtime.sendMessage.mockImplementation(answer);
       return unpair();
     }
@@ -271,8 +275,18 @@ describe('unpair', () => {
 
       expect(state.phase).toBe('idle');
       expect(state.error).toMatch(/could not be reached to remove the pairing/);
-      expect(sessionStore['agi_pair_token']).toBeUndefined();
-      expect(await readPendingDesktopRevocation()).not.toBeNull();
+      expect(state.error).toMatch(/removed the next time Desktop is open/);
+      expect(localStore['agi_paired_desktop']).toBeUndefined();
+      expect((await readPendingDesktopRevocation())?.token).toBe(DESKTOP_PAIR_TOKEN);
+    });
+
+    it('takes the background at its word when it already recorded the owed unpair', async () => {
+      const state = await pairThenLoseDesktop(() =>
+        Promise.resolve({ success: false, revocationOwed: true }),
+      );
+
+      expect(state.error).toMatch(/could not be reached to remove the pairing/);
+      expect(await readPendingDesktopRevocation()).toBeNull();
     });
 
     it('keeps telling the user after a browser restart', async () => {
@@ -287,20 +301,15 @@ describe('unpair', () => {
 
     it('keeps the pairing when the owed revocation cannot be recorded', async () => {
       const original = chromeMock.storage.local.set;
-      chromeMock.storage.local.set = (items: Record<string, unknown>, cb?: SetCallback) => {
-        if ('agi_pending_desktop_revocation' in items) {
-          chromeMock.runtime.lastError = { message: 'quota' };
-          cb?.();
-          chromeMock.runtime.lastError = null;
-          return;
-        }
-        original(items, cb);
+      chromeMock.storage.local.set = async (items: Record<string, unknown>) => {
+        if ('agi_pending_desktop_revocation' in items) throw new Error('quota');
+        return original(items);
       };
       try {
         const state = await pairThenLoseDesktop(() => Promise.resolve({ success: false }));
 
         expect(state.error).toMatch(/pairing was kept/);
-        expect(sessionStore['agi_pair_token']).toBe('tok');
+        expect(storedPairing().token).toBe(DESKTOP_PAIR_TOKEN);
         expect(await readPendingDesktopRevocation()).toBeNull();
       } finally {
         chromeMock.storage.local.set = original;
@@ -329,8 +338,7 @@ describe('unpair', () => {
 
 describe('desktopPairingRejectsAccount', () => {
   function seedDurablePairing(accountId: string | null): void {
-    localStore['connectedToDesktop'] = true;
-    localStore['agi_paired_desktop'] = { fingerprint: 'ab12', accountId };
+    seedPairing(accountId);
   }
 
   it('rejects a pairing bound to a different account', async () => {
@@ -357,11 +365,9 @@ describe('desktopPairingRejectsAccount', () => {
     expect(await desktopPairingRejectsAccount('acct_2')).toBe(false);
   });
 
-  it('uses the session account when the pair token is still in memory', async () => {
-    sessionStore['agi_pair_token'] = DESKTOP_PAIR_TOKEN;
-    sessionStore['agi_pair_account'] = 'acct_1';
-    localStore['connectedToDesktop'] = true;
-    localStore['agi_paired_desktop'] = { fingerprint: 'ab12', accountId: 'acct_9' };
+  it('reads the account binding from the stored pairing, which survives a restart', async () => {
+    seedDurablePairing('acct_1');
+    for (const k of Object.keys(sessionStore)) delete sessionStore[k];
     expect(await desktopPairingRejectsAccount('acct_2')).toBe(true);
     expect(await desktopPairingRejectsAccount('acct_1')).toBe(false);
   });
@@ -369,18 +375,16 @@ describe('desktopPairingRejectsAccount', () => {
 
 describe('releaseStoredDesktopPairing', () => {
   it('clears the stored pairing and the connected-to-desktop flag', async () => {
-    sessionStore['agi_pair_token'] = 'tok';
-    sessionStore['agi_pairing_fingerprint'] = 'to12';
-    sessionStore['agi_pair_account'] = 'acct';
-    localStore['connectedToDesktop'] = true;
-    localStore['agi_paired_desktop'] = { fingerprint: 'to12', accountId: 'acct' };
+    seedPairing('acct', 'to12');
+    chromeMock.runtime.sendMessage.mockResolvedValue({
+      success: true,
+      owner: { accountId: 'acct', authIncarnation: 'sess_1' },
+    });
     await loadPairingState();
 
     await releaseStoredDesktopPairing();
 
     expect(getPairingState().phase).toBe('idle');
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
-    expect(sessionStore['agi_pair_account']).toBeUndefined();
     expect(localStore['connectedToDesktop']).toBeUndefined();
     expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
@@ -431,8 +435,10 @@ describe('requestPairing, authorizes with the operator-supplied bridge secret', 
 
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe(DESKTOP_PAIR_TOKEN.slice(0, 8));
-    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
-    expect(sessionStore['agi_pairing_fingerprint']).toBe(DESKTOP_PAIR_TOKEN.slice(0, 8));
+    expect(storedPairing()).toMatchObject({
+      token: DESKTOP_PAIR_TOKEN,
+      fingerprint: DESKTOP_PAIR_TOKEN.slice(0, 8),
+    });
   });
 
   it('reconnects native messaging after the manifest is installed', async () => {
@@ -462,7 +468,7 @@ describe('requestPairing, failure paths', () => {
     expect(state.phase).toBe('error');
     expect(state.error).toMatch(/copy the bridge token from desktop/i);
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 
   it('treats a whitespace-only stored bridge token as missing', async () => {
@@ -657,7 +663,7 @@ describe('startPairing, asks Desktop to display a code', () => {
 
     await startPairing();
 
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
     expect(sessionStore['agi_bridge_secret']).toBeUndefined();
     expect(JSON.stringify(sessionStore)).not.toContain(DESKTOP_CODE);
   });
@@ -707,7 +713,7 @@ describe('submitPairingCode, the code the user read off Desktop', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain('/pair/confirm');
     expect(init.body).toBe(JSON.stringify({ requestId: REQUEST_ID, code: DESKTOP_CODE }));
-    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
+    expect(storedPairing().token).toBe(DESKTOP_PAIR_TOKEN);
     expect(sessionStore['agi_pair_request']).toBeUndefined();
   });
 
@@ -723,21 +729,15 @@ describe('submitPairingCode, the code the user read off Desktop', () => {
 
     expect(restarted.phase).toBe('paired');
     expect(restarted.fingerprint).toBe(DESKTOP_PAIR_TOKEN.slice(0, 8));
-    expect(JSON.stringify(localStore)).not.toContain(DESKTOP_PAIR_TOKEN);
+    expect(storedPairing().token).toBe(DESKTOP_PAIR_TOKEN);
   });
 
-  it('forgets the restart record on unpair and when the host is gone for good', async () => {
+  it('forgets the restart record on unpair', async () => {
     await startAwaitingCode();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pairResponse()));
     await submitPairingCode('abcd-2345');
     localStore['connectedToDesktop'] = true;
 
-    delete localStore['connectedToDesktop'];
-    for (const k of Object.keys(sessionStore)) delete sessionStore[k];
-    _resetStateForTesting();
-    expect((await loadPairingState()).phase).toBe('idle');
-
-    localStore['connectedToDesktop'] = true;
     await unpair();
     expect(localStore['agi_paired_desktop']).toBeUndefined();
     _resetStateForTesting();
@@ -776,7 +776,7 @@ describe('submitPairingCode, the code the user read off Desktop', () => {
     expect(state.phase).toBe('awaiting-code');
     expect(state.requestId).toBe(REQUEST_ID);
     expect(state.error).toContain('401');
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 
   it('reports when Desktop could not install the manifest', async () => {
@@ -790,7 +790,7 @@ describe('submitPairingCode, the code the user read off Desktop', () => {
 
     expect(state.phase).toBe('error');
     expect(state.error).toMatch(/native host manifest/i);
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 });
 
@@ -825,7 +825,7 @@ describe('storeBridgeSecret, the operator credential keeps its own key', () => {
 
     expect(state.phase).toBe('idle');
     expect(sessionStore['agi_bridge_secret']).toBe(BRIDGE_SECRET);
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(localStore['agi_paired_desktop']).toBeUndefined();
   });
 
   it('does not overwrite a desktop-issued pair token', async () => {
@@ -835,7 +835,7 @@ describe('storeBridgeSecret, the operator credential keeps its own key', () => {
 
     await storeBridgeSecret(`rotated${'0123456789abcdef'.repeat(4)}`.slice(0, 64));
 
-    expect(sessionStore['agi_pair_token']).toBe(DESKTOP_PAIR_TOKEN);
+    expect(storedPairing().token).toBe(DESKTOP_PAIR_TOKEN);
     expect(sessionStore['agi_bridge_secret']).not.toBe(DESKTOP_PAIR_TOKEN);
   });
 

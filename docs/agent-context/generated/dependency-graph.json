@@ -371,6 +371,10 @@
       },
       {
         "from": "@agiworkforce/providers-anthropic",
+        "to": "@agiworkforce/agent-core"
+      },
+      {
+        "from": "@agiworkforce/providers-anthropic",
         "to": "@agiworkforce/provider-protocol"
       },
       {
@@ -704,6 +708,10 @@
       {
         "from": "@agiworkforce/ui",
         "to": "@agiworkforce/icons"
+      },
+      {
+        "from": "@agiworkforce/unified-chat",
+        "to": "@agiworkforce/artifacts"
       },
       {
         "from": "@agiworkforce/unified-chat",

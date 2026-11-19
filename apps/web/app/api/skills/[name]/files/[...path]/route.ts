@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -49,7 +50,7 @@ async function handleReadFile(
   request: NextRequest,
   context: { params: Promise<{ name: string; path: string[] }> },
 ) {
-  const rateLimit = await withRateLimit(request, 'chat-conversation');
+  const rateLimit = await withRateLimit(request, 'skills-catalog-read');
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const { name: rawName, path: segments } = await context.params;
@@ -123,7 +124,7 @@ async function handleReadFile(
   } satisfies ManagedSkillFilePreviewResponse);
 }
 
-export const GET = withCorsRoute(withErrorHandler(handleReadFile));
+export const GET = withCorsRoute(withAdmittedRateLimitHeaders(withErrorHandler(handleReadFile)));
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

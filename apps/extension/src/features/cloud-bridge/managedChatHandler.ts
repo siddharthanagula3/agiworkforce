@@ -65,6 +65,10 @@ import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import { MAX_CHAT_TOOL_RESULT_CHARS } from '../computer-use/chatBrowserTools';
 import type { ToolCall, CallerToolContinuation } from '../computer-use/toolHandoff';
 import { CallerToolCustodyError, type ChromeCallerToolCustody } from './callerToolCustody';
+import type { CallerBrowserContext } from './callerBrowserContext';
+import type { ChatToolResult } from '../computer-use/chatToolResults';
+import type { FormObservationReference } from '../browser-tools/documentBridge';
+import type { TaskTabScope } from '../browser-tools/taskTabScope';
 
 const MAX_MESSAGE_CHARS = 32_000;
 const MAX_PAGE_CONTEXT_CHARS = 64_000;
@@ -102,7 +106,7 @@ export function createChromeManagedStreamKey(clientInstanceId: string, streamId:
 }
 
 export interface ChromeManagedChatRequest {
-  browserObservation?: import('../browser-tools/documentBridge').FormObservationReference;
+  browserObservation?: FormObservationReference;
   id: string;
   text: string;
   modelSelection?: string;
@@ -131,12 +135,13 @@ export interface ChromeManagedChatRequest {
   memoryCommand?: ManagedMemoryCommandTurn;
   skillName?: string;
   tools?: readonly ToolDefinition[];
+  callerToolContinuation?: boolean;
   signal?: AbortSignal;
 }
 
-export type ChromeManagedToolResult = import('../computer-use/chatToolResults').ChatToolResult & {
-  browserContext?: import('./callerBrowserContext').CallerBrowserContext;
-  taskTabs?: import('../browser-tools/taskTabScope').TaskTabScope;
+export type ChromeManagedToolResult = ChatToolResult & {
+  browserContext?: CallerBrowserContext;
+  taskTabs?: TaskTabScope;
 };
 
 export type ChromeManagedToolHandoffOutcome =
@@ -558,6 +563,17 @@ export async function executeChromeManagedChat(
   } catch {
     return { status: 'error', code: 'invalid_request', message: 'Invalid browser tool offering.' };
   }
+  if (
+    request.callerToolContinuation !== undefined &&
+    (typeof request.callerToolContinuation !== 'boolean' ||
+      (request.callerToolContinuation && (!initialTools.length || !dependencies.callerCustody)))
+  ) {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Browser recovery state is unavailable for this turn. Send it again.',
+    };
+  }
 
   const userContent = buildUserContent(request.text.trim(), request.pageContext);
   const uploadedAttachments = ManagedCloudUploadedChatAttachmentsSchema.parse(
@@ -812,6 +828,9 @@ export async function executeChromeManagedChat(
           }),
       ...(legTools.length > 0 ? { tools: structuredClone(legTools) } : {}),
       ...(callerResume ? { callerResume: structuredClone(callerResume) } : {}),
+      ...(request.callerToolContinuation === true && !callerResume && legTools.length > 0
+        ? { callerToolContinuation: true }
+        : {}),
     };
     let legText = '';
     let handoff: ToolCall[] | null = null;

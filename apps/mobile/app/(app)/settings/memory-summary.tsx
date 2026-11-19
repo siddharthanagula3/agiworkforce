@@ -85,9 +85,7 @@ export default function MemorySummaryScreen() {
               textAlign: 'center',
             }}
           >
-            {loading
-              ? 'Reading stored memories.'
-              : 'Once memories are saved they are grouped here so you can review everything at once.'}
+            {loading ? 'Reading stored memories.' : 'Saved memories are grouped here.'}
           </Text>
         </View>
       ) : (

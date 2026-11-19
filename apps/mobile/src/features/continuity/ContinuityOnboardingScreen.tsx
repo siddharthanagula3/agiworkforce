@@ -10,10 +10,11 @@ import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
-import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { enterCloudMode } from '@/src/features/chat/store/cloudModeDoor';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { acknowledgeContinuityOnboarding } from './continuity-onboarding';
 
 interface ContinuityBenefit {
@@ -25,19 +26,18 @@ interface ContinuityBenefit {
 const BENEFITS: ContinuityBenefit[] = [
   {
     icon: ListChecks,
-    title: 'Start and steer tasks from your phone',
-    description: 'Send work to Managed Cloud, answer follow-ups, and review results from mobile.',
+    title: 'Start and steer tasks from your device',
+    description: 'Send work, answer follow-ups and review results.',
   },
   {
     icon: Globe2,
     title: 'Check in from any signed-in surface',
-    description: 'The same Cloud task is available on your phone, browser, and desktop app.',
+    description: 'The same task on your device, browser and desktop.',
   },
   {
     icon: Clock3,
     title: 'Work continues when the app is closed',
-    description:
-      'Managed Cloud keeps the run alive and a completion notification can deep-link you back to the result.',
+    description: 'A notification takes you back to the result when it’s done.',
   },
 ];
 
@@ -46,10 +46,12 @@ export default function ContinuityOnboardingScreen() {
   const colors = useThemeColors();
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
-  const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const setWorkMode = useChatStore((state) => state.setWorkMode);
   const subscriptionTier = useTierStore((state) => state.tier);
+  const planKnown = useTierStore((state) => state.lastRefreshedAt !== null);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const notInPlan =
+    isClerkSignedIn && planKnown && !canUseBillingPlanCapability(subscriptionTier, 'agi_work');
 
   const rememberDecision = useCallback(() => {
     if (isClerkSignedIn && clerkUserId) {
@@ -73,10 +75,11 @@ export default function ContinuityOnboardingScreen() {
     }
 
     rememberDecision();
-    setAppMode('cloud');
-    if (cloudUnlocked && canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
-      setWorkMode('agiwork');
-    }
+    enterCloudMode(() => {
+      if (cloudUnlocked && canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
+        setWorkMode('agiwork');
+      }
+    });
     router.replace('/(app)/(tabs)/chat');
   }, [
     clerkUserId,
@@ -84,7 +87,6 @@ export default function ContinuityOnboardingScreen() {
     isClerkSignedIn,
     rememberDecision,
     router,
-    setAppMode,
     setWorkMode,
     subscriptionTier,
   ]);
@@ -94,6 +96,7 @@ export default function ContinuityOnboardingScreen() {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
+          ...contentColumn('form'),
           flexGrow: 1,
           paddingHorizontal: 22,
           paddingTop: 8,
@@ -188,8 +191,7 @@ export default function ContinuityOnboardingScreen() {
               textAlign: 'center',
             }}
           >
-            Managed Cloud tasks stay attached to your AGI account, so you can leave this device
-            without ending the run.
+            Tasks stay on your AGI account, so leaving this device won’t end them.
           </Text>
         </View>
 
@@ -215,30 +217,44 @@ export default function ContinuityOnboardingScreen() {
         <View style={{ flex: 1, minHeight: 12 }} />
 
         <View style={{ gap: 10 }}>
-          <Pressable
-            onPress={startTask}
-            accessibilityRole="button"
-            accessibilityLabel="Start a Managed Cloud task"
-            style={({ pressed }) => ({
-              minHeight: 52,
-              borderRadius: 14,
-              borderCurve: 'continuous',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.teal,
-              opacity: pressed ? 0.78 : 1,
-            })}
-          >
+          {notInPlan ? (
             <Text
-              style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '700' }}
+              testID="continuity.not-in-plan"
+              style={{
+                color: colors.textSecondary,
+                fontSize: typeScale.callout,
+                lineHeight: 23,
+                textAlign: 'center',
+              }}
             >
-              Start a task
+              {`${PRODUCT_NAMES.work} isn’t included in your plan.`}
             </Text>
-          </Pressable>
+          ) : (
+            <Pressable
+              onPress={startTask}
+              accessibilityRole="button"
+              accessibilityLabel="Start a Managed Cloud task"
+              style={({ pressed }) => ({
+                minHeight: 52,
+                borderRadius: 14,
+                borderCurve: 'continuous',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.teal,
+                opacity: pressed ? 0.78 : 1,
+              })}
+            >
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '700' }}
+              >
+                Start a task
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={leave}
             accessibilityRole="button"
-            accessibilityLabel="Not now"
+            accessibilityLabel={notInPlan ? 'Close' : 'Not now'}
             style={({ pressed }) => ({
               minHeight: 48,
               borderRadius: 14,
@@ -251,7 +267,7 @@ export default function ContinuityOnboardingScreen() {
             <Text
               style={{ color: colors.textSecondary, fontSize: typeScale.body, fontWeight: '600' }}
             >
-              Not now
+              {notInPlan ? 'Close' : 'Not now'}
             </Text>
           </Pressable>
         </View>

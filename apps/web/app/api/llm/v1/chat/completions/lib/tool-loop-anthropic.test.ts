@@ -50,6 +50,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 import { runToolLoop } from './tool-loop';
 import {
+  anthropicPromptCacheTtls,
   buildServingRouteId,
   chunksToOpenAiSse,
   type ToolLoopStepSink,
@@ -723,6 +724,149 @@ describe('SSE framing', () => {
       expect(JSON.stringify(toolStart)).toContain('"name":"click"');
     },
   );
+});
+
+describe('prompt cache diagnostics per provider call', () => {
+  const routeId = `anthropic/${ANTHROPIC_MODEL}`;
+
+  async function runCall(chunks: unknown[]): Promise<ToolLoopStepSink> {
+    const sink: ToolLoopStepSink = {
+      thinkingBlocks: [],
+      text: '',
+      usage: createObservedProviderUsage(),
+    };
+    await new Response(
+      chunksToOpenAiSse(
+        fakeAdapterStream(chunks)() as AsyncIterable<StreamChunk>,
+        ANTHROPIC_MODEL,
+        'legacy-web',
+        sink,
+        {
+          provider: 'anthropic',
+          model: ANTHROPIC_MODEL,
+          routeId,
+          promptCacheTtls: { system: '1h', conversation: '5m' },
+        },
+      ),
+    ).text();
+    return sink;
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('logs read and write counts with the breakpoint TTLs and no content', async () => {
+    const info = vi.spyOn(logger, 'info');
+
+    await runCall([
+      { type: 'thinking-delta', delta: 'private reasoning' },
+      { type: 'text-delta', delta: 'private answer' },
+      {
+        type: 'usage',
+        inputTokens: 145,
+        outputTokens: 502,
+        cacheReadTokens: 6697,
+        cacheWriteTokens: 9516,
+        cacheWrite1hTokens: 0,
+      },
+      { type: 'stop', reason: 'end_turn' },
+    ]);
+
+    const call = info.mock.calls.find(
+      ([, message]) => message === 'Provider call prompt cache usage',
+    );
+    expect(call?.[0]).toMatchObject({
+      provider: 'anthropic',
+      model: ANTHROPIC_MODEL,
+      routeId,
+      inputTokens: 145,
+      cacheReadTokens: 6697,
+      cacheWrite5mTokens: 9516,
+      cacheWrite1hTokens: 0,
+      systemBreakpointTtl: '1h',
+      conversationBreakpointTtl: '5m',
+    });
+    expect(JSON.stringify(call?.[0])).not.toMatch(/private reasoning|private answer/u);
+  });
+
+  it('records reasoning estimated from the streamed thinking without changing the charge', async () => {
+    const usage = {
+      type: 'usage',
+      inputTokens: 100,
+      outputTokens: 500,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+    };
+    const thinking = await runCall([
+      { type: 'thinking-delta', delta: 'a'.repeat(240) },
+      { type: 'thinking-delta', delta: 'b'.repeat(160) },
+      { type: 'text-delta', delta: 'Done.' },
+      usage,
+      { type: 'stop', reason: 'end_turn' },
+    ]);
+    const plain = await runCall([
+      { type: 'text-delta', delta: 'Done.' },
+      usage,
+      { type: 'stop', reason: 'end_turn' },
+    ]);
+
+    expect(thinking.usage?.reasoningTokens).toBe(100);
+    expect(plain.usage?.reasoningTokens).toBe(0);
+    expect(thinking.usage?.providerCallObservations?.[0]?.costDollars).toBe(
+      plain.usage?.providerCallObservations?.[0]?.costDollars,
+    );
+  });
+
+  it('keeps a reasoning count the provider reported', async () => {
+    const sink = await runCall([
+      { type: 'thinking-delta', delta: 'a'.repeat(400) },
+      { type: 'usage', inputTokens: 10, outputTokens: 300, reasoningTokens: 250 },
+      { type: 'stop', reason: 'end_turn' },
+    ]);
+
+    expect(sink.usage?.reasoningTokens).toBe(250);
+  });
+});
+
+describe('anthropicPromptCacheTtls', () => {
+  function processedWith(llmRequest: Partial<ProcessedRequest['llmRequest']>): ProcessedRequest {
+    const base = makeProcessed() as unknown as ProcessedRequest;
+    return { ...base, llmRequest: { ...base.llmRequest, usePromptCache: true, ...llmRequest } };
+  }
+
+  it('holds the system prefix for an hour and the conversation for five minutes on a tool turn', () => {
+    const processed = processedWith({ tools: [{ type: 'function' }] });
+    expect(
+      anthropicPromptCacheTtls(processed, {
+        model: ANTHROPIC_MODEL,
+        messages: [{ role: 'user', content: 'read this page' }],
+        tools: [{ name: 'browser_read_page', description: '', inputSchema: {} }],
+      }),
+    ).toEqual({ system: '1h', conversation: '5m' });
+  });
+
+  it('writes only the system prefix for a one-shot request with no tools', () => {
+    expect(
+      anthropicPromptCacheTtls(processedWith({}), {
+        model: ANTHROPIC_MODEL,
+        messages: [
+          { role: 'system', content: 'You are a coding assistant.' },
+          { role: 'user', content: 'Fix the issues in this function.' },
+        ],
+      }),
+    ).toEqual({ system: '5m', conversation: 'none' });
+  });
+
+  it('places nothing on a turn that may not be cached', () => {
+    expect(
+      anthropicPromptCacheTtls(processedWith({ usePromptCache: false }), {
+        model: ANTHROPIC_MODEL,
+        messages: [{ role: 'user', content: 'hi' }],
+      }),
+    ).toEqual({ system: 'none', conversation: 'none' });
+  });
 });
 
 type ImportedModule0 = typeof import('@/lib/mcp-tool-executor');

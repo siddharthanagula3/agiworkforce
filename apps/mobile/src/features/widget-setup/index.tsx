@@ -1,10 +1,8 @@
 import { useCallback } from 'react';
 import { View, ScrollView, Platform } from 'react-native';
-import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
-  ArrowLeft,
   Smartphone,
   Mic,
   Camera,
@@ -23,6 +21,7 @@ import {
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useThemeColors } from '@/src/ui/theme';
 
 const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; description: string }> = [
@@ -133,29 +132,14 @@ export default function WidgetSetupScreen() {
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    else router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const isIOS = Platform.OS === 'ios';
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View
-        className="flex-row items-center px-3 h-12"
-        style={{ borderBottomWidth: 1, borderBottomColor: colors.border }}
-      >
-        <PressableBox
-          onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={20} color={colors.textSecondary} />
-        </PressableBox>
-        <Text variant="subheading" className="ml-2">
-          Quick Access
-        </Text>
-      </View>
+      <ScreenHeader title="Quick Access" onBack={handleBack} />
 
       <ScrollView
         className="flex-1 px-4"
@@ -218,7 +202,7 @@ export default function WidgetSetupScreen() {
               <SectionHeader icon={Share2} title="Share Sheet" step={2} />
               <Text className="text-sm text-fg-muted mb-3">
                 Share text or a web link from another app, choose{' '}
-                <Text className="text-sm text-fg-secondary font-medium">Share to AGI</Text>, and
+                <Text className="text-sm text-fg-secondary font-medium">AGI Mobile</Text>, and
                 review the content twice: once while saving and once after you open AGI Mobile.
               </Text>
               <View
@@ -234,7 +218,7 @@ export default function WidgetSetupScreen() {
                 </Text>
                 <Text className="text-sm text-fg-muted">
                   2. Choose{' '}
-                  <Text className="text-sm text-fg-secondary font-medium">Share to AGI</Text>
+                  <Text className="text-sm text-fg-secondary font-medium">AGI Mobile</Text>
                 </Text>
                 <Text className="text-sm text-fg-muted">
                   3. Preview it, tap{' '}

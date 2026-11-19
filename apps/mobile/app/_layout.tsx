@@ -1,7 +1,6 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
-import { useLinkingURL } from 'expo-linking';
 import * as Linking from 'expo-linking';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,6 +18,8 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { answerCloudSession } from '@/src/features/chat/store/cloudModeFallback';
+import { installCloudModeDoor } from '@/src/features/chat/store/cloudModeDoor';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -33,16 +34,14 @@ import {
   activateCloudAccount,
   hasCloudAccountOwner,
   invalidateCloudAccount,
+  recordedCloudAccountOwnerId,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
   isSignInOwedForEndedSession,
   oweSignInForEndedSession,
   settleSignInForEndedSession,
 } from '@/src/features/auth/services/endedSession';
-import {
-  beginPushTokenAccountSession,
-  clearPushTokenAccountSession,
-} from '@/src/features/auth/services/pushTokenAccountLifecycle';
+import { usePushTokenAccountRegistration } from '@/src/features/auth/hooks/usePushTokenAccountRegistration';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
@@ -63,17 +62,25 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
-import { clearAuthSession, getAuthToken } from '@/services/authSession';
+import { clearAuthSession } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
-import { syncDeviceLanguage } from '@/src/i18n';
+import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
+import { onDeviceRecognizerGuaranteed } from '@/src/features/voice/services/voiceInput';
 import {
   parseSharedFilesParam,
+  stagedIntentFileUri,
   stageSharedFileAttachments,
 } from '@/src/features/share-preview/sharedAttachments';
 import {
+  beginCloudPostAuthIntent,
+  beginCloudPostAuthIntentForChat,
+  clearPendingIntentLink,
   clearPostAuthIntent,
+  consumePendingCloudChat,
+  consumePendingIntentLink,
   consumePostAuthDestination,
+  stagePendingIntentLink,
 } from '@/src/features/auth/services/postAuthIntent';
 import { completePendingPostAuthIntentForLoadedSession } from '@/src/features/auth/actions/postAuthIntent';
 
@@ -81,13 +88,14 @@ export { default as ErrorBoundary } from './error';
 
 setUuidV7RandomSource((byteCount) => Crypto.getRandomBytes(byteCount));
 import {
-  registerForPushNotifications,
   setupNotificationListeners,
-  setPushAccountContext,
   handleInitialNotification,
   setNavigatorReady,
+  setPushTypeReceivedListener,
   setSignedIn,
 } from '@/services/notifications';
+import { setLinkBrowserPreferenceReader } from '@/lib/safeOpenURL';
+import { useNotificationPrefsStore } from '@/stores/notificationPrefsStore';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
@@ -95,17 +103,28 @@ import {
   CLOUD_SIGN_IN_RETURN_PATH,
   resolveRootRedirect,
 } from '@/src/features/auth/services/rootRouting';
+import { isCloudAccountAdditionOpenFor } from '@/src/features/auth/services/accountAddition';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { ToastHost } from '@/src/shared/components/Toast';
-import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
+import { ActionMenuHost } from '@/src/shared/components/ActionMenuHost';
+import { AppleRevokeListener } from '@/src/features/auth/components/AppleRevokeListener';
+import { CloudSyncErrorNotice } from '@/src/features/edge-cases/components/CloudSyncErrorNotice';
 import { CapabilityProvider } from '@/src/lib/Capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
+import { lockPhonePortrait } from '@/src/shared/hooks/useLandscapeWhileOpen';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
+import { useLocalModelMemoryRelease } from '@/src/features/model-picker/useLocalModelMemoryRelease';
 import '../global.css';
 
+installCloudModeDoor();
 holdLaunchSplash();
+lockPhonePortrait();
+setLinkBrowserPreferenceReader(() => useLocalSettingsStore.getState().linkBrowser === 'system');
+setPushTypeReceivedListener((type) =>
+  useNotificationPrefsStore.getState().notePushTypeReceived(type),
+);
 
 LogBox.ignoreLogs([
   '[React Native ExecuTorch] No content-length header for ',
@@ -122,6 +141,193 @@ function queueBackgroundFetchLifecycle(operation: () => Promise<void>): Promise<
   return transition;
 }
 
+type AppRouter = ReturnType<typeof useRouter>;
+
+interface LinkArrival {
+  id: number;
+  url: string;
+}
+
+function isIntentLink(url: string): boolean {
+  const parsed = Linking.parse(url);
+  return (
+    (parsed.scheme ?? '').toLowerCase() === 'agiworkforce' &&
+    (parsed.hostname ?? '').toLowerCase() === 'intent'
+  );
+}
+
+function chatLinkId(url: string): string | null {
+  const parsed = Linking.parse(url);
+  const scheme = (parsed.scheme ?? '').toLowerCase();
+  const hostname = (parsed.hostname ?? '').toLowerCase();
+  const segments = (parsed.path ?? '').split('/').filter(Boolean);
+  if (scheme === 'agiworkforce' && hostname === 'chat' && segments.length === 1) {
+    return segments[0] ?? null;
+  }
+  if (
+    scheme === 'https' &&
+    isAgiWorkforceUniversalLinkHost(hostname) &&
+    segments[0] === 'chat' &&
+    segments.length === 2
+  ) {
+    return segments[1] ?? null;
+  }
+  return null;
+}
+
+function isLocalChatOnThisDevice(chatId: string): boolean {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { useChatMessageStore } = require('@/stores/chat/chatMessageStore');
+  const { executionModeForConversation } = require('@/src/features/chat/utils/conversationMode');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return (
+    useChatMessageStore.getState().conversations as {
+      id: string;
+      executionMode?: 'local' | 'cloud';
+      model?: string;
+      provider?: string;
+    }[]
+  ).some(
+    (conversation) =>
+      conversation.id === chatId && executionModeForConversation(conversation) === 'local',
+  );
+}
+
+function openIntentLink(router: AppRouter, url: string): void {
+  const parsed = Linking.parse(url);
+  const segments = (parsed.path ?? '').split('/').filter(Boolean);
+  const verb = segments[0];
+  const queryParams = parsed.queryParams ?? {};
+  const getParam = (key: string): string | undefined => {
+    const value = queryParams[key];
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  };
+
+  switch (verb) {
+    case 'chat':
+      router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+      break;
+    case 'camera':
+      router.push('/(app)/camera' as Parameters<typeof router.push>[0]);
+      break;
+    case 'voice':
+      router.push(
+        (onDeviceRecognizerGuaranteed() ? '/(app)/voice' : '/(app)/(tabs)/chat') as Parameters<
+          typeof router.push
+        >[0],
+      );
+      break;
+    case 'ask': {
+      const prompt = getParam('prompt');
+      if (prompt) {
+        router.push(
+          `/(app)/share-preview?text=${encodeURIComponent(prompt)}` as Parameters<
+            typeof router.push
+          >[0],
+        );
+      } else {
+        router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+      }
+      break;
+    }
+    case 'summarize': {
+      const text = getParam('text');
+      if (text) {
+        router.push(
+          `/(app)/share-preview?text=${encodeURIComponent(
+            `Summarize this:\n\n${text}`,
+          )}` as Parameters<typeof router.push>[0],
+        );
+      }
+      break;
+    }
+    case 'remind': {
+      const reminder = getParam('reminder');
+      const due = getParam('due');
+      if (reminder) {
+        if (Platform.OS === 'ios') {
+          router.push(
+            `/(app)/reminder-review?title=${encodeURIComponent(reminder)}${
+              due ? `&due=${encodeURIComponent(due)}` : ''
+            }` as Parameters<typeof router.push>[0],
+          );
+        } else {
+          const dueDate = due ? new Date(due) : null;
+          const dueLabel =
+            dueDate && Number.isFinite(dueDate.getTime()) ? dueDate.toLocaleString() : null;
+          const message = dueLabel
+            ? `Remind me to ${reminder} at ${dueLabel}`
+            : `Remind me to ${reminder}`;
+          router.push(
+            `/(app)/share-preview?text=${encodeURIComponent(message)}` as Parameters<
+              typeof router.push
+            >[0],
+          );
+        }
+      }
+      break;
+    }
+    case 'share': {
+      const text = getParam('text');
+      const nativeTruncated = getParam('truncated') === '1';
+      const handoffKey = stageSharedFileAttachments(parseSharedFilesParam(getParam('files')));
+      const omittedFiles = getParam('omitted');
+      if ((text && text.trim()) || handoffKey || omittedFiles) {
+        router.push(
+          `/(app)/share-preview?text=${encodeURIComponent(text ?? '')}${
+            nativeTruncated ? '&nativeTruncated=1' : ''
+          }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}${
+            omittedFiles ? `&omittedFiles=${encodeURIComponent(omittedFiles)}` : ''
+          }` as Parameters<typeof router.push>[0],
+        );
+      }
+      break;
+    }
+    case 'translate': {
+      const text = getParam('text');
+      const targetLanguage = getParam('targetLanguage');
+      router.push({
+        pathname: '/(app)/translate' as const,
+        params: {
+          ...(text ? { text } : {}),
+          ...(targetLanguage ? { targetLanguage } : {}),
+        },
+      });
+      break;
+    }
+    case 'scan': {
+      const imageUri = stagedIntentFileUri(getParam('imageUri'));
+      router.push({
+        pathname: '/(app)/scan' as const,
+        params: imageUri ? { imageUri } : {},
+      });
+      break;
+    }
+    case 'analyze_image': {
+      const imageUri = stagedIntentFileUri(getParam('imageUri'));
+      const question = getParam('question');
+      router.push({
+        pathname: '/(app)/camera' as const,
+        params: {
+          ...(imageUri ? { imageUri } : {}),
+          ...(question ? { question } : {}),
+        },
+      });
+      break;
+    }
+    case 'transcribe': {
+      const audioUri = stagedIntentFileUri(getParam('audioUri'));
+      router.push({
+        pathname: '/(app)/voice' as const,
+        params: audioUri ? { audioUri } : {},
+      });
+      break;
+    }
+    default:
+      break;
+  }
+}
+
 // Clerk never reports `isLoaded` when its environment call fails (an offline
 // launch, a disabled instance). Everything keyed off it then reads "Checking…"
 // for the life of the process and the rows it gates do nothing when tapped.
@@ -136,6 +342,7 @@ function ClerkTokenBridge() {
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
   const termsUserId = useTermsAcceptanceStore((s) => s.userId);
   const termsStatus = useTermsAcceptanceStore((s) => s.status);
+  const wasSignedIn = useRef(false);
 
   useEffect(() => {
     if (isLoaded) return;
@@ -163,7 +370,13 @@ function ClerkTokenBridge() {
         void useTermsAcceptanceStore.getState().verify(userId);
       }
       if (termsUserId !== userId || termsStatus !== 'accepted') {
-        if (useAuthStore.getState().isClerkSignedIn) {
+        if (termsUserId === userId && termsStatus === 'required') answerCloudSession(null);
+        const recordedOwnerId = recordedCloudAccountOwnerId();
+        if (recordedOwnerId !== userId) useRolloutStore.getState().clear();
+        if (
+          useAuthStore.getState().isClerkSignedIn ||
+          (recordedOwnerId !== null && recordedOwnerId !== userId)
+        ) {
           invalidateCloudAccount();
           clearLocalCloudAccountState();
         }
@@ -177,6 +390,7 @@ function ClerkTokenBridge() {
       const owner = activateCloudAccount(userId);
       if (owner.changed) {
         clearLocalCloudAccountState();
+        useRolloutStore.getState().clear();
         startCloudSyncLoop();
       }
       setCloudAccess(true);
@@ -188,8 +402,10 @@ function ClerkTokenBridge() {
         cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
         subscriptionTier: useTierStore.getState().tier,
       });
+      wasSignedIn.current = true;
       setClerkSignedIn(true);
       setClerkLoaded(true);
+      answerCloudSession(userId);
       void refreshRolloutRings();
       void registerAppTransactionForAccount(userId);
     } else {
@@ -198,6 +414,10 @@ function ClerkTokenBridge() {
       if (hasCloudAccountOwner()) oweSignInForEndedSession();
       useRolloutStore.getState().clear();
       clearPostAuthIntent();
+      if (wasSignedIn.current) {
+        wasSignedIn.current = false;
+        clearPendingIntentLink();
+      }
       setClerkTokenMinter(null, null);
       useTermsAcceptanceStore.getState().reset();
       setClerkUserId(null);
@@ -205,6 +425,7 @@ function ClerkTokenBridge() {
       invalidateCloudAccount();
       setCloudAccess(false);
       clearLocalCloudAccountState();
+      answerCloudSession(null);
       setClerkLoaded(true);
     }
   }, [
@@ -222,7 +443,9 @@ function ClerkTokenBridge() {
 
   // Loaded with signed-in false reads as signed out, and the chat tab answers
   // that by persisting Local Mode. A session whose Terms answer is still in
-  // flight is neither, so it stays unloaded, bounded by the same settle window.
+  // flight is neither, so it stays unloaded, bounded by the same settle window;
+  // a Local fallback taken before any answer returns to Cloud only when the
+  // recorded Cloud account confirms (answerCloudSession).
   const termsAnswerPending =
     isLoaded &&
     isSignedIn === true &&
@@ -237,6 +460,7 @@ function ClerkTokenBridge() {
 
   useEffect(() => {
     return () => {
+      useAuthStore.getState().setClerkLoaded(false);
       clearPostAuthIntent();
       setClerkTokenMinter(null, null);
       useAuthStore.getState().setClerkUserId(null);
@@ -266,7 +490,13 @@ export default function RootLayout() {
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
   const router = useRouter();
-  const url = useLinkingURL();
+  const [linkArrival, setLinkArrival] = useState<LinkArrival | null>(null);
+  const linkArrivalCount = useRef(0);
+  const initialLinkRead = useRef(false);
+  const handledPairingArrival = useRef(0);
+  const handledIntentArrival = useRef(0);
+  const handledResetArrival = useRef(0);
+  const handledChatArrival = useRef(0);
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
@@ -282,6 +512,7 @@ export default function RootLayout() {
       themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
     );
   }, [themeMode]);
+  useLocalModelMemoryRelease();
   const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   const resetAppLock = useCallback(() => {
@@ -311,10 +542,10 @@ export default function RootLayout() {
     setStorageStatus('pending');
     initMmkvEncryption()
       .then(async () => {
-        const language = await syncDeviceLanguage();
+        const language = await restoreStoredLanguage();
         if (language.directionChanged) {
-          void reloadAppAsync('Apply device language direction').catch((err) => {
-            console.warn('[RootLayout] device language direction reload failed:', err);
+          void reloadAppAsync('Apply app language direction').catch((err) => {
+            console.warn('[RootLayout] app language direction reload failed:', err);
             setStorageStatus('ready');
           });
           return;
@@ -382,12 +613,31 @@ export default function RootLayout() {
     refreshTier().catch((err) => {
       console.warn('[RootLayout] Cloud-mode-entry tier refresh failed:', err);
     });
-    if (enteredCloud && isMmkvReady) void syncNow();
+    if (!enteredCloud) return;
+    void refreshRolloutRings();
+    void registerAppTransactionForAccount(clerkUserId);
+    if (isMmkvReady) void syncNow();
   }, [isClerkSignedIn, clerkUserId, isCloud, isMmkvReady, refreshTier]);
 
   useEffect(() => {
     setNavigatorReady(true);
     return () => setNavigatorReady(false);
+  }, []);
+
+  // Every arrival is its own event: the same link opened twice must be handled
+  // twice, so an arrival carries an id instead of being held as the latest URL.
+  useEffect(() => {
+    const receive = (incoming: string | null) => {
+      if (!incoming) return;
+      linkArrivalCount.current += 1;
+      setLinkArrival({ id: linkArrivalCount.current, url: incoming });
+    };
+    if (!initialLinkRead.current) {
+      initialLinkRead.current = true;
+      receive(Linking.getLinkingURL());
+    }
+    const subscription = Linking.addEventListener('url', ({ url: incoming }) => receive(incoming));
+    return () => subscription.remove();
   }, []);
 
   // A Local Mode notification is still this app's notification, so the taps and
@@ -402,42 +652,7 @@ export default function RootLayout() {
     return removeListeners;
   }, [isInitialized]);
 
-  useEffect(() => {
-    if (
-      !FEATURES.auth ||
-      !FEATURES.cloudChat ||
-      !isClerkSignedIn ||
-      !clerkUserId ||
-      !isInitialized
-    ) {
-      if (isInitialized && (!isClerkSignedIn || !clerkUserId)) {
-        setPushAccountContext(null);
-        void clearPushTokenAccountSession().catch((err) => {
-          console.warn('[RootLayout] Push-token account cleanup failed:', err);
-        });
-      }
-      return;
-    }
-
-    let disposed = false;
-    void beginPushTokenAccountSession(clerkUserId, getAuthToken)
-      .then(async (accountContext) => {
-        if (!accountContext || disposed || !accountContext.isCurrent()) return;
-        if (!isCloud) return;
-        setPushAccountContext(accountContext);
-        await registerForPushNotifications(accountContext);
-      })
-      .catch((err) => {
-        if (!disposed) {
-          console.warn('[RootLayout] Push notification setup failed:', err);
-        }
-      });
-
-    return () => {
-      disposed = true;
-      setPushAccountContext(null);
-    };
-  }, [isClerkSignedIn, clerkUserId, isCloud, isInitialized]);
+  usePushTokenAccountRegistration({ isClerkSignedIn, clerkUserId, isCloud, isInitialized });
 
   // Polling for cloud approvals has nothing to poll outside Cloud Mode, and
   // nothing to report when the user has turned background alerts off
@@ -481,7 +696,7 @@ export default function RootLayout() {
       isAgeGateConfirmed() &&
       segments[0] !== '(auth)'
     ) {
-      router.replace('/(auth)/login');
+      router.replace(beginCloudPostAuthIntent());
       return;
     }
     const redirect = resolveRootRedirect({
@@ -492,12 +707,20 @@ export default function RootLayout() {
       onboardingDone: Boolean(storage.getString('onboarding-done')),
       ageGateConfirmed: isAgeGateConfirmed(),
       signInOwedForEndedSession: isSignInOwedForEndedSession(),
+      addingAccount: isCloudAccountAdditionOpenFor(clerkUserId),
     });
     if (redirect?.pathname === CLOUD_SIGN_IN_RETURN_PATH) settleSignInForEndedSession();
     if (redirect) {
-      const destination =
-        redirect.pathname === '/(app)' && isClerkSignedIn ? consumePostAuthDestination() : null;
-      router.replace((destination ? { pathname: destination } : redirect) as never);
+      const signedInArrival = redirect.pathname === '/(app)' && isClerkSignedIn;
+      const destination = signedInArrival ? consumePostAuthDestination() : null;
+      const chatId = signedInArrival ? consumePendingCloudChat() : null;
+      router.replace(
+        (chatId && destination === '/(app)'
+          ? { pathname: '/(app)/chat/[id]', params: { id: chatId } }
+          : destination
+            ? { pathname: destination }
+            : redirect) as never,
+      );
     }
     // clerkUserId, not only isClerkSignedIn: a direct account switch keeps
     // signed-in true while onboarding and age-gate state, which this reads from
@@ -519,9 +742,11 @@ export default function RootLayout() {
   // from the `agiworkforce` scheme with host exactly `pair`, or from https on a
   // verified AGI domain with the pair route as the leading segment.
   useEffect(() => {
-    if (!url || !isClerkSignedIn || !isInitialized) return;
+    if (!linkArrival || !isClerkSignedIn || !isInitialized) return;
+    if (handledPairingArrival.current === linkArrival.id) return;
+    handledPairingArrival.current = linkArrival.id;
 
-    const parsed = Linking.parse(url);
+    const parsed = Linking.parse(linkArrival.url);
     const scheme = (parsed.scheme ?? '').toLowerCase();
     const hostname = (parsed.hostname ?? '').toLowerCase();
     const path = parsed.path ?? '';
@@ -548,7 +773,7 @@ export default function RootLayout() {
       }
       router.push({ pathname: '/(app)/companion' as const, params: { pairingCode: code } });
     }
-  }, [url, isClerkSignedIn, isInitialized, router]);
+  }, [linkArrival, isClerkSignedIn, isInitialized, router]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -571,147 +796,88 @@ export default function RootLayout() {
     );
   }, [isInitialized, router]);
 
+  const appRouteBlocked =
+    isMmkvReady &&
+    ((Boolean(clerkUserId) &&
+      (termsStatus === 'required' || termsStatus === 'error') &&
+      isCloud &&
+      isAgeGateConfirmed()) ||
+      resolveRootRedirect({
+        segments: ['(app)'],
+        authEnabled,
+        isClerkLoaded,
+        isClerkSignedIn,
+        onboardingDone: Boolean(storage.getString('onboarding-done')),
+        ageGateConfirmed: isAgeGateConfirmed(),
+        signInOwedForEndedSession: isSignInOwedForEndedSession(),
+        addingAccount: isCloudAccountAdditionOpenFor(clerkUserId),
+      }) !== null);
+
+  // A link that arrives before first-run onboarding, sign-in or the Terms answer
+  // is held and opened once the person reaches the app, instead of being
+  // bounced away by the redirect above.
   useEffect(() => {
-    if (!url || !isInitialized) return;
-
-    const parsed = Linking.parse(url);
-    const scheme = (parsed.scheme ?? '').toLowerCase();
-    const hostname = (parsed.hostname ?? '').toLowerCase();
-    if (scheme !== 'agiworkforce' || hostname !== 'intent') return;
-
-    const segments = (parsed.path ?? '').split('/').filter(Boolean);
-    const verb = segments[0];
-    const queryParams = parsed.queryParams ?? {};
-    const getParam = (key: string): string | undefined => {
-      const value = queryParams[key];
-      return typeof value === 'string' && value.length > 0 ? value : undefined;
-    };
-
-    switch (verb) {
-      case 'chat':
-        router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-        break;
-      case 'camera':
-        router.push('/(app)/camera' as Parameters<typeof router.push>[0]);
-        break;
-      case 'voice':
-        router.push('/(app)/voice' as Parameters<typeof router.push>[0]);
-        break;
-      case 'ask': {
-        const prompt = getParam('prompt');
-        if (prompt) {
-          router.push(
-            `/(app)/share-preview?text=${encodeURIComponent(prompt)}` as Parameters<
-              typeof router.push
-            >[0],
-          );
-        } else {
-          router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-        }
-        break;
-      }
-      case 'summarize': {
-        const text = getParam('text');
-        if (text) {
-          router.push(
-            `/(app)/share-preview?text=${encodeURIComponent(
-              `Summarize this:\n\n${text}`,
-            )}` as Parameters<typeof router.push>[0],
-          );
-        }
-        break;
-      }
-      case 'remind': {
-        const reminder = getParam('reminder');
-        const due = getParam('due');
-        if (reminder) {
-          if (Platform.OS === 'ios') {
-            router.push(
-              `/(app)/reminder-review?title=${encodeURIComponent(reminder)}${
-                due ? `&due=${encodeURIComponent(due)}` : ''
-              }` as Parameters<typeof router.push>[0],
-            );
-          } else {
-            const dueDate = due ? new Date(due) : null;
-            const dueLabel =
-              dueDate && Number.isFinite(dueDate.getTime()) ? dueDate.toLocaleString() : null;
-            const message = dueLabel
-              ? `Remind me to ${reminder} at ${dueLabel}`
-              : `Remind me to ${reminder}`;
-            router.push(
-              `/(app)/share-preview?text=${encodeURIComponent(message)}` as Parameters<
-                typeof router.push
-              >[0],
-            );
-          }
-        }
-        break;
-      }
-      case 'share': {
-        const text = getParam('text');
-        const nativeTruncated = getParam('truncated') === '1';
-        const handoffKey = stageSharedFileAttachments(parseSharedFilesParam(getParam('files')));
-        const omittedFiles = getParam('omitted');
-        if ((text && text.trim()) || handoffKey || omittedFiles) {
-          router.push(
-            `/(app)/share-preview?text=${encodeURIComponent(text ?? '')}${
-              nativeTruncated ? '&nativeTruncated=1' : ''
-            }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}${
-              omittedFiles ? `&omittedFiles=${encodeURIComponent(omittedFiles)}` : ''
-            }` as Parameters<typeof router.push>[0],
-          );
-        }
-        break;
-      }
-      case 'translate': {
-        const text = getParam('text');
-        const targetLanguage = getParam('targetLanguage');
-        router.push({
-          pathname: '/(app)/translate' as const,
-          params: {
-            ...(text ? { text } : {}),
-            ...(targetLanguage ? { targetLanguage } : {}),
-          },
-        });
-        break;
-      }
-      case 'scan': {
-        const imageUri = getParam('imageUri');
-        router.push({
-          pathname: '/(app)/scan' as const,
-          params: imageUri ? { imageUri } : {},
-        });
-        break;
-      }
-      case 'analyze_image': {
-        const imageUri = getParam('imageUri');
-        const question = getParam('question');
-        router.push({
-          pathname: '/(app)/camera' as const,
-          params: {
-            ...(imageUri ? { imageUri } : {}),
-            ...(question ? { question } : {}),
-          },
-        });
-        break;
-      }
-      case 'transcribe': {
-        const audioUri = getParam('audioUri');
-        router.push({
-          pathname: '/(app)/voice' as const,
-          params: audioUri ? { audioUri } : {},
-        });
-        break;
-      }
-      default:
-        break;
+    if (!linkArrival || !isInitialized || !isMmkvReady) return;
+    if (handledIntentArrival.current === linkArrival.id) return;
+    if (!isIntentLink(linkArrival.url)) {
+      handledIntentArrival.current = linkArrival.id;
+      return;
     }
-  }, [url, isInitialized, router]);
+    if (authEnabled && !isClerkLoaded) return;
+    handledIntentArrival.current = linkArrival.id;
+    if (appRouteBlocked) {
+      stagePendingIntentLink(linkArrival.url);
+      return;
+    }
+    clearPendingIntentLink();
+    openIntentLink(router, linkArrival.url);
+  }, [
+    linkArrival,
+    isInitialized,
+    isMmkvReady,
+    isClerkLoaded,
+    authEnabled,
+    appRouteBlocked,
+    router,
+  ]);
 
   useEffect(() => {
-    if (!FEATURES.auth || !url || !isInitialized) return;
+    if (!isInitialized || !isMmkvReady || segments[0] !== '(app)') return;
+    if (appRouteBlocked) return;
+    const pendingLink = consumePendingIntentLink();
+    if (pendingLink) openIntentLink(router, pendingLink);
+  }, [isInitialized, isMmkvReady, segments, appRouteBlocked, router]);
 
-    const parsed = Linking.parse(url);
+  useEffect(() => {
+    if (!authEnabled || !linkArrival || !isInitialized || !isMmkvReady) return;
+    if (handledChatArrival.current === linkArrival.id) return;
+    const chatId = chatLinkId(linkArrival.url);
+    if (!chatId) {
+      handledChatArrival.current = linkArrival.id;
+      return;
+    }
+    const routeSegments: readonly string[] = segments;
+    if (!isClerkLoaded || routeSegments[0] !== '(app)' || routeSegments[1] !== 'chat') return;
+    handledChatArrival.current = linkArrival.id;
+    if (isClerkSignedIn || isLocalChatOnThisDevice(chatId)) return;
+    router.replace(beginCloudPostAuthIntentForChat(chatId));
+  }, [
+    linkArrival,
+    authEnabled,
+    isInitialized,
+    isMmkvReady,
+    isClerkLoaded,
+    isClerkSignedIn,
+    segments,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (!FEATURES.auth || !linkArrival || !isInitialized) return;
+    if (handledResetArrival.current === linkArrival.id) return;
+    handledResetArrival.current = linkArrival.id;
+
+    const parsed = Linking.parse(linkArrival.url);
     const scheme = (parsed.scheme ?? '').toLowerCase();
     const hostname = (parsed.hostname ?? '').toLowerCase();
     const segments = (parsed.path ?? '').split('/').filter(Boolean);
@@ -724,7 +890,7 @@ export default function RootLayout() {
       segments.length === 2;
     if (!isResetPassword) return;
     router.replace({ pathname: '/(auth)/reset-password' as const });
-  }, [url, isInitialized, router]);
+  }, [linkArrival, isInitialized, router]);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -769,7 +935,11 @@ export default function RootLayout() {
           justifyContent: 'center',
         }}
       >
-        <LoadingIndicator size="large" />
+        {isBiometricReady && !isUnlocked ? (
+          <AppLockOverlay onUnlock={authenticate} onReset={resetAppLock} />
+        ) : (
+          <LoadingIndicator size="large" />
+        )}
       </View>
     );
   }
@@ -790,8 +960,10 @@ export default function RootLayout() {
               </TextScaleBoundary>
             </ThemeVars>
             <OfflineBanner />
-            <CloudSyncErrorBanner />
+            <CloudSyncErrorNotice />
             <ToastHost />
+            <ActionMenuHost />
+            <AppleRevokeListener />
             <AccountSecurityVerificationPrompt />
             {/* The lock covers the app, it does not replace it: unmounting the
                 navigator on every resume discarded the open conversation. */}

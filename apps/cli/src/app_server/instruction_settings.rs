@@ -72,7 +72,7 @@ fn snapshot(
     })
 }
 
-fn lock(base: &Path) -> Result<std::fs::File> {
+fn lock(base: &Path) -> Result<impl Sized> {
     DirectoryAuthority::open(base)?
         .child(Path::new("instruction-settings"), true)?
         .coordination_lock(Path::new("lock"))

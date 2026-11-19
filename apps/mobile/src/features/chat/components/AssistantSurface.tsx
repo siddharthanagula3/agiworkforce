@@ -1,15 +1,21 @@
 import { useState, type ReactNode } from 'react';
-import { Alert, Share, TextInput, View, useWindowDimensions } from 'react-native';
+import { Alert, Share, View, useWindowDimensions } from 'react-native';
 import { ArrowUpRight, ChevronDown } from 'lucide-react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import type { ColorScheme } from '@/src/ui/theme';
-import { chatTypography, radii, spacing, typeScale } from '@/src/ui/theme/tokens';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
+import { radii, spacing, typeScale } from '@/src/ui/theme/tokens';
 import { checklistProgress, type AssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
+import { parseEmailBlock } from '@agiworkforce/unified-chat/rich-blocks';
+import { AssistantDraftScope, useAssistantDraftScope } from './AssistantDraftScope';
+import { EmailDraftSurface, WritingDraftSurface } from './DraftSurfaces';
 import { AnswerFormSurface } from './AnswerFormSurface';
+import { MapFenceSurface } from './MapFenceSurface';
 import { CarouselSurface, GallerySurface } from './AnswerMediaSurfaces';
+import { openAssistantLink } from './MarkdownInline';
+import { followUpChipText } from '@/src/features/chat/utils/followUpChipText';
 import {
   ChoiceRow,
   PanelHeader,
@@ -21,12 +27,12 @@ import {
   type SurfaceTone,
 } from './AnswerSurfaceKit';
 import { ReportChart } from './ReportChart';
-
-const PREVIEW_EDIT_NOTICE = 'Edits stay in this preview. Copy or share to keep them.';
+import { chartFromAssistantFence } from '@/src/features/chat/utils/chartArtifact';
 
 type MobileAssistantFence = Exclude<AssistantFence, { kind: 'code' }>;
 
 const WIDE_LAYOUT_MIN_WIDTH = 600;
+const THREE_COLUMN_MIN_WIDTH = 900;
 
 export function canRenderAssistantSurface(fence: AssistantFence): fence is MobileAssistantFence {
   return fence.kind !== 'code';
@@ -72,145 +78,6 @@ function CopyControl({ label, text, color }: { label: string; text: string; colo
       >
         <Text style={{ color, fontSize: typeScale.footnote }}>Share</Text>
       </PressableBox>
-    </View>
-  );
-}
-
-function EmailDraft({
-  fence,
-  colors,
-}: {
-  fence: Extract<AssistantFence, { kind: 'email' }>;
-  colors: ColorScheme;
-}) {
-  const [to, setTo] = useState(fence.to);
-  const [subject, setSubject] = useState(fence.subject);
-  const [body, setBody] = useState(fence.body);
-  const headers = [
-    to ? `To: ${to}` : null,
-    fence.cc ? `Cc: ${fence.cc}` : null,
-    fence.bcc ? `Bcc: ${fence.bcc}` : null,
-    subject ? `Subject: ${subject}` : null,
-  ].filter((line): line is string => line !== null);
-  const copyText = headers.length > 0 ? `${headers.join('\n')}\n\n${body}` : body;
-  return (
-    <View
-      testID="answer-surface-email"
-      accessibilityLabel="Email"
-      style={{
-        padding: spacing.xl,
-        gap: spacing.sm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radii.xl,
-        backgroundColor: colors.surfaceElevated,
-      }}
-    >
-      <TextInput
-        accessibilityLabel="To"
-        value={to}
-        onChangeText={setTo}
-        style={{
-          ...chatTypography.writingSubject,
-          color: colors.textPrimary,
-          minHeight: 44,
-          paddingVertical: spacing.sm,
-        }}
-      />
-      {(
-        [
-          ['Cc', fence.cc],
-          ['Bcc', fence.bcc],
-        ] as const
-      ).map(([label, value]) =>
-        value ? (
-          <Text
-            key={label}
-            selectable
-            numberOfLines={3}
-            style={{
-              ...chatTypography.writingSubject,
-              color: colors.textSecondary,
-              maxWidth: '100%',
-            }}
-          >
-            {`${label}: ${value}`}
-          </Text>
-        ) : null,
-      )}
-      <TextInput
-        accessibilityLabel="Subject"
-        value={subject}
-        onChangeText={setSubject}
-        style={{
-          ...chatTypography.writingSubject,
-          color: colors.textPrimary,
-          minHeight: 44,
-          paddingVertical: spacing.sm,
-        }}
-      />
-      <TextInput
-        accessibilityLabel="Message"
-        value={body}
-        onChangeText={setBody}
-        editable
-        multiline
-        style={{
-          ...chatTypography.body,
-          color: colors.textPrimary,
-          minHeight: 44,
-          textAlignVertical: 'top',
-        }}
-      />
-      <CopyControl label="Copy email" text={copyText} color={colors.textSecondary} />
-      <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-        {PREVIEW_EDIT_NOTICE}
-      </Text>
-    </View>
-  );
-}
-
-function WritingDraft({
-  fence,
-  colors,
-}: {
-  fence: Extract<AssistantFence, { kind: 'writing' }>;
-  colors: ColorScheme;
-}) {
-  const [text, setText] = useState(fence.copyText);
-  return (
-    <View
-      testID="answer-surface-writing"
-      accessibilityLabel={fence.label}
-      style={{
-        padding: spacing.xl,
-        gap: spacing.sm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radii.xl,
-        backgroundColor: colors.surfaceElevated,
-      }}
-    >
-      <Text style={{ ...chatTypography.writingSubject, color: colors.textSecondary }}>
-        {fence.label}
-      </Text>
-      <TextInput
-        accessibilityLabel={fence.label}
-        value={text}
-        onChangeText={setText}
-        editable
-        multiline
-        style={{
-          ...chatTypography.body,
-          color: colors.textPrimary,
-          minHeight: 44,
-          textAlignVertical: 'top',
-        }}
-      />
-      <CopyControl label="Copy draft" text={text} color={colors.textSecondary} />
-      <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-        {PREVIEW_EDIT_NOTICE}
-      </Text>
     </View>
   );
 }
@@ -290,11 +157,30 @@ function CheckGroup({
             colors={colors}
           />
         ) : (
-          <CopyControl
-            label="Copy checklist"
-            text={items.map((item) => `${item.checked ? '[x]' : '[ ]'} ${item.label}`).join('\n')}
-            color={colors.textSecondary}
-          />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' }}>
+            {items.some((item, index) => item.checked !== initial[index]?.checked) ? (
+              <PressableBox
+                onPress={() => setItems(initial)}
+                accessibilityRole="button"
+                accessibilityLabel="Reset"
+                style={{
+                  minWidth: 44,
+                  minHeight: 44,
+                  justifyContent: 'center',
+                  paddingHorizontal: spacing.sm,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+                  Reset
+                </Text>
+              </PressableBox>
+            ) : null}
+            <CopyControl
+              label="Copy checklist"
+              text={items.map((item) => `${item.checked ? '[x]' : '[ ]'} ${item.label}`).join('\n')}
+              color={colors.textSecondary}
+            />
+          </View>
         )}
       </PanelSection>
     </SurfacePanel>
@@ -474,46 +360,80 @@ function DetailsSurface({
   );
 }
 
+function cardWidth(columns: 1 | 2 | 3, windowWidth: number): '100%' | '48%' | '31%' {
+  if (columns === 3 && windowWidth >= THREE_COLUMN_MIN_WIDTH) return '31%';
+  if (columns > 1 && windowWidth >= WIDE_LAYOUT_MIN_WIDTH) return '48%';
+  return '100%';
+}
+
 function CardsSurface({
-  cards,
+  fence,
   colors,
 }: {
-  cards: { title: string; body: string }[];
+  fence: Extract<AssistantFence, { kind: 'cards' }>;
   colors: ColorScheme;
 }) {
   const { width } = useWindowDimensions();
-  const twoColumns = width >= WIDE_LAYOUT_MIN_WIDTH;
+  const columnWidth = cardWidth(fence.columns, width);
+  const modes = fence.note !== '';
   return (
     <View
       testID="answer-surface-cards"
-      accessibilityLabel="Cards"
-      style={{
-        marginVertical: spacing.md,
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing.md,
-      }}
+      accessibilityLabel={fence.title || (modes ? 'Display modes' : 'Cards')}
+      style={{ marginVertical: spacing.md, gap: spacing.md }}
     >
-      {cards.map((card) => (
+      {fence.title ? (
+        <Text
+          accessibilityRole="header"
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+        >
+          {fence.title}
+        </Text>
+      ) : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
+        {fence.cards.map((card) => (
+          <CardTile key={card.title} card={card} width={columnWidth} colors={colors} />
+        ))}
+      </View>
+      {modes ? (
         <View
-          key={card.title}
           style={{
-            width: twoColumns ? '48%' : '100%',
-            gap: spacing.xs,
-            padding: spacing.lg,
-            borderWidth: 1,
-            borderColor: colors.borderLight,
-            borderRadius: radii.md,
+            borderTopWidth: 1,
+            borderTopColor: colors.borderLight,
+            paddingTop: spacing.md,
           }}
         >
-          <Text
-            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}
-          >
-            {card.title}
-          </Text>
-          <SecondaryText text={card.body} colors={colors} />
+          <SecondaryText text={fence.note} colors={colors} />
         </View>
-      ))}
+      ) : null}
+    </View>
+  );
+}
+
+function CardTile({
+  card,
+  width,
+  colors,
+}: {
+  card: { title: string; body: string };
+  width: '100%' | '48%' | '31%';
+  colors: ColorScheme;
+}) {
+  return (
+    <View
+      style={{
+        width,
+        gap: spacing.xs,
+        padding: spacing.lg,
+        borderWidth: 1,
+        borderColor: colors.borderLight,
+        borderRadius: radii.md,
+      }}
+    >
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}>
+        {card.title}
+      </Text>
+      <SecondaryText text={card.body} colors={colors} />
     </View>
   );
 }
@@ -625,28 +545,12 @@ function CardSurface({
   );
 }
 
-function chartFromFence(fence: Extract<AssistantFence, { kind: 'chart' }>) {
-  return {
-    kind: 'xy' as const,
-    ...(fence.title ? { title: fence.title } : {}),
-    categories: fence.points.map((point) => point.label),
-    ...(fence.yLabel ? { yLabel: fence.yLabel } : {}),
-    series: [
-      {
-        type: 'bar' as const,
-        ...(fence.yLabel ? { name: fence.yLabel } : {}),
-        values: fence.points.map((point) => point.value),
-      },
-    ],
-  };
-}
-
 function LinkText({ href, colors }: { href: string; colors: ColorScheme }) {
   return (
     <PressableBox
       accessibilityRole="link"
       accessibilityLabel={`Open ${href}`}
-      onPress={() => void openUntrustedUrlInAppBrowser(href)}
+      onPress={() => openAssistantLink(href)}
       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
     >
       <Text
@@ -665,7 +569,42 @@ function LinkText({ href, colors }: { href: string; colors: ColorScheme }) {
   );
 }
 
+const STOPPED_SURFACE_CAPTION = 'Stopped before it finished';
+
 export function AssistantSurface({
+  stopped = false,
+  ...surface
+}: {
+  fence: MobileAssistantFence;
+  colors: ColorScheme;
+  onFollowUp?: (text: string) => void;
+  streaming?: boolean;
+  stopped?: boolean;
+  renderBody?: (text: string) => ReactNode;
+}) {
+  const scope = useAssistantDraftScope();
+  const { fence, colors } = surface;
+  const body = <AssistantSurfaceBody {...surface} />;
+  if (!stopped || fence.kind === 'fallback') return body;
+  const persistable = fence.kind !== 'email' || parseEmailBlock(fence.copyText) !== null;
+  return (
+    <View>
+      {scope && !persistable ? (
+        <AssistantDraftScope messageId={scope.messageId}>{body}</AssistantDraftScope>
+      ) : (
+        body
+      )}
+      <Text
+        testID="answer-surface-stopped"
+        style={{ fontSize: typeScale.caption, color: colors.textSecondary }}
+      >
+        {STOPPED_SURFACE_CAPTION}
+      </Text>
+    </View>
+  );
+}
+
+function AssistantSurfaceBody({
   fence,
   colors,
   onFollowUp,
@@ -678,6 +617,21 @@ export function AssistantSurface({
   streaming?: boolean;
   renderBody?: (text: string) => ReactNode;
 }) {
+  const scope = useAssistantDraftScope();
+  const streamingEmail =
+    streaming && fence.kind === 'fallback' && fence.language === 'email'
+      ? parseEmailBlock(fence.text, true)
+      : null;
+  if (streamingEmail) {
+    return (
+      <EmailDraftSurface
+        draft={streamingEmail.draft}
+        identity={fence.kind === 'fallback' ? fence.text : ''}
+        colors={colors}
+        streaming
+      />
+    );
+  }
   if (fence.kind === 'fallback') {
     return (
       <Text testID="answer-fallback" selectable style={{ color: colors.textPrimary }}>
@@ -686,15 +640,36 @@ export function AssistantSurface({
     );
   }
   if (fence.kind === 'email') {
-    return <EmailDraft key={fence.copyText} fence={fence} colors={colors} />;
+    return (
+      <EmailDraftSurface
+        key={scope ? undefined : fence.copyText}
+        draft={fence}
+        identity={fence.copyText}
+        colors={colors}
+        streaming={streaming}
+      />
+    );
   }
-  if (fence.kind === 'writing') {
-    return <WritingDraft key={fence.copyText} fence={fence} colors={colors} />;
+  if (fence.kind === 'writing' || (fence.kind === 'copy' && fence.surface === 'prompt')) {
+    const prompt = fence.kind === 'copy';
+    return (
+      <WritingDraftSurface
+        key={scope ? undefined : fence.copyText}
+        language={prompt ? 'prompt' : fence.language}
+        label={prompt ? fence.title : fence.label}
+        copyLabel={prompt ? 'Copy full prompt' : 'Copy draft'}
+        source={fence.copyText}
+        colors={colors}
+        streaming={streaming}
+        {...(renderBody ? { renderBody } : {})}
+      />
+    );
   }
   if (fence.kind === 'form') {
     return (
       <AnswerFormSurface
         key={fence.source}
+        source={fence.source}
         spec={fence.spec}
         colors={colors}
         streaming={streaming}
@@ -714,12 +689,7 @@ export function AssistantSurface({
     return <StatsSurface spec={fence.spec} colors={colors} />;
   }
   if (fence.kind === 'copy') {
-    const label =
-      fence.surface === 'prompt'
-        ? 'Copy full prompt'
-        : fence.surface === 'commands'
-          ? 'Copy commands'
-          : 'Copy';
+    const label = fence.surface === 'commands' ? 'Copy commands' : 'Copy';
     return (
       <SurfacePanel
         colors={colors}
@@ -732,7 +702,7 @@ export function AssistantSurface({
             selectable
             style={{
               color: colors.textPrimary,
-              fontFamily: 'Menlo',
+              fontFamily: codeFontFamily,
               fontSize: typeScale.footnote,
               lineHeight: 20,
             }}
@@ -748,7 +718,7 @@ export function AssistantSurface({
     );
   }
   if (fence.kind === 'cards') {
-    return <CardsSurface cards={fence.cards} colors={colors} />;
+    return <CardsSurface fence={fence} colors={colors} />;
   }
   if (fence.kind === 'checklist') {
     return (
@@ -777,7 +747,7 @@ export function AssistantSurface({
   if (fence.kind === 'chart') {
     return (
       <View testID="answer-surface-chart" style={{ marginVertical: spacing.md }}>
-        <ReportChart chart={chartFromFence(fence)} colors={colors} />
+        <ReportChart chart={chartFromAssistantFence(fence)} colors={colors} />
       </View>
     );
   }
@@ -847,38 +817,7 @@ export function AssistantSurface({
     return <DetailsSurface fence={fence} colors={colors} />;
   }
   if (fence.kind === 'map') {
-    return (
-      <SurfacePanel colors={colors} testID="answer-surface-map" accessibilityLabel="Map">
-        <PanelHeader title="Places" colors={colors} />
-        <PanelSection colors={colors}>
-          {fence.stops.map((stop, index) => (
-            <View key={stop.name} style={{ flexDirection: 'row', gap: spacing.sm }}>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typeScale.body,
-                  fontVariant: ['tabular-nums'],
-                }}
-              >
-                {`${index + 1}.`}
-              </Text>
-              <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
-                <Text style={{ fontWeight: '600' }}>{stop.name}</Text>
-                {stop.note ? (
-                  <Text style={{ color: colors.textSecondary }}>{`: ${stop.note}`}</Text>
-                ) : null}
-              </Text>
-            </View>
-          ))}
-        </PanelSection>
-        <PanelSection colors={colors} divided>
-          <SecondaryText
-            text="Place names are listed. A map image is not loaded in this view."
-            colors={colors}
-          />
-        </PanelSection>
-      </SurfacePanel>
-    );
+    return <MapFenceSurface stops={fence.stops} colors={colors} streaming={streaming} />;
   }
   if (fence.kind === 'actions') {
     return (
@@ -973,6 +912,11 @@ export function AssistantSurface({
                 >
                   {`${index + 1}. ${step.title}`}
                 </Text>
+                {step.date ? (
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+                    {step.date}
+                  </Text>
+                ) : null}
                 {step.detail ? <SecondaryText text={step.detail} colors={colors} /> : null}
               </View>
               <StatusPill label={step.name} tone={stateTone(step.name)} colors={colors} />
@@ -995,8 +939,10 @@ export function AssistantSurface({
             {onFollowUp ? (
               <PressableBox
                 accessibilityRole="button"
-                accessibilityLabel={item}
-                onPress={() => onFollowUp(item)}
+                accessibilityLabel={followUpChipText(item)}
+                accessibilityState={{ disabled: streaming }}
+                disabled={streaming}
+                onPress={() => onFollowUp(followUpChipText(item))}
                 style={({ pressed }) => ({
                   minHeight: 44,
                   flexDirection: 'row',
@@ -1009,7 +955,7 @@ export function AssistantSurface({
                 })}
               >
                 <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
-                  {item}
+                  {followUpChipText(item)}
                 </Text>
                 <ArrowUpRight size={16} color={colors.textSecondary} />
               </PressableBox>
@@ -1042,7 +988,7 @@ export function AssistantSurface({
             selectable
             style={{
               color: colors.textPrimary,
-              fontFamily: 'Menlo',
+              fontFamily: codeFontFamily,
               fontSize: typeScale.footnote,
               lineHeight: 20,
             }}

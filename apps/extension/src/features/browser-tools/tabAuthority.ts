@@ -5,6 +5,7 @@ import {
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
 import { assertSiteAccess, readAdminSitePolicy } from '../site-policy/store';
 import { hasOneTimeSiteGrant } from '../computer-use/oneTimeSiteGrants';
+import { ACCOUNT_ORIGIN_REFUSAL, isExtensionAccountOrigin } from '../computer-use/accountOrigins';
 import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
 import type { BrowserProfileCapability } from '@agiworkforce/types';
 
@@ -100,6 +101,7 @@ export async function authorizeBrowserToolCapability(
     throw new Error('Browser task URLs cannot contain credentials.');
   const origin = normalizeApprovedSiteOrigin(parsed.origin);
   if (!origin) throw new Error('Only http and https tabs are supported.');
+  if (isExtensionAccountOrigin(origin)) throw new Error(ACCOUNT_ORIGIN_REFUSAL);
   const notApproved = `"${origin}" ${SITE_NOT_APPROVED_FOR_BROWSER_TOOLS}`;
   if (capability === 'automation' && hasOneTimeSiteGrant(origin)) {
     const evaluation = evaluateSitePolicy(

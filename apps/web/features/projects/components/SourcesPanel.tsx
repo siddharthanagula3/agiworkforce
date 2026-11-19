@@ -499,8 +499,8 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
             {readOnly
               ? 'The owner of this project has not added any sources yet. Only they can add or remove them.'
               : connectorsReleased()
-                ? 'Upload files, paste text or add files from Google Drive to give AGI deeper context about your project.'
-                : 'Upload files or paste text to give AGI deeper context about your project.'}
+                ? 'Add files, text or Google Drive files to give AGI context.'
+                : 'Add files or text to give AGI context.'}
           </p>
 
           {readOnly ? null : (

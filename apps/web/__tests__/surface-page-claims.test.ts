@@ -10,6 +10,7 @@ import {
   PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
+import { CANONICAL_SITE_URL } from '@/lib/seo/site';
 import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
@@ -271,7 +272,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(config).toMatch(/Desktop chat has no Local mode/u);
     expect(dispatcher).toMatch(/localModels: false/u);
-    expect(dispatcher).toMatch(/localMcp: false/u);
+    expect(dispatcher).toMatch(/localMcp: localMcpAvailable\(\)/u);
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
@@ -297,7 +298,12 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /pub fn save_device_grant[\s\S]*AuthStore::transaction_with_commit/u,
     );
     expect(repoText('apps', 'desktop', 'electron', 'runtime', 'runtimeEnvironment.ts')).toContain(
-      "'AGIWORKFORCE_NO_KEYRING'",
+      "import { GUARD_LIFTING_ENVIRONMENT } from '@agiworkforce/local-runtime-contract';",
+    );
+    expect(
+      repoText('packages', 'contracts', 'local-runtime', 'src', 'developer-sessions.ts'),
+    ).toMatch(
+      /export const GUARD_LIFTING_ENVIRONMENT: readonly string\[\] = \[[^\]]*'AGIWORKFORCE_NO_KEYRING'/u,
     );
     expect(repoText('apps', 'cli', 'src', 'secure_store.rs')).toContain(
       '!cfg!(test) && !cfg!(target_os = "linux") && !keyring_disabled()',
@@ -451,7 +457,9 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       .join('\n');
 
     expect(currentDocs).toMatch(/Electron is the only public Desktop product/iu);
-    expect(currentDocs).toMatch(/public Electron Desktop reports `localMcp: false`/iu);
+    expect(currentDocs).toMatch(
+      /public Electron Desktop reports `localMcp: true` when its bundled CLI serves MCP/iu,
+    );
     expect(currentDocs).toMatch(/released CLI supports BYOK/iu);
 
     for (const [label, pattern] of [
@@ -909,10 +917,7 @@ function repoText(...segments: string[]): string {
 }
 
 function canonicalSupportUrl(path: string): string {
-  const site = fileText('lib/seo/site.ts');
-  const origin = /NEXT_PUBLIC_APP_URL'\]\s*\?\?\s*'([^']+)'/u.exec(site)?.[1];
-  if (!origin) throw new Error('Missing canonical public origin');
-  return new URL(path, origin).href;
+  return new URL(path, CANONICAL_SITE_URL).href;
 }
 
 describe('/byok, VS Code is named with the release state it actually has', () => {
@@ -1100,8 +1105,8 @@ describe('/byok, custody names the store each runtime really writes to', () => {
 
 describe('/web, the browser surface has one route and it is managed cloud', () => {
   it('reads the single trust mode the web chat route stamps on every turn', () => {
-    const processor = fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts');
-    expect(processor).toMatch(/const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u);
+    const routing = fileText('lib/server/managed-cloud-routing/routing-request.ts');
+    expect(routing).toMatch(/export const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';/u);
     expect(fileText('lib/marketing-constants.ts')).toMatch(
       /exclusion: 'Web, Mobile, Desktop and Chrome do not accept provider keys\.'/u,
     );

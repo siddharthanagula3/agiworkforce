@@ -1,7 +1,9 @@
 import {
-  documentDirectory,
+  cacheDirectory,
+  deleteAsync,
   getInfoAsync,
   moveAsync,
+  readDirectoryAsync,
   writeAsStringAsync,
   makeDirectoryAsync,
   EncodingType,
@@ -15,13 +17,38 @@ import {
   saveToLibraryAsync,
 } from 'expo-media-library/legacy';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
-import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
+import { codeFileFor } from '@agiworkforce/unified-chat/code-file-name';
+import { API_URL } from '@/lib/constants';
+import { guardedFetch } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
+import { ApiHttpError } from '@/services/apiErrors';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 import { EXPORT_CONTENT_STYLES, markdownToExportHtml } from '@/services/exportMarkdownHtml';
+import { nativeFileName } from '@/services/nativeFileName';
 import { markdownToDocxBase64 } from './docxExport';
+import {
+  StaleCloudAccountOperationError,
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
 
-export const EXPORTS_DIR = `${documentDirectory}exports/`;
+export const EXPORTS_DIR = `${cacheDirectory}exports/`;
+
+const STALE_EXPORT_AGE_MS = 24 * 60 * 60 * 1000;
+let staleExportSweep: Promise<void> | null = null;
+
+// Android resolves shareAsync before the receiving app has read the file, so an export is only
+// removed once it is a day old, never as soon as the share sheet closes.
+export async function removeStaleExports(): Promise<void> {
+  const now = Date.now();
+  for (const entry of await readDirectoryAsync(EXPORTS_DIR)) {
+    const uri = `${EXPORTS_DIR}${entry}/`;
+    const info = await getInfoAsync(uri);
+    if (info.exists && now - info.modificationTime * 1000 > STALE_EXPORT_AGE_MS) {
+      await deleteAsync(uri, { idempotent: true });
+    }
+  }
+}
 
 async function ensureExportsDir(): Promise<void> {
   const info = await getInfoAsync(EXPORTS_DIR);
@@ -33,13 +60,14 @@ async function ensureExportsDir(): Promise<void> {
 // Keep every returned URI tied to its original export, even when titles repeat.
 // Allocation failure must not fall back to overwriting an earlier file.
 async function allocateExportPath(fileName: string): Promise<string> {
+  staleExportSweep ??= removeStaleExports().catch(() => undefined);
   await ensureExportsDir();
   const directory = `${EXPORTS_DIR}${Crypto.randomUUID()}/`;
   if ((await getInfoAsync(directory)).exists) {
     throw new Error('Could not allocate a new export directory. Please try again.');
   }
   await makeDirectoryAsync(directory, { intermediates: false });
-  return `${directory}${fileName}`;
+  return `${directory}${encodeURIComponent(fileName)}`;
 }
 
 export type ExportFormat = 'pdf' | 'text' | 'markdown' | 'docx' | 'source';
@@ -61,14 +89,9 @@ function exportedFile(uri: string, fileName: string, lineage: Partial<FileLineag
   });
 }
 
-function sanitizeFileName(title: string): string {
-  return (
-    title
-      .replace(/[^a-zA-Z0-9\s\-_]/g, '')
-      .replace(/\s+/g, '_')
-      .slice(0, 64)
-      .replace(/_+$/, '') || 'export'
-  );
+function exportFileName(title: string, extension: string): string {
+  const name = nativeFileName(title);
+  return extension ? nativeFileName(`${name}.${extension}`) : name;
 }
 
 function markdownToHtml(content: string, title: string): string {
@@ -166,7 +189,27 @@ export async function exportToPDF(
   const html = markdownToHtml(content, title);
   const { uri } = await Print.printToFileAsync({ html });
 
-  const fileName = `${sanitizeFileName(title)}.pdf`;
+  const fileName = exportFileName(title, 'pdf');
+  const destUri = await allocateExportPath(fileName);
+
+  await moveAsync({ from: uri, to: destUri });
+
+  return { uri: destUri, format: 'pdf', fileName, file: exportedFile(destUri, fileName, lineage) };
+}
+
+export async function exportHtmlToPDF(
+  html: string,
+  title: string,
+  page: { width: number; height: number },
+  lineage: Partial<FileLineage> = {},
+): Promise<ExportResult> {
+  if (!html.trim()) {
+    throw new Error('Cannot export empty content');
+  }
+
+  const { uri } = await Print.printToFileAsync({ html, width: page.width, height: page.height });
+
+  const fileName = exportFileName(title, 'pdf');
   const destUri = await allocateExportPath(fileName);
 
   await moveAsync({ from: uri, to: destUri });
@@ -191,14 +234,10 @@ export async function exportToText(
     throw new Error('Cannot export empty content');
   }
 
-  const timestamp = new Date().toISOString();
-  const header = `${title}\nExported: ${timestamp}\n${'─'.repeat(40)}\n\n`;
-  const fullContent = header + content;
-
-  const fileName = `${sanitizeFileName(title)}.txt`;
+  const fileName = exportFileName(title, 'txt');
   const destUri = await allocateExportPath(fileName);
 
-  await writeAsStringAsync(destUri, fullContent, {
+  await writeAsStringAsync(destUri, content, {
     encoding: EncodingType.UTF8,
   });
 
@@ -212,7 +251,10 @@ export async function exportSourceFile(
   lineage: Partial<FileLineage> = {},
 ): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
-  const fileName = `${sanitizeFileName(title)}.${extension.replace(/[^a-z0-9]/gi, '') || 'txt'}`;
+  const fileName = exportFileName(
+    title,
+    extension === '' ? '' : extension.replace(/[^a-z0-9]/gi, '') || 'txt',
+  );
   const destUri = await allocateExportPath(fileName);
   await writeAsStringAsync(destUri, content, { encoding: EncodingType.UTF8 });
   return {
@@ -224,10 +266,76 @@ export async function exportSourceFile(
 }
 
 export async function exportPngImage(base64Png: string, title: string): Promise<string> {
-  const destUri = await allocateExportPath(`${sanitizeFileName(title)}.png`);
+  const destUri = await allocateExportPath(exportFileName(title, 'png'));
   await writeAsStringAsync(destUri, base64Png, { encoding: EncodingType.Base64 });
   return destUri;
 }
+
+const SHARE_UTI_BY_EXTENSION: Readonly<Record<string, string>> = {
+  pdf: 'com.adobe.pdf',
+  md: 'net.daringfireball.markdown',
+  docx: 'org.openxmlformats.wordprocessingml.document',
+  xlsx: 'org.openxmlformats.spreadsheetml.sheet',
+  pptx: 'org.openxmlformats.presentationml.presentation',
+  csv: 'public.comma-separated-values-text',
+  json: 'public.json',
+  html: 'public.html',
+  svg: 'public.svg-image',
+  png: 'public.png',
+  jpg: 'public.jpeg',
+  jpeg: 'public.jpeg',
+  zip: 'public.zip-archive',
+  mp4: 'public.mpeg-4',
+  mov: 'com.apple.quicktime-movie',
+  webm: 'public.movie',
+  gif: 'com.compuserve.gif',
+  heic: 'public.heic',
+  avif: 'public.avif',
+  webp: 'org.webmproject.webp',
+  mp3: 'public.mp3',
+  wav: 'com.microsoft.waveform-audio',
+  m4a: 'public.mpeg-4-audio',
+  txt: 'public.plain-text',
+};
+const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
+  pdf: 'application/pdf',
+  md: 'text/markdown',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  csv: 'text/csv',
+  json: 'application/json',
+  html: 'text/html',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  zip: 'application/zip',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  avif: 'image/avif',
+  webp: 'image/webp',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  m4a: 'audio/mp4',
+  txt: 'text/plain',
+};
+
+const PLAIN_TEXT_UTI = 'public.plain-text';
+const PLAIN_TEXT_MIME_TYPE = 'text/plain';
+
+function isSourceCodeExtension(extension: string | undefined): boolean {
+  return Boolean(extension) && codeFileFor(extension as string).extension === extension;
+}
+
+const EXTENSION_BY_MIME: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(MIME_BY_EXTENSION)
+    .filter(([extension]) => extension !== 'jpeg')
+    .map(([extension, mimeType]) => [mimeType, extension]),
+);
 
 /**
  * Share a file using the native share sheet.
@@ -248,46 +356,13 @@ export async function shareFile(
   }
 
   const ext = uri.split('.').pop()?.toLowerCase();
-  const utiMap: Record<string, string> = {
-    pdf: 'com.adobe.pdf',
-    md: 'net.daringfireball.markdown',
-    docx: 'org.openxmlformats.wordprocessingml.document',
-    xlsx: 'org.openxmlformats.spreadsheetml.sheet',
-    pptx: 'org.openxmlformats.presentationml.presentation',
-    csv: 'public.comma-separated-values-text',
-    json: 'public.json',
-    html: 'public.html',
-    svg: 'public.svg-image',
-    png: 'public.png',
-    jpg: 'public.jpeg',
-    jpeg: 'public.jpeg',
-    zip: 'public.zip-archive',
-    mp4: 'public.mpeg-4',
-    mov: 'com.apple.quicktime-movie',
-    webm: 'public.movie',
-  };
-  const mimeMap: Record<string, string> = {
-    pdf: 'application/pdf',
-    md: 'text/markdown',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    csv: 'text/csv',
-    json: 'application/json',
-    html: 'text/html',
-    svg: 'image/svg+xml',
-    png: 'image/png',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    zip: 'application/zip',
-    mp4: 'video/mp4',
-    mov: 'video/quicktime',
-    webm: 'video/webm',
-  };
   if (options.isCurrent?.() === false) return;
+  const sourceCode = isSourceCodeExtension(ext);
+  const uti = SHARE_UTI_BY_EXTENSION[ext ?? ''] ?? (sourceCode ? PLAIN_TEXT_UTI : undefined);
+  const mimeType = MIME_BY_EXTENSION[ext ?? ''] ?? (sourceCode ? PLAIN_TEXT_MIME_TYPE : undefined);
   await Sharing.shareAsync(uri, {
-    UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
-    mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
+    ...(uti ? { UTI: uti } : {}),
+    ...(mimeType ? { mimeType } : {}),
   });
 }
 
@@ -297,7 +372,7 @@ function dataUrlToBase64(dataUrl: string): string {
   return dataUrl.slice(commaIdx + 1);
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
+export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Failed to read downloaded file bytes'));
@@ -327,25 +402,57 @@ function blobToBase64(blob: Blob): Promise<string> {
  * @returns The local `file://` URI of the downloaded file.
  * @throws {Error} On HTTP failure (surfaced honestly to the caller's alert).
  */
+const SIGNED_OUT_STATUSES: ReadonlySet<number> = new Set([401, 403]);
+const GONE_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+const TOO_LARGE_STATUS = 413;
+const FILE_TOO_LARGE_CODE = 'file_too_large';
+const FILE_TOO_LARGE_MESSAGE = 'This file is too large to open on this device.';
+
+export class FileDownloadError extends ApiHttpError {
+  constructor(status: number) {
+    super(
+      SIGNED_OUT_STATUSES.has(status)
+        ? 'You must be signed in to download this file.'
+        : GONE_STATUSES.has(status)
+          ? 'This file no longer exists.'
+          : status === TOO_LARGE_STATUS
+            ? FILE_TOO_LARGE_MESSAGE
+            : `Download failed (HTTP ${status})`,
+      status,
+      status === TOO_LARGE_STATUS ? FILE_TOO_LARGE_CODE : null,
+    );
+    this.name = 'FileDownloadError';
+  }
+}
+
+export function downloadFailureMessage(error: unknown, fallback: string): string {
+  if (
+    error instanceof FileDownloadError &&
+    (SIGNED_OUT_STATUSES.has(error.status) ||
+      GONE_STATUSES.has(error.status) ||
+      error.status === TOO_LARGE_STATUS)
+  ) {
+    return error.message;
+  }
+  return fallback;
+}
+
 async function fetchGeneratedFileBytes(
   url: string,
 ): Promise<{ base64: string; contentType: string | null }> {
-  let host: string | undefined;
+  let origin: string;
   try {
-    host = new URL(url).hostname;
+    origin = new URL(url).origin;
   } catch {
     throw new Error(`Generated file URL is not absolute: ${url}`);
   }
-  const headers: Record<string, string> = isOurCloudHost(host) ? await getAuthHeaders() : {};
+  // Only the API's own origin gets the session token. A shared platform domain
+  // such as vercel.app also hosts other people's sites.
+  const headers: Record<string, string> =
+    origin === new URL(API_URL).origin ? await getAuthHeaders() : {};
 
   const res = await guardedFetch(url, { headers });
-  if (!res.ok) {
-    throw new Error(
-      res.status === 401 || res.status === 403
-        ? 'You must be signed in to download this file.'
-        : `Download failed (HTTP ${res.status})`,
-    );
-  }
+  if (!res.ok) throw new FileDownloadError(res.status);
   const base64 = await blobToBase64(await res.blob());
   return {
     base64,
@@ -353,11 +460,17 @@ async function fetchGeneratedFileBytes(
   };
 }
 
-async function writeGeneratedFileBytes(fileName: string, base64: string): Promise<string> {
+function nameForContentType(fileName: string, contentType: string | null): string {
+  const extensionForType = contentType ? EXTENSION_BY_MIME[contentType] : undefined;
+  if (!extensionForType) return fileName;
   const dotIdx = fileName.lastIndexOf('.');
-  const baseName = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
-  const ext = dotIdx > 0 ? `.${fileName.slice(dotIdx + 1).replace(/[^a-zA-Z0-9]/g, '')}` : '';
-  const destUri = await allocateExportPath(`${sanitizeFileName(baseName)}${ext}`);
+  const extension = dotIdx > 0 ? fileName.slice(dotIdx + 1).toLowerCase() : '';
+  if (MIME_BY_EXTENSION[extension]) return fileName;
+  return `${fileName}.${extensionForType}`;
+}
+
+async function writeGeneratedFileBytes(fileName: string, base64: string): Promise<string> {
+  const destUri = await allocateExportPath(nativeFileName(fileName));
   await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
   return destUri;
 }
@@ -372,12 +485,13 @@ export async function downloadGeneratedFileAsManagedFile(
   url: string,
   fileName: string,
 ): Promise<ManagedFile> {
-  const { base64 } = await fetchGeneratedFileBytes(url);
-  const destUri = await writeGeneratedFileBytes(fileName, base64);
+  const { base64, contentType } = await fetchGeneratedFileBytes(url);
+  const typedName = nativeFileName(nameForContentType(fileName, contentType));
+  const destUri = await writeGeneratedFileBytes(typedName, base64);
   const sourceFileId = CLOUD_FILE_PATH.exec(url)?.[1] ?? null;
   return exportedFile(
     destUri,
-    fileName,
+    typedName,
     sourceFileId ? { derivedFromFileId: sourceFileId, derivation: 'copy' } : {},
   );
 }
@@ -386,7 +500,7 @@ export async function downloadGeneratedFile(url: string, fileName: string): Prom
   return (await downloadGeneratedFileAsManagedFile(url, fileName)).uri;
 }
 
-function videoFileKey(url: string): string {
+function cachedFileKey(url: string): string {
   const cloudId = CLOUD_FILE_PATH.exec(url)?.[1];
   if (cloudId && /^[a-zA-Z0-9_-]+$/.test(cloudId)) return cloudId;
   let hash = 2166136261;
@@ -394,6 +508,52 @@ function videoFileKey(url: string): string {
     hash = Math.imul(hash ^ url.charCodeAt(index), 16777619) >>> 0;
   }
   return hash.toString(16);
+}
+
+function cacheOwnerSegment(): string | undefined {
+  return captureCloudAccountEpoch()?.ownerId.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
+const VIEWER_COPY_DIR = `${cacheDirectory}file-views/`;
+
+async function completedViewerCopy(directoryUri: string): Promise<string | null> {
+  if (!(await getInfoAsync(directoryUri)).exists) return null;
+  const name = (await readDirectoryAsync(directoryUri)).find((entry) => !entry.endsWith('.part'));
+  return name ? `${directoryUri}${encodeURIComponent(name)}` : null;
+}
+
+// A copy made only to show a file lives in the cache, one directory per account and file, so
+// reopening reuses it, Clear cache reclaims it and sign-out removes it; exports stay in EXPORTS_DIR.
+export async function viewerFileCopy(url: string, fileName: string): Promise<string> {
+  const account = captureCloudAccountEpoch();
+  const owner = cacheOwnerSegment();
+  const directoryUri = `${VIEWER_COPY_DIR}${owner ? `accounts/${owner}` : 'device'}/${cachedFileKey(url)}/`;
+  const existing = await completedViewerCopy(directoryUri);
+  if (existing) return existing;
+  const { base64, contentType } = await fetchGeneratedFileBytes(url);
+  const fileUri = `${directoryUri}${encodeURIComponent(
+    nativeFileName(nameForContentType(fileName, contentType)),
+  )}`;
+  await makeDirectoryAsync(directoryUri, { intermediates: true });
+  const partialUri = `${directoryUri}${Crypto.randomUUID()}.part`;
+  await writeAsStringAsync(partialUri, base64, { encoding: EncodingType.Base64 });
+  if ((await getInfoAsync(fileUri)).exists) {
+    await deleteAsync(partialUri, { idempotent: true });
+  } else {
+    await moveAsync({ from: partialUri, to: fileUri });
+  }
+  if (account ? !isCloudAccountEpochCurrent(account) : captureCloudAccountEpoch() !== null) {
+    await deleteAsync(directoryUri, { idempotent: true });
+    throw new StaleCloudAccountOperationError();
+  }
+  return fileUri;
+}
+
+const VIDEO_PREVIEW_DIR = `${cacheDirectory}video-previews/`;
+
+export async function removeViewerFileCopies(): Promise<void> {
+  await deleteAsync(VIEWER_COPY_DIR, { idempotent: true });
+  await deleteAsync(VIDEO_PREVIEW_DIR, { idempotent: true });
 }
 
 export interface LocalVideoPlayer {
@@ -408,21 +568,52 @@ const PLAYABLE_VIDEO_EXTENSIONS: Readonly<Record<string, string>> = {
   'video/quicktime': 'mov',
 };
 
+// Previews live in the cache, one directory per account and video, so replaying reuses the bytes,
+// Clear cache reclaims them and sign-out removes them; explicit exports stay in EXPORTS_DIR.
+async function videoPreviewDirectory(key: string): Promise<{ uri: string; reusable: boolean }> {
+  const owner = cacheOwnerSegment();
+  const uri = owner
+    ? `${VIDEO_PREVIEW_DIR}${owner}/${key}/`
+    : `${VIDEO_PREVIEW_DIR}transient/${Crypto.randomUUID()}/`;
+  if (!(await getInfoAsync(uri)).exists) {
+    await makeDirectoryAsync(uri, { intermediates: true });
+  }
+  return { uri, reusable: Boolean(owner) };
+}
+
+async function cachedPreviewVideoName(directoryUri: string, key: string): Promise<string | null> {
+  for (const extension of Object.values(PLAYABLE_VIDEO_EXTENSIONS)) {
+    const name = `video-${key}.${extension}`;
+    if ((await getInfoAsync(`${directoryUri}${name}`)).exists) return name;
+  }
+  return null;
+}
+
 export async function prepareLocalVideoPlayer(
   url: string,
   background: string,
 ): Promise<LocalVideoPlayer> {
-  const key = videoFileKey(url);
-  const downloaded = await fetchGeneratedFileBytes(url);
-  const extension = downloaded.contentType
-    ? PLAYABLE_VIDEO_EXTENSIONS[downloaded.contentType]
-    : undefined;
-  if (!extension) {
-    throw new Error('The saved video format is not supported.');
+  const key = cachedFileKey(url);
+  const directory = await videoPreviewDirectory(key);
+  const directoryUri = directory.uri;
+  let videoName = directory.reusable ? await cachedPreviewVideoName(directoryUri, key) : null;
+  if (!videoName) {
+    const downloaded = await fetchGeneratedFileBytes(url);
+    const extension = downloaded.contentType
+      ? PLAYABLE_VIDEO_EXTENSIONS[downloaded.contentType]
+      : undefined;
+    if (!extension) {
+      throw new Error('The saved video format is not supported.');
+    }
+    videoName = `video-${key}.${extension}`;
+    const partialUri = `${directoryUri}${Crypto.randomUUID()}.part`;
+    await writeAsStringAsync(partialUri, downloaded.base64, { encoding: EncodingType.Base64 });
+    if ((await getInfoAsync(`${directoryUri}${videoName}`)).exists) {
+      await deleteAsync(partialUri, { idempotent: true });
+    } else {
+      await moveAsync({ from: partialUri, to: `${directoryUri}${videoName}` });
+    }
   }
-  const videoUri = await writeGeneratedFileBytes(`video-${key}.${extension}`, downloaded.base64);
-  const directoryUri = videoUri.slice(0, videoUri.lastIndexOf('/') + 1);
-  const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
   const playerUri = `${directoryUri}player.html`;
   await writeAsStringAsync(
     playerUri,
@@ -436,13 +627,16 @@ export async function prepareLocalVideoPlayer(
     ].join(''),
     { encoding: EncodingType.UTF8 },
   );
-  return { videoUri, playerUri, directoryUri };
+  return { videoUri: `${directoryUri}${videoName}`, playerUri, directoryUri };
 }
 
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {
   'image/png': { extension: 'png', mimeType: 'image/png' },
   'image/jpeg': { extension: 'jpg', mimeType: 'image/jpeg' },
   'image/webp': { extension: 'webp', mimeType: 'image/webp' },
+  'image/gif': { extension: 'gif', mimeType: 'image/gif' },
+  'image/avif': { extension: 'avif', mimeType: 'image/avif' },
+  'image/heic': { extension: 'heic', mimeType: 'image/heic' },
 };
 
 export async function shareGeneratedImage(
@@ -479,6 +673,13 @@ export async function shareGeneratedImage(
   });
 }
 
+export class PhotosPermissionError extends Error {
+  constructor() {
+    super('Allow AGI Workforce to add photos in Settings to save images.');
+    this.name = 'PhotosPermissionError';
+  }
+}
+
 export async function saveGeneratedImageToPhotos(
   imagePath: string,
   fileName = 'generated-image',
@@ -489,9 +690,7 @@ export async function saveGeneratedImageToPhotos(
   if (!url) throw new Error('Only saved AGI Cloud images can be saved.');
   const permission = await requestPhotoPermissionsAsync(true);
   if (options.isCurrent?.() === false) return;
-  if (!permission.granted) {
-    throw new Error('Allow AGI Workforce to add photos in Settings to save images.');
-  }
+  if (!permission.granted) throw new PhotosPermissionError();
   const downloaded = await fetchGeneratedFileBytes(url);
   if (options.isCurrent?.() === false) return;
   const imageType = downloaded.contentType ? SHAREABLE_IMAGE_TYPES[downloaded.contentType] : null;
@@ -535,10 +734,9 @@ export async function exportToMarkdown(
   lineage: Partial<FileLineage> = {},
 ): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
-  const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
-  const fileName = `${sanitizeFileName(title)}.md`;
+  const fileName = exportFileName(title, 'md');
   const destUri = await allocateExportPath(fileName);
-  await writeAsStringAsync(destUri, header + content, { encoding: EncodingType.UTF8 });
+  await writeAsStringAsync(destUri, content, { encoding: EncodingType.UTF8 });
   return {
     uri: destUri,
     format: 'markdown',
@@ -554,7 +752,7 @@ export async function exportToDocx(
 ): Promise<ExportResult> {
   if (!content.trim()) throw new Error('Cannot export empty content');
   const base64 = await markdownToDocxBase64(content, title);
-  const fileName = `${sanitizeFileName(title)}.docx`;
+  const fileName = exportFileName(title, 'docx');
   const destUri = await allocateExportPath(fileName);
   await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
   return { uri: destUri, format: 'docx', fileName, file: exportedFile(destUri, fileName, lineage) };
@@ -574,27 +772,53 @@ function formatTimestamp(iso: string): string {
   }
 }
 
-export function formatConversationAsMarkdown(messages: ChatMessage[], title: string): string {
-  const lines = [`# ${title}\n`];
+function attachmentLine(message: ChatMessage): string | null {
+  const names = (message.attachments ?? [])
+    .map((attachment) => attachment.fileName.trim())
+    .filter((name) => name.length > 0);
+  return names.length > 0 ? `Attachments: ${names.join(', ')}` : null;
+}
+
+function hasExportableContent(message: ChatMessage): boolean {
+  return Boolean(message.content.trim()) || attachmentLine(message) !== null;
+}
+
+function conversationMarkdownBody(messages: ChatMessage[]): string {
+  const lines: string[] = [];
   for (const m of messages) {
-    if (!m.content.trim()) continue;
+    if (!hasExportableContent(m)) continue;
     lines.push(`## ${roleLabel(m.role)}\n`);
     if (m.createdAt) lines.push(`_${formatTimestamp(m.createdAt)}_\n`);
-    lines.push(m.content + '\n');
+    if (m.content.trim()) lines.push(m.content + '\n');
+    const attachments = attachmentLine(m);
+    if (attachments) lines.push(`${attachments}\n`);
   }
   return lines.join('\n');
+}
+
+export function formatConversationAsMarkdown(messages: ChatMessage[], title: string): string {
+  return [`# ${title}\n`, conversationMarkdownBody(messages)].join('\n');
 }
 
 export async function exportConversationToPDF(
   messages: ChatMessage[],
   title: string,
 ): Promise<ExportResult> {
-  const md = formatConversationAsMarkdown(messages, title);
-  return exportToPDF(md, title);
+  return exportToPDF(conversationMarkdownBody(messages), title);
+}
+
+export async function exportConversationToMarkdown(
+  messages: ChatMessage[],
+  title: string,
+): Promise<ExportResult> {
+  const body = conversationMarkdownBody(messages);
+  if (!body.trim()) throw new Error('Cannot export empty content');
+  const header = `# ${title}\n\n_Exported: ${new Date().toISOString()}_\n\n---\n\n`;
+  return exportToMarkdown(header + body, title);
 }
 
 export async function printConversation(messages: ChatMessage[], title: string): Promise<void> {
-  const md = formatConversationAsMarkdown(messages, title);
+  const md = conversationMarkdownBody(messages);
   if (!md.trim()) throw new Error('Cannot print empty content');
   try {
     await Print.printAsync({ html: markdownToHtml(md, title) });
@@ -608,12 +832,17 @@ export async function exportConversationToText(
   messages: ChatMessage[],
   title: string,
 ): Promise<ExportResult> {
-  const lines = [`${title}\nExported: ${new Date().toISOString()}\n${'─'.repeat(40)}\n`];
+  const lines: string[] = [];
   for (const m of messages) {
-    if (!m.content.trim()) continue;
+    if (!hasExportableContent(m)) continue;
     lines.push(`[${roleLabel(m.role)}] ${m.createdAt ? formatTimestamp(m.createdAt) : ''}`);
-    lines.push(m.content);
+    if (m.content.trim()) lines.push(m.content);
+    const attachments = attachmentLine(m);
+    if (attachments) lines.push(attachments);
     lines.push('');
   }
-  return exportToText(lines.join('\n'), title);
+  const body = lines.join('\n');
+  if (!body.trim()) throw new Error('Cannot export empty content');
+  const header = `${title}\nExported: ${new Date().toISOString()}\n${'─'.repeat(40)}\n\n`;
+  return exportToText(header + body, title);
 }

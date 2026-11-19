@@ -190,6 +190,7 @@ export function GeneralSection() {
 
   return (
     <div className="flex flex-col gap-8">
+      <h1 className="text-h1 font-medium text-foreground md:hidden max-md:-mb-4">General</h1>
       <div>
         <h2 className="mb-4 text-h4 text-foreground">Profile</h2>
 
@@ -249,7 +250,7 @@ export function GeneralSection() {
                   </button>
                 )}
               </div>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 PNG, JPEG, GIF, WebP, or HEIC. Up to {AVATAR_MAX_MB} MB.
               </span>
               {avatarError && (
@@ -276,7 +277,7 @@ export function GeneralSection() {
             />
           </FieldRow>
 
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Response style, instructions and what AGI knows about you are in{' '}
             <SettingsSectionLink
               section="personalization"
@@ -396,9 +397,7 @@ export function GeneralSection() {
       <div>
         <h2 className="mb-1 text-h4 text-foreground">Custom commands</h2>
         <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-          Commands you define here appear in the composer&apos;s slash menu alongside the built-in
-          ones. They are saved to your account, so they follow you to every browser and the desktop
-          app.
+          Your own slash commands, saved to your account on every device.
         </p>
         <CustomCommandsSettings />
       </div>
@@ -475,7 +474,7 @@ function DefaultModelRow() {
       label="Default model"
       hint={
         savedDefaultOffPlan
-          ? 'Your saved default is not on your current plan, so new chats start with the model you used last.'
+          ? 'Your saved default is not on your plan, so new chats use your last model.'
           : 'New chats start with this model.'
       }
     >
@@ -574,12 +573,12 @@ function ReasoningEffortRow() {
         // use far less on an easy question, and saying "costs 16x more" would
         // be a claim the billing data would contradict.
         freePlan && gatedEfforts.size > 0
-          ? 'Higher effort lets a reply think up to 16x longer. Levels above your plan need one with manual model selection.'
+          ? 'Thinks up to 16x longer. Higher levels need a plan with manual model selection.'
           : freePlan
-            ? 'Higher effort lets a reply think up to 16x longer.'
+            ? 'Higher effort thinks up to 16x longer.'
             : gatedEfforts.size > 0
-              ? 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster. Levels above your plan need one with manual model selection.'
-              : 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster.'
+              ? 'Thinks up to 16x longer and draws your usage allowance faster. Upper levels need manual model selection.'
+              : 'Higher effort thinks up to 16x longer and draws on your usage allowance faster.'
       }
     >
       <div className="flex flex-col items-stretch gap-1 sm:items-end">
@@ -603,10 +602,7 @@ function ReasoningEffortRow() {
             );
           })}
         </select>
-        <p className="text-xs text-muted-foreground">
-          Global default. Each chat can override it; the composer shows the setting supported by its
-          model.
-        </p>
+        <p className="text-xs text-muted-foreground">Each chat can change this in the composer.</p>
         <HelpArticleLink docId="models-and-reasoning" label="Choosing a model and effort" />
       </div>
     </Row>
@@ -619,7 +615,7 @@ function AccentColorRow() {
 
   return (
     <Row label="Accent colour">
-      <div className="flex gap-1.5" role="group" aria-label="Accent colour">
+      <div className="flex gap-1.5 pointer-coarse:gap-4" role="group" aria-label="Accent colour">
         {ACCENT_COLORS.map((accent) => {
           const isActive = accentColor === accent.value;
           return (
@@ -631,7 +627,7 @@ function AccentColorRow() {
               title={accent.label}
               aria-label={`${accent.label} accent`}
               aria-pressed={isActive}
-              className={`flex h-7 w-7 items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-shadow ${isActive ? 'ring-2 ring-foreground' : 'ring-0'}`}
+              className={`relative flex h-7 min-h-0 w-7 items-center justify-center rounded-full ring-offset-2 ring-offset-background transition-shadow pointer-coarse:after:absolute pointer-coarse:after:-inset-2 pointer-coarse:after:content-[''] ${isActive ? 'ring-2 ring-foreground' : 'ring-0'}`}
             >
               {isActive && <Check className="h-3.5 w-3.5 text-white" aria-hidden="true" />}
             </button>
@@ -679,7 +675,7 @@ function SidebarItemsRow() {
               aria-checked={visible}
               aria-label={t(destination.labelKey, { defaultValue: destination.label })}
               onClick={() => setNavItemVisible(destination.id, !visible)}
-              className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+              className={`rounded-md border px-2.5 py-1 text-xs transition-colors max-md:px-3 max-md:py-1.5 max-md:text-sm ${
                 visible
                   ? 'border-transparent bg-accent text-accent-foreground ring-1 ring-inset ring-primary'
                   : 'border-border text-muted-foreground hover:text-foreground'
@@ -706,7 +702,7 @@ function MotionRow() {
   return (
     <Row
       label="Motion"
-      hint="Reduce animation in streaming responses and other interface elements. System follows your device setting."
+      hint="Less animation in replies and the interface. System follows your device."
     >
       <div className="flex gap-1" role="group" aria-label="Motion">
         {options.map((option) => (
@@ -827,7 +823,7 @@ function CodeThemeRow() {
   return (
     <Row
       label="Code theme"
-      hint="Colours code blocks in dark mode. Light mode keeps the high-contrast palette, the one light theme whose every colour stays readable on the code background."
+      hint="Colours code blocks in dark mode. Light mode keeps high contrast."
     >
       <select
         value={codeTheme}
@@ -915,7 +911,7 @@ function FollowUpBehaviorRow() {
   return (
     <Row
       label="Follow-up behavior"
-      hint={`Queue follow-ups while AGI replies or steer the current reply. Press ${followUpInvertKeys()} to do the opposite for one message.`}
+      hint={`Queue or steer while AGI replies. ${followUpInvertKeys()} does the opposite once.`}
     >
       <SegmentedControl
         options={FOLLOW_UP_BEHAVIOR_OPTIONS}
@@ -940,7 +936,7 @@ function CodeFollowUpModeRow() {
   return (
     <Row
       label={CODE_FOLLOW_UP_LABEL}
-      hint={`Steer adds your message to the running turn, which reads it at its next step. Queue sends it when the turn ends. ${invertKeys} does the other one for a single message.`}
+      hint={`Steer joins the running turn; Queue waits for it to end. ${invertKeys} swaps once.`}
     >
       <select
         value={codeFollowUpQueueMode}
@@ -1070,8 +1066,7 @@ function ReadAloudVoiceRow() {
     return (
       <Row label="Backup read-aloud voice">
         <span className="text-xs text-muted-foreground sm:text-end">
-          This browser has no speech voices of its own, so read-aloud has no backup when the AGI
-          voice is unavailable.
+          This browser has no voices, so read-aloud has no backup.
         </span>
       </Row>
     );
@@ -1110,11 +1105,8 @@ function ReadAloudVoiceRow() {
         </div>
       </Row>
       <p className="-mt-3 text-xs leading-relaxed text-muted-foreground">
-        Read-aloud speaks replies in the AGI voice, which uses a few credits per reply. When that
-        voice is unavailable it falls back to this browser voice. Audio always plays through your
-        system default output device, browsers give web pages no way to choose one, so change it in
-        your operating system&apos;s sound settings. Read-aloud plays a reply on request and then
-        stops.
+        The AGI voice uses a few credits per reply. Audio plays on your system default output
+        device.
       </p>
     </>
   );
@@ -1136,7 +1128,7 @@ function Row({
       <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
         <span className="text-sm text-foreground">{label}</span>
         {hint && (
-          <span id={hintId} className="text-sm text-muted-foreground">
+          <span id={hintId} className="text-xs text-muted-foreground">
             {hint}
           </span>
         )}
@@ -1161,7 +1153,7 @@ function FieldRow({
     <div className="flex flex-col items-stretch gap-2 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <label htmlFor={htmlFor} className="flex min-w-0 flex-col gap-0.5">
         <span className="text-sm font-medium text-foreground">{label}</span>
-        {helper && <span className="text-sm text-muted-foreground">{helper}</span>}
+        {helper && <span className="text-xs text-muted-foreground">{helper}</span>}
       </label>
       <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{children}</div>
     </div>

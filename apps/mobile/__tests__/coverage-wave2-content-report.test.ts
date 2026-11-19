@@ -148,6 +148,84 @@ describe('saveContentReport, MAX_STORED_REPORTS cap (100)', () => {
   });
 });
 
+function seedQueuedReport(id: string): void {
+  const queued: ContentReport = {
+    id,
+    messageId: 'queued',
+    conversationId: 'conv-001',
+    contentExcerpt: 'Queued while offline.',
+    category: 'harmful',
+    userNote: '',
+    createdAt: '2026-11-01T10:00:00.000Z',
+    emailHandoffOpened: false,
+    serverAcknowledged: false,
+    uploadConsented: true,
+  };
+  mockStorage.set(MMKV_KEY, JSON.stringify([queued]));
+}
+
+describe('saveContentReport, queued reports survive the history cap', () => {
+  it('keeps a report the user agreed to send through more than 100 later reports', async () => {
+    seedQueuedReport('rpt_queued');
+    const queued = { id: 'rpt_queued' };
+
+    for (let i = 0; i < MAX_STORED_REPORTS + 5; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    const reports = getContentReports();
+    expect(reports.map((entry: ContentReport) => entry.id)).toContain(queued.id);
+    expect(queuedContentReports().map((entry) => entry.id)).toEqual([queued.id]);
+    expect(reports.length).toBe(MAX_STORED_REPORTS + 1);
+  });
+
+  it('caps only the unsent and acknowledged history, newest first', async () => {
+    seedQueuedReport('rpt_queued');
+    const queued = { id: 'rpt_queued' };
+    mockApiPost.mockResolvedValue({ success: true });
+    for (let i = 0; i < MAX_STORED_REPORTS; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    const reports = getContentReports();
+    const history = reports.filter((entry: ContentReport) => entry.id !== queued.id);
+    expect(history.length).toBe(MAX_STORED_REPORTS);
+    expect(history[0]?.messageId).toBe(String(MAX_STORED_REPORTS - 1));
+    expect(reports.some((entry: ContentReport) => entry.id === queued.id)).toBe(true);
+  });
+
+  it('sends a queued report that survived the cap once the device reconnects', async () => {
+    seedQueuedReport('rpt_queued');
+    const queued = { id: 'rpt_queued' };
+    for (let i = 0; i < MAX_STORED_REPORTS + 1; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    mockApiPost.mockResolvedValue({ success: true });
+    await expect(flushQueuedContentReports()).resolves.toBe(1);
+
+    expect(mockApiPost).toHaveBeenLastCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({ reportId: queued.id }),
+      { consentedReport: true },
+    );
+    expect(queuedContentReports()).toEqual([]);
+  });
+
+  it('lets a report fall out of the history once it has been sent', async () => {
+    seedQueuedReport('rpt_sent');
+    const sent = { id: 'rpt_sent' };
+    mockApiPost.mockResolvedValue({ success: true });
+    await flushQueuedContentReports();
+
+    for (let i = 0; i < MAX_STORED_REPORTS; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    expect(getContentReports().map((entry: ContentReport) => entry.id)).not.toContain(sent.id);
+  });
+});
+
 describe('getContentReports', () => {
   it('returns empty array when no reports have been saved', () => {
     expect(getContentReports()).toEqual([]);
@@ -212,13 +290,15 @@ describe('saveContentReport, sendEmail=true', () => {
     expect(getContentReports()[0]?.emailHandoffOpened).toBe(false);
   });
 
-  it('does not call Linking.openURL when canOpenURL returns false', async () => {
-    canOpenSpy.mockResolvedValueOnce(false);
+  it('opens the mail client without asking canOpenURL, which answers false for an unlisted scheme on iOS', async () => {
+    canOpenSpy.mockResolvedValue(false);
 
-    const { delivery } = await saveContentReport(makeParams({ sendEmail: true }));
+    const { report, delivery } = await saveContentReport(makeParams({ sendEmail: true }));
 
-    expect(openUrlSpy).not.toHaveBeenCalled();
-    expect(delivery).toEqual({ kind: 'email-unavailable' });
+    expect(canOpenSpy).not.toHaveBeenCalled();
+    expect(openUrlSpy).toHaveBeenCalledTimes(1);
+    expect(report.emailHandoffOpened).toBe(true);
+    expect(delivery).toEqual({ kind: 'email-composer-opened' });
   });
 });
 
@@ -269,7 +349,7 @@ describe('saveContentReport, server intake', () => {
 
   it('reports submitted-to-server even if the optional email hand-off has no mail client', async () => {
     mockApiPost.mockResolvedValueOnce({ success: true });
-    canOpenSpy.mockResolvedValueOnce(false);
+    openUrlSpy.mockRejectedValueOnce(new Error('no mail client'));
 
     const { delivery } = await saveContentReport(makeParams({ sendEmail: true }));
 
@@ -306,14 +386,23 @@ describe('openSupportEmail', () => {
     expect(getContentReports()[0]?.emailHandoffOpened).toBe(true);
   });
 
-  it('returns false and leaves the record untouched when no mail client exists', async () => {
+  it('returns false and leaves the record untouched when openURL throws because no mail client exists', async () => {
     const { report } = await saveContentReport(makeParams({ sendEmail: false }));
-    canOpenSpy.mockResolvedValueOnce(false);
+    openUrlSpy.mockRejectedValueOnce(new Error('no mail client'));
 
     await expect(openSupportEmail(report)).resolves.toBe(false);
 
-    expect(openUrlSpy).not.toHaveBeenCalled();
     expect(getContentReports()[0]?.emailHandoffOpened).toBe(false);
+  });
+
+  it('opens the mail client even when canOpenURL answers false', async () => {
+    const { report } = await saveContentReport(makeParams({ sendEmail: false }));
+    canOpenSpy.mockResolvedValue(false);
+
+    await expect(openSupportEmail(report)).resolves.toBe(true);
+
+    expect(canOpenSpy).not.toHaveBeenCalled();
+    expect(getContentReports()[0]?.emailHandoffOpened).toBe(true);
   });
 
   it('reports that the mail client opened even when local hand-off metadata cannot be saved', async () => {
@@ -366,6 +455,66 @@ describe('saveContentReport, media and shared content', () => {
       url: 'data:image/png;base64',
     });
     expect(reportAssetFor('video', null)).toBeUndefined();
+  });
+});
+
+describe('saveContentReport, the kind of content reported', () => {
+  it('sends the subject a surface names and keeps it on the stored copy', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true });
+
+    const { report } = await saveContentReport({
+      ...makeParams({ messageId: 'cloud-run:run-9', conversationId: 'cloud-run:run-9' }),
+      subject: { kind: 'task-run', id: 'run-9' },
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({ subject: { kind: 'task-run', id: 'run-9' } }),
+    );
+    expect(getContentReports()[0]?.subject).toEqual({ kind: 'task-run', id: 'run-9' });
+    expect(report.subject).toEqual({ kind: 'task-run', id: 'run-9' });
+  });
+
+  it('names generated media and shared items by their own fields when no subject is given', async () => {
+    mockApiPost.mockResolvedValue({ success: true });
+
+    await saveContentReport({
+      ...makeParams({ messageId: 'msg-img' }),
+      asset: { kind: 'video', url: 'https://cdn.example.com/v.mp4' },
+    });
+    await saveContentReport({
+      ...makeParams({ messageId: 'p-1', conversationId: 'shared:project' }),
+      sharedItem: { kind: 'project', id: 'p-1', sharerId: 'owner-1' },
+    });
+
+    expect(mockApiPost.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ subject: { kind: 'video', id: 'msg-img' } }),
+    );
+    expect(mockApiPost.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ subject: { kind: 'shared-item', id: 'p-1' } }),
+    );
+  });
+
+  it('bounds the subject id to what the intake accepts', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true });
+
+    await saveContentReport({
+      ...makeParams(),
+      subject: { kind: 'code-reply', id: `  ${'r'.repeat(250)}  ` },
+    });
+
+    const body = mockApiPost.mock.calls[0]?.[1] as { subject: { id: string } };
+    expect(body.subject.id).toBe('r'.repeat(200));
+  });
+
+  it('lists the reported item in the email to support', async () => {
+    await saveContentReport({
+      ...makeParams({ sendEmail: true }),
+      subject: { kind: 'voice-turn', id: 'msg-v' },
+    });
+
+    const calledUrl = decodeURIComponent(openUrlSpy.mock.calls[0][0] as string);
+    expect(calledUrl).toContain('Reported item: voice-turn msg-v');
   });
 });
 

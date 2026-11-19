@@ -132,7 +132,7 @@ export function MediaJobsSection({ transport }: { transport: MediaJobsTransport 
           const conversationId = job.conversation_id;
           return (
             <li key={job.id} className="flex flex-wrap items-start gap-3 px-3 py-2.5">
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5 max-md:basis-full">
                 <p className="line-clamp-2 text-sm text-[var(--chat-text-primary)]">{job.prompt}</p>
                 <p className="text-xs text-[var(--chat-text-muted)]">
                   {KIND_LABEL[job.kind]} · {job.model} ·{' '}

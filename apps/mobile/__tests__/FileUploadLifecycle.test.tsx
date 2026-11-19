@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('lucide-react-native', () => {
   const React = require('react');
@@ -106,6 +106,10 @@ function abortError(): Error {
   const error = new Error('Attachment upload aborted');
   error.name = 'AbortError';
   return error;
+}
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 function entry(id: string) {
@@ -279,6 +283,94 @@ describe('resume and retry', () => {
     expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
   });
 
+  it('keeps a cancel pressed during the second backoff final too', async () => {
+    jest.useFakeTimers();
+    mockUploadFile.mockRejectedValue(new Error('Network request failed'));
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(mockUploadFile).toHaveBeenCalledTimes(2);
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(10000);
+
+    expect(await pending).toBeNull();
+    expect(mockUploadFile).toHaveBeenCalledTimes(2);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('starts no request when the upload is canceled while consent is still being asked', async () => {
+    let allow: () => void = () => undefined;
+    mockEnsureCloudSendConsent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        allow = resolve;
+      }),
+    );
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('uploading');
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    allow();
+
+    expect(await pending).toBeNull();
+    expect(mockUploadFile).not.toHaveBeenCalled();
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('starts no request for a file removed while consent is still being asked', async () => {
+    let allow: () => void = () => undefined;
+    mockEnsureCloudSendConsent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        allow = resolve;
+      }),
+    );
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    useUploadLifecycleStore.getState().clear(ROWS_CSV.id);
+    allow();
+
+    expect(await pending).toBeNull();
+    expect(mockUploadFile).not.toHaveBeenCalled();
+    expect(entry(ROWS_CSV.id)).toBeUndefined();
+  });
+
+  it('drops a result that arrives after the person canceled', async () => {
+    let finish: (value: ReturnType<typeof uploadResultFor>) => void = () => undefined;
+    mockUploadFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await flushMicrotasks();
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    finish(uploadResultFor(ROWS_CSV));
+
+    expect(await pending).toBeNull();
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('does not let a canceled request that fails late overwrite the retry that replaced it', async () => {
+    let failFirst: (error: Error) => void = () => undefined;
+    mockUploadFile
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          failFirst = reject;
+        }),
+      )
+      .mockResolvedValueOnce(uploadResultFor(ROWS_CSV));
+
+    const first = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await flushMicrotasks();
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    const second = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    expect(await second).toEqual(uploadResultFor(ROWS_CSV));
+    failFirst(abortError());
+
+    expect(await first).toBeNull();
+    expect(entry(ROWS_CSV.id)?.phase).toBe('done');
+  });
+
   it('does not revive a file removed during backoff', async () => {
     jest.useFakeTimers();
     mockUploadFile.mockRejectedValueOnce(new Error('Network request failed'));
@@ -381,5 +473,36 @@ describe('resume and retry', () => {
     const both = unsentAttachmentMessage(['notes.txt', 'rows.csv']);
     expect(both).toContain('“notes.txt”, “rows.csv”');
     expect(both).toContain('Tap Retry on each file');
+  });
+});
+
+describe('a picked file that is still being prepared', () => {
+  it('shows a tile with a progress indicator before the file itself is ready', () => {
+    const { getByTestId, getByLabelText } = render(
+      <AttachmentPreview
+        attachments={[]}
+        preparing={[{ id: 'prep-1', failed: false }]}
+        onRemove={jest.fn()}
+      />,
+    );
+
+    expect(getByTestId('attachment-preparing-prep-1')).toBeTruthy();
+    expect(getByLabelText('Adding attachment').props.accessibilityRole).toBe('progressbar');
+  });
+
+  it('shows the failure on the tile and lets the person remove it', () => {
+    const onDismissPreparing = jest.fn();
+    const { getByText, getByLabelText } = render(
+      <AttachmentPreview
+        attachments={[NOTES_TXT]}
+        preparing={[{ id: 'prep-1', failed: true }]}
+        onRemove={jest.fn()}
+        onDismissPreparing={onDismissPreparing}
+      />,
+    );
+
+    expect(getByText('Not added')).toBeTruthy();
+    fireEvent.press(getByLabelText('Remove the attachment that could not be added'));
+    expect(onDismissPreparing).toHaveBeenCalledWith('prep-1');
   });
 });

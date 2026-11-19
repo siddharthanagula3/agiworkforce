@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-11-09
+Last updated: 2026-11-11
 
 ## Bootstrap Rule
 
@@ -22,7 +22,7 @@ pass the paid-launch gate before self-serve paid acquisition opens.
 | Local         | Core differentiation. Free to use where technically available.                                                                                                                             |
 | BYOK          | Explicit provider trust boundary. User pays provider directly.                                                                                                                             |
 | Managed cloud | Free public alpha is enabled for signed-in users. Paid plan acquisition remains waitlist/access-code gated; existing paid entitlements continue to resolve normally. Env kill-switch only. |
-| Mobile v1     | Small on-device Local LLMs plus signed-in Managed Free public alpha. Store in-app purchase has no waitlist or access code; Web paid upgrades remain gated. No Mobile BYOK in v1.           |
+| Mobile v1     | Small on-device Local LLMs plus signed-in Managed Free public alpha. Sells nothing in the app (`nativePurchases: false`); Web paid upgrades remain gated. No Mobile BYOK in v1.            |
 | Web           | Account/chat state through Neon. No Web BYOK. Managed Free is available after sign-in; paid upgrade acquisition remains waitlist/access-code gated.                                        |
 | Desktop       | Electron Cloud chat consumes the shared account entitlement; Desktop Code uses the host-owned developer runtime shared with CLI/VS Code. The two trust domains remain separate.            |
 | CLI/VS Code   | Developer/workspace scoped and entitled through the same account; local credentials stay in the shared host credential broker, with no silent global chat sync.                            |
@@ -63,9 +63,11 @@ and signed order forms before card top-ups.
   waitlist decision before checkout.
 - Access codes authorize acquisition, not a second subscription owner or a
   surface-specific entitlement.
-- The gate applies to Stripe checkout on Web. Store in-app purchase on Mobile
-  opens with no waitlist or access code (owner decision 2026-10-19,
-  `docs/compliance/mobile-store-feature-justification.md` O2).
+- The gate applies to Stripe checkout on Web. Mobile v1 sells nothing in the
+  app: `apps/mobile/src/features/billing/storePurchases.json` holds
+  `nativePurchases: false` (owner deferral 2026-11-10). When store purchase is
+  turned on it opens with no waitlist or access code (owner decision 2026-10-19,
+  `audit/registers/mobile-store-feature-justification.md` O2).
 - When the founder opens self-serve upgrades, one policy switch and its audited
   rollout state replace the waitlist decision; clients do not fork the rule.
 
@@ -234,11 +236,31 @@ purchased portion inside it.
 | Transferable      | No                                     | No                                                                                     |
 | Consumption order | First                                  | Second, reachable only once the included allowance is exhausted                        |
 
-The consumption order is enforced by `reserve_managed_usage_request_with_limits`, which
-tags purchased-funded spend `is_overage` and excludes it from the plan window, and by
-`resolveOverageHeadroomCents`, which passes
-`least(credits_allocated_cents - credits_used_cents, top_up_allocated_cents)` as the
-remaining purchased budget. Non-transferability is enforced by migration
+The consumption order is enforced at admission by
+`reserve_managed_usage_request_with_limits_microusd` and
+`extend_managed_usage_request_provider_step_microusd` (0392), under the per-user lock:
+
+- A 5-hour, weekly or flagship weekly window funds a turn on the plan while its plan usage
+  is below the cap. The turn that crosses the cap finishes on the plan, as Claude lets the
+  last message finish; only a turn reserved once the window is already used up goes to
+  credits.
+- The billing period has a hard edge. The plan's remaining allowance is the pooled
+  balance less the bonus and purchased lots still held, and a turn whose estimate exceeds
+  it goes to credits, because an overshoot there would be paid from purchased credits.
+- A turn sent to credits is admitted only on headroom from
+  `prepaid_credit_balances_microusd`: bonus credits, plus purchased credits only while
+  usage credits are on, within the personal spend limit (0378). Otherwise it is refused
+  with the limit that stopped it. Purchased credits are never spent while usage credits
+  are off.
+- An admitted credit turn is tagged `is_overage` for its whole life. Every plan window
+  (`apps/web/lib/server/rolling-usage.ts`) and the billing-period meter
+  (`managed-usage-summary-service.ts`) leave tagged spend out, and the 0298 trigger draws
+  it from bonus, then purchased lots.
+
+Only an account billed by Stripe, Apple or Google buys credits and switches them on in
+Settings > Billing (`credits.purchased.self_serve` in the usage summary). Any other
+account is told that whoever manages its plan controls them, as business plans at both
+leaders leave extra usage to admins. Non-transferability is enforced by migration
 `0126_credit_balance_transferability.sql`: the owner of a credit account and of a ledger
 entry is immutable, so no write can detach a balance from the identity that paid for it
 and from its refund and dispute path.

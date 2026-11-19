@@ -316,6 +316,42 @@ describe('GET /api/connectors/directory', () => {
     await expect(ids('?category=Productivity')).resolves.toEqual(['notion', 'com.example/notes']);
   });
 
+  it('lists only the categories that have an entry under the request filters', async () => {
+    async function categories(query = ''): Promise<string[]> {
+      const response = await GET(request(query));
+      expect(response.status).toBe(200);
+      return (await response.json()).categories;
+    }
+
+    await expect(categories()).resolves.toEqual(['Code', 'Communication', 'Productivity', 'Other']);
+    await expect(categories('?connectableOnly=true')).resolves.toEqual([
+      'Code',
+      'Communication',
+      'Productivity',
+    ]);
+    await expect(categories('?badge=first-party')).resolves.toEqual([
+      'Communication',
+      'Productivity',
+    ]);
+    await expect(categories('?badge=verified')).resolves.toEqual([]);
+  });
+
+  it('keeps every sibling category listed when one category is selected', async () => {
+    const response = await GET(request('?category=Code&connectableOnly=true'));
+    const body = await response.json();
+
+    expect(body.entries.map((entry: { id: string }) => entry.id)).toEqual(['com.linear/mcp']);
+    expect(body.categories).toEqual(['Code', 'Communication', 'Productivity']);
+  });
+
+  it('keeps the selected category listed when no entry in it matches the search', async () => {
+    const response = await GET(request('?category=Code&connectableOnly=true&search=notion'));
+    const body = await response.json();
+
+    expect(body.entries).toEqual([]);
+    expect(body.categories).toEqual(['Code', 'Productivity']);
+  });
+
   it('combines filters', async () => {
     await expect(ids('?badge=community&connectableOnly=true')).resolves.toEqual([
       'io.github.someone/tool',
@@ -332,6 +368,49 @@ describe('GET /api/connectors/directory', () => {
       'notion',
       'slack',
     ]);
+  });
+
+  it('filters to connectors that read one personal source and tags each entry', async () => {
+    const internal = (id: string, name: string) =>
+      directoryRecord({
+        id,
+        name,
+        publisher: name,
+        description: `${name} connector.`,
+        categories: ['Communication'],
+        remotes: [{ url: `https://mcp.example.com/${id}`, transport: 'streamable-http' }],
+        authMode: 'oauth',
+        connectable: 'connect',
+        sourceRegistry: 'internal',
+        badge: 'first-party',
+        monogram: name.slice(0, 1),
+      });
+    mocks.getSnapshotView.mockResolvedValue(
+      view([
+        internal('gmail', 'Gmail'),
+        internal('google-calendar', 'Google Calendar'),
+        internal('outlook', 'Outlook'),
+        internal('slack', 'Slack'),
+      ]),
+    );
+
+    const email = await (await GET(request('?personalSource=email'))).json();
+    expect(email.entries.map((entry: { id: string }) => entry.id).sort()).toEqual([
+      'gmail',
+      'outlook',
+    ]);
+    const calendar = await (await GET(request('?personalSource=calendar'))).json();
+    expect(calendar.entries.map((entry: { id: string }) => entry.id).sort()).toEqual([
+      'google-calendar',
+      'outlook',
+    ]);
+    const outlook = email.entries.find((entry: { id: string }) => entry.id === 'outlook');
+    expect(outlook.personalSources).toEqual(['email', 'calendar']);
+  });
+
+  it('rejects a personal source outside the fixed set', async () => {
+    const response = await GET(request('?personalSource=files'));
+    expect(response.status).toBe(400);
   });
 
   it('paginates with a limit and hands back an offset cursor for the next page', async () => {

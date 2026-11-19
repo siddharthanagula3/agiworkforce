@@ -16,6 +16,7 @@ jest.mock('../lib/mmkv', () => ({
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),
+  uuidV7TimestampMs: jest.requireActual('@agiworkforce/utils/uuidv7').uuidV7TimestampMs,
   setUuidV7RandomSource: jest.fn(),
 }));
 
@@ -167,5 +168,30 @@ describe('cloudSettingsMapping, identity namespace the server actually reads', (
     expect(personalization.nickname).toBe('Sid');
     expect(personalization.occupation).toBe('Design / UX');
     expect(personalization.instructions).toBe('Cite sources.');
+  });
+});
+
+describe('cloudSettingsMapping, accents the app no longer offers', () => {
+  beforeEach(() => {
+    useCloudSettingsStore.setState({ accentColor: 'blue' });
+  });
+
+  it('falls back to the default accent when another device syncs a retired accent', () => {
+    applyCloudSettings({ appearance: { accentColor: 'amber' as never } });
+
+    expect(useCloudSettingsStore.getState().accentColor).toBe('neutral');
+  });
+
+  it('keeps an accent the app still offers', () => {
+    applyCloudSettings({ appearance: { accentColor: 'rose' } });
+
+    expect(useCloudSettingsStore.getState().accentColor).toBe('rose');
+  });
+
+  it('falls back to the default accent when a saved retired accent is restored', () => {
+    const merge = useCloudSettingsStore.persist.getOptions().merge!;
+    const restored = merge({ accentColor: 'amber' }, useCloudSettingsStore.getState());
+
+    expect(restored.accentColor).toBe('neutral');
   });
 });

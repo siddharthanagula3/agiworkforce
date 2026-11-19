@@ -173,8 +173,7 @@ export function WorkspaceServicePrincipals() {
             Service principals
           </h3>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Non-interactive workspace actors. A principal holds the permission ceiling its keys are
-            bounded by, and it can reach only these endpoints:{' '}
+            Non-interactive actors, limited by their keys. They can reach only:{' '}
             {data.reachableRoutes.join(', ') || 'none'}.
           </p>
         </div>

@@ -815,12 +815,11 @@ spreadsheet values/formula caches and existing extractor resource limits. The
 same truncated directory reproduces a bounds panic with 0.37.0 in an isolated
 fixture project; the fixed reader returns an error.
 
-Retained Tauri now uses rusqlite 0.41.1 / libsqlite3-sys 0.39.1 while preserving
-bundled SQLCipher and vendored OpenSSL. The binding's SQLCipher source pin still
-selects an affected engine upstream, so the root Cargo patch supplies the
-unmodified SQLCipher 4.20.0 amalgamation with SQLite 3.54.1. The source carrier
-verifies file hashes during builds; an independently modified copy fails that
-guard. Attribution, license delivery, provenance and the removal condition live
+Retained Tauri now uses rusqlite 0.42.0 / libsqlite3-sys 0.40.0 while preserving
+bundled SQLCipher and vendored OpenSSL. That binding builds from the crates.io
+SQLCipher 4.20.0 source crate with SQLite 3.54.1, so no Cargo patch or
+in-repository copy of the engine remains; `Cargo.lock` pins the crate's
+checksum. Attribution, license delivery and provenance live
 in [the dependency patch owner](../../docs/security/dependency-patches.md#sqlcipher-engine-source)
 and `THIRD_PARTY_LICENSES.md`.
 

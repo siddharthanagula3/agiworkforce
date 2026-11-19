@@ -1,4 +1,4 @@
-import attachmentPolicy from './attachment-policy.json';
+import attachmentPolicy from './attachment-policy.json' with { type: 'json' };
 /**
  * Chat Types
  *

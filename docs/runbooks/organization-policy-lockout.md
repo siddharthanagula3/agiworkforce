@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-18
+Last updated: 2026-11-11
 
 ## Why this exists
 
@@ -80,7 +80,10 @@ and to stop enforcing on an instance that cached a since-cleared list.
 Reach for these only when an account is locked out and the safeguards above
 did not prevent it (for example, the ip changed after a valid save). Run
 these against the primary Postgres database, scoped to the affected
-organization only.
+organization only. A write to a customer workspace's settings is a break-glass
+action: it needs an approved grant covering `workspace_settings` on that
+workspace and the ticket in the grant reason, per
+`docs/runbooks/break-glass-production-access.md`.
 
 **To find the organization:** the affected user's active workspace is in
 `public.user_settings.settings #>> '{workspace,activeOrganizationId}'`, or ask

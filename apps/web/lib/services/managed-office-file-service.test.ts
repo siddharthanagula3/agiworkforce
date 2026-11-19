@@ -8,6 +8,13 @@ import JSZip from 'jszip';
 import { describe, expect, it } from 'vitest';
 
 import {
+  openAIWireRequestToChatRequest,
+  resolveOpenAICompletionsCompatDefaults,
+} from '@agiworkforce/provider-protocol';
+import { translateChatRequestToResponses } from '@agiworkforce/providers-openai';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+
+import {
   createManagedOfficeFileToolDefinition,
   generateManagedOfficeFile,
 } from './managed-office-file-service';
@@ -36,7 +43,8 @@ describe('managed Office file service', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'invalid_office_file_request',
-      message: 'The Office file request is invalid.',
+      message:
+        'The Office file request is invalid. filename: Use a file name only, with no folder or control characters.',
     });
 
     await expect(
@@ -49,7 +57,8 @@ describe('managed Office file service', () => {
     ).resolves.toEqual({
       ok: false,
       code: 'invalid_office_file_request',
-      message: 'The Office file request is invalid.',
+      message:
+        'The Office file request is invalid. content: Too big: expected string to have <=100000 characters.',
     });
   });
 
@@ -462,7 +471,7 @@ describe('bounded existing Word document editing', () => {
       ok: false,
       message: expect.stringMatching(/package size limit/),
     });
-  });
+  }, 30_000);
 
   it('rejects existing-input operations on formats that do not support them', async () => {
     const result = await generateManagedOfficeFile({
@@ -566,7 +575,8 @@ describe('bounded existing Word document editing', () => {
     expect(result).toEqual({
       ok: false,
       code: 'invalid_office_file_request',
-      message: 'The Office file request is invalid.',
+      message:
+        'The Office file request is invalid. sheets: Worksheet names must be unique, ignoring case.',
     });
   });
 
@@ -783,6 +793,185 @@ describe('existing workbook preservation', () => {
     await expect(verifyManagedOfficePackage(data, 'xlsx')).rejects.toThrow(
       /malformed XML|broken relationships/,
     );
+  });
+
+  it('creates the CSV from the exact call the model sent, ignoring the other formats placeholder fields', async () => {
+    const sent = {
+      format: 'csv',
+      filename: 'fruits.csv',
+      title: 'Fruit Prices and Colours',
+      content: '',
+      verify_render: false,
+      source: {
+        filename: '',
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000',
+        edits: [{ sheet: 'Sheet1', cell: 'A1', expected: '', value: '' }],
+        replacements: [{ find: '', replace: '', expectedMatches: 1 }],
+      },
+      slides: [{ title: 'Unused', bullets: ['Unused'], speaker_notes: '' }],
+      sheets: [
+        {
+          name: 'Unused',
+          rows: [['']],
+          chart: {
+            type: 'bar',
+            title: '',
+            category_column: 'A',
+            value_column: 'B',
+            first_row: 1,
+            last_row: 1,
+          },
+        },
+      ],
+      rows: [
+        ['Fruit', 'Price (USD per fruit, sample)', 'Colour'],
+        ['Apple', 0.75, 'Red'],
+        ['Banana', 0.3, 'Yellow'],
+        ['Orange', 0.8, 'Orange'],
+        ['Pear', 0.9, 'Green'],
+        ['Plum', 0.6, 'Purple'],
+      ],
+    };
+
+    const result = await generateManagedOfficeFile(sent);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.filename).toBe('fruits.csv');
+    expect(result.data.toString('utf8').split('\r\n')).toEqual([
+      'Fruit,"Price (USD per fruit, sample)",Colour',
+      'Apple,0.75,Red',
+      'Banana,0.3,Yellow',
+      'Orange,0.8,Orange',
+      'Pear,0.9,Green',
+      'Plum,0.6,Purple',
+      '',
+    ]);
+  });
+
+  it('names the missing or malformed field in an invalid request', async () => {
+    const missingRows = await generateManagedOfficeFile({
+      format: 'csv',
+      filename: 'fruits.csv',
+      title: 'Fruit',
+    });
+    expect(missingRows).toEqual({
+      ok: false,
+      code: 'invalid_office_file_request',
+      message:
+        'The Office file request is invalid. rows is required for a csv file. A csv file takes format, filename, title and rows.',
+    });
+
+    const csvAsContent = await generateManagedOfficeFile({
+      format: 'csv',
+      filename: 'fruits.csv',
+      title: 'Fruit',
+      content: 'Fruit\nApple',
+    });
+    expect(!csvAsContent.ok && csvAsContent.message).toBe(
+      'The Office file request is invalid. rows is required for a csv file. A csv file takes format, filename, title and rows.',
+    );
+
+    const unknownFormat = await generateManagedOfficeFile({
+      format: 'txt',
+      filename: 'notes.txt',
+      title: 'Notes',
+    });
+    expect(unknownFormat).toEqual({
+      ok: false,
+      code: 'invalid_office_file_request',
+      message:
+        'The Office file request is invalid. format must be one of docx, pptx, xlsx, pdf and csv.',
+    });
+
+    const wrongExtension = await generateManagedOfficeFile({
+      format: 'csv',
+      filename: 'fruits.txt',
+      title: 'Fruit',
+      rows: [['Fruit']],
+    });
+    expect(wrongExtension).toEqual({
+      ok: false,
+      code: 'invalid_office_file_request',
+      message:
+        'The Office file request is invalid. filename must be a file name ending in .csv, or one with no extension.',
+    });
+  });
+
+  it('still rejects fields no format takes, and bounds and places the keys it reports', async () => {
+    const unknownKey = await generateManagedOfficeFile({
+      format: 'csv',
+      filename: 'fruits.csv',
+      title: 'Fruit',
+      rows: [['Fruit']],
+      delimiter: ';',
+    });
+    expect(unknownKey).toEqual({
+      ok: false,
+      code: 'invalid_office_file_request',
+      message:
+        'The Office file request is invalid. delimiter does not apply to a csv file: leave it out. A csv file takes format, filename, title and rows.',
+    });
+
+    const manyKeys = await generateManagedOfficeFile({
+      format: 'csv',
+      filename: 'fruits.csv',
+      title: 'Fruit',
+      rows: [['Fruit']],
+      ...Object.fromEntries(
+        ['a', 'b', 'c', 'd', `e${'x'.repeat(80)}`, 'f', 'g'].map((key) => [key, 1]),
+      ),
+    });
+    expect(!manyKeys.ok && manyKeys.message).toBe(
+      `The Office file request is invalid. a, b, c, d, e${'x'.repeat(39)}... and 2 more do not apply to a csv file: leave them out. A csv file takes format, filename, title and rows.`,
+    );
+
+    const nestedKey = await generateManagedOfficeFile({
+      format: 'docx',
+      filename: 'notes.docx',
+      title: 'Notes',
+      source: {
+        filename: 'notes.docx',
+        sha256: 'a'.repeat(64),
+        replacements: [{ find: 'old', replace: 'new', expectedMatches: 1 }],
+        edits: [{ sheet: 'Sheet1', cell: 'A1', expected: '', value: '' }],
+      },
+    });
+    expect(!nestedKey.ok && nestedKey.message).toBe(
+      'The Office file request is invalid. source: edits does not belong there: leave it out.',
+    );
+  });
+
+  it('declares the tool non-strict so the OpenAI Responses route does not force every field', () => {
+    const definition = createManagedOfficeFileToolDefinition();
+    expect(definition.function.strict).toBe(false);
+
+    const request = openAIWireRequestToChatRequest({
+      model: requireProviderDefaultModel('openai'),
+      messages: [{ role: 'user', content: 'Make a CSV of 5 fruits.' }],
+      tools: [definition],
+    });
+    const translated = translateChatRequestToResponses(request, {
+      compat: resolveOpenAICompletionsCompatDefaults({
+        provider: 'openai',
+        endpointClass: 'default',
+        knownProviderFamily: 'openai',
+      }),
+    });
+    const tool = translated.tools?.find(
+      (entry) => entry.type === 'function' && entry.name === definition.function.name,
+    );
+    expect(tool).toMatchObject({ type: 'function', strict: false });
+  });
+
+  it('tells the model to send only the fields of the chosen format', () => {
+    const definition = createManagedOfficeFileToolDefinition();
+    const properties = definition.function.parameters.properties;
+    expect(definition.function.description).toContain(
+      'Send only the fields of the chosen format and leave every other field out',
+    );
+    expect(properties.rows.description).toMatch(/^CSV only, and required for csv:/);
+    expect(properties.content.description).toMatch(/^DOCX and PDF only\./);
+    expect(definition.function.parameters.required).toEqual(['format', 'filename', 'title']);
   });
 
   it('requires a real rendering executor when rendering was requested', async () => {

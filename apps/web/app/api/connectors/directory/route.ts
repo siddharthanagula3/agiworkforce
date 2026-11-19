@@ -13,7 +13,10 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
+import {
+  DIRECTORY_CATEGORIES,
+  type DirectoryCategory,
+} from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import {
   DIRECTORY_CONNECTABLE_MODES,
@@ -21,7 +24,7 @@ import {
   isConnectableNow,
 } from '@/lib/connectors/directory/snapshot-view';
 import { isEligibleForListing, isInDefaultListing } from '@/lib/connectors/directory/listing';
-import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
+import { personalSourcesOf, toDirectoryEntryView } from '@/lib/connectors/directory/view';
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 export const runtime = 'nodejs';
@@ -60,6 +63,9 @@ function matchesFilters(record: DirectoryRecord, query: ConnectorDirectoryQuery)
   if (query.connectable && record.connectable !== query.connectable) return false;
   if (query.connectableOnly && !isConnectableNow(record)) return false;
   if (query.authMode && record.authMode !== query.authMode) return false;
+  if (query.personalSource && !personalSourcesOf(record)?.includes(query.personalSource)) {
+    return false;
+  }
   return true;
 }
 
@@ -78,6 +84,20 @@ function selectRecords(
     : filtered;
   if (query.sort === NAME_SORT) selected.sort(compareDirectoryRecordsByName);
   return selected;
+}
+
+function categoriesWithEntries(
+  records: readonly DirectoryRecord[],
+  query: ConnectorDirectoryQuery,
+  selected: readonly DirectoryRecord[],
+): DirectoryCategory[] {
+  const scope = query.category
+    ? selectRecords(records, { ...query, category: undefined })
+    : selected;
+  return DIRECTORY_CATEGORIES.filter(
+    (category) =>
+      category === query.category || scope.some((record) => record.categories.includes(category)),
+  );
 }
 
 function readQuery(url: URL) {
@@ -118,7 +138,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         entries: page.map(toDirectoryEntryView),
         total: selected.length,
         nextCursor: nextOffset < selected.length ? String(nextOffset) : null,
-        categories: [...DIRECTORY_CATEGORIES],
+        categories: categoriesWithEntries(view.records, query, selected),
         connectableModes: [...DIRECTORY_CONNECTABLE_MODES],
         stats: {
           ...view.counts,

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runStatusLabel } from '@agiworkforce/types';
-import { RemoteComputerPage } from '../RemoteComputerPage';
+import { RemoteComputerPage, RemoteComputerScreen } from '../RemoteComputerPage';
 import type { RemoteTaskStatus } from '../../lib/remote-dispatch-client';
 
 interface Handlers {
@@ -48,6 +48,13 @@ vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
 }));
 vi.mock('@features/chat/components/Composer/DictationStrip', () => ({
   DictationStrip: () => null,
+}));
+vi.mock('@shared/components/layout/WebAppShell', () => ({
+  WebAppShell: ({ children, rail = true }: { children: React.ReactNode; rail?: boolean }) => (
+    <div data-testid="web-app-shell" data-rail={String(rail)}>
+      {children}
+    </div>
+  ),
 }));
 
 function useFakeRelay() {
@@ -192,3 +199,37 @@ describe('RemoteComputerPage task ownership', () => {
 
 type ImportedModule1 = typeof import('../../lib/browser-pairing');
 type ImportedModule0 = typeof import('@features/chat/hooks/use-dictation');
+
+describe('RemoteComputerScreen', () => {
+  const wideWidth = window.innerWidth;
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => ({ devices: [] }) })),
+    );
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: wideWidth });
+    vi.unstubAllGlobals();
+  });
+
+  it('gives a phone the app header with its navigation button', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    render(<RemoteComputerScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('web-app-shell')).toHaveAttribute('data-rail', 'true'),
+    );
+    expect(screen.getByRole('heading', { name: 'Your computer' })).toBeInTheDocument();
+  });
+
+  it('keeps a wide screen free of the app navigation', async () => {
+    render(<RemoteComputerScreen />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('web-app-shell')).toHaveAttribute('data-rail', 'false'),
+    );
+  });
+});

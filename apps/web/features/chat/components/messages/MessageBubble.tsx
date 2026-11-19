@@ -70,9 +70,13 @@ import {
 } from './messageActionRow';
 import { variantDeleteConfirm } from './variantDeleteConfirm';
 import {
-  RESPONSE_RATING_REASON_LABELS,
   RESPONSE_RATING_REMOVE_FAILED,
   RESPONSE_RATING_SEND_FAILED,
+  responseRatingFeedbackBody,
+  responseRatingRemovePath,
+  FEEDBACK_PATH,
+} from '@agiworkforce/cloud-contracts';
+import {
   ResponseRatingDetails,
   ResponseRatingRequestError,
   responseRatingFailureMessage,
@@ -81,19 +85,18 @@ import {
 import { VariantPager } from './VariantPager';
 import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
-import { WEB_RESPONSE_RATING_MESSAGE } from '@/app/api/feedback/response-rating-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toolApprovalLabel } from '@/lib/tool-copy';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
-import {
-  SAVE_ANSWER_AS_DOCUMENT_LABEL,
-  useSaveAnswerAsDocument,
-} from '../artifacts/save-answer-as-document';
+import { SAVE_ANSWER_AS_DOCUMENT_LABEL } from '@agiworkforce/unified-chat/answer-document';
+import { useSaveAnswerAsDocument } from '../artifacts/save-answer-as-document';
 import { useSaveAsSkill } from '@/features/skills/components/save-as-skill';
 import { useScheduleFromTurn } from '@/features/schedules/components/schedule-from-turn';
 import { TokenUsageDisplay } from '../tokens/TokenUsageDisplay';
 import {
+  cardLeadsProse,
+  hasKnownMediaFrame,
   isAutoModeModelId,
   providerModeToPrivacyMode,
   type ArtifactManifest,
@@ -104,22 +107,27 @@ import {
 } from '@agiworkforce/types';
 import { describeFallbackReason } from '@/lib/chat-fallback-reason';
 import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
-import { describeSecretRedactionNotice } from '@/lib/chat-secret-redaction-notice';
-import { describeAttachmentTruncation } from '@agiworkforce/cloud-contracts';
-import { isFreeRouteLane } from '@/features/chat/lib/routeLane';
+import { describeSecretRedactionNotice } from '@agiworkforce/cloud-contracts';
 import {
-  hasKnownMediaFrame,
-  mediaFrameStyle,
-  mediaTurn,
-  mediaTurnProse,
-} from '@/features/chat/lib/media-turn';
+  describeAttachmentTruncation,
+  SHARED_ATTACHMENTS_NOT_COPIED,
+} from '@agiworkforce/cloud-contracts';
+import { isFreeRouteLane } from '@agiworkforce/cloud-contracts';
+import {
+  turnAttemptedSearch,
+  turnDeclinedSearch,
+  turnRanAnyTool,
+  webSearchNoticeFor,
+  type WebSearchNotice,
+} from '@agiworkforce/unified-chat/web-search-notice';
+import { mediaFrameStyle, mediaTurn, mediaTurnProse } from '@/features/chat/lib/media-turn';
 import { VoiceActivityAffordance } from '@/features/chat/components/Voice/VoiceActivityAffordance';
 import {
   useVoiceModeActive,
   useVoiceSessionStore,
 } from '@/features/chat/stores/voice-session-store';
 import { TranscriptNotice } from './TranscriptNotice';
-import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '../../lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_MESSAGE } from '@agiworkforce/cloud-contracts';
 import { StreamPhaseNotice } from './StreamPhaseNotice';
 import { CitationPastChats } from './CitationPastChats';
 import {
@@ -137,6 +145,7 @@ import {
   richBlocksAsPlainText,
   StreamAnnouncer,
   type BranchItem,
+  type FinishedAnswer,
 } from '@agiworkforce/unified-chat';
 import {
   hasUnavailableWebSearch,
@@ -203,7 +212,7 @@ import { ToolApprovalCard } from '../approvals/ToolApprovalCard';
 import { ConnectorInputRequestForm } from '@/features/connectors/components/ConnectorInputRequestForm';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
-import { describeMcpTool, mcpServerLabel } from '@/features/connectors/lib/mcp-tool-name';
+import { describeMcpTool, mcpServerLabel } from '@agiworkforce/cloud-contracts';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
 import { hasWebSearchSources } from '../../types/message-metadata';
@@ -220,7 +229,7 @@ import {
   WORKBOOK_PREVIEW_TOO_LARGE,
 } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
-import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
+import type { InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { ImageToolCard } from './cards/ImageToolCard';
 import { TurnPluginDraftCard } from '../PluginDraftCard';
@@ -244,7 +253,7 @@ import {
   reconcileCitationMarkersFromSourceList,
   stripTrailingSourceList,
   stripTrailingCitationOnlyBlock,
-} from '../../lib/researchReportSources';
+} from '@agiworkforce/unified-chat/report-sources';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import type {
   AgiWorkPlanReview as AgiWorkPlanReviewState,
@@ -253,7 +262,7 @@ import type {
 import {
   collectMessageResearchSources,
   orderSourcesByCitation,
-} from '../../utils/research-sources';
+} from '@agiworkforce/unified-chat/message-sources';
 import { rendersResearchPlan } from '../../utils/research-plan';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
@@ -267,7 +276,7 @@ import {
 } from '../../utils/turn-artifacts';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { CodeExecutionBlock } from './CodeExecutionBlock';
-import { detectCardType } from '../cards';
+import { answerFormatCardType } from '@agiworkforce/unified-chat/message-format';
 import { MessageFormatCard } from '../cards/MessageFormatCard';
 import { MediaGenerationPlaceholder } from './MediaGenerationPlaceholder';
 import { EditableMessage } from './EditableMessage';
@@ -456,8 +465,6 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
 const LOCAL_BOUNDARY_LABEL = 'Local';
 const LOCAL_BOUNDARY_TITLE =
   'Answered by a model running on this device. Nothing you wrote in this chat was sent to Cloud or a provider, and it used none of your plan.';
-const SHARED_ATTACHMENTS_NOT_COPIED =
-  'Attached in the shared chat and kept private to the person who shared it:';
 const LOCAL_PERSONAL_CONTEXT_MISSING =
   'Answered without your instructions and memory: they could not be loaded onto this device.';
 
@@ -654,6 +661,7 @@ interface Message {
      * unrecognized card carries only its envelope and its authored fallback.
      */
     interactiveCards?: InteractiveCard[];
+    interactiveCardTextOffsets?: Record<string, number>;
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
     /** Work plan steps with their status, and the goal and approval state they belong to. */
@@ -1221,37 +1229,31 @@ const MessageBubbleComponent = function MessageBubble({
   const postResponseRating = useCallback(
     (rating: 'up' | 'down', details?: ResponseRatingDetailsInput): Promise<void> =>
       queueRatingRequest(async () =>
-        fetch('/api/feedback', {
+        fetch(FEEDBACK_PATH, {
           method: 'POST',
           headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           credentials: 'include',
-          body: JSON.stringify({
-            subject: details?.reason
-              ? `Response rated ${rating}: ${RESPONSE_RATING_REASON_LABELS[details.reason]}`
-              : `Response rated ${rating}`,
-            message: WEB_RESPONSE_RATING_MESSAGE,
-            metadata: {
-              source: 'web',
+          body: JSON.stringify(
+            responseRatingFeedbackBody({
+              rating,
+              messageId: message.id,
+              surface: 'web',
               platform: 'web',
               version: 'web',
-              user_agent:
-                typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent.slice(0, 500),
-              feedback_context: 'response_rating',
-              rating,
-              message_id: message.id,
-              conversation_id: message.sessionId ?? activeConversationId ?? undefined,
+              userAgent: typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent,
+              ...(codeRunConversationId ? { conversationId: codeRunConversationId } : {}),
               ...(details?.reason ? { reason: details.reason } : {}),
               ...(details?.comment ? { comment: details.comment } : {}),
-            },
-          }),
+            }),
+          ),
         }),
       ),
-    [activeConversationId, message.id, message.sessionId, queueRatingRequest],
+    [codeRunConversationId, message.id, queueRatingRequest],
   );
   const removeResponseRating = useCallback(
     (): Promise<void> =>
       queueRatingRequest(async () =>
-        fetch(`/api/feedback?message_id=${encodeURIComponent(message.id)}`, {
+        fetch(responseRatingRemovePath(message.id), {
           method: 'DELETE',
           headers: await addCsrfHeaders(),
           credentials: 'include',
@@ -2048,6 +2050,8 @@ const MessageBubbleComponent = function MessageBubble({
       ? mediaFrameStyle(media.frame, media.aspectRatio)
       : undefined;
 
+  const finishedAnswer: FinishedAnswer =
+    message.metadata?.finishReason === 'stopped' ? 'stopped' : 'complete';
   const { cleanedContent, leadProse, trailingProse, canLinkNumericCitations } = useMemo(() => {
     // While an artifact block streams, the growing raw fence stays out of the
     // chat body (the "Creating" row stands in for it), mirroring how completed
@@ -2168,13 +2172,16 @@ const MessageBubbleComponent = function MessageBubble({
       }),
     [interactiveCards, inlineToolImages],
   );
+  const interactiveCardTextOffsets = message.metadata?.interactiveCardTextOffsets;
   const leadingInteractiveCards = useMemo(
-    () => separateInteractiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
-    [separateInteractiveCards],
+    () =>
+      separateInteractiveCards.filter((card) => cardLeadsProse(card, interactiveCardTextOffsets)),
+    [separateInteractiveCards, interactiveCardTextOffsets],
   );
   const trailingInteractiveCards = useMemo(
-    () => separateInteractiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
-    [separateInteractiveCards],
+    () =>
+      separateInteractiveCards.filter((card) => !cardLeadsProse(card, interactiveCardTextOffsets)),
+    [separateInteractiveCards, interactiveCardTextOffsets],
   );
 
   /**
@@ -2192,11 +2199,10 @@ const MessageBubbleComponent = function MessageBubble({
    */
   const formatCardType = useMemo(() => {
     if (isUser || message.isStreaming) return null;
-    const detected = detectCardType(cleanedContent);
-    return detected === 'comparison' &&
-      interactiveCards?.some((card) => card.kind === 'product-comparison.v1')
-      ? null
-      : detected;
+    return answerFormatCardType(
+      cleanedContent,
+      interactiveCards?.map((card) => card.kind),
+    );
   }, [isUser, message.isStreaming, cleanedContent, interactiveCards]);
 
   /**
@@ -2443,26 +2449,18 @@ const MessageBubbleComponent = function MessageBubble({
     [cleanedContent, canLinkNumericCitations, citationsByMarker, searchSources],
   );
 
-  const turnAttemptedSearch = useMemo(() => {
-    if (
-      canonicalActivity?.entries.some(
-        (entry) =>
-          entry.kind === 'tool' &&
-          (entry.category === 'web-search' || entry.category === 'web-fetch'),
-      )
-    ) {
-      return true;
-    }
-    if (canonicalActivity?.entries.some((entry) => entry.kind === 'sources')) return true;
-    return Boolean(
-      message.metadata?.tools?.some((tool) => /web_search|url_fetch|grounding/i.test(tool.name)),
-    );
-  }, [canonicalActivity, message.metadata?.tools]);
-
-  const turnRanAnyTool = useMemo(() => {
-    if (canonicalActivity?.entries.some((entry) => entry.kind === 'tool')) return true;
-    return (message.metadata?.tools?.length ?? 0) > 0;
-  }, [canonicalActivity, message.metadata?.tools]);
+  const turnToolNames = useMemo(
+    () => message.metadata?.tools?.map((tool) => tool.name),
+    [message.metadata?.tools],
+  );
+  const attemptedSearch = useMemo(
+    () => turnAttemptedSearch(canonicalActivity, turnToolNames),
+    [canonicalActivity, turnToolNames],
+  );
+  const ranAnyTool = useMemo(
+    () => turnRanAnyTool(canonicalActivity, turnToolNames),
+    [canonicalActivity, turnToolNames],
+  );
 
   // Two different failures wearing one label. A search that ran and found
   // nothing is the model's honest limit. A search that never ran is the model
@@ -2473,33 +2471,38 @@ const MessageBubbleComponent = function MessageBubble({
   // one: a toggle left on is a standing preference, and reporting its empty
   // result on a question that was never about the web is noise with a Retry
   // attached.
-  const searchNotice = useMemo<'no-results' | 'not-invoked' | 'memory-grounded' | null>(() => {
-    if (isUser || message.isStreaming || awaitingApproval) return null;
-    if (message.metadata?.webSearchRequested !== true) return null;
-    if (producedNoVisibleOutput) return null;
-    if (rendersResearchPlan(message.metadata?.research)) return null;
-    if (hasStreamError({ metadata: message.metadata })) return null;
-    if (message.metadata?.webSearchAskedInText !== true) return null;
-    if (hasUnavailableWebSearch(canonicalActivity)) return null;
-    if (message.metadata?.tools?.some((tool) => tool.status === 'awaiting_approval')) return null;
-    if (!turnAttemptedSearch) {
-      if (turnRanAnyTool) return null;
-      return (message.metadata?.memoryCitations?.count ?? 0) > 0
-        ? 'memory-grounded'
-        : 'not-invoked';
-    }
-    return searchSources.length > 0 ? null : 'no-results';
-  }, [
-    isUser,
-    awaitingApproval,
-    message.isStreaming,
-    message.metadata,
-    canonicalActivity,
-    turnAttemptedSearch,
-    turnRanAnyTool,
-    producedNoVisibleOutput,
-    searchSources,
-  ]);
+  const searchNotice = useMemo<WebSearchNotice | null>(
+    () =>
+      webSearchNoticeFor({
+        isUser,
+        streaming: message.isStreaming === true,
+        awaitingApproval,
+        webSearchRequested: message.metadata?.webSearchRequested === true,
+        webSearchAskedInText: message.metadata?.webSearchAskedInText === true,
+        producedNoVisibleOutput,
+        rendersResearchPlan: rendersResearchPlan(message.metadata?.research),
+        hasStreamError: hasStreamError({ metadata: message.metadata }),
+        declinedSearch: turnDeclinedSearch(canonicalActivity),
+        webSearchUnavailable: hasUnavailableWebSearch(canonicalActivity),
+        toolAwaitingApproval:
+          message.metadata?.tools?.some((tool) => tool.status === 'awaiting_approval') ?? false,
+        attemptedSearch,
+        ranAnyTool,
+        memoryCitationCount: message.metadata?.memoryCitations?.count ?? 0,
+        sourceCount: searchSources.length,
+      }),
+    [
+      isUser,
+      awaitingApproval,
+      message.isStreaming,
+      message.metadata,
+      canonicalActivity,
+      attemptedSearch,
+      ranAnyTool,
+      producedNoVisibleOutput,
+      searchSources,
+    ],
+  );
   const showNoSearchResultsNotice = searchNotice === 'no-results';
 
   const memoryCitations = message.metadata?.memoryCitations ?? null;
@@ -2668,6 +2671,9 @@ const MessageBubbleComponent = function MessageBubble({
               key={showNoSearchResultsNotice ? `${message.id}-no-sources` : message.id}
               activity={activityTimeline}
               {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
+              {...(!message.isStreaming && searchSources.length > 0
+                ? { sourceCount: searchSources.length }
+                : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
               onApproveForChat={
@@ -2814,7 +2820,11 @@ const MessageBubbleComponent = function MessageBubble({
               leads the turn; every other card follows the prose that motivated
               it. */}
           {!isUser && leadingInteractiveCards.length > 0 ? (
-            <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
+            <InteractiveCardBlock
+              cards={leadingInteractiveCards}
+              assistantText={cleanedContent}
+              trustedImageUrls={trustedImageUrls}
+            />
           ) : null}
 
           {!isUser && proseIsStreaming && cleanedContent.trim() && !activityTimeline ? (
@@ -2891,6 +2901,7 @@ const MessageBubbleComponent = function MessageBubble({
                         onFollowUp={onFollowUp}
                         footnoteScope={`${message.id}lead`}
                         onFenceEdit={handleFenceEdit}
+                        {...(isUser ? {} : { finishedAnswer })}
                       />
                     </CodeBlockEditorContext.Provider>
                   );
@@ -2954,7 +2965,11 @@ const MessageBubbleComponent = function MessageBubble({
               A card that fails to render its kind still renders its authored
               fallback, so this block never leaves a gap in the answer. */}
           {!isUser && trailingInteractiveCards.length > 0 ? (
-            <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
+            <InteractiveCardBlock
+              cards={trailingInteractiveCards}
+              assistantText={cleanedContent}
+              trustedImageUrls={trustedImageUrls}
+            />
           ) : null}
 
           {!isUser && !streamingBlock && createdArtifacts.length > 0 && (
@@ -3220,6 +3235,7 @@ const MessageBubbleComponent = function MessageBubble({
                       footnoteScope={`${message.id}tail`}
                       onFenceEdit={handleFenceEdit}
                       fenceIndexOffset={trailingFenceIndexOffset}
+                      finishedAnswer={finishedAnswer}
                     />
                   </CodeBlockEditorContext.Provider>
                 )}

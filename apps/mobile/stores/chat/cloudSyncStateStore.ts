@@ -6,17 +6,25 @@ import type { DirtyMessageRef } from '@agiworkforce/sync';
 export type { DirtyMessageRef } from '@agiworkforce/sync';
 
 export type CloudSyncStatus = 'idle' | 'syncing' | 'error';
+export type CloudSyncStep = 'chats' | 'memory' | 'projects' | 'settings';
 
 interface CloudSyncState {
   cursor: string;
   lastSyncAt: number | null;
   status: CloudSyncStatus;
   lastError: string | null;
+  failedSyncSteps: CloudSyncStep[];
+  chatSyncOffReason: string | null;
   dirtyConversationIds: string[];
   dirtyMessages: DirtyMessageRef[];
 
   setCursor: (cursor: string) => void;
-  setStatus: (status: CloudSyncStatus, error?: string | null) => void;
+  setStatus: (
+    status: CloudSyncStatus,
+    error?: string | null,
+    failedSteps?: CloudSyncStep[],
+  ) => void;
+  setChatSyncOffReason: (reason: string | null) => void;
   markConversationDirty: (id: string) => void;
   markMessageDirty: (conversationId: string, messageId: string) => void;
   clearDirty: (conversationIds: string[], messages: DirtyMessageRef[]) => void;
@@ -30,12 +38,19 @@ export const useCloudSyncStateStore = create<CloudSyncState>()(
       lastSyncAt: null,
       status: 'idle',
       lastError: null,
+      failedSyncSteps: [],
+      chatSyncOffReason: null,
       dirtyConversationIds: [],
       dirtyMessages: [],
 
       setCursor: (cursor) => set({ cursor }),
-      setStatus: (status, error = null) =>
-        set({ status, lastError: status === 'error' ? error : null }),
+      setStatus: (status, error = null, failedSteps = []) =>
+        set({
+          status,
+          lastError: status === 'error' ? error : null,
+          failedSyncSteps: status === 'error' ? failedSteps : [],
+        }),
+      setChatSyncOffReason: (reason) => set({ chatSyncOffReason: reason }),
       markConversationDirty: (id) =>
         set((s) =>
           s.dirtyConversationIds.includes(id)
@@ -63,6 +78,8 @@ export const useCloudSyncStateStore = create<CloudSyncState>()(
           lastSyncAt: null,
           status: 'idle',
           lastError: null,
+          failedSyncSteps: [],
+          chatSyncOffReason: null,
           dirtyConversationIds: [],
           dirtyMessages: [],
         }),

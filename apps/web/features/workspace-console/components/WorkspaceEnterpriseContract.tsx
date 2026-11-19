@@ -268,7 +268,7 @@ export function WorkspaceEnterpriseContract({
         <SectionHeading
           id="enterprise-contract-heading"
           title={contract.ended ? 'Enterprise contract (ended)' : 'Enterprise contract'}
-          caption="Read only. Your account team changes contract terms, and changes appear here once billing records them."
+          caption="Read only. Changes appear once billing records them."
         />
         <div className="divide-y" style={{ borderColor: 'var(--settings-border)' }}>
           <Row label="Legal entity" value={contract.customerLegalEntity ?? NOT_ON_RECORD} />
@@ -307,7 +307,7 @@ export function WorkspaceEnterpriseContract({
         <SectionHeading
           id="enterprise-invoices-heading"
           title="Invoices"
-          caption="The most recent invoices on this contract, newest first. Older invoices stay with the billing provider and are reachable from any invoice link below."
+          caption="Recent invoices, newest first. Older invoices stay with the billing provider."
         />
         <InvoiceTable invoices={data?.invoices ?? []} />
       </section>

@@ -321,7 +321,7 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
                   message={failure}
                   action={{
                     label: 'Retry',
-                    ariaLabel: 'Send your last message again',
+                    ariaLabel: 'Retry sending your last message',
                     icon: RefreshCw,
                     onClick: retry,
                   }}

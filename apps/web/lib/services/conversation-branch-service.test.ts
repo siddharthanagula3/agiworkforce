@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { jsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 vi.mock('server-only', () => ({}));
@@ -162,6 +163,8 @@ describe('conversation branch service', () => {
     );
     expect(copySql).toContain('insert into public.web_messages');
     expect(copySql).toContain('cost_cents');
+    expect(copySql).toContain(jsonbObjectSql('metadata'));
+    expect(copySql).not.toContain("coalesce(metadata, '{}'::jsonb)");
     expect(copySql).not.toContain('insert into public.conversation_branch_messages');
     expect(copyParams).toEqual([
       sourceConversation.id,

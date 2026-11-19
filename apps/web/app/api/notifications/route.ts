@@ -8,6 +8,7 @@ import {
   type NotificationMarkReadResponse,
 } from '@agiworkforce/cloud-contracts';
 import { requireCsrfToken } from '@/lib/csrf';
+import { decodeKeysetCursor, isTimestampUuidCursor } from '@/lib/identity/pagination';
 import { createError } from '@/lib/errors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -27,6 +28,7 @@ const FEED_SCOPE = { resolveOrganization: false } as const;
 const ListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_FEED_LIMIT).optional(),
   before: z.string().datetime({ offset: true }).optional(),
+  cursor: z.string().min(1).max(512).optional(),
   unread: z.enum(['true', 'false']).optional(),
 });
 
@@ -40,15 +42,22 @@ async function handleList(request: NextRequest): Promise<NextResponse> {
   const parsed = ListQuerySchema.safeParse({
     limit: search.get('limit') ?? undefined,
     before: search.get('before') ?? undefined,
+    cursor: search.get('cursor') ?? undefined,
     unread: search.get('unread') ?? undefined,
   });
   if (!parsed.success) {
     throw createError.badRequest('Invalid notification query', parsed.error.flatten());
   }
 
+  const cursor = parsed.data.cursor ? decodeKeysetCursor(parsed.data.cursor) : null;
+  if (parsed.data.cursor && (!cursor || !isTimestampUuidCursor(cursor))) {
+    throw createError.badRequest('Invalid notification cursor');
+  }
+
   const { db, userId } = await getUserScopedDb(request, FEED_SCOPE);
   const feed: NotificationFeedResponseWire = await listNotifications(db, userId, {
     ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
+    cursor,
     before: parsed.data.before ?? null,
     unreadOnly: parsed.data.unread === 'true',
   });

@@ -32,6 +32,7 @@ import {
 import { useDeveloperCapabilities } from '../hooks/use-developer-capabilities';
 import { useLocalModels } from '../hooks/use-local-models';
 import { LocalWorktreeSettings } from '@/features/code/components/LocalWorktreeSettings';
+import { LocalWorktreePreferences } from '@/features/code/components/LocalWorktreePreferences';
 
 const HEADING = 'Local access';
 const FOLDERS_HEADING = 'Folders';
@@ -75,6 +76,7 @@ const CAPABILITY_TITLES: Record<DesktopCapability, string> = {
   'computer.use': 'Read the screen and control the mouse and keyboard',
   'application.control': 'Open files in other apps',
   'screen.capture': 'Capture the screen',
+  'simulator.control': 'Run and control the iOS Simulator',
   'clipboard.read': 'Read the clipboard',
   microphone: 'Use the microphone',
   'local.inference': 'Run models on this Mac',
@@ -466,6 +468,13 @@ export function LocalAccessSection() {
             buttonClassName={BUTTON_CLASS}
             onCliAnswered={onCliAnswered}
           />
+          <div className="mt-4">
+            <LocalWorktreePreferences
+              headingClassName={SUB_HEADING_CLASS}
+              fieldClassName={FIELD_CLASS}
+              buttonClassName={BUTTON_CLASS}
+            />
+          </div>
         </div>
       )}
 

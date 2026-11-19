@@ -559,7 +559,8 @@
         "apps/desktop/electron/runtime/developerAccountSync.ts#reconcileDeveloperAccount",
         "apps/cli/src/app_server/account.rs#save_device_grant",
         "apps/cli/src/secure_store.rs#uses_keychain",
-        "apps/desktop/electron/runtime/runtimeEnvironment.ts#AGIWORKFORCE_NO_KEYRING"
+        "apps/desktop/electron/runtime/runtimeEnvironment.ts#GUARD_LIFTING_ENVIRONMENT",
+        "packages/contracts/local-runtime/src/developer-sessions.ts#AGIWORKFORCE_NO_KEYRING"
       ],
       "proof": [
         {

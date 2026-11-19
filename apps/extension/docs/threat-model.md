@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Extension lead, with security/privacy review for boundary changes
-Last reviewed: 2026-11-06
+Last reviewed: 2026-11-11
 Applies to: `apps/extension` source and the configured Manifest V3 build
 
 This document describes the behavior implemented in this repository. It is not
@@ -22,8 +22,10 @@ the evidence and this document must be corrected.
 - Keep Chrome chat Managed-Cloud-only. A failed cloud turn must not silently
   fall back to Desktop, Local, or BYOK inference.
 - Treat page text, page schemas, tool output, and model output as untrusted data.
-- Restrict browser automation to user-approved origins and default every
-  computer-use action to human approval.
+- Restrict browser automation to user-approved origins and keep a human in the
+  loop: Auto, the default mode, stops for crucial actions and for controls it
+  cannot identify, Ask first confirms every action, and no mode completes a
+  purchase.
 - Authenticate privileged extension messages and native-messaging envelopes at
   their respective boundaries.
 - Bound and runtime-validate data before persistence, network transmission, DOM
@@ -31,70 +33,109 @@ the evidence and this document must be corrected.
 
 ## Trust boundaries
 
-| Boundary                                | Trust treatment                                                                                                                                              | Current enforcement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Visited HTTP(S) page and content script | The page DOM and page-supplied metadata are untrusted. A content script is installed broadly, but that does not grant the page privileged background access. | [`background/policy.ts`](src/background/policy.ts) gates tab-originated messages by the device-local origin allowlist. DOM mutations are restricted to the sender's own tab. Extension-page-only operations reject content-script senders.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Side panel and options page             | Trusted extension UI, but all user, storage, page, model, and network data remains untrusted input.                                                          | The background authenticates the extension id and exact `chrome-extension://` document origin; id equality alone is insufficient.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Background service worker               | Privileged Chrome owner for tabs, scripting, debugger, alarms, network, and native messaging.                                                                | [`background.ts`](src/background.ts) validates message shape, sender class, tab ownership, origins, request bounds, and action plans before dispatch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| AGI Managed Cloud                       | External service receiving an authenticated request only after the user sends a chat turn or starts computer use.                                            | Chat uses fixed AGI Web endpoints in [`freeTrialClient.ts`](src/features/cloud-bridge/freeTrialClient.ts). Computer use uses an exact HTTPS gateway allowlist from [`background/policy.ts`](src/background/policy.ts). Automatic account-backed mirroring for provenance-eligible Managed Cloud chats is confined to [`conversationSync.ts`](src/features/cloud-bridge/conversationSync.ts) and its transport [`conversationSyncClient.ts`](src/features/cloud-bridge/conversationSyncClient.ts); those persistence writes force `skipLlm: true` and therefore cannot trigger inference or billing. Server admission, plan, usage, and model routing remain authoritative.            |
-| Local Desktop bridge                    | Separate native process; pairing or process locality alone is not treated as message integrity.                                                              | A native connect handshake must negotiate a 32-byte session secret. Subsequent request and response envelopes use HMAC-SHA256, and missing MACs after negotiation are rejected as a downgrade. Pairing itself is authorized out of band: `POST /pair/request` returns only an opaque request id while Desktop displays a short code in its own window, and `POST /pair/confirm` installs the native-messaging manifest only for the code the user typed back. The extension never receives anything over loopback that authorizes the install. The operator-provisioned `X-Bridge-Token` path remains the alternative for hosts where the Desktop window is not on the user's screen. |
-| Chrome storage                          | Browser-profile storage, not an encrypted secrets vault. `local`, `session`, and `sync` have different disclosure lifetimes.                                 | Only the boolean allowlist in [`synced-preferences.ts`](src/features/background/synced-preferences.ts) is mirrored to Chrome Sync. Other current application data is local/session scoped as described below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Boundary                                | Trust treatment                                                                                                                                              | Current enforcement                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visited HTTP(S) page and content script | The page DOM and page-supplied metadata are untrusted. A content script is installed broadly, but that does not grant the page privileged background access. | [`background/policy.ts`](../src/background/policy.ts) gates tab-originated messages by the device-local origin allowlist. DOM mutations are restricted to the sender's own tab. Extension-page-only operations reject content-script senders.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Side panel and options page             | Trusted extension UI, but all user, storage, page, model, and network data remains untrusted input.                                                          | The background authenticates the extension id and exact `chrome-extension://` document origin; id equality alone is insufficient.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Background service worker               | Privileged Chrome owner for tabs, scripting, debugger, alarms, network, and native messaging.                                                                | [`background.ts`](../src/background.ts) validates message shape, sender class, tab ownership, origins, request bounds, and action plans before dispatch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| AGI Managed Cloud                       | External service receiving an authenticated request only after the user sends a chat turn or starts computer use.                                            | Chat uses fixed AGI Web endpoints in [`freeTrialClient.ts`](../src/features/cloud-bridge/freeTrialClient.ts). Computer use uses an exact HTTPS gateway allowlist from [`background/policy.ts`](../src/background/policy.ts). Automatic account-backed mirroring for provenance-eligible Managed Cloud chats is confined to [`conversationSync.ts`](../src/features/cloud-bridge/conversationSync.ts) and its transport [`conversationSyncClient.ts`](../src/features/cloud-bridge/conversationSyncClient.ts); those persistence writes force `skipLlm: true` and therefore cannot trigger inference or billing. Server admission, plan, usage, and model routing remain authoritative. |
+| Local Desktop bridge                    | Separate native process; pairing or process locality alone is not treated as message integrity.                                                              | A native connect handshake must negotiate a 32-byte session secret. Subsequent request and response envelopes use HMAC-SHA256, and missing MACs after negotiation are rejected as a downgrade. Pairing itself is authorized out of band: `POST /pair/request` returns only an opaque request id while Desktop displays a short code in its own window, and `POST /pair/confirm` installs the native-messaging manifest only for the code the user typed back. The extension never receives anything over loopback that authorizes the install. The operator-provisioned `X-Bridge-Token` path remains the alternative for hosts where the Desktop window is not on the user's screen.  |
+| Chrome storage                          | Browser-profile storage, not an encrypted secrets vault. `local`, `session`, and `sync` have different disclosure lifetimes.                                 | Only the preference allowlist (four booleans and the dictation language) in [`synced-preferences.ts`](../src/features/background/synced-preferences.ts) is mirrored to Chrome Sync. Other current application data is local/session scoped as described below.                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 ## Manifest capability inventory
 
-The source manifest is [`manifest.json`](manifest.json). Production builds add
+The source manifest is [`manifest.json`](../manifest.json). Production builds add
 only the configured exact Clerk Frontend API and Sync Host origins to host
-permissions and `connect-src`; [`scripts/manifest-config.mjs`](scripts/manifest-config.mjs)
+permissions and `connect-src`; [`scripts/manifest-config.mjs`](../scripts/manifest-config.mjs)
 validates those origins.
 
-| Capability                                | Why it exists                                                                                                                              | Principal exposure                                                                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `activeTab`, `tabs`, `scripting`          | Read explicitly requested page context; inspect and operate tabs; inject bounded scripts.                                                  | Page text, URL/title metadata, or DOM changes on the active/target page.                                                                                                                                                                                                                                                                                                  |
-| `debugger`                                | Bounded Chrome DevTools Protocol computer-use actions.                                                                                     | High privilege over an attached tab. `chrome.debugger.attach` takes a bare tab id and needs no host permission, so the reach is bounded instead by a Chrome-granted host permission for the target origin (below) plus the stored consent record; the driver detaches after the bounded action/run path, and Chrome's own Cancel on the debugging bar terminates the run. |
-| `nativeMessaging`                         | Pair and exchange approved messages with AGI Desktop.                                                                                      | Local-process boundary and native host installation/trust.                                                                                                                                                                                                                                                                                                                |
-| `cookies`                                 | The Clerk sync-host handshake reads the user's agiworkforce.com session so the extension acts as the account already signed in on the web. | Session-cookie confidentiality on the configured Clerk and web origins only; no extension code calls `chrome.cookies`, and nothing sets a cookie.                                                                                                                                                                                                                         |
-| `storage`                                 | Conversations, allowlist, tasks, shortcuts, preferences, profiles, and transient session state.                                            | Browser-profile persistence and Chrome Sync for the explicit boolean preference set.                                                                                                                                                                                                                                                                                      |
-| `alarms`, `notifications`, `contextMenus` | Scheduled tasks, completion notices, and user-invoked page actions.                                                                        | Work can occur while the side panel is closed; task origin is checked again at fire time.                                                                                                                                                                                                                                                                                 |
-| `sidePanel`, `tabGroups`                  | Primary UI and explicit tab organization features.                                                                                         | Tab metadata and grouping state.                                                                                                                                                                                                                                                                                                                                          |
+| Capability                                | Why it exists                                                                                                                              | Principal exposure                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `activeTab`, `tabs`, `scripting`          | Read explicitly requested page context; inspect and operate tabs; inject bounded scripts.                                                  | Page text, URL/title metadata, or DOM changes on the active/target page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `debugger`                                | Bounded Chrome DevTools Protocol computer-use actions.                                                                                     | High privilege over an attached tab. `chrome.debugger.attach` takes a bare tab id and needs no host permission, so the reach is bounded instead by a Chrome-granted host permission for the target origin (below) plus the stored consent record, except on loopback, where Chrome grants every port at install and the stored record is the only gate, and on the AGI account, API and sign-in origins, which are refused outright; the driver detaches after the bounded action/run path, and Chrome's own Cancel on the debugging bar terminates the run. |
+| `nativeMessaging`                         | Pair and exchange approved messages with AGI Desktop.                                                                                      | Local-process boundary and native host installation/trust.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `cookies`                                 | The Clerk sync-host handshake reads the user's agiworkforce.com session so the extension acts as the account already signed in on the web. | Session-cookie confidentiality on the configured Clerk and web origins only; [`clerkAuth.ts`](src/features/cloud-bridge/clerkAuth.ts) reads and watches the sync host's session cookie, and nothing sets a cookie.                                                                                                                                                                                                                                                                                                                                           |
+| `storage`                                 | Conversations, allowlist, tasks, shortcuts, preferences, profiles, and transient session state.                                            | Browser-profile persistence and Chrome Sync for the explicit boolean preference set.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `alarms`, `notifications`, `contextMenus` | Scheduled tasks, completion notices, and user-invoked page actions.                                                                        | Work can occur while the side panel is closed; task origin is checked again at fire time.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `sidePanel`, `tabGroups`                  | Primary UI and explicit tab organization features.                                                                                         | Tab metadata and grouping state.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 Source host permissions cover loopback (`localhost`, `127.0.0.1`) and the
 documented AGI Web/API origins. Every other origin is reachable only through
 `optional_host_permissions` (`http://*/*`, `https://*/*`), which grant nothing
 at install: `requestBrowserControlHostPermission`
-([`browserControlConsent.ts`](src/features/computer-use/browserControlConsent.ts))
+([`browserControlConsent.ts`](../src/features/computer-use/browserControlConsent.ts))
 raises Chrome's own site-access prompt for one exact origin at the moment the
 user confirms "Grant full browser control", and the grant is visible and
 withdrawable at `chrome://extensions`. Nothing is written to the consent record
 unless Chrome grants first, and both revoke paths remove the host permission
 alongside the record.
 
+The install-time hosts never raise that prompt, so for them the Chrome half of
+the grant proves nothing. [`accountOrigins.ts`](src/features/computer-use/accountOrigins.ts)
+reads them from the running manifest: every host permission except the any-port
+loopback grants, plus the configured AGI web origin, is an account origin (the
+AGI web app, the API and the Clerk sign-in hosts, where the user's session and
+billing live). `hasBrowserControlConsent`, `grantBrowserControlConsent` and
+`authorizeBrowserToolCapability` refuse those origins for every browser-control
+capability, and the options page and side panel refuse to approve them, so the
+agent never operates the user's own AGI account. The Clerk sync-host cookie read
+that keeps the panel signed in is not a browser-control capability and is
+unaffected. Loopback (`localhost`, `127.0.0.1` and `[::1]` on any port) stays
+approvable, but only through the stored confirmation, whose wording says that
+Chrome does not ask for local addresses.
+
 The content script matches all ordinary `http://*/*` and `https://*/*`
 top-level frames. Incognito use is disabled. The broad content-script match is a
 material attack-surface choice: it enables page discovery/context features, but
 every visited page can observe the content script's page-world effects and can
 attempt to exercise its message handlers. On an origin that is not on the
-approved-sites list the content script now injects no UI and sends no startup
-message, so an unapproved page neither sees extension chrome nor wakes the
-service worker.
+approved-sites list the content script injects no UI and sends no further
+message, so an unapproved page sees no extension chrome.
+
+The content script runs in the page's renderer, so it is treated as possibly
+compromised. At startup the service worker sets every storage area (`local`,
+`session`, `sync`, `managed`) to `TRUSTED_CONTEXTS`
+([`storageAccess.ts`](src/features/background/storageAccess.ts)), so the session
+token, the approved-sites list, the browser-control record, the permission mode
+and the org policy are unreadable and unwritable from any page. Chrome documents
+`StorageArea.setAccessLevel` from Chrome 102, below this manifest's
+`minimum_chrome_version` of 132. The content script asks the worker instead,
+and the worker answers from Chrome's own description of the sender (this
+extension, a tab, frame 0, an http(s) page) rather than from the message:
+`GET_PAGE_ACCESS` says only whether that page is approved and whether the
+in-page panel is on, `GET_AUTOFILL_PROFILE` hands the form-fill profile only to
+an approved job-application page, and `AUTHORIZE_SITE_TOOL_DESTINATION` checks
+a site-tool form destination against the same gate as navigation. Each page load
+therefore wakes the worker once for that answer. Chrome gives the outermost frame
+of a prerendered page a non-zero frame id until the page is activated, and the
+worker still answers frame 0 only, so a prerendered page asks after activation.
+When the approved-sites list, the org policy or the in-page panel preference
+changes, the worker sends `PAGE_ACCESS_CHANGED` to the top document of the
+affected open tabs and the page asks again, mounting or removing its launcher.
+The message carries no data, and a tab cannot send it.
+[`__tests__/content-storage-boundary.test.ts`](__tests__/content-storage-boundary.test.ts)
+walks the content build's imports and fails on any storage access.
 
 No extension resource is exposed to web pages: there is no
 `web_accessible_resources` entry. Store-listing copy and the per-permission
 justifications that must accompany `debugger` are versioned in
 [`chrome-web-store-listing.md`](chrome-web-store-listing.md), and
-[`__tests__/manifest-contract.test.ts`](__tests__/manifest-contract.test.ts)
+[`__tests__/manifest-contract.test.ts`](../__tests__/manifest-contract.test.ts)
 freezes the permission and host lists against it.
 
 Extension pages use a restrictive CSP for scripts and objects and disallow
-framing. The current source CSP permits inline styles and `data:` images; code
-review must not assume those two classes are blocked.
+framing (`frame-ancestors 'none'`); the only frame source besides the extension
+is the artifact renderer at `https://sandbox.agiworkforce.com`. The current
+source CSP permits inline styles and images from `data:` and any `https:`
+origin; code review must not assume those classes are blocked.
 
 `connect-src` names each AGI origin exactly (`https://agiworkforce.com`,
 `https://api.agiworkforce.com`) rather than
 a `https://*.agiworkforce.com` wildcard, so a preview, marketing or staging
 subdomain is not a reachable egress target even if something in the extension
 were persuaded to name one. The set must stay equal to
-`GATEWAY_URL_ALLOWLIST_EXACT` in [`background/policy.ts`](src/background/policy.ts);
-[`__tests__/manifest-contract.test.ts`](__tests__/manifest-contract.test.ts)
+`GATEWAY_URL_ALLOWLIST_EXACT` in [`background/policy.ts`](../src/background/policy.ts);
+[`__tests__/manifest-contract.test.ts`](../__tests__/manifest-contract.test.ts)
 fails the build when it is not.
 
 `connect-src` also allows `https://*.ingest.sentry.io` and
@@ -102,9 +143,9 @@ fails the build when it is not.
 entry rather than a build-time or runtime-conditioned one: CSP is fixed at
 package time, so there is no way to add the host only when a user has opted
 in. Whether anything is ever sent to it is instead gated at runtime by
-[`errorReportingConsent.ts`](src/features/observability/errorReportingConsent.ts),
+[`errorReportingConsent.ts`](../src/features/observability/errorReportingConsent.ts),
 default off, and by the presence of a configured DSN
-([`errorReporting.ts`](src/features/observability/errorReporting.ts)). Every
+([`errorReporting.ts`](../src/features/observability/errorReporting.ts)). Every
 payload is scrubbed by [`@agiworkforce/observability`](../../../packages/platform/observability)
 before it reaches this host: message text, file paths, and URLs never leave
 the browser, only the error's type name and bare function names from its
@@ -203,7 +244,7 @@ then fences page context as untrusted data through the same Managed Cloud chat
 handler. Redaction is mitigation rather than a promise to identify every
 sensitive value. Sign-in, plan, usage, account, rate-limit, cancellation, and
 provider failures return typed UI outcomes; the panel must not render them as a
-successful assistant answer. There is no Local, BYOK, or Desktop-chat fallback.
+successful assistant answer. There is no Local, BYOK, or Desktop-chat fallback. An on-page request is cancelled when its page goes away (the port it opened for the request closes), when its tab closes, when the user closes or removes the panel, and the moment its site loses approval.
 
 Pixel screenshots and pasted images are not text-redacted. They can contain
 credentials, health information, private messages, or other sensitive pixels.
@@ -278,8 +319,11 @@ pending delete.
      session on that origin); and
   2. a Chrome-enforced host permission for that exact origin, checked with
      `chrome.permissions.contains`. The extension's own storage is invisible to
-     Chrome and to `chrome://extensions`, so it must never be the only thing
-     authorizing DevTools-Protocol reach.
+     Chrome and to `chrome://extensions`, so outside loopback it must never be
+     the only thing authorizing DevTools-Protocol reach. Loopback is granted by
+     Chrome at install on every port, so there the record alone decides, and
+     the account origins described under Capabilities are refused before
+     either half is read.
 
   `AGI_START_COMPUTER_USE` refuses before any lease, CDP attach, or paid cloud
   call when either half is absent, and refuses the same way when the record or
@@ -295,6 +339,14 @@ pending delete.
   cancellation and aborts the run's `AbortController`; it does not re-attach.
   Any other detach reason (an eviction, a target close) still re-attaches,
   because that is not the user withdrawing consent.
+- Auto asks before acting on a target it cannot identify: a point or index whose
+  element cannot be read, or a control with no readable label, maps to
+  `unidentified_input`, which `asksInAutoMode`
+  ([`crucialActions.ts`](src/features/computer-use/crucialActions.ts)) treats as
+  a stop, and a run with nobody to ask refuses it. Pointer tools also refuse a
+  point that lands in a frame from another origin (`validateViewportPoint` in
+  [`cdpDriver.ts`](src/features/computer-use/cdpDriver.ts)), so a click never
+  reaches a cross-origin frame under the parent page's approval.
 - An index the model acts through addresses exactly one element. The page-side
   snapshot only assigns an index to an element whose structural path is proven,
   in that same pass, to resolve to that element and nothing else, and every
@@ -306,8 +358,9 @@ pending delete.
   (name, contact, location, profile URLs, employment, work authorization,
   salary, cover-letter and resume text, custom answers) into page-controlled
   DOM inputs. Both `AGI_RUN_AUTOFILL` and `AUTO_FILL_JOB_APPLICATION` refuse
-  before reading storage unless `window.location.origin` is on
-  `agi_site_allowlist`. ATS platform detection is a second, independent gate:
+  unless the worker reports the page approved; `AGI_RUN_AUTOFILL` receives the
+  stored profile only through `GET_AUTOFILL_PROFILE`, which the worker answers
+  only for an approved job-application page in a tab's top frame. ATS platform detection is a second, independent gate:
   it matches the parsed hostname with exact-or-suffix comparison against the
   real ATS hosts, so a page whose path or query merely contains
   `boards.greenhouse.io`, `jobs.lever.co`, `linkedin.com/jobs/`, or
@@ -335,14 +388,22 @@ pending delete.
   replays recorded DOM actions against the active tab rather than the sender's.
   `LIST_SHORTCUTS` stays allowlisted-tab and still discloses shortcut ids and
   names to an allowlisted page; the replay gate is what makes that inert.
-- Ask-before-acting defaults on. Only an explicit stored `false` enables full
-  access. Approval requests use random ids, accept responses only from trusted
-  extension pages, and deny after 30 seconds without a response. The panel
-  rehydrates this authoritative stored preference and rolls its toggle back if
-  a write fails, so the visible gate cannot claim an opt-in or opt-out the
-  background never received. Pending approval UI is announced and focused;
-  decision or expiry returns focus to a live run control instead of leaving a
-  visually active but inert approval affordance.
+- The permission mode has three values, stored under `agi_cu_ask_before_acting`
+  and read through `readBrowserPermissionMode`: a stored `true` is Ask first
+  (every action asks), a stored `false` is Full access, and anything else,
+  including nothing stored, is Auto, the default. Auto acts on the sites of the
+  task without asking and stops for a crucial action (money, speaking for the
+  user, secrets) and for a control it cannot identify (`unidentified_input`);
+  Full access skips routine confirmations on approved sites. In every mode,
+  uploads, downloads, sign-ins and sensitive input still ask, and a purchase is
+  refused outright and handed back to the user with `ask_user_to_take_over`.
+  Approval requests use random ids, accept responses only from trusted
+  extension pages, and skip the action after five minutes without a response
+  (`APPROVAL_TIMEOUT_MS`). The panel rehydrates the authoritative stored
+  preference and rolls its control back if a write fails, so the visible gate
+  cannot claim a mode the background never received. Pending approval UI is
+  announced and focused; decision or expiry returns focus to a live run control
+  instead of leaving a visually active but inert approval affordance.
 - The background owns at most one tracked computer-use lease. The lease binds a
   random run id, a monotonic run generation, the target tab/window/exact URL
   intent, and the Managed Cloud account plus auth-session incarnation. Those
@@ -371,6 +432,13 @@ pending delete.
 - Recorded workflows capture selectors only by default. Optional value capture
   omits password values, replaces declared card/password/OTP fields, and runs
   remaining values through secret redaction before local persistence.
+- A paired Desktop's `browser_list_tabs` gets the title and full address only
+  of tabs on approved sites. Any other tab, and any AGI account origin, is
+  listed by its origin alone, with no title, path, query or fragment
+  ([`tabListing.ts`](src/features/native-bridge/tabListing.ts)).
+- Page selection reaches a message only when the user picks Add selected text
+  in the panel's plus menu, on an approved site, or uses a right-click entry on
+  the selection. Focusing the panel reads nothing from the page.
 - Scheduled tasks created from a page origin are rechecked against the allowlist
   at fire time and removed if that origin is no longer allowed. Extension-UI
   tasks use a distinct origin sentinel.
@@ -452,7 +520,7 @@ document. This file makes no retention promise for those systems.
 | Persistent sensitive browser data leaks.                                            | Sensitive categories stay out of Chrome Sync, values are bounded/redacted where implemented, and conversations expire/cap.                                                                                                                                                                                                                                                                                                                                        | Local Chrome profile compromise, extension compromise, backups, screenshots, and redaction false negatives can expose data.                                                                                                                                                                                                                              |
 | Automatic cloud mirroring copies an eligible transcript beyond the browser profile. | Every turn must carry Managed Cloud provenance; any local/unknown turn stickily disqualifies the conversation; the account owner is re-checked at the transport boundary before egress; local eviction never issues a cloud delete; egress is confined to the cloud-bridge gate and enforced by `check:no-cloud-ipc`; persistence writes force `skipLlm: true`; rich metadata is contract-validated and length-bounded.                                           | Once mirrored, the stored prompt/answer, exact per-turn model/provider, and durable descriptor/card copy are subject to server-side retention and account-deletion policy, not this extension. Request-only page context and image bytes are not part of the mirrored record. Deleting the conversation is the supported way to remove its account copy. |
 | A structured result card smuggles arbitrary outbound links into the panel.          | Chrome advertises only display-only `map-search.v1` support (`canRespond: false`); card envelopes and typed bodies are runtime-validated and bounded before persistence; unknown/newer/malformed kinds render only server-authored plain text; Chrome repeats the exact Google Maps/OpenStreetMap URL allowlist at render and click time; no card URL is fetched automatically.                                                                                   | A user who explicitly opens an allowed provider search leaves AGI for that provider, whose normal request and privacy policy then apply. Chrome has no card-response continuation path and therefore does not advertise clarification support.                                                                                                           |
-| Autonomous action proceeds without review.                                          | Ask-before-acting defaults on and times out to deny; permissive mode is visibly labeled and requires explicit opt-out.                                                                                                                                                                                                                                                                                                                                            | A user can choose Full access; model mistakes and page-driven deception are then acted on within the approved origin and action set.                                                                                                                                                                                                                     |
+| Autonomous action proceeds without review.                                          | Auto is the default and asks for crucial actions and unidentified controls; Ask first confirms every action; an unanswered approval is skipped after five minutes; a purchase is never completed; Full access is a visible, explicit choice.                                                                                                                                                                                                                      | A user can choose Full access; model mistakes and page-driven deception are then acted on within the approved origin and action set.                                                                                                                                                                                                                     |
 | A delayed computer-use run continues after Stop or as another account/tab.          | One tracked run lease, captured account/session ownership, exact foreground-tab intent, AbortSignal propagation, exact-run cancellation, and stale run-generation filtering.                                                                                                                                                                                                                                                                                      | A CDP command already accepted by Chrome at the instant of cancellation cannot be recalled; cleanup prevents subsequent commands, captures, cloud cycles, and UI events.                                                                                                                                                                                 |
 
 ## Verification and change control
@@ -464,7 +532,7 @@ conversation-sync tests, computer-use approval tests,
 computer-use cancellation/ownership and Stop-UI tests, native pairing tests,
 manifest contract tests, `check:no-cloud-ipc`, the
 extension unit suite, typecheck, lint, build, and the unpacked-extension UI
-smoke in [`e2e/smoke.mjs`](e2e/smoke.mjs).
+smoke in [`e2e/smoke.mjs`](../e2e/smoke.mjs).
 
 The offline Chromium smoke proves that signed-out or owner-mismatched history
 stays hidden and cannot emit Managed Cloud work. The authenticated release gate

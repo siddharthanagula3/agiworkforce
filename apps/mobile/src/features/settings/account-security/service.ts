@@ -1,3 +1,7 @@
+import {
+  ACCOUNT_SECURITY_PATH,
+  accountSecurityCredentialPath,
+} from '@agiworkforce/cloud-contracts/account-security';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { api } from '@/services/api';
 import {
@@ -107,6 +111,8 @@ export interface AccountSessionRow {
   id: string;
   device: string;
   browser: string | null;
+  os?: string;
+  surface?: string;
   location: string | null;
   lastActiveAt: string | null;
   isCurrent: boolean;
@@ -130,6 +136,8 @@ function parseAccountSessionRow(value: unknown): AccountSessionRow | null {
     id,
     device: typeof device === 'string' && device ? device : 'Unknown device',
     browser: optionalString(value['browser']),
+    os: optionalString(value['os']) ?? undefined,
+    surface: optionalString(value['surface']) ?? undefined,
     location: optionalString(value['location']),
     lastActiveAt: optionalString(value['lastActiveAt']),
     isCurrent: value['isCurrent'] === true,
@@ -203,7 +211,9 @@ export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<A
     `/api/settings/audit-logs?limit=${limit}`,
     signal ? { signal } : undefined,
   );
-  if (!isRecord(response) || !Array.isArray(response['entries'])) return [];
+  if (!isRecord(response) || !Array.isArray(response['entries'])) {
+    throw new Error('Account security returned an invalid activity history');
+  }
 
   return response['entries'].flatMap((raw): AuditLogEntry[] => {
     if (!isRecord(raw)) return [];
@@ -257,10 +267,15 @@ export interface SignInKey {
   kind: 'passkey' | 'security_key';
 }
 
+export type SignInKeys =
+  | { state: 'listed'; items: SignInKey[] }
+  | { state: 'verification_required' }
+  | { state: 'unavailable' }
+  | { state: 'failed' };
+
 export interface SignInMethods {
   identities: SignInIdentity[];
-  /** `null` when the account-security service could not list them. */
-  keys: SignInKey[] | null;
+  keys: SignInKeys;
 }
 
 function readIdentities(value: unknown): SignInIdentity[] {
@@ -281,28 +296,49 @@ function readIdentities(value: unknown): SignInIdentity[] {
   });
 }
 
-function readKeys(value: unknown): SignInKey[] | null {
-  if (!isRecord(value)) return null;
-  if (value['state'] === 'unavailable') return [];
+function readKeys(value: unknown): SignInKeys {
+  if (!isRecord(value)) return { state: 'failed' };
+  if (value['state'] === 'unavailable') return { state: 'unavailable' };
+  if (value['state'] === 'verification_required') return { state: 'verification_required' };
   const credentials = value['credentials'];
-  if (!Array.isArray(credentials)) return null;
-  return credentials.flatMap((entry) => {
-    const row = entry as Record<string, unknown>;
-    const kind = row['kind'];
-    return typeof row['id'] === 'string' &&
-      typeof row['name'] === 'string' &&
-      (kind === 'passkey' || kind === 'security_key')
-      ? [{ id: row['id'], name: row['name'], kind }]
-      : [];
-  });
+  if (!Array.isArray(credentials)) return { state: 'failed' };
+  return {
+    state: 'listed',
+    items: credentials.flatMap((entry) => {
+      const row = entry as Record<string, unknown>;
+      const kind = row['kind'];
+      return typeof row['id'] === 'string' &&
+        typeof row['name'] === 'string' &&
+        (kind === 'passkey' || kind === 'security_key')
+        ? [{ id: row['id'], name: row['name'], kind }]
+        : [];
+    }),
+  };
+}
+
+export async function fetchSignInKeys(signal?: AbortSignal): Promise<SignInKeys> {
+  try {
+    return readKeys(await api.get<unknown>(ACCOUNT_SECURITY_PATH, { signal }));
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return { state: 'failed' };
+  }
 }
 
 export async function fetchSignInMethods(signal?: AbortSignal): Promise<SignInMethods> {
-  const [identities, security] = await Promise.all([
+  const [identities, keys] = await Promise.all([
     api.get<unknown>('/api/settings/identities', { signal }),
-    api.get<unknown>('/api/account-security', { signal }).catch(() => null),
+    fetchSignInKeys(signal),
   ]);
-  return { identities: readIdentities(identities), keys: readKeys(security) };
+  return { identities: readIdentities(identities), keys };
+}
+
+export async function removeSignInKey(
+  credentialId: string,
+  headers: Record<string, string>,
+  accountEpoch: CloudAccountEpoch,
+): Promise<void> {
+  await api.delete(accountSecurityCredentialPath(credentialId), { headers, accountEpoch });
 }
 
 function readBackupCodes(value: unknown): string[] {

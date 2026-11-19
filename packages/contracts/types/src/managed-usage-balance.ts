@@ -1,4 +1,5 @@
 import { isTeamSeatType, type TeamSeatType } from './billing-catalog';
+import { effectivePlanTier } from './subscription-entitlement';
 import {
   parseUsageLimitPromotionState,
   type UsageLimitPromotionState,
@@ -45,6 +46,12 @@ export interface ManagedUsagePurchasedCredits {
   /** Null when the balance lookup failed: unknown, which is not the same as none. */
   remaining: number | null;
   overage_enabled: boolean;
+  /**
+   * Billed by Stripe or an app store, so the account holder buys credits and
+   * switches them on in Settings > Billing. False when whoever manages the plan
+   * does; absent on older servers.
+   */
+  self_serve?: boolean;
 }
 
 export interface ManagedUsageBonusCredits {
@@ -213,6 +220,9 @@ function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
       remaining:
         purchasedRecord['remaining'] === null ? null : readCredits(purchasedRecord, 'remaining'),
       overage_enabled: purchasedRecord['overage_enabled'] === true,
+      ...(purchasedRecord['self_serve'] === undefined
+        ? {}
+        : { self_serve: purchasedRecord['self_serve'] === true }),
     },
     ...(record['bonus'] === undefined ? {} : { bonus: readBonusCredits(record['bonus']) }),
     ...(record['purchase_expiry'] === undefined
@@ -230,6 +240,22 @@ function readLimitPromotions(value: unknown): { limit_promotions?: UsageLimitPro
   } catch {
     return {};
   }
+}
+
+/**
+ * The plan the account is entitled to now. The server's answer wins because only
+ * it knows about seats and the Enterprise grace period; the status rule covers
+ * servers that predate the field.
+ */
+export function entitledPlanTierOfUsageSummary(
+  summary: Pick<
+    ManagedUsageSummaryResponse,
+    'plan_tier' | 'effective_plan_tier' | 'subscription_status'
+  >,
+): string {
+  return (
+    summary.effective_plan_tier ?? effectivePlanTier(summary.plan_tier, summary.subscription_status)
+  );
 }
 
 export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSummaryResponse {

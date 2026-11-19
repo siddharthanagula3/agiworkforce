@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: CLI lead
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 Kind: app
 Criticality: high
 
@@ -20,32 +20,23 @@ $ agi
 ```
 
 Multi-model. Cost-aware. Replayable. Built in Rust. The CLI for teams that
-ship CI/CD with AI in the loop.
-
-## Why?
-
-Claude Code, OpenAI Codex CLI, OpenCode, and Gemini CLI are the four serious
-competitors. We close gaps none of them close, and meet them on parity where
-the ecosystem expects it.
-
-| Feature                                                 |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                     **AGI CLI**                      |
-| ------------------------------------------------------- | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
-| Multi-provider in one session, mid-turn switch          |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 15+ + `/model`                   |
-| Always-on usage HUD top-right (tokens + credits + ctx%) | ⚠️ status line only  | ⚠️ /status card  |           ❌           |       ❌       |                          ✅                          |
-| Machine-readable JSONL agent events for CI              | ⚠️ stream-json mode  | ⚠️ JSONL events  |           ❌           |       ❌       |   ✅ `--json-events` (typed, stable kind strings)    |
-| Multi-model fallback chain                              |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
-| Session fork at specific turn with rename               |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |             ✅ `--at-turn N --as <name>`             |
-| Native Rust binary                                      |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
-| OSS license                                             |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ❌ Proprietary                    |
-| MCP support (transports)                                | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |             stdio + SSE + HTTP (+OAuth)              |
-| Hook events                                             |     ~19 (config)     |       ~10        |           ✓            |    (varies)    |                          32                          |
-| Plan mode (model writes plan → user approves)           |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
+ship CI/CD with AI in the loop. How it compares with other coding CLIs is kept,
+with dated evidence, in `docs/product/competitive-guidance.md`, not here.
 
 ## Install
 
 ```bash
 curl -fsSL https://agiworkforce.com/install.sh | bash
 ```
+
+This is the only published install route; there is no npm package, Homebrew
+tap or native Windows installer. Until the first signed release is published
+the installer stops with "No signed AGI CLI release is published yet". Pass
+`--version X.Y.Z` to install a specific release, `--install-dir DIR` to choose
+the folder and `--no-modify-path` to leave your shell profile alone. Builds are
+published for macOS (Apple silicon and Intel), Linux with glibc (x64 and
+arm64; Alpine and other musl systems are not supported) and Windows (x64 and
+arm64). The release process is in `docs/runbooks/cli-release.md`.
 
 The installer downloads the release archive for your platform from GitHub,
 verifies the release's signed checksum manifest with `openssl`, checks the
@@ -55,8 +46,11 @@ published. Windows needs Git Bash, MSYS2, Cygwin or WSL to run it. `agi update`
 compares this build against the newest release. `agi update --install` does not
 run the shell installer: it downloads the release archive for your platform,
 verifies the signed checksum manifest against the key built into this `agi`,
-checks the archive's SHA-256, and replaces the `agi` it runs from, after you
-confirm (or pass `--yes`). It does not replace a running `agi` on Windows or inside the AGI Cloud
+checks the archive's SHA-256, checks that the new build reports the version the
+release feed named and that it is newer than the running one, and replaces the
+`agi` it runs from, after you confirm (or pass `--yes`). It runs `openssl` and
+`tar` only from `PATH` folders outside the project and temporary folders a
+sandboxed command can write, and stops if it finds none there. It does not replace a running `agi` on Windows or inside the AGI Cloud
 app; on Windows, close `agi` and run the installer above from Git Bash or WSL.
 AGI Cloud for desktop ships its own copy of `agi` for local coding sessions, so
 the desktop app needs no separate install.
@@ -130,8 +124,10 @@ unsandboxed and is the only supported way to proceed without the backend.
 - A hook blocks the action by printing `{"decision": "block"}` or exiting
   with code 2 (its stderr is the reason); any other non-zero exit is shown and
   the action continues. A blocking hook that cannot run at all, because the
-  sandbox refused it or it could not start, blocks. One that runs out of time
-  is shown and the action continues, as in Claude Code. Every hook failure is
+  sandbox refused it or it could not start, blocks, and so does one that runs
+  out of time; the CLI says the hook timed out and the action was stopped. A
+  non-blocking hook that runs out of time is shown and the action continues.
+  Every hook failure is
   shown once a session, and a sandboxed hook or server that fails says it ran
   in the sandbox and how to opt out.
 - Unsandboxed servers and hooks find programs only on a `PATH` without the
@@ -202,7 +198,7 @@ machine-readable `kind` (`api_rate_limit`, `auth_expired`, `network`, …) and
 a runbook hint.
 
 ```bash
-agi --json-events exec "explain main.rs" | jq '.[]'
+agi --json-events exec "explain main.rs" | jq -c .
 ```
 
 ### 3. Multi-model fallback chain
@@ -218,7 +214,8 @@ agi -m "<primary-model>,<fallback-model>,<local-model>" "refactor main.rs"
 ### 4. Session replay / fork
 
 Every session is persisted under `~/.agiworkforce/managed_sessions/`.
-List, inspect, and fork from any turn:
+List, inspect, and fork from any turn. `--at-turn N` counts your prompts from
+0 and keeps everything that answered prompt N, tool calls included:
 
 ```bash
 agi session list
@@ -226,6 +223,14 @@ agi session show <id>
 agi session fork <id> --at-turn 2 --as refactor-alt
 agi --resume refactor-alt
 ```
+
+`-c` (also `--continue`) picks up the newest session started in this project,
+archived ones left out, in the interactive interface and with `--print` or
+`agi "<prompt>"` alike. `--session-id <id>` starts a new session under that id,
+so `--resume <id>` and `agi session show <id>` find it; an id already in use is
+refused. Ctrl-C during `agi exec`, `--print` or `agi "<prompt>"` stops the
+turn and every command it started, saves the session so it resumes cleanly, and
+exits with status 130.
 
 ## Output styles
 
@@ -317,12 +322,14 @@ Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 models use the normal model/session path after the explicit privacy handoff;
 there is no separate cloud-task command.
 
-Managed Cloud on CLI is a Pro, Max 5x, Max 20x, Team, or Enterprise benefit.
-The signed-in account keeps its exact purchased tier label; Auto routing maps
-Team to the Pro roster and Max 20x to the Max roster. Free, Basic, expired, and
-unpaid accounts fail closed on this developer surface. Billing, Team
-administration, connector setup, and Enterprise sales live in the Web control
-plane so every AGI client consumes one account and policy source.
+Managed Cloud in the CLI needs a plan that includes "Cloud in the CLI and VS
+Code"; `agi plans` lists which plans do, from a table that
+`pnpm check:protocol-types` keeps equal to the billing catalog. Accounts on other plans, and expired or unpaid ones, fail closed
+on this surface. Local mode and BYOK need no plan. Account commands (`usage`,
+`invite`, `library`, `projects` and the rest) run only in Managed mode and
+refuse in Local and BYOK before any request. Billing, Team administration,
+connector setup and Enterprise sales live in the Web control plane so every
+AGI client consumes one account and policy source.
 
 ```bash
 agi doctor
@@ -374,8 +381,9 @@ JetBrains IDEs: in AI Chat choose Add Custom Agent, then add the agent to
   protocol and full agent engine; the CLI owns persistence, tool/MCP execution,
   streaming, approval round-trips, cancellation, model resolution, and
   workspace isolation while clients own presentation and context selection.
-  WebSocket mode requires `--auth-token` or `AGI_APP_SERVER_TOKEN`; auth tokens
-  are never printed.
+  WebSocket mode requires its bearer token in `AGI_APP_SERVER_TOKEN`; no
+  argument carries it, because other local users can list a process's
+  arguments, and auth tokens are never printed.
 - CLI and VS Code sessions share `~/.agiworkforce/managed_sessions/`; they do
   not join Web/Mobile/Desktop Cloud chat sync. App-server reads never expose
   the internal system prompt, and cross-workspace read/fork/archive operations
@@ -391,9 +399,8 @@ JetBrains IDEs: in AI Chat choose Add Custom Agent, then add the agent to
 - Sandboxing: Linux (bubblewrap) and macOS (Seatbelt); Windows has no
   sandbox.
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).
-- Hooks: 32 events shipped (`apps/cli/src/features/hooks/hooks.rs`); aligned
-  with the Sprint B5 canonical vocabulary (Claude Code aliases like
-  `BeforeToolUse` map to canonical `PreToolUse`).
+- Hooks: 35 events (`ALL_EVENTS` in `apps/cli/src/features/hooks/hooks.rs`);
+  Claude Code names such as `BeforeToolUse` map to the canonical `PreToolUse`.
 - Catalog-driven provider routes through AGI-owned adapters and user-defined
   endpoints registered through `~/.agiworkforce/config.toml`.
 - Models loaded from `models.json` (no hardcoded model IDs anywhere).

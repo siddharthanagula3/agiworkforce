@@ -144,7 +144,7 @@ describe('iOS Share Extension contract', () => {
   });
 
   it('stages bounded image and file copies in the App Group beside the text draft', () => {
-    expect(source).toContain('maximumSharedFileBytes = 12 * 1024 * 1024');
+    expect(source).toContain('maximumSharedFileBytes = 25 * 1024 * 1024');
     expect(source).toContain('maximumSharedFiles = 5');
     expect(source).toContain('loadFileRepresentation(forTypeIdentifier: typeIdentifier)');
     expect(source).toContain('UTType.fileURL.identifier');
@@ -218,6 +218,25 @@ describe('iOS Share Extension contract', () => {
     expect(hostInboxSource).toContain('maximumSharedBytes = 100 * 1024');
   });
 
+  it('stages a HEIC photo as a JPEG so both Local and AGI Cloud accept it', () => {
+    expect(source).toContain('portableImageTypes: [UTType] = [.jpeg, .png, .gif, .webP]');
+    const pick = source.slice(
+      source.indexOf('private static func fileTypeIdentifier'),
+      source.indexOf('private func loadFiles('),
+    );
+    expect(pick).toContain('return portableImage ?? candidates.first');
+    const stage = source.slice(
+      source.indexOf('private static func stageTemporaryCopy'),
+      source.indexOf('private static func sanitizedFileName'),
+    );
+    expect(stage).toContain('!isPortableImage(imageType)');
+    expect(stage).toContain('stageJPEGCopy(of: url, fileName: fileName, in: staging)');
+    expect(stage).toContain('kCGImageSourceCreateThumbnailWithTransform: true');
+    expect(stage).toContain('kCGImageSourceThumbnailMaxPixelSize: maximumImagePixelSize');
+    expect(stage).toContain('mimeType: "image/jpeg"');
+    expect(stage.match(/byteSize <= maximumSharedFileBytes/g)).toHaveLength(2);
+  });
+
   it('saves a share all-or-nothing and names the items it could not add', () => {
     const persist = source.slice(
       source.indexOf('private static func persistForReview'),
@@ -240,5 +259,76 @@ describe('iOS Share Extension contract', () => {
       APP_GROUP_IDENTIFIER: 'group.com.agiworkforce.app.share',
       IOS_DEPLOYMENT_TARGET: '17.0',
     });
+  });
+});
+
+describe('iOS extension display names', () => {
+  type PluginConfig = Record<string, unknown> & {
+    mods: { ios: { dangerous: (config: Record<string, unknown>) => Promise<unknown> } };
+  };
+  const appDisplayName = (
+    appConfig.expo as { ios?: { infoPlist?: { CFBundleDisplayName?: string } } }
+  ).ios?.infoPlist?.CFBundleDisplayName;
+  const nativeIos = path.join(__dirname, '..', 'native', 'ios');
+
+  const stagedInfoPlist = async (pluginFile: string, extension: string) => {
+    const projectRoot = fs.mkdtempSync(path.join(require('os').tmpdir(), 'agi-extension-'));
+    try {
+      const withExtension = require(path.join(nativeIos, pluginFile)) as (
+        config: Record<string, unknown>,
+      ) => PluginConfig;
+      const config = withExtension({ ...appConfig.expo, _internal: { projectRoot } });
+      await config.mods.ios.dangerous({
+        ...config,
+        modResults: {},
+        modRequest: {
+          projectRoot,
+          platformProjectRoot: path.join(projectRoot, 'ios'),
+          platform: 'ios',
+          modName: 'dangerous',
+          introspect: false,
+        },
+      });
+      return plist.parse(
+        fs.readFileSync(
+          path.join(projectRoot, 'ios', extension, `${extension}-Info.plist`),
+          'utf8',
+        ),
+      );
+    } finally {
+      fs.rmSync(projectRoot, { recursive: true, force: true });
+    }
+  };
+
+  it('names the app the same way under the icon and in the share sheet and widget gallery', async () => {
+    expect(appDisplayName).toEqual(expect.any(String));
+    for (const [pluginFile, extension] of [
+      ['withAGIShareExtension.cjs', 'AGIShareExtension'],
+      ['withAGIWidgets.cjs', 'AGIWidgets'],
+    ]) {
+      const staged = await stagedInfoPlist(pluginFile, extension);
+      expect([extension, staged.CFBundleDisplayName]).toEqual([extension, appDisplayName]);
+    }
+  });
+
+  it('keeps no second copy of the name in the extension Info.plist templates', () => {
+    for (const extension of ['AGIShareExtension', 'AGIWidgets']) {
+      const template = plist.parse(
+        fs.readFileSync(path.join(nativeIos, extension, `${extension}-Info.plist`), 'utf8'),
+      );
+      expect([extension, template.CFBundleDisplayName]).toEqual([extension, '']);
+    }
+  });
+
+  it('shows the app name in every widget gallery string', () => {
+    const widgets = fs.readFileSync(path.join(nativeIos, 'AGIWidgets', 'AGIWidgets.swift'), 'utf8');
+    const galleryNames = [
+      ...widgets.matchAll(/\.configurationDisplayName\("([^"]*)"\)/g),
+      ...widgets.matchAll(/Label\("([^"]*)", systemImage/g),
+    ].map(([, name]) => name);
+    expect(galleryNames.length).toBeGreaterThan(0);
+    for (const name of galleryNames) expect(name).toBe(appDisplayName);
+    expect(widgets).toContain(`.displayName("Open ${appDisplayName}")`);
+    expect(widgets).toContain(`.description("Open ${appDisplayName} from Control Center`);
   });
 });

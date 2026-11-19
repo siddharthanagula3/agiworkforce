@@ -2,9 +2,20 @@ import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { Modal, ScrollView, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X } from 'lucide-react-native';
-import type { ManagedCloudAgentRunApprovalDecision } from '@agiworkforce/cloud-contracts';
-import { TOOL_APPROVAL_ACTION_LABELS, creditsFromCents, formatCredits } from '@agiworkforce/types';
+import { useState } from 'react';
+import { Flag, X } from 'lucide-react-native';
+import {
+  TOOL_APPROVAL_NO_PARAMETERS,
+  toolApprovalParameterRows,
+  type CloudAgentPendingApproval,
+  type ManagedCloudAgentRunApprovalDecision,
+} from '@agiworkforce/cloud-contracts';
+import {
+  TOOL_APPROVAL_ACTION_LABELS,
+  creditsFromCents,
+  formatCredits,
+  getToolDisplayLabel,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
@@ -24,9 +35,66 @@ import { CloudRunSteerSection } from './CloudRunSteerSection';
 import { CloudRunInputForm } from './CloudRunInputForm';
 import { CloudRunFilesSection } from './CloudRunFilesSection';
 import { useCloudTaskStore, type CloudRunDetail } from '../store';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
+import { TOOL_MONOSPACE } from '@/src/features/chat/components/ToolFileDiffBlock';
+import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 
 const DEVICE_STEP_NOTE =
   'Open the AGI Cloud app on that computer to carry this out, or stop the task below.';
+
+const REPORT_THIS_TASK = 'Report this task';
+
+const CITATION_SEPARATOR = '(?:[\\uE200-\\uE204\\u{1F300}-\\u{1FAFF}]\\uFE0F?)';
+const CITATION_REFERENCE = 'turn\\d+[a-z]+\\d+';
+const PROVIDER_CITATION_TOKEN = new RegExp(
+  `${CITATION_SEPARATOR}?cite(?:${CITATION_SEPARATOR}+${CITATION_REFERENCE})+${CITATION_SEPARATOR}?`,
+  'gu',
+);
+const PRIVATE_USE_CITATION_SPAN = /\uE200cite\uE202[^\s\uE200\uE201\uE203\uE204]{0,505}\uE201/g;
+const PRIVATE_USE_MARKUP_SPAN =
+  /\uE200(?!cite\uE202)[a-z_]{1,32}\uE202[^\n\uE200\uE201]{0,477}\uE201/g;
+const PRIVATE_USE_CITATION_HEADER = /\uE200(?:cite\uE202[A-Za-z0-9_\uE202]*|c(?:i(?:te?)?)?$)/g;
+const PRIVATE_USE_MARKUP = new RegExp(
+  [
+    PRIVATE_USE_CITATION_SPAN.source,
+    PRIVATE_USE_MARKUP_SPAN.source,
+    PRIVATE_USE_CITATION_HEADER.source,
+  ].join('|'),
+  'g',
+);
+const STRAY_CITATION_MARK = /[\uE200-\uE204]/g;
+
+export function stripProviderCitationTokens(text: string): string {
+  return text
+    .replace(PRIVATE_USE_MARKUP, '')
+    .replace(PROVIDER_CITATION_TOKEN, '')
+    .replace(STRAY_CITATION_MARK, '');
+}
+
+function cloudRunReportTarget(detail: CloudRunDetail): ReportTarget {
+  const reference = `cloud-run:${detail.runId}`;
+  const parts = [
+    stripProviderCitationTokens(detail.transcript),
+    ...detail.plan.map((step) => step.description),
+    ...(detail.run?.pendingDeviceStep?.steps.map((step) => step.summary) ?? []),
+  ];
+  return {
+    messageId: reference,
+    conversationId: detail.run?.conversationId ?? reference,
+    contentExcerpt: parts.filter((part) => part.trim()).join('\n\n'),
+    subject: { kind: 'task-run', id: detail.runId },
+  };
+}
+
+function hasReportableOutput(detail: CloudRunDetail | null): detail is CloudRunDetail {
+  if (!detail) return false;
+  return (
+    detail.transcript.trim().length > 0 ||
+    detail.plan.length > 0 ||
+    (detail.run?.pendingDeviceStep?.steps.length ?? 0) > 0
+  );
+}
 
 function activityToneColor(tone: CloudRunActivityTone, colors: ColorScheme): string {
   if (tone === 'error') return colors.agentError;
@@ -67,6 +135,83 @@ function MetadataRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+type PendingApprovalCall = CloudAgentPendingApproval['toolCalls'][number];
+
+function approvalCallParameters(argsPreview: string): Record<string, unknown> | null {
+  if (!argsPreview.trim()) return {};
+  try {
+    const parsed: unknown = JSON.parse(argsPreview);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function PendingApprovalCallRows({ call }: { call: PendingApprovalCall }) {
+  const colors = useThemeColors();
+  const parameters = approvalCallParameters(call.argsPreview);
+  const rows = parameters ? toolApprovalParameterRows(parameters) : [];
+
+  return (
+    <View testID={`cloud-run-approval-call-${call.toolCallId}`} style={{ gap: 4 }}>
+      <Text
+        numberOfLines={2}
+        style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+      >
+        {getToolDisplayLabel(call.name).displayName}
+      </Text>
+      {parameters === null ? (
+        <Text
+          selectable
+          numberOfLines={4}
+          style={{
+            color: colors.textSecondary,
+            fontFamily: TOOL_MONOSPACE,
+            fontSize: typeScale.caption,
+          }}
+        >
+          {call.argsPreview}
+        </Text>
+      ) : rows.length > 0 ? (
+        <View style={{ gap: 3 }}>
+          {rows.map((row) => (
+            <View key={row.key} style={{ flexDirection: 'row', gap: 10 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  maxWidth: '40%',
+                  fontFamily: TOOL_MONOSPACE,
+                  fontSize: typeScale.caption,
+                  color: colors.textMuted,
+                }}
+              >
+                {row.key}
+              </Text>
+              <Text
+                selectable
+                style={{
+                  flex: 1,
+                  fontFamily: TOOL_MONOSPACE,
+                  fontSize: typeScale.caption,
+                  color: colors.textPrimary,
+                }}
+              >
+                {row.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+          {TOOL_APPROVAL_NO_PARAMETERS}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 const STOPPED_SHORT_STATES = new Set(['partial', 'timed_out', 'cancelled', 'failed']);
 
 export function CloudRunDetailSheet({
@@ -101,6 +246,9 @@ export function CloudRunDetailSheet({
   const run = detail?.run ?? null;
   const busy = detail?.pendingAction != null;
   const conversationId = run?.conversationId ?? null;
+  const [reportingRunId, setReportingRunId] = useState<string | null>(null);
+  const reportTarget = hasReportableOutput(detail) ? cloudRunReportTarget(detail) : null;
+  const output = detail ? stripProviderCitationTokens(detail.transcript) : '';
 
   return (
     <Modal
@@ -130,6 +278,22 @@ export function CloudRunDetailSheet({
           >
             {title}
           </Text>
+          {reportTarget ? (
+            <PressableBox
+              testID="cloud-run-report"
+              onPress={() => setReportingRunId(detail?.runId ?? null)}
+              accessibilityRole="button"
+              accessibilityLabel={REPORT_THIS_TASK}
+              style={{
+                width: FULL_SCREEN_TOUCH_TARGET,
+                height: FULL_SCREEN_TOUCH_TARGET,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Flag size={18} color={colors.textSecondary} />
+            </PressableBox>
+          ) : null}
           <PressableBox
             onPress={onClose}
             accessibilityRole="button"
@@ -253,25 +417,7 @@ export function CloudRunDetailSheet({
                   Waiting for your approval
                 </Text>
                 {run.pendingApproval.toolCalls.map((call) => (
-                  <View key={call.toolCallId} style={{ gap: 3 }}>
-                    <Text
-                      numberOfLines={1}
-                      style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}
-                    >
-                      {call.name}
-                    </Text>
-                    <Text
-                      selectable
-                      numberOfLines={4}
-                      style={{
-                        color: colors.textSecondary,
-                        fontSize: typeScale.caption,
-                        lineHeight: 18,
-                      }}
-                    >
-                      {call.argsPreview}
-                    </Text>
-                  </View>
+                  <PendingApprovalCallRows key={call.toolCallId} call={call} />
                 ))}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <Button
@@ -307,15 +453,6 @@ export function CloudRunDetailSheet({
                   borderColor: colors.border,
                 }}
               >
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontSize: typeScale.subhead,
-                    fontWeight: '700',
-                  }}
-                >
-                  Waiting for connector input
-                </Text>
                 <CloudRunInputForm
                   key={run.pendingInput.requestedAt}
                   pendingInput={run.pendingInput}
@@ -402,19 +539,15 @@ export function CloudRunDetailSheet({
               </View>
             ) : null}
 
-            {detail?.transcript ? (
+            {output.trim() ? (
               <View style={{ gap: 8 }}>
                 <SectionTitle label="Latest output" />
-                <Text
-                  selectable
-                  style={{
-                    color: colors.textSecondary,
-                    fontSize: typeScale.footnote,
-                    lineHeight: 20,
-                  }}
-                >
-                  {detail.transcript}
-                </Text>
+                <View style={{ minWidth: 0 }}>
+                  {renderMarkdownContent(output, colors, {
+                    highlightCode: detail?.status !== 'live',
+                    streaming: detail?.status === 'live',
+                  })}
+                </View>
               </View>
             ) : null}
 
@@ -477,7 +610,7 @@ export function CloudRunDetailSheet({
                 title="Run again"
                 variant="outline"
                 loading={rerunning}
-                accessibilityHint="Starts a new task with the same goal"
+                accessibilityHint="Opens a new task with the original request, ready to review before it starts"
                 onPress={onRerun}
               />
             ) : null}
@@ -513,6 +646,14 @@ export function CloudRunDetailSheet({
           </ScrollView>
         )}
       </SafeAreaView>
+      {reportTarget && reportingRunId === detail?.runId ? (
+        <ReportSheet
+          visible
+          onClose={() => setReportingRunId(null)}
+          title={REPORT_THIS_TASK}
+          target={reportTarget}
+        />
+      ) : null}
     </Modal>
   );
 }

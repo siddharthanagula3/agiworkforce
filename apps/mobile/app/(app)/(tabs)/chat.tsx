@@ -1,13 +1,27 @@
 import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
+import {
+  agreeToCloudUploadAhead,
+  takeCloudUploadAgreedAhead,
+} from '@/src/features/chat/utils/cloudUploadConsent';
+import { photoSelectionLimitForPlan } from '@/src/features/chat/utils/photoSelectionLimit';
+import { attachmentLimitsFor } from '@/src/features/chat/utils/attachmentValidation';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { View, Alert, Keyboard, Linking, ScrollView, KeyboardAvoidingView } from 'react-native';
+import {
+  View,
+  Alert,
+  Keyboard,
+  Linking,
+  ScrollView,
+  KeyboardAvoidingView,
+  StyleSheet,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useNavigation } from 'expo-router';
+import { useRouter, useNavigation, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Building2, UserRound } from 'lucide-react-native';
+import { Building2, FolderOpen, UserRound, X } from 'lucide-react-native';
 import { useNewChatWorkspace } from '@/src/features/team/useNewChatWorkspace';
 import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,14 +29,25 @@ import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import {
   canUseBillingPlanCapability,
+  getModelMetadataById,
   summarizeSendPreview,
   type ProviderMode,
   type SendPreviewInput,
 } from '@agiworkforce/types';
-import { ChatInput } from '@/src/features/chat/components/ChatInput';
+import { ChatInput, type ComposerSendOutcome } from '@/src/features/chat/components/ChatInput';
 import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
+import {
+  HEADER_TEXT_SCALE_LIMIT,
+  WorkModeSwitch,
+} from '@/src/features/chat/components/WorkModeSwitch';
 import { UsageLimitBanner } from '@/src/features/chat/components/UsageLimitBanner';
 import { useWorkUsageLimit } from '@/src/features/chat/hooks/useWorkUsageLimit';
+import { useGreetingName } from '@/src/features/chat/hooks/useGreetingName';
+import { useGreetingTime } from '@/src/features/chat/hooks/useGreetingTime';
+import {
+  ProjectChatBackButton,
+  openedFromProject,
+} from '@/src/features/projects/components/ProjectChatBackButton';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { readClipboardImageAttachment } from '@/src/features/media/clipboard-image';
@@ -36,13 +61,22 @@ import {
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
+import { onDeviceRecognizerGuaranteed } from '@/src/features/voice/services/voiceInput';
 import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/Capabilities';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
-import {
-  useVoiceConversation,
-  voiceCaptureErrorMessage,
-} from '@/src/features/voice/hooks/useVoiceConversation';
+import { useVoiceConversation } from '@/src/features/voice/hooks/useVoiceConversation';
+import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
+import { classifyVoiceFailure } from '@/src/features/voice/services/voiceFailure';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
+import type { DraftProvenance } from '@/src/features/chat/draftStore';
+import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
+import { useVoiceAttachments } from '@/src/features/voice/hooks/useVoiceAttachments';
+import { useFocusBoundVisibility } from '@/src/features/voice/hooks/useInlineVoiceBar';
+import {
+  discardVoiceHandoff,
+  openVoiceHandoff,
+  type VoiceHandoffSettler,
+} from '@/src/features/voice/services/voiceHandoff';
 import { speechSettings } from '@/src/features/voice/services/speechSettings';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
@@ -58,12 +92,18 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
-  getDefaultCloudModelIdForTier,
   getSelectableModelById,
   getShortDisplayName,
   isSelectableModelIdForAccess,
 } from '@/src/features/model-picker/service';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import {
+  clearNewChatProjectScope,
+  leaveNewChatComposer,
+  returnToNewChatComposer,
+  startNewChatComposerRoundTrip,
+} from '@/stores/projects/newChatProjectScope';
+import { useProjectStore } from '@/src/features/projects/store';
 import { refreshCloudProjectDetails } from '@/src/features/projects/service';
 import { executionModeForSelection } from '@/src/features/chat/utils/conversationMode';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
@@ -77,20 +117,23 @@ import {
   PICTURE_METADATA_RECOVERY_MESSAGE,
 } from '@/src/features/media/image-metadata';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import {
-  readyLocalModelIdOr,
-  useModelInstallStore,
-} from '@/src/features/model-picker/installStore';
+import { resolveMediaModelId } from '@/src/features/chat/actions/mediaMode';
+import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
+import { fallBackToLocalMode } from '@/src/features/chat/store/cloudModeFallback';
+import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { toUserMessage } from '@/services/userMessage';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
+import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
@@ -108,20 +151,24 @@ import {
 import { ComposerApprovalModeControl } from '@/src/features/chat/components/ComposerApprovalModeControl';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+import { selectedSkillTools } from '@/stores/chat/skillTurnOptions';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
-
-function getTimeOfDayGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'How can I help you this morning?';
-  if (hour < 17) return 'How can I help you this afternoon?';
-  if (hour < 21) return 'How can I help you this evening?';
-  return 'How can I help you tonight?';
-}
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
+const OFFLINE_NEW_CLOUD_CHAT_ALERT = {
+  title: "You're offline",
+  message:
+    'AGI Cloud needs a connection to start a new chat. Your message is still in the composer. Reconnect and send again.',
+} as const;
+type RouterHref = Parameters<ReturnType<typeof useRouter>['push']>[0];
 const HEADER_SIDE_SLOT = 44;
-const WORK_SWITCH_HIT_SLOP = { top: 4, bottom: 4 };
 const NEW_CHAT_SYMBOL_SIZE = 40;
+const GREETING_MINIMUM_FONT_SCALE = 0.6;
+
+async function sharingAllowedWhile(isStillCurrent: () => boolean): Promise<boolean> {
+  return (await sharingWithProvidersAllowed()) && isStillCurrent();
+}
 
 export default function ChatTabScreen() {
   const router = useRouter();
@@ -135,7 +182,6 @@ export default function ChatTabScreen() {
   >(null);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
-  const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
   const voiceAllowed = useCapability('canUseVoice');
   const keyboard = useKeyboardSafeComposer('screen');
@@ -146,6 +192,7 @@ export default function ChatTabScreen() {
 
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
+  const discardUnsentConversation = useChatStore((s) => s.discardUnsentConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const beginImageGeneration = useChatStore((s) => s.beginImageGeneration);
   const completeImageGeneration = useChatStore((s) => s.completeImageGeneration);
@@ -157,12 +204,15 @@ export default function ChatTabScreen() {
   const recordVideoGenerationTask = useChatStore((s) => s.recordVideoGenerationTask);
   const isVideoGenerationCancelRequested = useChatStore((s) => s.isVideoGenerationCancelRequested);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const selectedMediaModel = useChatViewStore((s) => s.selectedMediaModel);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
   const videoResolution = useChatViewStore((s) => s.videoResolution);
+  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
+  const imageTransparentBackground = useChatViewStore((s) => s.imageTransparentBackground);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
-  const clearError = useChatStore((s) => s.clearError);
+  const clearUnscopedError = useChatStore((s) => s.clearUnscopedError);
   const setSendError = useChatStore((s) => s.setSendError);
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
   const workMode = useChatStore((s) => s.workMode);
@@ -174,14 +224,17 @@ export default function ChatTabScreen() {
     useCallback(() => {
       composerFocusGenerationRef.current += 1;
       composerFocusedRef.current = true;
-      clearError();
+      clearUnscopedError();
+      if (!returnToNewChatComposer()) useModelStore.getState().endConversationModel();
       useChatViewStore.getState().bindStyleConversation(NEW_CHAT_STYLE_KEY);
       return () => {
         composerFocusedRef.current = false;
         composerFocusGenerationRef.current += 1;
+        leaveNewChatComposer();
       };
-    }, [clearError]),
+    }, [clearUnscopedError]),
   );
+  useEffect(() => clearNewChatProjectScope, []);
   useComposerAttachmentHandoff('new-chat', chatInputAttachRef);
   const { isOnline } = useNetworkStatus();
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -203,14 +256,57 @@ export default function ChatTabScreen() {
   );
   const activeMode = appMode;
   const speechOwner = useVoiceOutputOwner(activeMode, 'new-chat');
+  const [voiceInlineVisible, setVoiceInlineVisible] = useFocusBoundVisibility(
+    `new-chat:${activeMode}`,
+  );
+  const composerDraftProvenance: DraftProvenance | undefined =
+    activeMode === 'local'
+      ? { scope: 'local' }
+      : clerkUserId
+        ? { scope: 'cloud', ownerId: clerkUserId }
+        : undefined;
+  const voiceAttachments = useVoiceAttachments({
+    active: voiceInlineVisible,
+    scopeKey: draftIdentityKey('new-chat', composerDraftProvenance),
+    composerRef: chatInputAttachRef,
+    onRelease: (items) => chatInputAttachRef.current?.addAttachments(items),
+  });
+  const { activeTarget: activeAttachTarget, beginSend: beginVoiceAttachmentSend } =
+    voiceAttachments;
   const activeCloudProjectId = useCloudProjectStore((s) => s.activeProjectId);
+  const cloudProjects = useCloudProjectStore((s) => s.projects);
+  const activeLocalProjectId = useProjectStore((s) => s.activeProjectId);
+  const localProjects = useProjectStore((s) => s.projects);
+  const setActiveProject = useProjectStore((s) => s.setActiveProject);
+  const newChatProject = useMemo(() => {
+    if (activeMode === 'cloud') {
+      return activeCloudProjectId
+        ? (cloudProjects.find(
+            (project) => project.id === activeCloudProjectId && project.deletedAt === null,
+          ) ?? null)
+        : null;
+    }
+    return activeLocalProjectId
+      ? (localProjects.find((project) => project.id === activeLocalProjectId) ?? null)
+      : null;
+  }, [activeCloudProjectId, activeLocalProjectId, activeMode, cloudProjects, localProjects]);
+  const clearNewChatProject = useCallback(() => setActiveProject(null), [setActiveProject]);
   const projectDefaultModelId = useCloudProjectStore((s) =>
     s.activeProjectId ? (s.details[s.activeProjectId]?.defaultModelId ?? null) : null,
   );
   const hasActiveProjectDetails = useCloudProjectStore((s) =>
     s.activeProjectId ? s.details[s.activeProjectId] !== undefined : true,
   );
-  const appliedProjectDefaultRef = useRef<string | null>(null);
+  const conversationModelShown = useModelStore((s) => s.conversationModelShown);
+  const newChatProjectKey = newChatProject ? `${activeMode}:${newChatProject.id}` : null;
+  const previousNewChatProjectKeyRef = useRef(newChatProjectKey);
+
+  useEffect(() => {
+    const previous = previousNewChatProjectKeyRef.current;
+    previousNewChatProjectKeyRef.current = newChatProjectKey;
+    if (previous === null || previous === newChatProjectKey || !composerFocusedRef.current) return;
+    useModelStore.getState().endConversationModel();
+  }, [newChatProjectKey]);
 
   useEffect(() => {
     if (activeMode !== 'cloud' || !isClerkSignedIn || hasActiveProjectDetails) return;
@@ -221,21 +317,29 @@ export default function ChatTabScreen() {
 
   useEffect(() => {
     if (activeMode !== 'cloud' || !activeCloudProjectId || !projectDefaultModelId) return;
-    const key = `${activeCloudProjectId}:${projectDefaultModelId}`;
-    if (appliedProjectDefaultRef.current === key) return;
-    if (!isSelectableModelIdForAccess(projectDefaultModelId, cloudUnlocked, subscriptionTier)) {
+    if (conversationModelShown) return;
+    if (
+      !isSelectableModelIdForAccess(projectDefaultModelId, cloudUnlocked, subscriptionTier) ||
+      executionModeForSelection(projectDefaultModelId, 'cloud') !== 'cloud'
+    ) {
       return;
     }
-    appliedProjectDefaultRef.current = key;
-    setModel(projectDefaultModelId);
+    useModelStore.getState().showConversationModel(projectDefaultModelId);
   }, [
     activeCloudProjectId,
     activeMode,
     cloudUnlocked,
+    conversationModelShown,
     projectDefaultModelId,
-    setModel,
     subscriptionTier,
   ]);
+  const handleSelectNewChatModel = useCallback(
+    (modelId: string) => {
+      if (newChatProject) useModelStore.getState().showConversationModel(modelId);
+      else setModel(modelId);
+    },
+    [newChatProject, setModel],
+  );
   const selectedSkillName =
     activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
       ? skillSelection.name
@@ -266,7 +370,7 @@ export default function ChatTabScreen() {
 
   const workSwitchVisible =
     activeMode === 'cloud' && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
-  const [composerStacked, setComposerStacked] = useState(false);
+  const [composerMultiline, setComposerMultiline] = useState(false);
   const usageLimit = useWorkUsageLimit({
     metered: activeMode === 'cloud' && isClerkSignedIn,
   });
@@ -274,10 +378,11 @@ export default function ChatTabScreen() {
     workSwitchVisible && workMode === 'agiwork' && usageLimit.exhaustedRecovery !== null;
 
   useEffect(() => {
+    if (workSwitchVisible && !isClerkLoaded) return;
     if (workMode === 'agiwork' && (!workSwitchVisible || !cloudUnlocked || !isClerkSignedIn)) {
       setWorkMode('chat');
     }
-  }, [cloudUnlocked, isClerkSignedIn, setWorkMode, workMode, workSwitchVisible]);
+  }, [cloudUnlocked, isClerkLoaded, isClerkSignedIn, setWorkMode, workMode, workSwitchVisible]);
 
   const modelForSend = useMemo(() => {
     return resolveNewConversationModel({
@@ -320,24 +425,24 @@ export default function ChatTabScreen() {
     if (appMode === 'cloud') {
       if (!cloudChatAvailable || !DEFAULT_CLOUD_MODEL_ID) {
         setAppMode('local');
-        setModel(DEFAULT_LOCAL_MODEL_ID);
+        useModelStore.getState().restoreNewChatModel();
         return;
       }
       if (!isClerkLoaded) return;
       if (!isClerkSignedIn) {
-        setAppMode('local');
-        setModel(DEFAULT_LOCAL_MODEL_ID);
+        fallBackToLocalMode();
+        useModelStore.getState().restoreNewChatModel();
         return;
       }
       if (!cloudUnlocked) return;
       if (executionModeForSelection(selectedModel, appMode) !== 'cloud') {
-        setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
+        useModelStore.getState().restoreNewChatModel();
       }
       return;
     }
 
     if (executionModeForSelection(selectedModel, appMode) !== 'local') {
-      setModel(DEFAULT_LOCAL_MODEL_ID);
+      useModelStore.getState().restoreNewChatModel();
     }
   }, [
     appMode,
@@ -347,7 +452,6 @@ export default function ChatTabScreen() {
     isClerkSignedIn,
     selectedModel,
     setAppMode,
-    setModel,
     subscriptionTier,
   ]);
 
@@ -355,13 +459,41 @@ export default function ChatTabScreen() {
     openNearestDrawer(navigation);
   }, [navigation]);
 
+  const params = useLocalSearchParams<{ from?: string }>();
+  const startedFromProject = openedFromProject(params.from);
+  const drawerNavigation = startedFromProject ? navigation.getParent() : undefined;
+  const backToProject = startedFromProject && (drawerNavigation?.canGoBack() ?? false);
+  const handleBackToProject = useCallback(() => {
+    void speechOwner?.stop().catch(() => undefined);
+    drawerNavigation?.goBack();
+  }, [drawerNavigation, speechOwner]);
+  const greetingTime = useGreetingTime();
+  const greetingName = useGreetingName();
+  const greeting = resolveGreetingHeadline(greetingTime, greetingName);
+  const mediaKind = mediaMode === 'image' || mediaMode === 'video' ? mediaMode : null;
+  const mediaHeading =
+    mediaKind === 'image' ? 'Create an image' : mediaKind === 'video' ? 'Create a video' : null;
+  const mediaModelId = mediaKind ? resolveMediaModelId(mediaKind, selectedMediaModel) : null;
+  const mediaModelName = mediaModelId ? getModelMetadataById(mediaModelId)?.name : undefined;
+
   const handleSend = useCallback(
     async (
       text: string,
       attachments?: Attachment[],
-      dispatchOptions?: { awaitCompletion?: boolean },
+      dispatchOptions?: {
+        awaitCompletion?: boolean;
+        onAccepted?: () => void;
+        onOpenConversation?: (conversationId: string) => void;
+      },
     ): Promise<boolean> => {
+      const openCreatedConversation = (conversationId: string) => {
+        dispatchOptions?.onOpenConversation?.(conversationId);
+        if (startedFromProject) router.setParams({ from: undefined });
+        router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+      };
       const entryAccount = activeMode === 'cloud' ? captureCloudAccountEpoch() : null;
+      const entryAccountCurrent = () => !entryAccount || isCloudAccountEpochCurrent(entryAccount);
+      let discardAbandoned: (() => void) | null = null;
       try {
         if (activeMode === 'cloud' && !FEATURES.cloudChat) {
           Alert.alert(
@@ -371,6 +503,7 @@ export default function ChatTabScreen() {
           return false;
         }
         const trimmed = text.trim();
+        if (refuseFilteredSend(trimmed)) return false;
         const skillNameForTurn = activeMode === 'cloud' ? selectedSkillName : undefined;
 
         const videoRequest = skillNameForTurn
@@ -381,6 +514,7 @@ export default function ChatTabScreen() {
               mediaMode,
               aspectRatio: videoAspectRatio,
               resolution: videoResolution,
+              durationSecs: videoDurationSecs,
               subscriptionTier,
               isClerkSignedIn,
               ownerId: clerkUserId,
@@ -396,8 +530,10 @@ export default function ChatTabScreen() {
             videoRequest.prompt.length > 40
               ? videoRequest.prompt.slice(0, 40).trim() + '...'
               : videoRequest.prompt;
+          if (!(await sharingAllowedWhile(entryAccountCurrent))) return false;
           const conversationId = await createConversation(title);
-          router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+          openCreatedConversation(conversationId);
+          useChatViewStore.getState().resetMediaChoice('video');
 
           const videoTurn = runVideoGenerationTurn({
             conversationId,
@@ -406,6 +542,7 @@ export default function ChatTabScreen() {
             model: videoRequest.model,
             aspectRatio: videoRequest.aspectRatio,
             resolution: videoRequest.resolution,
+            durationSecs: videoRequest.durationSecs,
             ownerId: videoRequest.ownerId,
             begin: beginVideoGeneration,
             taskCreated: recordVideoGenerationTask,
@@ -442,6 +579,7 @@ export default function ChatTabScreen() {
               grantedCapabilities,
               isOnline,
               aspectRatio: imageAspectRatio,
+              transparentBackground: imageTransparentBackground,
             });
 
         if (imageRequest.status === 'blocked') {
@@ -485,6 +623,7 @@ export default function ChatTabScreen() {
           }
           const title =
             offer.prompt.length > 40 ? offer.prompt.slice(0, 40).trim() + '...' : offer.prompt;
+          if (!(await sharingAllowedWhile(isRequestCurrent))) return false;
           const conversationId = await createConversation(title, projectId ?? undefined);
           if (!isRequestCurrent()) return false;
           const accepted = dispatchOptions?.awaitCompletion
@@ -498,7 +637,8 @@ export default function ChatTabScreen() {
                 },
               );
           if (accepted && isRequestCurrent()) {
-            router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+            openCreatedConversation(conversationId);
+            useChatViewStore.getState().resetMediaChoice('image');
           }
           return accepted;
         }
@@ -507,8 +647,10 @@ export default function ChatTabScreen() {
             imageRequest.prompt.length > 40
               ? imageRequest.prompt.slice(0, 40).trim() + '...'
               : imageRequest.prompt;
+          if (!(await sharingAllowedWhile(entryAccountCurrent))) return false;
           const conversationId = await createConversation(title);
-          router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+          openCreatedConversation(conversationId);
+          useChatViewStore.getState().resetMediaChoice('image');
 
           const imageTurn = runImageGenerationTurn({
             conversationId,
@@ -516,9 +658,12 @@ export default function ChatTabScreen() {
             prompt: imageRequest.prompt,
             model: imageRequest.model,
             aspectRatio: imageRequest.aspectRatio,
+            transparentBackground: imageRequest.transparentBackground,
             operation: imageRequest.operation,
             sourceImage: imageRequest.sourceImage,
+            referenceImages: imageRequest.referenceImages,
             ownerId: imageRequest.ownerId,
+            onStarted: dispatchOptions?.onAccepted,
             begin: beginImageGeneration,
             complete: completeImageGeneration,
             fail: failImageGeneration,
@@ -536,21 +681,55 @@ export default function ChatTabScreen() {
         }
 
         if (!modelForSend) return false;
+        if (activeMode === 'cloud' && !isOnline) {
+          Alert.alert(OFFLINE_NEW_CLOUD_CHAT_ALERT.title, OFFLINE_NEW_CLOUD_CHAT_ALERT.message);
+          return false;
+        }
         const fallbackTitle = attachments?.[0]?.fileName ?? 'New chat';
         const titleSource = trimmed || fallbackTitle;
         const title =
           titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
+        if (activeMode === 'cloud' && !(await sharingAllowedWhile(entryAccountCurrent))) {
+          return false;
+        }
+        const needingUpload =
+          activeMode === 'cloud'
+            ? (attachments ?? []).filter((attachment) => !attachment.assetId)
+            : [];
+        if (needingUpload.length > 0) {
+          if (!(await agreeToCloudUploadAhead(needingUpload))) return false;
+          if (!entryAccountCurrent()) {
+            takeCloudUploadAgreedAhead(needingUpload);
+            return false;
+          }
+        }
         const conversationId = await createConversation(title);
-        router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        const sendOptions = skillNameForTurn ? { skillName: skillNameForTurn } : {};
+        // Files go up before the message is stored, so the chat opens only once
+        // the send is accepted: a failed upload leaves the draft where it was.
+        const asksToUpload = needingUpload.length > 0;
+        let opened = false;
+        const openOnce = () => {
+          if (opened) return;
+          opened = true;
+          openCreatedConversation(conversationId);
+        };
+        if (!asksToUpload) openOnce();
+        discardAbandoned = () => {
+          if (!opened) void discardUnsentConversation(conversationId);
+        };
+        const sendOptions = skillNameForTurn
+          ? { skillName: skillNameForTurn, skillTools: selectedSkillTools(skillSelection) }
+          : {};
         if (dispatchOptions?.awaitCompletion) {
-          const accepted = await sendMessage(
-            conversationId,
-            trimmed,
-            modelForSend,
-            attachments,
-            sendOptions,
-          );
+          const accepted = await sendMessage(conversationId, trimmed, modelForSend, attachments, {
+            ...sendOptions,
+            onAccepted: () => {
+              openOnce();
+              dispatchOptions.onAccepted?.();
+            },
+          });
+          if (accepted) openOnce();
+          else discardAbandoned();
           if (accepted && skillNameForTurn) clearSelectedSkill();
           return accepted;
         }
@@ -558,25 +737,38 @@ export default function ChatTabScreen() {
           (onAccepted) =>
             sendMessage(conversationId, trimmed, modelForSend, attachments, {
               ...sendOptions,
-              onAccepted,
+              onAccepted: () => {
+                openOnce();
+                onAccepted();
+              },
             }),
           (err) => {
             console.warn('[ChatTabScreen] sendMessage rejected:', err);
             setSendError('Message could not be sent. Please try again.');
           },
         );
+        if (accepted) openOnce();
+        else discardAbandoned();
         if (accepted && skillNameForTurn) clearSelectedSkill();
         return accepted;
       } catch (err) {
-        if (entryAccount && !isCloudAccountEpochCurrent(entryAccount)) return false;
+        discardAbandoned?.();
+        if (!entryAccountCurrent()) return false;
         console.warn('[ChatTabScreen] createConversation failed:', err);
-        Alert.alert('Could not start the chat', 'Something went wrong. Please try again.');
+        Alert.alert(
+          'Could not start the chat',
+          toUserMessage(
+            err instanceof Error && err.cause ? err.cause : err,
+            'Something went wrong. Please try again.',
+          ),
+        );
         return false;
       }
     },
     [
       activeMode,
       createConversation,
+      discardUnsentConversation,
       sendMessage,
       modelForSend,
       subscriptionTier,
@@ -585,6 +777,7 @@ export default function ChatTabScreen() {
       isClerkSignedIn,
       clerkUserId,
       router,
+      startedFromProject,
       isOnline,
       beginImageGeneration,
       completeImageGeneration,
@@ -598,18 +791,32 @@ export default function ChatTabScreen() {
       mediaMode,
       videoAspectRatio,
       videoResolution,
+      videoDurationSecs,
       imageAspectRatio,
+      imageTransparentBackground,
       selectedModel,
       deleteMessage,
       setPaywallError,
       setSendError,
       selectedSkillName,
+      skillSelection,
       clearSelectedSkill,
     ],
   );
 
   const handleComposerSend = useCallback(
-    (text: string, attachments?: Attachment[]): Promise<boolean> => handleSend(text, attachments),
+    async (text: string, attachments?: Attachment[]): Promise<ComposerSendOutcome> => {
+      const opened: { conversationId?: string } = {};
+      const accepted = await handleSend(text, attachments, {
+        onOpenConversation: (conversationId) => {
+          opened.conversationId = conversationId;
+          chatInputAttachRef.current?.handOverTypingTo?.(conversationId);
+        },
+      });
+      return accepted && opened.conversationId
+        ? { openedConversationId: opened.conversationId }
+        : accepted;
+    },
     [handleSend],
   );
 
@@ -633,13 +840,6 @@ export default function ChatTabScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  const handleSheetModelPicker = useCallback(() => {
-    addToChatRef.current?.close();
-    setTimeout(() => {
-      handleOpenModelPicker();
-    }, STYLE_SHEET_HANDOFF_DELAY_MS);
-  }, [handleOpenModelPicker]);
-
   const handleSheetProjectPicker = useCallback(() => {
     addToChatRef.current?.close();
     setTimeout(() => {
@@ -647,23 +847,31 @@ export default function ChatTabScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
+  const pushFromComposer = useCallback(
+    (href: RouterHref) => {
+      startNewChatComposerRoundTrip();
+      router.push(href);
+    },
+    [router],
+  );
+
   const handleOpenCloudAccess = useCallback(() => {
-    router.push(beginCloudPostAuthIntent());
-  }, [router]);
+    pushFromComposer(beginCloudPostAuthIntent());
+  }, [pushFromComposer]);
 
   const handleTapWorkMode = useCallback(() => {
     if (!cloudUnlocked || !isClerkSignedIn) {
-      router.push(beginCloudPostAuthIntent());
+      pushFromComposer(beginCloudPostAuthIntent());
       return;
     }
     setWorkMode('agiwork');
-  }, [cloudUnlocked, isClerkSignedIn, router, setWorkMode]);
+  }, [cloudUnlocked, isClerkSignedIn, pushFromComposer, setWorkMode]);
 
   const handleSheetCamera = useCallback(async () => {
-    const operation = chatInputAttachRef.current?.captureAttachmentOperation(activeMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(activeMode);
     await runComposerAttachmentPick(
       operation,
-      async (scope) => {
+      async (scope, onPicked) => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (!scope.isCurrent()) return [];
         if (status !== 'granted') {
@@ -682,7 +890,7 @@ export default function ChatTabScreen() {
           );
           return [];
         }
-        const assets = await captureImageAssetsFromCamera();
+        const assets = await captureImageAssetsFromCamera({ onPicked });
         return scope.isCurrent() ? imageAssetsToChatAttachments(assets, 'cam') : [];
       },
       (error) => {
@@ -694,10 +902,10 @@ export default function ChatTabScreen() {
         );
       },
     );
-  }, [activeMode]);
+  }, [activeAttachTarget, activeMode]);
 
   const handleSheetPasteImage = useCallback(async () => {
-    const operation = chatInputAttachRef.current?.captureAttachmentOperation(activeMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(activeMode);
     await runComposerAttachmentPick(
       operation,
       async (scope) => {
@@ -711,17 +919,20 @@ export default function ChatTabScreen() {
         Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
       },
     );
-  }, [activeMode]);
+  }, [activeAttachTarget, activeMode]);
 
   const handleSheetPhotos = useCallback(async () => {
-    const operation = chatInputAttachRef.current?.captureAttachmentOperation(activeMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(activeMode);
     await runComposerAttachmentPick(
       operation,
-      async (scope) => {
+      async (scope, onPicked) => {
         const assets = await pickImageAssetsFromLibrary({
           allowsMultipleSelection: true,
-          selectionLimit: 5,
+          selectionLimit:
+            attachmentLimitsFor(activeMode, subscriptionTier).filesPerMessage ??
+            photoSelectionLimitForPlan(subscriptionTier),
           orderedSelection: true,
+          onPicked,
         });
         return scope.isCurrent() ? imageAssetsToChatAttachments(assets) : [];
       },
@@ -734,10 +945,10 @@ export default function ChatTabScreen() {
         );
       },
     );
-  }, [activeMode]);
+  }, [activeAttachTarget, activeMode, subscriptionTier]);
 
   const handleSheetFile = useCallback(async () => {
-    const operation = chatInputAttachRef.current?.captureAttachmentOperation(activeMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(activeMode);
     await runComposerAttachmentPick(
       operation,
       async (scope) => {
@@ -759,15 +970,18 @@ export default function ChatTabScreen() {
         Alert.alert('Error', 'Failed to pick document. Please try again.');
       },
     );
-  }, [activeMode]);
+  }, [activeAttachTarget, activeMode]);
 
   const handleOpenSkills = useCallback(() => {
-    router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
-  }, [router]);
+    pushFromComposer('/(app)/skills?returnTo=composer' as RouterHref);
+  }, [pushFromComposer]);
 
-  const handleAttachFromLibrary = useCallback((attachment: Attachment) => {
-    chatInputAttachRef.current?.addAttachments([attachment]);
-  }, []);
+  const handleAttachFromLibrary = useCallback(
+    (attachment: Attachment) => {
+      activeAttachTarget()?.addAttachments([attachment]);
+    },
+    [activeAttachTarget],
+  );
 
   const voiceOnboardingMode: VoiceOnboardingMode = useMemo(
     () =>
@@ -779,6 +993,7 @@ export default function ChatTabScreen() {
         : 'live',
     [activeMode, isClerkSignedIn],
   );
+  const voiceModeAvailable = onDeviceRecognizerGuaranteed() || voiceOnboardingMode === 'live';
 
   const startVoiceMode = useCallback(() => {
     if (!voiceAllowed) {
@@ -789,35 +1004,58 @@ export default function ChatTabScreen() {
       executionMode: activeMode === 'cloud' ? 'cloud' : 'local',
       signedIn: isClerkSignedIn,
     });
+    if (reason && !onDeviceRecognizerGuaranteed()) return;
     setVoiceFallbackReason(reason);
     if (reason) {
       setVoiceInlineVisible(true);
       return;
     }
-    createConversation('Voice chat')
-      .then((conversationId) => {
+    const entryAccount = captureCloudAccountEpoch();
+    sharingAllowedWhile(() => !entryAccount || isCloudAccountEpochCurrent(entryAccount))
+      .then(async (allowed) => {
+        if (!allowed) return;
+        const conversationId = await createConversation('Voice chat');
+        if (startedFromProject) router.setParams({ from: undefined });
         router.push(
           `/(app)/chat/${conversationId}?voice=live` as Parameters<typeof router.push>[0],
         );
       })
       .catch(() => {
+        if (!onDeviceRecognizerGuaranteed()) {
+          Alert.alert('Voice is unavailable', 'The chat could not be started.');
+          return;
+        }
         setVoiceFallbackReason('The chat could not be started, so voice stays turn based.');
         setVoiceInlineVisible(true);
       });
-  }, [activeMode, createConversation, isClerkSignedIn, router, voiceAllowed]);
+  }, [
+    activeMode,
+    createConversation,
+    isClerkSignedIn,
+    router,
+    setVoiceInlineVisible,
+    startedFromProject,
+    voiceAllowed,
+  ]);
 
   const handleOpenVoiceMode = useCallback(() => {
+    if (!voiceModeAvailable) return;
     Keyboard.dismiss();
     if (!useSettingsStore.getState().voiceOnboardingSeen) {
       setVoiceIntroVisible(true);
       return;
     }
     startVoiceMode();
-  }, [startVoiceMode]);
+  }, [startVoiceMode, voiceModeAvailable]);
 
   useEffect(() => {
+    if (!isClerkLoaded && !onDeviceRecognizerGuaranteed()) return;
     const openVoiceOnLaunch = () => {
-      if (takeStartWithVoiceOnLaunch() && useSettingsStore.getState().voiceEnabled) {
+      if (
+        takeStartWithVoiceOnLaunch() &&
+        useSettingsStore.getState().voiceEnabled &&
+        voiceModeAvailable
+      ) {
         handleOpenVoiceMode();
       }
     };
@@ -826,7 +1064,7 @@ export default function ChatTabScreen() {
       return;
     }
     return useLocalSettingsStore.persist.onFinishHydration(openVoiceOnLaunch);
-  }, [handleOpenVoiceMode]);
+  }, [handleOpenVoiceMode, isClerkLoaded, voiceModeAvailable]);
 
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);
@@ -845,106 +1083,96 @@ export default function ChatTabScreen() {
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
     requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
-  }, []);
-
-  const handleVoiceAttach = useCallback(() => {
-    setVoiceInlineVisible(false);
-    handleOpenAddToChat();
-  }, [handleOpenAddToChat]);
+  }, [setVoiceInlineVisible]);
 
   const handleVoiceIntroDismiss = useCallback(() => {
     setVoiceIntroVisible(false);
   }, []);
 
   const handleOpenCompare = useCallback(() => {
-    router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
-  }, [router]);
+    pushFromComposer('/(app)/compare' as RouterHref);
+  }, [pushFromComposer]);
+  const openUsageRecovery = usageLimit.openRecovery;
+  const handleOpenUsageRecovery = useCallback(() => {
+    startNewChatComposerRoundTrip();
+    openUsageRecovery();
+  }, [openUsageRecovery]);
   const compareAction = activeMode === 'cloud' ? handleOpenCompare : undefined;
 
   const handleVoiceSendMessage = useCallback(
     async (text: string): Promise<string> => {
+      const send = beginVoiceAttachmentSend();
+      const opened: { id: string | null; handoff: VoiceHandoffSettler | null } = {
+        id: null,
+        handoff: null,
+      };
       try {
-        const accepted = await handleSend(text, undefined, { awaitCompletion: true });
+        const accepted = await handleSend(text, send.attachments, {
+          awaitCompletion: true,
+          onAccepted: send.markSent,
+          onOpenConversation: (conversationId) => {
+            opened.id = conversationId;
+            opened.handoff = openVoiceHandoff(conversationId, text);
+          },
+        });
         if (!accepted) {
           throw new Error(useChatStore.getState().error ?? 'Message was not sent.');
         }
-        const conversationId = useChatStore.getState().currentConversationId;
-        if (!conversationId) return '';
-        return (
-          findNewAssistantResponse(
-            useChatStore.getState().messages[conversationId] ?? [],
-            new Set(),
-          ) ?? ''
-        );
-      } catch {
+        const reply = opened.id
+          ? (findNewAssistantResponse(
+              useChatStore.getState().messages[opened.id] ?? [],
+              new Set(),
+            ) ?? '')
+          : '';
+        opened.handoff?.resolve(reply);
+        return reply;
+      } catch (err) {
+        opened.handoff?.reject(err);
         throw new Error('Failed to send voice message');
+      } finally {
+        if (opened.id) discardVoiceHandoff(opened.id);
+        send.settle();
       }
     },
-    [handleSend],
+    [beginVoiceAttachmentSend, handleSend],
   );
 
   const {
     phase: inlineVoicePhase,
     muted: inlineVoiceMuted,
     audioLevel: inlineVoiceLevel,
-    toggleMute: inlineToggleMute,
+    handleMicPress: inlineMicPress,
   } = useVoiceConversation({
     enabled: voiceInlineVisible,
+    listenOnEnable: true,
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
     speechOwner,
     speechOptions: speechSettings(),
     onCaptureError: (err) => {
-      setVoiceInlineVisible(false);
-      Alert.alert('Voice unavailable', voiceCaptureErrorMessage(err));
+      if (classifyVoiceFailure(err) !== 'no-speech') setVoiceInlineVisible(false);
+      showVoiceCaptureFailureAlert(err);
     },
   });
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
-      <View className="flex-row items-center justify-between px-4 h-12">
-        <DrawerButton onPress={handleOpenDrawer} />
+      <View className="flex-row items-center justify-between px-4 min-h-12">
+        {backToProject ? (
+          <ProjectChatBackButton
+            testID="chat.new-chat.back-to-project"
+            projectName={newChatProject?.name}
+            onPress={handleBackToProject}
+          />
+        ) : (
+          <DrawerButton onPress={handleOpenDrawer} />
+        )}
         {workSwitchVisible ? (
-          <View
-            accessibilityRole="tablist"
-            accessibilityLabel="Chat or Work"
-            style={{
-              flexDirection: 'row',
-              borderRadius: 999,
-              backgroundColor: c.surfaceElevated,
-              padding: 3,
-            }}
-          >
-            {(['chat', 'agiwork'] as const).map((mode) => {
-              const selected = mode === (cloudUnlocked && isClerkSignedIn ? workMode : 'chat');
-              return (
-                <Pressable
-                  key={mode}
-                  testID={`chat.work-mode.${mode}`}
-                  accessibilityRole="tab"
-                  accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
-                  accessibilityState={{ selected }}
-                  onPress={mode === 'chat' ? () => setWorkMode('chat') : handleTapWorkMode}
-                  hitSlop={WORK_SWITCH_HIT_SLOP}
-                  style={{
-                    minWidth: 72,
-                    minHeight: 36,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 999,
-                    backgroundColor: selected ? c.charcoal700 : c.transparent,
-                  }}
-                >
-                  <Text
-                    style={{ color: selected ? c.textPrimary : c.textMuted, fontWeight: '600' }}
-                  >
-                    {mode === 'chat' ? 'Chat' : 'Work'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+          <WorkModeSwitch
+            workReady={cloudUnlocked && isClerkSignedIn}
+            onSelectWork={handleTapWorkMode}
+          />
         ) : null}
         <View style={{ minWidth: HEADER_SIDE_SLOT, alignItems: 'flex-end' }}>
           <TemporaryChatToggle />
@@ -959,67 +1187,128 @@ export default function ChatTabScreen() {
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{
-            flexGrow: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingHorizontal: 24,
-            paddingTop: 24,
-            paddingBottom: 16,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
-        >
-          {composerStacked ? null : (
-            <>
-              <View style={{ marginBottom: 16 }}>
-                <AgiMark size={NEW_CHAT_SYMBOL_SIZE} testID="chat.new-chat.symbol" />
-              </View>
-              <Text
-                testID="chat.new-chat.greeting"
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            testID="chat.new-chat.middle"
+            style={StyleSheet.absoluteFill}
+            contentContainerStyle={{
+              flexGrow: 1,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 24,
+              paddingTop: 24,
+              paddingBottom: 16,
+            }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
+          >
+            {composerMultiline ? null : (
+              <>
+                <View style={{ marginBottom: 16 }}>
+                  <AgiMark size={NEW_CHAT_SYMBOL_SIZE} testID="chat.new-chat.symbol" />
+                </View>
+                <Text
+                  testID="chat.new-chat.greeting"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  adjustsFontSizeToFit
+                  minimumFontScale={GREETING_MINIMUM_FONT_SCALE}
+                  maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                  style={{
+                    fontSize: typeScale.title1,
+                    lineHeight: 34,
+                    fontWeight: '500',
+                    color: c.textPrimary,
+                    textAlign: 'center',
+                    width: '100%',
+                  }}
+                >
+                  {mediaHeading ?? greeting}
+                </Text>
+                {mediaHeading && mediaModelName ? (
+                  <Text
+                    testID="chat.new-chat.media-model"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                    style={{
+                      fontSize: typeScale.body,
+                      lineHeight: 22,
+                      color: c.textMuted,
+                      textAlign: 'center',
+                      width: '100%',
+                      marginTop: 4,
+                    }}
+                  >
+                    {`with ${mediaModelName}`}
+                  </Text>
+                ) : null}
+              </>
+            )}
+            {activeMode === 'cloud' && newChatWorkspace ? (
+              <View
                 style={{
-                  fontSize: typeScale.title1,
-                  lineHeight: 34,
-                  fontWeight: '500',
-                  color: c.textPrimary,
-                  textAlign: 'center',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 12,
+                  maxWidth: 300,
                 }}
               >
-                {getTimeOfDayGreeting()}
-              </Text>
-            </>
-          )}
-          {activeMode === 'cloud' && newChatWorkspace ? (
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                marginTop: 12,
-                maxWidth: 300,
-              }}
-            >
-              {newChatWorkspace.organization ? (
-                <Building2 size={14} color={c.textMuted} />
-              ) : (
-                <UserRound size={14} color={c.textMuted} />
-              )}
-              <Text numberOfLines={1} style={{ fontSize: typeScale.footnote, color: c.textMuted }}>
-                {t('newChat.workspace', { name: newChatWorkspace.name })}
-              </Text>
-            </View>
-          ) : null}
-          {activeMode === 'local' && !hasReadyLocalModel ? (
-            <View style={{ width: '100%', marginTop: 16 }}>
-              <DownloadModelBanner
-                onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
-              />
-            </View>
-          ) : null}
-        </ScrollView>
+                {newChatWorkspace.organization ? (
+                  <Building2 size={14} color={c.textMuted} />
+                ) : (
+                  <UserRound size={14} color={c.textMuted} />
+                )}
+                <Text
+                  numberOfLines={1}
+                  style={{ fontSize: typeScale.footnote, color: c.textMuted }}
+                >
+                  {t('newChat.workspace', { name: newChatWorkspace.name })}
+                </Text>
+              </View>
+            ) : null}
+            {newChatProject ? (
+              <View
+                testID="chat.new-chat.project"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginTop: 4,
+                  maxWidth: 300,
+                }}
+              >
+                <FolderOpen size={14} color={c.textMuted} />
+                <Text
+                  numberOfLines={1}
+                  style={{ flexShrink: 1, fontSize: typeScale.footnote, color: c.textMuted }}
+                >
+                  {`In ${newChatProject.name}`}
+                </Text>
+                <Pressable
+                  onPress={clearNewChatProject}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Start this chat outside ${newChatProject.name}`}
+                  style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <X size={14} color={c.textMuted} />
+                </Pressable>
+              </View>
+            ) : null}
+            {activeMode === 'local' && !hasReadyLocalModel ? (
+              <View
+                testID="download-model-banner.column"
+                style={{ ...contentColumn('reading'), marginTop: 16 }}
+              >
+                <DownloadModelBanner
+                  onPress={() => pushFromComposer('/(app)/models' as RouterHref)}
+                />
+              </View>
+            ) : null}
+          </ScrollView>
+        </View>
 
         {/* Mode-aware: shows local projects in Local, cloud projects in Cloud.
             Trigger lives in the "+" sheet; this renders the picker modal only. */}
@@ -1029,7 +1318,7 @@ export default function ChatTabScreen() {
           <UsageLimitBanner
             warning={workUsageCardShown ? null : usageLimit.warning}
             actionLabel={usageLimit.actionLabel}
-            onAction={usageLimit.openRecovery}
+            onAction={handleOpenUsageRecovery}
             onDismiss={usageLimit.dismissWarning}
           />
         )}
@@ -1038,24 +1327,18 @@ export default function ChatTabScreen() {
           <ChatInput
             onSend={handleComposerSend}
             onOpenModelPicker={handleOpenModelPicker}
-            onOpenVoiceMode={handleOpenVoiceMode}
+            onOpenVoiceMode={voiceModeAvailable ? handleOpenVoiceMode : undefined}
             onOpenCompare={compareAction}
             onOpenAddToChat={handleOpenAddToChat}
             attachRef={chatInputAttachRef}
             attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
             sendPreview={sendPreviewInput}
             draftKey="new-chat"
-            draftProvenance={
-              activeMode === 'local'
-                ? { scope: 'local' }
-                : clerkUserId
-                  ? { scope: 'cloud', ownerId: clerkUserId }
-                  : undefined
-            }
+            draftProvenance={composerDraftProvenance}
             selectedSkillName={selectedSkillName}
             onClearSelectedSkill={clearSelectedSkill}
             exhaustedUsageRecovery={usageLimit.exhaustedRecovery}
-            onStackedChange={setComposerStacked}
+            onMultilineChange={setComposerMultiline}
           />
         )}
       </KeyboardAvoidingView>
@@ -1069,10 +1352,10 @@ export default function ChatTabScreen() {
         onFile={handleSheetFile}
         onOpenCloudAccess={handleOpenCloudAccess}
         onOpenStyleSelector={handleOpenStyleSelector}
-        onOpenModelPicker={handleSheetModelPicker}
         onOpenProjectPicker={handleSheetProjectPicker}
         onAttachFromLibrary={handleAttachFromLibrary}
         onOpenSkills={handleOpenSkills}
+        onStartComposerRoundTrip={startNewChatComposerRoundTrip}
         offersOutputFormat
       />
 
@@ -1082,9 +1365,9 @@ export default function ChatTabScreen() {
         sheetRef={modelPickerRef}
         openSignal={modelPickerOpenSignal}
         modelScope={modelPickerScope}
-        onSelect={setModel}
+        onSelect={handleSelectNewChatModel}
         onOpenCloudAccess={handleOpenCloudAccess}
-        offerRoutingProfiles
+        showEffort={false}
       />
 
       <VoiceOnboardingSheet
@@ -1102,9 +1385,12 @@ export default function ChatTabScreen() {
         audioLevel={inlineVoiceLevel}
         muted={inlineVoiceMuted}
         notice={voiceFallbackReason}
-        onAttach={handleVoiceAttach}
+        attachments={voiceAttachments.attachments}
+        attachmentPrivacyLabel={sendPreviewPresentation.privacyShortLabel}
+        onRemoveAttachment={voiceAttachments.remove}
+        onAttach={handleOpenAddToChat}
         onOpenKeyboard={handleExitInlineVoice}
-        onToggleMic={inlineToggleMute}
+        onToggleMic={inlineMicPress}
         onExit={handleExitInlineVoice}
       />
 

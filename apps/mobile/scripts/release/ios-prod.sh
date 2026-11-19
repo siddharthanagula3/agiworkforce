@@ -48,5 +48,5 @@ else
   eas_build ios "${PROFILE}"
   log_ok "iOS production build queued."
   log "build only. To upload after it finishes:"
-  log "  pnpm --filter @agiworkforce/mobile release:ios:prod:submit -- --build-id <id>"
+  log "  pnpm --filter @agiworkforce/mobile release:ios:prod:submit --build-id <id>"
 fi

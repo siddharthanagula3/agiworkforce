@@ -21,6 +21,8 @@ const CLOUD_DESTINATIONS = {
   'cloud-privacy': '/(app)/settings/cloud-privacy',
   'cloud-usage': '/(app)/settings/cloud-usage',
   'cloud-connectors': '/(app)/settings/cloud-connectors',
+  'cloud-support': '/(app)/support',
+  'cloud-code': '/(app)/cloud-code',
 } as const;
 
 export type PostAuthIntent = keyof typeof CLOUD_DESTINATIONS;
@@ -28,6 +30,8 @@ export type PostAuthDestination = (typeof CLOUD_DESTINATIONS)[PostAuthIntent];
 
 let pendingPostAuthIntent: PostAuthIntent | null = null;
 let pendingPostAuthDestination: PostAuthDestination | null = null;
+let pendingIntentLink: string | null = null;
+let pendingCloudChatId: string | null = null;
 
 export function parsePostAuthIntent(value: unknown): PostAuthIntent | null {
   return typeof value === 'string' &&
@@ -42,6 +46,7 @@ export function stagePostAuthIntent(value: unknown): PostAuthIntent | null {
 }
 
 export function beginCloudPostAuthIntent(intent: PostAuthIntent = CLOUD_CHAT_POST_AUTH_INTENT) {
+  pendingCloudChatId = null;
   stagePostAuthIntent(intent);
   return {
     pathname: '/(auth)/login' as const,
@@ -65,6 +70,7 @@ export function clearPostAuthIntent(): boolean {
   const hadPendingIntent = pendingPostAuthIntent !== null;
   pendingPostAuthIntent = null;
   pendingPostAuthDestination = null;
+  pendingCloudChatId = null;
   return hadPendingIntent;
 }
 
@@ -80,4 +86,30 @@ export function consumePostAuthDestination(): PostAuthDestination | null {
 
 export function peekPostAuthIntent(): PostAuthIntent | null {
   return pendingPostAuthIntent;
+}
+
+export function stagePendingIntentLink(url: string): void {
+  pendingIntentLink = url;
+}
+
+export function consumePendingIntentLink(): string | null {
+  const url = pendingIntentLink;
+  pendingIntentLink = null;
+  return url;
+}
+
+export function clearPendingIntentLink(): void {
+  pendingIntentLink = null;
+}
+
+export function beginCloudPostAuthIntentForChat(chatId: string) {
+  const route = beginCloudPostAuthIntent(CLOUD_CHAT_POST_AUTH_INTENT);
+  pendingCloudChatId = chatId;
+  return route;
+}
+
+export function consumePendingCloudChat(): string | null {
+  const chatId = pendingCloudChatId;
+  pendingCloudChatId = null;
+  return chatId;
 }

@@ -193,6 +193,7 @@ export const contracts = {
         'SIGNALING_INTERNAL_SECRET',
         'SIGNALING_HTTP_URL',
         'SIGNALING_WS_URL',
+        'SIGNALING_STANDING_URL',
         'ALLOWED_ORIGINS',
       ],
       development: ['SIGNALING_INTERNAL_SECRET'],
@@ -201,7 +202,7 @@ export const contracts = {
       production: [['NEON_DATABASE_URL', 'DATABASE_URL']],
       development: [['NEON_DATABASE_URL', 'DATABASE_URL']],
     },
-    urlKeys: ['SIGNALING_HTTP_URL', 'SIGNALING_WS_URL'],
+    urlKeys: ['SIGNALING_HTTP_URL', 'SIGNALING_WS_URL', 'SIGNALING_STANDING_URL'],
   },
   scanner: {
     productionExample: 'services/upload-scanner/.env.example',
@@ -214,6 +215,7 @@ export const contracts = {
 };
 
 const platformProvidedKeys = new Set([
+  'CARGO_HOME',
   'CARGO_PKG_NAME',
   'CARGO_PKG_VERSION',
   'CI',

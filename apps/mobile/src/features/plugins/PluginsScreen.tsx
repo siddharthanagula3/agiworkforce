@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { BadgeCheck, Blocks, ChevronRight, Search } from 'lucide-react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { BadgeCheck, Blocks, ChevronRight, MoreHorizontal, Plus } from 'lucide-react-native';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
 import type {
   PluginDirectoryEntryWire,
@@ -14,7 +21,9 @@ import type {
 import { Button } from '@/components/ui/Button';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { fetchConnectorDirectory } from '@/services/connectors';
+import { customizeDestinations } from '@/src/features/customize/CustomizeScreen';
 import { ApprovalPolicySummary } from '@/src/features/settings/cloud-connectors/ApprovalPolicySummary';
 import {
   captureCloudAccountEpoch,
@@ -29,16 +38,28 @@ import {
   MetaText,
   ScreenHeader,
 } from '@/src/shared/components/cloud-screen';
+import { showActionMenu } from '@/src/shared/components/ActionMenuHost';
+import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/components/BottomSearchBar';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
+import { InstalledPluginTiles, SCREEN_GUTTER } from './InstalledPluginTiles';
 import {
-  featuredPlugins,
+  ADDED_PLUGINS_ROUTE,
+  PLUGIN_SHELF_ROW_LIMIT,
   indexInstallations,
+  installedTilePlan,
   pluginCategories,
+  pluginCategoryKey,
+  pluginRowControl,
+  pluginShelfCategories,
   pluginStateLabel,
+  popularPlugins,
   recommendedPlugins,
+  updateOfferFor,
+  type PluginCategoryOption,
   type PluginInstallIndex,
 } from './pluginsModel';
 import {
@@ -47,6 +68,8 @@ import {
   fetchPluginUpdates,
   pluginActionError,
 } from './service';
+import { useInstalledPluginDetails } from './useInstalledPluginDetails';
+import { usePluginActions, type PluginActionPending } from './usePluginActions';
 
 export const PLUGINS_ROUTE = '/(app)/plugins';
 
@@ -62,85 +85,145 @@ const SORTS: { id: PluginDirectorySortKey; label: string }[] = [
   { id: 'name', label: 'Name' },
 ];
 
+const CHIP_ROW_STYLE = { marginHorizontal: -SCREEN_GUTTER } as const;
+const CHIP_ROW_CONTENT_STYLE = { paddingHorizontal: SCREEN_GUTTER, gap: 6 } as const;
+
 const ROW_PADDING = 14;
 const ROW_ICON_SIZE = 40;
 const ROW_GAP = 12;
 const ROW_DIVIDER_INSET = ROW_PADDING + ROW_ICON_SIZE + ROW_GAP;
 
-function PluginRow({
+const ROW_CONTROL_SIZE = 44;
+const SEARCH_BAR_CLEARANCE = 16;
+
+interface PluginListContext {
+  installed: PluginInstallIndex;
+  pending: PluginActionPending | null;
+  onOpen: (entry: PluginDirectoryEntryWire) => void;
+  onInstall: (entry: PluginDirectoryEntryWire) => void;
+  onMore: (entry: PluginDirectoryEntryWire) => void;
+}
+
+function PluginRowControl({
   entry,
-  installed,
-  onOpen,
+  context,
 }: {
   entry: PluginDirectoryEntryWire;
-  installed: PluginInstallIndex;
-  onOpen: (entry: PluginDirectoryEntryWire) => void;
+  context: PluginListContext;
 }) {
   const colors = useThemeColors();
-  const state = pluginStateLabel(entry, installed.get(entry.id));
+  const control = pluginRowControl(entry, context.installed.get(entry.id));
+  if (control === 'none') return null;
+  const working = context.pending?.pluginId === entry.id;
+  const install = control === 'install';
+  const Icon = install ? Plus : MoreHorizontal;
   return (
     <PressableBox
-      onPress={() => onOpen(entry)}
+      onPress={() => (install ? context.onInstall(entry) : context.onMore(entry))}
+      disabled={context.pending !== null}
       accessibilityRole="button"
-      accessibilityLabel={`${entry.name} by ${entry.publisher.name}. ${state}`}
+      accessibilityLabel={install ? `Install ${entry.name}` : `More actions for ${entry.name}`}
+      accessibilityState={{ disabled: context.pending !== null, busy: working }}
       style={({ pressed }) => ({
-        padding: ROW_PADDING,
-        flexDirection: 'row',
+        width: ROW_CONTROL_SIZE,
+        height: ROW_CONTROL_SIZE,
+        marginRight: ROW_PADDING / 2,
+        borderRadius: ROW_CONTROL_SIZE / 2,
         alignItems: 'center',
-        gap: ROW_GAP,
+        justifyContent: 'center',
         backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
       })}
     >
-      <View
-        style={{
-          width: ROW_ICON_SIZE,
-          height: ROW_ICON_SIZE,
-          borderRadius: 12,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: colors.neutralSurface,
-        }}
-      >
-        <Blocks size={18} color={colors.textPrimary} />
-      </View>
-      <View style={{ flex: 1, gap: 3 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text
-            numberOfLines={1}
-            style={{
-              flexShrink: 1,
-              color: colors.textPrimary,
-              fontSize: typeScale.body,
-              fontWeight: '600',
-            }}
-          >
-            {entry.name}
-          </Text>
-          {entry.verified ? (
-            <BadgeCheck size={14} color={colors.textSecondary} accessibilityLabel="Verified" />
-          ) : null}
-        </View>
-        <Text
-          numberOfLines={2}
-          style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}
-        >
-          {entry.description}
-        </Text>
-        <MetaText>{`${entry.publisher.name} · ${state}`}</MetaText>
-      </View>
-      <ChevronRight size={17} color={colors.textMuted} />
+      {working ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : (
+        <Icon size={install ? 20 : 18} color={colors.textSecondary} />
+      )}
     </PressableBox>
+  );
+}
+
+function PluginRow({
+  entry,
+  context,
+}: {
+  entry: PluginDirectoryEntryWire;
+  context: PluginListContext;
+}) {
+  const colors = useThemeColors();
+  const state = pluginStateLabel(entry, context.installed.get(entry.id));
+  const working = context.pending?.pluginId === entry.id;
+  const hasControl = pluginRowControl(entry, context.installed.get(entry.id)) !== 'none';
+  const stacked = useLargeTextRows();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <PressableBox
+        onPress={() => context.onOpen(entry)}
+        disabled={working}
+        accessibilityRole="button"
+        accessibilityLabel={`${entry.name} by ${entry.publisher.name}. ${state}`}
+        accessibilityState={{ disabled: working, busy: working }}
+        style={({ pressed }) => ({
+          flex: 1,
+          padding: ROW_PADDING,
+          paddingRight: hasControl ? ROW_GAP / 2 : ROW_PADDING,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: ROW_GAP,
+          backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+        })}
+      >
+        <View
+          style={{
+            width: ROW_ICON_SIZE,
+            height: ROW_ICON_SIZE,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.neutralSurface,
+          }}
+        >
+          <Blocks size={18} color={colors.textPrimary} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text
+              {...(stacked
+                ? { maxFontSizeMultiplier: ROW_LABEL_TEXT_SCALE_LIMIT }
+                : { numberOfLines: 1 })}
+              style={{
+                flexShrink: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.body,
+                fontWeight: '600',
+              }}
+            >
+              {entry.name}
+            </Text>
+            {entry.verified ? (
+              <BadgeCheck size={14} color={colors.textSecondary} accessibilityLabel="Verified" />
+            ) : null}
+          </View>
+          <Text
+            numberOfLines={2}
+            style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}
+          >
+            {entry.description}
+          </Text>
+          <MetaText>{`${entry.publisher.name} · ${state}`}</MetaText>
+        </View>
+      </PressableBox>
+      <PluginRowControl entry={entry} context={context} />
+    </View>
   );
 }
 
 function PluginGroup({
   entries,
-  installed,
-  onOpen,
+  context,
 }: {
   entries: PluginDirectoryEntryWire[];
-  installed: PluginInstallIndex;
-  onOpen: (entry: PluginDirectoryEntryWire) => void;
+  context: PluginListContext;
 }) {
   const colors = useThemeColors();
   return (
@@ -159,23 +242,56 @@ function PluginGroup({
               style={{ height: 1, backgroundColor: colors.border, marginLeft: ROW_DIVIDER_INSET }}
             />
           ) : null}
-          <PluginRow entry={entry} installed={installed} onOpen={onOpen} />
+          <PluginRow entry={entry} context={context} />
         </View>
       ))}
     </View>
   );
 }
 
-function SectionTitle({ title, note }: { title: string; note?: string }) {
+function SectionTitle({
+  title,
+  note,
+  hint,
+  onPress,
+  onLayout,
+}: {
+  title: string;
+  note?: string;
+  hint?: string;
+  onPress?: () => void;
+  onLayout?: (event: LayoutChangeEvent) => void;
+}) {
   const colors = useThemeColors();
+  const heading = (
+    <Text
+      accessibilityRole={onPress ? undefined : 'header'}
+      style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '600' }}
+    >
+      {title}
+    </Text>
+  );
   return (
-    <View style={{ paddingTop: 14, gap: 2 }}>
-      <Text
-        accessibilityRole="header"
-        style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '600' }}
-      >
-        {title}
-      </Text>
+    <View style={{ paddingTop: 14, gap: 2 }} onLayout={onLayout}>
+      {onPress ? (
+        <PressableBox
+          onPress={onPress}
+          accessibilityRole="header"
+          accessibilityLabel={title}
+          accessibilityHint={hint}
+          style={{
+            minHeight: ROW_CONTROL_SIZE,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          {heading}
+          <ChevronRight size={18} color={colors.textMuted} />
+        </PressableBox>
+      ) : (
+        heading
+      )}
       {note ? <MetaText>{note}</MetaText> : null}
     </View>
   );
@@ -186,6 +302,7 @@ export function PluginsScreen() {
   const colors = useThemeColors();
   const access = useCloudFeatureAccess();
   const goBack = useGoBack('/(app)/(tabs)/chat');
+  const searchSpace = useBottomSearchBarSpace();
   const [search, setSearch] = useState('');
   const [source, setSource] = useState<PluginDirectorySourceFacet | null>(null);
   const [category, setCategory] = useState<string | null>(null);
@@ -196,10 +313,18 @@ export function PluginsScreen() {
   const [installed, setInstalled] = useState<PluginInstallIndex>(new Map());
   const [updates, setUpdates] = useState<PluginUpdateOfferWire[]>([]);
   const [connected, setConnected] = useState<ReadonlySet<string>>(new Set());
+  const [shelves, setShelves] = useState<ReadonlyMap<string, PluginDirectoryEntryWire[]>>(
+    new Map(),
+  );
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const pagingRequest = useRef<AbortController | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const allPluginsOffset = useRef(0);
+  const focusedBefore = useRef(false);
+  const [scrollPending, setScrollPending] = useState(false);
 
   const query = useMemo(
     () => ({
@@ -217,6 +342,9 @@ export function PluginsScreen() {
     const account = captureCloudAccountEpoch();
     if (!account) return;
     const controller = new AbortController();
+    pagingRequest.current?.abort();
+    pagingRequest.current = null;
+    setLoadingMore(false);
     setLoading(true);
     setError(null);
     const timer = setTimeout(
@@ -228,7 +356,7 @@ export function PluginsScreen() {
           fetchConnectorDirectory().catch(() => null),
         ])
           .then(([page, installations, offers, directory]) => {
-            if (!isCloudAccountEpochCurrent(account)) return;
+            if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
             setEntries(page.entries);
             setByCategory((current) => page.stats?.byCategory ?? current);
             setNextCursor(page.nextCursor);
@@ -251,7 +379,9 @@ export function PluginsScreen() {
             );
           })
           .finally(() => {
-            if (isCloudAccountEpochCurrent(account)) setLoading(false);
+            if (!controller.signal.aborted && isCloudAccountEpochCurrent(account)) {
+              setLoading(false);
+            }
           });
       },
       query.search ? 250 : 0,
@@ -259,20 +389,68 @@ export function PluginsScreen() {
     return () => {
       clearTimeout(timer);
       controller.abort();
+      pagingRequest.current?.abort();
+      pagingRequest.current = null;
     };
   }, [access.ready, query, reload]);
 
+  const shelfSignature = useMemo(
+    () => JSON.stringify(pluginShelfCategories(byCategory)),
+    [byCategory],
+  );
+  const shelfOptions = useMemo(
+    () => JSON.parse(shelfSignature) as PluginCategoryOption[],
+    [shelfSignature],
+  );
+
+  useEffect(() => {
+    if (!access.ready || shelfOptions.length === 0) {
+      setShelves((current) => (current.size === 0 ? current : new Map()));
+      return;
+    }
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+    const controller = new AbortController();
+    void Promise.all(
+      shelfOptions.map((option) =>
+        fetchPluginDirectory(
+          { category: option.value, sort: 'installs', limit: PLUGIN_SHELF_ROW_LIMIT },
+          controller.signal,
+        ).then(
+          (page) => [option.key, page.entries] as const,
+          () => [option.key, [] as PluginDirectoryEntryWire[]] as const,
+        ),
+      ),
+    ).then((results) => {
+      if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
+      setShelves(new Map(results.filter(([, rows]) => rows.length > 0)));
+    });
+    return () => controller.abort();
+  }, [access.ready, reload, shelfOptions]);
+
   const loadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+    const controller = new AbortController();
+    pagingRequest.current = controller;
     setLoadingMore(true);
     try {
-      const page = await fetchPluginDirectory({ ...query, cursor: nextCursor });
-      setEntries((current) => [...current, ...page.entries]);
+      const page = await fetchPluginDirectory({ ...query, cursor: nextCursor }, controller.signal);
+      if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
+      setEntries((current) => {
+        const known = new Set(current.map((entry) => entry.id));
+        return [...current, ...page.entries.filter((entry) => !known.has(entry.id))];
+      });
       setNextCursor(page.nextCursor);
     } catch (moreError) {
+      if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
       setError(pluginActionError(moreError, 'Could not load more plugins.'));
     } finally {
-      setLoadingMore(false);
+      if (pagingRequest.current === controller) {
+        pagingRequest.current = null;
+        setLoadingMore(false);
+      }
     }
   }, [loadingMore, nextCursor, query]);
 
@@ -282,15 +460,189 @@ export function PluginsScreen() {
     [router],
   );
 
-  const featured = useMemo(() => featuredPlugins(entries, installed), [entries, installed]);
+  const refreshInstallations = useCallback(async () => {
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+    const [installations, offers] = await Promise.all([
+      fetchPluginInstallations().catch(() => null),
+      fetchPluginUpdates().catch(() => null),
+    ]);
+    if (!isCloudAccountEpochCurrent(account)) return;
+    if (!installations) {
+      setReload((value) => value + 1);
+      return;
+    }
+    setInstalled(indexInstallations(installations));
+    if (offers) setUpdates(offers);
+  }, []);
+
+  const accessReady = useRef(access.ready);
+  useEffect(() => {
+    accessReady.current = access.ready;
+  }, [access.ready]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!focusedBefore.current) {
+        focusedBefore.current = true;
+        return;
+      }
+      if (accessReady.current) void refreshInstallations();
+    }, [refreshInstallations]),
+  );
+
+  const handleFailure = useCallback(
+    (message: string, entry: PluginDirectoryEntryWire) => Alert.alert(entry.name, message),
+    [],
+  );
+  const { pending, requestInstall, setEnabled, remove } = usePluginActions({
+    onChanged: refreshInstallations,
+    onFailure: handleFailure,
+  });
+
+  const openMenu = useCallback(
+    (entry: PluginDirectoryEntryWire) => {
+      const installation = installed.get(entry.id);
+      if (!installation) return;
+      const offer = updateOfferFor(updates, entry.id);
+      showActionMenu({
+        title: entry.name,
+        dismissLabel: 'Cancel',
+        actions: [
+          { key: 'details', label: 'View details', run: () => openPlugin(entry) },
+          {
+            key: 'enabled',
+            label: installation.enabled ? 'Turn off' : 'Turn on',
+            run: () => void setEnabled(entry, !installation.enabled),
+          },
+          ...(offer
+            ? [
+                {
+                  key: 'update',
+                  label: `Update to ${offer.latestVersion}`,
+                  run: () => openPlugin(entry),
+                },
+              ]
+            : []),
+          {
+            key: 'remove',
+            label: 'Remove',
+            destructive: true,
+            run: () => void remove(entry),
+          },
+        ],
+      });
+    },
+    [installed, openPlugin, remove, setEnabled, updates],
+  );
+
+  const listContext = useMemo<PluginListContext>(
+    () => ({
+      installed,
+      pending,
+      onOpen: openPlugin,
+      onInstall: (entry) => void requestInstall(entry),
+      onMore: openMenu,
+    }),
+    [installed, openMenu, openPlugin, pending, requestInstall],
+  );
+
+  const scrollToAllPlugins = useCallback(() => {
+    setScrollPending(false);
+    scrollRef.current?.scrollTo({ y: allPluginsOffset.current, animated: true });
+  }, []);
+
+  const showAllPlugins = useCallback(() => {
+    if (sort === 'installs') {
+      scrollToAllPlugins();
+      return;
+    }
+    setLoading(true);
+    setScrollPending(true);
+    setSort('installs');
+  }, [scrollToAllPlugins, sort]);
+
+  useEffect(() => {
+    if (!scrollPending || loading) return;
+    const frame = requestAnimationFrame(scrollToAllPlugins);
+    return () => cancelAnimationFrame(frame);
+  }, [loading, scrollPending, scrollToAllPlugins]);
+
+  const showShelfCategory = useCallback(
+    (option: PluginCategoryOption) => {
+      const chip = pluginCategories(entries, byCategory).find(
+        (candidate) => candidate.key === option.key,
+      );
+      setLoading(true);
+      setScrollPending(true);
+      setCategory(chip?.value ?? option.value);
+    },
+    [byCategory, entries],
+  );
+
+  const openSectionMenu = useCallback(
+    () =>
+      showActionMenu({
+        title: 'Customize',
+        dismissLabel: 'Cancel',
+        actions: [
+          ...customizeDestinations(FEATURES).map((destination) => ({
+            key: destination.key,
+            label: destination.title,
+            selected: destination.key === 'plugins',
+            run: () => {
+              if (destination.key !== 'plugins') {
+                router.replace(destination.route as Parameters<typeof router.replace>[0]);
+              }
+            },
+          })),
+          {
+            key: 'sources',
+            label: 'Sources',
+            run: () => router.push('/(app)/plugins/sources' as Parameters<typeof router.push>[0]),
+          },
+        ],
+      }),
+    [router],
+  );
+
+  const popular = useMemo(() => popularPlugins(entries), [entries]);
   const recommended = useMemo(
     () =>
-      recommendedPlugins(entries, installed, connected, new Set(featured.map((entry) => entry.id))),
-    [connected, entries, featured, installed],
+      recommendedPlugins(entries, installed, connected, new Set(popular.map((entry) => entry.id))),
+    [connected, entries, installed, popular],
   );
-  const installedEntries = useMemo(
-    () => entries.filter((entry) => installed.has(entry.id)),
-    [entries, installed],
+  const knownEntries = useMemo(
+    () => new Map(entries.map((entry) => [entry.id, entry] as const)),
+    [entries],
+  );
+  const installedPlan = useMemo(
+    () => installedTilePlan(filtering ? [] : [...installed.values()]),
+    [filtering, installed],
+  );
+  const installedIds = useMemo(
+    () => installedPlan.tiles.map((installation) => installation.pluginId),
+    [installedPlan],
+  );
+  const { details: installedDetails } = useInstalledPluginDetails(
+    installedIds,
+    knownEntries,
+    reload,
+  );
+  const installedTiles = useMemo(
+    () =>
+      installedIds.map((id) => {
+        const detail = installedDetails.get(id);
+        return { id, name: detail?.status === 'loaded' ? detail.entry.name : id };
+      }),
+    [installedDetails, installedIds],
+  );
+  const openAdded = useCallback(
+    () => router.push(ADDED_PLUGINS_ROUTE as Parameters<typeof router.push>[0]),
+    [router],
+  );
+  const openInstalledPlugin = useCallback(
+    (id: string) => router.push({ pathname: '/(app)/plugins/[id]' as const, params: { id } }),
+    [router],
   );
   const categories = useMemo(() => pluginCategories(entries, byCategory), [byCategory, entries]);
   const updateNames = useMemo(
@@ -308,7 +660,7 @@ export function PluginsScreen() {
       <CloudFeatureGate
         title="Plugins"
         feature="Plugins"
-        description="Plugins add skills, connectors and agents to AGI Cloud; switching won’t upload your local chats."
+        description="Plugins live in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}
@@ -317,29 +669,20 @@ export function PluginsScreen() {
   }
 
   const renderRows = (list: PluginDirectoryEntryWire[]) => (
-    <PluginGroup entries={list} installed={installed} onOpen={openPlugin} />
+    <PluginGroup entries={list} context={listContext} />
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <ScreenHeader
-        title="Plugins"
-        onBack={goBack}
-        trailing={
-          <Button
-            title="Sources"
-            size="sm"
-            variant="outline"
-            accessibilityLabel="Workspace plugins, marketplaces and submissions"
-            onPress={() =>
-              router.push('/(app)/plugins/sources' as Parameters<typeof router.push>[0])
-            }
-          />
-        }
-      />
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+      <ScreenHeader title="Plugins" onBack={goBack} onTitlePress={openSectionMenu} />
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10 }}
+        contentContainerStyle={{
+          paddingHorizontal: SCREEN_GUTTER,
+          paddingBottom: searchSpace + SEARCH_BAR_CLEARANCE,
+          gap: 10,
+        }}
         refreshControl={
           <RefreshControl
             refreshing={loading && entries.length > 0}
@@ -352,79 +695,72 @@ export function PluginsScreen() {
           label="Permissions"
           helper={`Choose when ${PRODUCT_BRAND} asks before a plugin acts.`}
         />
-        <View
-          style={{
-            height: 44,
-            borderRadius: 14,
-            paddingHorizontal: 13,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 9,
-            backgroundColor: colors.inputSurface,
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={CHIP_ROW_STYLE}
+          contentContainerStyle={CHIP_ROW_CONTENT_STYLE}
         >
-          <Search size={17} color={colors.textMuted} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search plugins"
-            placeholderTextColor={colors.textMuted}
-            accessibilityLabel="Search plugins"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            style={{
-              flex: 1,
-              color: colors.textPrimary,
-              fontSize: typeScale.body,
-              paddingVertical: 0,
-            }}
-          />
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {SOURCE_FILTERS.map((filter) => (
-              <Chip
-                key={filter.label}
-                label={filter.label}
-                selected={source === filter.id}
-                onPress={() => setSource(filter.id)}
-              />
-            ))}
-            {SORTS.map((option) => (
-              <Chip
-                key={option.id}
-                label={option.label}
-                accessibilityLabel={`Sort by ${option.label.toLowerCase()}`}
-                selected={sort === option.id}
-                onPress={() => setSort(option.id)}
-              />
-            ))}
-          </View>
+          {SOURCE_FILTERS.map((filter) => (
+            <Chip
+              key={filter.label}
+              label={filter.label}
+              selected={source === filter.id}
+              onPress={() => setSource(filter.id)}
+            />
+          ))}
+          {SORTS.map((option) => (
+            <Chip
+              key={option.id}
+              label={option.label}
+              accessibilityLabel={`Sort by ${option.label.toLowerCase()}`}
+              selected={sort === option.id}
+              onPress={() => setSort(option.id)}
+            />
+          ))}
         </ScrollView>
         {categories.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <Chip
-                label="Every category"
-                selected={category === null}
-                onPress={() => setCategory(null)}
-              />
-              {categories.map((name) => (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={CHIP_ROW_STYLE}
+            contentContainerStyle={CHIP_ROW_CONTENT_STYLE}
+          >
+            <Chip
+              label="Every category"
+              selected={category === null}
+              onPress={() => setCategory(null)}
+            />
+            {categories.map((option) => {
+              const selected = category !== null && pluginCategoryKey(category) === option.key;
+              return (
                 <Chip
-                  key={name}
-                  label={name}
-                  selected={category === name}
-                  onPress={() => setCategory(category === name ? null : name)}
+                  key={option.key}
+                  label={option.label}
+                  selected={selected}
+                  onPress={() => setCategory(selected ? null : option.value)}
                 />
-              ))}
-            </View>
+              );
+            })}
           </ScrollView>
         ) : null}
         {error ? (
           <ErrorBanner message={error} onRetry={() => setReload((value) => value + 1)} />
+        ) : null}
+        {installedTiles.length > 0 ? (
+          <>
+            <SectionTitle
+              title="Installed"
+              hint="Shows every plugin you added"
+              onPress={openAdded}
+            />
+            <InstalledPluginTiles
+              tiles={installedTiles}
+              overflow={installedPlan.overflow}
+              onOpen={openInstalledPlugin}
+              onShowAll={openAdded}
+            />
+          </>
         ) : null}
         {loading && entries.length === 0 ? (
           <LoadingRows />
@@ -448,10 +784,15 @@ export function PluginsScreen() {
                 )}
               </>
             ) : null}
-            {!filtering && featured.length > 0 ? (
+            {!filtering && popular.length > 0 ? (
               <>
-                <SectionTitle title="Featured" note="Verified plugins people install most" />
-                {renderRows(featured)}
+                <SectionTitle
+                  title="Popular"
+                  note="Verified plugins people install most"
+                  hint="Shows every plugin, most installed first"
+                  onPress={showAllPlugins}
+                />
+                {renderRows(popular)}
               </>
             ) : null}
             {!filtering && recommended.length > 0 ? (
@@ -463,13 +804,29 @@ export function PluginsScreen() {
                 {renderRows(recommended)}
               </>
             ) : null}
-            {!filtering && installedEntries.length > 0 ? (
-              <>
-                <SectionTitle title="Installed" />
-                {renderRows(installedEntries)}
-              </>
-            ) : null}
-            <SectionTitle title={filtering ? 'Results' : 'All plugins'} />
+            {!filtering
+              ? shelfOptions.map((option) => {
+                  const rows = shelves.get(option.key);
+                  if (!rows) return null;
+                  return (
+                    <Fragment key={option.key}>
+                      <SectionTitle
+                        title={option.label}
+                        hint={`Shows every plugin in ${option.label}`}
+                        onPress={() => showShelfCategory(option)}
+                      />
+                      {renderRows(rows)}
+                    </Fragment>
+                  );
+                })
+              : null}
+            <SectionTitle
+              title={filtering ? 'Results' : 'All plugins'}
+              onLayout={(event) => {
+                allPluginsOffset.current = event.nativeEvent.layout.y;
+                if (scrollPending && !loading) scrollToAllPlugins();
+              }}
+            />
             {renderRows(entries)}
             {nextCursor ? (
               <Button
@@ -482,6 +839,16 @@ export function PluginsScreen() {
           </>
         )}
       </ScrollView>
+      <View pointerEvents="box-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}>
+        <BottomSearchBar
+          testID="plugins-search"
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search plugins"
+          accessibilityLabel="Search plugins"
+          clearAccessibilityLabel="Clear plugin search"
+        />
+      </View>
     </SafeAreaView>
   );
 }

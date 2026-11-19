@@ -6,6 +6,7 @@ type MockSubscription = {
   status: string;
   current_period_end?: number | null;
   cancel_at_period_end?: boolean;
+  subscription_source?: string;
 } | null;
 
 const billingState = vi.hoisted(() => ({
@@ -82,6 +83,35 @@ describe('UpgradeWelcome', () => {
 
     expect(screen.getByRole('heading', { name: /all set/i })).toBeInTheDocument();
     expect(screen.queryByText(/renews|ends/i)).toBeNull();
+    unmount();
+  });
+
+  it('says a card-billed plan renews on its period end', () => {
+    billingState.subscription = {
+      tier: 'basic',
+      status: 'active',
+      current_period_end: PERIOD_END_UNIX,
+      cancel_at_period_end: false,
+      subscription_source: 'stripe',
+    };
+    const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="basic" />);
+
+    expect(screen.getByText(/^renews /)).toBeInTheDocument();
+    unmount();
+  });
+
+  it('prints no renewal wording and no date for a plan given without a purchase', () => {
+    billingState.subscription = {
+      tier: 'basic',
+      status: 'active',
+      current_period_end: PERIOD_END_UNIX,
+      cancel_at_period_end: false,
+      subscription_source: 'manual',
+    };
+    const { unmount } = render(<UpgradeWelcome checkoutState="confirmed" expectedPlan="basic" />);
+
+    expect(screen.getByRole('heading', { name: /all set/i })).toBeInTheDocument();
+    expect(screen.queryByText(/renews|ends|2026/i)).toBeNull();
     unmount();
   });
 });

@@ -1480,6 +1480,7 @@ describe('ChatMessageList Continue Generation', () => {
     );
     expect(continueButton()).not.toBeInTheDocument();
     expect(screen.getByText('Response stopped.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
   it('calls onContinue with the last assistant message id', () => {
@@ -1544,7 +1545,7 @@ describe('ChatMessageList Continue Generation', () => {
 });
 
 describe('ChatMessageList stream error notice', () => {
-  const retryButton = () => screen.queryByRole('button', { name: /regenerate this response/i });
+  const retryButton = () => screen.queryByRole('button', { name: /^retry this response$/i });
   const noticeText = () => screen.queryByTestId('turn-failure-row');
 
   function streamErrorThread(streamError: string | undefined, content = 'partial answer') {
@@ -1652,7 +1653,7 @@ describe('ChatMessageList stream error notice', () => {
     ];
   }
 
-  const switchModelButton = () => screen.queryByRole('button', { name: /open the model picker/i });
+  const switchModelButton = () => screen.queryByRole('button', { name: /^switch model$/i });
 
   it.each(['provider_unreachable', 'provider_error', 'model_not_found'])(
     'offers Switch model for the %s stream error code',
@@ -1753,7 +1754,7 @@ describe('ChatMessageList stream error notice', () => {
     const actionRow = screen.getAllByTestId('message-action-row').at(-1);
     expect(actionRow).toBeTruthy();
     expect(rows[0]!.compareDocumentPosition(actionRow!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(screen.getByRole('button', { name: /regenerate this response/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^retry this response$/i })).toBeInTheDocument();
   });
 
   it('opens the model picker from the failure row', () => {
@@ -1797,7 +1798,7 @@ describe('ChatMessageList stream error notice', () => {
 
 describe('ChatMessageList safety refusal notice', () => {
   const refusalText = () => screen.queryByText(/declined to finish this response/i);
-  const retryButton = () => screen.queryByRole('button', { name: /regenerate this response/i });
+  const retryButton = () => screen.queryByRole('button', { name: /^retry this response$/i });
   const errorNoticeText = () => screen.queryByText(/response may be incomplete/i);
 
   function refusalThread(finishReason: string, content = 'I can') {

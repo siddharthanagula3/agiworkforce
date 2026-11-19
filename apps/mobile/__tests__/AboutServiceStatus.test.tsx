@@ -10,11 +10,18 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import AboutScreen from '../app/(app)/about';
 
 describe('Help & About', () => {
+  it('shows the product symbol beside the app name', () => {
+    render(<AboutScreen />);
+
+    expect(screen.getByTestId('about.brand-symbol')).toBeTruthy();
+    expect(screen.getByText('AGI Mobile')).toBeTruthy();
+  });
+
   it('opens the live service status page', async () => {
     render(<AboutScreen />);
     fireEvent.press(screen.getByLabelText('Service Status'));
     await waitFor(() =>
-      expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/status'),
+      expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/status?from=mobile'),
     );
   });
 
@@ -22,7 +29,9 @@ describe('Help & About', () => {
     render(<AboutScreen />);
     fireEvent.press(screen.getByLabelText('Acceptable Use Policy'));
     await waitFor(() =>
-      expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/acceptable-use'),
+      expect(openInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/acceptable-use?from=mobile',
+      ),
     );
   });
 });

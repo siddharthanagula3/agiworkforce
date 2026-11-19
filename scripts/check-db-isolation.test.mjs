@@ -552,6 +552,76 @@ test('a workspace-scoped read carrying only user_id fails: it reads Personal and
   assert.match(result.stderr, /web_conversations/);
 });
 
+for (const { name, declarations, query, parameters = 'userId: string', status } of [
+  {
+    name: 'a nearby scoped declaration cannot lend scope to an unrelated literal',
+    declarations: "const workspaceClause = 'true'; const otherClause = 'organization_id = $2';",
+    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
+    status: 1,
+  },
+  {
+    name: 'SQL comments in a literal cannot establish workspace scope',
+    declarations: "const workspaceClause = 'true -- organization_id = $2';",
+    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
+    status: 1,
+  },
+  {
+    name: 'the real shadowing parameter wins over a scoped outer constant',
+    declarations: "const workspaceClause = 'organization_id = $2';",
+    parameters: 'userId: string, workspaceClause: string',
+    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
+    status: 1,
+  },
+  {
+    name: 'a mutable SQL binding never grants workspace scope',
+    declarations: "let workspaceClause = 'organization_id = $2'; workspaceClause = 'true';",
+    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
+    status: 1,
+  },
+  {
+    name: 'a literal in a SELECT list is still not a workspace predicate',
+    declarations: "const workspaceClause = 'organization_id = $2';",
+    query: '`select ${workspaceClause} from web_conversations where user_id = $1`',
+    status: 1,
+  },
+  {
+    name: 'a quoted SQL value is still data rather than a workspace predicate',
+    declarations: "const workspaceClause = 'organization_id = $2';",
+    query:
+      "`select id from web_conversations where user_id = $1 and id::text = '${workspaceClause}'`",
+    status: 1,
+  },
+  {
+    name: 'a tagged SQL expression is opaque to literal scope expansion',
+    declarations: "const workspaceClause = 'organization_id = $2';",
+    query: 'sql`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
+    status: 1,
+  },
+  {
+    name: 'multiple statements in a literal never grant workspace scope',
+    declarations:
+      "const workspaceClause = 'organization_id = $2; select id from web_conversations';",
+    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
+    status: 1,
+  },
+]) {
+  test(name, () => {
+    const result = runOnSandbox({
+      [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+      'apps/web/lib/chats.ts': [
+        "import { getNeonDb } from './db';",
+        declarations,
+        `export async function listChats(${parameters}) {`,
+        '  const db = getNeonDb();',
+        `  return db.query(${query}, [userId]);`,
+        '}',
+      ].join('\n'),
+    });
+    assert.equal(result.status, status, result.stderr || result.stdout);
+    if (status === 1) assert.match(result.stderr, /workspace scope ratchet/);
+  });
+}
+
 test('adding the organization_id predicate satisfies the workspace rule', () => {
   const result = runOnSandbox({
     [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,

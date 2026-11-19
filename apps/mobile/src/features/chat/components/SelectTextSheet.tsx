@@ -7,12 +7,13 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { markdownToPlainText } from '@/src/features/chat/utils/markdownPlainText';
+import { answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface SelectTextSheetProps {
   visible: boolean;
   text: string;
+  verbatim?: boolean;
   onClose: () => void;
   onQuoteSelection?: (text: string) => void;
 }
@@ -25,11 +26,15 @@ interface Selection {
 export function SelectTextSheet({
   visible,
   text,
+  verbatim = false,
   onClose,
   onQuoteSelection,
 }: SelectTextSheetProps) {
   const colors = useThemeColors();
-  const plainText = useMemo(() => markdownToPlainText(text), [text]);
+  const plainText = useMemo(
+    () => (!visible ? '' : verbatim ? text : answerPlainText(text)),
+    [visible, verbatim, text],
+  );
   const [selection, setSelection] = useState<Selection>({ start: 0, end: 0 });
   const selectedText = plainText.slice(selection.start, selection.end).trim();
 
@@ -124,7 +129,7 @@ export function SelectTextSheet({
               </View>
             </>
           ) : (
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16 }}>
               <Text
                 selectable
                 style={{ fontSize: typeScale.callout, lineHeight: 24, color: colors.textPrimary }}

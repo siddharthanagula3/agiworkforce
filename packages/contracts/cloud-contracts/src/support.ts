@@ -265,6 +265,12 @@ export const DIAGNOSTIC_SURFACES = [
 
 export type DiagnosticSurface = (typeof DIAGNOSTIC_SURFACES)[number];
 
+export const DIAGNOSTIC_DEVICE_CLASSES = ['phone', 'tablet'] as const;
+export type DiagnosticDeviceClass = (typeof DIAGNOSTIC_DEVICE_CLASSES)[number];
+
+export const DIAGNOSTIC_APP_MODES = ['local', 'cloud'] as const;
+export type DiagnosticAppMode = (typeof DIAGNOSTIC_APP_MODES)[number];
+
 export interface DiagnosticEvent {
   at: string;
   kind: 'error' | 'warning' | 'request_failed';
@@ -275,9 +281,12 @@ export interface SupportDiagnostics {
   collectedAt: string;
   surface: DiagnosticSurface;
   appVersion: string | null;
+  appBuild?: string | null;
   releaseSha: string | null;
   deployEnv: string | null;
   platform: string | null;
+  deviceClass?: DiagnosticDeviceClass | null;
+  appMode?: DiagnosticAppMode | null;
   locale: string | null;
   timeZone: string | null;
   viewport: { width: number; height: number } | null;
@@ -294,9 +303,12 @@ export function describeDiagnostics(diagnostics: SupportDiagnostics): string {
   const lines = [
     `surface: ${diagnostics.surface}`,
     `app version: ${diagnostics.appVersion ?? 'unknown'}`,
-    `release: ${diagnostics.releaseSha ?? 'unknown'}`,
+    ...(diagnostics.appBuild ? [`app build: ${diagnostics.appBuild}`] : []),
+    `server release: ${diagnostics.releaseSha ?? 'unknown'}`,
     `environment: ${diagnostics.deployEnv ?? 'unknown'}`,
     `platform: ${diagnostics.platform ?? 'unknown'}`,
+    ...(diagnostics.deviceClass ? [`device: ${diagnostics.deviceClass}`] : []),
+    ...(diagnostics.appMode ? [`app mode: ${diagnostics.appMode}`] : []),
     `locale: ${diagnostics.locale ?? 'unknown'}`,
     `time zone: ${diagnostics.timeZone ?? 'unknown'}`,
     `viewport: ${
@@ -333,9 +345,12 @@ export const supportDiagnosticsSchema = z
     collectedAt: z.string().datetime(),
     surface: z.enum(DIAGNOSTIC_SURFACES),
     appVersion: z.string().max(100).nullable(),
+    appBuild: z.string().max(50).nullable().optional(),
     releaseSha: z.string().max(100).nullable(),
     deployEnv: z.string().max(50).nullable(),
     platform: z.string().max(200).nullable(),
+    deviceClass: z.enum(DIAGNOSTIC_DEVICE_CLASSES).nullable().optional(),
+    appMode: z.enum(DIAGNOSTIC_APP_MODES).nullable().optional(),
     locale: z.string().max(50).nullable(),
     timeZone: z.string().max(100).nullable(),
     viewport: z

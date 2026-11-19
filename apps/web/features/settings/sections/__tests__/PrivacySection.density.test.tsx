@@ -170,14 +170,14 @@ describe('PrivacySection row density', () => {
     render(<PrivacySection />);
 
     expect(screen.getByRole('switch', { name: 'Start new chats as temporary' })).toBeVisible();
-    expect(screen.getByText(/chats you start inside a project are always saved/i)).toBeVisible();
+    expect(screen.getByText(/Project chats are saved/i)).toBeVisible();
   });
 
   it('never names the telemetry vendor or implementation detail in the toggle copy', () => {
     render(<PrivacySection />);
     expect(screen.queryByText(/sentry/i)).toBeNull();
     expect(screen.queryByText(/beforeSend/i)).toBeNull();
-    expect(screen.getByText(/sensitive request fields are removed/i)).toBeInTheDocument();
+    expect(screen.getByText(/sensitive fields removed/i)).toBeInTheDocument();
     expect(screen.queryByText(/message content is never included/i)).toBeNull();
   });
 });

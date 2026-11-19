@@ -1,11 +1,12 @@
 import {
   ManagedCloudAgentRunAlreadyResumingError,
   ManagedCloudAgentRunApprovalExpiredError,
+  ManagedCloudAgentRunHttpError,
   type CloudAgentRun,
-  type CloudAgentRunListPage,
   type ManagedCloudAgentRunApprovalDecision,
   type ManagedCloudAgentRunFollowOptions,
   type ManagedCloudAgentRunFollowResult,
+  type ManagedCloudAgentRunListResult,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
@@ -20,19 +21,35 @@ export const CLOUD_RUN_PAUSE_ERROR = 'This task could not be paused';
 export const CLOUD_RUN_RESUME_ERROR = 'This task could not be resumed';
 
 const ALREADY_RESUMING_MESSAGE = 'Another device already answered this one';
+const RUN_UNAVAILABLE_MESSAGE = 'This task is no longer available';
+const RUN_UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([403, 404, 410]);
 const APPROVAL_EXPIRED_MESSAGE = 'This approval expired, so the task cannot continue from it';
 
-export interface CloudRunListOptions {
+export interface CloudRunWithdrawalOptions {
+  withdrawalControl?: boolean;
+}
+
+export interface CloudRunListOptions extends CloudRunWithdrawalOptions {
   states: AgentTaskState[];
   cursor?: string;
+  query?: string;
   signal?: AbortSignal;
 }
 
-export function listCloudRuns(options: CloudRunListOptions): Promise<CloudAgentRunListPage> {
-  return createMobileCloudAgentRunClient().listRuns({
+function runClient(options: CloudRunWithdrawalOptions) {
+  return options.withdrawalControl
+    ? createMobileCloudAgentRunClient(undefined, { withdrawalControl: true })
+    : createMobileCloudAgentRunClient();
+}
+
+export function listCloudRuns(
+  options: CloudRunListOptions,
+): Promise<ManagedCloudAgentRunListResult> {
+  return runClient(options).listRuns({
     states: options.states,
     limit: CLOUD_RUN_PAGE_LIMIT,
     ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.query ? { q: options.query } : {}),
     signal: options.signal,
   });
 }
@@ -61,8 +78,12 @@ export function cancelCloudRun(runId: string, signal?: AbortSignal): Promise<Clo
   return createMobileCloudAgentRunClient().cancelRun(runId, { signal });
 }
 
-export function pauseCloudRun(runId: string, signal?: AbortSignal): Promise<CloudAgentRun> {
-  return createMobileCloudAgentRunClient().pauseRun(runId, { signal });
+export function pauseCloudRun(
+  runId: string,
+  signal?: AbortSignal,
+  options: CloudRunWithdrawalOptions = {},
+): Promise<CloudAgentRun> {
+  return runClient(options).pauseRun(runId, { signal });
 }
 
 export function resumePausedCloudRun(runId: string, signal?: AbortSignal): Promise<void> {
@@ -72,6 +93,12 @@ export function resumePausedCloudRun(runId: string, signal?: AbortSignal): Promi
 export function describeCloudRunError(error: unknown, fallback: string): string {
   if (error instanceof ManagedCloudAgentRunAlreadyResumingError) return ALREADY_RESUMING_MESSAGE;
   if (error instanceof ManagedCloudAgentRunApprovalExpiredError) return APPROVAL_EXPIRED_MESSAGE;
+  if (
+    error instanceof ManagedCloudAgentRunHttpError &&
+    RUN_UNAVAILABLE_STATUSES.has(error.status)
+  ) {
+    return RUN_UNAVAILABLE_MESSAGE;
+  }
   return fallback;
 }
 

@@ -186,15 +186,20 @@ export const ChatSyncPullResponseSchema = z.object({
 });
 export type ChatSyncPullResponse = z.infer<typeof ChatSyncPullResponseSchema>;
 
-export const ConversationSyncPushItemSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH),
-  model: z.string().max(200).nullable().optional(),
-  projectId: z.string().max(200).nullable().optional(),
-  pinned: z.boolean().optional(),
-  baseVersion: ServerVersionSchema,
-  isDeleted: z.boolean().optional(),
-});
+export const ConversationSyncPushItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
+    model: z.string().max(200).nullable().optional(),
+    projectId: z.string().max(200).nullable().optional(),
+    pinned: z.boolean().optional(),
+    baseVersion: ServerVersionSchema,
+    isDeleted: z.boolean().optional(),
+  })
+  .refine((item) => item.title !== undefined || Number(item.baseVersion) !== 0, {
+    path: ['title'],
+    message: 'A conversation created by a push must carry a title.',
+  });
 export type ConversationSyncPushItem = z.infer<typeof ConversationSyncPushItemSchema>;
 
 export const MessageSyncPushItemSchema = z.object({
@@ -368,6 +373,8 @@ export const ProjectSyncPushItemSchema = z.object({
   color: z.string().max(50).nullable().optional(),
   isArchived: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  /** Read only when the push creates the project; later changes go through the project update route. */
+  usesGlobalMemory: z.boolean().optional(),
   baseVersion: ServerVersionSchema,
   deletedAt: z.string().datetime().nullable().optional(),
 });

@@ -19,6 +19,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { Button } from '@/components/ui/Button';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import {
@@ -30,6 +31,7 @@ import {
   ToggleRow,
   confirmIrreversible,
 } from '@/src/shared/components/cloud-screen';
+import { useRetryableRead, type RetryableRead } from '@/src/shared/hooks/useRetryableRead';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -55,12 +57,6 @@ const VISIBILITY_LABELS: Record<AgentVisibility, string> = {
   people: 'Specific people',
   workspace: 'Workspace',
 };
-
-export function agentFileSizeLabel(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function agentShareUserIds(share: AgentShareResponse): string[] {
   return share.members.filter((member) => member.hasAccess).map((member) => member.userId);
@@ -90,22 +86,9 @@ function useAsyncAction() {
 
 function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
   const colors = useThemeColors();
-  const [files, setFiles] = useState<AgentFile[] | null>(null);
+  const loadFiles = useCallback(() => listAgentFiles(agent.id), [agent.id]);
+  const { value: files, failed, retry, setValue: setFiles } = useRetryableRead(loadFiles);
   const { busy, error, run } = useAsyncAction();
-
-  useEffect(() => {
-    let cancelled = false;
-    listAgentFiles(agent.id)
-      .then((next) => {
-        if (!cancelled) setFiles(next);
-      })
-      .catch(() => {
-        if (!cancelled) setFiles([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [agent.id]);
 
   const addFile = useCallback(async () => {
     const picked = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
@@ -115,7 +98,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
       'upload',
       async () => {
         if ((asset.size ?? 0) > AGENT_FILE_MAX_BYTES) {
-          throw new Error(`Files can be up to ${agentFileSizeLabel(AGENT_FILE_MAX_BYTES)}.`);
+          throw new Error(`Files can be up to ${formatAttachmentSize(AGENT_FILE_MAX_BYTES)}.`);
         }
         return uploadAgentFile(agent.id, {
           uri: asset.uri,
@@ -126,7 +109,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
       `Could not add ${asset.name}.`,
     );
     if (saved) setFiles((current) => [...(current ?? []), saved]);
-  }, [agent.id, run]);
+  }, [agent.id, run, setFiles]);
 
   const removeFile = useCallback(
     async (file: AgentFile) => {
@@ -146,15 +129,13 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
       );
       if (removed) setFiles((current) => (current ?? []).filter((entry) => entry.id !== file.id));
     },
-    [agent.id, agent.name, run],
+    [agent.id, agent.name, run, setFiles],
   );
 
   return (
-    <SectionCard
-      title="Knowledge"
-      description="Files the agent can read in every chat. Text is extracted when you add a file."
-    >
-      {files === null ? <MetaText>Loading files…</MetaText> : null}
+    <SectionCard title="Knowledge" description="Files the agent can read in every chat.">
+      {files === null && !failed ? <MetaText>Loading files…</MetaText> : null}
+      {failed ? <ErrorBanner message="Could not load the files." onRetry={retry} /> : null}
       {files?.length === 0 ? <MetaText>No files yet.</MetaText> : null}
       {files?.map((file) => (
         <View key={file.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -166,7 +147,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
             >
               {file.name}
             </Text>
-            <MetaText>{agentFileSizeLabel(file.byteSize)}</MetaText>
+            <MetaText>{formatAttachmentSize(file.byteSize)}</MetaText>
           </View>
           <PressableBox
             onPress={() => void removeFile(file)}
@@ -186,7 +167,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
         size="sm"
         variant="outline"
         loading={busy === 'upload'}
-        disabled={busy !== null || (files?.length ?? 0) >= AGENT_FILES_MAX}
+        disabled={busy !== null || files === null || files.length >= AGENT_FILES_MAX}
         onPress={() => void addFile()}
       />
     </SectionCard>
@@ -206,16 +187,13 @@ function AgentPublishSection({
 }) {
   const colors = useThemeColors();
   const [note, setNote] = useState('');
-  const [versions, setVersions] = useState<AgentVersion[] | null>(null);
+  const loadVersions = useCallback(() => listAgentVersions(agent.id), [agent.id]);
+  const {
+    value: versions,
+    failed: versionsFailed,
+    retry: retryVersions,
+  } = useRetryableRead(loadVersions, agent.publishedVersion);
   const { busy, error, run } = useAsyncAction();
-
-  const loadVersions = useCallback(() => {
-    listAgentVersions(agent.id)
-      .then(setVersions)
-      .catch(() => setVersions([]));
-  }, [agent.id]);
-
-  useEffect(loadVersions, [loadVersions, agent.publishedVersion]);
 
   const publish = useCallback(async () => {
     const next = await run('publish', () => publishAgent(agent.id, note), 'Could not publish.');
@@ -227,6 +205,14 @@ function AgentPublishSection({
 
   const restore = useCallback(
     async (version: AgentVersion) => {
+      if (dirty) {
+        const confirmed = await confirmIrreversible({
+          title: 'Replace your unsaved changes?',
+          consequence: `Restoring version ${version.version} replaces the edits you have not saved. They cannot be brought back.`,
+          actionLabel: 'Restore',
+        });
+        if (!confirmed) return;
+      }
       const next = await run(
         `restore:${version.version}`,
         () => restoreAgentVersion(agent.id, version.version),
@@ -234,7 +220,7 @@ function AgentPublishSection({
       );
       if (next) onRestored(next);
     },
-    [agent.id, onRestored, run],
+    [agent.id, dirty, onRestored, run],
   );
 
   const canPublish = !dirty && (agent.publishedVersion === null || agent.hasUnpublishedChanges);
@@ -242,7 +228,7 @@ function AgentPublishSection({
   return (
     <SectionCard
       title="Publish"
-      description="People you share with use the published version. Saving keeps a draft until you publish."
+      description="Others use the published version. Saving keeps a draft until you publish."
     >
       <MetaText>{agentStateLabel(agent)}</MetaText>
       <TextField
@@ -263,6 +249,9 @@ function AgentPublishSection({
         onPress={() => void publish()}
       />
       {error ? <ErrorBanner message={error} /> : null}
+      {versionsFailed ? (
+        <ErrorBanner message="Could not load the version history." onRetry={retryVersions} />
+      ) : null}
       {versions && versions.length > 0 ? (
         <View style={{ gap: 8 }}>
           <Text
@@ -310,23 +299,14 @@ function AgentPublishSection({
   );
 }
 
-function AgentShareSection({ agent }: { agent: ManagedCloudAgent }) {
-  const [share, setShare] = useState<AgentShareResponse | null>(null);
+function AgentShareSection({
+  agent,
+  read: { value: share, failed, retry, setValue: setShare },
+}: {
+  agent: ManagedCloudAgent;
+  read: RetryableRead<AgentShareResponse>;
+}) {
   const { busy, error, run } = useAsyncAction();
-
-  useEffect(() => {
-    let cancelled = false;
-    getAgentShare(agent.id)
-      .then((next) => {
-        if (!cancelled) setShare(next);
-      })
-      .catch(() => {
-        if (!cancelled) setShare(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [agent.id]);
 
   const apply = useCallback(
     async (visibility: AgentVisibility, userIds: string[]) => {
@@ -337,13 +317,17 @@ function AgentShareSection({ agent }: { agent: ManagedCloudAgent }) {
       );
       if (next) setShare(next);
     },
-    [agent.id, run],
+    [agent.id, run, setShare],
   );
 
   if (!share) {
     return (
       <SectionCard title="Sharing">
-        <MetaText>Loading sharing…</MetaText>
+        {failed ? (
+          <ErrorBanner message="Could not load who can use this agent." onRetry={retry} />
+        ) : (
+          <MetaText>Loading sharing…</MetaText>
+        )}
       </SectionCard>
     );
   }
@@ -501,28 +485,17 @@ function AgentActivitySection({ agent }: { agent: ManagedCloudAgent }) {
 
 function AgentLifecycleSection({
   agent,
+  share,
   onAgent,
   onDeleted,
 }: {
   agent: ManagedCloudAgent;
+  share: AgentShareResponse | null;
   onAgent: (agent: ManagedCloudAgent) => void;
   onDeleted: () => void;
 }) {
-  const [share, setShare] = useState<AgentShareResponse | null>(null);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const { busy, error, run } = useAsyncAction();
-
-  useEffect(() => {
-    let cancelled = false;
-    getAgentShare(agent.id)
-      .then((next) => {
-        if (!cancelled) setShare(next);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [agent.id]);
 
   const pauseOrResume = useCallback(async () => {
     const next = await run(
@@ -669,13 +642,20 @@ export function AgentManageSections({
   onRestored: (agent: ManagedCloudAgent) => void;
   onDeleted: () => void;
 }) {
+  const loadShare = useCallback(() => getAgentShare(agent.id), [agent.id]);
+  const shareRead = useRetryableRead(loadShare);
   return (
     <View style={{ gap: 12 }}>
       <AgentFilesSection agent={agent} />
       <AgentPublishSection agent={agent} dirty={dirty} onAgent={onAgent} onRestored={onRestored} />
-      <AgentShareSection agent={agent} />
+      <AgentShareSection agent={agent} read={shareRead} />
       <AgentActivitySection agent={agent} />
-      <AgentLifecycleSection agent={agent} onAgent={onAgent} onDeleted={onDeleted} />
+      <AgentLifecycleSection
+        agent={agent}
+        share={shareRead.value}
+        onAgent={onAgent}
+        onDeleted={onDeleted}
+      />
     </View>
   );
 }

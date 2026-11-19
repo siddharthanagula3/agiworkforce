@@ -49,6 +49,19 @@ export function bindPresignedUpload(input: PresignPutInput): BoundPresignUpload 
 export interface BoundPresignDownload {
   expiresInSeconds: number;
   contentDisposition: string | undefined;
+  contentType: string | undefined;
+}
+
+const MEDIA_TYPE_PATTERN =
+  /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*(?:[ \t]*;[ \t]*[a-z0-9!#$&^_.+-]+=[a-z0-9!#$&^_.+-]+)*$/i;
+
+function downloadContentType(contentType: string | undefined): string | undefined {
+  if (contentType === undefined) return undefined;
+  const trimmed = contentType.trim();
+  if (!MEDIA_TYPE_PATTERN.test(trimmed)) {
+    throw new Error('A presigned download must name a valid content type.');
+  }
+  return trimmed;
 }
 
 function attachmentDisposition(fileName: string): string {
@@ -65,6 +78,7 @@ export function bindPresignedDownload(input: PresignGetInput): BoundPresignDownl
   return {
     expiresInSeconds: boundLifetime(input.expiresInSeconds),
     contentDisposition: fileName ? attachmentDisposition(fileName) : undefined,
+    contentType: downloadContentType(input.contentType),
   };
 }
 

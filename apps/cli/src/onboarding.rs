@@ -46,9 +46,24 @@ fn multi_model_fallback_example() -> String {
     let fallback = model_catalog::fast_completion_model("openai");
     let local = model_catalog::models_for("ollama")
         .first()
-        .map(|m| m.id.clone())
-        .unwrap_or_else(|| fallback.clone());
-    format!("-m {primary},{fallback},{local}")
+        .map(|m| m.id.clone());
+    fallback_example_arg(primary, fallback, local)
+}
+
+fn fallback_example_arg(primary: String, fallback: String, local: Option<String>) -> String {
+    let mut chain: Vec<String> = Vec::new();
+    for id in [Some(primary), Some(fallback), local].into_iter().flatten() {
+        if !chain.contains(&id) {
+            chain.push(id);
+        }
+    }
+    format!("-m {}", chain.join(","))
+}
+
+fn config_folder_label() -> String {
+    crate::config::CliConfig::config_dir()
+        .map(|dir| dir.display().to_string())
+        .unwrap_or_else(|_| "your AGI config folder".to_string())
 }
 
 fn local_pull_hint() -> String {
@@ -90,6 +105,18 @@ pub(crate) fn fast_mode_cost_note(model: &str) -> Option<String> {
     })
 }
 
+fn welcome_identity_lines(working_path: String) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{} {}",
+        ts::brand_header(format!("Welcome to {}", crate::PRODUCT_NAME)),
+        ts::header(format!("v{}", env!("CARGO_PKG_VERSION"))),
+    )];
+    if !working_path.is_empty() {
+        lines.push(ts::muted(working_path).to_string());
+    }
+    lines
+}
+
 fn print_welcome_banner() {
     let logo = r#"
      _    ____ ___     ____ _     ___
@@ -100,18 +127,8 @@ fn print_welcome_banner() {
     "#;
 
     eprintln!("{}", ts::brand(logo));
-    eprintln!(
-        "  {} {}",
-        ts::brand_header(format!("Welcome to {}", crate::PRODUCT_NAME)),
-        ts::header(format!("v{}", env!("CARGO_PKG_VERSION"))),
-    );
-    eprintln!(
-        "  {}",
-        ts::muted(model_catalog::display_name(model_catalog::default_model()))
-    );
-    let working_path = current_working_path();
-    if !working_path.is_empty() {
-        eprintln!("  {}", ts::muted(working_path));
+    for line in welcome_identity_lines(current_working_path()) {
+        eprintln!("  {line}");
     }
     eprintln!(
         "\n  {}\n",
@@ -306,7 +323,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
         "Local model                      Run AI locally, no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
-        "Other providers                  GitHub Copilot, OpenRouter, NVIDIA, local servers",
+        "Other providers                  OpenRouter, NVIDIA, local servers",
         "AGI cloud                        Sign in to get started, open to everyone",
         "Skip for now                     Configure later with /login",
     ];
@@ -323,7 +340,6 @@ fn select_auth_provider() -> Result<AuthChoice> {
 
 fn select_other_provider() -> Result<AuthChoice> {
     let choices = &[
-        "Sign in with GitHub Copilot      Usage included with Copilot subscription",
         "OpenRouter                       API key, access 200+ models",
         "NVIDIA NIM                       API key, NVIDIA hosted models",
         "Ollama (local)                   Connect to locally running Ollama models",
@@ -448,11 +464,10 @@ fn local_provider_preference(auth_choice: &AuthChoice) -> Option<&'static str> {
 /// Local submenu entries must resolve to LOCAL providers, never cloud login.
 fn other_provider_choice_for_index(selection: usize) -> AuthChoice {
     match selection {
-        0 => AuthChoice::Provider("copilot"),
-        1 => AuthChoice::ApiKeyProvider("openrouter"),
-        2 => AuthChoice::ApiKeyProvider("nvidia"),
-        3 => AuthChoice::Local("ollama"),
-        4 => AuthChoice::Local("lmstudio"),
+        0 => AuthChoice::ApiKeyProvider("openrouter"),
+        1 => AuthChoice::ApiKeyProvider("nvidia"),
+        2 => AuthChoice::Local("ollama"),
+        3 => AuthChoice::Local("lmstudio"),
         _ => AuthChoice::Skip,
     }
 }
@@ -461,8 +476,20 @@ fn other_provider_choice_for_index(selection: usize) -> AuthChoice {
 // API key submenu
 // ─────────────────────────────────────────────────────────────────────────────
 
-async fn run_api_key_flow() -> Result<()> {
-    crate::auth::interactive_api_key_login().await
+async fn run_api_key_flow() -> Result<Option<&'static str>> {
+    crate::auth::interactive_api_key_login_choice().await
+}
+
+fn model_picker_providers_after_key(
+    saved: Option<&'static str>,
+    current: Vec<&'static str>,
+) -> Vec<&'static str> {
+    match saved {
+        Some(provider) if is_catalog_provider(provider) => {
+            model_picker_providers_for_auth_choice(&AuthChoice::ApiKeyProvider(provider))
+        }
+        _ => current,
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -739,13 +766,7 @@ fn edit_default_config(edit: impl FnOnce(&mut toml::Table)) -> Result<()> {
 
     let rendered = toml::to_string_pretty(&toml::Value::Table(root))
         .context("Failed to serialize config.toml")?;
-    std::fs::write(&config_path, rendered)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
+    crate::config::write_config_file(&config_path, &rendered)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -763,7 +784,7 @@ fn print_safety_notes() {
     );
     eprintln!();
     eprintln!(
-        "  {}  Tool calls (file edits, shell commands) require your approval.",
+        "  {}  File edits and shell commands ask for your approval; read-only commands like ls run without asking.",
         ts::warning("•")
     );
     eprintln!(
@@ -773,14 +794,23 @@ fn print_safety_notes() {
     eprintln!();
 }
 
-const PERMISSION_MODE_CHOICES: [&str; 3] = [
-    "Ask            Ask before every file edit and command (safest, recommended)",
-    "Auto           File edits and safe commands run, unknown and dangerous ones ask",
-    "Plan first     Read-only until you approve a plan",
-];
+fn permission_mode_choices() -> [String; 3] {
+    [
+        (
+            crate::tui::MODE_DEFAULT,
+            "Asks before file edits and commands, except read-only ones like ls (recommended)",
+        ),
+        (
+            crate::tui::MODE_AUTO,
+            "File edits and safe commands run, unknown and dangerous ones ask",
+        ),
+        (crate::tui::MODE_PLAN, "Read-only until you approve a plan"),
+    ]
+    .map(|(name, meaning)| format!("{name:<15}{meaning}"))
+}
 
 fn select_permission_mode() -> Result<PermissionMode> {
-    let choices = &PERMISSION_MODE_CHOICES;
+    let choices = permission_mode_choices();
 
     eprintln!(
         "  {}\n",
@@ -863,7 +893,7 @@ pub async fn run_onboarding() -> Result<bool> {
 
     let chose_local = matches!(&auth_choice, AuthChoice::Local(_));
     let preferred_local_provider = local_provider_preference(&auth_choice);
-    let model_picker_providers = model_picker_providers_for_auth_choice(&auth_choice);
+    let mut model_picker_providers = model_picker_providers_for_auth_choice(&auth_choice);
 
     match auth_choice {
         AuthChoice::Local(_provider) => {
@@ -907,8 +937,14 @@ pub async fn run_onboarding() -> Result<bool> {
                 );
             }
         }
-        AuthChoice::ApiKey => {
-            if let Err(e) = run_api_key_flow().await {
+        AuthChoice::ApiKey => match run_api_key_flow().await {
+            Ok(saved) => {
+                model_picker_providers = model_picker_providers_after_key(
+                    saved,
+                    std::mem::take(&mut model_picker_providers),
+                );
+            }
+            Err(e) => {
                 eprintln!(
                     "\n  {} API key setup failed: {}",
                     ts::warning_header("⚠"),
@@ -919,7 +955,7 @@ pub async fn run_onboarding() -> Result<bool> {
                     ts::muted("You can try again later with /login or `agi login`.")
                 );
             }
-        }
+        },
         AuthChoice::OtherProviders | AuthChoice::Skip => {
             eprintln!("\n  {} Skipped authentication.", ts::muted("→"));
             eprintln!(
@@ -1016,15 +1052,13 @@ pub async fn run_onboarding() -> Result<bool> {
     eprintln!(
         "\n  {} {}",
         ts::accent_header("Memory"),
-        ts::muted(
-            "Lasting instructions live in ~/.agiworkforce (one file per mode: Local, BYOK and Managed) and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what this session loads."
-        )
+        ts::muted(format!(
+            "Lasting instructions live in {} (one file per mode: Local, BYOK and Managed) and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what this session loads.",
+            config_folder_label()
+        ))
     );
     let bell = crate::output::confirm("  Ring the terminal bell when a long turn finishes?", false);
-    let saved = crate::config::CliConfig::load().and_then(|mut config| {
-        config.set_value("bell", &bell.to_string())?;
-        config.save()
-    });
+    let saved = crate::config::CliConfig::save_user_value("bell", &bell.to_string());
     if let Err(e) = saved {
         eprintln!(
             "  {} Failed to save the notification choice: {}",
@@ -1108,9 +1142,8 @@ mod local_first_run_tests {
 
     #[test]
     fn other_providers_ollama_entry_resolves_to_local() {
-        // "Other providers" submenu index 3 = "Ollama (local)".
         assert_eq!(
-            other_provider_choice_for_index(3),
+            other_provider_choice_for_index(2),
             AuthChoice::Local("ollama")
         );
     }
@@ -1118,7 +1151,7 @@ mod local_first_run_tests {
     #[test]
     fn other_providers_lmstudio_entry_resolves_to_local() {
         assert_eq!(
-            other_provider_choice_for_index(4),
+            other_provider_choice_for_index(3),
             AuthChoice::Local("lmstudio")
         );
     }
@@ -1129,20 +1162,23 @@ mod local_first_run_tests {
             auth_choice_for_index(3),
             AuthChoice::Provider("agiworkforce")
         );
-        assert_eq!(
-            other_provider_choice_for_index(0),
-            AuthChoice::Provider("copilot")
-        );
+        for index in 0..=4 {
+            assert_ne!(
+                other_provider_choice_for_index(index),
+                AuthChoice::Provider("copilot")
+            );
+        }
+        assert_eq!(other_provider_choice_for_index(4), AuthChoice::Skip);
     }
 
     #[test]
     fn api_key_providers_do_not_route_to_oauth_login() {
         assert_eq!(
-            other_provider_choice_for_index(1),
+            other_provider_choice_for_index(0),
             AuthChoice::ApiKeyProvider("openrouter")
         );
         assert_eq!(
-            other_provider_choice_for_index(2),
+            other_provider_choice_for_index(1),
             AuthChoice::ApiKeyProvider("nvidia")
         );
     }
@@ -1159,6 +1195,31 @@ mod local_first_run_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_key_for_a_catalog_provider_offers_that_providers_models() {
+        let defaults = DEFAULT_ONBOARDING_PROVIDERS.to_vec();
+        let keyed = model_catalog::providers()
+            .into_iter()
+            .find(|provider| {
+                crate::auth::is_api_key_provider(provider)
+                    && !DEFAULT_ONBOARDING_PROVIDERS.contains(provider)
+            })
+            .expect("the catalog lists a key provider outside the default picker");
+        assert_eq!(
+            model_picker_providers_after_key(Some(keyed), defaults.clone()),
+            vec![keyed]
+        );
+        assert!(!is_catalog_provider("brave"));
+        assert_eq!(
+            model_picker_providers_after_key(Some("brave"), defaults.clone()),
+            defaults
+        );
+        assert_eq!(
+            model_picker_providers_after_key(None, defaults.clone()),
+            defaults
+        );
+    }
 
     #[test]
     fn the_working_path_abbreviates_the_home_directory() {
@@ -1195,12 +1256,48 @@ mod tests {
     }
 
     #[test]
+    fn the_welcome_names_no_model_before_one_is_chosen() {
+        let lines = welcome_identity_lines("~/projects/fixture".to_string()).join("\n");
+        let default_name = model_catalog::display_name(model_catalog::default_model());
+        assert!(!lines.contains(&default_name), "{lines}");
+        assert!(lines.contains(crate::PRODUCT_NAME), "{lines}");
+        assert!(lines.contains("~/projects/fixture"), "{lines}");
+    }
+
+    #[test]
     fn the_second_permission_choice_describes_the_auto_posture() {
-        let auto = PERMISSION_MODE_CHOICES[1];
+        let choices = permission_mode_choices();
+        let auto = &choices[1];
         assert!(auto.starts_with("Auto"), "{auto}");
         assert!(auto.contains("safe commands run"), "{auto}");
         assert!(auto.contains("unknown and dangerous ones ask"), "{auto}");
         assert!(!auto.contains("commands still ask"), "{auto}");
+    }
+
+    #[test]
+    fn the_fallback_example_never_repeats_a_model() {
+        let example = multi_model_fallback_example();
+        let ids: Vec<&str> = example.trim_start_matches("-m ").split(',').collect();
+        let mut seen = std::collections::HashSet::new();
+        assert!(ids.iter().all(|id| seen.insert(*id)), "{example}");
+        assert_eq!(
+            fallback_example_arg("a".into(), "b".into(), Some("b".into())),
+            "-m a,b"
+        );
+        assert_eq!(fallback_example_arg("a".into(), "a".into(), None), "-m a");
+        assert_eq!(
+            fallback_example_arg("a".into(), "b".into(), Some("c".into())),
+            "-m a,b,c"
+        );
+    }
+
+    #[test]
+    fn the_default_permission_choice_names_what_runs_without_asking() {
+        let choices = permission_mode_choices();
+        let ask = &choices[0];
+        assert!(ask.starts_with(crate::tui::MODE_DEFAULT), "{ask}");
+        assert!(ask.contains("read-only"), "{ask}");
+        assert!(!ask.contains("every"), "{ask}");
     }
 
     #[test]

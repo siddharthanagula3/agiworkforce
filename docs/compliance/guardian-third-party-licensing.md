@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 Commercial context: Guardian may ship later as proprietary SaaS / self-hosted
 product. Every component below records how it is used and whether that use is
@@ -14,7 +14,7 @@ inspiration only (clean-room).
 
 | Component | Version                          | License | Use                            | Commercial assessment |
 | --------- | -------------------------------- | ------- | ------------------------------ | --------------------- |
-| `zod`     | ^4.6.5                           | MIT     | schema validation              | OK                    |
+| `zod`     | ^4.6.7                           | MIT     | schema validation              | OK                    |
 | `yaml`    | ^2.9.1 (`guardian-core`)         | ISC     | `.agi-guardian.yml` parsing    | OK                    |
 | `tsx`     | ^4.23.15 (`guardian-github` dev) | MIT     | dev/CI runner for the scan CLI | OK (not shipped)      |
 

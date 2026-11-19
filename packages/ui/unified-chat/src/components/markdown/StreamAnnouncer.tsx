@@ -12,6 +12,19 @@ function wordBoundedDelta(source: string, from: number): string {
   return '';
 }
 
+export function announcementPlainText(markdown: string): string {
+  return markdown
+    .replace(/^\s*(```|~~~).*$/gm, ' ')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/[*`~]+/g, '')
+    .replace(/(^|\s)_+|_+(?=\s|$)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /**
  * The text a polite live region should carry for a message that is streaming.
  * Each tick announces only what arrived since the last one, so the reader hears
@@ -37,7 +50,7 @@ export function useStreamAnnouncement(
       const ready = wordBoundedDelta(latestRef.current, consumedRef.current);
       if (!ready.trim()) return;
       consumedRef.current += ready.length;
-      setAnnouncement(ready.trim());
+      setAnnouncement(announcementPlainText(ready));
     }, intervalMs);
     return () => clearInterval(id);
   }, [isStreaming, intervalMs]);
@@ -54,7 +67,7 @@ export function useStreamAnnouncement(
     wasStreamingRef.current = false;
     const tail = latestRef.current.slice(consumedRef.current).trim();
     consumedRef.current = latestRef.current.length;
-    if (tail) setAnnouncement(tail);
+    if (tail) setAnnouncement(announcementPlainText(tail));
   }, [isStreaming]);
 
   return announcement;

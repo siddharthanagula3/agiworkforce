@@ -31,6 +31,7 @@ jest.mock('@/services/streaming', () => ({
 
 import {
   ManagedCloudAgentRunApprovalExpiredError,
+  ManagedCloudAgentRunHttpError,
   type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -203,6 +204,145 @@ describe('cloud task list', () => {
   });
 });
 
+describe('searching the cloud task list', () => {
+  it('learns from the server that it can search, and not before', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValueOnce({ runs: [cloudRun()], nextCursor: null });
+    await useCloudTaskStore.getState().load('initial');
+    expect(useCloudTaskStore.getState().searchAvailable).toBe(false);
+
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun()],
+      nextCursor: null,
+      searchSupported: true,
+    });
+    await useCloudTaskStore.getState().load('refresh');
+    expect(useCloudTaskStore.getState().searchAvailable).toBe(true);
+  });
+
+  it('reloads page one with the text and the current filter, replacing the list', async () => {
+    activateCloudAccount('user_1');
+    const all = cloudRun({ id: 'a' });
+    const found = cloudRun({ id: 'b' });
+    mockListRuns.mockResolvedValueOnce({ runs: [all], nextCursor: 'c1', searchSupported: true });
+    await useCloudTaskStore.getState().load('initial');
+    useCloudTaskStore.setState({ filter: 'blocked' });
+    mockListRuns.mockResolvedValueOnce({ runs: [found], nextCursor: null, searchSupported: true });
+
+    useCloudTaskStore.getState().setSearchQuery('  invoice  ');
+    expect(useCloudTaskStore.getState().runs).toEqual([]);
+    expect(useCloudTaskStore.getState().status).toBe('loading');
+    await settle();
+
+    expect(mockListRuns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ states: cloudRunFilterStates('blocked'), q: 'invoice' }),
+    );
+    expect(mockListRuns.mock.calls.at(-1)?.[0]).not.toHaveProperty('cursor');
+    expect(useCloudTaskStore.getState().runs).toEqual([found]);
+    expect(useCloudTaskStore.getState().searchQuery).toBe('invoice');
+    expect(useCloudTaskStore.getState().status).toBe('loaded');
+  });
+
+  it('keeps the text on later pages and on refreshes', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValue({
+      runs: [cloudRun({ id: 'a' })],
+      nextCursor: 'c1',
+      searchSupported: true,
+    });
+    useCloudTaskStore.getState().setSearchQuery('invoice');
+    await settle();
+
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun({ id: 'b' })],
+      nextCursor: null,
+      searchSupported: true,
+    });
+    await useCloudTaskStore.getState().loadMore();
+    expect(mockListRuns).toHaveBeenLastCalledWith(
+      expect.objectContaining({ cursor: 'c1', q: 'invoice' }),
+    );
+
+    await useCloudTaskStore.getState().load('refresh');
+    expect(mockListRuns).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'invoice' }));
+  });
+
+  it('restores the whole list when the text is cleared', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValue({ runs: [], nextCursor: null, searchSupported: true });
+    useCloudTaskStore.getState().setSearchQuery('invoice');
+    await settle();
+
+    useCloudTaskStore.getState().setSearchQuery('   ');
+    await settle();
+
+    expect(mockListRuns.mock.calls.at(-1)?.[0]).not.toHaveProperty('q');
+    expect(useCloudTaskStore.getState().searchQuery).toBe('');
+  });
+
+  it('does not reload for text that trims to the same query', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValue({ runs: [], nextCursor: null, searchSupported: true });
+    useCloudTaskStore.getState().setSearchQuery('invoice');
+    await settle();
+    mockListRuns.mockClear();
+
+    useCloudTaskStore.getState().setSearchQuery('invoice ');
+    await settle();
+
+    expect(mockListRuns).not.toHaveBeenCalled();
+  });
+
+  it('shows a failed search as an error the person can retry', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockRejectedValueOnce(new Error('offline'));
+
+    useCloudTaskStore.getState().setSearchQuery('invoice');
+    await settle();
+
+    expect(useCloudTaskStore.getState().status).toBe('error');
+    expect(useCloudTaskStore.getState().searchQuery).toBe('invoice');
+
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun()],
+      nextCursor: null,
+      searchSupported: true,
+    });
+    await useCloudTaskStore.getState().load('initial');
+    expect(mockListRuns).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'invoice' }));
+    expect(useCloudTaskStore.getState().status).toBe('loaded');
+  });
+
+  it('drops the search and lists everything when the server stops answering it', async () => {
+    activateCloudAccount('user_1');
+    const everything = cloudRun({ id: 'everything' });
+    mockListRuns
+      .mockResolvedValueOnce({ runs: [everything], nextCursor: null })
+      .mockResolvedValueOnce({ runs: [everything], nextCursor: null });
+
+    useCloudTaskStore.getState().setSearchQuery('invoice');
+    await settle();
+
+    expect(mockListRuns.mock.calls[0][0]).toHaveProperty('q', 'invoice');
+    expect(mockListRuns.mock.calls[1][0]).not.toHaveProperty('q');
+    expect(useCloudTaskStore.getState().searchQuery).toBe('');
+    expect(useCloudTaskStore.getState().searchAvailable).toBe(false);
+    expect(useCloudTaskStore.getState().runs).toEqual([everything]);
+  });
+
+  it('forgets the search and what the server said when the account changes', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValue({ runs: [], nextCursor: null, searchSupported: true });
+    useCloudTaskStore.getState().setSearchQuery('invoice');
+    await settle();
+
+    useCloudTaskStore.getState().reset();
+
+    expect(useCloudTaskStore.getState().searchQuery).toBe('');
+    expect(useCloudTaskStore.getState().searchAvailable).toBe(false);
+  });
+});
+
 describe('following one cloud run', () => {
   it('folds the followed events into a transcript and an activity trail', async () => {
     activateCloudAccount('user_1');
@@ -232,6 +372,97 @@ describe('following one cloud run', () => {
     expect(detail?.status).toBe('settled');
   });
 
+  it('keeps the end of a long transcript from a line start with its code fences balanced', async () => {
+    activateCloudAccount('user_1');
+    const code = Array.from(
+      { length: 200 },
+      (_, index) => `    value_${index} = compute(${index})`,
+    );
+    const full = ['Here is the script:', '```python', ...code, '```', 'All done.'].join('\n');
+    followsWith(
+      snapshot(cloudRun({ state: 'completed' }), [
+        envelope({ type: 'text-delta', delta: full }, 0),
+      ]),
+    );
+
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    const transcript = useCloudTaskStore.getState().detail?.transcript ?? '';
+    expect(full.length).toBeGreaterThan(4_000);
+    expect(transcript.length).toBeLessThanOrEqual(4_000);
+    expect(full.endsWith(transcript)).toBe(true);
+    expect(full[full.length - transcript.length - 1]).toBe('\n');
+    const fences = transcript.split('\n').filter((line) => /^\s*(```|~~~)/.test(line));
+    expect(fences.length % 2).toBe(0);
+    expect(transcript).toContain('All done.');
+  });
+
+  it('keeps a code block that is still being written as code behind an earlier closed block', async () => {
+    activateCloudAccount('user_1');
+    const intro = Array.from(
+      { length: 100 },
+      (_, index) => `Intro paragraph line number ${index}.`,
+    );
+    const sample = Array.from({ length: 10 }, (_, index) => `const sample${index} = ${index};`);
+    const prose = Array.from({ length: 30 }, (_, index) => `Explanation sentence ${index} here.`);
+    const script = Array.from({ length: 15 }, (_, index) => `step_${index} = run(${index})`);
+    const streaming = [...intro, '```ts', ...sample, '```', ...prose, '```python', ...script].join(
+      '\n',
+    );
+    const pages = [
+      snapshot(cloudRun({ state: 'running' }), [
+        envelope({ type: 'text-delta', delta: streaming }, 0),
+      ]),
+      snapshot(cloudRun({ state: 'completed' }), [
+        envelope({ type: 'text-delta', delta: '\n```\nAll done.' }, 1),
+      ]),
+    ];
+    const fenceLines = (text: string) =>
+      text.split('\n').filter((line) => /^\s*(```|~~~)/.test(line));
+    const seen: string[] = [];
+    mockFollowRun.mockImplementation(
+      async (_runId: string, options: { onSnapshot?: (p: CloudAgentRunSnapshotPage) => void }) => {
+        for (const page of pages) {
+          await options.onSnapshot?.(page);
+          seen.push(useCloudTaskStore.getState().detail?.transcript ?? '');
+        }
+        return { run: pages[1].run, lastSequence: 1 };
+      },
+    );
+
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    expect(streaming.length).toBeGreaterThan(4_000);
+    expect(streaming.endsWith(seen[0])).toBe(true);
+    expect(fenceLines(seen[0])).toEqual(['```ts', '```', '```python']);
+    expect(seen[0]).toContain(prose[0]);
+    const settled = useCloudTaskStore.getState().detail?.transcript ?? '';
+    expect(fenceLines(settled)).toEqual(['```ts', '```', '```python', '```']);
+    expect(settled.endsWith(`${script[script.length - 1]}\n\`\`\`\nAll done.`)).toBe(true);
+  });
+
+  it('keeps drawing as code a long block cut before its opening line', async () => {
+    activateCloudAccount('user_1');
+    const code = Array.from(
+      { length: 200 },
+      (_, index) => `    value_${index} = compute(${index})`,
+    );
+    const streaming = ['Here is the script:', '```python', ...code].join('\n');
+    followsWith(
+      snapshot(cloudRun({ state: 'running' }), [
+        envelope({ type: 'text-delta', delta: streaming }, 0),
+      ]),
+    );
+
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    const transcript = useCloudTaskStore.getState().detail?.transcript ?? '';
+    const [first, ...rest] = transcript.split('\n');
+    expect(first).toBe('```python');
+    expect(streaming.endsWith(rest.join('\n'))).toBe(true);
+    expect(rest[rest.length - 1]).toBe(code[code.length - 1]);
+  });
+
   it('stops following and drops the detail when the sheet closes', async () => {
     activateCloudAccount('user_1');
     followsWith(snapshot(cloudRun({ state: 'completed' })));
@@ -251,6 +482,19 @@ describe('following one cloud run', () => {
     expect(useCloudTaskStore.getState().detail?.status).toBe('error');
     expect(useCloudTaskStore.getState().detail?.error).toBe('This task could not be opened');
   });
+
+  it.each([403, 404, 410])(
+    'says plainly that a run answering %i is no longer available',
+    async (status) => {
+      activateCloudAccount('user_1');
+      mockFollowRun.mockRejectedValueOnce(new ManagedCloudAgentRunHttpError('gone', status));
+
+      await useCloudTaskStore.getState().openRun(RUN_ID);
+
+      expect(useCloudTaskStore.getState().detail?.status).toBe('error');
+      expect(useCloudTaskStore.getState().detail?.error).toBe('This task is no longer available');
+    },
+  );
 });
 
 describe('resolving the approval blocking a run', () => {
@@ -378,6 +622,32 @@ describe('list requests that no longer own the list', () => {
     expect(state.filter).toBe('blocked');
     expect(state.runs.map((run) => run.id)).toEqual(['blocked-1']);
     expect(state.nextCursor).toBe('blocked-cursor');
+  });
+
+  it('keeps the latest request when the filter returns to the one it started on', async () => {
+    activateCloudAccount('user_1');
+    const firstAll = deferred<Page>();
+    const blocked = deferred<Page>();
+    const secondAll = deferred<Page>();
+    mockListRuns
+      .mockReturnValueOnce(firstAll.promise)
+      .mockReturnValueOnce(blocked.promise)
+      .mockReturnValueOnce(secondAll.promise);
+
+    const pending = useCloudTaskStore.getState().load('initial');
+    useCloudTaskStore.getState().setFilter('blocked');
+    useCloudTaskStore.getState().setFilter('all');
+    secondAll.resolve({ runs: [cloudRun({ id: 'all-new' })], nextCursor: 'all-new-cursor' });
+    await settle();
+    firstAll.resolve({ runs: [cloudRun({ id: 'all-old' })], nextCursor: 'all-old-cursor' });
+    blocked.resolve({ runs: [cloudRun({ id: 'blocked-1' })], nextCursor: 'blocked-cursor' });
+    await pending;
+    await settle();
+
+    const state = useCloudTaskStore.getState();
+    expect(state.filter).toBe('all');
+    expect(state.runs.map((run) => run.id)).toEqual(['all-new']);
+    expect(state.nextCursor).toBe('all-new-cursor');
   });
 
   it('drops a continuation page that was requested before the filter changed', async () => {

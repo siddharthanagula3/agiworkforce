@@ -18,6 +18,12 @@ export const NOTIFICATION_EVENT_TYPES = [
   'schedule_run',
   'companion_connected',
   'chat_message',
+  'product_update',
+  'usage_limit_reset',
+  'research_completed',
+  'code_session_completed',
+  'code_session_failed',
+  'code_session_needs_input',
 ] as const;
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
@@ -27,5 +33,8 @@ export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
  * the foreground handler and ships it with its registration so the server
  * applies the identical exemption before it hands a notice to Expo.
  */
-export const QUIET_HOURS_EXEMPT_EVENT_TYPES: readonly NotificationEventType[] =
-  QUIET_HOURS_EXEMPT_NOTIFICATION_TYPES;
+export const QUIET_HOURS_EXEMPT_EVENT_TYPES: readonly NotificationEventType[] = [
+  ...QUIET_HOURS_EXEMPT_NOTIFICATION_TYPES,
+  'code_session_failed',
+  'code_session_needs_input',
+];

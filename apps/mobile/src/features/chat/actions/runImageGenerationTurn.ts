@@ -1,7 +1,9 @@
 import type { ManagedMediaImageOperation } from '@agiworkforce/cloud-contracts';
 import type { MessageAttachment } from '@/types/chat';
 import { ApiPaywallError } from '@/services/api';
-import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import { ApiHttpError, CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import { CloudProviderConsentRequiredError } from '@/services/llmGate';
+import { sharingWithProvidersAnswer } from './mediaGenerationConsent';
 import { readReferenceImageBase64 } from '@/src/features/image/services/imageReference';
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
 import {
@@ -19,6 +21,10 @@ import {
   type ImageGenResponse,
 } from '@/src/features/image/services/imagegen';
 
+import {
+  clearStoppedImageGenerations,
+  isImageGenerationStopped,
+} from '@/src/features/image/services/imageGenerationStops';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -47,6 +53,7 @@ export interface RunImageGenerationTurnInput {
   sourceImageBase64?: string;
   maskImageBase64?: string;
   referenceImages?: MobileImageReferenceAttachment[];
+  replayOnRetry?: boolean;
   ownerId: string;
   onStarted?: () => void;
   begin: (
@@ -61,7 +68,12 @@ export interface RunImageGenerationTurnInput {
     assistantMessageId: string,
     result: ImageTurnCompletion,
   ) => void;
-  fail: (conversationId: string, assistantMessageId: string, message: string) => void;
+  fail: (
+    conversationId: string,
+    assistantMessageId: string,
+    message: string,
+    retryAt?: number,
+  ) => void;
   remove: (conversationId: string, assistantMessageId: string) => void;
   onPaywall: (error: ApiPaywallError) => void;
   onUnexpectedError?: (error: unknown) => void;
@@ -90,7 +102,9 @@ export interface ImageGenerationTurnDependencies {
   getUri: (image: GeneratedImage | undefined) => string | null;
   getDurablePath?: (image: GeneratedImage | undefined) => string | null;
   readReferenceImage?: (uri: string) => Promise<string>;
+  isStopped?: (operationId: string) => boolean;
   timeoutMs?: number;
+  sharingAllowed?: () => boolean | Promise<boolean>;
 }
 
 export const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
@@ -98,7 +112,15 @@ export const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
 const IMAGE_GENERATION_TIMEOUT_MESSAGE =
   'Image generation timed out. Retry to run it again, or try a shorter prompt.';
 
+const IMAGE_NOT_RETURNED_MESSAGE = 'AGI Cloud did not return an image. Try again.';
+
 class ImageGenerationTimeout extends Error {}
+
+function failedJobSentence(result: ImageGenResponse): string | null {
+  if (result.status !== 'failed' || typeof result.error !== 'string') return null;
+  const sentence = result.error.trim();
+  return sentence.length > 0 ? sentence : null;
+}
 
 function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -114,8 +136,9 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 export type ImageGenerationTurnOutcome = {
-  status: 'completed' | 'failed' | 'paywall' | 'cancelled';
+  status: 'completed' | 'failed' | 'paywall' | 'cancelled' | 'declined';
   assistantMessageId: string | null;
+  stopped?: true;
 };
 
 let cloudImageGeneration = 0;
@@ -133,12 +156,20 @@ function rememberImageEditRetry(assistantMessageId: string, input: ImageEditTurn
   }
 }
 
-export function takeImageEditRetry(
+export function peekImageEditRetry(
   assistantMessageId: string,
   ownerId: string,
 ): ImageEditTurnRequest | null {
   const request = imageEditRetries.get(assistantMessageId);
-  if (!request || request.ownerId !== ownerId) return null;
+  return request && request.ownerId === ownerId ? request : null;
+}
+
+export function takeImageEditRetry(
+  assistantMessageId: string,
+  ownerId: string,
+): ImageEditTurnRequest | null {
+  const request = peekImageEditRetry(assistantMessageId, ownerId);
+  if (!request) return null;
   imageEditRetries.delete(assistantMessageId);
   return request;
 }
@@ -146,6 +177,7 @@ export function takeImageEditRetry(
 export function clearCloudImageGenerationState(): void {
   cloudImageGeneration += 1;
   imageEditRetries.clear();
+  clearStoppedImageGenerations();
 }
 
 const defaultDependencies: ImageGenerationTurnDependencies = {
@@ -153,6 +185,7 @@ const defaultDependencies: ImageGenerationTurnDependencies = {
   getUri: getGeneratedImageUri,
   getDurablePath: getDurableGeneratedImagePath,
   readReferenceImage: readReferenceImageBase64,
+  sharingAllowed: sharingWithProvidersAnswer,
 };
 
 export async function runImageGenerationTurn(
@@ -161,14 +194,19 @@ export async function runImageGenerationTurn(
 ): Promise<ImageGenerationTurnOutcome> {
   const outcome = await executeImageGenerationTurn(input, dependencies);
   const editOperation = imageEditOperation(input);
-  if (outcome.status === 'failed' && outcome.assistantMessageId && editOperation) {
+  if (
+    (outcome.status === 'failed' || outcome.stopped === true) &&
+    outcome.assistantMessageId &&
+    (editOperation || input.replayOnRetry)
+  ) {
     rememberImageEditRetry(outcome.assistantMessageId, {
       conversationId: input.conversationId,
       displayText: input.displayText,
       prompt: input.prompt,
       model: input.model,
       ownerId: input.ownerId,
-      operation: editOperation,
+      ...(editOperation ? { operation: editOperation } : {}),
+      ...(input.replayOnRetry ? { replayOnRetry: true } : {}),
       ...(input.aspectRatio ? { aspectRatio: input.aspectRatio } : {}),
       ...(input.transparentBackground ? { transparentBackground: true } : {}),
       ...(input.sourceImage ? { sourceImage: input.sourceImage } : {}),
@@ -200,6 +238,18 @@ async function executeImageGenerationTurn(
   const generation = cloudImageGeneration;
   const isAccountCurrent = () =>
     generation === cloudImageGeneration && isCloudAccountEpochCurrent(accountEpoch);
+  if (dependencies.sharingAllowed) {
+    let allowed: boolean;
+    try {
+      const answer = dependencies.sharingAllowed();
+      allowed = typeof answer === 'boolean' ? answer : await answer;
+    } catch (error) {
+      input.onUnexpectedError?.(error);
+      return { status: 'failed', assistantMessageId: null };
+    }
+    if (!allowed) return { status: 'declined', assistantMessageId: null };
+    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId: null };
+  }
   const referenceAttachment: MessageAttachment | null = input.sourceImage
     ? {
         url: input.sourceImage.uri,
@@ -216,6 +266,12 @@ async function executeImageGenerationTurn(
       ])
     : input.begin(input.conversationId, input.displayText, input.prompt, input.model);
   input.onStarted?.();
+  const isStopped = () => (dependencies.isStopped ?? isImageGenerationStopped)(assistantMessageId);
+  const stoppedOutcome = (): ImageGenerationTurnOutcome => ({
+    status: 'cancelled',
+    assistantMessageId,
+    stopped: true,
+  });
 
   try {
     const referenceOperation = imageEditOperation(input);
@@ -230,6 +286,7 @@ async function executeImageGenerationTurn(
         );
       } catch (error) {
         if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+        if (isStopped()) return stoppedOutcome();
         input.onUnexpectedError?.(error);
         input.fail(
           input.conversationId,
@@ -240,6 +297,7 @@ async function executeImageGenerationTurn(
       }
     }
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (isStopped()) return stoppedOutcome();
     const result = await withTimeout(
       dependencies.generate(
         {
@@ -265,13 +323,14 @@ async function executeImageGenerationTurn(
       dependencies.timeoutMs ?? IMAGE_GENERATION_TIMEOUT_MS,
     );
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (isStopped()) return stoppedOutcome();
     const image = result.images?.[0];
     const imageUrl = dependencies.getUri(image);
     if (result.success === false || !imageUrl) {
       input.fail(
         input.conversationId,
         assistantMessageId,
-        'AGI Cloud did not return an image. Try again.',
+        failedJobSentence(result) ?? IMAGE_NOT_RETURNED_MESSAGE,
       );
       return { status: 'failed', assistantMessageId };
     }
@@ -294,6 +353,11 @@ async function executeImageGenerationTurn(
     return { status: 'completed', assistantMessageId };
   } catch (error) {
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (isStopped()) return stoppedOutcome();
+    if (error instanceof CloudProviderConsentRequiredError) {
+      input.remove(input.conversationId, assistantMessageId);
+      return { status: 'declined', assistantMessageId: null };
+    }
     if (error instanceof ApiPaywallError) {
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);
@@ -307,6 +371,15 @@ async function executeImageGenerationTurn(
 
     if (error instanceof ImageGenerationTimeout) {
       input.fail(input.conversationId, assistantMessageId, IMAGE_GENERATION_TIMEOUT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
+    }
+
+    if (error instanceof ApiHttpError && error.status === 429) {
+      const retryAt =
+        error.retryAfterSeconds !== undefined
+          ? Date.now() + error.retryAfterSeconds * 1000
+          : undefined;
+      input.fail(input.conversationId, assistantMessageId, error.message, retryAt);
       return { status: 'failed', assistantMessageId };
     }
 

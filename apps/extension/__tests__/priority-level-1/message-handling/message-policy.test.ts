@@ -1,4 +1,3 @@
-
 import { describe, expect, test } from 'vitest';
 import {
   DISCOVERY_MESSAGE_TYPES,
@@ -24,7 +23,7 @@ describe('L1 Message Handling - Policy resolution', () => {
     expect(policy.allowsCrossTab).toBe(true);
   });
 
-  test('SECURITY: discovery class is empty (no message bypasses the allowlist)', () => {
-    expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
+  test('SECURITY: discovery class holds only GET_PAGE_ACCESS (no other message bypasses the allowlist)', () => {
+    expect([...DISCOVERY_MESSAGE_TYPES]).toEqual(['GET_PAGE_ACCESS']);
   });
 });

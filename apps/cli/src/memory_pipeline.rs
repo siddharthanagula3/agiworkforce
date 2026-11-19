@@ -13,13 +13,20 @@
 //!   or Managed session's prompt carries only its own boundary's file; a Local
 //!   session's carries all three.
 //!
+//! A summary learned in a project carries that project's key, and merges into
+//! `memories/projects/<key>/`, which only sessions in the same project read.
+//! The files directly under `memories/` hold what was learned with no project,
+//! including everything merged before summaries carried one.
+//!
 //! All operations are best-effort: errors are logged to stderr and never
 //! block the main agent loop.
 
 use agiworkforce_agent_core::memory::normalize_memory_key;
 use anyhow::Result;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::agent::PrivacyMode;
 use crate::config::CliConfig;
@@ -140,11 +147,10 @@ fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
 }
 
 pub fn stored_fact_count(home: &Path) -> usize {
-    BOUNDARIES
+    memory_dirs(home)
         .into_iter()
-        .filter_map(|boundary| {
-            fs::read_to_string(memory_file(home, boundary_memory_file(boundary))).ok()
-        })
+        .flat_map(|dir| BOUNDARIES.map(|boundary| dir.join(boundary_memory_file(boundary))))
+        .filter_map(|file| fs::read_to_string(file).ok())
         .map(|content| {
             content
                 .lines()
@@ -159,23 +165,65 @@ pub fn stored_fact_count(home: &Path) -> usize {
         .sum()
 }
 
-fn memory_file(home: &Path, file: &str) -> std::path::PathBuf {
-    home.join("memories").join(file)
+/// The key a project's learned memory is filed under: a digest of its
+/// folder, so the folder's path never becomes a file name.
+fn project_key(root: &Path) -> String {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    crate::hex::encode(&Sha256::digest(root.to_string_lossy().as_bytes()))
+}
+
+fn is_project_key(key: &str) -> bool {
+    key.len() == 64 && key.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn projects_dir(home: &Path) -> PathBuf {
+    home.join("memories").join("projects")
+}
+
+fn project_memory_dir(home: &Path, key: Option<&str>) -> PathBuf {
+    match key {
+        Some(key) => projects_dir(home).join(key),
+        None => home.join("memories"),
+    }
+}
+
+/// Every folder merged memory is kept in: the one for no project, then one
+/// per project.
+fn memory_dirs(home: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![project_memory_dir(home, None)];
+    if let Ok(entries) = fs::read_dir(projects_dir(home)) {
+        let mut projects: Vec<PathBuf> = entries
+            .flatten()
+            .filter(|entry| entry.file_name().to_str().is_some_and(is_project_key))
+            .map(|entry| entry.path())
+            .collect();
+        projects.sort();
+        dirs.extend(projects);
+    }
+    dirs
+}
+
+fn frontmatter_value<'a>(content: &'a str, key: &str) -> Option<&'a str> {
+    let after_open = content.trim_start().strip_prefix("---")?;
+    let end = after_open.find("\n---")?;
+    after_open[..end]
+        .lines()
+        .find_map(|line| line.trim().strip_prefix(key))
+        .map(str::trim)
+}
+
+/// The project a stored summary was learned in. A summary without one, or
+/// with a key that is not one, belongs to no project.
+fn summary_project(content: &str) -> Option<String> {
+    frontmatter_value(content, "project:")
+        .filter(|key| is_project_key(key))
+        .map(str::to_string)
 }
 
 /// The trust boundary a stored summary came from. A summary without a label
 /// predates labelling and counts as Local, so it never leaves the device.
 fn summary_origin(content: &str) -> PrivacyMode {
-    let trimmed = content.trim_start();
-    let Some(after_open) = trimmed.strip_prefix("---") else {
-        return PrivacyMode::Local;
-    };
-    let Some(end) = after_open.find("\n---") else {
-        return PrivacyMode::Local;
-    };
-    after_open[..end]
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("origin:"))
+    frontmatter_value(content, "origin:")
         .and_then(PrivacyMode::from_arg)
         .unwrap_or(PrivacyMode::Local)
 }
@@ -215,7 +263,7 @@ impl SummariesByOrigin {
     }
 }
 
-fn collect_summaries(summaries_dir: &Path) -> Result<SummariesByOrigin> {
+fn collect_summaries(summaries_dir: &Path) -> Result<BTreeMap<Option<String>, SummariesByOrigin>> {
     let mut entries: Vec<_> = fs::read_dir(summaries_dir)?
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
@@ -228,12 +276,15 @@ fn collect_summaries(summaries_dir: &Path) -> Result<SummariesByOrigin> {
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
     });
 
-    let mut summaries = SummariesByOrigin::default();
+    let mut summaries: BTreeMap<Option<String>, SummariesByOrigin> = BTreeMap::new();
     for entry in &entries {
         if let Ok(content) = fs::read_to_string(entry.path()) {
             let body = strip_frontmatter(&content);
             if !body.trim().is_empty() {
-                summaries.push(summary_origin(&content), body);
+                summaries
+                    .entry(summary_project(&content))
+                    .or_default()
+                    .push(summary_origin(&content), body);
             }
         }
     }
@@ -241,7 +292,7 @@ fn collect_summaries(summaries_dir: &Path) -> Result<SummariesByOrigin> {
 }
 
 fn write_consolidated(
-    home: &Path,
+    dir: &Path,
     file: &str,
     body: &str,
     count: u32,
@@ -254,7 +305,8 @@ fn write_consolidated(
         count,
     );
     let body = cap_consolidated_facts(body, max_facts as usize);
-    fs::write(memory_file(home, file), format!("{}{}\n", header, body))?;
+    fs::create_dir_all(dir)?;
+    fs::write(dir.join(file), format!("{}{}\n", header, body))?;
     Ok(())
 }
 
@@ -281,6 +333,8 @@ impl MemoryPipeline {
     ///
     /// If the LLM call fails or times out, falls back to saving raw message
     /// content as the summary.
+    /// `project` is the folder the session works in; the summary is filed
+    /// under it, so only sessions in that project are given what it learned.
     /// `route` is the source session's own off-device route
     /// ([`crate::subagent::InheritedRoute::off_device`]). With one, the summary
     /// is extracted through it and labelled with its trust boundary. Without
@@ -288,6 +342,7 @@ impl MemoryPipeline {
     /// network) and labelled Local.
     pub async fn extract_session_summary(
         home: &Path,
+        project: Option<&Path>,
         session_id: &str,
         messages: &[Message],
         config: &CliConfig,
@@ -334,13 +389,16 @@ impl MemoryPipeline {
             )
         };
 
-        // Write with metadata header
+        let project_line = project
+            .map(|root| format!("project: {}\n", project_key(root)))
+            .unwrap_or_default();
         let content = format!(
-            "---\nsession_id: {}\ntimestamp: {}\nmodel: {}\norigin: {}\n---\n\n{}\n",
+            "---\nsession_id: {}\ntimestamp: {}\nmodel: {}\norigin: {}\n{}---\n\n{}\n",
             session_id,
             timestamp,
             model_label,
             origin.label(),
+            project_line,
             summary_body
         );
 
@@ -420,17 +478,35 @@ impl MemoryPipeline {
             return Ok(());
         }
 
-        let summaries = collect_summaries(&summaries_dir)?;
-        if BOUNDARIES
-            .into_iter()
-            .all(|boundary| summaries.of(boundary).count == 0)
-        {
+        let by_project = collect_summaries(&summaries_dir)?;
+        if by_project.values().all(|summaries| {
+            BOUNDARIES
+                .into_iter()
+                .all(|boundary| summaries.of(boundary).count == 0)
+        }) {
             return Ok(());
         }
 
         // Honor the user's /memories max_facts cap (default 500 = no-op in practice).
         let (_, _, max_facts) = load_memory_settings(home);
 
+        for (project, summaries) in &by_project {
+            let dir = project_memory_dir(home, project.as_deref());
+            Self::consolidate_project(&dir, summaries, config, route, max_facts).await?;
+        }
+
+        Self::prune_old_summaries(home)?;
+
+        Ok(())
+    }
+
+    async fn consolidate_project(
+        dir: &Path,
+        summaries: &SummariesByOrigin,
+        config: &CliConfig,
+        route: Option<&crate::subagent::InheritedRoute>,
+        max_facts: u32,
+    ) -> Result<()> {
         for boundary in BOUNDARIES {
             let input = summaries.of(boundary);
             if input.count == 0 {
@@ -452,16 +528,13 @@ impl MemoryPipeline {
                 None => deduplicate_lines(&input.text),
             };
             write_consolidated(
-                home,
+                dir,
                 boundary_memory_file(boundary),
                 &merged,
                 input.count,
                 max_facts,
             )?;
         }
-
-        Self::prune_old_summaries(home)?;
-
         Ok(())
     }
 
@@ -535,11 +608,10 @@ impl MemoryPipeline {
             return false;
         }
 
-        BOUNDARIES
+        memory_dirs(home)
             .into_iter()
-            .filter_map(|boundary| {
-                fs::metadata(memory_file(home, boundary_memory_file(boundary))).ok()
-            })
+            .flat_map(|dir| BOUNDARIES.map(|boundary| dir.join(boundary_memory_file(boundary))))
+            .filter_map(|file| fs::metadata(file).ok())
             .map(|metadata| {
                 metadata
                     .modified()
@@ -592,20 +664,37 @@ impl MemoryPipeline {
     // System prompt integration
     // -----------------------------------------------------------------
 
-    /// The merged memory a session in `privacy` may carry in its system
-    /// prompt, each boundary's memory wrapped in [`origin_memory_tag`]. A BYOK
-    /// or Managed session gets only its own boundary's memory; a Local session
-    /// gets every boundary's.
+    /// The merged memory a session in `privacy` working in `project` may
+    /// carry in its system prompt, each boundary's memory wrapped in
+    /// [`origin_memory_tag`]. A BYOK or Managed session gets only its own
+    /// boundary's memory; a Local session gets every boundary's. Memory learned
+    /// in a project reaches only sessions in that project.
     ///
     /// Returns an empty string when there is nothing to carry.
-    pub fn load_persistent_memory(home: &Path, privacy: PrivacyMode, nonce: &str) -> String {
+    pub fn load_persistent_memory(
+        home: &Path,
+        project: Option<&Path>,
+        privacy: PrivacyMode,
+        nonce: &str,
+    ) -> String {
+        let mut dirs = vec![project_memory_dir(home, None)];
+        if let Some(root) = project {
+            dirs.push(project_memory_dir(home, Some(&project_key(root))));
+        }
         let sections: Vec<String> = BOUNDARIES
             .into_iter()
             .filter(|boundary| privacy == PrivacyMode::Local || *boundary == privacy)
             .filter_map(|boundary| {
-                let content =
-                    fs::read_to_string(memory_file(home, boundary_memory_file(boundary))).ok()?;
-                let content = neutralize_memory_tags(content.trim());
+                let content = dirs
+                    .iter()
+                    .filter_map(|dir| {
+                        fs::read_to_string(dir.join(boundary_memory_file(boundary))).ok()
+                    })
+                    .map(|content| content.trim().to_string())
+                    .filter(|content| !content.is_empty())
+                    .collect::<Vec<_>>()
+                    .join("\n\n");
+                let content = neutralize_memory_tags(&content);
                 if content.is_empty() {
                     return None;
                 }
@@ -832,6 +921,10 @@ fn deduplicate_lines(text: &str) -> String {
 mod tests {
     use super::*;
 
+    fn memory_file(home: &Path, file: &str) -> PathBuf {
+        home.join("memories").join(file)
+    }
+
     const NONCE: &str = "fixturenonce";
 
     #[test]
@@ -956,6 +1049,7 @@ mod tests {
 
         MemoryPipeline::extract_session_summary(
             home.path(),
+            None,
             "safe-session-id",
             &messages,
             &config,
@@ -1137,6 +1231,7 @@ mod tests {
 
         MemoryPipeline::extract_session_summary(
             home.path(),
+            None,
             "local-session",
             &messages,
             &CliConfig::default(),
@@ -1206,8 +1301,9 @@ mod tests {
         let home = memories_home();
         write_every_boundary_summary(home.path());
 
-        let summaries =
+        let by_project =
             collect_summaries(&home.path().join("memories").join("session_summaries")).unwrap();
+        let summaries = &by_project[&None::<String>];
 
         let local = &summaries.of(PrivacyMode::Local).text;
         let byok = &summaries.of(PrivacyMode::Byok).text;
@@ -1272,7 +1368,8 @@ mod tests {
         let home = memories_home();
         write_every_boundary_memory(home.path());
 
-        let memory = MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Byok, NONCE);
+        let memory =
+            MemoryPipeline::load_persistent_memory(home.path(), None, PrivacyMode::Byok, NONCE);
 
         assert!(memory.contains("byok fact"), "{memory}");
         assert!(!memory.contains("managed fact"), "{memory}");
@@ -1293,7 +1390,7 @@ mod tests {
         write_every_boundary_memory(home.path());
 
         let memory =
-            MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Managed, NONCE);
+            MemoryPipeline::load_persistent_memory(home.path(), None, PrivacyMode::Managed, NONCE);
 
         assert!(memory.contains("managed fact"), "{memory}");
         assert!(!memory.contains("byok fact"), "{memory}");
@@ -1321,7 +1418,8 @@ mod tests {
         )
         .unwrap();
 
-        let memory = MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Local, NONCE);
+        let memory =
+            MemoryPipeline::load_persistent_memory(home.path(), None, PrivacyMode::Local, NONCE);
 
         for (boundary, fact) in [
             (PrivacyMode::Local, "local secret plan"),
@@ -1346,17 +1444,116 @@ mod tests {
         )
         .unwrap();
 
-        assert!(
-            MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Managed, NONCE)
-                .is_empty()
+        assert!(MemoryPipeline::load_persistent_memory(
+            home.path(),
+            None,
+            PrivacyMode::Managed,
+            NONCE
+        )
+        .is_empty());
+        assert!(MemoryPipeline::load_persistent_memory(
+            home.path(),
+            None,
+            PrivacyMode::Byok,
+            NONCE
+        )
+        .is_empty());
+        assert!(MemoryPipeline::load_persistent_memory(
+            home.path(),
+            None,
+            PrivacyMode::Local,
+            NONCE
+        )
+        .contains("legacy unlabelled fact"));
+    }
+
+    #[tokio::test]
+    async fn what_one_project_taught_never_reaches_a_session_in_another() {
+        let home = memories_home();
+        let project_a = tempfile::tempdir().unwrap();
+        let project_b = tempfile::tempdir().unwrap();
+        for (project, session_id, fact) in [
+            (
+                project_a.path(),
+                "in-a",
+                "I always deploy client A with the blue pipeline.",
+            ),
+            (
+                project_b.path(),
+                "in-b",
+                "I always prefer pnpm in project B.",
+            ),
+        ] {
+            let messages = vec![
+                Message::text("system", "sys"),
+                Message::text("user", fact),
+                Message::text("assistant", "Understood."),
+            ];
+            MemoryPipeline::extract_session_summary(
+                home.path(),
+                Some(project),
+                session_id,
+                &messages,
+                &CliConfig::default(),
+                None,
+            )
+            .await
+            .unwrap();
+        }
+        write_summary(home.path(), "legacy.md", None, "- legacy unlabelled fact");
+
+        MemoryPipeline::consolidate(home.path(), &CliConfig::default(), None)
+            .await
+            .unwrap();
+
+        let in_b = MemoryPipeline::load_persistent_memory(
+            home.path(),
+            Some(project_b.path()),
+            PrivacyMode::Local,
+            NONCE,
+        );
+        assert!(in_b.contains("prefer pnpm in project B"), "{in_b}");
+        assert!(!in_b.contains("client A"), "{in_b}");
+        assert!(in_b.contains("legacy unlabelled fact"), "{in_b}");
+        let in_a = MemoryPipeline::load_persistent_memory(
+            home.path(),
+            Some(project_a.path()),
+            PrivacyMode::Local,
+            NONCE,
         );
         assert!(
-            MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Byok, NONCE)
-                .is_empty()
+            in_a.contains("client A") && !in_a.contains("project B"),
+            "{in_a}"
         );
-        assert!(
-            MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Local, NONCE)
-                .contains("legacy unlabelled fact")
+        let elsewhere =
+            MemoryPipeline::load_persistent_memory(home.path(), None, PrivacyMode::Local, NONCE);
+        assert!(!elsewhere.contains("client A") && !elsewhere.contains("project B"));
+        assert_eq!(
+            elsewhere
+                .matches(&format!(
+                    "</{}>",
+                    origin_memory_tag(PrivacyMode::Local, NONCE)
+                ))
+                .count(),
+            1
+        );
+        assert!(stored_fact_count(home.path()) >= 3);
+        assert!(!MemoryPipeline::needs_consolidation(home.path()));
+    }
+
+    #[test]
+    fn a_project_key_that_is_not_one_files_the_summary_under_no_project() {
+        assert_eq!(
+            summary_project("---\nproject: ../../outside\n---\n\n- fact"),
+            None
+        );
+        let key = project_key(Path::new("/work/client-a"));
+        assert!(is_project_key(&key));
+        assert_eq!(
+            summary_project(&format!(
+                "---\norigin: local\nproject: {key}\n---\n\n- fact"
+            )),
+            Some(key)
         );
     }
 
@@ -1389,14 +1586,20 @@ mod tests {
     #[test]
     fn test_load_persistent_memory_empty() {
         let dir = tempfile::tempdir().unwrap();
-        assert!(
-            MemoryPipeline::load_persistent_memory(dir.path(), PrivacyMode::Local, NONCE)
-                .is_empty()
-        );
-        assert!(
-            MemoryPipeline::load_persistent_memory(dir.path(), PrivacyMode::Managed, NONCE)
-                .is_empty()
-        );
+        assert!(MemoryPipeline::load_persistent_memory(
+            dir.path(),
+            None,
+            PrivacyMode::Local,
+            NONCE
+        )
+        .is_empty());
+        assert!(MemoryPipeline::load_persistent_memory(
+            dir.path(),
+            None,
+            PrivacyMode::Managed,
+            NONCE
+        )
+        .is_empty());
     }
 
     #[test]
@@ -1410,7 +1613,7 @@ mod tests {
             "# Memory\n\n- Always run tests",
         )
         .unwrap();
-        let result = MemoryPipeline::load_persistent_memory(home, PrivacyMode::Local, NONCE);
+        let result = MemoryPipeline::load_persistent_memory(home, None, PrivacyMode::Local, NONCE);
         assert!(result.contains("<persistent_memory>"));
         assert!(result.contains("Always run tests"));
         assert!(result.contains("</persistent_memory>"));
@@ -1439,7 +1642,7 @@ mod tests {
         ];
         let config = CliConfig::default();
 
-        MemoryPipeline::extract_session_summary(home, "sess-local", &messages, &config, None)
+        MemoryPipeline::extract_session_summary(home, None, "sess-local", &messages, &config, None)
             .await
             .unwrap();
 

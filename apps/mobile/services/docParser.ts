@@ -1,5 +1,6 @@
 import { readAsStringAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { OFFICE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
+import { parseCsvRecords } from '@/services/csvRecords';
 
 export type SupportedDocType = 'pdf' | 'txt' | 'md' | 'csv' | 'code';
 
@@ -126,44 +127,39 @@ async function readFileText(uri: string): Promise<string> {
   }
 }
 
-function parseCsvToText(raw: string): { text: string; rows: number; columns: number } {
-  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { text: '', rows: 0, columns: 0 };
+const CSV_VALUE_NEEDS_QUOTING = /[\r\n";]|^\s|\s$/;
+const CSV_HEADER_NEEDS_QUOTING = /[\r\n",]|^\s|\s$/;
 
-  const splitCsvLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
-        result.push(current.trim());
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-    result.push(current.trim());
-    return result;
-  };
+function csvLabelText(value: string, needsQuoting: RegExp): string {
+  return needsQuoting.test(value) ? JSON.stringify(value) : value;
+}
 
-  const headers = splitCsvLine(lines[0] ?? '');
-  const columns = headers.length;
-  const dataRows = lines.slice(1);
+function parseCsvToText(raw: string): {
+  text: string;
+  rows: number;
+  columns: number;
+  complete: boolean;
+} {
+  const { records, complete } = parseCsvRecords(raw);
+  const [headerRecord, ...dataRows] = records;
+  if (!headerRecord) return { text: '', rows: 0, columns: 0, complete };
 
+  const headers = headerRecord.map((header) => csvLabelText(header, CSV_HEADER_NEEDS_QUOTING));
   const segments: string[] = [`Columns: ${headers.join(', ')}`];
-  for (const row of dataRows) {
-    const values = splitCsvLine(row);
-    const pairs = headers.map((h, i) => `${h}: ${values[i] ?? ''}`);
+  for (const values of dataRows) {
+    const width = Math.max(headers.length, values.length);
+    const pairs = Array.from({ length: width }, (_, i) => {
+      const label = headers[i] ?? `column ${i + 1}`;
+      return `${label}: ${csvLabelText(values[i] ?? '', CSV_VALUE_NEEDS_QUOTING)}`;
+    });
     segments.push(pairs.join('; '));
   }
 
   return {
     text: segments.join('\n'),
     rows: dataRows.length,
-    columns,
+    columns: headers.length,
+    complete,
   };
 }
 
@@ -401,13 +397,19 @@ export async function parseDocument(uri: string, mimeType?: string): Promise<Par
 
     case 'csv': {
       const raw = await readFileText(uri);
-      const { text, rows, columns } = parseCsvToText(raw);
+      const { text, rows, columns, complete } = parseCsvToText(raw);
       if (!text.trim()) {
         throw new DocParseError('CSV appears to be empty', 'EMPTY_DOCUMENT');
       }
       return {
         text,
-        metadata: { docType, rows, columns, fileSizeBytes },
+        metadata: {
+          docType,
+          rows,
+          columns,
+          fileSizeBytes,
+          ...(complete ? {} : { partial: true }),
+        },
       };
     }
 

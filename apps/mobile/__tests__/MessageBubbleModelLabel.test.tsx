@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Modal } from 'react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -104,8 +105,17 @@ jest.mock('@/src/features/chat/components/ToolCallTimeline', () => {
 jest.mock('@/src/features/chat/components/AgentActivityTimeline', () => {
   const RN = require('react-native');
   return {
-    AgentActivityTimeline: ({ activity }: { activity: { status: string } }) => (
-      <RN.Text>Canonical activity: {activity.status}</RN.Text>
+    AgentActivityTimeline: ({
+      activity,
+      reasoning,
+    }: {
+      activity: { status: string };
+      reasoning?: React.ReactNode;
+    }) => (
+      <RN.View testID="canonical-activity">
+        <RN.Text>Canonical activity: {activity.status}</RN.Text>
+        {reasoning}
+      </RN.View>
     ),
   };
 });
@@ -170,7 +180,13 @@ jest.mock('@/src/features/chat/components/PerformanceChip', () => ({
   PerformanceChip: () => null,
 }));
 jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
-  ReportFlagButton: () => null,
+  ReportSheet: () => null,
+}));
+
+const mockShowToast = jest.fn();
+jest.mock('@/src/shared/components/Toast', () => ({
+  ...jest.requireActual('@/src/shared/components/Toast'),
+  showToast: (...args: unknown[]) => mockShowToast(...args),
 }));
 
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
@@ -179,10 +195,12 @@ import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   DEFAULT_LOCAL_MODEL_ID,
+  getDisplayName,
   getModelById,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
 import { requireAutoMode, requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { getManagedModelPresentationLabel } from '@agiworkforce/unified-chat/model-info';
 
 const LOCAL_MODEL_LABEL = getShortDisplayName(DEFAULT_LOCAL_MODEL_ID);
 const SYNTHETIC_CLOUD_MODEL_ID = 'fixture-cloud-model';
@@ -217,18 +235,59 @@ describe('MessageBubble model label', () => {
       'Read aloud',
       'More message actions for AGI',
       'Regenerate response',
-      'Good response',
-      'Bad response',
       'Previous response',
       'Next response',
     ]) {
       expect(view.getByRole('button', { name })).toHaveStyle({ width: 44, height: 44 });
     }
+    expect(view.queryByRole('button', { name: 'Good response' })).toBeNull();
+    expect(view.queryByRole('button', { name: 'Bad response' })).toBeNull();
     fireEvent.press(view.getByRole('button', { name: 'Next response' }));
     expect(onSelectVariant).toHaveBeenCalledWith('answer-3');
   });
 
-  it('follows the stored rating when a failed write restores the previous value', () => {
+  it('wraps a failed reply notice inside the reading column instead of running off screen', () => {
+    const message: ChatMessage = {
+      id: 'answer-failed',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-11-11T00:00:00.000Z',
+      metadata: {
+        streamError:
+          'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.',
+      },
+    };
+    const onSwitchModel = jest.fn();
+    const view = render(
+      <MessageBubble
+        message={{
+          ...message,
+          metadata: {
+            streamError: {
+              message:
+                'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later.',
+              code: 'billing_period_not_renewed',
+            },
+          },
+        }}
+        onRetryMessage={jest.fn()}
+        onSwitchModel={onSwitchModel}
+      />,
+    );
+
+    expect(view.getByTestId('stream-failure-notice-text')).toHaveStyle({ flexShrink: 1 });
+    const actions = view.getByTestId('stream-failure-notice-actions');
+    expect(actions).toHaveStyle({ flexDirection: 'row', flexWrap: 'wrap' });
+    expect(within(actions).getByText('Retry')).toBeTruthy();
+    expect(view.getByTestId('stream-failure-notice-text').parent).not.toBe(actions);
+    expect(
+      view.getByLabelText(
+        'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later. Tap to try again.',
+      ),
+    ).toHaveStyle({ alignSelf: 'flex-start', maxWidth: '100%' });
+  });
+
+  it('rates from the More menu and follows the stored rating when a failed write restores the previous value', () => {
     const message: ChatMessage = {
       id: 'm-rated',
       role: 'assistant',
@@ -238,11 +297,20 @@ describe('MessageBubble model label', () => {
     };
     const onReaction = jest.fn();
     const view = render(<MessageBubble message={message} onReaction={onReaction} />);
-    const goodButton = () => view.getByLabelText('Good response');
-    const iconColor = () =>
-      goodButton().findAll((node) => node.props.color !== undefined)[0]?.props.color;
+    const openMenu = () => {
+      fireEvent.press(view.getByRole('button', { name: /^More message actions for / }));
+      return view
+        .UNSAFE_getAllByType(Modal)
+        .find((modal) => modal.props.visible && modal.props.onDismiss)!;
+    };
+    const goodLabel = () =>
+      view.getByTestId('message-action-good-response').props.accessibilityLabel;
 
-    fireEvent.press(goodButton());
+    const menu = openMenu();
+    expect(goodLabel()).toBe('Good Response');
+    expect(view.getByTestId('message-action-bad-response')).toBeTruthy();
+    fireEvent.press(view.getByTestId('message-action-good-response'));
+    act(() => menu.props.onDismiss());
     expect(onReaction).toHaveBeenCalledTimes(1);
     expect(onReaction).toHaveBeenCalledWith('m-rated', 'thumbsUp');
 
@@ -252,10 +320,47 @@ describe('MessageBubble model label', () => {
         onReaction={onReaction}
       />,
     );
-    expect(iconColor()).toBe(lightColors.agentSuccess);
+    openMenu();
+    expect(goodLabel()).toBe('Remove Good Response');
 
     view.rerender(<MessageBubble message={message} onReaction={onReaction} />);
-    expect(iconColor()).toBe(lightColors.textMuted);
+    expect(goodLabel()).toBe('Good Response');
+  });
+
+  it('confirms a rating from the More menu with a passing notice, and its removal', () => {
+    mockShowToast.mockClear();
+    const message: ChatMessage = {
+      id: 'm-confirmed',
+      role: 'assistant',
+      content: 'An answer to rate.',
+      createdAt: new Date().toISOString(),
+      metadata: { reaction: null },
+    };
+    const onReaction = jest.fn();
+    const view = render(<MessageBubble message={message} onReaction={onReaction} />);
+    const choose = (testID: string) => {
+      fireEvent.press(view.getByRole('button', { name: /^More message actions for / }));
+      const menu = view
+        .UNSAFE_getAllByType(Modal)
+        .find((modal) => modal.props.visible && modal.props.onDismiss)!;
+      fireEvent.press(view.getByTestId(testID));
+      act(() => menu.props.onDismiss());
+    };
+
+    choose('message-action-bad-response');
+    expect(onReaction).toHaveBeenLastCalledWith('m-confirmed', 'thumbsDown');
+    expect(mockShowToast).toHaveBeenLastCalledWith('Thanks for your feedback');
+
+    view.rerender(
+      <MessageBubble
+        message={{ ...message, metadata: { reaction: 'thumbsDown' } }}
+        onReaction={onReaction}
+      />,
+    );
+    choose('message-action-bad-response');
+    expect(onReaction).toHaveBeenLastCalledWith('m-confirmed', null);
+    expect(mockShowToast).toHaveBeenLastCalledWith('Rating removed');
+    expect(mockShowToast).toHaveBeenCalledTimes(2);
   });
 
   it('shows the friendly local model name instead of the internal model ID', () => {
@@ -290,6 +395,53 @@ describe('MessageBubble model label', () => {
 
     expect(getByText(`AGI Cloud · ${getModelById(cloudModel.id)?.name}`)).toBeTruthy();
     expect(queryByText(/Local Mode/)).toBeNull();
+  });
+
+  it('says a free-pool turn was answered through the free pool', () => {
+    const cloudModel = requireMobileCloudModel();
+    const message: ChatMessage = {
+      id: 'm-free',
+      role: 'assistant',
+      content: 'Answered on the free lane.',
+      createdAt: new Date().toISOString(),
+      model: cloudModel.id,
+      metadata: { requestedModel: cloudModel.id, resolvedModel: cloudModel.id, routeLane: 'free' },
+    };
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(
+      view.getByText(
+        `AGI Cloud · ${getManagedModelPresentationLabel(cloudModel.id, { freePool: true })}`,
+      ),
+    ).toBeTruthy();
+    expect(view.getByText(/via free pool$/)).toBeTruthy();
+
+    view.rerender(
+      <MessageBubble
+        message={{ ...message, metadata: { ...message.metadata, routeLane: 'managed' } }}
+      />,
+    );
+    expect(view.queryByText(/via free pool/)).toBeNull();
+  });
+
+  it('names a picked Cloud model that is not its provider preview model', () => {
+    const pickedModel = requireMobileCloudModel(
+      (model) => getModelById(model.id) === undefined,
+      'Cloud model outside the per-provider preview list',
+    );
+    const message: ChatMessage = {
+      id: 'm-cloud-picked',
+      role: 'assistant',
+      content: 'Answered by the picked model.',
+      createdAt: new Date().toISOString(),
+      model: pickedModel.id,
+      metadata: { requestedModel: pickedModel.id, resolvedModel: pickedModel.id },
+    };
+
+    const { getByText } = render(<MessageBubble message={message} />);
+
+    expect(getByText(`AGI Cloud · ${getDisplayName(pickedModel.id)}`)).toBeTruthy();
   });
 
   it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {
@@ -347,6 +499,41 @@ describe('MessageBubble model label', () => {
     expect(view.queryByText('Legacy tool timeline')).toBeNull();
     expect(view.getByText('Verified answer.')).toBeTruthy();
     expect(view.getByText('Legacy thinking')).toBeTruthy();
+    expect(view.getAllByText('Legacy thinking')).toHaveLength(1);
+    expect(
+      within(view.getByTestId('canonical-activity')).getByText('Legacy thinking'),
+    ).toBeTruthy();
+  });
+
+  it('keeps the reasoning as the one line when the activity has nothing to show', () => {
+    const message: ChatMessage = {
+      id: 'm-cloud-empty-activity',
+      role: 'assistant',
+      content: 'Short answer.',
+      createdAt: new Date().toISOString(),
+      model: SYNTHETIC_CLOUD_MODEL_ID,
+      reasoning: 'brief scratchpad',
+      metadata: {
+        agentActivity: {
+          schemaVersion: 1,
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          lastSequence: 1,
+          status: 'completed',
+          startedAtMs: 1_000,
+          updatedAtMs: 2_000,
+          completedAtMs: 2_000,
+          entries: [],
+        },
+      },
+    } as ChatMessage;
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.getAllByText('Legacy thinking')).toHaveLength(1);
+    expect(
+      within(view.getByTestId('canonical-activity')).queryByText('Legacy thinking'),
+    ).toBeNull();
   });
 
   it('opens structured search details from the VoiceOver message action', () => {

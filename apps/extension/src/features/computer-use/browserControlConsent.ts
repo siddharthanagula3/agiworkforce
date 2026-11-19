@@ -1,6 +1,7 @@
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
 import { hasOneTimeSiteGrant } from './oneTimeSiteGrants';
 import { readUserSiteAllowlist } from '../site-policy/store';
+import { ACCOUNT_ORIGIN_REFUSAL, isExtensionAccountOrigin } from './accountOrigins';
 
 export const BROWSER_CONTROL_CONSENT_STORAGE_KEY = 'agi_cu_browser_control_consent';
 
@@ -9,10 +10,11 @@ export const BROWSER_CONTROL_CONSENT_HEADLINE = 'This grants full DevTools-Proto
 export const BROWSER_CONTROL_CONSENT_BODY =
   'Approving browser control lets AGI attach the Chrome DevTools Protocol debugger to this origin ' +
   'and click, type, navigate, read the page DOM, and take screenshots inside your signed-in ' +
-  'session there. Chrome shows a debugging banner while a run is attached. Chrome will ask you ' +
-  'to grant site access for this origin, that grant is what makes the control possible, and you ' +
-  'can withdraw it from chrome://extensions at any time. Grant this only on sites you trust with ' +
-  'that session, and remove the site to revoke it.';
+  'session there. Chrome shows a debugging banner while a run is attached. For most sites Chrome ' +
+  'also asks you to grant site access, which you can withdraw from chrome://extensions at any ' +
+  'time. Local addresses such as localhost are already allowed, so this approval is the only ' +
+  'check there. Grant this only on sites you trust with that session, and remove the site to ' +
+  'revoke it.';
 
 export interface BrowserControlConsentStorage {
   get(key: string): Promise<Record<string, unknown>>;
@@ -117,8 +119,9 @@ export async function removeBrowserControlHostPermission(
 /**
  * The gate every computer-use entry point consults. Both halves must hold: the
  * in-extension record that the user read the DevTools-Protocol warning, and the
- * Chrome-enforced host grant that makes the reach real and revocable from
- * chrome://extensions.
+ * host grant. Chrome grants the AGI account, API and sign-in origins and any
+ * loopback port at install, so the host half proves nothing there: the account
+ * origins are refused outright and loopback rests on the stored record alone.
  */
 export async function hasBrowserControlConsent(
   origin: string,
@@ -126,7 +129,7 @@ export async function hasBrowserControlConsent(
   permissions: BrowserControlPermissions = chromePermissions(),
 ): Promise<boolean> {
   const normalized = normalizeApprovedSiteOrigin(origin);
-  if (!normalized) return false;
+  if (!normalized || isExtensionAccountOrigin(normalized)) return false;
   if (!hasOneTimeSiteGrant(normalized)) {
     const granted = await readBrowserControlConsent(storage);
     if (!granted.includes(normalized)) return false;
@@ -152,6 +155,7 @@ export async function grantBrowserControlConsent(
 ): Promise<void> {
   const normalized = normalizeApprovedSiteOrigin(origin);
   if (!normalized) throw new Error('Browser control can only be granted to an http(s) origin.');
+  if (isExtensionAccountOrigin(normalized)) throw new Error(ACCOUNT_ORIGIN_REFUSAL);
   const granted = await readBrowserControlConsent(storage);
   if (granted.includes(normalized)) return;
   await storage.set({

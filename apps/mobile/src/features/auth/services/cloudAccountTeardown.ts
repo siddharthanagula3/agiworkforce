@@ -1,4 +1,19 @@
-import { whenMmkvReady } from '@/lib/mmkv';
+import { storage, whenMmkvReady } from '@/lib/mmkv';
+import { SET_ASIDE_MARKER } from '@/storage/unreadableFiles';
+
+const CLOUD_ACCOUNT_STORE_NAMES = [
+  'chat-message-store-cloud',
+  'memory-store-cloud',
+  'projects-store-cloud',
+  'library-store-cloud',
+  'settings-store-cloud',
+  'schedule-store',
+  'tier-store',
+] as const;
+
+export interface ClearCloudAccountOptions {
+  keepUnsentWork?: boolean;
+}
 
 function runTeardownStep(label: string, step: () => void): void {
   try {
@@ -8,7 +23,28 @@ function runTeardownStep(label: string, step: () => void): void {
   }
 }
 
-function clearLocalCloudAccountStateNow(): void {
+function deleteSetAsideCloudStoreCopies(): void {
+  const prefixes = CLOUD_ACCOUNT_STORE_NAMES.map((name) => `${name}${SET_ASIDE_MARKER}`);
+  for (const key of storage.getAllKeys?.() ?? []) {
+    if (prefixes.some((prefix) => key.startsWith(prefix))) storage.delete(key);
+  }
+}
+
+function clearUnsentCloudWorkNow(): void {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  runTeardownStep('offline Cloud sends', () => {
+    const { clearAccountScopedOfflineQueue } = require('@/services/offlineQueue');
+    clearAccountScopedOfflineQueue();
+  });
+
+  runTeardownStep('Cloud composer drafts', () => {
+    const { clearAccountScopedDrafts } = require('@/src/features/chat/draftStore');
+    clearAccountScopedDrafts();
+  });
+  /* eslint-enable @typescript-eslint/no-require-imports */
+}
+
+function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOptions): void {
   /* eslint-disable @typescript-eslint/no-require-imports */
   let cloudConversationIds: string[] = [];
   let cloudProjectIds: string[] = [];
@@ -71,15 +107,19 @@ function clearLocalCloudAccountStateNow(): void {
     clearAccountScopedArtifactState();
   });
 
-  runTeardownStep('offline Cloud sends', () => {
-    const { clearAccountScopedOfflineQueue } = require('@/services/offlineQueue');
-    clearAccountScopedOfflineQueue();
+  runTeardownStep('recent searches', () => {
+    const { clearCloudRecentSearches } = require('@/src/features/search/recentSearches');
+    clearCloudRecentSearches();
   });
 
-  runTeardownStep('Cloud composer drafts', () => {
-    const { clearAccountScopedDrafts } = require('@/src/features/chat/draftStore');
-    clearAccountScopedDrafts();
+  runTeardownStep('unreadable store copies', deleteSetAsideCloudStoreCopies);
+
+  runTeardownStep('answers finished after the app closed', () => {
+    const { clearInFlightTurnRuns } = require('@/src/features/chat/inFlightTurnRun');
+    clearInFlightTurnRuns();
   });
+
+  if (!keepUnsentWork) clearUnsentCloudWorkNow();
 
   runTeardownStep('composer handoff', () => {
     const { clearComposerHandoff } = require('@/src/features/chat/composerHandoff');
@@ -156,9 +196,16 @@ function clearLocalCloudAccountStateNow(): void {
   runTeardownStep('promotional model selection', () => {
     const { useModelStore } = require('@/src/features/model-picker/store');
     const { getProviderOffering } = require('@agiworkforce/types');
-    const { DEFAULT_LOCAL_MODEL_ID } = require('@/src/features/model-picker/service');
+    const {
+      DEFAULT_LOCAL_MODEL_ID,
+      isCloudManagedModelId,
+    } = require('@/src/features/model-picker/service');
     const selected = useModelStore.getState().selectedModel;
-    if (getProviderOffering(selected)) useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
+    if (getProviderOffering(selected)) {
+      useModelStore
+        .getState()
+        .setModel(useModelStore.getState().newChatModels.local ?? DEFAULT_LOCAL_MODEL_ID);
+    } else if (isCloudManagedModelId(selected)) useModelStore.getState().restoreNewChatModel();
   });
 
   runTeardownStep('schedule cache', () => {
@@ -186,6 +233,11 @@ function clearLocalCloudAccountStateNow(): void {
     notificationCenterStore.clear();
   });
 
+  runTeardownStep('delivered notifications and badge', () => {
+    const { clearDeliveredNotifications } = require('@/services/notifications');
+    void clearDeliveredNotifications();
+  });
+
   runTeardownStep('account notification feed', () => {
     const { useAccountNotificationFeed } = require('@/src/features/notifications/accountFeed');
     useAccountNotificationFeed.getState().reset();
@@ -201,6 +253,16 @@ function clearLocalCloudAccountStateNow(): void {
     useChatViewStore.getState().clearCloudSearchState();
   });
 
+  runTeardownStep('Cloud conversation style and connectors', () => {
+    const { useChatViewStore } = require('@/stores/chat/chatViewStore');
+    useChatViewStore.getState().clearCloudConversationState(cloudConversationIds);
+  });
+
+  runTeardownStep('library cache', () => {
+    const { useLibraryCacheStore } = require('@/src/features/library/libraryCacheStore');
+    useLibraryCacheStore.getState().clearLibraryCache();
+  });
+
   runTeardownStep('Managed Cloud access', () => {
     const { useWaitlistStore } = require('@/src/features/waitlist/store');
     useWaitlistStore.getState().clear();
@@ -208,12 +270,29 @@ function clearLocalCloudAccountStateNow(): void {
   /* eslint-enable @typescript-eslint/no-require-imports */
 }
 
-export function clearLocalCloudAccountState(): void {
-  clearLocalCloudAccountStateNow();
+function runNowAndOnceStorageIsReady(teardown: () => void): void {
+  teardown();
 
   let registrationComplete = false;
   whenMmkvReady(() => {
-    if (registrationComplete) clearLocalCloudAccountStateNow();
+    if (registrationComplete) teardown();
   });
   registrationComplete = true;
+}
+
+export function clearLocalCloudAccountState(options: ClearCloudAccountOptions = {}): void {
+  runNowAndOnceStorageIsReady(() => clearLocalCloudAccountStateNow(options));
+}
+
+export function clearUnsentCloudWork(): void {
+  runNowAndOnceStorageIsReady(clearUnsentCloudWorkNow);
+}
+
+export function hasQueuedCloudSends(): boolean {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { offlineQueue } = require('@/services/offlineQueue');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return (offlineQueue.getQueue() as { provenance: { scope: string } }[]).some(
+    (entry) => entry.provenance.scope === 'cloud',
+  );
 }

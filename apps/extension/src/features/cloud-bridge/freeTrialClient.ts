@@ -68,6 +68,12 @@ import { platformRequestHeaders } from '../../platformHeaders';
 import { UUID_PATTERN } from '../../lib/uuid';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
+import {
+  classifyCloudRefusal,
+  readCloudRefusal,
+  retryAfterSentence,
+  type CloudRefusalKind,
+} from './cloudRefusal';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import {
   CallerToolContinuationError,
@@ -204,6 +210,35 @@ function isGatewayCode(code: string | undefined, expected: string): boolean {
 const ACCOUNT_UNAVAILABLE_MESSAGE =
   'This AGI account cannot be used right now. Open your account on the web to see why.';
 
+/** The server did not accept the credential. Only the auth layer can say the session is gone. */
+export class ManagedAccessAuthRequiredError extends Error {
+  constructor() {
+    super('Authentication is required');
+    this.name = 'ManagedAccessAuthRequiredError';
+  }
+}
+
+/** A refusal with a reason, such as a workspace policy, that signing in again does not change. */
+export class ManagedAccessRefusedError extends Error {
+  constructor(
+    message: string,
+    readonly kind: Extract<CloudRefusalKind, 'plan' | 'policy' | 'account' | 'refused'> = 'policy',
+  ) {
+    super(message);
+    this.name = 'ManagedAccessRefusedError';
+  }
+}
+
+/** The server could not answer right now; the session and stored data stand. */
+export class ManagedAccessUnavailableError extends Error {
+  constructor(readonly retryAfterSeconds: number | undefined) {
+    super(`AGI could not check your account right now. ${retryAfterSentence(retryAfterSeconds)}`);
+    this.name = 'ManagedAccessUnavailableError';
+  }
+}
+
+const ACCESS_REFUSED_MESSAGE = 'This AGI account cannot use AGI Cloud from the Chrome extension.';
+
 export class AccountUnavailableError extends Error {
   constructor(
     message: string,
@@ -236,18 +271,27 @@ export async function getManagedModelAccess(
   if (!response.ok || !usageResponse.ok) {
     const failed = !response.ok ? response : usageResponse;
     const status = failed.status;
-    if (status === 403) {
-      const refusal = readGatewayErrorBody(await readBoundedErrorBody(failed));
-      if (isGatewayCode(refusal.code, ACCOUNT_UNAVAILABLE_CODE)) {
-        throw new AccountUnavailableError(
-          refusal.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
-          refusal.recoveryPath ?? null,
-        );
-      }
+    const gatewayError =
+      status === 403 ? readGatewayErrorBody(await readBoundedErrorBody(failed.clone())) : {};
+    const refusal = await readCloudRefusal(failed);
+    if (refusal.kind === 'auth') throw new ManagedAccessAuthRequiredError();
+    if (refusal.kind === 'unavailable')
+      throw new ManagedAccessUnavailableError(refusal.retryAfterSeconds);
+    if (isGatewayCode(gatewayError.code, ACCOUNT_UNAVAILABLE_CODE)) {
+      throw new AccountUnavailableError(
+        gatewayError.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+        gatewayError.recoveryPath ?? null,
+      );
     }
-    throw new Error(
-      status === 401 ? 'Authentication is required' : `Account access is unavailable (${status})`,
-    );
+    if (
+      refusal.kind === 'plan' ||
+      refusal.kind === 'policy' ||
+      refusal.kind === 'account' ||
+      refusal.kind === 'refused'
+    ) {
+      throw new ManagedAccessRefusedError(refusal.message ?? ACCESS_REFUSED_MESSAGE, refusal.kind);
+    }
+    throw new Error(`Account access is unavailable (${status})`);
   }
 
   const [body, usageBody] = await Promise.all([response.json(), usageResponse.json()]);
@@ -444,11 +488,13 @@ async function clearLocalAuth(endClerkSession: boolean): Promise<LocalAuthClearR
     // ignore
   }
   let profileCleared = true;
-  try {
-    await clearAutofillProfile();
-  } catch (error) {
-    console.warn('[AGI] Removing the saved autofill profile failed:', error);
-    profileCleared = false;
+  if (endClerkSession) {
+    try {
+      await clearAutofillProfile();
+    } catch (error) {
+      console.warn('[AGI] Removing the saved autofill profile failed:', error);
+      profileCleared = false;
+    }
   }
   return { webSessionEnded, profileCleared };
 }
@@ -729,6 +775,8 @@ export type FreeTrialChunk =
         | 'account_suspended'
         | 'terms_required'
         | 'plan_required'
+        | 'policy_blocked'
+        | 'model_refused'
         | 'rate_limited'
         | 'server_error'
         | 'protocol_error'
@@ -1193,7 +1241,57 @@ function bodyIndicatesFreeQuota(body: string): boolean {
 
 const ACCOUNT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 429]);
 
-function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, { type: 'error' }> {
+const MODEL_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  'model_may_train',
+  'no_training_model_available',
+  'model_not_available',
+]);
+
+const MODEL_REFUSED_MESSAGE =
+  'This model is not available with your current settings. Choose another model.';
+
+const POLICY_BLOCKED_MESSAGE = 'Your workspace policy does not allow this AGI Cloud request.';
+
+function parsedErrorBody(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+function retryAfterFromHeader(headers: Headers): number | undefined {
+  const raw = headers.get('retry-after')?.trim();
+  if (!raw) return undefined;
+  if (/^\d+$/.test(raw)) return statableRetryAfterSeconds(Number(raw));
+  const at = Date.parse(raw);
+  return Number.isNaN(at) ? undefined : statableRetryAfterSeconds((at - Date.now()) / 1000);
+}
+
+function retryAfterFromBody(body: string): number | undefined {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const record = parsed as Record<string, unknown>;
+    for (const holder of [record['error'], record['rateLimit']]) {
+      if (holder && typeof holder === 'object' && !Array.isArray(holder)) {
+        const seconds = statableRetryAfterSeconds(
+          (holder as Record<string, unknown>)['retry_after_seconds'],
+        );
+        if (seconds !== undefined) return seconds;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function accountRefusal(
+  status: number,
+  body: string,
+  headers: Headers,
+): Extract<FreeTrialChunk, { type: 'error' }> {
   const gatewayError = readGatewayErrorBody(body);
   if (isGatewayCode(gatewayError.code, ACCOUNT_UNAVAILABLE_CODE)) {
     return {
@@ -1232,15 +1330,38 @@ function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, {
     return { type: 'error', message: 'Sign in to use AGI Cloud chat.', code: 'auth_required' };
   }
   if (status === 429) {
+    const retryAfterSeconds = retryAfterFromHeader(headers) ?? retryAfterFromBody(body);
     return {
       type: 'error',
-      message: 'AGI Cloud is receiving too many requests. Try again shortly.',
+      message:
+        retryAfterSeconds === undefined
+          ? 'AGI Cloud is receiving too many requests. Try again shortly.'
+          : 'AGI Cloud is receiving too many requests.',
       code: 'rate_limited',
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     };
+  }
+  if (status === 403 && gatewayError.code && MODEL_REFUSAL_CODES.has(gatewayError.code)) {
+    return {
+      type: 'error',
+      message: gatewayError.message ?? MODEL_REFUSED_MESSAGE,
+      code: 'model_refused',
+    };
+  }
+  if (status === 403) {
+    const refusal = classifyCloudRefusal(status, parsedErrorBody(body), headers);
+    if (refusal.kind === 'policy') {
+      return {
+        type: 'error',
+        message: refusal.message ?? POLICY_BLOCKED_MESSAGE,
+        code: 'policy_blocked',
+      };
+    }
   }
   return {
     type: 'error',
-    message: 'This AGI Cloud capability is not available for the current account.',
+    message:
+      gatewayError.message ?? 'This AGI Cloud capability is not available for the current account.',
     code: 'plan_required',
   };
 }
@@ -1517,7 +1638,7 @@ export async function* streamFreeChat(
 
     if (ACCOUNT_REFUSAL_STATUSES.has(response.status)) {
       const body = await readBoundedErrorBody(response);
-      yield accountRefusal(response.status, body);
+      yield accountRefusal(response.status, body, response.headers);
       return;
     }
 

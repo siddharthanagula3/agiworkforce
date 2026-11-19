@@ -10,7 +10,7 @@ const appConfig = require('../app.config.js') as {
 };
 
 describe('iPad multitasking native config', () => {
-  it('supports tablet multitasking without unlocking iPhone landscape', () => {
+  it('supports tablet multitasking and keeps the Android activity portrait', () => {
     expect(appConfig.expo.orientation).toBe('portrait');
     expect(appConfig.expo.ios).toMatchObject({
       supportsTablet: true,

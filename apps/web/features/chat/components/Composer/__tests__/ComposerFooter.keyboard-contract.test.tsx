@@ -189,6 +189,16 @@ describe('ComposerFooter · picker keyboard contract', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it('does not leave the model name tooltip open over the composer after the picker closes', async () => {
+    render(<ComposerFooter />);
+    openPicker();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    const trigger = screen.getByRole('button', { name: /, change model$/ });
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
   it('short list: Tab closes the menu, matching the reference', () => {
     render(<ComposerFooter />);
     const dialog = openPicker();
@@ -203,7 +213,7 @@ describe('ComposerFooter · picker keyboard contract', () => {
     const rows = within(dialog)
       .getAllByRole('button')
       .filter((button) => button.hasAttribute('aria-pressed'));
-    const freeSection = within(dialog).getByRole('button', { name: 'Free' });
+    const freeSection = within(dialog).getByRole('button', { name: 'Free models' });
     await waitFor(() => expect(document.activeElement).toBe(freeSection));
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(rows[0]);

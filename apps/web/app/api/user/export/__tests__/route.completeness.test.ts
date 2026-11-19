@@ -54,6 +54,10 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 
+import {
+  DataExportCompletenessSchema,
+  DataExportResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 import { GET } from '../route';
 
 function exportRequest(url = 'https://agiworkforce.com/api/user/export'): NextRequest {
@@ -97,6 +101,11 @@ describe('GET /api/user/export completeness', () => {
     expect(body.data.export_metadata.completeness.truncated_sections).toEqual([
       { section: 'security_audit_logs', limit: 1000 },
     ]);
+    const envelope = DataExportResponseSchema.parse(body);
+    expect(envelope).toMatchObject({ success: false, status: 'partial' });
+    expect(
+      DataExportCompletenessSchema.parse(body.data.export_metadata.completeness),
+    ).toMatchObject({ status: 'partial' });
   });
 
   it('reports a complete export when every section was read', async () => {
@@ -406,6 +415,87 @@ describe('GET /api/user/export completeness', () => {
     expect(body.status).toBe('partial');
     expect(body.data.export_metadata.completeness.skipped_rows).toEqual([
       { section: 'memories', count: 1 },
+    ]);
+  });
+
+  it('with the chat file schema absent the export is complete and has no chat_file_intakes section', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('to_regclass(')) {
+        return [{ intakes_table: false, preparations_table: false, scanned_sha256_column: false }];
+      }
+      if (sql.includes('chat_file_intakes')) {
+        throw new Error('relation "chat_file_intakes" does not exist');
+      }
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(body.status).toBe('complete');
+    expect(body.data.export_metadata.completeness.unavailable_sections).toEqual([]);
+    expect(body.data).not.toHaveProperty('chat_file_intakes');
+    expect(
+      mockQuery.mock.calls.filter(
+        ([sql]) =>
+          String(sql).includes('chat_file_intakes') && !String(sql).includes('to_regclass('),
+      ),
+    ).toEqual([]);
+  });
+
+  it('with the schema present the intake rows are exported', async () => {
+    const intake = {
+      id: '6c1f4a52-0d9e-4b7a-9f13-2e8c5d7a1b40',
+      organization_id: null,
+      conversation_id: null,
+      temporary_chat: false,
+      file_name: 'quarterly-report.pdf',
+      mime_type: 'application/pdf',
+      byte_count: '73400320',
+      declared_sha256: 'a'.repeat(64),
+      state: 'rejected',
+      refusal_code: 'encrypted',
+      failure_code: null,
+      cancel_reason: null,
+      media_asset_id: null,
+      created_at: '2026-11-15T10:00:00.000Z',
+      state_changed_at: '2026-11-15T10:01:00.000Z',
+      updated_at: '2026-11-15T10:01:00.000Z',
+    };
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('to_regclass(')) {
+        return [{ intakes_table: true, preparations_table: true, scanned_sha256_column: true }];
+      }
+      if (sql.includes('from chat_file_intakes')) return [intake];
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(body.status).toBe('complete');
+    expect(body.data.chat_file_intakes).toEqual([intake]);
+    const reads = mockQuery.mock.calls.filter(([sql]) =>
+      String(sql).includes('from chat_file_intakes'),
+    );
+    expect(reads.length).toBeGreaterThan(0);
+    for (const [sql] of reads) {
+      expect(String(sql)).not.toMatch(/staging_key|multipart_upload_id|scan_job_id|etag/);
+    }
+  });
+
+  it('marks the chat file section unavailable when the schema cannot be probed', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('to_regclass(')) throw new Error('connection reset');
+      return [];
+    });
+
+    const response = await GET(exportRequest());
+    const body = await response.json();
+
+    expect(body.status).toBe('partial');
+    expect(body.data.export_metadata.completeness.unavailable_sections).toEqual([
+      'chat_file_intakes',
     ]);
   });
 

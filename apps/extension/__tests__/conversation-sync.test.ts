@@ -57,7 +57,15 @@ const chromeMock = {
     },
   },
   runtime: { lastError: undefined as chrome.runtime.LastError | undefined },
+  alarms: {
+    create: vi.fn(async (name: string, info: { when: number }) => {
+      alarms.set(name, { name, scheduledTime: info.when });
+    }),
+    get: vi.fn(async (name: string) => alarms.get(name)),
+    clear: vi.fn(async (name: string) => alarms.delete(name)),
+  },
 };
+const alarms = new Map<string, { name: string; scheduledTime: number }>();
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
 
 function setCloudMirroring(enabled: boolean): void {
@@ -86,13 +94,16 @@ import {
   ensureCloudConversation,
   flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
+  saveConversationNow,
   scheduleConversationSync,
   sweepConversationSync,
   CLOUD_SYNC_TOMBSTONE_KEY,
+  CONVERSATION_SYNC_RETRY_ALARM,
 } from '../src/features/cloud-bridge/conversationSync';
 import {
   getConversation,
   pendingCloudMessages,
+  recordCloudSyncState,
   upsertConversation,
   type HistoryMessage,
 } from '../src/features/background/conversation-history';
@@ -169,6 +180,7 @@ function conversationPosts(): RecordedRequest[] {
 describe('conversation cloud sync', () => {
   beforeEach(() => {
     for (const key of Object.keys(_store)) delete _store[key];
+    alarms.clear();
     setCloudMirroring(true);
     requests.length = 0;
     respond = defaultResponder;
@@ -433,6 +445,59 @@ describe('conversation cloud sync', () => {
     expect(entry?.messages[0]?.content).toBe('ask');
   });
 
+  it('shows a workspace policy refusal in its own words instead of asking to sign in', async () => {
+    const reason =
+      'Your workspace administrator has turned off cloud access from the Chrome extension.';
+    await upsertConversation(OWNER, 'conv-policy', cloudMessages(4_500));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse(
+            {
+              error: {
+                type: 'organization_policy',
+                code: 'surface_sync_disabled',
+                message: reason,
+              },
+            },
+            403,
+          )
+        : defaultResponder(request);
+
+    await flushConversation(OWNER, 'conv-policy');
+
+    const entry = await getConversation(OWNER, 'conv-policy');
+    expect(entry?.cloudSync).toMatchObject({
+      state: 'blocked',
+      blockedReason: 'policy',
+      lastError: reason,
+    });
+    expect(entry?.cloudSync?.retryAfter).toBeGreaterThan(Date.now());
+    expect(entry?.messages).toHaveLength(2);
+  });
+
+  it('waits only as long as a slow server asks before trying again', async () => {
+    await upsertConversation(OWNER, 'conv-503', cloudMessages(4_700));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? new Response(
+            JSON.stringify({
+              error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' },
+            }),
+            { status: 503, headers: { 'Content-Type': 'application/json', 'retry-after': '5' } },
+          )
+        : defaultResponder(request);
+
+    const startedAt = Date.now();
+    await flushConversation(OWNER, 'conv-503');
+
+    const entry = await getConversation(OWNER, 'conv-503');
+    expect(entry?.cloudSync?.state).toBe('error');
+    expect(entry?.cloudSync?.blockedReason).toBeUndefined();
+    expect(entry?.cloudSync?.retryAfter).toBeGreaterThanOrEqual(startedAt + 5_000);
+    expect(entry?.cloudSync?.retryAfter).toBeLessThan(Date.now() + 6_000);
+    expect(entry?.messages).toHaveLength(2);
+  }, 10_000);
+
   it('backs off on 429 without a client retry, and the next flush is a no-op', async () => {
     await upsertConversation(OWNER, 'conv-429', cloudMessages(5_000));
     respond = (request) =>
@@ -450,6 +515,299 @@ describe('conversation cloud sync', () => {
     await flushConversation(OWNER, 'conv-429');
     expect(requests).toHaveLength(countBefore);
   });
+
+  it('saves at once when the user asks, even inside the wait an earlier failure set', async () => {
+    await upsertConversation(OWNER, 'conv-save-now', cloudMessages(5_100));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse({ error: 'Too many requests' }, 429)
+        : defaultResponder(request);
+    await flushConversation(OWNER, 'conv-save-now');
+    const failed = await getConversation(OWNER, 'conv-save-now');
+    expect(failed?.cloudSync?.state).toBe('error');
+    expect(failed?.cloudSync?.retryAfter).toBeGreaterThan(Date.now());
+
+    respond = defaultResponder;
+    const postsBefore = messagePosts().length;
+    await expect(saveConversationNow(OWNER, 'conv-save-now')).resolves.toEqual({
+      status: 'saved',
+    });
+
+    expect(messagePosts().length).toBeGreaterThan(postsBefore);
+    const saved = await getConversation(OWNER, 'conv-save-now');
+    expect(saved?.cloudSync?.state).toBe('idle');
+    expect(saved?.cloudSync?.retryAfter).toBeUndefined();
+    expect(pendingCloudMessages(saved!)).toHaveLength(0);
+  });
+
+  it('reports a refused user save with the account reason and does not ask again', async () => {
+    const reason = 'Your workspace administrator has turned off saving chats from the extension.';
+    await upsertConversation(OWNER, 'conv-save-refused', cloudMessages(5_200));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse(
+            {
+              error: {
+                type: 'organization_policy',
+                code: 'surface_sync_disabled',
+                message: reason,
+              },
+            },
+            403,
+          )
+        : defaultResponder(request);
+
+    await expect(saveConversationNow(OWNER, 'conv-save-refused')).resolves.toEqual({
+      status: 'refused',
+      reason,
+    });
+    await expect(saveConversationNow(OWNER, 'conv-save-refused')).resolves.toEqual({
+      status: 'refused',
+      reason,
+    });
+    expect(messagePosts()).toHaveLength(1);
+  });
+
+  it('keeps to the wait a rate limit stated and says until when', async () => {
+    await upsertConversation(OWNER, 'conv-save-wait', cloudMessages(5_250));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? new Response(
+            JSON.stringify({
+              error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests.' },
+            }),
+            { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '120' } },
+          )
+        : defaultResponder(request);
+    const startedAt = Date.now();
+
+    const first = await saveConversationNow(OWNER, 'conv-save-wait');
+    expect(first).toMatchObject({
+      status: 'not-saved',
+      reason: expect.stringContaining('Too many'),
+    });
+    const retryAt = (first as { retryAt?: number }).retryAt!;
+    expect(retryAt).toBeGreaterThanOrEqual(startedAt + 120_000);
+    expect(retryAt).toBeLessThan(Date.now() + 121_000);
+    expect(messagePosts()).toHaveLength(1);
+
+    respond = defaultResponder;
+    await expect(saveConversationNow(OWNER, 'conv-save-wait')).resolves.toEqual(first);
+    expect(messagePosts()).toHaveLength(1);
+  });
+
+  describe('Save changes now after an earlier save was blocked', () => {
+    const unauthorized = (request: RecordedRequest): Response =>
+      request.url.endsWith('/messages')
+        ? jsonResponse({ error: 'Unauthorized' }, 401)
+        : defaultResponder(request);
+
+    it('saves for a signed-in owner whose earlier save hit a sign-in block', async () => {
+      await upsertConversation(OWNER, 'conv-auth-retry', cloudMessages(5_260));
+      respond = unauthorized;
+      await flushConversation(OWNER, 'conv-auth-retry');
+      expect((await getConversation(OWNER, 'conv-auth-retry'))?.cloudSync).toMatchObject({
+        state: 'blocked',
+        blockedReason: 'auth',
+      });
+
+      respond = defaultResponder;
+      const postsBefore = messagePosts().length;
+      await expect(saveConversationNow(OWNER, 'conv-auth-retry')).resolves.toEqual({
+        status: 'saved',
+      });
+
+      expect(messagePosts().length).toBeGreaterThan(postsBefore);
+      const saved = await getConversation(OWNER, 'conv-auth-retry');
+      expect(saved?.cloudSync?.state).toBe('idle');
+      expect(saved?.cloudSync?.blockedReason).toBeUndefined();
+      expect(pendingCloudMessages(saved!)).toHaveLength(0);
+    });
+
+    it('asks a signed-out user to sign in, without a request', async () => {
+      await upsertConversation(OWNER, 'conv-auth-signed-out', cloudMessages(5_265));
+      respond = unauthorized;
+      await flushConversation(OWNER, 'conv-auth-signed-out');
+      authContext.current = null;
+      const before = requests.length;
+
+      await expect(saveConversationNow(OWNER, 'conv-auth-signed-out')).resolves.toEqual({
+        status: 'refused',
+        reason: 'Sign in to save chats to your account.',
+      });
+      expect(requests).toHaveLength(before);
+    });
+
+    it('never tells a signed-in user to sign in when the account turns the token down', async () => {
+      await upsertConversation(OWNER, 'conv-auth-again', cloudMessages(5_270));
+      respond = unauthorized;
+
+      const outcome = await saveConversationNow(OWNER, 'conv-auth-again');
+
+      expect(outcome).toEqual({ status: 'not-saved' });
+      expect(messagePosts()).toHaveLength(1);
+    });
+
+    it('tries again once a policy block has waited out its time', async () => {
+      await upsertConversation(OWNER, 'conv-policy-over', cloudMessages(5_275));
+      respond = (request) =>
+        request.url.endsWith('/messages')
+          ? jsonResponse(
+              { error: { type: 'organization_policy', code: 'surface_sync_disabled' } },
+              403,
+            )
+          : defaultResponder(request);
+      await flushConversation(OWNER, 'conv-policy-over');
+      expect((await getConversation(OWNER, 'conv-policy-over'))?.cloudSync?.blockedReason).toBe(
+        'policy',
+      );
+      await expect(saveConversationNow(OWNER, 'conv-policy-over')).resolves.toMatchObject({
+        status: 'refused',
+      });
+      expect(messagePosts()).toHaveLength(1);
+
+      await recordCloudSyncState(OWNER, 'conv-policy-over', { retryAfter: Date.now() - 1 });
+      respond = defaultResponder;
+      await expect(saveConversationNow(OWNER, 'conv-policy-over')).resolves.toEqual({
+        status: 'saved',
+      });
+      expect(messagePosts().length).toBeGreaterThan(1);
+    });
+  });
+
+  it('does not name a reset time the save will not wait for', async () => {
+    await upsertConversation(OWNER, 'conv-two-waits', cloudMessages(5_280));
+    const resetAt = new Date(Date.now() + 20 * 60 * 60_000).toISOString();
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? new Response(
+            JSON.stringify({
+              error: {
+                code: 'RATE_LIMIT_EXCEEDED',
+                message: 'Too many requests.',
+                reset_at: resetAt,
+              },
+            }),
+            { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '120' } },
+          )
+        : defaultResponder(request);
+
+    const outcome = await saveConversationNow(OWNER, 'conv-two-waits');
+
+    expect(outcome).toMatchObject({ status: 'not-saved' });
+    const { reason, retryAt } = outcome as { reason?: string; retryAt?: number };
+    expect(retryAt).toBeLessThan(Date.now() + 121_000);
+    expect(reason).not.toContain('resets');
+    expect(reason).toContain('2 minutes');
+  });
+
+  describe('a chat waiting out a wait is retried by the extension itself', () => {
+    const rateLimited = (request: RecordedRequest): Response =>
+      request.url.endsWith('/messages')
+        ? new Response(
+            JSON.stringify({ error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many.' } }),
+            { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '120' } },
+          )
+        : defaultResponder(request);
+
+    it('wakes when the earliest wait ends, not every minute', async () => {
+      await upsertConversation(OWNER, 'conv-wake', cloudMessages(5_290));
+      respond = rateLimited;
+      await flushConversation(OWNER, 'conv-wake');
+      const retryAfter = (await getConversation(OWNER, 'conv-wake'))?.cloudSync?.retryAfter;
+      expect(retryAfter).toBeGreaterThan(Date.now());
+
+      expect(alarms.get(CONVERSATION_SYNC_RETRY_ALARM)?.scheduledTime).toBe(retryAfter);
+      expect(await sweepConversationSync()).toBe(false);
+      expect(alarms.get(CONVERSATION_SYNC_RETRY_ALARM)?.scheduledTime).toBe(retryAfter);
+    });
+
+    it('wakes for the soonest of several waits and drops the wake once none is left', async () => {
+      await upsertConversation(OWNER, 'conv-wake-later', cloudMessages(5_291));
+      await upsertConversation(OWNER, 'conv-wake-sooner', cloudMessages(5_292));
+      respond = rateLimited;
+      await flushConversation(OWNER, 'conv-wake-later');
+      await flushConversation(OWNER, 'conv-wake-sooner');
+      const sooner = Date.now() + 30_000;
+      await recordCloudSyncState(OWNER, 'conv-wake-sooner', { retryAfter: sooner });
+
+      await sweepConversationSync();
+      expect(alarms.get(CONVERSATION_SYNC_RETRY_ALARM)?.scheduledTime).toBe(sooner);
+
+      respond = defaultResponder;
+      await recordCloudSyncState(OWNER, 'conv-wake-later', { retryAfter: Date.now() - 1 });
+      await recordCloudSyncState(OWNER, 'conv-wake-sooner', { retryAfter: Date.now() - 1 });
+      expect(await sweepConversationSync()).toBe(false);
+      expect(alarms.has(CONVERSATION_SYNC_RETRY_ALARM)).toBe(false);
+      for (const id of ['conv-wake-later', 'conv-wake-sooner']) {
+        expect(pendingCloudMessages((await getConversation(OWNER, id))!)).toHaveLength(0);
+      }
+    });
+
+    it('does not keep waking the worker for an account that refuses on policy', async () => {
+      await upsertConversation(OWNER, 'conv-wake-policy', cloudMessages(5_293));
+      respond = (request) =>
+        request.url.endsWith('/messages')
+          ? jsonResponse(
+              { error: { type: 'organization_policy', code: 'surface_sync_disabled' } },
+              403,
+            )
+          : defaultResponder(request);
+      await flushConversation(OWNER, 'conv-wake-policy');
+
+      expect(await sweepConversationSync()).toBe(false);
+      expect(alarms.has(CONVERSATION_SYNC_RETRY_ALARM)).toBe(false);
+    });
+
+    it('saves after the wait from stored state alone, as a restarted worker would', async () => {
+      await upsertConversation(OWNER, 'conv-restart', cloudMessages(5_295));
+      respond = rateLimited;
+      await flushConversation(OWNER, 'conv-restart');
+      const retryAfter = (await getConversation(OWNER, 'conv-restart'))!.cloudSync!.retryAfter!;
+      const postsBefore = messagePosts().length;
+
+      vi.resetModules();
+      const restarted = await import('../src/features/cloud-bridge/conversationSync');
+      respond = defaultResponder;
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        vi.setSystemTime(retryAfter + 1);
+        expect(await restarted.sweepConversationSync()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(messagePosts().length).toBeGreaterThan(postsBefore);
+      const saved = await getConversation(OWNER, 'conv-restart');
+      expect(pendingCloudMessages(saved!)).toHaveLength(0);
+      expect(alarms.has(CONVERSATION_SYNC_RETRY_ALARM)).toBe(false);
+    });
+  });
+
+  it('says saving is turned off instead of pretending to save', async () => {
+    await upsertConversation(OWNER, 'conv-save-off', cloudMessages(5_300));
+    setCloudMirroring(false);
+
+    await expect(saveConversationNow(OWNER, 'conv-save-off')).resolves.toEqual({
+      status: 'mirroring-off',
+    });
+    expect(requests).toHaveLength(0);
+  });
+
+  it('never shows a raw transport error as the reason a save failed', async () => {
+    await upsertConversation(OWNER, 'conv-save-raw', cloudMessages(5_400));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse({ error: 'internal stack trace at db.query' }, 500)
+        : defaultResponder(request);
+
+    const outcome = await saveConversationNow(OWNER, 'conv-save-raw');
+
+    expect(outcome).toEqual({
+      status: 'not-saved',
+      reason: 'This chat could not be saved to your account. Try again in a few minutes.',
+    });
+  }, 10_000);
 
   it('retries a 5xx three times with the same message id, then records an error', async () => {
     await upsertConversation(OWNER, 'conv-5xx', cloudMessages(6_000));

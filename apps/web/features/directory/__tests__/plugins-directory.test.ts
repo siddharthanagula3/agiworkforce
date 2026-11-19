@@ -988,7 +988,7 @@ describe('a plugin the account added itself is marked as not reviewed', () => {
       const source = { ...userSource(), id: 'source-own', kind };
       const card = toUserMarketplaceEntry(entry(), source, installs());
       expect(card.badges).toEqual(['unreviewed']);
-      expect(card.installNotice).toMatch(/^Only add skills and plugins from sources you trust\./);
+      expect(card.installNotice).toMatch(/^Only add skills and plugins you trust\./);
       expect(card.installNotice).toContain('Reads files');
       expect(toUserMarketplaceDetail(entry(), source, installs()).unreviewed).toBe(true);
     }

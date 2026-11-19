@@ -183,15 +183,16 @@ impl AgentSession {
         })
     }
 
-    pub(crate) fn note_file_edit_started(
+    pub(crate) async fn note_file_edit_started(
         &mut self,
         call_id: &str,
         tool: &str,
         args: &serde_json::Value,
         root: Option<&std::path::Path>,
     ) {
+        let edited = checkpoints::edited_paths(tool, args, root).await;
         let authority = self.checkpoint_file_authority().cloned();
-        let captured: Vec<std::path::PathBuf> = checkpoints::edited_paths(tool, args, root)
+        let captured: Vec<std::path::PathBuf> = edited
             .into_iter()
             .filter(|path| self.checkpoint_log.capture(path, authority.as_ref()))
             .collect();

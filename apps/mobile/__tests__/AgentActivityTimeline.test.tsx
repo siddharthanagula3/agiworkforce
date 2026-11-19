@@ -67,35 +67,68 @@ function activity(overrides: Partial<AgentActivityState> = {}): AgentActivitySta
 }
 
 describe('AgentActivityTimeline', () => {
-  it('opens active work, lets the user collapse it, and keeps details deliberate', () => {
+  it('rests running work as one closed line, opens on a tap, and keeps details deliberate', () => {
     const view = render(
       <AgentActivityTimeline messageId="message-1" activity={activity()} nowMs={2_500} />,
     );
 
-    const trigger = view.getByLabelText(/hide agent activity/i);
-    expect(trigger.props.accessibilityState).toEqual({ expanded: true });
-    expect(view.getAllByText(/Searching official sources/)).toHaveLength(2);
-    expect(view.queryByText('Official agent documentation')).toBeNull();
+    const trigger = view.getByLabelText(/show agent activity/i);
+    expect(trigger.props.accessibilityState).toEqual({ expanded: false });
+    expect(view.getByTestId('agent-activity.running-label')).toBeTruthy();
+    expect(view.queryByLabelText(/^Searching official sources, /)).toBeNull();
 
     fireEvent.press(trigger);
+
+    expect(view.getByLabelText(/hide agent activity/i).props.accessibilityState).toEqual({
+      expanded: true,
+    });
+    expect(view.queryByText('Official agent documentation')).toBeNull();
+    fireEvent.press(view.getByLabelText(/^Searching official sources, /));
+    expect(view.getByText('Official agent documentation')).toBeTruthy();
+    expect(view.getByText('example.com')).toBeTruthy();
+
+    fireEvent.press(view.getByLabelText(/hide agent activity/i));
 
     expect(view.getByLabelText(/show agent activity/i).props.accessibilityState).toEqual({
       expanded: false,
     });
     expect(view.queryByLabelText(/^Searching official sources, /)).toBeNull();
+  });
+
+  it('carries the reasoning inside its one line instead of a second status row', () => {
+    const { Text: RNText } = require('react-native');
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-1"
+        activity={activity()}
+        nowMs={2_500}
+        reasoning={<RNText>Reasoning entry</RNText>}
+      />,
+    );
+
+    expect(view.queryByText('Reasoning entry')).toBeNull();
 
     fireEvent.press(view.getByLabelText(/show agent activity/i));
+
+    expect(view.getByText('Reasoning entry')).toBeTruthy();
+  });
+
+  it('opens by itself when a step waits for the person to answer', () => {
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-1"
+        activity={activity({ status: 'awaiting-approval' })}
+        nowMs={2_500}
+      />,
+    );
 
     expect(view.getByLabelText(/hide agent activity/i).props.accessibilityState).toEqual({
       expanded: true,
     });
-    fireEvent.press(view.getByLabelText(/^Searching official sources, /));
-    expect(view.getByText('Official agent documentation')).toBeTruthy();
-    expect(view.getByText('example.com')).toBeTruthy();
   });
 
   it('keeps active summaries semantic and shows a fixed duration after completion', () => {
-    expect(buildAgentActivitySummary(activity(), 60_000)).toBe('Searching official sources');
+    expect(buildAgentActivitySummary(activity(), 60_000)).toBe('Searching official sources · 59s');
     expect(
       buildAgentActivitySummary(activity({ status: 'completed', completedAtMs: 50_000 }), 60_000),
     ).toBe('Worked for 49s · 1 tool');
@@ -168,10 +201,133 @@ describe('AgentActivityTimeline', () => {
     fireEvent.press(view.getByLabelText(/show 5 earlier steps/i));
     expect(view.getByText('Step 1')).toBeTruthy();
 
-    fireEvent.press(view.getByLabelText('Allow Install the document library'));
-    fireEvent.press(view.getByLabelText('Deny Install the document library'));
+    fireEvent.press(view.getByLabelText('Allow once: Install the document library'));
+    fireEvent.press(view.getByLabelText('Deny: Install the document library'));
 
     expect(onResolveApproval).toHaveBeenNthCalledWith(1, 'shell-1', 'approved', undefined);
     expect(onResolveApproval).toHaveBeenNthCalledWith(2, 'shell-1', 'rejected', undefined);
+  });
+
+  it('counts the seconds of a running turn in its one line', () => {
+    expect(buildAgentActivitySummary(activity({ startedAtMs: 1_000 }), 13_000)).toBe(
+      'Searching official sources · 12s',
+    );
+    expect(buildAgentActivitySummary(activity({ startedAtMs: 1_000 }), 1_200)).toBe(
+      'Searching official sources',
+    );
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-ticking"
+        activity={activity({ startedAtMs: 1_000 })}
+        nowMs={13_000}
+      />,
+    );
+    expect(view.getByLabelText(/show agent activity: .*· 12s$/i)).toBeTruthy();
+    view.rerender(
+      <AgentActivityTimeline
+        messageId="message-ticking"
+        activity={activity({ startedAtMs: 1_000 })}
+        nowMs={14_000}
+      />,
+    );
+    expect(view.getByLabelText(/show agent activity: .*· 13s$/i)).toBeTruthy();
+  });
+
+  it('keeps a stop label without seconds and adds none once the run settles', () => {
+    expect(
+      buildAgentActivitySummary(activity({ status: 'completed', completedAtMs: 13_000 }), 20_000),
+    ).toBe('Worked for 12s · 1 tool');
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-stopping"
+        activity={activity({ startedAtMs: 1_000 })}
+        nowMs={13_000}
+        statusLabel="Stopping"
+      />,
+    );
+    expect(view.getByLabelText('Show agent activity: Stopping')).toBeTruthy();
+  });
+
+  it('reads a turn paused on an undecided approval as waiting for the person', () => {
+    const pending = {
+      kind: 'tool' as const,
+      id: 'tool:send-1',
+      toolCallId: 'send-1',
+      name: 'mcp__gmail__send_email',
+      category: 'connector' as const,
+      summary: 'Review Gmail action',
+      status: 'awaiting-approval' as const,
+      input: { to: 'team@example.com' },
+      startedAtMs: 2_000,
+      approval: { id: 'approval-send', riskLevel: 'high' as const },
+    };
+    const paused = activity({ status: 'paused', entries: [pending] });
+    expect(buildAgentActivitySummary(paused, 9_000)).toBe('Needs approval · Review Gmail action');
+    const view = render(<AgentActivityTimeline messageId="message-paused" activity={paused} />);
+    expect(view.getByLabelText(/hide agent activity/i).props.accessibilityState).toEqual({
+      expanded: true,
+    });
+    expect(view.getByLabelText('Allow once: Review Gmail action')).toBeTruthy();
+  });
+
+  it('names a connector step in plain words and gives a failed one its reason', () => {
+    const running = {
+      kind: 'tool' as const,
+      id: 'tool:issues-1',
+      toolCallId: 'issues-1',
+      name: 'mcp__github__search_issues',
+      category: 'connector' as const,
+      summary: 'Using GitHub connector',
+      status: 'running' as const,
+      input: { query: 'is:open' },
+      startedAtMs: 1_100,
+    };
+    expect(buildAgentActivitySummary(activity({ entries: [running] }), 1_200)).toBe(
+      'Searching GitHub',
+    );
+    const failed = {
+      ...running,
+      status: 'failed' as const,
+      error: 'The provider refused the request (429).',
+      completedAtMs: 1_900,
+      elapsedMs: 800,
+    };
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-connector"
+        defaultExpanded
+        activity={activity({ status: 'failed', entries: [failed] })}
+      />,
+    );
+    expect(view.getByText('Could not search GitHub')).toBeTruthy();
+    expect(view.getByTestId('agent-activity.failure-reason').props.children).toBe(
+      'Rate limited, try again in a minute.',
+    );
+  });
+
+  it('shows a failed step error without the tool label, trust fence or stack frames', () => {
+    const failed = {
+      kind: 'tool' as const,
+      id: 'tool:fetch-1',
+      toolCallId: 'fetch-1',
+      name: 'web_fetch',
+      category: 'web-fetch' as const,
+      summary: 'Reading the page',
+      status: 'failed' as const,
+      input: { url: 'https://example.com' },
+      error: 'Tool error: The page could not be read.\n    at fetchPage (fetch.js:10:3)',
+      startedAtMs: 1_100,
+      completedAtMs: 1_900,
+    };
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-failed-fetch"
+        defaultExpanded
+        activity={activity({ status: 'failed', entries: [failed] })}
+      />,
+    );
+    fireEvent.press(view.getByLabelText(/^Reading the page, /));
+    expect(view.getByText('The page could not be read.')).toBeTruthy();
+    expect(view.queryByText(/fetch\.js/)).toBeNull();
   });
 });

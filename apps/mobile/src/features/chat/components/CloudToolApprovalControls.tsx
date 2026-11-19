@@ -1,8 +1,25 @@
-import { TextInput, View } from 'react-native';
+import { useRef } from 'react';
+import { Alert, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useRecyclingState } from '@shopify/flash-list';
-import { ShieldAlert } from 'lucide-react-native';
-import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import { ChevronDown, ChevronRight, ShieldAlert } from 'lucide-react-native';
+import {
+  TOOL_APPROVAL_DESTRUCTIVE_NOTICE,
+  TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
+  TOOL_APPROVAL_NO_PARAMETERS,
+  TOOL_APPROVAL_RISK_LABELS,
+  TOOL_APPROVAL_SCOPES,
+  TOOL_APPROVAL_SCOPE_DECISIONS,
+  TOOL_APPROVAL_SCOPE_LABELS,
+  TOOL_APPROVAL_SESSION_SCOPE_NOTE,
+  effectiveToolApprovalReview,
+  toolApprovalParameterRows,
+  toolApprovalRawParameters,
+  toolApprovalScopeConfirmation,
+  type ToolApprovalDecisionValue,
+  type ToolApprovalReview,
+  type ToolApprovalScope,
+} from '@agiworkforce/cloud-contracts';
 import {
   TOOL_APPROVAL_ACTION_LABELS,
   TOOL_APPROVAL_HIGH_RISK_NOTICE,
@@ -15,15 +32,33 @@ import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { RiskLevel } from '@/types/chat';
-import { translatePlural } from '@/src/i18n/plural';
+import { TOOL_MONOSPACE, ToolFileDiffBlock } from './ToolFileDiffBlock';
+import { useRevealFocusedField } from './cards/ChatScrollIntoView';
+import { parseToolArguments } from '@/src/features/chat/utils/executedToolCode';
+import {
+  clearToolApprovalGuidanceDraft,
+  setToolApprovalGuidanceDraft,
+  toolApprovalGuidanceDraft,
+} from '@/src/features/chat/utils/toolApprovalGuidanceDrafts';
 
 export type CloudToolApprovalDecision = 'approved' | 'rejected';
 
 export type ResolveCloudToolApproval = (
   toolCallId: string,
-  decision: CloudToolApprovalDecision,
+  decision: ToolApprovalDecisionValue,
   guidance?: string,
 ) => void;
+
+function decidedToolApprovalScope(
+  decision: CloudToolApprovalDecision | undefined,
+  approvalScope: ToolApprovalDecisionValue | undefined,
+): ToolApprovalScope | undefined {
+  if (decision !== 'approved') return undefined;
+  return (
+    TOOL_APPROVAL_SCOPES.find((scope) => TOOL_APPROVAL_SCOPE_DECISIONS[scope] === approvalScope) ??
+    'once'
+  );
+}
 
 export type AllowCloudToolForChat = (
   toolCallId: string,
@@ -43,20 +78,7 @@ export function cloudToolApprovalPreview(
   return { stakes: toolApprovalStakes(toolName, args), diff: detectFileDiff(args) };
 }
 
-export function parseToolArguments(input: unknown): Record<string, unknown> | undefined {
-  if (typeof input === 'object' && input !== null && !Array.isArray(input)) {
-    return input as Record<string, unknown>;
-  }
-  if (typeof input !== 'string' || input.trim() === '') return undefined;
-  try {
-    const parsed: unknown = JSON.parse(input);
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
+export type AlwaysAllowCloudTool = AllowCloudToolForChat;
 
 interface CloudToolApprovalControlsProps {
   toolCallId: string;
@@ -64,78 +86,24 @@ interface CloudToolApprovalControlsProps {
   summary: string;
   args?: Record<string, unknown>;
   riskLevel?: RiskLevel;
+  review?: ToolApprovalReview;
   decision?: CloudToolApprovalDecision;
+  approvalScope?: ToolApprovalDecisionValue;
   guidance?: string;
   onResolve?: ResolveCloudToolApproval;
   onAllowForChat?: AllowCloudToolForChat;
+  onAlwaysAllow?: AlwaysAllowCloudTool;
 }
 
 const HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 } as const;
-const MAX_PREVIEW_DIFF_LINES = 40;
 
-function DiffPreview({ diff }: { diff: FileDiff }) {
-  const colors = useThemeColors();
-  const visible = diff.lines
-    .filter((line) => line.type !== 'meta')
-    .slice(0, MAX_PREVIEW_DIFF_LINES);
-  const hidden = diff.lines.filter((line) => line.type !== 'meta').length - visible.length;
-  return (
-    <View
-      accessibilityLabel={`Proposed change${diff.filePath ? ` to ${diff.filePath}` : ''}: ${diff.additions} added, ${diff.deletions} removed`}
-      style={{
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: colors.borderLight,
-        backgroundColor: colors.surfaceElevated,
-        paddingHorizontal: 8,
-        paddingVertical: 6,
-        gap: 2,
-      }}
-    >
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Text
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}
-        >
-          {diff.filePath ?? 'Proposed change'}
-        </Text>
-        <Text style={{ fontSize: typeScale.caption, color: colors.agentSuccess }}>
-          +{diff.additions}
-        </Text>
-        <Text style={{ fontSize: typeScale.caption, color: colors.agentError }}>
-          -{diff.deletions}
-        </Text>
-      </View>
-      {visible.map((line, index) => (
-        <Text
-          key={index}
-          style={{
-            fontFamily: 'monospace',
-            fontSize: typeScale.caption,
-            color:
-              line.type === 'add'
-                ? colors.agentSuccess
-                : line.type === 'remove'
-                  ? colors.agentError
-                  : colors.textSecondary,
-          }}
-        >
-          {`${line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' '} ${line.content}`}
-        </Text>
-      ))}
-      {hidden > 0 ? (
-        <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
-          {translatePlural(
-            'chat',
-            'counts.hiddenLines',
-            hidden,
-            { one: '{{lines}} more line not shown', other: '{{lines}} more lines not shown' },
-            { lines: hidden },
-          )}
-        </Text>
-      ) : null}
-    </View>
-  );
+function riskTone(
+  tier: ToolApprovalReview['riskTier'],
+  colors: ReturnType<typeof useThemeColors>,
+): string {
+  if (tier === 'low') return colors.textSecondary;
+  if (tier === 'medium') return colors.agentWarning;
+  return colors.agentError;
 }
 
 export function CloudToolApprovalControls({
@@ -144,22 +112,80 @@ export function CloudToolApprovalControls({
   summary,
   args,
   riskLevel,
+  review,
   decision,
+  approvalScope,
   guidance: savedGuidance,
   onResolve,
   onAllowForChat,
+  onAlwaysAllow,
 }: CloudToolApprovalControlsProps) {
   const colors = useThemeColors();
-  const disabled = !onResolve;
+  const decided = decision !== undefined;
+  const disabled = !onResolve || decided;
+  const effective = effectiveToolApprovalReview(review);
   const preview = cloudToolApprovalPreview(toolName, args);
-  const [guidance, setGuidance] = useRecyclingState(savedGuidance ?? '', [toolCallId]);
-  const [guidanceOpen, setGuidanceOpen] = useRecyclingState(Boolean(savedGuidance), [toolCallId]);
-  const resolve = (next: CloudToolApprovalDecision) =>
-    onResolve?.(toolCallId, next, guidance.trim() || undefined);
-  const canAllowForChat = Boolean(onAllowForChat) && !disabled && riskLevel !== 'high';
+  const parameterRows = toolApprovalParameterRows(args);
+  const rawParameters = toolApprovalRawParameters(args);
+  const [rawOpen, setRawOpen] = useRecyclingState(false, [toolCallId]);
+  const unsentGuidance = decided ? undefined : toolApprovalGuidanceDraft(toolCallId);
+  const initialGuidance = unsentGuidance ?? savedGuidance ?? '';
+  const [guidance, setGuidance] = useRecyclingState(initialGuidance, [toolCallId]);
+  const [guidanceOpen, setGuidanceOpen] = useRecyclingState(Boolean(initialGuidance), [toolCallId]);
+  const guidanceArea = useRef<View>(null);
+  const guidanceFocus = useRevealFocusedField(guidanceArea);
+  const editGuidance = (text: string) => {
+    setToolApprovalGuidanceDraft(toolCallId, text);
+    setGuidance(text);
+  };
+  const trimmedGuidance = () => {
+    clearToolApprovalGuidanceDraft(toolCallId);
+    return guidance.trim() || undefined;
+  };
+  const resolve = (next: ToolApprovalDecisionValue) =>
+    onResolve?.(toolCallId, next, trimmedGuidance());
+  const decidedScope = decidedToolApprovalScope(decision, approvalScope);
+
+  const scopeHandler = (scope: ToolApprovalScope): (() => void) | undefined => {
+    if (scope === 'once') return () => resolve(TOOL_APPROVAL_SCOPE_DECISIONS.once);
+    const grant = scope === 'session' ? onAllowForChat : onAlwaysAllow;
+    if (!grant) return undefined;
+    const run = () => grant(toolCallId, toolName, trimmedGuidance());
+    if (!effective.destructive) return run;
+    return () => {
+      const confirmation = toolApprovalScopeConfirmation(scope, summary);
+      Alert.alert(confirmation.title, confirmation.message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: confirmation.confirmLabel, style: 'destructive', onPress: run },
+      ]);
+    };
+  };
+  const scopeButtons = TOOL_APPROVAL_SCOPES.flatMap((scope) => {
+    const onPress = effective.scopes.includes(scope) ? scopeHandler(scope) : undefined;
+    return onPress || scope === decidedScope ? [{ scope, onPress }] : [];
+  });
+  const offersSession = scopeButtons.some((button) => button.scope === 'session');
 
   return (
     <View style={{ gap: 7 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <Text
+          testID="tool-approval.risk"
+          style={{
+            fontSize: typeScale.caption,
+            fontWeight: '600',
+            color: riskTone(effective.riskTier, colors),
+          }}
+        >
+          {TOOL_APPROVAL_RISK_LABELS[effective.riskTier]}
+        </Text>
+      </View>
+      {effective.destructive ? (
+        <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+          {TOOL_APPROVAL_DESTRUCTIVE_NOTICE}
+        </Text>
+      ) : null}
+
       {riskLevel === 'high' ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <ShieldAlert size={14} color={colors.agentError} />
@@ -190,69 +216,168 @@ export function CloudToolApprovalControls({
         </View>
       ) : null}
 
-      {preview.diff ? <DiffPreview diff={preview.diff} /> : null}
+      {preview.diff ? <ToolFileDiffBlock diff={preview.diff} /> : null}
 
-      {guidanceOpen ? (
-        <TextInput
-          value={guidance}
-          onChangeText={setGuidance}
-          editable={!disabled}
-          multiline
-          autoFocus={!savedGuidance}
-          maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
-          placeholder="Tell the agent what to do instead"
-          placeholderTextColor={colors.textMuted}
-          selectionColor={colors.teal}
-          accessibilityLabel={`Guidance for ${summary}`}
-          accessibilityHint="Sent to the agent with Allow or Deny"
-          style={{
-            minHeight: 64,
-            maxHeight: 140,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.inputSurface,
-            color: colors.textPrimary,
-            fontSize: typeScale.footnote,
-            paddingHorizontal: 10,
-            paddingVertical: 8,
-            textAlignVertical: 'top',
-          }}
-        />
+      {parameterRows.length > 0 ? (
+        <View testID="tool-approval.parameters" style={{ gap: 3 }}>
+          {parameterRows.map((row) => (
+            <View key={row.key} style={{ flexDirection: 'row', gap: 10 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  maxWidth: '40%',
+                  fontFamily: TOOL_MONOSPACE,
+                  fontSize: typeScale.caption,
+                  color: colors.textMuted,
+                }}
+              >
+                {row.key}
+              </Text>
+              <Text
+                selectable
+                style={{
+                  flex: 1,
+                  fontFamily: TOOL_MONOSPACE,
+                  fontSize: typeScale.caption,
+                  color: colors.textPrimary,
+                }}
+              >
+                {row.value}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+          {TOOL_APPROVAL_NO_PARAMETERS}
+        </Text>
+      )}
+
+      {rawParameters ? (
+        <View style={{ gap: 4 }}>
+          <PressableBox
+            onPress={() => setRawOpen((open) => !open)}
+            accessibilityRole="button"
+            accessibilityLabel="Raw JSON"
+            accessibilityState={{ expanded: rawOpen }}
+            hitSlop={HIT_SLOP}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              {rawOpen ? (
+                <ChevronDown size={13} color={colors.textMuted} />
+              ) : (
+                <ChevronRight size={13} color={colors.textMuted} />
+              )}
+              <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>Raw JSON</Text>
+            </View>
+          </PressableBox>
+          {rawOpen ? (
+            <Text
+              testID="tool-approval.raw-json"
+              selectable
+              style={{
+                fontFamily: TOOL_MONOSPACE,
+                fontSize: typeScale.caption,
+                color: colors.textPrimary,
+                backgroundColor: colors.surfaceOverlay,
+                borderRadius: 6,
+                padding: 8,
+              }}
+            >
+              {rawParameters}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-        <PressableBox
-          onPress={() => resolve('approved')}
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allow} ${summary}`}
-          accessibilityState={{ disabled, selected: decision === 'approved' }}
-          hitSlop={HIT_SLOP}
-        >
-          <View
+      <View ref={guidanceArea} collapsable={false} style={{ gap: 7 }}>
+        {guidanceOpen ? (
+          <TextInput
+            value={guidance}
+            onChangeText={editGuidance}
+            onFocus={guidanceFocus.onFocus}
+            onBlur={guidanceFocus.onBlur}
+            onContentSizeChange={guidanceFocus.onContentSizeChange}
+            editable={!disabled}
+            multiline
+            autoFocus={!initialGuidance}
+            maxLength={TOOL_APPROVAL_GUIDANCE_MAX_LENGTH}
+            placeholder="Tell the agent what to do instead"
+            placeholderTextColor={colors.textMuted}
+            selectionColor={colors.teal}
+            accessibilityLabel={`Guidance for ${summary}`}
+            accessibilityHint="Sent to the agent with Allow or Deny"
             style={{
-              paddingHorizontal: 13,
-              paddingVertical: 7,
+              minHeight: 64,
+              maxHeight: 140,
               borderRadius: 8,
-              backgroundColor: colors.agentSuccess,
-              opacity: disabled ? 0.5 : 1,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.inputSurface,
+              color: colors.textPrimary,
+              fontSize: typeScale.footnote,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              textAlignVertical: 'top',
             }}
-          >
-            <Text
-              style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '600' }}
-            >
-              {decision === 'approved'
+          />
+        ) : null}
+
+        <View
+          accessibilityLabel={`Decision for ${summary}`}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}
+        >
+          {scopeButtons.map(({ scope, onPress }) => {
+            const chosen = scope === decidedScope;
+            const primary = decided ? chosen : scope === 'once';
+            const label =
+              chosen && scope === 'once'
                 ? TOOL_APPROVAL_ACTION_LABELS.allowed
-                : TOOL_APPROVAL_ACTION_LABELS.allow}
-            </Text>
-          </View>
-        </PressableBox>
-        {canAllowForChat ? (
+                : TOOL_APPROVAL_SCOPE_LABELS[scope];
+            return (
+              <PressableBox
+                key={scope}
+                onPress={onPress}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityLabel={`${label}: ${summary}`}
+                accessibilityState={{ disabled, selected: chosen }}
+                hitSlop={HIT_SLOP}
+              >
+                <View
+                  style={{
+                    paddingHorizontal: 13,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    backgroundColor: primary ? colors.agentSuccess : undefined,
+                    borderWidth: primary ? 0 : 1,
+                    borderColor: colors.border,
+                    opacity: disabled && !chosen ? 0.5 : 1,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: primary ? colors.accentText : colors.textPrimary,
+                      fontSize: typeScale.caption,
+                      fontWeight: '600',
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </View>
+              </PressableBox>
+            );
+          })}
           <PressableBox
-            onPress={() => onAllowForChat?.(toolCallId, toolName, guidance.trim() || undefined)}
+            onPress={() => resolve('rejected')}
+            disabled={disabled}
             accessibilityRole="button"
-            accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allowForChat}: ${summary}`}
+            accessibilityLabel={`${
+              decision === 'rejected'
+                ? TOOL_APPROVAL_ACTION_LABELS.denied
+                : TOOL_APPROVAL_ACTION_LABELS.deny
+            }: ${summary}`}
+            accessibilityState={{ disabled, selected: decision === 'rejected' }}
             hitSlop={HIT_SLOP}
           >
             <View
@@ -262,6 +387,7 @@ export function CloudToolApprovalControls({
                 borderRadius: 8,
                 borderWidth: 1,
                 borderColor: colors.border,
+                opacity: disabled && decision !== 'rejected' ? 0.5 : 1,
               }}
             >
               <Text
@@ -271,59 +397,39 @@ export function CloudToolApprovalControls({
                   fontWeight: '600',
                 }}
               >
-                {TOOL_APPROVAL_ACTION_LABELS.allowForChat}
+                {decision === 'rejected'
+                  ? TOOL_APPROVAL_ACTION_LABELS.denied
+                  : TOOL_APPROVAL_ACTION_LABELS.deny}
               </Text>
             </View>
           </PressableBox>
-        ) : null}
-        <PressableBox
-          onPress={() => resolve('rejected')}
-          disabled={disabled}
-          accessibilityRole="button"
-          accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny} ${summary}`}
-          accessibilityState={{ disabled, selected: decision === 'rejected' }}
-          hitSlop={HIT_SLOP}
-        >
-          <View
-            style={{
-              paddingHorizontal: 13,
-              paddingVertical: 7,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: colors.border,
-              opacity: disabled ? 0.5 : 1,
-            }}
-          >
-            <Text
-              style={{ color: colors.textPrimary, fontSize: typeScale.caption, fontWeight: '600' }}
+          {guidanceOpen || disabled ? null : (
+            <PressableBox
+              onPress={() => setGuidanceOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Add guidance for ${summary}`}
+              hitSlop={HIT_SLOP}
             >
-              {decision === 'rejected'
-                ? TOOL_APPROVAL_ACTION_LABELS.denied
-                : TOOL_APPROVAL_ACTION_LABELS.deny}
-            </Text>
-          </View>
-        </PressableBox>
-        {guidanceOpen || disabled ? null : (
-          <PressableBox
-            onPress={() => setGuidanceOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Add guidance for ${summary}`}
-            hitSlop={HIT_SLOP}
-          >
-            <View style={{ paddingHorizontal: 6, paddingVertical: 7 }}>
-              <Text
-                style={{
-                  color: colors.textSecondary,
-                  fontSize: typeScale.caption,
-                  fontWeight: '600',
-                }}
-              >
-                Add guidance
-              </Text>
-            </View>
-          </PressableBox>
-        )}
+              <View style={{ paddingHorizontal: 6, paddingVertical: 7 }}>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                  }}
+                >
+                  Add guidance
+                </Text>
+              </View>
+            </PressableBox>
+          )}
+        </View>
       </View>
+      {offersSession && !decided ? (
+        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+          {TOOL_APPROVAL_SESSION_SCOPE_NOTE}
+        </Text>
+      ) : null}
     </View>
   );
 }

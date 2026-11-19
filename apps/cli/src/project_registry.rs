@@ -230,7 +230,7 @@ impl ProjectRegistry {
                 .max_by(|(left_key, left), (right_key, right)| {
                     (**left_key == path_key)
                         .cmp(&(**right_key == path_key))
-                        .then_with(|| decided_at(*left).cmp(&decided_at(*right)))
+                        .then_with(|| decided_at(left).cmp(&decided_at(right)))
                         .then_with(|| {
                             (left.trust_level == "untrusted")
                                 .cmp(&(right.trust_level == "untrusted"))

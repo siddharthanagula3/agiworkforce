@@ -35,10 +35,7 @@ import {
 } from '@/lib/services/managed-compute-access';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
-import {
-  evaluateActiveWorkspacePolicy,
-  resolveZeroDataRetentionPolicy,
-} from '@/lib/services/organization-policy-gate';
+import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import type { ArtifactRuntimeCompleteResponse } from '@agiworkforce/cloud-contracts';
 import { connectorDisplayName } from '@/app/chat/live-artifacts/live-artifact-contract';
 import {
@@ -72,13 +69,9 @@ export function ownedArtifactOriginRefusal(
 
 const WORDING = {
   published: {
-    zeroRetention:
-      'Your workspace requires zero data retention, which AI in published apps does not offer yet.',
     connectorsUnavailable: 'Your plan cannot use connected apps from published apps.',
   },
   owned: {
-    zeroRetention:
-      'Your workspace requires zero data retention, which AI in artifacts does not offer yet.',
     connectorsUnavailable: 'Your plan cannot use connected apps from artifacts.',
   },
 } as const;
@@ -175,11 +168,6 @@ export async function respondToArtifactCompletion(
     if (connectorGate) return connectorGate;
   }
 
-  const retention = await resolveZeroDataRetentionPolicy(scoped.db, scoped.userId);
-  if (retention.required) {
-    return artifactRuntimeRefusal(403, 'organization_policy', wording.zeroRetention);
-  }
-
   const moderation = moderateManagedPrompt({
     userId: scoped.userId,
     segments: [input.prompt],
@@ -222,10 +210,12 @@ export async function respondToArtifactCompletion(
 
   let route;
   try {
-    route = await selectArtifactRuntimeRoute(scoped.db, scoped.userId, prompt, entitlement.plan, {
-      needsTools: connectors.length > 0,
-      googleUserData,
-    });
+    route = await selectArtifactRuntimeRoute(
+      { db: scoped.db, userId: scoped.userId, organizationId: scoped.organizationId },
+      prompt,
+      entitlement.plan,
+      { needsTools: connectors.length > 0, googleUserData },
+    );
   } catch (error) {
     if (error instanceof ArtifactRuntimeRouteUnavailableError) {
       return artifactRuntimeRefusal(503, 'model_unavailable', error.message);

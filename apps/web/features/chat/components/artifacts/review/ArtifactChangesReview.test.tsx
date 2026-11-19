@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { ArtifactPreview } from '../ArtifactPreview';
 import { useArtifactsStore } from '../../../stores/artifacts-store';
-import { buildChangeReview, resolveReview } from './change-review';
+import { buildChangeReview, resolveReview } from '@agiworkforce/artifacts';
 
 const ID = '7b6a5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d';
 const BEFORE = '# Plan\n\nWe ship in March. The team is small.';

@@ -17,6 +17,7 @@ function stubChrome(): void {
     configurable: true,
     value: {
       runtime: { lastError: undefined, sendMessage: vi.fn() },
+      i18n: { getMessage: (key: string) => key, getUILanguage: () => 'en' },
       storage: { local: { get: vi.fn(), set: vi.fn() } },
       tabs: { query: vi.fn() },
     },

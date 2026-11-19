@@ -14,17 +14,13 @@ const session: Record<string, unknown> = {};
 const servers: Server[] = [];
 function storage(items: Record<string, unknown>) {
   return {
-    get: (keys: string | string[], callback: (value: Record<string, unknown>) => void) =>
-      callback(
-        Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map((key) => [key, items[key]])),
-      ),
-    set: (value: Record<string, unknown>, callback?: () => void) => {
+    get: async (keys: string | string[]) =>
+      Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map((key) => [key, items[key]])),
+    set: async (value: Record<string, unknown>) => {
       Object.assign(items, value);
-      callback?.();
     },
-    remove: (keys: string | string[], callback?: () => void) => {
+    remove: async (keys: string | string[]) => {
       for (const key of Array.isArray(keys) ? keys : [keys]) delete items[key];
-      callback?.();
     },
   };
 }
@@ -120,7 +116,7 @@ describe('pairing uses the canonical loopback transport', () => {
         expect((await requestPairing()).phase).toBe('error');
       }
       expect(received).not.toHaveBeenCalled();
-      expect(session['agi_pair_token']).toBeUndefined();
+      expect(local['agi_paired_desktop']).toBeUndefined();
     },
   );
 

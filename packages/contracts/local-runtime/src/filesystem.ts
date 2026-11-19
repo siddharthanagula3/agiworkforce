@@ -98,7 +98,10 @@ const SSH_KEY = /^id_(rsa|dsa|ecdsa|ed25519|xmss)(_sk)?([-_.].*)?$/u;
  * test counts them. The environment patterns come first because a checked-in
  * template is exempt from them alone.
  */
-const ENVIRONMENT_FILE_PATTERNS: readonly RegExp[] = [/(^|\/)\.env(\..+)?$/i, /(^|\/)\.envrc$/i];
+const ENVIRONMENT_FILE_PATTERNS: readonly RegExp[] = [
+  /(^|\/)\.env(\.[\s\S]+)?$/i,
+  /(^|\/)\.envrc$/i,
+];
 
 const CREDENTIAL_FILE_PATTERNS: readonly RegExp[] = [
   /(^|\/)secrets?\.(json|ya?ml|toml|env|txt)$/i,

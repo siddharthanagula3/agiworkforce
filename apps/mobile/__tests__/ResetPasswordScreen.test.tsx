@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
+const mockOpenInAppBrowser = jest.fn();
 const mockOpenExternalUrl = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -23,6 +24,7 @@ jest.mock('@/lib/v1FeatureFlags', () => ({
 
 jest.mock('@/lib/safeOpenURL', () => ({
   openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+  openInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -44,12 +46,22 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+import {
+  EMBEDDED_PAGE_PARAM,
+  EMBEDDED_PAGE_PARAM_VALUE,
+  isEmbeddableAccountPagePath,
+} from '@agiworkforce/types';
 import ResetPasswordScreen from '../app/(auth)/reset-password';
+
+function openedPage(call = 0): URL {
+  return new URL(mockOpenInAppBrowser.mock.calls[call]![0] as string);
+}
 
 describe('ResetPasswordScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOpenExternalUrl.mockResolvedValue(true);
+    mockOpenInAppBrowser.mockResolvedValue(true);
   });
 
   it('uses the web-owned recovery handoff instead of a dead native password form', async () => {
@@ -61,9 +73,24 @@ describe('ResetPasswordScreen', () => {
 
     fireEvent.press(getByLabelText('Open Web Account'));
 
-    await waitFor(() => {
-      expect(mockOpenExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/login');
-    });
+    await waitFor(() => expect(mockOpenInAppBrowser).toHaveBeenCalledTimes(1));
+    expect(mockOpenExternalUrl).not.toHaveBeenCalled();
+    const signIn = openedPage();
+    expect(signIn.pathname).toBe('/login');
+    const accountPage = new URL(signIn.searchParams.get('redirectTo') ?? '', signIn.origin);
+    expect(isEmbeddableAccountPagePath(accountPage.pathname)).toBe(true);
+    expect(accountPage.searchParams.get(EMBEDDED_PAGE_PARAM)).toBe(EMBEDDED_PAGE_PARAM_VALUE);
+  });
+
+  it('opens account recovery as the marked page in the in-app sheet', async () => {
+    const { getByLabelText } = render(<ResetPasswordScreen />);
+
+    fireEvent.press(getByLabelText('Lost Your Email or Two-Factor Device?'));
+
+    await waitFor(() => expect(mockOpenInAppBrowser).toHaveBeenCalledTimes(1));
+    expect(mockOpenExternalUrl).not.toHaveBeenCalled();
+    expect(openedPage().pathname).toBe('/recover');
+    expect(openedPage().searchParams.get(EMBEDDED_PAGE_PARAM)).toBe(EMBEDDED_PAGE_PARAM_VALUE);
   });
 
   it('never opens a link the app claims, which Android would hand straight back to this screen', async () => {
@@ -76,8 +103,8 @@ describe('ResetPasswordScreen', () => {
 
     fireEvent.press(getByLabelText('Open Web Account'));
 
-    await waitFor(() => expect(mockOpenExternalUrl).toHaveBeenCalled());
-    const opened = new URL(mockOpenExternalUrl.mock.calls[0]![0] as string);
+    await waitFor(() => expect(mockOpenInAppBrowser).toHaveBeenCalled());
+    const opened = openedPage();
     const claimed = claims.some(
       (claim) =>
         claim['host'] === opened.host &&

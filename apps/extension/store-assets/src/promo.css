@@ -1,0 +1,35 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--chat-bg);
+  color: var(--chat-fg);
+  font-family: var(--chat-font-sans);
+}
+
+.lockup {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: calc(var(--mark) * 0.22);
+}
+
+.lockup img {
+  width: var(--mark);
+  height: var(--mark);
+  object-fit: contain;
+}
+
+.lockup span {
+  font-size: var(--name);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}

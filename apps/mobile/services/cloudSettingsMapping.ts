@@ -17,6 +17,7 @@ import {
   type TechnicalLevel,
 } from '@agiworkforce/types';
 import { speechLanguageFromLegacy } from '@/src/features/voice/speechLanguage';
+import { accentTokenFrom } from '@/src/ui/theme/tokens';
 
 function isPreferredLength(value: unknown): value is PreferredLength {
   return (PREFERRED_LENGTHS as readonly unknown[]).includes(value);
@@ -183,7 +184,7 @@ export function applyCloudSettings(partial: CloudSettings): void {
     const { theme, font, accentColor } = partial.appearance;
     if (theme !== undefined) store.setThemeMode(theme);
     if (font !== undefined) store.setFontPreference(font);
-    if (accentColor !== undefined) store.setAccentColor(accentColor);
+    if (accentColor !== undefined) store.setAccentColor(accentTokenFrom(accentColor));
   }
 
   if (partial.personalization) {

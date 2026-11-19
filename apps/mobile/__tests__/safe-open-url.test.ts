@@ -3,7 +3,7 @@ jest.mock('expo-linking', () => ({
   openURL: (...args: unknown[]) => mockOpenURL(...args),
 }));
 
-import { isAllowedExternalUrl, openExternalUrl } from '../lib/safeOpenURL';
+import { isAllowedExternalUrl, isInAppBrowsableUrl, openExternalUrl } from '../lib/safeOpenURL';
 
 beforeEach(() => {
   mockOpenURL.mockReset().mockResolvedValue(undefined);
@@ -98,4 +98,36 @@ describe('openExternalUrl, Linking.openURL integration', () => {
     expect(ok).toBe(false);
     expect(mockOpenURL).not.toHaveBeenCalled();
   });
+});
+
+describe('isInAppBrowsableUrl', () => {
+  it.each([
+    'https://images.example.com/a.png',
+    'http://example.com/a.png',
+    'HTTPS://Example.com/Path?x=1#frag',
+  ])('accepts the web address %s', (url) => {
+    expect(isInAppBrowsableUrl(url)).toBe(true);
+  });
+
+  it.each([
+    ['javascript:', 'javascript:alert(1)'],
+    ['data:', 'data:image/png;base64,AAAA'],
+    ['file://', 'file:///etc/passwd'],
+    ['intent://', 'intent://attacker.com#Intent;scheme=https;end'],
+    ['mailto:', 'mailto:someone@example.com'],
+    ['tel:', 'tel:+15551234567'],
+    ['ftp://', 'ftp://example.com/a.png'],
+    ['a path with no scheme', '/api/files/abc'],
+    ['plain text', 'not a url'],
+    ['empty', ''],
+  ])('refuses %s', (_label, url) => {
+    expect(isInAppBrowsableUrl(url)).toBe(false);
+  });
+
+  it.each([undefined, null, 42, { url: 'https://example.com' }])(
+    'refuses the non-string %p',
+    (input) => {
+      expect(isInAppBrowsableUrl(input)).toBe(false);
+    },
+  );
 });

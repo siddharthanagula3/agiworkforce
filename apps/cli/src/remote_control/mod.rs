@@ -19,7 +19,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::platform::runtime::session::PrivacyMode;
 use envelope::{DispatchSession, VerifyError};
-use host::{CodeHost, Outgoing};
+use host::{relayable_thread, CodeHost, Outgoing};
 
 const PAIR_PATH: &str = "/api/pair/initiate";
 const ACTIVITY_PATH: &str = "/api/code/local-sessions/activity";
@@ -129,6 +129,14 @@ fn backoff(attempt: u32) -> Duration {
     (RECONNECT_BASE * 2u32.saturating_pow(attempt.min(5))).min(RECONNECT_MAX)
 }
 
+fn attempt_after_drop(attempt: u32, connected_for: Duration) -> u32 {
+    if connected_for >= RECONNECT_MAX {
+        1
+    } else {
+        attempt.saturating_add(1)
+    }
+}
+
 type Socket = WebSocketStream<reqwest::Upgraded>;
 
 struct Pairing {
@@ -211,6 +219,25 @@ fn relay_http_url(raw: &str, origin: &str) -> Result<reqwest::Url> {
     Ok(url)
 }
 
+fn pairing_refusal(status: reqwest::StatusCode, body: &Value) -> String {
+    let error = body.get("error");
+    let reason = error
+        .and_then(Value::as_str)
+        .or_else(|| {
+            error
+                .and_then(|error| error.get("message"))
+                .and_then(Value::as_str)
+        })
+        .map(|reason| {
+            crate::approval_audit::sanitize_field(reason)
+                .trim()
+                .to_string()
+        })
+        .filter(|reason| !reason.is_empty())
+        .unwrap_or_else(|| "Remote Control could not start".to_string());
+    format!("{reason} ({status})")
+}
+
 async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
     let base = validate_pairing_base(base)?;
     let client = reqwest::Client::builder()
@@ -227,11 +254,8 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
     let status = response.status();
     let body: Value = response.json().await.unwrap_or(Value::Null);
     if !status.is_success() {
-        let reason = body
-            .get("error")
-            .and_then(Value::as_str)
-            .unwrap_or("Remote Control could not start");
-        bail!("{reason} ({status})");
+        let refusal = pairing_refusal(status, &body);
+        bail!("{refusal}");
     }
     let code = body["code"].as_str().unwrap_or_default().to_string();
     let ws_url = body["signaling"]["wsUrl"]
@@ -598,7 +622,8 @@ fn session_title(thread_id: &str) -> Option<String> {
         .title
 }
 
-async fn report_activity(
+async fn report_activity<H: DeveloperSessionHost>(
+    host: Arc<H>,
     mut notifications: tokio::sync::broadcast::Receiver<
         agiworkforce_protocol::developer_session::AppServerNotification,
     >,
@@ -620,6 +645,12 @@ async fn report_activity(
         let Some(activity) = activity_of(&root_id, &notification, session_title) else {
             continue;
         };
+        let Some(thread_id) = activity["threadId"].as_str() else {
+            continue;
+        };
+        if !relayable_thread(&*host, thread_id).await {
+            continue;
+        }
         if let Err(error) = client.post::<_, Value>(ACTIVITY_PATH, &activity).await {
             tracing::debug!("[remote-control] session activity was not reported: {error}");
         }
@@ -684,6 +715,7 @@ fn print_status(status: RemoteControlStatus) {
             println!("  {pairing_line}");
             println!();
             println!("Anyone with this code can control sessions in this folder until you stop. Press Ctrl+C to stop.");
+            println!("Only Managed sessions are shared over Remote Control. Local and Your key sessions stay off the phone.");
         }
         RemoteControlStatus::Connected { phone } => {
             println!("Remote Control: connected to {phone}.")
@@ -706,13 +738,22 @@ pub async fn run<H: DeveloperSessionHost + 'static>(
     workspace: &Path,
     privacy: PrivacyMode,
 ) -> Result<()> {
-    run_with(host, workspace, privacy, stop_on_ctrl_c(), print_status).await
+    run_with(
+        host,
+        workspace,
+        privacy,
+        false,
+        stop_on_ctrl_c(),
+        print_status,
+    )
+    .await
 }
 
 pub async fn run_with<H: DeveloperSessionHost + 'static>(
     host: Arc<H>,
     workspace: &Path,
     privacy: PrivacyMode,
+    terminal_approver: bool,
     stop: Stop,
     status: impl Fn(RemoteControlStatus) + Send + Sync + 'static,
 ) -> Result<()> {
@@ -732,13 +773,15 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
         .unwrap_or_else(|| workspace.to_string_lossy().to_string());
     let mut notifications = host.subscribe();
     let activity_notifications = host.subscribe();
+    let activity_host = Arc::clone(&host);
     let mut relay = Relay {
         code_host: CodeHost::new(
             host,
             root_id(workspace),
             folder.clone(),
             workspace.to_string_lossy().to_string(),
-        ),
+        )
+        .with_terminal_approver(terminal_approver),
         pairing,
         secret,
         dispatch: None,
@@ -756,6 +799,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
     crate::device_registry::set_remote_control(true);
     let heartbeat = crate::device_registry::spawn_heartbeat_loop(privacy);
     let activity = tokio::spawn(report_activity(
+        activity_host,
         activity_notifications,
         root_id(workspace),
         privacy,
@@ -777,6 +821,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
                 continue;
             }
         };
+        let connected_at = std::time::Instant::now();
         match relay.serve(&stop, socket, &mut notifications).await {
             SessionEnd::Stopped => {
                 paired_end_sent = true;
@@ -784,7 +829,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
             }
             SessionEnd::Ended(reason) => break Err(anyhow!("Remote Control stopped: {reason}")),
             SessionEnd::Dropped => {
-                attempt += 1;
+                attempt = attempt_after_drop(attempt, connected_at.elapsed());
                 relay.dispatch = None;
                 relay.code_host.reset();
                 status(RemoteControlStatus::Reconnecting);
@@ -815,6 +860,78 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    #[test]
+    fn a_nested_pairing_refusal_shows_the_server_sentence() {
+        let lockdown = json!({
+            "error": {
+                "code": "FORBIDDEN",
+                "message": "This workspace is locked down while an incident is investigated. Contact support."
+            }
+        });
+        assert_eq!(
+            pairing_refusal(reqwest::StatusCode::FORBIDDEN, &lockdown),
+            "This workspace is locked down while an incident is investigated. Contact support. (403 Forbidden)"
+        );
+        let policy = json!({
+            "error": {
+                "type": "organization_policy",
+                "code": "surface_not_allowed",
+                "message": "Your workspace does not allow this app."
+            }
+        });
+        assert_eq!(
+            pairing_refusal(reqwest::StatusCode::FORBIDDEN, &policy),
+            "Your workspace does not allow this app. (403 Forbidden)"
+        );
+        let unavailable = json!({
+            "error": { "code": "SERVICE_UNAVAILABLE", "message": "Service temporarily unavailable" }
+        });
+        assert_eq!(
+            pairing_refusal(reqwest::StatusCode::SERVICE_UNAVAILABLE, &unavailable),
+            "Service temporarily unavailable (503 Service Unavailable)"
+        );
+    }
+
+    #[test]
+    fn a_string_pairing_refusal_still_reads_and_is_one_clean_line() {
+        assert_eq!(
+            pairing_refusal(
+                reqwest::StatusCode::SERVICE_UNAVAILABLE,
+                &json!({ "error": "Signaling server unavailable" })
+            ),
+            "Signaling server unavailable (503 Service Unavailable)"
+        );
+        assert_eq!(
+            pairing_refusal(
+                reqwest::StatusCode::FORBIDDEN,
+                &json!({ "error": { "message": "Blocked\n\u{1b}]52;c;cGF5bG9hZA==\u{7}here" } })
+            ),
+            "Blocked here (403 Forbidden)"
+        );
+        assert_eq!(
+            pairing_refusal(reqwest::StatusCode::FORBIDDEN, &Value::Null),
+            "Remote Control could not start (403 Forbidden)"
+        );
+    }
+
+    #[test]
+    fn a_drop_after_a_settled_connection_waits_the_short_delay_again() {
+        let mut attempt = 0;
+        for _ in 0..6 {
+            attempt = attempt_after_drop(attempt, Duration::from_secs(1));
+        }
+        assert_eq!(backoff(attempt), RECONNECT_MAX);
+
+        attempt = attempt_after_drop(attempt, RECONNECT_MAX);
+        assert_eq!(backoff(attempt), RECONNECT_BASE * 2);
+
+        assert_eq!(
+            backoff(attempt_after_drop(attempt, Duration::from_secs(1))),
+            RECONNECT_BASE * 4,
+            "a relay that drops straight after connecting must still back off"
+        );
+    }
 
     fn notification(
         method: &str,
@@ -1204,9 +1321,14 @@ mod tests {
             let statuses = Arc::new(std::sync::Mutex::new(0usize));
             let seen = Arc::clone(&statuses);
             let (_sender, stop) = tokio::sync::watch::channel(false);
-            let refused = run_with(Arc::new(host), workspace.path(), mode, stop, move |_| {
-                *seen.lock().unwrap() += 1
-            })
+            let refused = run_with(
+                Arc::new(host),
+                workspace.path(),
+                mode,
+                false,
+                stop,
+                move |_| *seen.lock().unwrap() += 1,
+            )
             .await
             .expect_err("Remote Control must be refused outside Cloud mode");
             assert_eq!(

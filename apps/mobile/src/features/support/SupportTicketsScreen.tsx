@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Switch, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LifeBuoy, Plus } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   CloudAccountRequired,
+  CloudSyncBlockedBanner,
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
@@ -37,13 +39,25 @@ export function SupportTicketsScreen() {
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
+  const setAppMode = useChatAppModeStore((state) => state.setAppMode);
 
-  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
+  if (!isClerkLoaded || !isClerkSignedIn) {
     return (
       <SettingsScreenShell title="Support" backHref="/(app)/about">
         <CloudAccountRequired
           isLoading={!isClerkLoaded}
-          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+          onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-support'))}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (appMode !== 'cloud') {
+    return (
+      <SettingsScreenShell title="Support" backHref="/(app)/about">
+        <CloudSyncBlockedBanner
+          message="Support tickets are kept in your Cloud account."
+          onSwitchToCloud={() => setAppMode('cloud')}
         />
       </SettingsScreenShell>
     );
@@ -67,6 +81,18 @@ function SupportTicketList() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const generation = useRef(0);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setComposing(false);
+        setSubject('');
+        setMessage('');
+        setIncludeDiagnostics(true);
+      },
+      [],
+    ),
+  );
 
   const load = useCallback(async (signal?: AbortSignal) => {
     generation.current += 1;
@@ -155,7 +181,7 @@ function SupportTicketList() {
     <SettingsScreenShell title="Support" backHref="/(app)/about">
       <SettingsInfo
         title="Raise a ticket"
-        body="Describe what went wrong. The support team replies here, and also by email to your account address."
+        body="Describe the problem. Support replies here and by email."
         icon={LifeBuoy}
       />
       {composing ? (

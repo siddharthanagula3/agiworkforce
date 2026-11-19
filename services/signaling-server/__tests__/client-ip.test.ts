@@ -27,8 +27,8 @@ describe('resolveClientIp', () => {
     expect(resolveClientIp(req, DIRECT)).toBe(CLIENT_A);
   });
 
-  it('falls back to the socket address behind a proxy when no header is present', () => {
-    expect(resolveClientIp(requestFrom(EDGE_SOCKET), PROXIED)).toBe(EDGE_SOCKET);
+  it('refuses to name a client behind a proxy when no forwarding header is present', () => {
+    expect(resolveClientIp(requestFrom(EDGE_SOCKET), PROXIED)).toBeNull();
   });
 
   it('uses the single entry the edge proxy wrote for an honest client', () => {
@@ -66,9 +66,9 @@ describe('resolveClientIp', () => {
     expect(resolveClientIp(req, PROXIED)).toBe('2001:db8::1');
   });
 
-  it('falls back to the socket address when the selected entry is not an IP', () => {
+  it('refuses to name a client when the selected entry is not an IP', () => {
     const req = requestFrom(EDGE_SOCKET, { 'x-forwarded-for': `${CLIENT_A}, not-an-ip` });
-    expect(resolveClientIp(req, PROXIED)).toBe(EDGE_SOCKET);
+    expect(resolveClientIp(req, PROXIED)).toBeNull();
   });
 
   it('skips the configured number of hops from the right', () => {
@@ -78,13 +78,21 @@ describe('resolveClientIp', () => {
     expect(resolveClientIp(req, { TRUST_PROXY: '1', TRUSTED_PROXY_HOPS: '2' })).toBe(CLIENT_A);
   });
 
-  it('falls back to the socket address when the chain is shorter than the hop count', () => {
+  it('refuses to name a client when the chain is shorter than the hop count', () => {
     const req = requestFrom(EDGE_SOCKET, { 'x-forwarded-for': CLIENT_A });
-    expect(resolveClientIp(req, { TRUST_PROXY: '1', TRUSTED_PROXY_HOPS: '3' })).toBe(EDGE_SOCKET);
+    expect(resolveClientIp(req, { TRUST_PROXY: '1', TRUSTED_PROXY_HOPS: '3' })).toBeNull();
   });
 
-  it('reports unknown only when there is nothing left to fall back to', () => {
-    expect(resolveClientIp(requestFrom(undefined), PROXIED)).toBe('unknown');
+  it('never collapses every proxied client onto the proxy socket address', () => {
+    const a = requestFrom(EDGE_SOCKET);
+    const b = requestFrom(EDGE_SOCKET, { 'x-forwarded-for': '' });
+    expect(resolveClientIp(a, PROXIED)).toBeNull();
+    expect(resolveClientIp(b, PROXIED)).toBeNull();
+  });
+
+  it('has no answer without a proxy when the socket has no peer address', () => {
+    expect(resolveClientIp(requestFrom(undefined), DIRECT)).toBeNull();
+    expect(resolveClientIp(requestFrom(undefined), PROXIED)).toBeNull();
   });
 });
 
@@ -110,6 +118,15 @@ describe('the client address on the Fly deployment', () => {
       'x-forwarded-for': `${SPOOFED}, ${CLIENT_B}, ${APP_IP}`,
     });
     expect(resolveClientIp(req, flyEnv)).toBe(CLIENT_B);
+  });
+
+  it('refuses a Fly request that carries only the app address Fly appends', () => {
+    const req = requestFrom(FLY_PROXY_SOCKET, { 'x-forwarded-for': APP_IP });
+    expect(resolveClientIp(req, flyEnv)).toBeNull();
+  });
+
+  it('refuses a Fly request with no forwarding header instead of keying it on the Fly proxy', () => {
+    expect(resolveClientIp(requestFrom(FLY_PROXY_SOCKET), flyEnv)).toBeNull();
   });
 
   it('gives two clients behind the same app address two identities', () => {

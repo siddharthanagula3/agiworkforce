@@ -16,12 +16,15 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export interface AddCustomConnectorModalProps {
   visible: boolean;
   onClose: () => void;
   onAdded: (connector: CustomConnectorResult) => void;
 }
+
+export const CUSTOM_CONNECTOR_HTTPS_REQUIRED = 'Use an address that starts with https://.';
 
 export function isLikelyHttpsUrl(value: string): boolean {
   const v = value.trim();
@@ -88,6 +91,7 @@ export function AddCustomConnectorModal({
     onClose();
   }, [submitting, reset, onClose]);
 
+  const urlRejected = url.trim().length > 0 && !isLikelyHttpsUrl(url);
   const canSubmit = name.trim().length > 0 && isLikelyHttpsUrl(url) && !submitting;
 
   const handleSubmit = useCallback(async () => {
@@ -141,6 +145,7 @@ export function AddCustomConnectorModal({
       >
         <View
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceBase,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
@@ -156,7 +161,7 @@ export function AddCustomConnectorModal({
             Add custom MCP connector
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
-            Connect a remote MCP server by its HTTPS URL. Its tools become available to the model.
+            Add a remote MCP server by its HTTPS URL to use its tools in chat.
           </Text>
 
           <TextInput
@@ -174,11 +179,20 @@ export function AddCustomConnectorModal({
             placeholder="https://mcp.example.com/sse"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Connector URL"
+            accessibilityHint={urlRejected ? CUSTOM_CONNECTOR_HTTPS_REQUIRED : undefined}
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="url"
             style={inputStyle}
           />
+          {urlRejected ? (
+            <Text
+              testID="custom-connector.url-reason"
+              style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}
+            >
+              {CUSTOM_CONNECTOR_HTTPS_REQUIRED}
+            </Text>
+          ) : null}
           <TextInput
             value={authToken}
             onChangeText={setAuthToken}

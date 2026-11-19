@@ -48,6 +48,7 @@ export interface AppMenuActions {
   openSettings: () => void;
   openLogs: () => void;
   copyDiagnostics: () => void;
+  clearCacheAndRestart: () => void;
   openProductHelp: () => void;
   openWhatsNew: () => void;
   openSupport: () => void;
@@ -565,6 +566,8 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
         submenu: [
           { label: 'Open Logs', click: actions.openLogs },
           { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+          { type: 'separator' },
+          { label: 'Clear Cache and Restart…', click: actions.clearCacheAndRestart },
         ],
       },
       { label: 'Open-Source Licenses', click: actions.openOpenSourceNotices },

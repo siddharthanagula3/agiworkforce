@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ChevronRight, Cloud, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Card } from '@/components/ui/Card';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -13,11 +14,13 @@ import {
   type ModelInstallJob,
 } from '@/src/features/model-picker/installStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { claimModelSelection } from '@/src/features/model-picker/selectionIntent';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
-import { useThemeColors } from '@/src/ui/theme';
+import { spacing, useThemeColors } from '@/src/ui/theme';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import {
   AUTO_MODES,
   LOCAL_MODEL_LIST,
@@ -129,6 +132,7 @@ export default function ModelsScreen() {
         openPicker();
         return;
       }
+      claimModelSelection();
       setModel(model.id);
     },
     [cloudUnlocked, openPicker, setModel, subscriptionTier],
@@ -142,7 +146,7 @@ export default function ModelsScreen() {
           borderBottomColor: c.border,
           borderBottomWidth: 1,
           flexDirection: 'row',
-          height: 48,
+          minHeight: 48,
           paddingHorizontal: 12,
         }}
       >
@@ -156,12 +160,27 @@ export default function ModelsScreen() {
             <ArrowLeft size={20} color={c.textSecondary} />
           </View>
         </Pressable>
-        <Text variant="subheading" style={{ color: c.textPrimary, marginLeft: 4 }}>
+        <Text
+          variant="subheading"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ color: c.textPrimary, marginLeft: 4 }}
+        >
           Models
         </Text>
       </View>
 
-      <View style={{ flex: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16 }}>
+      <ScrollView
+        testID="models-scroll"
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          gap: spacing.lg,
+          paddingBottom: spacing['2xl'],
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.lg,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
         <Card>
           <Text
             className="text-sm uppercase font-semibold mb-3"
@@ -277,7 +296,7 @@ export default function ModelsScreen() {
             Browse Models
           </Text>
         </Pressable>
-      </View>
+      </ScrollView>
 
       <ModelPickerSheet
         sheetRef={pickerRef}

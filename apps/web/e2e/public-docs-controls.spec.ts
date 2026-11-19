@@ -20,6 +20,7 @@ import { headingAnchor } from '../lib/support/doc-topics';
 import { getHelpArticle } from '../lib/support/help-articles';
 import { interpolateFacts } from '../lib/support/agent/corpus';
 import { parseFrontmatter } from '../scripts/lib/support-frontmatter.mjs';
+import { resolvePurchasePassages } from '../scripts/lib/support-purchase-passages.mjs';
 import {
   COOKIE_CONSENT_STORAGE_KEY,
   isCookieConsentCurrent,
@@ -339,6 +340,7 @@ const controlsSources = [
   'apps/web/lib/support/help-articles.ts',
   'apps/web/lib/support/doc-topics.ts',
   'apps/web/scripts/lib/support-frontmatter.mjs',
+  'apps/web/scripts/lib/support-purchase-passages.mjs',
   'apps/web/scripts/build-support-corpus.mjs',
   'apps/web/lib/support/agent/corpus/index.ts',
   'apps/web/lib/support/agent/corpus.generated.json',
@@ -681,7 +683,7 @@ function controlsSnapshot() {
 function controlsSourceMarkdown(id: string) {
   const file = path.join(controlsRepository, 'apps/web/content/support', `${id}.md`);
   const { data, body } = parseFrontmatter(readFileSync(file, 'utf8'), file);
-  const resolved = interpolateFacts(body.trim(), file);
+  const resolved = interpolateFacts(resolvePurchasePassages(body.trim(), file).web, file);
   expect(resolved).not.toMatch(/\{\{[^}]+\}\}/u);
   return {
     title: data['title']!,

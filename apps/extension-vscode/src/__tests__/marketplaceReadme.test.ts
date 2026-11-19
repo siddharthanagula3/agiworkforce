@@ -63,6 +63,34 @@ describe('Marketplace README', () => {
     expect(named.filter((label) => !titles.has(label))).toEqual([]);
   });
 
+  it('links and embeds only absolute https URLs and no SVG images', () => {
+    const targets = [
+      ...[...rendered.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/gu)].map((match) => match[1] ?? ''),
+      ...[...rendered.matchAll(/<(?:img|a)\b[^>]*\b(?:src|href)="([^"]+)"/giu)].map(
+        (match) => match[1] ?? '',
+      ),
+      ...[...rendered.matchAll(/<(https?:[^>\s]+)>/gu)].map((match) => match[1] ?? ''),
+    ];
+
+    expect(targets.length).toBeGreaterThan(0);
+    expect(targets.filter((target) => !target.startsWith('https://'))).toEqual([]);
+    expect(targets.filter((target) => /\.svg(?:[?#]|$)/iu.test(target))).toEqual([]);
+    expect(rendered).not.toMatch(/<svg\b/iu);
+  });
+
+  it('describes memory as account memory, which is where the extension stores it', () => {
+    const configuration = manifest.contributes.configuration as unknown as {
+      properties: Record<string, { description?: string }>;
+    };
+    const memorySetting =
+      configuration.properties['agiWorkforce.memory.enabled']?.description ?? '';
+    const workspaceOnly = /workspace memory|only in this (?:VS Code )?workspace|Memory view/iu;
+
+    expect(rendered).not.toMatch(workspaceOnly);
+    expect(memorySetting).not.toMatch(workspaceOnly);
+    expect(memorySetting).toContain('AGI account');
+  });
+
   it('keeps the relocated contributor notes in the repository', () => {
     const notes = fs.readFileSync(path.join(extensionRoot, 'docs/CONTRIBUTING-NOTES.md'), 'utf8');
     expect(notes).toContain('Status:');

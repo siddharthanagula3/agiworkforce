@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -159,7 +159,7 @@ const RETENTION: readonly LedgerRow[] = [
   {
     label: 'Account and its content',
     value:
-      'Kept while your account is active. Permanently erased 24 hours after a deletion request, by a daily scheduled job that also deletes your identity at our authentication provider.',
+      'Kept while your account is active. A deletion request schedules erasure 24 hours later, and a daily scheduled job then carries it out and deletes your identity at our authentication provider. If an active legal hold covers your account, erasure waits until the hold is released.',
   },
   {
     label: 'Conversations (Cloud)',
@@ -207,9 +207,9 @@ const RIGHTS: readonly LedgerRow[] = [
         Signed in, export your data from the account export endpoint at any time. It is rate limited
         and each export is recorded in the security audit log. The list of recipients is section 04
         and{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
           /subprocessors
-        </Link>
+        </PageLink>
         ; the export does not enumerate them per record.
       </>
     ),
@@ -222,15 +222,15 @@ const RIGHTS: readonly LedgerRow[] = [
   {
     label: 'Erasure',
     value:
-      'Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
+      'Request account deletion in the product. Erasure is scheduled 24 hours later and then carried out by a daily job, unless an active legal hold covers your account, in which case it waits until the hold is released. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
   },
   {
     label: 'Withdraw consent',
     value: (
       <>
-        <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           /privacy/requests
-        </Link>
+        </PageLink>
         , per purpose, immediately, without contacting anyone.
       </>
     ),
@@ -268,9 +268,9 @@ export default function IndiaDpdpNoticePage() {
             <Prose size="lg">
               This is the itemised notice the DPDP Act requires us to give you before we process
               your personal data. It sits alongside the{' '}
-              <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+              <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                 main privacy policy
-              </Link>
+              </PageLink>
               , which describes the same processing in more detail;{' '}
               <strong>where the two differ on your rights in India, this page governs.</strong> Last
               updated: {POLICY_LAST_UPDATED.indiaPrivacy}. Cloud is in public alpha.{' '}
@@ -356,9 +356,9 @@ export default function IndiaDpdpNoticePage() {
                   <Ledger caption="Consent purposes" rows={consentRows()} />
                   <Prose size="sm">
                     Withdrawing is as easy as giving: change any of them at{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
                       /privacy/requests
-                    </Link>
+                    </PageLink>
                     , with no email and no support ticket. Withdrawal stops the future processing
                     that depended on it; it does not undo processing that already lawfully happened,
                     and it does not delete your account. That is a separate request on the same
@@ -378,9 +378,9 @@ export default function IndiaDpdpNoticePage() {
                   </h2>
                   <Prose>
                     The published list, with what each one receives and where it runs, is at{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.subprocessors} className="agi-ds-link">
                       /subprocessors
-                    </Link>
+                    </PageLink>
                     . In summary: an identity provider holds your login, Stripe holds your payments,
                     our hosting and database vendors hold what you store in Cloud, object storage
                     holds your files, and error/analytics vendors receive only what section 02
@@ -426,9 +426,9 @@ export default function IndiaDpdpNoticePage() {
                       retention is required by law. Every row below is a job or a mechanism that
                       exists in the product, and the ones we do not control are named as such. The
                       full schedule, including billing records, is section 05 of the{' '}
-                      <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+                      <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                         privacy policy
-                      </Link>
+                      </PageLink>
                       .
                     </Prose>
                   </div>
@@ -511,9 +511,9 @@ export default function IndiaDpdpNoticePage() {
                     Under this Act a child is anyone under 18, and processing a child&rsquo;s data
                     requires verifiable consent from a parent or guardian. Sign-up asks for your age
                     and refuses anyone under {ACCOUNT_MINIMUM_AGE}, and the{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.terms} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.terms} className="agi-ds-link">
                       terms
-                    </Link>{' '}
+                    </PageLink>{' '}
                     require anyone under {PARENTAL_PERMISSION_BELOW_AGE} to have permission from a
                     parent or guardian.{' '}
                     <strong>
@@ -540,9 +540,9 @@ export default function IndiaDpdpNoticePage() {
                     We are required to protect your data with reasonable security safeguards, and to
                     notify the Data Protection Board and every affected Data Principal if there is a
                     breach. Our operational posture is at{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
                       /security
-                    </Link>
+                    </PageLink>
                     . The internal procedure for a breach (who declares it, what goes in the Board
                     notification, and what you would receive) is written down and rehearsed against
                     a 72-hour clock. The product sends email to one account at a time, and no
@@ -564,9 +564,9 @@ export default function IndiaDpdpNoticePage() {
                     in the Eighth Schedule to the Constitution; translations are not yet published,
                     and that is an open item. The current version is always at this URL with the
                     revision date at the top, and material changes are recorded on{' '}
-                    <Link href="/changelog" className="agi-ds-link">
+                    <PageLink href="/changelog" className="agi-ds-link">
                       /changelog
-                    </Link>
+                    </PageLink>
                     . No mailing path for policy changes exists in the product, so we do not promise
                     emailed notice of a change.
                   </Prose>

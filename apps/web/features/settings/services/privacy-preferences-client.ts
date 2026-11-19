@@ -9,7 +9,13 @@ import {
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 
-export type PrivacyKey = 'shareTelemetry' | 'keepOutOfProviderTraining';
+export const PRIVACY_KEYS = [
+  'shareTelemetry',
+  'keepOutOfProviderTraining',
+  'allowChatsForModelImprovement',
+  'allowVoiceForModelImprovement',
+] as const;
+export type PrivacyKey = (typeof PRIVACY_KEYS)[number];
 export type PrivacyValues = Record<PrivacyKey, boolean>;
 export interface PrivacySnapshot {
   stored: Partial<PrivacyValues> & Record<string, unknown>;
@@ -37,7 +43,7 @@ function parseSnapshot(body: unknown): PrivacySnapshot {
     throw new Error('Privacy settings could not be confirmed');
   }
   const stored = privacy === undefined ? {} : (privacy as Record<string, unknown>);
-  for (const key of ['shareTelemetry', 'keepOutOfProviderTraining'] as const) {
+  for (const key of PRIVACY_KEYS) {
     if (Object.hasOwn(stored, key) && typeof stored[key] !== 'boolean') {
       throw new Error('Privacy settings could not be confirmed');
     }

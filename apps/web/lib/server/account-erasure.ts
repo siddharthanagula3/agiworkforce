@@ -14,6 +14,7 @@ import {
   objectKeyFromStorageUri,
 } from '@/lib/server/object-storage';
 import { eraseBackupCopies } from '@/lib/server/object-backup-erasure';
+import { chatFileTableOutcome, eraseChatFiles } from '@/lib/server/chat-file-intake/erasure';
 import {
   deleteProjectKnowledgeObject,
   isProjectKnowledgeObjectStorageConfigured,
@@ -38,6 +39,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   column: string;
   /** A second column naming the same person, ORed into the delete. */
   alsoColumn?: string;
+  /** The key inside a jsonb `column` that holds the person's id. */
+  jsonKey?: string;
 }> = [
   { table: 'retrieval_chunks', column: 'user_id' },
   { table: 'retrieval_documents', column: 'user_id' },
@@ -71,6 +74,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'shared_sessions', column: 'owner_id' },
   { table: 'cloud_agent_runs', column: 'user_id' },
   { table: 'cloud_code_sessions', column: 'user_id' },
+  { table: 'cloud_code_environments', column: 'user_id' },
   { table: 'work_plans', column: 'user_id' },
   { table: 'user_memories', column: 'user_id' },
   { table: 'connector_account_states', column: 'user_id' },
@@ -78,6 +82,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'personal_spend_limits', column: 'user_id' },
   { table: 'user_projects', column: 'user_id' },
   { table: 'external_resource_references', column: 'user_id' },
+  { table: 'chat_file_intakes', column: 'user_id' },
+  { table: 'chat_file_preparations', column: 'user_id' },
   { table: 'user_shortcuts', column: 'user_id' },
   { table: 'user_skill_files', column: 'user_id' },
   { table: 'user_skills', column: 'user_id' },
@@ -131,6 +137,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'event_triggers', column: 'user_id' },
   { table: 'background_jobs', column: 'user_id' },
   { table: 'device_pairings', column: 'user_id' },
+  { table: 'signaling_sessions', column: 'metadata', jsonKey: 'userId' },
   { table: 'device_refresh_tokens', column: 'user_id' },
   { table: 'device_refresh_token_families', column: 'user_id' },
   { table: 'revoked_jwts', column: 'user_id' },
@@ -200,6 +207,8 @@ export const EMAIL_SCOPED_USER_TABLES: ReadonlyArray<{
 ];
 
 const PROFILE_TABLE = 'profiles';
+const KNOWLEDGE_LEDGER_TABLE = 'project_knowledge_objects';
+const TOMBSTONE_TABLE = 'erasure_tombstones';
 const ORGANIZATION_USAGE_LEDGER_TABLE = 'organization_usage_ledger';
 
 async function anonymizeUserReference(
@@ -350,7 +359,7 @@ export const FINANCIAL_ERASURE_DISPOSITION: Readonly<Record<string, string>> = {
 
 export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   project_knowledge_objects:
-    'Retired-object cleanup ledger: provenance stays while physical removal is unconfirmed. Migration 0419 requires deleted rows to clear object_key, user_id and organization_id; the receipt function clears those fields only after every target confirms removal. Fingerprint-only tombstones prevent resurrection. Erasure integration remains tracked by WEB-PROJECT-OBJECT-LIFECYCLE-01.',
+    'Retired-object cleanup ledger: provenance stays while physical removal is unconfirmed. Migration 0419 requires deleted rows to clear object_key, user_id and organization_id. A row with recorded storage targets is cleared by the receipt function once every target confirms removal; a row without them, which the cleanup dispatcher never takes, is settled and cleared by settleUntrackedKnowledgeLedger after this erasure deletes its bytes and the subject projects. Fingerprint-only tombstones prevent resurrection.',
   media_assets: 'Erased by eraseUserMedia(): bytes first, then rows.',
   cloud_agent_events: 'Cascades from cloud_agent_runs.',
   cloud_agent_approval_checkpoints: 'Cascades from cloud_agent_runs.',
@@ -451,9 +460,11 @@ export interface AccountErasureReport {
   profileRetained: boolean;
 }
 
+export type ErasureScope = 'account' | 'data' | 'tombstone';
+
 export interface EraseUserAccountOptions {
   retainProfile?: boolean;
-  scope?: 'account' | 'data';
+  scope?: ErasureScope;
 }
 
 async function releaseDataVideoErasureFence(userId: string, fenceToken: string): Promise<void> {
@@ -495,9 +506,31 @@ const IMAGE_JOB_BLOCKING = `
               )
          )`;
 
+/**
+ * An erased subject has no profile row to seal, so its fence is the tombstone
+ * itself, read together with the absence of a profile: a tombstoned subject is
+ * refused at authentication, video admission writes to the profile row and
+ * cannot start without one, and a profile that is back belongs to the
+ * resurrected-account path, which erases it as an account.
+ */
+const TOMBSTONED_SUBJECT_FENCE = `
+  select tombstone.user_id as id
+    from public.${TOMBSTONE_TABLE} as tombstone
+   where tombstone.user_id = $1
+     and not exists (
+       select 1 from public.${PROFILE_TABLE} as profile where profile.id = tombstone.user_id
+     )`;
+
+const FENCE_REFUSALS: Record<ErasureScope, string> = {
+  account: 'The profile deletion fence matched no account row.',
+  data: 'The data-erasure fence could not be acquired without changing account-deletion state.',
+  tombstone:
+    'The tombstone fence matched no erased subject: no tombstone records it, or a profile row exists under it.',
+};
+
 async function sealAndCheckMediaJobsForErasure(
   userId: string,
-  scope: 'account' | 'data',
+  scope: ErasureScope,
 ): Promise<{
   blocked: boolean;
   blockedBy?: string;
@@ -508,9 +541,11 @@ async function sealAndCheckMediaJobsForErasure(
   let dataFenceToken: string | undefined;
   try {
     const fenced =
-      scope === 'account'
-        ? await db.query<{ id: string }>(
-            `update public.profiles
+      scope === 'tombstone'
+        ? await db.query<{ id: string }>(TOMBSTONED_SUBJECT_FENCE, [userId])
+        : scope === 'account'
+          ? await db.query<{ id: string }>(
+              `update public.profiles
                 set deletion_requested_at = coalesce(deletion_requested_at, now()),
                     deletion_scheduled_for = coalesce(deletion_scheduled_for, now())
               where id = $1
@@ -523,12 +558,12 @@ async function sealAndCheckMediaJobsForErasure(
                   or video_generation_erasure_fence_expires_at <= now()
                 )
             returning id`,
-            [userId],
-          )
-        : await (async () => {
-            dataFenceToken = randomUUID();
-            return db.query<{ id: string }>(
-              `update public.profiles
+              [userId],
+            )
+          : await (async () => {
+              dataFenceToken = randomUUID();
+              return db.query<{ id: string }>(
+                `update public.profiles
                   set video_generation_erasure_fence_token = $2,
                       video_generation_erasure_fence_expires_at = now() + interval '1 hour'
                 where id = $1
@@ -542,16 +577,14 @@ async function sealAndCheckMediaJobsForErasure(
                     or video_generation_erasure_fence_expires_at <= now()
                   )
               returning id`,
-              [userId, dataFenceToken],
-            );
-          })();
+                [userId, dataFenceToken],
+              );
+            })();
     if (!fenced[0]) {
       return {
         blocked: true,
-        error:
-          scope === 'account'
-            ? 'The profile deletion fence matched no account row.'
-            : 'The data-erasure fence could not be acquired without changing account-deletion state.',
+        ...(scope === 'tombstone' ? { blockedBy: TOMBSTONE_TABLE } : {}),
+        error: FENCE_REFUSALS[scope],
       };
     }
 
@@ -721,7 +754,7 @@ async function deleteObjectKeys(
       deleted++;
     } catch (error) {
       failed++;
-      logger.warn({ kind, key, error }, 'Failed to delete stored object');
+      logger.warn({ kind, objectKey: key, error }, 'Failed to delete stored object');
     }
   }
   return { deleted, failed };
@@ -732,6 +765,7 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
   failed: number;
   backupObjectsDeleted: number;
   backupObjectsFailed: number;
+  erasedKeys: string[];
 }> {
   const rows = await getNeonDb().query<{ storage_uri: string | null }>(
     `select k.storage_uri
@@ -741,15 +775,25 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
         and k.storage_uri is not null`,
     [userId],
   );
+  const untrackedLedgerKeys = await getNeonDb().query<{ object_key: string }>(
+    `select ledger.object_key
+       from public.${KNOWLEDGE_LEDGER_TABLE} ledger
+      where ledger.user_id = $1
+        and not ledger.origin_known
+        and ledger.state <> 'deleted'
+        and ledger.object_key is not null`,
+    [userId],
+  );
 
-  const keys: string[] = [];
+  const keys = new Set<string>();
   let unresolvedReferences = 0;
   for (const row of rows) {
     if (!row.storage_uri?.trim()) continue;
     const key = objectKeyFromStorageUri(row.storage_uri);
-    if (key) keys.push(key);
+    if (key) keys.add(key);
     else unresolvedReferences++;
   }
+  for (const row of untrackedLedgerKeys) keys.add(row.object_key);
   if (unresolvedReferences > 0) {
     logger.warn(
       { userId, count: unresolvedReferences },
@@ -757,7 +801,7 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
     );
   }
   const erasedKeys: string[] = [];
-  const primary = await deleteObjectKeys(keys, 'knowledge-file', {
+  const primary = await deleteObjectKeys([...keys], 'knowledge-file', {
     configured: isProjectKnowledgeObjectStorageConfigured,
     deleteKey: async (key) => {
       await deleteProjectKnowledgeObject(key);
@@ -765,12 +809,52 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
     },
   });
   const backup = await eraseBackupCopies(erasedKeys);
+  const backupStillStored = new Set(backup.failedKeys);
   return {
     ...primary,
     failed: primary.failed + unresolvedReferences,
     backupObjectsDeleted: backup.deleted,
     backupObjectsFailed: backup.failedKeys.length,
+    erasedKeys: erasedKeys.filter((key) => !backupStillStored.has(key)),
   };
+}
+
+/**
+ * The cleanup dispatcher only takes ledger rows whose storage targets were
+ * recorded (origin_known). A row 0419 backfilled has none, so nothing else ever
+ * settles it: once this erasure has removed its bytes and the subject's projects
+ * are gone, it is settled here and stripped of key, owner and workspace, as the
+ * receipt function does for a dispatched row.
+ */
+async function settleUntrackedKnowledgeLedger(
+  db: ReturnType<typeof getNeonDb>,
+  userId: string,
+  erasedKeys: readonly string[],
+): Promise<void> {
+  if (erasedKeys.length > 0) {
+    await db.execute(
+      `update public.${KNOWLEDGE_LEDGER_TABLE}
+          set state = 'deleted', object_key = null, user_id = null, organization_id = null,
+              targets = '{}'::jsonb, completed_at = now(), updated_at = now()
+        where user_id = $1
+          and not origin_known
+          and state = 'queued'
+          and reference_count = 0
+          and object_key = any($2::text[])`,
+      [userId, [...erasedKeys]],
+    );
+  }
+  const [residual] = await db.query<{ unsettled: number }>(
+    `select count(*)::int as unsettled
+       from public.${KNOWLEDGE_LEDGER_TABLE}
+      where user_id = $1
+        and not origin_known
+        and state <> 'deleted'`,
+    [userId],
+  );
+  if ((residual?.unsettled ?? 0) > 0) {
+    throw new Error(`${residual!.unsettled} untracked knowledge ledger rows are not settled`);
+  }
 }
 
 async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number; failed: number }> {
@@ -924,6 +1008,9 @@ export async function eraseUserAccountData(
     };
   }
   try {
+    // Chat files before media: a seal that commits meanwhile leaves a media row
+    // this media erasure still finds; afterwards it finds no intake and cleans up.
+    const chatFiles = await eraseChatFiles(db, { userId });
     const media = await eraseUserMedia(userId);
     const knowledge = await eraseUserKnowledgeObjects(userId);
     const exportArchives = await eraseUserDataExportArchives(db, userId);
@@ -974,8 +1061,13 @@ export async function eraseUserAccountData(
       }
     }
 
-    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
+    for (const { table, column, alsoColumn, jsonKey } of USER_SCOPED_TABLES) {
       if (table === PROFILE_TABLE) continue;
+      const chatFileTable = chatFileTableOutcome(chatFiles, table);
+      if (chatFileTable !== undefined) {
+        recordTableOutcome(tables, table, chatFileTable);
+        continue;
+      }
       if (
         table === 'user_projects' &&
         (knowledge.failed > 0 || knowledge.backupObjectsFailed > 0)
@@ -991,8 +1083,9 @@ export async function eraseUserAccountData(
         continue;
       }
       const retainExportJobs = table === 'background_jobs' && exportArchives.failed > 0;
+      const target = jsonKey === undefined ? column : `${column} ->> '${jsonKey}'`;
       const subject =
-        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
+        alsoColumn === undefined ? `${target} = $1` : `(${target} = $1 or ${alsoColumn} = $1)`;
       try {
         await db.execute(
           `delete from public.${table} where ${subject}${retainExportJobs ? ' and kind <> $2' : ''}`,
@@ -1009,6 +1102,19 @@ export async function eraseUserAccountData(
           error: error instanceof Error ? error.message : String(error),
         });
         logger.error({ userId, table, error }, 'Account erasure failed for table');
+      }
+    }
+
+    if (tables['user_projects']?.deleted) {
+      try {
+        await settleUntrackedKnowledgeLedger(db, userId, knowledge.erasedKeys);
+        anonymized[KNOWLEDGE_LEDGER_TABLE] = { updated: true };
+      } catch (error) {
+        anonymized[KNOWLEDGE_LEDGER_TABLE] = {
+          updated: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        logger.error({ userId, error }, 'Account erasure failed to settle the knowledge ledger');
       }
     }
 
@@ -1089,8 +1195,6 @@ export async function eraseProfileRow(userId: string): Promise<void> {
   await db.execute(`delete from public.${PROFILE_TABLE} where id = $1`, [userId]);
 }
 
-const TOMBSTONE_TABLE = 'erasure_tombstones';
-
 export interface ErasureTombstoneResult {
   recorded: boolean;
   error?: string;
@@ -1110,6 +1214,30 @@ export async function openErasureTombstone(userId: string): Promise<ErasureTombs
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ userId, error: message }, 'Failed to record the erasure tombstone');
+    return { recorded: false, error: message };
+  }
+}
+
+/**
+ * A resweep only moves an existing tombstone. Creating one here would let a
+ * stray job manufacture the record the tombstone fence trusts as proof that
+ * this subject was erased.
+ */
+export async function advanceErasureTombstone(userId: string): Promise<ErasureTombstoneResult> {
+  const db = getNeonDb();
+  try {
+    const advanced = await db.query<{ user_id: string }>(
+      `update public.${TOMBSTONE_TABLE}
+          set last_swept_at = now()
+        where user_id = $1
+        returning user_id`,
+      [userId],
+    );
+    if (advanced[0]) return { recorded: true };
+    return { recorded: false, error: 'No erasure tombstone records this subject' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ userId, error: message }, 'Failed to advance the erasure tombstone');
     return { recorded: false, error: message };
   }
 }

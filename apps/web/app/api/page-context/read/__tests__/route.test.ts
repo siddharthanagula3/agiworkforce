@@ -58,6 +58,24 @@ describe('authenticated public page reads', () => {
     expect(rateLimitConfigs['page-read'].failClosed).toBe(true);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
   });
+  it('holds every account to a daily page-read allowance from configuration', async () => {
+    const request = input();
+    mocks.limit.mockImplementation(async (_request: unknown, key: string) =>
+      key === 'page-read-account-day'
+        ? NextResponse.json({ error: { code: 'RATE_LIMIT_EXCEEDED' } }, { status: 429 })
+        : null,
+    );
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(429);
+    expect(mocks.limit).toHaveBeenCalledWith(request, 'page-read-account-day', 'user:owner-a');
+    expect(rateLimitConfigs['page-read-account-day']).toMatchObject({
+      window: '1 d',
+      failClosed: true,
+    });
+    expect(mocks.read).not.toHaveBeenCalled();
+  });
   it('does not fetch for an unauthenticated caller', async () => {
     mocks.auth.mockRejectedValue(createError.unauthorized());
     expect((await POST(input())).status).toBe(401);

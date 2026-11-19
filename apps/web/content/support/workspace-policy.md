@@ -4,7 +4,7 @@ title: Workspace policy: features, models and exceptions
 path: /workspace/policy
 category: administration
 tags: policy, workspace policy, feature controls, disable feature, model policy, connector policy, reasoning effort, allowed countries, surfaces, retention, exceptions, override
-updated: 2026-09-17
+updated: 2026-11-11
 description: What a workspace policy controls, including exceptions, retention, spend and audit.
 scope: public
 ---
@@ -14,8 +14,10 @@ scope: public
 A workspace policy narrows what its members can do. Four things can be set:
 
 - **Feature access**: each of Work, Code, Research, Skills, Plugins, Hooks,
-  Browser, Computer use, Remote Control, Schedules, Event triggers and Projects
-  can be turned off for the workspace. All are on by default.
+  Browser, Computer use, Remote Control, Schedules, Event triggers, Projects,
+  Connected apps in artifacts and Fast mode can be switched for the workspace.
+  All are on by default except Fast mode, which stays off until an administrator
+  turns it on.
 - **Default model**: the model members start on.
 - **Highest reasoning level**: a ceiling on how hard a model may think, chosen
   from none, minimal, low, medium, high, xhigh and max. Left unset, there is no

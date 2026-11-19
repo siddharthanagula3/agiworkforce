@@ -211,7 +211,8 @@ export default function ContentReportQueuePanel() {
               </p>
             ) : null}
             <p className="mt-2 font-mono text-xs text-muted-foreground">
-              conversation {report.conversationId} · message {report.messageId} · reporter{' '}
+              conversation {report.conversationId} · message {report.messageId}
+              {report.subject ? ` · ${report.subject.kind} ${report.subject.id}` : null} · reporter{' '}
               {report.userId ?? 'anonymous'}
             </p>
 

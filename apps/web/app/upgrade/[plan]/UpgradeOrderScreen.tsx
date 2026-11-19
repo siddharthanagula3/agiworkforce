@@ -48,11 +48,11 @@ export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-6 py-12">
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-6 py-12 max-md:px-4">
       <div>
         <Link
           href="/upgrade"
-          className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          className="text-sm text-muted-foreground transition-colors hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
         >
           ← Upgrade
         </Link>

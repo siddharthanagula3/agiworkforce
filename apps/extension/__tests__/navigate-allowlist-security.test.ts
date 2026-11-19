@@ -65,10 +65,12 @@ const chromeMock = vi.hoisted(() => {
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;
 });
+Object.assign(chromeMock.runtime, { getManifest: packagedManifest });
 
 import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
 import { assertDestinationAllowlisted, getOrigin } from '../src/features/computer-use/cdpDriver';
 import { NavigationOffAllowlistError } from '../src/features/computer-use/agentLoop';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 function setAllowlist(origins: string[]): void {
   chromeMock._localStore['agi_site_allowlist'] = origins;

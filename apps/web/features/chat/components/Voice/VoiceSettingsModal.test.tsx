@@ -133,8 +133,6 @@ describe('the intelligence control is scoped to the chat', () => {
 
     expect(screen.getByText('Chat intelligence')).toBeInTheDocument();
     expect(screen.queryByText(/how much intelligence a voice turn gets/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/the intelligence this chat uses for typed replies/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/the intelligence for typed replies/)).toBeInTheDocument();
   });
 });

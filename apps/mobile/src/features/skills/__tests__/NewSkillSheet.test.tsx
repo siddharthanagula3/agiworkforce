@@ -10,6 +10,7 @@ jest.mock('../service', () => ({
 }));
 
 import { NewSkillSheet } from '../NewSkillSheet';
+import { sitsInColumn } from '../../../../test-utils/sheetColumn';
 
 function Harness({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
@@ -95,5 +96,13 @@ describe('NewSkillSheet save lifetime', () => {
     expect(api.getByLabelText('Skill name').props.editable).toBe(false);
     expect(api.getByLabelText('Skill description').props.editable).toBe(false);
     expect(api.getByLabelText('Skill instructions').props.editable).toBe(false);
+  });
+
+  it('stops the sheet at the reading column on a wide window', () => {
+    const api = render(<Harness onCreated={jest.fn()} />);
+
+    fireEvent.press(api.getByLabelText('Open sheet'));
+
+    expect(sitsInColumn(api.getByText('New skill'), 'reading')).toBe(true);
   });
 });

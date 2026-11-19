@@ -250,7 +250,7 @@
     "temporaryChatRetentionNote": "No se guardará en tu historial y omite la memoria en este turno.",
     "temporaryChatPersonalized": "Personalizado",
     "temporaryChatUnpersonalized": "Sin personalizar",
-    "temporaryChatPersonalizationHint": "Personalizado usa tu perfil, tus instrucciones y tu estilo de respuesta. Sin personalizar los deja fuera.",
+    "temporaryChatPersonalizationHint": "Personalizado usa tu perfil, tus instrucciones y tu estilo de respuesta.",
     "toggleArtifacts": "Alternar panel de artefactos",
     "toggleArtifactsCount": "Alternar panel de artefactos ({{count}})",
     "toggleStats": "Estadísticas",
@@ -302,7 +302,7 @@
     "noneReported": "El proveedor no informó recuentos de tokens para esta conversación.",
     "outputTokens": "Tokens de salida",
     "panelLabel": "Uso de tokens de la conversación",
-    "partialCoverage": "{{reported}} de {{total}} respuestas informaron el uso. El resto es anterior a la captura de uso o proviene de un proveedor que no informa nada, por lo que este total es un mínimo.",
+    "partialCoverage": "{{reported}} de {{total}} respuestas informaron el uso, así que este total es un mínimo.",
     "reasoningTokens": "Tokens de pensamiento"
   },
   "stream": {
@@ -450,6 +450,8 @@
     "videoModeAttachments_other": "La generación de video solo usa tu instrucción. Los archivos adjuntos no se envían al modelo de video. Sal del modo video primero si quieres enviar estos archivos al modelo de chat.",
     "viewSources_one": "Ver {{count}} fuente",
     "viewSources_other": "Ver {{count}} fuentes",
+    "viewSourcesSoFar_one": "Ver {{count}} fuente hasta ahora",
+    "viewSourcesSoFar_other": "Ver {{count}} fuentes hasta ahora",
     "folderFilesLeftOut_one": "{{count}} archivo de {{folder}} no se adjuntó. Adjúntalo desde una carpeta local.",
     "folderFilesLeftOut_other": "{{count}} archivos de {{folder}} no se adjuntaron. Adjúntalos desde una carpeta local.",
     "savedMemoriesUsed_one": "Usó {{count}} memoria guardada",

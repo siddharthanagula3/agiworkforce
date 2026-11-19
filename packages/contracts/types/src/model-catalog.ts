@@ -426,6 +426,11 @@ export interface ModelReasoning {
    * `disabled` for this model. Sending `disabled` to such a model is a 400.
    */
   disabledThinkingType?: 'between_tools';
+  /**
+   * The `thinking.display` the provider needs before thinking blocks carry
+   * readable text; at its default the model streams them empty.
+   */
+  thinkingDisplay?: 'summarized';
   rejectsSamplingParameters?: boolean;
   unsupportedRequestParameters?: readonly RequestParameter[];
   thinkingBudget?: ReasoningBudget;
@@ -742,8 +747,17 @@ export interface ModelMetadata {
       endpoint: 'responses';
     };
   };
-  imageInput?: { detailValues?: string[]; maxImagesPerRequest?: number };
-  documentInput?: { maxPagesPerRequest?: number };
+  imageInput?: {
+    detailValues?: string[];
+    maxImagesPerRequest?: number;
+    /** The most input tokens the provider bills for one image at any accepted detail. */
+    maxInputTokensPerImage?: number;
+  };
+  documentInput?: {
+    maxPagesPerRequest?: number;
+    /** The most input tokens the provider bills for the image it makes of one PDF page. */
+    maxInputTokensPerPageImage?: number;
+  };
   endpoints?: string[];
   knowledgeCutoff?: string;
   inputTokenPricingTiers?: InputTokenPricingTier[];
@@ -1273,7 +1287,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowMediaGeneration: true,
     allowImageGeneration: true,
     allowVoice: true,
-    voiceMinutesPerMonth: 300,
+    voiceMinutesPerMonth: null,
     allowVideoGeneration: false,
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
@@ -2825,7 +2839,7 @@ function formatCoreModelDetail(model: ModelMetadata): string {
   const tierLabel: Record<PickerModelTier, string> = {
     economy: 'Economy',
     balanced: 'Balanced',
-    premium: 'Premium',
+    premium: 'Flagship',
   };
   const tier = tierLabel[getPickerModelTier(model.id)];
   const bestFor = model.bestFor.slice(0, 2).join(', ');

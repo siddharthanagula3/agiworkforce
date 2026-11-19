@@ -13,6 +13,7 @@ import {
   LAUNCH,
   MARKETING,
   MARKETING_FEATURE_MATRIX,
+  POSITIONING,
   SURFACE_STATUS,
 } from '../marketing-constants';
 
@@ -70,6 +71,20 @@ describe('marketing plan matrix', () => {
 
   it('publishes no unlimited or uncapped usage claim', () => {
     expect(JSON.stringify(MARKETING_FEATURE_MATRIX)).not.toMatch(/unlimited|uncapped/i);
+  });
+});
+
+describe('the Free plan in the route boundary', () => {
+  it('says AGI chooses the default model and the person may pick another, as /privacy does', () => {
+    expect(POSITIONING.routeBoundary).toContain(
+      'On the Free plan, AGI chooses the default model and you may pick another model the plan includes, within a usage allowance.',
+    );
+  });
+
+  it('neither sizes the Free allowance nor says paid plans hold more capacity', () => {
+    expect(POSITIONING.routeBoundary).not.toMatch(
+      /automatically selected model|small usage allowance|more capacity/iu,
+    );
   });
 });
 

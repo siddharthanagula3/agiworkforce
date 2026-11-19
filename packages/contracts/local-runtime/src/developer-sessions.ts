@@ -70,8 +70,23 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_thread_fork',
   'developer_thread_compact',
   'developer_thread_archive',
+  'developer_thread_unarchive',
+  'developer_thread_rename',
+  'developer_thread_pin',
   'developer_thread_takeover',
   'developer_mcp_approval_review',
+  'developer_mcp_list',
+  'developer_mcp_add',
+  'developer_mcp_remove',
+  'developer_mcp_set_enabled',
+  'developer_mcp_test',
+  'developer_mcp_tools',
+  'developer_mcp_logs',
+  'developer_mcp_open_config',
+  'developer_terminal_open',
+  'developer_terminal_write',
+  'developer_terminal_resize',
+  'developer_terminal_close',
   'developer_account_report',
 ] as const;
 
@@ -110,6 +125,9 @@ export interface LocalDeveloperSession {
   origin: DeveloperSessionSource;
   location?: 'cloud';
   environment?: 'local' | 'worktree' | 'ssh';
+  pinned?: boolean;
+  /** When the session was archived, in milliseconds; absent while it is not. */
+  archivedAt?: number;
 }
 
 /**
@@ -225,6 +243,12 @@ export const DEVELOPER_RUNTIME_CAPABILITIES = [
   'thread_archive',
   'thread_takeover',
   'reasoning_effort_ladder',
+  'thread_rename',
+  'thread_unarchive',
+  'thread_pin',
+  'mcp_servers',
+  'mcp_logs',
+  'terminals',
 ] as const;
 
 export type DeveloperRuntimeCapability = (typeof DEVELOPER_RUNTIME_CAPABILITIES)[number];
@@ -366,6 +390,8 @@ export const DEVELOPER_FILE_CHANGE_LABELS: Record<DeveloperFileChange, string> =
 type DeveloperSessionEventBody =
   | { type: 'turn-started'; threadId: string; turnId: string }
   | { type: 'output-delta'; threadId: string; turnId: string; delta: string; index?: number }
+  /** What the model thought before or between its replies, where the provider sends it. */
+  | { type: 'reasoning-delta'; threadId: string; turnId: string; delta: string }
   | {
       type: 'turn-finished';
       threadId: string;
@@ -477,6 +503,7 @@ export type DeveloperSessionEvent = DeveloperSessionEventBody & { sequence?: num
 export const DEVELOPER_SESSION_EVENT_MESSAGE_KINDS = Object.freeze({
   'turn-started': 'status',
   'output-delta': 'text',
+  'reasoning-delta': 'text',
   'turn-finished': 'status',
   'tool-queued': 'tool_call',
   'tool-started': 'tool_call',
@@ -882,3 +909,8 @@ export interface DeveloperThreadCompactRequest {
   threadId: string;
   fromTurnId?: string;
 }
+
+export const TERMINAL_WRITE_LIMIT = 65_536;
+export const TERMINAL_MIN_SIZE = 2;
+export const TERMINAL_MAX_COLUMNS = 1_000;
+export const TERMINAL_MAX_ROWS = 500;

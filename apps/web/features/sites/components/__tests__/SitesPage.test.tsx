@@ -677,9 +677,7 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
     render(<SitesPage />);
     await screen.findByTestId('site-card');
     expect(mocks.listPublishedSitesPage).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByText(/Search and updated-date sorting apply to this page only/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Search and sorting apply to this page only/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeDisabled();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Older page' } });
     expect(screen.getByTestId('sites-no-match')).toBeInTheDocument();

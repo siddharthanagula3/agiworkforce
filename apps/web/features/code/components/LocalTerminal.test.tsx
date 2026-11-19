@@ -14,6 +14,10 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   cancelLocalCommand,
 }));
 
+vi.mock('./LocalPtyTerminal', () => ({
+  LocalPtyTerminal: ({ rootId }: { rootId: string }) => <div data-testid="pty">{rootId}</div>,
+}));
+
 const { LocalTerminal, LocalTerminalDock } = await import('./LocalTerminal');
 
 beforeEach(() => {
@@ -21,7 +25,7 @@ beforeEach(() => {
   cancelLocalCommand.mockResolvedValue(undefined);
 });
 
-function renderDock(open = true) {
+function renderDock(open = true, pty = false) {
   const onClose = vi.fn();
   const onCommandFinished = vi.fn();
   const view = render(
@@ -29,6 +33,7 @@ function renderDock(open = true) {
       rootId="root-1"
       folder="agiworkforce"
       open={open}
+      pty={pty}
       onClose={onClose}
       onCommandFinished={onCommandFinished}
       onBackgroundStarted={vi.fn()}
@@ -212,6 +217,19 @@ describe('the local terminal', () => {
 });
 
 describe('the terminal dock', () => {
+  it('gives each tab a real shell when the CLI hosts one, and the command line otherwise', async () => {
+    const shell = renderDock(true, true);
+    expect(screen.getByTestId('pty')).toHaveTextContent('root-1');
+    expect(screen.queryByLabelText('Command')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'New terminal' }));
+    expect(screen.getAllByTestId('pty')).toHaveLength(2);
+    shell.unmount();
+
+    renderDock(true, false);
+    expect(screen.queryByTestId('pty')).toBeNull();
+    expect(screen.getByLabelText('Command')).toBeInTheDocument();
+  });
+
   it('opens one tab named for the folder and adds numbered tabs with the plus button', async () => {
     renderDock();
 

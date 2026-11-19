@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockReadSupportTicket = jest.fn();
 let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: string | null } = {
@@ -9,10 +9,33 @@ let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: s
   clerkUserId: 'user_a',
 };
 let mockAppMode = 'cloud';
+const mockFocusEffects: Array<{ blur: () => void; focus: () => void }> = [];
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: jest.fn() }),
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    useEffect(() => {
+      let cleanup: (() => void) | undefined;
+      const blur = () => {
+        cleanup?.();
+        cleanup = undefined;
+      };
+      const focus = () => {
+        blur();
+        const next = callback();
+        cleanup = typeof next === 'function' ? next : undefined;
+      };
+      const entry = { blur, focus };
+      mockFocusEffects.push(entry);
+      focus();
+      return () => {
+        blur();
+        mockFocusEffects.splice(mockFocusEffects.indexOf(entry), 1);
+      };
+    }, [callback]);
+  },
 }));
 
 jest.mock('@/src/ui/theme', () => {
@@ -46,6 +69,7 @@ jest.mock('@/src/features/settings/Common', () => {
   const { Text, View } = require('react-native');
   return {
     CloudAccountRequired: () => <Text>Sign in required</Text>,
+    CloudSyncBlockedBanner: ({ message }: { message: string }) => <Text>{message}</Text>,
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
   };
 });
@@ -110,6 +134,8 @@ describe('SupportTicketScreen account custody', () => {
     screen.rerender(<SupportTicketScreen ticketId="t1" />);
 
     expect(screen.queryByText('Private text')).toBeNull();
+    expect(screen.getByText('Support tickets are kept in your Cloud account.')).toBeTruthy();
+    expect(screen.queryByText('Sign in required')).toBeNull();
   });
 
   it('does not show the previous account thread to a replacement account', async () => {
@@ -137,5 +163,23 @@ describe('SupportTicketScreen account custody', () => {
 
     expect(screen.queryByText('Private text')).toBeNull();
     expect(screen.getByText('Loading the ticket…')).toBeTruthy();
+  });
+
+  it('drops an unsent reply once the person leaves the ticket and comes back', async () => {
+    mockReadSupportTicket.mockResolvedValue(thread('t1', 'Billing question', 'Private text'));
+    const screen = render(<SupportTicketScreen ticketId="t1" />);
+    expect(await screen.findByText('Private text')).toBeTruthy();
+
+    fireEvent.changeText(screen.getByLabelText('Reply'), 'Half a reply');
+    expect(screen.getByDisplayValue('Half a reply')).toBeTruthy();
+
+    act(() => {
+      for (const effect of mockFocusEffects) effect.blur();
+    });
+    act(() => {
+      for (const effect of mockFocusEffects) effect.focus();
+    });
+
+    expect(screen.queryByDisplayValue('Half a reply')).toBeNull();
   });
 });

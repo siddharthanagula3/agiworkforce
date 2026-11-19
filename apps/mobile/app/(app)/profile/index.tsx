@@ -20,6 +20,7 @@ import {
 import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
+import { deviceAccountErrorMessage } from '@/src/features/accounts/deviceAccounts';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -31,6 +32,7 @@ import {
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
+import { SECURITY_LOGIN_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -115,7 +117,14 @@ export default function ProfileScreen() {
   const handleSignOut = useCallback(() => {
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: signOut },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: () =>
+          void signOut().catch((error: unknown) => {
+            Alert.alert('Log out failed', deviceAccountErrorMessage(error, 'sign-out'));
+          }),
+      },
     ]);
   }, [signOut]);
 
@@ -215,7 +224,7 @@ export default function ProfileScreen() {
               />
               <ProfileRow
                 icon={Shield}
-                label="Account Security"
+                label={SECURITY_LOGIN_SCREEN_TITLE}
                 onPress={push('/(app)/settings/account-security')}
                 value="Manage"
               />
@@ -290,7 +299,7 @@ export default function ProfileScreen() {
                   lineHeight: 19,
                 }}
               >
-                Cloud profile, chats, memory, and account settings stay separate from Local Mode.
+                Your Cloud profile, chats and memory stay separate from Local Mode.
               </Text>
             </View>
           </View>

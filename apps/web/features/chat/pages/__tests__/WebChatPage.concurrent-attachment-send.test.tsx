@@ -35,6 +35,7 @@ const mocks = vi.hoisted(() => ({
   composerPrefillText: undefined as string | undefined,
   composerUploadAttempt: null as UploadAttempt | null,
   retryAttachmentUpload: null as ((index: number) => void) | null,
+  removeAttachmentUpload: null as ((index: number) => void) | null,
   sendMessage: vi.fn(async (_content: string, ..._rest: unknown[]) => true),
   createConversation: vi.fn(async () => ({
     id: 'real-conversation-id',
@@ -43,6 +44,8 @@ const mocks = vi.hoisted(() => ({
     updatedAt: '2026-09-03T00:00:00.000Z',
   })),
   uploadChatAttachments: vi.fn(),
+  keptSettle: vi.fn(),
+  keptDiscard: vi.fn(async (_authority: unknown) => undefined),
   toastError: vi.fn(),
   uploadResolvers: [] as Array<(value: unknown[]) => void>,
 }));
@@ -144,6 +147,7 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
     prefillText?: string;
     attachmentUploadAttempt?: UploadAttempt | null;
     onRetryAttachmentUpload?: (index: number) => void;
+    onRemoveAttachmentUpload?: (index: number) => void;
   }) => {
     mocks.composerOnSend = props.onSend;
     mocks.composerDroppedFiles = props.droppedFiles;
@@ -151,6 +155,7 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
     mocks.composerPrefillText = props.prefillText;
     mocks.composerUploadAttempt = props.attachmentUploadAttempt ?? null;
     mocks.retryAttachmentUpload = props.onRetryAttachmentUpload ?? null;
+    mocks.removeAttachmentUpload = props.onRemoveAttachmentUpload ?? null;
     return null;
   },
   SEND_GUARD_BLOCKED: 'guard-blocked',
@@ -287,6 +292,14 @@ vi.mock('../../components/research/ResearchPanel', async (importOriginal) => ({
 vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () => null }));
 
 import WebChatPage from '../WebChatPage';
+import { useKeyboardShortcuts } from '../../hooks/use-keyboard-shortcuts';
+import {
+  CHAT_LARGE_FILE_POLICY,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+  type ChatAttachmentLimits,
+} from '@agiworkforce/cloud-contracts';
 
 const workspaceFixture = createWebChatWorkspaceFixture();
 import { classifyTaskLocally } from '@agiworkforce/routing';
@@ -489,6 +502,432 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     expect(mocks.sendMessage.mock.calls[0]![1]).toMatchObject({
       disabledConnectorIds: ['gmail', 'notion'],
       connectorToolsEnabled: false,
+    });
+  });
+});
+
+const KEPT_INTAKE_ID = '0b1c2d3e-4f50-4a6b-8c7d-000000000001';
+const KEPT_ASSET_ID = '7a5d0c1e-2b3f-4c4d-8e5f-6a7b8c9d0e1f';
+const KEPT_REFUSAL = 'report.pdf was not attached because it contains malware.';
+
+function keptReport(): File {
+  return new File(['%PDF-1.7'], 'report.pdf', { type: 'application/pdf' });
+}
+
+function keptAsset(file: File) {
+  return {
+    id: KEPT_ASSET_ID,
+    assetId: KEPT_ASSET_ID,
+    type: 'file' as const,
+    name: file.name,
+    size: file.size,
+    mimeType: file.type,
+    url: `/api/files/${KEPT_ASSET_ID}`,
+  };
+}
+
+type KeptUploadOptions = {
+  signal?: AbortSignal;
+  onKeptAfterCancel?: (
+    kept: readonly {
+      file: File;
+      intakeId: string;
+      attachment?: ReturnType<typeof keptAsset>;
+      settle: typeof mocks.keptSettle;
+      discard: typeof mocks.keptDiscard;
+    }[],
+  ) => void;
+};
+
+/** The upload the person cancels, answering the way the service does when the server kept the file. */
+function uploadTheServerKeeps(
+  attachment: 'ready' | 'checking' | 'none',
+  {
+    keptIndex = 0,
+    settled = Promise.resolve(),
+  }: { keptIndex?: number; settled?: Promise<void> } = {},
+) {
+  mocks.uploadChatAttachments.mockImplementationOnce(
+    (files: File[], options: KeptUploadOptions) =>
+      new Promise((_resolve, reject) => {
+        options.signal?.addEventListener('abort', async () => {
+          await Promise.resolve();
+          const file = files[keptIndex];
+          if (file && attachment !== 'none') {
+            options.onKeptAfterCancel?.([
+              {
+                file,
+                intakeId: KEPT_INTAKE_ID,
+                ...(attachment === 'ready' ? { attachment: keptAsset(file) } : {}),
+                settle: mocks.keptSettle,
+                discard: mocks.keptDiscard,
+              },
+            ]);
+          }
+          await settled;
+          reject(Object.assign(new Error('The upload was cancelled.'), { name: 'AbortError' }));
+        });
+      }),
+  );
+}
+
+function largeFile(name: string): File {
+  const file = new File(['%PDF-1.7'], name, { type: 'application/pdf' });
+  Object.defineProperty(file, 'size', { value: MAX_CHAT_ATTACHMENT_BYTES + 1 });
+  return file;
+}
+
+const LARGE_FILE_OFFER: ChatAttachmentLimits = {
+  maxFileBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxBytes,
+  maxImageBytes: MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+  maxMessageBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxMessageBytes,
+  maxFilesPerMessage: CHAT_LARGE_FILE_POLICY.largeFiles.maxCount,
+  largeFilesAvailable: true,
+  storageRemainingBytes: null,
+  inlineMessageBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+};
+
+async function keptRowReady(file: File) {
+  uploadTheServerKeeps('ready');
+  await sendAndCancel(file);
+  await waitFor(() =>
+    expect(mocks.composerUploadAttempt).toMatchObject({
+      files: [file],
+      statuses: [{ phase: 'ready' }],
+    }),
+  );
+}
+
+async function sendAndCancel(file: File) {
+  render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+  await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+  act(() => {
+    mocks.composerOnSend!(FIRST_MESSAGE, [file], undefined, {});
+  });
+  await waitFor(() => expect(mocks.composerUploadAttempt?.files).toEqual([file]));
+  await waitFor(() => expect(mocks.removeAttachmentUpload).not.toBeNull());
+  act(() => {
+    mocks.removeAttachmentUpload!(0);
+  });
+}
+
+describe('WebChatPage file the cancel came too late for', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    mocks.composerOnSend = null;
+    mocks.composerDroppedFiles = null;
+    mocks.composerUploadAttempt = null;
+    mocks.removeAttachmentUpload = null;
+    mocks.uploadResolvers = [];
+    mocks.sendMessage.mockClear();
+    mocks.createConversation.mockClear();
+    mocks.toastError.mockClear();
+    mocks.uploadChatAttachments.mockReset();
+    mocks.keptSettle.mockReset();
+    mocks.keptDiscard.mockClear();
+  });
+
+  afterEach(() => {
+    useBillingStore.setState({ attachmentLimits: null });
+  });
+
+  it('shows a kept file that is ready as an attachment and sends it with the next message', async () => {
+    const file = keptReport();
+    uploadTheServerKeeps('ready');
+
+    await sendAndCancel(file);
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [file],
+        statuses: [{ phase: 'ready' }],
+      }),
+    );
+    expect(mocks.keptSettle).not.toHaveBeenCalled();
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+    expect(mocks.composerDroppedFiles).toBeNull();
+
+    mocks.uploadChatAttachments.mockResolvedValueOnce([keptAsset(file)]);
+    act(() => {
+      mocks.composerOnSend!('Now summarize it', [], undefined, {});
+    });
+
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(2);
+    expect(mocks.uploadChatAttachments.mock.calls[1]![0]).toEqual([file]);
+    expect(mocks.sendMessage.mock.calls[0]![1]).toMatchObject({
+      attachments: [expect.objectContaining({ assetId: KEPT_ASSET_ID })],
+    });
+    expect(mocks.composerUploadAttempt).toBeNull();
+    expect(mocks.keptDiscard).not.toHaveBeenCalled();
+  });
+
+  it('shows a kept file still being checked as verifying, then as ready', async () => {
+    const file = keptReport();
+    let settle!: (outcome: unknown) => void;
+    mocks.keptSettle.mockReturnValueOnce(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    uploadTheServerKeeps('checking');
+
+    await sendAndCancel(file);
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [file],
+        statuses: [{ phase: 'verifying' }],
+      }),
+    );
+    expect(mocks.keptSettle).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      settle({ state: 'ready', attachment: keptAsset(file) });
+    });
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [file],
+        statuses: [{ phase: 'ready' }],
+      }),
+    );
+    expect(mocks.toastError).not.toHaveBeenCalled();
+    expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a kept file the check refuses as refused, without a retry', async () => {
+    const file = keptReport();
+    mocks.keptSettle.mockResolvedValueOnce({ state: 'refused', message: KEPT_REFUSAL });
+    uploadTheServerKeeps('checking');
+
+    await sendAndCancel(file);
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [file],
+        statuses: [{ phase: 'failed', error: KEPT_REFUSAL, retryable: false }],
+      }),
+    );
+    expect(mocks.toastError).toHaveBeenCalledWith(KEPT_REFUSAL);
+
+    act(() => {
+      mocks.composerOnSend!('Now summarize it', [], undefined, {});
+    });
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes a kept file the person removes, and leaves it out of the next message', async () => {
+    const file = keptReport();
+    uploadTheServerKeeps('ready');
+
+    await sendAndCancel(file);
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({ statuses: [{ phase: 'ready' }] }),
+    );
+
+    expect(mocks.keptDiscard).not.toHaveBeenCalled();
+    act(() => {
+      mocks.removeAttachmentUpload!(0);
+    });
+
+    expect(mocks.keptDiscard).toHaveBeenCalledTimes(1);
+    expect(mocks.keptDiscard.mock.calls[0]![0]).toMatchObject({ isCurrent: expect.any(Function) });
+    await waitFor(() => expect(mocks.composerUploadAttempt).toBeNull());
+
+    act(() => {
+      mocks.composerOnSend!('Now summarize it', [], undefined, {});
+    });
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing and reads nothing when the cancel stopped the file', async () => {
+    const file = keptReport();
+    uploadTheServerKeeps('none');
+
+    await sendAndCancel(file);
+
+    await waitFor(() => expect(mocks.composerUploadAttempt).toBeNull());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.composerUploadAttempt).toBeNull();
+    expect(mocks.keptSettle).not.toHaveBeenCalled();
+  });
+
+  it('shows a kept file as its own attachment when the person cancels by removing another file, and deletes it when removed', async () => {
+    useBillingStore.setState({ attachmentLimits: LARGE_FILE_OFFER });
+    const kept = largeFile('report.pdf');
+    const removed = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    const small = new File(['todo'], 'todo.txt', { type: 'text/plain' });
+    uploadTheServerKeeps('ready');
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [kept, removed, small], undefined, {});
+    });
+    await waitFor(() => expect(mocks.composerUploadAttempt?.files).toEqual([kept, removed, small]));
+
+    act(() => {
+      mocks.removeAttachmentUpload!(1);
+    });
+    expect(mocks.composerDroppedFiles).toEqual([small]);
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [kept],
+        statuses: [{ phase: 'ready' }],
+      }),
+    );
+    expect(mocks.composerDroppedFiles).toEqual([small]);
+
+    act(() => {
+      mocks.removeAttachmentUpload!(0);
+    });
+    expect(mocks.keptDiscard).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(mocks.composerUploadAttempt).toBeNull());
+  });
+
+  it('puts a large file the cancel stopped back in the message box once the cancel settles', async () => {
+    useBillingStore.setState({ attachmentLimits: LARGE_FILE_OFFER });
+    const large = largeFile('report.pdf');
+    const removed = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    uploadTheServerKeeps('none');
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    act(() => {
+      mocks.composerOnSend!(FIRST_MESSAGE, [large, removed], undefined, {});
+    });
+    await waitFor(() => expect(mocks.composerUploadAttempt?.files).toEqual([large, removed]));
+
+    act(() => {
+      mocks.removeAttachmentUpload!(1);
+    });
+
+    await waitFor(() => expect(mocks.composerDroppedFiles).toEqual([large]));
+    expect(mocks.composerUploadAttempt).toBeNull();
+    expect(mocks.keptSettle).not.toHaveBeenCalled();
+  });
+
+  it('deletes a kept file removed from a message whose other file failed', async () => {
+    const kept = keptReport();
+    await keptRowReady(kept);
+    const fresh = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    mocks.uploadChatAttachments.mockImplementationOnce(
+      async (
+        _files: File[],
+        options?: { onStatus?: (status: Record<string, unknown>) => void },
+      ) => {
+        options?.onStatus?.({ index: 0, fileName: kept.name, phase: 'complete' });
+        options?.onStatus?.({
+          index: 1,
+          fileName: fresh.name,
+          phase: 'failed',
+          error: 'Storage unavailable',
+        });
+        throw new Error('Storage unavailable');
+      },
+    );
+    act(() => {
+      mocks.composerOnSend!('Now summarize it', [fresh], undefined, {});
+    });
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [kept, fresh],
+        statuses: [{ phase: 'complete' }, { phase: 'failed', error: 'Storage unavailable' }],
+      }),
+    );
+
+    act(() => {
+      mocks.removeAttachmentUpload!(0);
+    });
+
+    expect(mocks.keptDiscard).toHaveBeenCalledTimes(1);
+    expect(mocks.composerDroppedFiles).toEqual([fresh]);
+    await waitFor(() => expect(mocks.composerUploadAttempt).toBeNull());
+  });
+
+  it('keeps a kept file as its own attachment, out of the message box, when a send is refused while another is in flight', async () => {
+    const kept = keptReport();
+    let release!: () => void;
+    uploadTheServerKeeps('ready', {
+      settled: new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    });
+    await sendAndCancel(kept);
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [kept],
+        statuses: [{ phase: 'ready' }],
+      }),
+    );
+
+    let outcome: ReturnType<ComposerOnSend> = undefined;
+    act(() => {
+      outcome = mocks.composerOnSend!(SECOND_MESSAGE, [], undefined, {});
+    });
+
+    expect(outcome).toBe(GUARD_BLOCKED);
+    expect(mocks.composerDroppedFiles).toBeNull();
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [kept],
+        statuses: [{ phase: 'ready' }],
+      }),
+    );
+    await act(async () => {
+      release();
+    });
+    expect(mocks.composerUploadAttempt).toMatchObject({ files: [kept] });
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('shows a kept file as its own attachment again when the message it went with is not sent', async () => {
+    const kept = keptReport();
+    await keptRowReady(kept);
+    mocks.uploadChatAttachments.mockResolvedValueOnce([keptAsset(kept)]);
+    mocks.sendMessage.mockResolvedValueOnce(false);
+
+    act(() => {
+      mocks.composerOnSend!('Now summarize it', [], undefined, {});
+    });
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+
+    await waitFor(() =>
+      expect(mocks.composerUploadAttempt).toMatchObject({
+        files: [kept],
+        statuses: [{ phase: 'ready' }],
+      }),
+    );
+    expect(mocks.composerDroppedFiles).toBeNull();
+
+    act(() => {
+      mocks.removeAttachmentUpload!(0);
+    });
+    expect(mocks.keptDiscard).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a kept file where it was when the person starts a new chat, and deletes nothing', async () => {
+    const kept = keptReport();
+    await keptRowReady(kept);
+    const shortcuts = vi.mocked(useKeyboardShortcuts).mock.calls.at(-1)![0] as {
+      onNewChat: () => void;
+    };
+
+    act(() => {
+      shortcuts.onNewChat();
+    });
+
+    expect(mocks.keptDiscard).not.toHaveBeenCalled();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.composerUploadAttempt).toMatchObject({
+      files: [kept],
+      statuses: [{ phase: 'ready' }],
     });
   });
 });

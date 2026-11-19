@@ -1,6 +1,8 @@
+import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { ArrowUp, Square, Clock } from 'lucide-react-native';
 import { useThemeColors, radii } from '@/src/ui/theme';
+import { COMPOSER_ACTION_CIRCLE_SIZE, COMPOSER_CONTROL_SIZE } from './composerMetrics';
 
 type SendButtonState = 'idle' | 'streaming' | 'queued';
 
@@ -31,19 +33,13 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
     <PressableBox
       onPress={onPress}
       disabled={isDisabled}
-      style={({ pressed }) => ({
-        width: 44,
-        height: 44,
+      style={{
+        width: COMPOSER_CONTROL_SIZE,
+        height: COMPOSER_CONTROL_SIZE,
         flexShrink: 0,
-        borderRadius: radii.full,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: isDisabled
-          ? colors.neutralSurface
-          : pressed
-            ? colors.textSecondary
-            : colors.textPrimary,
-      })}
+      }}
       accessibilityLabel={
         accessibilityLabel ??
         (state === 'idle' ? 'Send message' : state === 'streaming' ? 'Stop generating' : 'Queued')
@@ -51,7 +47,25 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
       accessibilityRole="button"
       accessibilityState={{ disabled: isDisabled }}
     >
-      <Icon size={16} color={iconColor} fill={fillForState(state, iconColor)} />
+      {({ pressed }) => (
+        <View
+          testID="send-button-circle"
+          style={{
+            width: COMPOSER_ACTION_CIRCLE_SIZE,
+            height: COMPOSER_ACTION_CIRCLE_SIZE,
+            borderRadius: radii.full,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: isDisabled
+              ? colors.neutralSurface
+              : pressed
+                ? colors.textSecondary
+                : colors.textPrimary,
+          }}
+        >
+          <Icon size={16} color={iconColor} fill={fillForState(state, iconColor)} />
+        </View>
+      )}
     </PressableBox>
   );
 }

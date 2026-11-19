@@ -6,7 +6,11 @@ import {
   isMobileScheduleRecurrenceSupported,
   MOBILE_SCHEDULE_CADENCE_NOTE,
 } from '@/src/features/schedules/policy';
-import { isoToZonedDateInput, zonedDateAndTimeToIso } from '@/src/features/schedules/timing';
+import {
+  isoToZonedDateInput,
+  scheduleTimingProblem,
+  zonedDateAndTimeToIso,
+} from '@/src/features/schedules/timing';
 import { parseNaturalLanguage } from '@/src/features/schedules/components/QuickSchedule';
 
 const SWEEP_ROUTE = '/api/cron/run-schedules';
@@ -111,6 +115,46 @@ describe('Mobile schedule policy', () => {
   );
 });
 
+describe('Quick Schedule one-time dates', () => {
+  const at = { now: new Date('2026-11-15T12:00:00.000Z'), timezone: 'UTC' };
+
+  it.each([
+    ['January 5 2031 at 9am', '2031-01-05', '09:00', 'Once on Jan 5, 2031 at 09:00'],
+    ['Jan 5th, 2031 at 6:30pm', '2031-01-05', '18:30', 'Once on Jan 5, 2031 at 18:30'],
+    ['5 March 2031 9am', '2031-03-05', '09:00', 'Once on Mar 5, 2031 at 09:00'],
+    ['Pay rent on 2031-01-05 at 8am', '2031-01-05', '08:00', 'Once on Jan 5, 2031 at 08:00'],
+    ['January 5 at 9am', '2027-01-05', '09:00', 'Once on Jan 5, 2027 at 09:00'],
+    ['December 24 at 7pm', '2026-12-24', '19:00', 'Once on Dec 24, 2026 at 19:00'],
+    ['tomorrow at 8am', '2026-11-16', '08:00', 'Once on Nov 16, 2026 at 08:00'],
+  ])('reads %j as a one-time schedule', (phrase, date, time, description) => {
+    expect(parseNaturalLanguage(phrase, at)).toEqual({
+      recurrence: 'once',
+      scheduledDate: date,
+      timeOfDay: time,
+      description,
+    });
+  });
+
+  it.each([
+    'February 30 2031 at 9am',
+    '1/5/2031 at 9am',
+    'next Friday at 9am',
+    'every January 5 at 9am',
+    'once at 9am',
+    'Summarize my inbox at 8am',
+  ])('says it cannot read %j instead of turning it into a repeating schedule', (phrase) => {
+    expect(parseNaturalLanguage(phrase, at)).toBeNull();
+  });
+
+  it('keeps a bare clock and an explicit cadence as daily', () => {
+    expect(parseNaturalLanguage('at 9am', at)).toMatchObject({ recurrence: 'daily' });
+    expect(parseNaturalLanguage('Every day at 9am', at)).toMatchObject({
+      recurrence: 'daily',
+      timeOfDay: '09:00',
+    });
+  });
+});
+
 describe('Mobile one-time schedule timing', () => {
   it('converts the displayed wall-clock date and time in the selected timezone', () => {
     expect(zonedDateAndTimeToIso('2026-07-15', '09:30', 'America/New_York')).toBe(
@@ -138,5 +182,41 @@ describe('Mobile one-time schedule timing', () => {
     expect(() => zonedDateAndTimeToIso('2026-02-20', '09:00', 'Moon/Base')).toThrow(
       'valid IANA timezone',
     );
+  });
+
+  it('shows each known timing problem as its own sentence', () => {
+    const problem = (date: string, time: string, timezone: string) => {
+      try {
+        zonedDateAndTimeToIso(date, time, timezone);
+      } catch (error) {
+        return scheduleTimingProblem(error);
+      }
+      return null;
+    };
+    expect(problem('2026-03-08', '02:30', 'America/New_York')).toBe(
+      'This local time does not exist because the clock changes for daylight saving.',
+    );
+    expect(problem('2026-11-01', '01:30', 'America/New_York')).toBe(
+      'This local time occurs twice because the clock changes for daylight saving.',
+    );
+    expect(problem('2026-02-30', '09:00', 'UTC')).toBe('Enter a valid date and time.');
+    expect(problem('2026-02-20', '09:00', 'Moon/Base')).toBe(
+      'Enter a valid IANA timezone, such as America/Chicago.',
+    );
+  });
+
+  it('never lets a foreign error or thrown value reach the screen', () => {
+    expect(scheduleTimingProblem(new RangeError('Invalid time zone specified: Moon/Base'))).toBe(
+      'Enter a valid date and time.',
+    );
+    expect(scheduleTimingProblem(new Error('Unexpected token < in JSON'))).toBe(
+      'Enter a valid date and time.',
+    );
+    expect(
+      scheduleTimingProblem(
+        'This local time occurs twice because the clock changes for daylight saving.',
+      ),
+    ).toBe('Enter a valid date and time.');
+    expect(scheduleTimingProblem(undefined)).toBe('Enter a valid date and time.');
   });
 });

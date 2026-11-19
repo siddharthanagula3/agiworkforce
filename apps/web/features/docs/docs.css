@@ -42,6 +42,10 @@
   color: var(--chat-text-primary);
 }
 
+.dx-shell[data-embedded='true'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 [data-design='agi'] .dx-shell ::selection {
   background: var(--chat-text-primary);
   color: var(--chat-bg);

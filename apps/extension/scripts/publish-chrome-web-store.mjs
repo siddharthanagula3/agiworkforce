@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { setTimeout } from 'node:timers';
+import { URL, fileURLToPath, pathToFileURL } from 'node:url';
 
 const API_ORIGIN = 'https://chromewebstore.googleapis.com';
 const CHROMEWEBSTORE_SCOPE = 'https://www.googleapis.com/auth/chromewebstore';
 const MAX_STATUS_POLLS = 12;
 const STATUS_POLL_INTERVAL_MS = 5_000;
 const MAX_ERROR_BODY_CHARS = 4_000;
+const SETTLED_SUBMISSION_STATES = new Set([
+  'PUBLISHED',
+  'PUBLISHED_TO_TESTERS',
+  'REJECTED',
+  'CANCELLED',
+]);
 
 function requiredIdentifier(value, name, pattern) {
   const trimmed = value?.trim();
@@ -34,7 +42,7 @@ async function requestJson(fetchImpl, url, init, { retryGet = true, sleep } = {}
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const response = await fetchImpl(url, {
       ...init,
-      signal: AbortSignal.timeout(30_000),
+      signal: globalThis.AbortSignal.timeout(30_000),
     });
     const text = await response.text();
     const body = parseResponseBody(text);
@@ -119,14 +127,24 @@ export async function publishChromeWebStore({
     return { outcome: 'already-published', version, state: 'PUBLISHED' };
   }
   const submittedVersion = revisionVersion(initialStatus, 'submittedItemRevisionStatus');
-  if (submittedVersion === version) {
+  const submittedState = initialStatus.submittedItemRevisionStatus?.state;
+  if (submittedVersion === version && submittedState === 'REJECTED') {
+    throw new Error(
+      `Chrome Web Store rejected version ${version}; address the rejection email, then release a higher version`,
+    );
+  }
+  if (submittedVersion === version && submittedState !== 'CANCELLED') {
     return {
       outcome: 'already-submitted',
       version,
-      state: initialStatus.submittedItemRevisionStatus?.state ?? 'SUBMITTED',
+      state: submittedState ?? 'SUBMITTED',
     };
   }
-  if (submittedVersion && submittedVersion !== version) {
+  if (
+    submittedVersion &&
+    submittedVersion !== version &&
+    !SETTLED_SUBMISSION_STATES.has(submittedState)
+  ) {
     throw new Error(
       `Chrome Web Store already has submitted version ${submittedVersion}; resolve it before uploading ${version}`,
     );

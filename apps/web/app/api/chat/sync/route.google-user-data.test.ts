@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildChatSyncGateResponse: vi.fn(async () => null),
+}));
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/server/rls-db');
 type ScanModule1 = typeof import('@/lib/csrf');

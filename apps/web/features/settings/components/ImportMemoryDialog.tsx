@@ -332,8 +332,8 @@ function OwnedImportMemoryDialog({
         <DialogHeader>
           <DialogTitle>Import memory from other AI providers</DialogTitle>
           <DialogDescription>
-            Send the prompt below to your other assistant, then paste its reply here to review
-            before anything is saved.
+            Send the prompt below to your other assistant, then paste its reply to review before
+            saving.
           </DialogDescription>
           <div>
             <HelpArticleLink docId="memory" label="Learn more" />

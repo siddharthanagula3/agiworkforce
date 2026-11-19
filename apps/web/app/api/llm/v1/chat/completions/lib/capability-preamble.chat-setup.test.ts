@@ -20,6 +20,7 @@ import {
   chatSystemPromptSection,
   chatSystemPromptSections,
 } from '@/lib/prompts/chat-system-prompt';
+import type { ChatSetup } from '@/lib/prompts/chat-system-prompt-assembly';
 import { TEMPORARY_CHAT_RETENTION_DAYS } from '@/lib/server/temporary-files';
 
 import {
@@ -27,7 +28,6 @@ import {
   buildTextOnlyPreamble,
   servingModelFor,
   type CapabilityPreambleInput,
-  type ChatSetup,
   type ModelSelection,
   type TextOnlyPreambleInput,
 } from './capability-preamble';

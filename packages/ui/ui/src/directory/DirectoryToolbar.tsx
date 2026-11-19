@@ -155,9 +155,12 @@ export function DirectoryToolbar({
           </div>
         ) : null}
 
-        <div className="ms-auto flex items-center gap-2">
+        <div className="ms-auto flex items-center gap-2 max-md:ms-0 max-md:w-full max-md:flex-wrap">
           {countLabel ? (
-            <span className="text-sm text-muted-foreground" data-testid="directory-count">
+            <span
+              className="text-sm text-muted-foreground max-md:basis-full"
+              data-testid="directory-count"
+            >
               {countLabel}
             </span>
           ) : null}

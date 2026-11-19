@@ -89,7 +89,7 @@ export function useStreamingArtifactSync({
 
     const artifactId = computeDerivedArtifactId(conversationId, messageId, block.ordinal);
     const type = detectArtifactType(block.language, block.content) as ArtifactData['type'];
-    const title = extractArtifactTitle(block.content) ?? null;
+    const title = extractArtifactTitle(block.content, block.language) ?? null;
 
     streamedRef.current = {
       ordinal: block.ordinal,

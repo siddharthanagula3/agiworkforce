@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import { TEAM_SEAT_TYPES } from '@agiworkforce/types';
 import { EffectiveCapabilityDocumentSchema } from './capability-handshake';
+import { ChatAttachmentLimitsWireSchema } from './chat-attachments';
+import { ManagedCloudChatMessageLimitsWireSchema } from './conversations';
 export { CLIENT_VERSION_HEADER } from './header-names';
 
 export const ME_CLIENT_VERSION_PARAM = 'client_version';
 
 export const MeSubscriptionSourceSchema = z.enum(['none', 'stripe', 'apple', 'google', 'manual']);
+
+export const MeBillingOwnerSchema = z.enum(['organization', 'personal']);
 
 export const MePlanSchema = z.object({
   tier: z.string(),
@@ -14,6 +18,7 @@ export const MePlanSchema = z.object({
   current_period_end: z.number().nullable(),
   cancel_at_period_end: z.boolean().optional(),
   subscription_source: MeSubscriptionSourceSchema.optional(),
+  billing_owner: MeBillingOwnerSchema.optional(),
   effective_tier: z.string().optional(),
   seat_type: z.enum(TEAM_SEAT_TYPES).nullable().optional(),
 });
@@ -82,10 +87,23 @@ export const MeResponseSchema = z.object({
   capability_handshake: EffectiveCapabilityDocumentSchema.optional(),
   disabled_features: z.array(MeDisabledFeatureSchema).optional(),
   workspace_data_region: MeWorkspaceDataRegionSchema.nullable().optional(),
+  /**
+   * The chat attachment limits this account is held to, so a client can raise
+   * its own checks without a release. A malformed block reads as absent and the
+   * client keeps the limits it was built with.
+   */
+  attachment_limits: ChatAttachmentLimitsWireSchema.optional().catch(undefined),
+  /**
+   * The chat message length limits the server enforces, so a client sends a
+   * longer newest message only to a server that accepts it. A malformed block
+   * reads as absent and the client keeps the limit it was built with.
+   */
+  message_limits: ManagedCloudChatMessageLimitsWireSchema.optional().catch(undefined),
 });
 
 export type MePlan = z.infer<typeof MePlanSchema>;
 export type MeSubscriptionSource = z.infer<typeof MeSubscriptionSourceSchema>;
+export type MeBillingOwner = z.infer<typeof MeBillingOwnerSchema>;
 export type MeProfile = z.infer<typeof MeProfileSchema>;
 export type MeDisabledFeature = z.infer<typeof MeDisabledFeatureSchema>;
 export type MeWorkspaceDataRegion = z.infer<typeof MeWorkspaceDataRegionSchema>;
@@ -93,4 +111,17 @@ export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export function parseMeResponse(data: unknown): MeResponse {
   return MeResponseSchema.parse(data);
+}
+
+/**
+ * How long a client may act on a plan it read from `/api/me` before reading it
+ * again. The server enforces every request regardless; this bounds how long a
+ * client shows or routes on a plan that changed on another device.
+ */
+export const ME_PLAN_MAX_AGE_MS = 5 * 60_000;
+
+export function isMePlanStale(readAtIso: string | null, nowMs: number = Date.now()): boolean {
+  if (readAtIso === null) return true;
+  const readAtMs = Date.parse(readAtIso);
+  return !Number.isFinite(readAtMs) || nowMs - readAtMs >= ME_PLAN_MAX_AGE_MS;
 }

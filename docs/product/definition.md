@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -14,7 +14,7 @@ For the long-form PRD, serial surface order, per-surface release bars, and decis
 
 ## Product Definition
 
-AGI is the public product brand. AGI Workforce names the company and the site (`PRODUCT_BRAND` and `COMPANY_SITE_NAME` in `packages/contracts/types/src/product-names.ts`); the repo, packages and crates use `agiworkforce`.
+Product and company names come from `packages/contracts/types/src/product-names.ts`: `PRODUCT_BRAND` is AGIWORKFORCE, `PRODUCT_COPYRIGHT_NAME` is AGI, and `COMPANY_SITE_NAME` (the company and the site) is AGI Workforce. Prose here that says "AGI" means the product. The repo, packages and crates use `agiworkforce`.
 
 AGI is a leading AI application suite across six first-class surfaces:
 
@@ -156,9 +156,10 @@ competitor layouts is not parity.
 
 The current baseline was re-verified against first-party documentation on
 2026-09-21. The dated evidence, July-to-September change log, and source links
-live in `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`. Older
-screenshots and research files remain historical observations; they do not
-override this section.
+live in `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`. The
+latest vendor comparison is `docs/research/assistant-comparison-2026-11-11.md`.
+Older screenshots and research files remain historical observations; they do
+not override this section.
 
 OpenAI/ChatGPT baseline:
 
@@ -280,17 +281,19 @@ Capabilities must include tool access mode, connector discovery, visuals, artifa
 
 Billing and Usage must include plan, adjust plan, Stripe/payment link, invoices, due date, total, status, action, current-session percentage, rolling-week percentage, billing-period percentage, reset times, and auto reload. Public clients must not receive or reconstruct private internal allowance units, provider-cost value, ledger cents, or the internal unit-to-currency conversion.
 
-Billing plan lock (founder decision, 2026-07-18):
+Billing plan lock (founder decision, 2026-07-18; plans renamed on 2026-11-08,
+Pro to Premium, Max 5x to Max and Max 20x to Ultra, with the internal ids `pro`,
+`max` and `max_15x` unchanged):
 
-| Plan       | Public price                     | Public usage position               | Projects | Custom MCP | Managed developer surfaces | Image generation | Video generation | Shared controls |
-| ---------- | -------------------------------- | ----------------------------------- | -------- | ---------- | -------------------------- | ---------------- | ---------------- | --------------- |
-| Free       | Free                             | Small daily allowance               | 1        | None       | No                         | No               | No               | No              |
-| Basic      | $7/month; India ₹399/month       | Base paid usage                     | 5        | 5          | No                         | No               | No               | No              |
-| Pro        | $20/month; India ₹1,999/month    | 5x Basic                            | 25       | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 5x     | $100/month; India ₹9,999/month   | 5x Pro                              | No limit | No limit   | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 20x    | $200/month; India ₹19,999/month  | 20x Pro per session, 10x Pro weekly | No limit | No limit   | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
-| Team       | $25/seat/month or $240/seat/year | Same as Pro per seat                | 25       | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
-| Enterprise | Contract                         | Contract                            | Contract | Contract   | Contract                   | Yes              | Yes              | Yes             |
+| Plan       | Public price                     | Public usage position              | Projects | Custom MCP | Managed developer surfaces | Image generation | Video generation | Shared controls |
+| ---------- | -------------------------------- | ---------------------------------- | -------- | ---------- | -------------------------- | ---------------- | ---------------- | --------------- |
+| Free       | Free                             | Small daily allowance              | 1        | None       | No                         | No               | No               | No              |
+| Basic      | $7/month; India ₹399/month       | Base paid usage                    | 5        | 5          | No                         | No               | No               | No              |
+| Premium    | $20/month; India ₹1,999/month    | 5x Basic                           | 25       | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
+| Max        | $100/month; India ₹9,999/month   | 5x Premium                         | No limit | No limit   | CLI, Chrome, VS Code       | Yes              | No               | No              |
+| Ultra      | $200/month; India ₹19,999/month  | No session cap, 10x Premium weekly | No limit | No limit   | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
+| Team       | $25/seat/month or $240/seat/year | Same as Premium per seat           | 25       | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
+| Enterprise | Contract                         | Contract                           | Contract | Contract   | Contract                   | Yes              | Yes              | Yes             |
 
 Entitlements (owner decision 2026-10-22): Remote Control and connectors,
 custom MCP servers included, come with paid plans only; past-chat reference
@@ -301,12 +304,12 @@ The owner is `BILLING_PLAN_CAPABILITY_TIERS` in
 Connectors stay "coming soon" on every plan until `CONNECTOR_RELEASE_STATE` in
 `packages/contracts/types/src/connector-release.ts` is `released`.
 
-Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
+Basic, Premium, Max and Ultra are billed monthly only; Team is billed monthly
 or yearly (founder decision 2026-09-27, D-2026-09-27-01 in
 `docs/decisions/2026-09-27-founder-decisions.md`).
 
-India prices include 18% GST (owner decision 2026-10-10): Basic ₹399, Pro ₹1,999,
-Max 5x ₹9,999 and Max 20x ₹19,999 a month; a Team seat is ₹2,499 a month or
+India prices include 18% GST (owner decision 2026-10-10): Basic ₹399, Premium ₹1,999,
+Max ₹9,999 and Ultra ₹19,999 a month; a Team seat is ₹2,499 a month or
 ₹23,988 a year (₹1,999 a month). Every other price excludes tax, which is added at
 checkout. `BILLING_CURRENCY_TERMS` in `packages/contracts/types/src/billing-catalog.ts`
 records which currencies include tax.
@@ -322,7 +325,7 @@ seat gets the same budget as a monthly seat in its currency.
 
 Team sells two seat types on one subscription (founder decision 2026-10-08). The
 Team row above is the Standard seat. A Premium seat is $125/seat/month or
-$1,200/seat/year in US dollars only, carries the Max 5x usage, projects, custom
+$1,200/seat/year in US dollars only, carries the Max usage, projects, custom
 MCP and model access, and keeps the Team shared controls. A team may mix both;
 only the workspace owner makes a seat change that alters the bill, an admin may
 assign a Premium seat that is already paid for, and the seat minimum applies to
@@ -364,14 +367,16 @@ model run by a named provider asks for the person's agreement. The rules and the
 numbers are in `docs/runbooks/free-quota-models.md`.
 
 Paid plan prices are configured on Web, but new paid subscriptions and upgrades
-on Web remain waitlist/access-code gated. Store in-app purchase on Mobile
-carries no waitlist or access code (owner decision 2026-10-19,
-`docs/compliance/mobile-store-feature-justification.md` O2). Existing paid
+on Web remain waitlist/access-code gated. Mobile v1 sells nothing in the app:
+`apps/mobile/src/features/billing/storePurchases.json` holds
+`nativePurchases: false` (owner deferral 2026-11-10). When store purchase is
+turned on it carries no waitlist or access code (owner decision 2026-10-19,
+`audit/registers/mobile-store-feature-justification.md` O2). Existing paid
 entitlements resolve on Mobile and Desktop, although those clients are not
 publicly obtainable until their verified releases are published. Free and Basic do not include managed-cloud
 CLI, Chrome, or VS Code access; Local/BYOK developer use remains available
 inside its separate trust boundary. Skills and chat tools remain available in
-Free chat, while AGI Work and managed developer surfaces are Pro+ capabilities.
+Free chat, while AGI Work and managed developer surfaces need Premium or a higher plan.
 
 The billing catalog supports global acquisition with configured localized
 amounts and USD fallback, but the catalog does not open purchasing. The Website
@@ -380,9 +385,9 @@ options; it never trusts a browser-supplied currency. The same
 waitlist/access-code policy gates every supported country until the founder
 opens self-serve paid acquisition.
 
-Paid usage is enforced as overlapping billing-period, rolling seven-day, rolling five-hour, and flagship rolling-week windows. The five-hour allowance is 20% of that plan's weekly allowance and the flagship sub-limit is 30% of the weekly allowance. These are spend windows, not seven daily buckets: usage ages out from its original transaction timestamp. Rolling spend windows warn at 80% and hard-stop at 100%; there is no downgrade or 150% financial grace band. The server-owned reservation includes the estimated in-flight request before provider work and serializes concurrent reservations for one tenant.
+Paid usage is enforced as overlapping billing-period, rolling seven-day, rolling five-hour, and flagship rolling-week windows. The five-hour allowance is 10% of that plan's weekly allowance, Ultra (`max_15x`) has no five-hour cap, and the flagship sub-limit is 30% of the weekly allowance (`packages/contracts/types/src/managed-usage-limits.ts`). These are spend windows, not seven daily buckets: usage ages out from its original transaction timestamp. Rolling spend windows warn at 80% and hard-stop at 100%; there is no downgrade or 150% financial grace band. The server-owned reservation includes the estimated in-flight request before provider work and serializes concurrent reservations for one tenant.
 
-An immediate paid-plan upgrade preserves the existing renewal date. Stripe previews and invoices only the prorated price/seat difference for the remaining time in the current period, using the exact same signed proration timestamp for preview and apply. AGI carries already-consumed billing-period and rolling-window usage into the higher plan; usage never resets on upgrade, and purchased top-ups remain separate. If payment is incomplete or fails, the old plan and its counters remain active until the canonical paid webhook provisions the upgrade.
+An immediate tier upgrade starts a new billing period that day: Stripe charges the new plan's price less a credit for the unused time on the old one. A seat increase keeps the renewal date, and its preview and charge share one signed proration timestamp (`planChangeAnchor` in `apps/web/lib/server/stripe-plan-change.ts`). AGI carries already-consumed billing-period and rolling-window usage into the higher plan; usage never resets on upgrade, and purchased top-ups remain separate. If payment is incomplete or fails, the old plan and its counters remain active until the canonical paid webhook provisions the upgrade.
 
 Top-ups are available only to active Stripe-billed paid plans through the same
 gated commercial policy. They are whole-dollar purchases at 50 public top-up
@@ -460,8 +465,8 @@ Mobile:
 - Mobile is not published. Its code currently prioritizes Local Mode and keeps hosted sends gated unless Cloud access is explicitly unlocked.
 - `apps/mobile/services/remoteChatGate.ts` fails closed when Cloud sends are disabled.
 - Mobile v1 has small on-device Local LLM chat plus signed-in Managed Free
-  public alpha. Web paid upgrades remain gated; store in-app purchase carries no
-  waitlist or access code. Mobile BYOK is not a v1 product path.
+  public alpha. Web paid upgrades remain gated; Mobile v1 sells nothing in the
+  app (`nativePurchases: false`). Mobile BYOK is not a v1 product path.
 - Mobile should not be the first heavy local PDF/PPTX/DOCX generation surface.
 
 CLI:

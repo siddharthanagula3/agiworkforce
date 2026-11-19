@@ -75,14 +75,20 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-import { managedCloudConversationBranchesPath } from '@agiworkforce/cloud-contracts';
+import {
+  ManagedCloudChatHttpError,
+  managedCloudConversationBranchesPath,
+} from '@agiworkforce/cloud-contracts';
 import { api } from '../services/api';
+import { managedCloudChat } from '../services/managedCloudChat';
+import { toUserMessage } from '../services/userMessage';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import { useChatExecutionStore } from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
-import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { PROJECT_UNAVAILABLE_MESSAGE, useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatStore } from '../stores/chatStore';
 import type { ChatMessage } from '../types/chat';
 import {
@@ -329,6 +335,97 @@ describe('cloud send → sync write-through', () => {
     expect(branch?.parentConversationId).toBe(CONV_ID);
     expect(branch?.forkPointMessageId).toBe('0190a000-0000-7000-8000-000000000002');
     expect(useChatCloudMessageStore.getState().messages[forkId]).toEqual([]);
+  });
+
+  it('drops a project the server no longer has and says so in words a person can act on', async () => {
+    const PROJECT_ID = '0190a000-0000-7000-8000-0000000000a9';
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useCloudProjectStore.getState().upsertCloudProject({
+      id: PROJECT_ID,
+      name: 'Garden',
+      description: null,
+      instructions: null,
+      color: null,
+      isArchived: false,
+      metadata: null,
+      source: 'web',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      deletedAt: null,
+    });
+    useCloudProjectStore.getState().setActiveCloudProject(PROJECT_ID);
+    const createConversation = jest
+      .spyOn(managedCloudChat, 'createConversation')
+      .mockRejectedValue(new ManagedCloudChatHttpError('Project not found', 404));
+
+    let thrown: unknown;
+    try {
+      await useChatStore.getState().createConversation('Tulips', PROJECT_ID);
+    } catch (error) {
+      thrown = error;
+    } finally {
+      createConversation.mockRestore();
+    }
+
+    const cause = thrown instanceof Error ? thrown.cause : undefined;
+    expect(toUserMessage(cause, 'fallback')).toBe(PROJECT_UNAVAILABLE_MESSAGE);
+    expect(useCloudProjectStore.getState().activeProjectId).toBeNull();
+    useCloudProjectStore.getState().clearCloudProjectData();
+  });
+
+  it('names a Cloud branch with the title the person gave it', async () => {
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: CONV_ID,
+      title: 'Cloud Source',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: 1,
+      pinned: false,
+      starred: false,
+      archived: false,
+      model: CLOUD_MODEL,
+      executionMode: 'cloud',
+    });
+    useChatCloudMessageStore.getState().setCloudMessages(CONV_ID, [
+      {
+        id: '0190a000-0000-7000-8000-000000000002',
+        conversationId: CONV_ID,
+        role: 'user',
+        content: 'source message',
+        createdAt: new Date().toISOString(),
+        model: CLOUD_MODEL,
+      },
+    ]);
+    const BRANCH_ID = '0190a000-0000-7000-8000-0000000000b2';
+    mockPost.mockResolvedValueOnce({
+      conversation: {
+        id: BRANCH_ID,
+        title: 'Cloud Source (branch)',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        project_id: null,
+        pinned: false,
+        starred: false,
+        archived: false,
+        is_temporary: false,
+        model: CLOUD_MODEL,
+      },
+    });
+    const updateConversation = jest
+      .spyOn(managedCloudChat, 'updateConversation')
+      .mockResolvedValue(undefined as never);
+
+    const forkId = await useChatStore.getState().forkConversation(CONV_ID, {
+      forkPointMessageId: '0190a000-0000-7000-8000-000000000002',
+      title: '  Spring beds plan  ',
+    });
+    const updates = updateConversation.mock.calls.slice();
+    updateConversation.mockRestore();
+
+    expect(updates).toEqual([[BRANCH_ID, { title: 'Spring beds plan' }]]);
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === forkId)?.title,
+    ).toBe('Spring beds plan');
   });
 
   it('writes the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {

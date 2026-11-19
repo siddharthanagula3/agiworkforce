@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import {
   settingsSectionPath,
   type WebSettingsContentSection,
@@ -54,9 +55,9 @@ export function SettingsSectionLink({
 
   if (!navigation) {
     return (
-      <Link href={settingsSectionPath(section)} className={className} style={style}>
+      <PageLink href={settingsSectionPath(section)} className={className} style={style}>
         {children}
-      </Link>
+      </PageLink>
     );
   }
 

@@ -13,7 +13,10 @@ import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContra
 type Handler = (event: unknown, payload: unknown) => Promise<unknown>;
 
 const handlers = new Map<string, Handler>();
-const loginItem = vi.fn();
+let systemOpensAtLogin = false;
+const loginItem = vi.fn((settings: { openAtLogin: boolean }) => {
+  systemOpensAtLogin = settings.openAtLogin;
+});
 const trayCalls: string[] = [];
 let registeredAccelerators: string[] = [];
 let heldByAnotherApp: string[] = [];
@@ -67,6 +70,7 @@ vi.mock('electron', () => {
       setPath: vi.fn(),
       setAsDefaultProtocolClient: vi.fn(),
       setLoginItemSettings: loginItem,
+      getLoginItemSettings: () => ({ openAtLogin: systemOpensAtLogin }),
       on: vi.fn(),
       whenReady: () => Promise.resolve(),
       isReady: () => true,
@@ -194,6 +198,7 @@ type State = {
 
 beforeEach(() => {
   storedSettings = {};
+  systemOpensAtLogin = false;
   diskRefusesWrites = false;
   trayCalls.length = 0;
   registeredAccelerators = [];
@@ -345,10 +350,34 @@ describe('the host preferences channel', () => {
     expect(loginItem).not.toHaveBeenCalled();
 
     storedSettings = { ...storedSettings, launchAtLogin: true };
+    systemOpensAtLogin = true;
     showMessageBox.mockClear();
     const off = (await invoke({ launchAtLogin: false })) as State;
     expect(off.preferences['launchAtLogin']).toBe(false);
+    expect(loginItem).toHaveBeenCalledWith({ openAtLogin: false });
     expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('reports the login item the system holds after the person removed it in System Settings', async () => {
+    storedSettings = { ...storedSettings, launchAtLogin: true };
+    systemOpensAtLogin = false;
+
+    const state = (await invoke(null)) as State;
+
+    expect(state.preferences['launchAtLogin']).toBe(false);
+    expect(loginItem).not.toHaveBeenCalled();
+  });
+
+  it('asks again before turning back on a login item the system no longer holds', async () => {
+    storedSettings = { ...storedSettings, launchAtLogin: true };
+    systemOpensAtLogin = false;
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+
+    const state = (await invoke({ launchAtLogin: true })) as State;
+
+    expect(showMessageBox).toHaveBeenCalledTimes(1);
+    expect(loginItem).toHaveBeenCalledWith({ openAtLogin: true });
+    expect(state.preferences['launchAtLogin']).toBe(true);
   });
 
   it('turns dictation into other apps on once the user says yes here, and off without asking', async () => {
@@ -428,6 +457,7 @@ describe('the host preferences channel', () => {
 
   it('does not apply launch at login to the system when the setting could not be saved', async () => {
     storedSettings = { launchAtLogin: true };
+    systemOpensAtLogin = true;
     diskRefusesWrites = true;
 
     await expect(invoke({ launchAtLogin: false })).rejects.toThrow(/could not be saved/u);

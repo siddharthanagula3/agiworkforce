@@ -29,6 +29,9 @@ import {
   type BankAccountsItem,
   CONNECTOR_CALLS_PATH,
   ConnectorCallLogResponseSchema,
+  ListConnectorAccountsResponseSchema,
+  connectorAccountsPath,
+  type ConnectorAccount,
   type ConnectorCallEntry,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -44,6 +47,7 @@ import {
   ConnectorCredentialStatusResponseSchema,
   ConnectorDirectoryEntryResponseSchema,
   ConnectorDirectoryListResponseSchema,
+  ConnectorDirectoryStatsSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
   SaveConnectorCredentialResponseSchema,
   connectorCapabilitiesPath,
@@ -54,6 +58,7 @@ import {
   type ConnectorDirectoryEntry,
   type ConnectorDirectoryListResponse,
   type ConnectorDirectoryQuery,
+  type ConnectorPersonalSource,
   type SaveConnectorCredentialRequest,
 } from '@agiworkforce/cloud-contracts';
 
@@ -84,7 +89,7 @@ export type ConnectorListingCategory = ConnectorDirectoryCategory;
 export type ConnectorListingPage = Pick<
   ConnectorDirectoryListResponse,
   'entries' | 'nextCursor' | 'categories'
->;
+> & { stats?: { bootstrapComplete?: boolean } };
 
 export interface ConnectorListingFilter {
   search?: string;
@@ -100,6 +105,8 @@ const ListingPageSchema = ConnectorDirectoryListResponseSchema.pick({
   entries: true,
   nextCursor: true,
   categories: true,
+}).extend({
+  stats: ConnectorDirectoryStatsSchema.pick({ bootstrapComplete: true }).partial().optional(),
 });
 
 const SavedCredentialSchema = SaveConnectorCredentialResponseSchema.pick({ toolCount: true });
@@ -204,6 +211,20 @@ export async function browseConnectorListings(
   return parsed.data;
 }
 
+export async function browsePersonalSourceListings(
+  source: ConnectorPersonalSource,
+): Promise<ConnectorListing[]> {
+  const params = new URLSearchParams({
+    personalSource: source,
+    limit: String(CONNECTOR_DIRECTORY_MAX_LIMIT),
+  });
+  const parsed = ListingPageSchema.safeParse(
+    await api.get<unknown>(`${CONNECTOR_DIRECTORY_PATH}?${params.toString()}`),
+  );
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_LISTING);
+  return parsed.data.entries.filter((entry) => entry.personalSources?.includes(source));
+}
+
 export async function fetchConnectorListing(id: string): Promise<ConnectorListing | null> {
   let body: unknown;
   try {
@@ -279,6 +300,12 @@ export async function completeConnectorAuthorization(
     await api.post<unknown>(CONNECTOR_OAUTH_COMPLETE_PATH, request.data),
   );
   return response.status;
+}
+
+export async function fetchConnectorAccounts(connectorId: string): Promise<ConnectorAccount[]> {
+  return ListConnectorAccountsResponseSchema.parse(
+    await api.get<unknown>(connectorAccountsPath(connectorId)),
+  ).accounts;
 }
 
 export async function fetchConnectorCalls(connectorId: string): Promise<ConnectorCallEntry[]> {

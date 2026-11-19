@@ -478,8 +478,8 @@ Each implementation agent should:
 2. Inspect the listed AGI paths before editing.
 3. Verify competitor behavior from the listed source or the reference libraries at
    `/Users/siddhartha/Desktop/references-2`,
-   `/Users/siddhartha/Desktop/claude_reference`, and
-   `/Users/siddhartha/Desktop/chatgpt_reference` when the row depends on UI
+   `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference`, and
+   `/Users/siddhartha/Desktop/AGI/reference-screenshots/chatgpt_reference` when the row depends on UI
    parity.
 4. Implement the smallest end-to-end slice: UI control, state/store, backend/runtime path, persistence, permission/trust label, and test.
 5. Mark incomplete behavior as a tracked gap. Do not claim parity from placeholder UI or passing typecheck alone.
@@ -837,17 +837,17 @@ Sources: ChatGPT memory official help/FAQ, ChatGPT projects, Anthropic personali
 
 ## Connectors, Apps, MCP, Plugins, And Skills
 
-| Component / option           | Surfaces               | Competitive target                                                      | AGI requirement                                                                                                                                             | Current AGI status                                                        |
-| ---------------------------- | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Connector/app directory      | W, D, M, CLI, VSC, CHR | ChatGPT Apps directory; Claude connectors; Codex plugins.               | Directory with categories, search, details, connect/install, permissions, admin policy, connected list.                                                     | Partial: Desktop connector gallery exists.                                |
-| Apps with search             | W, D, M                | ChatGPT apps can search/reference third-party services.                 | User can invoke via @ mention, plus menu, or automatic "load tools when needed" policy; show connector label.                                               | Partial.                                                                  |
-| Apps with sync               | W, D, M                | ChatGPT apps with sync index selected sources.                          | Sync must have plan gate, admin control, delete/disconnect behavior, memory implications, and data controls.                                                | Missing/Partial.                                                          |
-| Write actions                | W, D, M, CHR, CLI, VSC | ChatGPT apps require confirmation; Claude/Codex permissions.            | External writes require confirmation, target preview, permission scope, audit trail, and rollback where possible.                                           | Partial.                                                                  |
-| Local MCP servers            | CLI, VSC               | Claude Desktop local MCP; Claude Code MCP.                              | Add/config/edit/view logs, status, OAuth where available, per-tool permissions, local path restrictions. Public Electron Desktop reports `localMcp: false`. | Partial in released CLI; VS Code remains unpublished.                     |
-| Remote MCP/custom connectors | W, D, CLI, VSC         | Claude custom connectors using remote MCP; ChatGPT custom apps via MCP. | URL/auth headers, OAuth/bearer token, timeout, SSL, tool discovery, permission review, admin allow/deny.                                                    | Partial: public Desktop uses the hosted account-scoped connector service. |
-| Plugins                      | D, CLI, VSC, CHR       | Codex plugins, Claude plugin-style references.                          | Bundle apps/skills/MCP servers, categories, install/update/uninstall, trust policy, marketplace/source controls.                                            | Partial.                                                                  |
-| Skills                       | W, D, CLI, VSC         | Claude skills/customization and Codex skills.                           | Skill directory, create/import/edit, slash/menu invocation, project/user scope, permission limits, testing/evals.                                           | Partial.                                                                  |
-| Tool access mode             | W, D, M, CLI, VSC      | User controls when tools/connectors load.                               | Settings must support load tools when needed, always/ask/off, connector discovery, and per-conversation overrides.                                          | Partial: Desktop capabilities settings has first pass.                    |
+| Component / option           | Surfaces               | Competitive target                                                      | AGI requirement                                                                                                                                                                            | Current AGI status                                                                              |
+| ---------------------------- | ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| Connector/app directory      | W, D, M, CLI, VSC, CHR | ChatGPT Apps directory; Claude connectors; Codex plugins.               | Directory with categories, search, details, connect/install, permissions, admin policy, connected list.                                                                                    | Partial: Desktop connector gallery exists.                                                      |
+| Apps with search             | W, D, M                | ChatGPT apps can search/reference third-party services.                 | User can invoke via @ mention, plus menu, or automatic "load tools when needed" policy; show connector label.                                                                              | Partial.                                                                                        |
+| Apps with sync               | W, D, M                | ChatGPT apps with sync index selected sources.                          | Sync must have plan gate, admin control, delete/disconnect behavior, memory implications, and data controls.                                                                               | Missing/Partial.                                                                                |
+| Write actions                | W, D, M, CHR, CLI, VSC | ChatGPT apps require confirmation; Claude/Codex permissions.            | External writes require confirmation, target preview, permission scope, audit trail, and rollback where possible.                                                                          | Partial.                                                                                        |
+| Local MCP servers            | CLI, VSC               | Claude Desktop local MCP; Claude Code MCP.                              | Add/config/edit/view logs, status, OAuth where available, per-tool permissions, local path restrictions. Public Electron Desktop reports `localMcp: true` when its bundled CLI serves MCP. | Electron Desktop: Developer settings page through the bundled CLI. VS Code remains unpublished. |
+| Remote MCP/custom connectors | W, D, CLI, VSC         | Claude custom connectors using remote MCP; ChatGPT custom apps via MCP. | URL/auth headers, OAuth/bearer token, timeout, SSL, tool discovery, permission review, admin allow/deny.                                                                                   | Partial: public Desktop uses the hosted account-scoped connector service.                       |
+| Plugins                      | D, CLI, VSC, CHR       | Codex plugins, Claude plugin-style references.                          | Bundle apps/skills/MCP servers, categories, install/update/uninstall, trust policy, marketplace/source controls.                                                                           | Partial.                                                                                        |
+| Skills                       | W, D, CLI, VSC         | Claude skills/customization and Codex skills.                           | Skill directory, create/import/edit, slash/menu invocation, project/user scope, permission limits, testing/evals.                                                                          | Partial.                                                                                        |
+| Tool access mode             | W, D, M, CLI, VSC      | User controls when tools/connectors load.                               | Settings must support load tools when needed, always/ask/off, connector discovery, and per-conversation overrides.                                                                         | Partial: Desktop capabilities settings has first pass.                                          |
 
 Sources: ChatGPT apps/connectors, ChatGPT apps with sync, Anthropic MCP/local MCP/custom connectors, Claude Code MCP/settings, Codex app features.
 
@@ -1102,11 +1102,11 @@ Anthropic official sources:
 
 Local evidence:
 
-- `/Users/siddhartha/Desktop/claude_reference/CLAUDE_REFERENCE.md`
-- `/Users/siddhartha/Desktop/claude_reference/COMPARISON.md`
-- `/Users/siddhartha/Desktop/claude_reference/claude/2026-05-13/manifest.md`
-- `/Users/siddhartha/Desktop/claude_reference/claude/2026-05-15/claude-desktop-post-update-notes.md`
-- `/Users/siddhartha/Desktop/claude_reference/**`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/CLAUDE_REFERENCE.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/COMPARISON.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/claude/2026-05-13/manifest.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/claude/2026-05-15/claude-desktop-post-update-notes.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/**`
 
 Do not copy proprietary source, screenshots, icons, text, or layouts exactly. Use these references to define AGI-owned feature parity and implementation requirements.
 

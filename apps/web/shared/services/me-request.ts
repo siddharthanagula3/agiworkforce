@@ -1,3 +1,7 @@
+import {
+  CLIENT_CAPABILITIES_REQUEST_HEADER,
+  LARGE_CHAT_FILES_CAPABILITY,
+} from '@agiworkforce/cloud-contracts';
 import { hasClerkSessionCookie, hasUsableClerkSessionToken } from '@/lib/clerk-session';
 
 const TOKEN_WAIT_MS = 4000;
@@ -17,7 +21,12 @@ async function waitForUsableToken(): Promise<void> {
 export function requestMe(): Promise<Response> {
   if (!inFlight) {
     inFlight = waitForUsableToken()
-      .then(() => fetch('/api/me', { credentials: 'include' }))
+      .then(() =>
+        fetch('/api/me', {
+          credentials: 'include',
+          headers: { [CLIENT_CAPABILITIES_REQUEST_HEADER]: LARGE_CHAT_FILES_CAPABILITY },
+        }),
+      )
       .finally(() => {
         inFlight = null;
       });

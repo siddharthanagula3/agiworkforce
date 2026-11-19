@@ -1,4 +1,4 @@
-import projectContract from './project-contract.json';
+import projectContract from './project-contract.json' with { type: 'json' };
 import { z } from 'zod';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 
@@ -18,6 +18,24 @@ export function managedCloudProjectKnowledgeOriginsPath(projectId: string): stri
 
 export function managedCloudProjectKnowledgeRefreshPath(projectId: string, fileId: string): string {
   return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/refresh`;
+}
+
+export function managedCloudProjectKnowledgeReindexPath(projectId: string, fileId: string): string {
+  return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/reindex`;
+}
+
+export function managedCloudProjectKnowledgeTextPath(projectId: string, fileId: string): string {
+  return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/text`;
+}
+
+export const KNOWLEDGE_INDEX_IN_PROGRESS_STATUSES = ['pending', 'indexing', 'stale'] as const;
+
+const IN_PROGRESS_STATUSES: ReadonlySet<string> = new Set(KNOWLEDGE_INDEX_IN_PROGRESS_STATUSES);
+
+export function isKnowledgeIndexInProgress(
+  indexing: { status: string } | null | undefined,
+): boolean {
+  return indexing ? IN_PROGRESS_STATUSES.has(indexing.status) : false;
 }
 
 export const ManagedCloudProjectKnowledgeFileIdSchema = z.string().uuid();

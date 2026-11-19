@@ -171,6 +171,13 @@ function isPrivateChatAttachmentPathname(pathname: string): boolean {
   return /^chat-attachments\/[A-Za-z0-9_-]+\/[0-9]+_[A-Za-z0-9_-]+\.[a-z0-9]+$/i.test(unsealed);
 }
 
+/** A sealed copy of a key the upload route itself issued, and nothing else that merely ends alike. */
+export function isSealedPrivateChatAttachmentPathname(pathname: string): boolean {
+  return (
+    pathname.endsWith(SEALED_CHAT_ATTACHMENT_SUFFIX) && isPrivateChatAttachmentPathname(pathname)
+  );
+}
+
 /**
  * The sealing copy in the upload-complete route is the only writer of this
  * shape, and it only ever writes into the private bucket. A sealed pathname

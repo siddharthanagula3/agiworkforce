@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { signedOutRedirectUrl, useSignOut } from '@/lib/identity/client';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 import {
   useQuery,
   useMutation,
@@ -502,6 +503,7 @@ export function useDeleteAccount(): UseMutationResult<
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const embeddedSignInPath = useEmbeddedSignInPath();
   const { withStepUp, dialog } = useStepUp();
   const mounted = useRef(true);
   const receiptSession = useRef<SessionAuthority | null>(null);
@@ -576,8 +578,10 @@ export function useDeleteAccount(): UseMutationResult<
     if (!session?.isCurrent()) return;
     // `signedOutRedirectUrl` is what decides where this lands: the marketing
     // home in a browser, the sign-in route inside the desktop shell, which does
-    // not host the marketing site and would open it in a browser instead.
-    const destination = signedOutRedirectUrl(SITE_HOME_PATH, isDesktopHost());
+    // not host the marketing site and would open it in a browser instead. The
+    // account page the phone app opens lands on its own sign-in page, because
+    // the marketing home leads to pricing.
+    const destination = embeddedSignInPath ?? signedOutRedirectUrl(SITE_HOME_PATH, isDesktopHost());
     try {
       await logout({ sessionId: session.sessionId });
       if (authService.isSessionSuperseded(session.sessionId)) return;
@@ -594,7 +598,7 @@ export function useDeleteAccount(): UseMutationResult<
         router.replace(destination ?? SITE_HOME_PATH);
       }
     }
-  }, [logout, identitySignOut, router]);
+  }, [embeddedSignInPath, logout, identitySignOut, router]);
 
   return { ...mutation, signOutAfterDeletion, stepUpDialog: dialog };
 }
@@ -1541,8 +1545,11 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
       }
 
       const json = (await res.json()) as Partial<AuditLogPage>;
+      if (!Array.isArray(json.entries)) {
+        throw new Error('The security activity history could not be read.');
+      }
       return {
-        entries: Array.isArray(json.entries) ? json.entries : [],
+        entries: json.entries,
         hasMore: json.hasMore === true,
       };
     },

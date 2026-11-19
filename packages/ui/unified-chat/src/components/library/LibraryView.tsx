@@ -43,6 +43,7 @@ import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
   LIBRARY_DEFAULT_SORT,
+  MAX_CHAT_ATTACHMENT_BYTES,
   type LibraryItem,
   type LibraryKind,
   type LibraryOrigin,
@@ -255,6 +256,11 @@ export interface LibraryTransport {
   isSignedIn: boolean;
   listPage(params: URLSearchParams): Promise<Response>;
   fetchAsset(uri: string): Promise<Response>;
+  /** Saves an uploaded file above the inline chat attachment limit, other than
+   *  a video, through the browser's own download, which the server may hand to
+   *  storage. Hosts without it read every download into the page with
+   *  `fetchAsset`. */
+  downloadInBrowser?: (uri: string) => void;
   deleteItem(id: string): Promise<Response>;
   permanentlyDeleteItem(id: string): Promise<Response>;
   restoreItem(id: string): Promise<Response>;
@@ -301,6 +307,17 @@ async function requireSuccessfulMutation(response: Response): Promise<void> {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const body = (await response.json()) as { success?: unknown };
   if (body.success !== true) throw new Error('The file is no longer available');
+}
+
+const DOWNLOADS_USED_UP_MESSAGE = 'This file is larger than the file downloads left this month.';
+
+function largeUploadBytes(item: LibraryItem): number | null {
+  return item.origin === 'uploaded' &&
+    !isVideoItem(item) &&
+    item.byte_count !== null &&
+    item.byte_count > MAX_CHAT_ATTACHMENT_BYTES
+    ? item.byte_count
+    : null;
 }
 
 function isImageItem(item: LibraryItem): boolean {
@@ -390,6 +407,7 @@ export function LibraryView({
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [unavailableIds, setUnavailableIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [fullFileTileIds, setFullFileTileIds] = useState<ReadonlySet<string>>(() => new Set());
   const [viewDeleted, setViewDeleted] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -532,6 +550,17 @@ export function LibraryView({
 
   const handleDownload = useCallback(
     async (item: LibraryItem) => {
+      const { downloadInBrowser } = transport;
+      const largeBytes = downloadInBrowser ? largeUploadBytes(item) : null;
+      if (downloadInBrowser && largeBytes !== null) {
+        if (downloads !== null && downloads.usedBytes + largeBytes > downloads.limitBytes) {
+          setRowError(item.id, DOWNLOADS_USED_UP_MESSAGE);
+          return;
+        }
+        downloadInBrowser(item.uri);
+        setRowError(item.id, null);
+        return;
+      }
       try {
         const res = await transport.fetchAsset(item.uri);
         if (!res.ok) {
@@ -552,13 +581,17 @@ export function LibraryView({
         setRowError(item.id, toUserMessageWithStatus(err, 'That file could not be downloaded.'));
       }
     },
-    [transport, setRowError],
+    [transport, downloads, setRowError],
   );
 
   const probedThumbnailIds = useRef<Set<string>>(new Set());
 
   const handleThumbnailError = useCallback(
-    async (item: LibraryItem) => {
+    async (item: LibraryItem, tileSource: string) => {
+      if (item.thumbnail_uri && tileSource === item.thumbnail_uri) {
+        setFullFileTileIds((current) => new Set(current).add(item.id));
+        return;
+      }
       if (probedThumbnailIds.current.has(item.id)) return;
       probedThumbnailIds.current.add(item.id);
       try {
@@ -851,6 +884,7 @@ export function LibraryView({
     items: page.items,
     folders: visibleFolders,
     unavailableIds,
+    fullFileTileIds,
     busyIds,
     rowErrors,
     viewDeleted,
@@ -892,7 +926,7 @@ export function LibraryView({
       ) : null}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
+          <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)] max-md:font-medium">
             Library
           </h1>
           {storageUsedBytes !== null ? (
@@ -1352,12 +1386,13 @@ interface LibraryListProps {
   items: readonly LibraryItem[];
   folders: readonly LibraryFolder[];
   unavailableIds: ReadonlySet<string>;
+  fullFileTileIds: ReadonlySet<string>;
   busyIds: ReadonlySet<string>;
   rowErrors: Record<string, string>;
   viewDeleted: boolean;
   actions: RowActions;
   onOpenFolder?: (folder: LibraryFolder) => void;
-  onThumbnailError: (item: LibraryItem) => Promise<void>;
+  onThumbnailError: (item: LibraryItem, tileSource: string) => Promise<void>;
   inlinePreviewUri?: (uri: string) => string;
   openArtifactIds: ReadonlySet<string>;
   artifactSources: Record<string, ArtifactSource>;
@@ -1438,8 +1473,10 @@ function LibraryGrid(props: LibraryListProps) {
 
       {props.items.map((item) => {
         const unavailable = props.unavailableIds.has(item.id);
+        const tileSource =
+          item.thumbnail_uri && !props.fullFileTileIds.has(item.id) ? item.thumbnail_uri : item.uri;
         const thumbnailUri =
-          !unavailable && isImageItem(item) ? props.inlinePreviewUri?.(item.uri) : undefined;
+          !unavailable && isImageItem(item) ? props.inlinePreviewUri?.(tileSource) : undefined;
         const rowError = props.rowErrors[item.id];
         return (
           <GridTile
@@ -1481,7 +1518,7 @@ function LibraryGrid(props: LibraryListProps) {
                 alt=""
                 loading="lazy"
                 className="h-full w-full object-cover"
-                onError={() => void props.onThumbnailError(item)}
+                onError={() => void props.onThumbnailError(item, tileSource)}
               />
             ) : isVideoItem(item) ? (
               <Play className={TILE_GLYPH_CLASS} aria-hidden />
@@ -1642,7 +1679,7 @@ const MENU_PANEL_CLASS =
   'absolute end-0 z-[var(--z-dropdown)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
 
 const MENU_TRIGGER_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1.5 max-md:pointer-coarse:after:content-[""] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 /**
  * The tile chip stays in the DOM at low emphasis and gains its border and full
@@ -1650,7 +1687,7 @@ const MENU_TRIGGER_CLASS =
  * unreachable on a touch pointer, which has neither.
  */
 const MENU_TRIGGER_OVERLAY_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-sm border border-transparent bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'flex h-8 w-8 items-center justify-center rounded-sm border border-transparent relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1.5 max-md:pointer-coarse:after:content-[""] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 const MENU_ITEM_CLASS =
   'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-start text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
@@ -2093,8 +2130,8 @@ function IconToggle({
       onClick={onClick}
       className={
         pressed
-          ? 'flex h-9 w-9 items-center justify-center rounded-md bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
-          : 'flex h-9 w-9 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          ? 'flex h-9 w-9 items-center justify-center rounded-md relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1 max-md:pointer-coarse:after:content-[""] bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          : 'flex h-9 w-9 items-center justify-center rounded-md relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1 max-md:pointer-coarse:after:content-[""] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
       }
     >
       {children}
@@ -2181,7 +2218,7 @@ function EmptyState({
   const copy = hasQuery
     ? 'Nothing here matches that name. Try a shorter search.'
     : viewDeleted
-      ? 'Deleted files wait here for 30 days, so you can put one back before it is removed for good.'
+      ? 'Deleted files wait here for 30 days before they are removed for good.'
       : 'Files you upload and files your work produces collect here, with your projects.';
   return (
     <div

@@ -23,7 +23,6 @@ import {
   STUDY_MODES,
   STUDY_MODE_DESCRIPTIONS,
   STUDY_MODE_LABELS,
-  composeStudyInstruction,
   normalizeStudyTopic,
   sortStudySessions,
   studyConversationTitle,
@@ -176,8 +175,7 @@ export function StudyPage({
           Study
         </PaneTitle>
         <p className="text-sm leading-relaxed text-muted-foreground">
-          Work through a subject with the model instead of asking it for the answer. A study session
-          is an ordinary conversation, so everything you cover stays in your chat history.
+          Work through a subject one idea at a time. Sessions stay in your chat history.
         </p>
       </header>
 
@@ -187,7 +185,9 @@ export function StudyPage({
         </h2>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-foreground">What are you studying?</span>
+          <span className="text-[13px] max-md:text-sm font-medium text-foreground">
+            What are you studying?
+          </span>
           <input
             value={topic}
             onChange={(e) => setTopic(e.target.value.slice(0, MAX_STUDY_TOPIC_LENGTH))}
@@ -199,7 +199,7 @@ export function StudyPage({
         </label>
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-[13px] font-medium text-foreground">How</legend>
+          <legend className="text-[13px] max-md:text-sm font-medium text-foreground">How</legend>
           <div className="flex flex-col gap-1.5" role="radiogroup" aria-label="How">
             {STUDY_MODES.map((entry) => (
               <button
@@ -215,7 +215,9 @@ export function StudyPage({
                     : 'border-border text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="text-[13px] font-medium">{STUDY_MODE_LABELS[entry]}</span>
+                <span className="text-[13px] max-md:text-sm font-medium">
+                  {STUDY_MODE_LABELS[entry]}
+                </span>
                 <span className="text-xs leading-snug">{STUDY_MODE_DESCRIPTIONS[entry]}</span>
               </button>
             ))}
@@ -223,7 +225,9 @@ export function StudyPage({
         </fieldset>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-foreground">Where you are with it</span>
+          <span className="text-[13px] max-md:text-sm font-medium text-foreground">
+            Where you are with it
+          </span>
           <select
             value={level}
             onChange={(e) => setLevel(e.target.value as StudyLevel)}
@@ -240,7 +244,9 @@ export function StudyPage({
 
         {projects.length > 0 && (
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-foreground">Course material</span>
+            <span className="text-[13px] max-md:text-sm font-medium text-foreground">
+              Course material
+            </span>
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
@@ -261,30 +267,24 @@ export function StudyPage({
           </label>
         )}
 
-        <label className="flex min-h-11 items-center gap-2 text-[13px] text-foreground">
+        <label className="flex min-h-11 items-center gap-2 text-[13px] max-md:text-sm text-foreground">
           <input
             type="checkbox"
             checked={withPlan}
             onChange={(e) => setWithPlan(e.target.checked)}
             disabled={starting}
-            className="h-4 w-4"
+            className="h-4 w-4 max-md:pointer-coarse:h-6 max-md:pointer-coarse:w-6"
             data-testid="study-with-plan"
           />
           Start with a personal study plan
         </label>
-
-        {normalizedTopic !== null && (
-          <p className="rounded-md border border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {composeStudyInstruction({ topic: normalizedTopic, mode, level })}
-          </p>
-        )}
 
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => void handleStart()}
             disabled={normalizedTopic === null || starting}
-            className="min-h-11 rounded-md bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
+            className="min-h-11 rounded-md bg-primary px-4 py-2 text-[13px] max-md:text-sm font-semibold text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
           >
             {starting ? 'Starting...' : 'Start studying'}
           </button>
@@ -307,7 +307,7 @@ export function StudyPage({
           <Spinner size="sm" aria-label="Loading your study history" />
         ) : sessions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Nothing yet. The subjects you study will be listed here so you can pick one back up.
+            Nothing yet. Subjects you study show up here.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -321,7 +321,7 @@ export function StudyPage({
                   onClick={() => router.push(`/chat/${session.conversationId}`)}
                   className="flex min-h-11 min-w-0 flex-1 basis-40 flex-col items-start gap-0.5 text-start"
                 >
-                  <span className="max-w-full truncate text-[13px] font-medium text-foreground">
+                  <span className="max-w-full truncate text-[13px] max-md:text-sm font-medium text-foreground">
                     {session.topic}
                   </span>
                   <span className="max-w-full truncate text-xs text-muted-foreground">

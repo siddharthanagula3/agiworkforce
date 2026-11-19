@@ -1,15 +1,16 @@
-import { Alert, Linking } from 'react-native';
+import { Alert } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
-import { guardedFetch } from '@/lib/egressGuard';
+import { STEP_UP_PATH, guardedFetch } from '@/lib/egressGuard';
 import {
   invalidateCloudAccount,
   assertCloudAccountEpochCurrent,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
-import { oweSignInForEndedSession } from '@/src/features/auth/services/endedSession';
+import { clearAnswerDrafts } from '@/src/features/chat/components/answerDraftStore';
 import {
   createUploadTask,
   getInfoAsync,
@@ -18,14 +19,19 @@ import {
 } from 'expo-file-system/legacy';
 import {
   TERMS_ACCEPTANCE_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
-  MAX_CHAT_ATTACHMENT_BYTES,
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
   ManagedCloudChatAttachmentCompleteResponseSchema,
   ManagedCloudChatAttachmentPresignResponseSchema,
-  chatAttachmentSizeLabel,
+  ManagedCloudResumableUploadError,
+  chatAttachmentSizeRefusal,
   resolveChatAttachmentMimeType,
   managedUploadRequestOptions,
+  shouldUploadInParts,
+  type ManagedCloudChatAttachment,
 } from '@agiworkforce/cloud-contracts';
 import { readPasskeyRequired } from '@agiworkforce/cloud-contracts/account-security';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
@@ -40,6 +46,8 @@ import {
   rateLimitErrorFrom,
 } from './apiErrors';
 import { platformRequestHeaders } from '../src/platform/platformHeaders';
+import { uploadChatAttachmentInParts } from '../src/features/chat/upload/partedChatUpload';
+import { currentAttachmentLimits } from '../src/features/chat/upload/attachmentLimits';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
 export type { ApiPaywallRecoveryAction } from './apiErrors';
@@ -50,9 +58,13 @@ let _refreshBackoffUntil = 0;
 let _accountGeneration = 0;
 const _activeAccountUploads = new Set<UploadTask>();
 const MAX_REFRESH_FAILURES = 3;
-// The account's own identity route. A 403 there is the server refusing the
-// account itself (deleted, suspended, locked), not one action being denied.
-const ACCOUNT_IDENTITY_PATH = '/api/me';
+const SIGNED_IN_ACCOUNT_CONTROL_PATHS: ReadonlySet<string> = new Set([
+  TERMS_ACCEPTANCE_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+  STEP_UP_PATH,
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
+]);
 const REFRESH_TIMEOUT_MS = 10_000;
 const PASSKEY_REQUIRED_CODE = 'PASSKEY_REQUIRED';
 const PASSKEY_REQUIRED_MESSAGE =
@@ -82,6 +94,7 @@ export function resetApiAccountState(): void {
   _refreshing = null;
   _refreshFailures = 0;
   _refreshBackoffUntil = 0;
+  clearAnswerDrafts();
 }
 
 async function tryRefreshToken(): Promise<boolean> {
@@ -137,10 +150,6 @@ async function refusedForPasskey(response: Response): Promise<boolean> {
   }
 }
 
-function isAccountIdentityPath(path: string): boolean {
-  return path === ACCOUNT_IDENTITY_PATH || path.startsWith(`${ACCOUNT_IDENTITY_PATH}?`);
-}
-
 interface AccountUnavailableRefusal {
   message: string;
   recoveryPath: string | null;
@@ -178,6 +187,11 @@ function handleAccountUnavailable(refusal: AccountUnavailableRefusal): void {
   clearAuthSession().catch((err) => {
     console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
   });
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { forgetRememberedAccount } =
+    require('@/src/features/auth/services/rememberedAccount') as typeof import('@/src/features/auth/services/rememberedAccount');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  void forgetRememberedAccount();
   const { recoveryPath } = refusal;
   Alert.alert('Account unavailable', refusal.message, [
     { text: 'Close', style: 'cancel' },
@@ -187,9 +201,7 @@ function handleAccountUnavailable(refusal: AccountUnavailableRefusal): void {
             text: 'Open on the web',
             style: 'default' as const,
             onPress: () => {
-              Linking.openURL(`${new URL(API_URL).origin}${recoveryPath}`).catch((err: unknown) => {
-                if (__DEV__) console.warn('[API] recovery link failed (non-blocking):', err);
-              });
+              void openWebContentPage(recoveryPath);
             },
           },
         ]
@@ -221,17 +233,6 @@ export async function recoverStreamSession(account: CloudAccountEpoch): Promise<
   return refreshed;
 }
 
-// A refusal is not the end of the session: Clerk alone says when that has
-// happened, and the root layout opens sign-in when it does.
-function endRefusedAccountSession(): void {
-  oweSignInForEndedSession();
-  invalidateCloudAccount();
-  clearLocalCloudAccountState();
-  clearAuthSession().catch((err) => {
-    console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
-  });
-}
-
 interface RequestOptions {
   accountEpoch?: CloudAccountEpoch | null;
   timeout?: number;
@@ -251,6 +252,8 @@ interface RequestOptions {
   auth401Recovery?: 'ambient' | 'caller-owned';
   /** A content report the user chose to send; lets that one POST through in Local mode. */
   consentedReport?: boolean;
+  /** Set only by the withdrawal helpers that stop standing Cloud work. */
+  withdrawalControl?: boolean;
   _skipAuthRetry?: boolean;
 }
 
@@ -332,8 +335,9 @@ async function sendRequest(
             : controller.signal,
       },
       {
-        authControl: path === TERMS_ACCEPTANCE_PATH && options.baseUrl === undefined,
+        authControl: SIGNED_IN_ACCOUNT_CONTROL_PATHS.has(path) && options.baseUrl === undefined,
         consentedReport: options.consentedReport === true && options.baseUrl === undefined,
+        withdrawalControl: options.withdrawalControl === true && options.baseUrl === undefined,
       },
     );
     assertApiAccountGeneration(accountGeneration);
@@ -373,12 +377,6 @@ async function sendRequest(
         handleAccountUnavailable(refusal);
         throw new Error(`HTTP 403: ${refusal.message}`);
       }
-    }
-
-    if (response.status === 403 && isAccountIdentityPath(path)) {
-      release();
-      endRefusedAccountSession();
-      throw new Error('HTTP 403: This account can no longer be used on this device.');
     }
 
     return { response, release };
@@ -460,12 +458,7 @@ async function request<T>(
       const rateLimitError = rateLimitErrorFrom(parsed);
       if (rateLimitError) throw rateLimitError;
 
-      const candidate = parsed?.error ?? parsed?.message;
-      throw new Error(
-        typeof candidate === 'string' && candidate.trim()
-          ? candidate
-          : 'Too many requests right now. Please wait a moment and try again.',
-      );
+      throw httpErrorFrom(429, bodyText);
     }
 
     if (!response.ok) {
@@ -523,23 +516,44 @@ async function request<T>(
   }
 }
 
-async function uploadErrorMessage(response: Response, fileName: string): Promise<string> {
-  const body = await response.text().catch(() => '');
+function parsedUploadErrorBody(text: string): Record<string, unknown> | null {
   try {
-    const parsed = JSON.parse(body) as Record<string, unknown>;
-    const candidate = parsed['error'] ?? parsed['message'];
-    if (typeof candidate === 'string' && candidate.trim()) return candidate;
-    const nested = (parsed['error'] as { message?: unknown } | undefined)?.message;
-    if (typeof nested === 'string' && nested.trim()) return nested;
-  } catch (err) {
-    void err;
+    const parsed: unknown = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
   }
-  if (__DEV__ && body) {
-    console.warn(`[api] upload step -> HTTP ${response.status}:`, body.slice(0, 500));
+}
+
+async function uploadErrorMessage(
+  response: Response,
+  fileName: string,
+): Promise<{ message: string; body: Record<string, unknown> | null }> {
+  const text = await response.text().catch(() => '');
+  const body = parsedUploadErrorBody(text);
+  if (body) {
+    const candidate = body['error'] ?? body['message'];
+    if (typeof candidate === 'string' && candidate.trim()) return { message: candidate, body };
+    const nested = (body['error'] as { message?: unknown } | undefined)?.message;
+    if (typeof nested === 'string' && nested.trim()) return { message: nested, body };
   }
-  return response.status >= 500
-    ? `Uploading "${fileName}" failed because the server hit a problem. Please try again.`
-    : `Uploading "${fileName}" failed (HTTP ${response.status}). Please try again.`;
+  if (__DEV__ && text) {
+    console.warn(`[api] upload step -> HTTP ${response.status}:`, text.slice(0, 500));
+  }
+  return {
+    message:
+      response.status >= 500
+        ? `Uploading "${fileName}" failed because the server hit a problem. Please try again.`
+        : `Uploading "${fileName}" failed (HTTP ${response.status}). Please try again.`,
+    body,
+  };
+}
+
+async function uploadRefusal(response: Response, fileName: string): Promise<ApiHttpError> {
+  const { message, body } = await uploadErrorMessage(response, fileName);
+  return new ApiHttpError(message, response.status, null, body ? { body } : {});
 }
 
 export interface UploadFileInput {
@@ -562,6 +576,63 @@ export interface UploadFileResult {
   name: string;
   byteCount: number;
   type: 'image' | 'file';
+}
+
+function uploadFileResult(attachment: ManagedCloudChatAttachment): UploadFileResult {
+  return {
+    id: attachment.id,
+    url: attachment.url,
+    mimeType: attachment.mimeType,
+    name: attachment.name,
+    byteCount: attachment.byteCount,
+    type: attachment.type,
+  };
+}
+
+async function uploadInParts(
+  file: UploadFileInput,
+  mimeType: string,
+  byteCount: number,
+  signal: AbortSignal,
+  options: UploadProgressOptions | undefined,
+): Promise<ManagedCloudChatAttachment | null> {
+  const accountGeneration = _accountGeneration;
+  const assertCurrent = () => assertApiAccountGeneration(accountGeneration);
+  try {
+    return await uploadChatAttachmentInParts({
+      uri: file.uri,
+      fileName: file.name,
+      mimeType,
+      byteCount,
+      baseUrl: API_URL,
+      fetchImpl: (input, init) => guardedFetch(input, init),
+      getHeaders: async () => {
+        assertCurrent();
+        const current = await getAuthHeaders();
+        assertCurrent();
+        return {
+          ...platformRequestHeaders(),
+          ...current,
+          'X-Requested-With': 'XMLHttpRequest',
+        };
+      },
+      assertCurrent,
+      trackTask: (task) => {
+        _activeAccountUploads.add(task);
+        return () => {
+          _activeAccountUploads.delete(task);
+        };
+      },
+      signal,
+      ...(options?.onProgress ? { onProgress: options.onProgress } : {}),
+      ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
+      ...(options?.temporary ? { temporary: true } : {}),
+    });
+  } catch (error) {
+    if (!(error instanceof ManagedCloudResumableUploadError)) throw error;
+    if (error.status === 401) throw new CloudCredentialUnavailableError();
+    throw new ApiHttpError(error.message, error.status);
+  }
 }
 
 export const api = {
@@ -600,11 +671,13 @@ export const api = {
     if (byteCount <= 0) {
       throw new Error(`"${file.name}" is empty and cannot be attached.`);
     }
-    if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
-      throw new Error(
-        `"${file.name}" is larger than the ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} chat attachment limit.`,
-      );
-    }
+    const sizeRefusal = chatAttachmentSizeRefusal(
+      file.name,
+      mimeType,
+      byteCount,
+      currentAttachmentLimits(),
+    );
+    if (sizeRefusal) throw new ApiHttpError(sizeRefusal, 413);
 
     const token = await getAuthToken();
     assertApiAccountGeneration(accountGeneration);
@@ -617,6 +690,12 @@ export const api = {
     const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     try {
+      if (shouldUploadInParts(byteCount)) {
+        const attachment = await uploadInParts(file, mimeType, byteCount, signal, options);
+        assertApiAccountGeneration(accountGeneration);
+        if (attachment) return uploadFileResult(attachment);
+      }
+
       const presignResponse = await guardedFetch(
         `${API_URL}${MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH}`,
         {
@@ -643,16 +722,18 @@ export const api = {
           const refreshed = await tryRefreshToken();
           assertApiAccountGeneration(accountGeneration);
           if (refreshed) {
+            if (options?.signal?.aborted) {
+              const abortError = new Error('Attachment upload aborted');
+              abortError.name = 'AbortError';
+              throw abortError;
+            }
             return api.uploadFile(file, { ...options, _skipAuthRetry: true });
           }
         }
         throw new CloudCredentialUnavailableError();
       }
       if (!presignResponse.ok) {
-        throw new ApiHttpError(
-          await uploadErrorMessage(presignResponse, file.name),
-          presignResponse.status,
-        );
+        throw await uploadRefusal(presignResponse, file.name);
       }
 
       const presign = ManagedCloudChatAttachmentPresignResponseSchema.parse(
@@ -763,24 +844,14 @@ export const api = {
         if (completeResponse.status === 401) throw new CloudCredentialUnavailableError();
       }
       if (!completeResponse.ok) {
-        throw new ApiHttpError(
-          await uploadErrorMessage(completeResponse, file.name),
-          completeResponse.status,
-        );
+        throw await uploadRefusal(completeResponse, file.name);
       }
 
       const { attachment } = ManagedCloudChatAttachmentCompleteResponseSchema.parse(
         await completeResponse.json(),
       );
       assertApiAccountGeneration(accountGeneration);
-      return {
-        id: attachment.id,
-        url: attachment.url,
-        mimeType: attachment.mimeType,
-        name: attachment.name,
-        byteCount: attachment.byteCount,
-        type: attachment.type,
-      };
+      return uploadFileResult(attachment);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         throw new Error('Upload timed out. Please check your connection and try again.');

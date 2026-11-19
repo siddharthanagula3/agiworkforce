@@ -71,13 +71,11 @@ function EnforcementBadge({ enforcement }: { enforcement: PostureEnforcement }) 
   const copy: Record<PostureEnforcement, { text: string; title: string }> = {
     enforced: {
       text: 'Enforced',
-      title:
-        'A server-side check denies requests that violate this. It holds regardless of which client sends them.',
+      title: 'Checked on the server for every client.',
     },
     stated: {
       text: 'Stated position',
-      title:
-        'Recorded for this workspace, but nothing currently enforces it at runtime. Do not present this as a control to an auditor.',
+      title: 'Recorded but not enforced. Do not present it to an auditor as a control.',
     },
     unconfigured: {
       text: 'Not configured',

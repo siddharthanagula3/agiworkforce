@@ -7,6 +7,13 @@ import {
 import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
 import { sameManagedCloudOwner, type ManagedCloudOwner } from './managedCloudAuthority';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { describeCloudRefusal, readCloudRefusal } from './cloudRefusal';
+
+const PAGE_READ_REFUSAL_COPY = {
+  refused: 'This account cannot read linked pages from the Chrome extension.',
+  unavailable: 'The page reader is temporarily unavailable.',
+  limitUnit: 'page reads',
+};
 
 export async function readChromeLinkedPage(
   url: string,
@@ -37,8 +44,14 @@ export async function readChromeLinkedPage(
     },
   );
   options.signal?.throwIfAborted();
+  if (!response.ok) {
+    const refusal = await readCloudRefusal(response);
+    if (refusal.kind === 'failed') {
+      throw new Error(`The page could not be read (${response.status}). Try again.`);
+    }
+    throw new Error(describeCloudRefusal(refusal, PAGE_READ_REFUSAL_COPY));
+  }
   const body: unknown = await response.json();
-  if (!response.ok) throw new Error(`The page could not be read (${response.status}). Try again.`);
   const parsed = ManagedCloudPageReadResponseSchema.safeParse(body);
   if (!parsed.success) throw new Error('The page reader returned an invalid response. Try again.');
   return parsed.data;

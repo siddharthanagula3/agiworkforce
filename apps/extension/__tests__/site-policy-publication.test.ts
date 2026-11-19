@@ -208,7 +208,7 @@ describe('background publication wiring', () => {
       /if \(\(area !== 'local' && area !== 'managed'\) \|\| !changes\[ADMIN_SITE_POLICY_STORAGE_KEY\]\) return;\s+const owner = adminSitePolicyPublication\.claim\(\);\s+void readAdminSitePolicy\(\)/,
     );
     expect(events).toMatch(
-      /adminSitePolicyPublication\.publish\(owner, \(\) => \{\s+adminSitePolicyCache = policy;\s+cancelActiveRunUnlessOriginStillApproved\(isOriginApprovedForAutomation\);\s+\}\);/,
+      /adminSitePolicyPublication\.publish\(owner, \(\) => \{\s+adminSitePolicyCache = policy;\s+cancelActiveRunUnlessOriginStillApproved\(isOriginApprovedForAutomation\);\s+cancelInPagePromptsOnUnapprovedOrigins\(\);\s+void notifyPageAccessChanged\(\(\) => true\);\s+\}\);/,
     );
   });
 });

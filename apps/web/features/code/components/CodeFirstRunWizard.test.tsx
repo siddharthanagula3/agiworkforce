@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { CodeFirstRunWizard } from './CodeFirstRunWizard';
+import { CODE_ROUTES } from '../code-surface';
 
 const INTRO_HEADING = `Set up ${PRODUCT_NAMES.code}`;
 
@@ -34,6 +35,12 @@ describe('CodeFirstRunWizard', () => {
       'href',
       '/api/github/install/start?returnPath=%2Fcode',
     );
+    const connect = new URL(
+      screen.getByRole('link', { name: 'Connect GitHub' }).getAttribute('href') ?? '',
+      'https://agi.test',
+    );
+    expect(connect.pathname).toBe(CODE_ROUTES.githubInstall);
+    expect(connect.searchParams.get('returnPath')).toBe(CODE_ROUTES.root);
   });
 
   it('goes back a step, and leaves the setup from the first step', async () => {

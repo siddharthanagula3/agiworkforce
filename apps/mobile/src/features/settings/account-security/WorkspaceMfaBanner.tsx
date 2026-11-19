@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShieldAlert } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { openWebAccountPage } from '@/src/platform/webContentPage';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -57,7 +57,7 @@ export function WorkspaceMfaBanner() {
           title="Turn on"
           size="sm"
           variant="outline"
-          onPress={() => void openInAppBrowser(WEB_SECURITY_URL)}
+          onPress={() => void openWebAccountPage(WEB_SECURITY_URL)}
         />
       </View>
     </View>

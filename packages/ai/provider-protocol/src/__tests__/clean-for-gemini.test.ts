@@ -538,3 +538,186 @@ describe('cleanSchemaForGemini, a union of non-object variants', () => {
     expect(serialized).not.toContain('anyOf');
   });
 });
+
+function findListValuedTypeOrItems(node: unknown, path: string, found: string[]): string[] {
+  if (!node || typeof node !== 'object') return found;
+  if (Array.isArray(node)) {
+    node.forEach((entry, index) => findListValuedTypeOrItems(entry, `${path}[${index}]`, found));
+    return found;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if ((key === 'type' || key === 'items') && Array.isArray(value)) found.push(`${path}.${key}`);
+    if (key === 'enum' || key === 'default' || key === 'required') continue;
+    if (key === 'properties' && value && typeof value === 'object') {
+      for (const [name, child] of Object.entries(value as Record<string, unknown>)) {
+        findListValuedTypeOrItems(child, `${path}.properties.${name}`, found);
+      }
+      continue;
+    }
+    findListValuedTypeOrItems(value, `${path}.${key}`, found);
+  }
+  return found;
+}
+
+describe('cleanSchemaForGemini, a type list or tuple at any depth', () => {
+  const answerUiShapedSchema = {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      blocks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            series: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  values: { type: 'array', items: { type: ['number', 'string'] } },
+                },
+              },
+            },
+            value: { type: ['number', 'string'] },
+            rows: {
+              type: 'array',
+              items: { type: 'array', items: { type: ['string', 'number'] } },
+            },
+          },
+          required: ['type'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['blocks'],
+  };
+
+  it('leaves no list-valued type anywhere in the schema Google rejected', () => {
+    const cleaned = cleanSchemaForGemini(answerUiShapedSchema);
+
+    expect(findListValuedTypeOrItems(cleaned, 'parameters', [])).toEqual([]);
+    const block = (
+      (cleaned as Record<string, Record<string, Record<string, Record<string, unknown>>>>)[
+        'properties'
+      ]?.['blocks']?.['items'] as Record<string, Record<string, Record<string, unknown>>>
+    )['properties'];
+    const series = block?.['series']?.['items'] as Record<string, Record<string, unknown>>;
+    const values = (series['properties'] as Record<string, Record<string, unknown>>)['values'];
+    expect(values?.['items']).toEqual({ type: 'string' });
+    expect(block?.['value']).toEqual({ type: 'string' });
+    expect(block?.['rows']).toEqual({
+      type: 'array',
+      items: { type: 'array', items: { type: 'string' } },
+    });
+  });
+
+  it('keeps the first type when no string is listed and makes a null-only type a nullable string', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        count: { type: ['integer', 'boolean', 'null'] },
+        nothing: { type: ['null'], description: 'kept' },
+      },
+    }) as Record<string, Record<string, unknown>>;
+
+    expect(cleaned['properties']?.['count']).toEqual({ type: 'integer' });
+    expect(cleaned['properties']?.['nothing']).toEqual({
+      type: 'string',
+      nullable: true,
+      description: 'kept',
+    });
+  });
+
+  it('keeps decimals when integer and number are both listed', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: { amount: { type: ['integer', 'number'] } },
+    }) as Record<string, Record<string, unknown>>;
+
+    expect(cleaned['properties']?.['amount']).toEqual({ type: 'number' });
+  });
+
+  it('drops items, properties and required that do not belong to the chosen type', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        listOrText: { type: ['array', 'string'], items: { type: 'string' } },
+        recordOrText: {
+          type: ['object', 'string'],
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+        list: { type: ['array', 'null'], items: { type: 'number' } },
+        record: {
+          type: ['object', 'null'],
+          properties: { name: { type: 'string' } },
+          required: ['name'],
+        },
+      },
+    }) as Record<string, Record<string, unknown>>;
+
+    expect(cleaned['properties']?.['listOrText']).toEqual({ type: 'string' });
+    expect(cleaned['properties']?.['recordOrText']).toEqual({ type: 'string' });
+    expect(cleaned['properties']?.['list']).toEqual({ type: 'array', items: { type: 'number' } });
+    expect(cleaned['properties']?.['record']).toEqual({
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+    });
+  });
+
+  it('turns tuple items into one item schema, cleaned like any other', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        point: {
+          type: 'array',
+          items: [{ type: ['number', 'null'], minimum: 0 }, { type: 'number' }],
+        },
+        empty: { type: 'array', items: [] },
+      },
+    }) as Record<string, Record<string, unknown>>;
+
+    expect(cleaned['properties']?.['point']).toEqual({
+      type: 'array',
+      items: { type: 'number' },
+    });
+    expect(cleaned['properties']?.['empty']).toEqual({ type: 'array' });
+  });
+
+  it('cleans a nullable union, additionalProperties and anyOf inside items of items', () => {
+    const cleaned = cleanSchemaForGemini({
+      type: 'object',
+      properties: {
+        grid: {
+          type: 'array',
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              additionalProperties: { type: ['string', 'number'] },
+              properties: {
+                cell: { anyOf: [{ type: ['string', 'number'] }, { type: 'null' }] },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(findListValuedTypeOrItems(cleaned, 'parameters', [])).toEqual([]);
+    expect(JSON.stringify(cleaned)).not.toContain('additionalProperties');
+    expect(JSON.stringify(cleaned)).not.toContain('anyOf');
+    const grid = (cleaned as Record<string, Record<string, Record<string, unknown>>>)[
+      'properties'
+    ]?.['grid'];
+    expect(grid).toEqual({
+      type: 'array',
+      items: {
+        type: 'array',
+        items: { type: 'object', properties: { cell: { type: 'string' } } },
+      },
+    });
+  });
+});

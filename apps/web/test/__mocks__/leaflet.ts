@@ -15,6 +15,7 @@ export interface MockLeafletMap {
   fitBounds: ReturnType<typeof vi.fn>;
   getZoom: () => number;
   getSize: () => { x: number; y: number };
+  invalidateSize: ReturnType<typeof vi.fn>;
   latLngToContainerPoint: (latLng: [number, number]) => { x: number; y: number };
 }
 
@@ -33,6 +34,7 @@ function createMockMap(): MockLeafletMap {
     fitBounds: vi.fn(),
     getZoom: () => zoom,
     getSize: () => ({ x: MOCK_MAP_WIDTH_PX, y: MOCK_MAP_HEIGHT_PX }),
+    invalidateSize: vi.fn(),
     latLngToContainerPoint: ([latitude, longitude]) => ({
       x: MOCK_MAP_WIDTH_PX / 2 + longitude * DEGREES_TO_PIXELS,
       y: MOCK_MAP_HEIGHT_PX / 2 - latitude * DEGREES_TO_PIXELS,

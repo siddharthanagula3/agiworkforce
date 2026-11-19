@@ -137,11 +137,17 @@ describe('Managed Cloud account/session authority', () => {
       transitionCase.indexOf('await invalidateManagedCloudOwner(previousOwner, true)'),
     );
     expect(transitionCase).toContain(
-      "await disconnectPairedNativeHost('The signed-in account changed.');",
+      "await releaseDesktopPairing('The signed-in account changed.', false);",
     );
-    expect(transitionCase).toContain('await releaseStoredDesktopPairing();');
-    expect(transitionCase.indexOf('await disconnectPairedNativeHost')).toBeLessThan(
-      transitionCase.indexOf('await releaseStoredDesktopPairing()'),
+    const release = sourceBetween(
+      backgroundSource,
+      'async function releaseDesktopPairing(',
+      'async function settleOwedDesktopRevocation',
+    );
+    expect(release).toContain('await disconnectPairedNativeHost(reason)');
+    expect(release).toContain('await releaseStoredDesktopPairing();');
+    expect(release.indexOf('await disconnectPairedNativeHost')).toBeLessThan(
+      release.indexOf('await releaseStoredDesktopPairing()'),
     );
     expect(transitionCase).toContain('return { success: true }');
 

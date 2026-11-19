@@ -153,7 +153,7 @@ if [[ "${PROFILE}" == "production" || "${PROFILE}" == "beta" ]]; then
   require_env EXPO_PUBLIC_API_URL
   if [[ "${PLATFORM}" == "ios" || "${PLATFORM}" == "all" ]]; then
     require_env EXPO_PUBLIC_AGI_AUTH_PROVIDERS
-    if node "${MOBILE_DIR}/scripts/release/check-ios-login-service.mjs"; then
+    if node "${MOBILE_DIR}/scripts/release/check-ios-login-service.mjs" --profile "${PROFILE}"; then
       log_ok "iOS release includes the configured Apple login option"
     else
       die "configure and verify Apple login before releasing iOS with social sign-in"

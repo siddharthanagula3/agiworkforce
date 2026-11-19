@@ -9,7 +9,8 @@ import {
   getModelContextLimits,
   getModelCostRates,
   getModelMetadataById,
-  getPickerModelTier,
+  getBillingPlanPricing,
+  getMinimumRequiredTier,
   autoAliasForRoutingProfile,
   ROUTING_PROFILE_CHOICE_OPTIONS,
   type RoutingProfileChoice,
@@ -108,10 +109,16 @@ export function isModelReachableForTier(modelId: string, tier: string | undefine
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
-function getPickerCapabilityLabel(modelId: string, catalogDetail: string): string {
-  const tier = getPickerModelTier(modelId);
-  const tierLabel = tier === 'premium' ? 'Premium' : tier === 'economy' ? 'Economy' : 'Balanced';
-  return catalogDetail === '' ? tierLabel : catalogDetail;
+function getPickerCapabilityLabel(modelId: string): string {
+  const plan = getMinimumRequiredTier(modelId);
+  const planLabel =
+    plan === null
+      ? undefined
+      : plan === 'max'
+        ? `${getBillingPlanPricing(plan).label} plan`
+        : `${getBillingPlanPricing(plan).label} plan and up`;
+  const bestFor = getModelMetadataById(modelId)?.bestFor.slice(0, 2).join(', ') ?? '';
+  return [planLabel, bestFor].filter((part) => part !== undefined && part !== '').join(' · ');
 }
 
 /**
@@ -274,7 +281,8 @@ export function buildGroupedQuickPickItems(
         if (!envResult.selectable) continue;
       }
 
-      const descriptionParts: string[] = [getPickerCapabilityLabel(opt.id, opt.detail)];
+      const capability = getPickerCapabilityLabel(opt.id);
+      const descriptionParts: string[] = capability === '' ? [] : [capability];
       if (metadata?.capabilities.thinking ?? false) descriptionParts.push('Thinking');
       if (metadata != null) descriptionParts.push(MODEL_SPEED_LABELS[metadata.speed]);
       const limits = [

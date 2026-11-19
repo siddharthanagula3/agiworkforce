@@ -10,6 +10,7 @@ import {
 
 vi.mock('../utils/api', () => ({
   fetchTierInfo: vi.fn(),
+  getAccountAuthState: vi.fn(),
 }));
 
 function setConfiguredModel(model: string): void {

@@ -19,8 +19,7 @@ async fn cli_websocket_uses_the_full_typed_developer_session() {
         .arg("app-server")
         .arg("--listen")
         .arg(format!("127.0.0.1:{port}"))
-        .arg("--auth-token")
-        .arg(token)
+        .env("AGI_APP_SERVER_TOKEN", token)
         .current_dir(workspace.path())
         .env("HOME", home.path())
         .env(
@@ -109,7 +108,7 @@ async fn cli_websocket_requires_an_explicit_token_instead_of_printing_one() {
 
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("requires --auth-token or AGI_APP_SERVER_TOKEN"));
+    assert!(stderr.contains("requires AGI_APP_SERVER_TOKEN"));
     assert!(!stderr.contains("Generated app-server auth token"));
 }
 
@@ -147,8 +146,7 @@ async fn every_connected_client_sees_a_thread_another_client_deleted() {
         .arg("app-server")
         .arg("--listen")
         .arg(format!("127.0.0.1:{port}"))
-        .arg("--auth-token")
-        .arg(token)
+        .env("AGI_APP_SERVER_TOKEN", token)
         .current_dir(workspace.path())
         .env("HOME", home.path())
         .env(

@@ -257,6 +257,7 @@ const CAPABILITY_LABELS: Record<DesktopCapability, string> = {
   'screen.capture': 'capture the screen',
   'computer.use': 'read the screen and control the mouse and keyboard',
   'application.control': 'control the application',
+  'simulator.control': 'run and control the iOS Simulator',
   'clipboard.read': 'read the clipboard',
   // Enforced by Chromium, not by this engine: audio capture reaches the
   // renderer through getUserMedia, so `setPermissionRequestHandler` and

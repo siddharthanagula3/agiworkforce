@@ -39,9 +39,16 @@ jest.mock('@/stores/chatStore', () => ({
     select({ sendMessage: mockSendMessage }),
 }));
 
+const mockModelState: { selectedModel: string | undefined; endConversationModel: jest.Mock } = {
+  selectedModel: undefined,
+  endConversationModel: jest.fn(),
+};
+
 jest.mock('@/src/features/model-picker/store', () => ({
-  useModelStore: (select: (value: Record<string, unknown>) => unknown) =>
-    select({ selectedModel: undefined }),
+  useModelStore: Object.assign(
+    (select: (value: Record<string, unknown>) => unknown) => select(mockModelState),
+    { getState: () => mockModelState },
+  ),
 }));
 
 const mockImpactAsync = jest.fn();
@@ -55,9 +62,13 @@ jest.mock('expo-haptics', () => ({
 }));
 
 import ScanScreen from '@/app/(app)/scan';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 beforeEach(() => {
+  mockModelState.selectedModel = undefined;
+  mockModelState.endConversationModel.mockReset();
+  mockSendMessage.mockReset();
   mockImpactAsync.mockReset().mockResolvedValue(undefined);
   mockNotificationAsync.mockReset().mockResolvedValue(undefined);
   useSettingsStore.setState({ hapticsEnabled: true });
@@ -104,4 +115,27 @@ it('keeps the scanned image and question when the chat store refuses the send', 
   } finally {
     alert.mockRestore();
   }
+});
+
+it('sends the scan with the new-chat model, not one shown only for a project', async () => {
+  const projectModel = requireMobileCloudModel().id;
+  const ownModel = requireMobileCloudModel((model) => model.id !== projectModel).id;
+  mockModelState.selectedModel = projectModel;
+  mockModelState.endConversationModel.mockImplementation(() => {
+    mockModelState.selectedModel = ownModel;
+  });
+  mockRecognizeText.mockResolvedValue({ text: 'Read this', regions: [] });
+  mockSendMessage.mockResolvedValue(true);
+
+  const screen = render(<ScanScreen />);
+  fireEvent.press(await screen.findByLabelText('Send to AI'));
+
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)/chat/scan-conversation'));
+  expect(mockModelState.endConversationModel).toHaveBeenCalledTimes(1);
+  expect(mockSendMessage).toHaveBeenCalledWith(
+    'scan-conversation',
+    expect.any(String),
+    ownModel,
+    expect.any(Array),
+  );
 });

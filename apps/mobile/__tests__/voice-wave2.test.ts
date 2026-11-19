@@ -12,6 +12,7 @@ jest.mock('expo-speech-recognition', () => {
       }),
       abort: jest.fn(),
       requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+      requestMicrophonePermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
       getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
       supportsOnDeviceRecognition: jest.fn().mockReturnValue(true),
       isRecognitionAvailable: jest.fn().mockReturnValue(true),
@@ -90,6 +91,19 @@ describe('voiceInput service', () => {
     expect(result).toBe(true);
   });
 
+  it('asks live voice for the microphone alone, not speech recognition', async () => {
+    const module = speechRecognitionMock.ExpoSpeechRecognitionModule as unknown as {
+      requestMicrophonePermissionsAsync: jest.Mock;
+      requestPermissionsAsync: jest.Mock;
+    };
+    module.requestPermissionsAsync.mockClear();
+
+    await expect(VoiceInput.requestMicrophoneOnlyPermission()).resolves.toBe(true);
+
+    expect(module.requestMicrophonePermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(module.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
   it('transcribeAudioFile reads the given recording instead of the microphone', async () => {
     const pending = VoiceInput.transcribeAudioFile('file:///test.m4a');
     await Promise.resolve();
@@ -114,6 +128,12 @@ describe('voiceInput service', () => {
   });
 
   it('fails closed when speech recognition permission is denied', async () => {
+    speechRecognitionMock.ExpoSpeechRecognitionModule.getPermissionsAsync.mockResolvedValueOnce({
+      granted: false,
+      status: 'denied',
+      canAskAgain: false,
+      expires: 'never',
+    });
     speechRecognitionMock.ExpoSpeechRecognitionModule.requestPermissionsAsync.mockResolvedValueOnce(
       {
         granted: false,

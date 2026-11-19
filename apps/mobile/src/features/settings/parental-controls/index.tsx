@@ -6,14 +6,20 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  AGE_ENTRY_PARAMS,
+  PARENTAL_CONTROLS_ROUTE,
+  parentalControlsTitle,
+} from '@/src/features/settings/parental-controls/entry';
 
 export default function ParentalControlsScreen() {
   const router = useRouter();
+  const { entry } = useLocalSearchParams<{ entry?: string }>();
   const minorMode = isMinorMode();
 
   return (
-    <SettingsScreenShell title="Parental Controls">
+    <SettingsScreenShell title={parentalControlsTitle(entry)}>
       <SettingsInfo
         title={minorMode ? 'Minor-safe mode is active' : 'Adult profile'}
         body={
@@ -32,7 +38,7 @@ export default function ParentalControlsScreen() {
         <SettingsInfo
           testID="parental-controls-minor-lock"
           title="Minor-safe mode cannot be turned off here"
-          body="An adult can lift it only by reinstalling AGI, which erases its data."
+          body="An adult can lift it only by erasing AGI’s data on this device."
           icon={Lock}
         />
       ) : (
@@ -44,7 +50,10 @@ export default function ParentalControlsScreen() {
             onPress={() =>
               router.push({
                 pathname: '/(public)/age-gate',
-                params: { returnTo: '/(app)/settings/parental-controls' },
+                params: {
+                  returnTo: PARENTAL_CONTROLS_ROUTE,
+                  ...(entry === AGE_ENTRY_PARAMS.entry ? AGE_ENTRY_PARAMS : {}),
+                },
               } as Parameters<typeof router.push>[0])
             }
           />

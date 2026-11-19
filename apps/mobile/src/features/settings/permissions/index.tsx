@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -17,11 +17,14 @@ import {
   permissionStatusLabel,
 } from './registry';
 import type { MobilePermissionKind } from './types';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 
 const PERMISSIONS_HELP_URL = 'https://agiworkforce.com/help?q=permissions+microphone+camera';
 const PERMISSION_READ_FAILURE =
   'Could not read some permissions from your device. The statuses shown may be out of date.';
+const DEVICE_DEPENDENT_KINDS = PERMISSION_KINDS.filter(
+  (kind) => PERMISSION_REGISTRY[kind].isAvailable !== undefined,
+);
 
 interface PermissionRowProps {
   kind: MobilePermissionKind;
@@ -72,7 +75,6 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
             {entry.label}
           </Text>
           <Text
-            numberOfLines={2}
             style={{
               color: c.textMuted,
               fontSize: typeScale.footnote,
@@ -117,28 +119,51 @@ export default function PermissionsScreen() {
   const c = useThemeColors();
   const setObservedStatus = usePermissionsStore((s) => s.setObservedStatus);
   const [readFailed, setReadFailed] = useState(false);
+  const [unavailableKinds, setUnavailableKinds] = useState<ReadonlySet<MobilePermissionKind>>(
+    () => new Set(DEVICE_DEPENDENT_KINDS),
+  );
+  const visibleKinds = PERMISSION_KINDS.filter((kind) => !unavailableKinds.has(kind));
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      let sequence = 0;
       async function pollAll() {
+        const current = ++sequence;
         let failed = false;
         await Promise.all(
           PERMISSION_KINDS.map(async (kind) => {
             const entry = PERMISSION_REGISTRY[kind];
             try {
+              if (entry.isAvailable) {
+                const available = await entry.isAvailable();
+                if (!cancelled && current === sequence) {
+                  setUnavailableKinds((previous) => {
+                    if (previous.has(kind) !== available) return previous;
+                    const next = new Set(previous);
+                    if (available) next.delete(kind);
+                    else next.add(kind);
+                    return next;
+                  });
+                }
+                if (!available) return;
+              }
               const status = await entry.getStatus();
-              if (!cancelled) setObservedStatus(kind, status);
+              if (!cancelled && current === sequence) setObservedStatus(kind, status);
             } catch {
               failed = true;
             }
           }),
         );
-        if (!cancelled) setReadFailed(failed);
+        if (!cancelled && current === sequence) setReadFailed(failed);
       }
       void pollAll();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void pollAll();
+      });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, [setObservedStatus]),
   );
@@ -191,11 +216,11 @@ export default function PermissionsScreen() {
           paddingHorizontal: 10,
         }}
       >
-        {PERMISSION_KINDS.map((kind, idx) => (
+        {visibleKinds.map((kind, idx) => (
           <PermissionRow
             key={kind}
             kind={kind}
-            isLast={idx === PERMISSION_KINDS.length - 1}
+            isLast={idx === visibleKinds.length - 1}
             onPressDetail={handlePressDetail}
           />
         ))}
@@ -216,7 +241,7 @@ export default function PermissionsScreen() {
           AGI asks only when a feature you started needs access.
         </Text>
         <Pressable
-          onPress={() => void openInAppBrowser(PERMISSIONS_HELP_URL)}
+          onPress={() => void openWebContentPage(PERMISSIONS_HELP_URL)}
           accessibilityRole="link"
           accessibilityLabel="Get help with permissions, opens the help centre"
           style={{ minHeight: 44, justifyContent: 'center', marginTop: 6 }}

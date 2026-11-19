@@ -2,6 +2,13 @@
 import React from 'react';
 import { Alert, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import {
+  actionMenuLabels,
+  actionMenuMessage,
+  actionMenuTitle,
+  chooseActionMenuItem,
+  selectedActionMenuLabels,
+} from '@/test-utils/actionMenu';
 import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
@@ -67,6 +74,8 @@ const mockViewState = {
   searchConversations: mockSearchConversations,
   searchQuery: 'launch',
   searchResults: [{ conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' }],
+  searchFailed: false,
+  isSearching: false,
 };
 const mockLocalProjects = [
   { id: 'project-1', name: 'Launch project', description: 'Release planning' },
@@ -228,7 +237,72 @@ describe('ChatsListScreen', () => {
     mockChatState.isLoadingMoreConversations = false;
     mockChatState.hasMoreCloudConversations = false;
     mockChatState.conversationLoadError = null;
+    mockViewState.searchQuery = 'launch';
+    mockViewState.searchFailed = false;
+    mockViewState.isSearching = false;
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  describe('when the Cloud search cannot be completed', () => {
+    const searchLabel = 'Search chats, projects, files, library, and artifacts';
+
+    beforeEach(() => {
+      mockAppMode = 'cloud';
+      mockViewState.searchQuery = 'zzzunmatched';
+      mockViewState.searchResults = [];
+    });
+
+    afterEach(() => {
+      mockViewState.searchResults = [
+        { conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' },
+      ];
+    });
+
+    it('says the search failed and offers Retry instead of reporting no matches', () => {
+      mockViewState.searchFailed = true;
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'zzzunmatched');
+
+      expect(
+        screen.getByText('Search could not be completed. Check your connection and try again.'),
+      ).toBeTruthy();
+      expect(screen.queryByText('No matches')).toBeNull();
+      expect(screen.queryByText(/Nothing in/)).toBeNull();
+      mockSearchConversations.mockClear();
+      fireEvent.press(screen.getByLabelText('Retry search'));
+      expect(mockSearchConversations).toHaveBeenCalledWith('zzzunmatched');
+    });
+
+    it('shows Searching, not No matches, while the Cloud search is still running', () => {
+      mockViewState.isSearching = true;
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'zzzunmatched');
+
+      expect(screen.getByText('Searching')).toBeTruthy();
+      expect(screen.queryByText('No matches')).toBeNull();
+      expect(screen.queryByText(/Nothing in/)).toBeNull();
+    });
+
+    it('reports no matches only when the search succeeded and found nothing', () => {
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'zzzunmatched');
+
+      expect(screen.getByText('No matches')).toBeTruthy();
+      expect(screen.queryByLabelText('Retry search')).toBeNull();
+    });
+
+    it('keeps device matches visible and labels them when the Cloud search failed', () => {
+      mockViewState.searchFailed = true;
+      mockViewState.searchQuery = 'connectors';
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'connectors');
+
+      expect(screen.getByText('Connectors')).toBeTruthy();
+      expect(
+        screen.getByText('Search could not be completed. Showing matches already on this device.'),
+      ).toBeTruthy();
+      expect(screen.getByLabelText('Retry search')).toBeTruthy();
+    });
   });
 
   it('paints the pure black background token on the dark page root and keeps surfaceBase in light', () => {
@@ -321,10 +395,13 @@ describe('ChatsListScreen', () => {
   });
 
   it('shows search guidance without chat history on the dedicated search screen', () => {
+    const savedConversations = mockChatState.conversations;
+    mockChatState.conversations = [];
     const screen = render(<ChatsListScreen searchOnly />);
+    mockChatState.conversations = savedConversations;
 
     expect(screen.getByText('Search your workspace')).toBeTruthy();
-    expect(screen.getByText(/Find chats, projects, files/)).toBeTruthy();
+    expect(screen.getByText(/Search chats, projects, files/)).toBeTruthy();
     expect(screen.queryByText('Launch checklist')).toBeNull();
     expect(screen.queryByLabelText('New chat')).toBeNull();
     expect(screen.queryByLabelText('Filter chats. All chats')).toBeNull();
@@ -361,11 +438,11 @@ describe('ChatsListScreen', () => {
     const { getByLabelText, getByText, queryByText } = render(<ChatsListScreen />);
     fireEvent.press(getByLabelText('Filter chats. All chats'));
 
-    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{
-      text?: string;
-      onPress?: () => void;
-    }>;
-    act(() => buttons.find((button) => button.text?.includes('Pinned'))?.onPress?.());
+    expect(actionMenuTitle()).toBe('Filter chats');
+    expect(actionMenuMessage()).toBe('Choose which chats appear in this list and in search.');
+    expect(actionMenuLabels()).toEqual(['All chats', 'Pinned', 'Unread']);
+    expect(selectedActionMenuLabels()).toEqual(['All chats']);
+    chooseActionMenuItem('Pinned');
 
     expect(getByText('Local chat 2')).toBeTruthy();
     expect(queryByText('Launch checklist')).toBeNull();
@@ -394,6 +471,30 @@ describe('ChatsListScreen', () => {
       pathname: '/(app)/library',
       params: { imageId: '11111111-1111-4111-8111-111111111111' },
     });
+  });
+
+  it('says which part of a chat matched: the title alone, or the message it found', () => {
+    mockViewState.searchResults = [
+      { conversationId: 'chat-1', messageId: '', snippet: 'Launch checklist' },
+      { conversationId: 'chat-4', messageId: 'message-4', snippet: '...the launch detail...' },
+    ];
+    try {
+      const { getByLabelText, getByText, queryByText } = render(<ChatsListScreen />);
+
+      fireEvent.changeText(
+        getByLabelText('Search chats, projects, files, library, and artifacts'),
+        'launch',
+      );
+
+      expect(getByText('Launch checklist')).toBeTruthy();
+      expect(getByText('Ready for release')).toBeTruthy();
+      expect(getByText('...the launch detail...')).toBeTruthy();
+      expect(queryByText('Matched message content')).toBeNull();
+    } finally {
+      mockViewState.searchResults = [
+        { conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' },
+      ];
+    }
   });
 
   it('offers the same rename, pin and delete actions the drawer has, on a long press', () => {

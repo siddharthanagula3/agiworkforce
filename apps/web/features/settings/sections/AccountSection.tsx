@@ -20,11 +20,21 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import {
   getBillingPlanPricing,
+  isAppSession,
   isBillingPlanTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
-import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
+import {
+  hasLiveBillingRelationship,
+  subscriptionAccessRank,
+} from '@/lib/services/subscription-access-policy';
 import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
+import { sessionDeviceLabel } from '@/features/settings/lib/session-device-label';
+import {
+  STORE_BILLING_NAME,
+  STORE_SUBSCRIPTION_MANAGEMENT_URL,
+  isStoreBillingSource,
+} from '@/lib/billing/store-subscription-management';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
@@ -47,6 +57,7 @@ import {
   type OwnedAccountDeletionSnapshot,
 } from '../hooks/use-account-deletion-status';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 
 type DeletionStatusSnapshot = OwnedAccountDeletionSnapshot;
 
@@ -63,7 +74,7 @@ function formatDateTime(value: Date | null | undefined): string {
 
 function livePaidPlanOf(subscription: SubscriptionPlan | null): SubscriptionPlan | null {
   if (!subscription) return null;
-  const tier = String(subscription.tier ?? 'free')
+  const tier = String(subscription.billing_tier ?? subscription.tier ?? 'free')
     .trim()
     .toLowerCase();
   if (isFreeBillingPlanTier(tier)) return null;
@@ -71,7 +82,9 @@ function livePaidPlanOf(subscription: SubscriptionPlan | null): SubscriptionPlan
 }
 
 function planLabelOf(subscription: SubscriptionPlan): string {
-  const tier = String(subscription.tier).trim().toLowerCase();
+  const tier = String(subscription.billing_tier ?? subscription.tier)
+    .trim()
+    .toLowerCase();
   return isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : subscription.display_name;
 }
 
@@ -82,6 +95,8 @@ interface AccountSession {
   id: string;
   status: string;
   device: string;
+  os?: string | null;
+  surface?: string | null;
   browser: string | null;
   location: string | null;
   createdAt: string | null;
@@ -157,7 +172,7 @@ const rowLabelStyle: CSSProperties = {
 };
 
 const rowHintStyle: CSSProperties = {
-  fontSize: 14,
+  fontSize: 12,
   color: 'var(--text-3)',
   margin: 'var(--space-1) 0 0',
 };
@@ -259,6 +274,7 @@ export function AccountSection({
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const signedOutPath = useEmbeddedSignInPath() ?? '/login';
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
@@ -333,7 +349,7 @@ export function AccountSection({
 
         if (session.isCurrent) {
           await logout();
-          await identitySignOut({ sessionId: session.id, redirectUrl: '/login' });
+          await identitySignOut({ sessionId: session.id, redirectUrl: signedOutPath });
           return;
         }
 
@@ -341,7 +357,7 @@ export function AccountSection({
         setSessionTotalCount((current) => (current === null ? current : Math.max(0, current - 1)));
       } catch (error) {
         if (sessionRevoked && session.isCurrent) {
-          router.replace('/login');
+          router.replace(signedOutPath);
           return;
         }
         setSessionActionError(toUserMessage(error, 'Unable to revoke this session.'));
@@ -349,7 +365,7 @@ export function AccountSection({
         setRevokingSessionId(null);
       }
     },
-    [identitySignOut, logout, router],
+    [identitySignOut, logout, router, signedOutPath],
   );
 
   // ── Delete account (canonical, working flow on this surface) ───────────────
@@ -393,10 +409,18 @@ export function AccountSection({
   const billingInitialized = useBillingStore((s) => s.initialized);
   const livePaidPlan = livePaidPlanOf(useBillingStore((s) => s.subscription));
   const livePlanLabel = livePaidPlan ? planLabelOf(livePaidPlan) : null;
-  const livePlanEnds = livePaidPlan?.cancel_at_period_end
+  const livePlanEnds = livePaidPlan
     ? formatBillingDateFromSeconds(livePaidPlan.current_period_end ?? null)
     : null;
-  const deleteBlockedByPlan = livePaidPlan !== null;
+  const deleteBlockedByPlan =
+    livePaidPlan !== null && subscriptionAccessRank(livePaidPlan.status) !== 2;
+  const endingPaidPlan = !deleteBlockedByPlan && livePaidPlan?.cancel_at_period_end === true;
+  const renewingPlanSource =
+    livePaidPlan && !deleteBlockedByPlan && !endingPaidPlan
+      ? (livePaidPlan.subscription_source ?? null)
+      : null;
+  const renewingStore = isStoreBillingSource(renewingPlanSource) ? renewingPlanSource : null;
+  const deletedReceiptStore = deleteAccountMutation.data?.storeBilling ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -488,27 +512,31 @@ export function AccountSection({
                 hint={
                   deleteBlockedByPlan ? (
                     <span data-testid="delete-account-plan-note">
-                      {livePaidPlan?.cancel_at_period_end ? (
-                        `You can delete your account once your ${livePlanLabel} plan ends${livePlanEnds ? ` on ${livePlanEnds}` : ''}.`
-                      ) : (
-                        <>
-                          {`Cancel your ${livePlanLabel} plan in `}
-                          <SettingsSectionLink
-                            section="billing"
-                            style={{
-                              color: 'var(--text-1)',
-                              textDecoration: 'underline',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Billing
-                          </SettingsSectionLink>
-                          {' before deleting your account.'}
-                        </>
-                      )}
+                      {`A ${livePlanLabel} payment is still being collected. You can delete once it settles.`}
+                    </span>
+                  ) : endingPaidPlan ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting ends your cancelled ${livePlanLabel} plan at erasure${livePlanEnds ? `, not ${livePlanEnds}` : ''}. Unused time is not refunded.`}
+                    </span>
+                  ) : renewingStore ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting does not cancel your ${livePlanLabel} plan. ${STORE_BILLING_NAME[renewingStore]} keeps charging until you `}
+                      <a
+                        href={STORE_SUBSCRIPTION_MANAGEMENT_URL[renewingStore]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+                      >
+                        cancel it there
+                      </a>
+                      .
+                    </span>
+                  ) : renewingPlanSource === 'stripe' ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting stops your ${livePlanLabel} plan renewing and ends it at erasure${livePlanEnds ? `, not ${livePlanEnds}` : ''}. Unused time is not refunded.`}
                     </span>
                   ) : (
-                    'Schedule permanent account deletion. You can cancel before the cancellation deadline.'
+                    'Schedule permanent account deletion. You can cancel before the deadline.'
                   )
                 }
               >
@@ -570,7 +598,7 @@ export function AccountSection({
                 label="User ID"
                 value={userId}
                 copyLabel="Copy user ID"
-                hint="Your account identifier. Share with support when reporting issues."
+                hint="Share this with support when reporting a problem."
               />
             </div>
 
@@ -592,7 +620,7 @@ export function AccountSection({
                   label="Organization ID"
                   value={organizationId}
                   copyLabel="Copy organization ID"
-                  hint="Identifies your workspace. Support will ask for this before anything workspace-wide."
+                  hint="Support asks for this before workspace-wide changes."
                 />
               </div>
             ) : null}
@@ -681,8 +709,8 @@ export function AccountSection({
                             fontWeight: 500,
                           }}
                         >
-                          <div>{row.device}</div>
-                          {row.browser ? (
+                          <div>{sessionDeviceLabel(row)}</div>
+                          {row.browser && !isAppSession(row) ? (
                             <div
                               style={{
                                 marginTop: 'var(--space-1)',
@@ -764,7 +792,7 @@ export function AccountSection({
                               confirm({
                                 title: row.isCurrent
                                   ? 'Log out this session?'
-                                  : `Revoke the ${row.device} session?`,
+                                  : `Revoke the ${sessionDeviceLabel(row)} session?`,
                                 description: row.isCurrent
                                   ? 'You will be signed out on this device and returned to the sign-in page.'
                                   : 'That device is signed out immediately and has to sign in again to regain access.',
@@ -776,7 +804,7 @@ export function AccountSection({
                             aria-label={
                               row.isCurrent
                                 ? 'Log out current session'
-                                : `Revoke ${row.device} session`
+                                : `Revoke ${sessionDeviceLabel(row)} session`
                             }
                             style={{
                               padding: 'var(--space-2) var(--space-3)',
@@ -835,7 +863,7 @@ export function AccountSection({
             <p
               style={{
                 padding: 'var(--space-3) 0 0',
-                fontSize: 14,
+                fontSize: 12,
                 color: 'var(--text-3)',
                 margin: 0,
               }}
@@ -892,6 +920,17 @@ export function AccountSection({
                   sign out.
                 </p>
               )}
+              {deletedReceiptStore && (
+                <a
+                  data-testid="delete-account-store-billing-link"
+                  href={deletedReceiptStore.manageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 14, color: 'var(--text-1)', textDecoration: 'underline' }}
+                >
+                  {`Cancel your subscription in ${STORE_BILLING_NAME[deletedReceiptStore.store]}`}
+                </a>
+              )}
               <AlertDialogFooter>
                 <AlertDialogAction
                   data-testid="delete-account-success-continue"
@@ -911,9 +950,10 @@ export function AccountSection({
                 <AlertDialogDescription>
                   This schedules your account and Cloud chats, projects, memory and artifacts for
                   permanent deletion. You can cancel before the deadline shown after scheduling.
-                  Erasure is processed after that deadline and may take longer. Choose Continue
-                  after scheduling to sign out. If you change your mind, sign back in and cancel
-                  from Settings &gt; Account before the cancellation deadline.
+                  Erasure is processed after that deadline and may take longer. Anything the law or
+                  an active legal hold requires us to keep is kept. Choose Continue after scheduling
+                  to sign out. If you change your mind, sign back in and cancel from Settings &gt;
+                  Account before the cancellation deadline.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">

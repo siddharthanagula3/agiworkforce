@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ObjectStorageModule = typeof import('@agiworkforce/object-storage');
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -30,7 +32,8 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 }));
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db.current }));
-vi.mock('@agiworkforce/object-storage', () => ({
+vi.mock('@agiworkforce/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ObjectStorageModule>()),
   abortOrphanedMultipartUploads: vi.fn(async () => ({ aborted: 0 })),
   hasObjectStorageCredentials: () => false,
 }));

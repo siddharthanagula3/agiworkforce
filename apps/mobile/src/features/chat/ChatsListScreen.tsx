@@ -43,13 +43,16 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import {
+  ActionMenuSheet,
   InlineRenameField,
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
+import { useActionMenu } from '@/src/shared/hooks/useActionMenu';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -67,16 +70,22 @@ import {
 import { collectGeneratedImages } from '@/src/features/library/collectGeneratedImages';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import {
+  RECENT_SEARCH_LIMIT,
   buildMobileGlobalSearchGroups,
+  clearRecentSearches,
   collectSearchableMobileFiles,
+  readRecentSearches,
+  recordRecentSearch,
   searchMobileDestinations,
   type MobileGlobalSearchResult,
+  type RecentSearchScope,
 } from '@/src/features/search';
 import type { ConversationGroup, ConversationSummary } from '@/types/chat';
 import { TIME_GROUPS } from '@/lib/constants';
 
 type ChatListFilter = 'all' | 'pinned' | 'unread';
-type SearchKind = 'chat' | 'destination' | 'project' | 'file' | 'library' | 'artifact';
+type SearchKind =
+  'chat' | 'destination' | 'project' | 'file' | 'library' | 'artifact' | 'recentSearch';
 
 const SEARCH_KIND_ICONS: Record<SearchKind, LucideIcon> = {
   chat: MessageSquare,
@@ -85,6 +94,7 @@ const SEARCH_KIND_ICONS: Record<SearchKind, LucideIcon> = {
   file: FileText,
   library: ImageIcon,
   artifact: Code2,
+  recentSearch: Search,
 };
 
 interface ChatsListItem extends MobileGlobalSearchResult {
@@ -96,11 +106,26 @@ interface ChatsListItem extends MobileGlobalSearchResult {
 
 type ChatsListSection = SectionListData<ChatsListItem, { title: string }>;
 
+const RECENT_SEARCHES_TITLE = 'Recent searches';
+const RECENT_CHATS_TITLE = 'Recent chats';
+
 const FILTER_LABELS: Record<ChatListFilter, string> = {
   all: 'All chats',
   pinned: 'Pinned',
   unread: 'Unread',
 };
+
+function toChatItem(conversation: ConversationSummary): ChatsListItem {
+  return {
+    kind: 'chat',
+    id: conversation.id,
+    title: conversation.title || 'Untitled chat',
+    subtitle: formatAgeLabel(conversation.updatedAt),
+    pinned: conversation.pinned,
+    starred: conversation.starred === true,
+    unread: conversation.unread,
+  };
+}
 
 function groupHistory(conversations: ReadonlyArray<ConversationSummary>): ChatsListSection[] {
   const startOfToday = new Date();
@@ -118,15 +143,7 @@ function groupHistory(conversations: ReadonlyArray<ConversationSummary>): ChatsL
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
   for (const conversation of sorted) {
-    const item: ChatsListItem = {
-      kind: 'chat',
-      id: conversation.id,
-      title: conversation.title || 'Untitled chat',
-      subtitle: formatAgeLabel(conversation.updatedAt),
-      pinned: conversation.pinned,
-      starred: conversation.starred === true,
-      unread: conversation.unread,
-    };
+    const item = toChatItem(conversation);
     if (conversation.pinned) {
       groups.Pinned.push(item);
       continue;
@@ -172,6 +189,9 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const searchInputRef = useRef<TextInput>(null);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ChatListFilter>('all');
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const filterMenu = useActionMenu();
+  const openFilterMenu = filterMenu.open;
   const appMode = useChatAppModeStore((state) => state.appMode);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
@@ -192,6 +212,8 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const { openActions, rename } = useConversationActions();
   const serverChatMatches = useChatViewStore((state) => state.remoteSearchChats);
   const serverProjectMatches = useChatViewStore((state) => state.remoteSearchProjects);
+  const searchFailed = useChatViewStore((state) => state.searchFailed);
+  const searchInFlight = useChatViewStore((state) => state.isSearching);
   const localProjects = useProjectStore((state) => state.projects);
   const cloudProjects = useCloudProjectStore((state) => state.projects);
   const storedArtifacts = useArtifactStore((state) => state.artifacts);
@@ -222,6 +244,26 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         isHistoryVisibleConversation(conversation),
     );
   }, [appMode, cloudConversations, conversations]);
+
+  const recentScope = useMemo<RecentSearchScope | null>(() => {
+    if (appMode !== 'cloud') return { mode: 'local' };
+    return clerkUserId ? { mode: 'cloud', ownerId: clerkUserId } : null;
+  }, [appMode, clerkUserId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (searchOnly) setRecentSearches(readRecentSearches(recentScope));
+    }, [recentScope, searchOnly]),
+  );
+
+  const recentChats = useMemo(
+    () =>
+      [...modeConversations]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, RECENT_SEARCH_LIMIT)
+        .map(toChatItem),
+    [modeConversations],
+  );
 
   const filteredHistory = useMemo(() => {
     if (filter === 'pinned') return modeConversations.filter((conversation) => conversation.pinned);
@@ -271,12 +313,18 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     [appMode, cloudMessages, messages, modeConversations],
   );
 
+  const contentMatchSnippets = useMemo(() => {
+    const snippets = new Map<string, string>();
+    if (searchResultQuery !== query.trim()) return snippets;
+    for (const result of searchResults) {
+      if (!result.messageId || snippets.has(result.conversationId)) continue;
+      snippets.set(result.conversationId, result.snippet);
+    }
+    return snippets;
+  }, [query, searchResultQuery, searchResults]);
   const contentMatchIds = useMemo(
-    () =>
-      searchResultQuery === query.trim()
-        ? new Set(searchResults.map((result) => result.conversationId))
-        : new Set<string>(),
-    [query, searchResultQuery, searchResults],
+    () => new Set(contentMatchSnippets.keys()),
+    [contentMatchSnippets],
   );
   const searchIsCurrent = searchResultQuery === query.trim();
   const remoteSearchChats = useMemo(
@@ -293,6 +341,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         query,
         conversations: filteredHistory,
         conversationContentMatchIds: contentMatchIds,
+        conversationContentSnippets: contentMatchSnippets,
         projects,
         files,
         libraryImages,
@@ -304,6 +353,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     [
       artifacts,
       contentMatchIds,
+      contentMatchSnippets,
       files,
       filter,
       filteredHistory,
@@ -316,33 +366,110 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   );
 
   const isSearching = query.trim().length > 0;
+  const searchPending = isSearching && (!searchIsCurrent || searchInFlight);
+  const cloudSearchFailed = isSearching && searchIsCurrent && searchFailed && appMode === 'cloud';
   const sections = useMemo<ChatsListSection[]>(() => {
-    if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
+    if (!isSearching) {
+      if (!searchOnly) return groupHistory(filteredHistory);
+      const recent: ChatsListSection[] = [];
+      if (recentSearches.length > 0) {
+        recent.push({
+          title: RECENT_SEARCHES_TITLE,
+          data: recentSearches.map<ChatsListItem>((entry) => ({
+            kind: 'recentSearch',
+            id: entry,
+            title: entry,
+            subtitle: '',
+          })),
+        });
+      }
+      if (recentChats.length > 0) recent.push({ title: RECENT_CHATS_TITLE, data: recentChats });
+      return recent;
+    }
     return [
       searchSection('Chats', 'chat', globalResults.chats),
-      searchSection('Go to', 'destination', searchMobileDestinations(query)),
+      searchSection('Go to', 'destination', searchMobileDestinations(query, appMode)),
       searchSection('Projects', 'project', globalResults.projects),
       searchSection('Files', 'file', globalResults.files),
       searchSection('Library', 'library', globalResults.library),
       searchSection('Artifacts', 'artifact', globalResults.artifacts),
     ].filter((section): section is ChatsListSection => section !== null);
-  }, [filteredHistory, globalResults, isSearching, query, searchOnly]);
+  }, [
+    appMode,
+    filteredHistory,
+    globalResults,
+    isSearching,
+    query,
+    recentChats,
+    recentSearches,
+    searchOnly,
+  ]);
+
+  const rememberQuery = useCallback(
+    (value: string) => {
+      if (useSettingsStore.getState().isTemporaryChat) return;
+      setRecentSearches(recordRecentSearch(recentScope, value));
+    },
+    [recentScope],
+  );
+
+  const clearRecents = useCallback(() => {
+    Alert.alert(
+      'Clear recent searches?',
+      'Your recent searches in this mode will be removed from this device. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            clearRecentSearches(recentScope);
+            setRecentSearches([]);
+          },
+        },
+      ],
+    );
+  }, [recentScope]);
+
+  const rememberSubmittedQuery = useCallback(() => rememberQuery(query), [query, rememberQuery]);
+
+  const rerunRecentSearch = useCallback(
+    (value: string) => {
+      setQuery(value);
+      rememberQuery(value);
+      searchInputRef.current?.focus();
+    },
+    [rememberQuery],
+  );
 
   const openFilter = useCallback(() => {
     const option = (value: ChatListFilter) => ({
-      text: `${filter === value ? '✓ ' : ''}${FILTER_LABELS[value]}`,
-      onPress: () => setFilter(value),
+      key: `filter-${value}`,
+      label: FILTER_LABELS[value],
+      selected: filter === value,
+      run: () => setFilter(value),
     });
-    Alert.alert('Filter chats', 'Choose which chats appear in this list and in search.', [
-      option('all'),
-      option('pinned'),
-      option('unread'),
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [filter]);
+    openFilterMenu(
+      'Filter chats',
+      [option('all'), option('pinned'), option('unread')],
+      'Choose which chats appear in this list and in search.',
+    );
+  }, [filter, openFilterMenu]);
 
   const openItem = useCallback(
     (item: ChatsListItem) => {
+      if (item.kind === 'recentSearch') {
+        rerunRecentSearch(item.title);
+        return;
+      }
+      if (isSearching && searchOnly) {
+        const openedTemporaryChat =
+          item.kind === 'chat' &&
+          (appMode === 'cloud' ? cloudConversations : conversations).some(
+            (conversation) => conversation.id === item.id && conversation.temporary === true,
+          );
+        if (!openedTemporaryChat) rememberQuery(query);
+      }
       if (item.kind === 'chat') {
         router.push({
           pathname: '/(app)/chat/[id]',
@@ -380,90 +507,136 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         params: { artifactId: item.id },
       });
     },
-    [router],
+    [
+      appMode,
+      cloudConversations,
+      conversations,
+      isSearching,
+      query,
+      rememberQuery,
+      rerunRecentSearch,
+      router,
+      searchOnly,
+    ],
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: ChatsListItem }) => (
-      <PressableBox
-        onPress={() => openItem(item)}
-        onLongPress={item.kind === 'chat' ? () => openActions(item.id, item.title) : undefined}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
-        accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
-        style={({ pressed }) => ({
-          minHeight: 66,
-          borderRadius: 14,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
-          paddingHorizontal: 14,
-          paddingVertical: 11,
-          marginHorizontal: 16,
-          marginBottom: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-        })}
-      >
-        {item.unread ? (
-          <View
-            style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textPrimary }}
-          />
-        ) : null}
-        {item.pinned ? <Pin size={15} color={colors.textMuted} fill={colors.textMuted} /> : null}
-        {item.starred ? (
-          <Star
-            size={15}
-            color={colors.textMuted}
-            fill={colors.textMuted}
-            accessibilityLabel="Starred"
-          />
-        ) : null}
-        {isSearching ? <SearchKindIcon kind={item.kind} color={colors.textMuted} /> : null}
-        {item.kind === 'chat' && rename.conversationId === item.id ? (
-          <InlineRenameField rename={rename} />
-        ) : (
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text
-              numberOfLines={1}
-              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
-            >
-              {item.title}
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={{ color: colors.textMuted, fontSize: typeScale.caption }}
-            >
-              {item.subtitle}
-            </Text>
-          </View>
-        )}
-        {isSearching ? (
-          <ChevronRight size={16} color={colors.textMuted} />
-        ) : item.kind === 'chat' ? (
-          <PressableBox
-            onPress={() => openActions(item.id, item.title)}
-            accessibilityRole="button"
-            accessibilityLabel={`More actions for ${item.title}`}
-            hitSlop={8}
-            style={({ pressed }) => ({
-              width: 44,
-              height: 44,
-              marginEnd: -10,
-              borderRadius: 22,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-            })}
+    ({ item }: { item: ChatsListItem }) =>
+      item.kind === 'recentSearch' ? (
+        <PressableBox
+          onPress={() => openItem(item)}
+          accessibilityRole="button"
+          accessibilityLabel={`Search for ${item.title}`}
+          style={({ pressed }) => ({
+            minHeight: 52,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            marginHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+          })}
+        >
+          <SearchKindIcon kind="recentSearch" color={colors.textMuted} />
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              color: colors.textPrimary,
+              fontSize: typeScale.body,
+              fontWeight: '600',
+            }}
           >
-            <MoreHorizontal size={18} color={colors.textMuted} />
-          </PressableBox>
-        ) : (
-          <ChevronRight size={16} color={colors.textMuted} />
-        )}
-      </PressableBox>
-    ),
+            {item.title}
+          </Text>
+        </PressableBox>
+      ) : (
+        <PressableBox
+          onPress={() => openItem(item)}
+          onLongPress={item.kind === 'chat' ? () => openActions(item.id, item.title) : undefined}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${item.kind}: ${item.title}${
+            item.kind === 'destination' && item.subtitle ? `, ${item.subtitle}` : ''
+          }${item.unread ? ', unread' : ''}`}
+          accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
+          style={({ pressed }) => ({
+            minHeight: 66,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
+            paddingHorizontal: 14,
+            paddingVertical: 11,
+            marginHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+          })}
+        >
+          {item.unread ? (
+            <View
+              style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textPrimary }}
+            />
+          ) : null}
+          {item.pinned ? <Pin size={15} color={colors.textMuted} fill={colors.textMuted} /> : null}
+          {item.starred ? (
+            <Star
+              size={15}
+              color={colors.textMuted}
+              fill={colors.textMuted}
+              accessibilityLabel="Starred"
+            />
+          ) : null}
+          {isSearching ? <SearchKindIcon kind={item.kind} color={colors.textMuted} /> : null}
+          {item.kind === 'chat' && rename.conversationId === item.id ? (
+            <InlineRenameField rename={rename} />
+          ) : (
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+              >
+                {item.title}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+              >
+                {item.subtitle}
+              </Text>
+            </View>
+          )}
+          {isSearching ? (
+            <ChevronRight size={16} color={colors.textMuted} />
+          ) : item.kind === 'chat' ? (
+            <PressableBox
+              onPress={() => openActions(item.id, item.title)}
+              accessibilityRole="button"
+              accessibilityLabel={`More actions for ${item.title}`}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                marginEnd: -10,
+                borderRadius: 22,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+              })}
+            >
+              <MoreHorizontal size={18} color={colors.textMuted} />
+            </PressableBox>
+          ) : (
+            <ChevronRight size={16} color={colors.textMuted} />
+          )}
+        </PressableBox>
+      ),
     [colors, isSearching, openActions, openItem, rename],
   );
 
@@ -566,10 +739,14 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               paddingTop: 14,
               paddingBottom: 7,
               backgroundColor: pageBackground,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
             }}
           >
             <Text
               style={{
+                flexShrink: 1,
                 color: colors.textMuted,
                 fontSize: typeScale.caption,
                 fontWeight: '700',
@@ -579,6 +756,21 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             >
               {section.title}
             </Text>
+            {section.title === RECENT_SEARCHES_TITLE ? (
+              <Pressable
+                onPress={clearRecents}
+                accessibilityRole="button"
+                accessibilityLabel="Clear recent searches"
+                hitSlop={14}
+                style={{ flexShrink: 0, marginStart: 12 }}
+              >
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
+                  Clear
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
         contentContainerStyle={{
@@ -589,7 +781,29 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
+          cloudSearchFailed ? (
+            <View
+              accessibilityRole="alert"
+              style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
+            >
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {hasResults
+                  ? 'Search could not be completed. Showing matches already on this device.'
+                  : 'Search could not be completed. Check your connection and try again.'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry search"
+                onPress={() => searchConversations(query)}
+              >
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            </View>
+          ) : appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
             <View
               accessibilityRole="alert"
               style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
@@ -641,7 +855,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           ) : null
         }
         ListEmptyComponent={
-          appMode === 'cloud' && conversationLoadError ? null : (
+          (appMode === 'cloud' && conversationLoadError) || cloudSearchFailed ? null : (
             <View
               style={{
                 flex: 1,
@@ -654,6 +868,8 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             >
               {searchOnly && !isSearching ? (
                 <Search size={34} color={colors.textMuted} />
+              ) : searchPending ? (
+                <LoadingIndicator accessibilityLabel="Searching" />
               ) : appMode === 'cloud' && isLoadingConversations ? (
                 <LoadingIndicator accessibilityLabel="Loading chats" />
               ) : (
@@ -668,15 +884,17 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               >
                 {searchOnly && !isSearching
                   ? 'Search your workspace'
-                  : appMode === 'cloud' && isLoadingConversations
-                    ? 'Loading chats'
-                    : isSearching
-                      ? 'No matches'
-                      : filter === 'all'
-                        ? 'No chats yet'
-                        : 'No chats here'}
+                  : searchPending
+                    ? 'Searching'
+                    : appMode === 'cloud' && isLoadingConversations
+                      ? 'Loading chats'
+                      : isSearching
+                        ? 'No matches'
+                        : filter === 'all'
+                          ? 'No chats yet'
+                          : 'No chats here'}
               </Text>
-              {appMode === 'cloud' && isLoadingConversations ? null : (
+              {searchPending || (appMode === 'cloud' && isLoadingConversations) ? null : (
                 <Text
                   style={{
                     color: colors.textMuted,
@@ -685,7 +903,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                   }}
                 >
                   {searchOnly && !isSearching
-                    ? 'Find chats, projects, files, library images, and artifacts in this mode.'
+                    ? 'Search chats, projects, files, images and artifacts in this mode.'
                     : isSearching
                       ? `Nothing in ${appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local Mode'} matches “${query.trim()}”.`
                       : filter === 'all'
@@ -713,8 +931,10 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         accessibilityLabel="Search chats, projects, files, library, and artifacts"
         inputRef={searchInputRef}
         autoFocus={autoFocusSearch}
+        onSubmitEditing={searchOnly ? rememberSubmittedQuery : undefined}
       />
       <RenameConversationModal rename={rename} inline />
+      <ActionMenuSheet menu={filterMenu.menu} dismissLabel="Dismiss chat filter" />
     </SafeAreaView>
   );
 }

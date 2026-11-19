@@ -66,6 +66,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getPlanMaxSandboxes, type CreateCloudCodeSessionInput } from '@agiworkforce/types';
 import { CHAT_COMPLETIONS_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
+import { CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS } from '@/lib/services/cloud-code-turn-budget';
 import { getInstallationAccessToken } from '@/lib/github-app';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 import {
@@ -1123,6 +1124,23 @@ describe('cloud code session run lease', () => {
     expect(result.terminalEntry.stdout).toBe('out');
     const row = storedRow(db, sessionId);
     expect(row.run_lease_token).toBeNull();
+  });
+
+  it('holds a command sandbox only as long as a Code session route can run', async () => {
+    const db = createFakeDb();
+    const sessionId = await readySession(db);
+    const startedMs = Date.now();
+
+    await runCloudCodeCommand(db, OWNER, sessionId, 'ls', PLAN_TIER);
+
+    const endedMs = Date.now();
+    const { releaseByMs } = vi.mocked(getE2BExecutor).mock.calls.at(-1)![0] as {
+      releaseByMs: number;
+    };
+    expect(releaseByMs).toBeGreaterThanOrEqual(
+      startedMs + CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS,
+    );
+    expect(releaseByMs).toBeLessThanOrEqual(endedMs + CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS);
   });
 
   it('still reports a session busy while another run holds a live lease', async () => {

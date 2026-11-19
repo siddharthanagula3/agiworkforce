@@ -126,6 +126,16 @@ function overview(): ProjectSharingOverview {
   };
 }
 
+function nothingShared(): ProjectSharingOverview {
+  return {
+    ...overview(),
+    sharedProjects: [],
+    sharedConversations: [],
+    sharedArtifacts: [],
+    sharedConnectors: [],
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockStorage.clear();
@@ -160,6 +170,35 @@ describe('projects shared with the member', () => {
     expect(screen.queryByText('Board pack')).toBeNull();
   });
 
+  it('stays hidden when nothing is shared and no empty message is asked for', async () => {
+    (api.get as jest.Mock).mockResolvedValue(nothingShared());
+    render(<SharedWithYouSection />);
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByTestId('projects-shared-empty')).toBeNull();
+    expect(screen.queryByTestId('projects-shared-with-you')).toBeNull();
+  });
+
+  it('shows the empty message once loading finishes when nothing is shared', async () => {
+    (api.get as jest.Mock).mockResolvedValue(nothingShared());
+    render(<SharedWithYouSection emptyMessage="Nothing is shared with you yet." />);
+
+    expect(await screen.findByText('Nothing is shared with you yet.')).toBeTruthy();
+  });
+
+  it('offers a retry instead of the empty message when shared projects cannot load', async () => {
+    (api.get as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    render(<SharedWithYouSection emptyMessage="Nothing is shared with you yet." />);
+
+    expect(await screen.findByText('Shared projects could not be loaded.')).toBeTruthy();
+    expect(screen.queryByText('Nothing is shared with you yet.')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Retry loading shared projects'));
+
+    expect(await screen.findByLabelText('Roadmap, shared by Dana. Can edit')).toBeTruthy();
+  });
+
   it('opens a shared project read-only with what is shared', async () => {
     (managedCloudProjects.getProject as jest.Mock).mockResolvedValue({
       id: 'p-open',
@@ -181,13 +220,62 @@ describe('projects shared with the member', () => {
           }
         : overview(),
     );
+    activateCloudAccount(ME);
     render(<SharedProjectScreen projectId="p-open" />);
 
     expect(await screen.findByTestId('shared-project-access')).toHaveTextContent(
       'Shared with you by Dana · Can view',
     );
     expect(screen.getByText('Use the brand voice.')).toBeTruthy();
-    expect(screen.getByText('No files in this project.')).toBeTruthy();
+    expect(await screen.findByText('No files in this project.')).toBeTruthy();
+  });
+
+  it('says the files could not be loaded, not that the project is empty, and retries in place', async () => {
+    (managedCloudProjects.getProject as jest.Mock).mockResolvedValue({
+      id: 'p-open',
+      ownerUserId: OWNER,
+      name: 'Brand book',
+      sharedAccess: 'read',
+      isOrgShared: true,
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+      allowedSurfaces: ['web'],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
+    let filesFail = true;
+    (api.get as jest.Mock).mockImplementation(async (path: string) => {
+      if (!path.includes('knowledge')) return overview();
+      if (filesFail) throw new ApiHttpError('files unavailable', 500);
+      return {
+        files: [
+          {
+            id: 'f-1',
+            projectId: 'p-open',
+            fileName: 'brand-guide.pdf',
+            mimeType: 'application/pdf',
+            byteCount: 10,
+            checksumSha256: 'a'.repeat(64),
+            sourceSurface: 'web',
+            addedByUserId: OWNER,
+            addedAt: '2026-10-01T00:00:00.000Z',
+            storageUri: 'storage://f-1',
+          },
+        ],
+      };
+    });
+    activateCloudAccount(ME);
+    render(<SharedProjectScreen projectId="p-open" />);
+
+    expect(await screen.findByText('Could not load this project’s files.')).toBeTruthy();
+    expect(screen.getByTestId('shared-project-access')).toBeTruthy();
+    expect(screen.queryByText('No files in this project.')).toBeNull();
+
+    filesFail = false;
+    fireEvent.press(screen.getByLabelText('Retry loading project files'));
+
+    expect(await screen.findByText('brand-guide.pdf')).toBeTruthy();
+    expect(screen.queryByText('Could not load this project’s files.')).toBeNull();
   });
 
   it('lists chats, artifacts and connectors others shared with me and opens them', async () => {

@@ -228,7 +228,7 @@ function DataSession({ site }: { site: PublishedSite }) {
         data-testid="site-data-unsupported"
         className="py-8 text-sm text-[var(--chat-text-secondary)]"
       >
-        This site does not save data. Only apps built as HTML or React can keep data between visits.
+        Only apps built as HTML or React can save data between visits.
       </p>
     );
   }

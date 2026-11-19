@@ -82,6 +82,10 @@
       "reason": "the turn is written under RLS through createClaimedUserScopedDb bound to the user id the turn already carries, because a cancelled stream settles after the request context is gone and there is no session left to bind; getNeonDb here is the schema-owner pool that SET ROLE app_rls needs, not an unscoped write"
     },
     {
+      "path": "apps/web/app/api/llm/v1/chat/completions/lib/stopped-run-turn.ts",
+      "reason": "the stop is recorded by a cancelled stream after its request is gone and by the background workflow settle step, neither of which has a session to bind, so the one update runs under RLS through createClaimedUserScopedDb bound to the run owner and constrains both the run and the conversation to that owner's user_id and organization; getNeonDb is the schema-owner pool SET ROLE app_rls needs"
+    },
+    {
       "path": "apps/web/app/api/me/route.ts",
       "reason": "the profiles upsert already runs under RLS through createClaimedUserScopedDb, which needs a schema-owner pool to SET ROLE app_rls on; getNeonDb here is that pool, not an unscoped read"
     },
@@ -304,6 +308,10 @@
     {
       "path": "apps/web/lib/services/usage-limit-promotion-service.ts",
       "reason": "usage-limit promotions write their own tables, which app_rls cannot write, on the service connection; every statement over credit_transactions and usage_limit_promotion_grants carries the account's user_id"
+    },
+    {
+      "path": "apps/web/lib/workflows/steps/settle-workflow-invocation.ts",
+      "reason": "a background workflow step with no request user settles a run on the service connection the billing and run services take; the one statement over cloud_agent_events, the finish reason read, runs on a claimed scope bound to the run owner and carries the run id and the owner's user_id"
     }
   ]
 }

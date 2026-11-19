@@ -251,12 +251,15 @@ impl DownloadDestination {
         );
         self.validate_original()?;
         let name = PathBuf::from(format!("{STAGING_PREFIX}{}", uuid::Uuid::new_v4()));
-        let mut directory_options = DirOptions::new();
         #[cfg(unix)]
-        {
+        let directory_options = {
             use confined::DirBuilderExt;
-            directory_options.mode(0o700);
-        }
+            let mut options = DirOptions::new();
+            options.mode(0o700);
+            options
+        };
+        #[cfg(not(unix))]
+        let directory_options = DirOptions::new();
         confined::create_dir(&self.parent, &name, &directory_options)?;
         let stage = match confined::open_dir_nofollow(&self.parent, &name) {
             Ok(stage) => stage,
@@ -379,6 +382,7 @@ impl DownloadDestination {
             Ok(())
         })();
         let _ = confined::remove_file(&stage, leaf);
+        drop(stage);
         let _ = confined::remove_dir(&self.parent, &name);
         result
     }
@@ -545,7 +549,17 @@ mod tests {
         let folder = root.path().join("chosen");
         std::fs::create_dir(&folder).unwrap();
         let selected = destination(&folder, "saved.txt");
-        std::fs::rename(&folder, root.path().join("moved")).unwrap();
+        if let Err(error) = std::fs::rename(&folder, root.path().join("moved")) {
+            const ERROR_SHARING_VIOLATION: i32 = 32;
+            assert!(
+                cfg!(windows) && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION),
+                "move chosen folder: {error}"
+            );
+            assert!(folder.is_dir());
+            assert!(!root.path().join("moved").exists());
+            drop(selected);
+            return;
+        }
         std::fs::create_dir(&folder).unwrap();
         let failed = selected.save(b"not published").err().unwrap();
         assert!(!failed.uncertain);

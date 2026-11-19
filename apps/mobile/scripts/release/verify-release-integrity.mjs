@@ -24,7 +24,10 @@ export const CANONICAL_IDENTITY = Object.freeze({
   easProjectId: '38f0941c-88a7-468a-9750-fcd8b357ff4c',
 });
 
-const PRODUCTION_ENTITLEMENTS = Object.freeze(['com.apple.developer.declared-age-range']);
+const PRODUCTION_ENTITLEMENTS = Object.freeze([
+  'com.apple.developer.declared-age-range',
+  'com.apple.developer.kernel.increased-memory-limit',
+]);
 
 const PRODUCTION_ASSOCIATED_DOMAINS = Object.freeze([
   'applinks:agiworkforce.com',

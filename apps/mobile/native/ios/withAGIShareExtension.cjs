@@ -13,6 +13,31 @@ const APP_GROUP_IDENTIFIER = 'group.com.agiworkforce.app.share';
 const DEFAULT_IOS_DEVELOPMENT_TEAM = 'D2PR62RLT4';
 const IOS_DEPLOYMENT_TARGET = '17.0';
 const NATIVE_EXTENSION_DIR = path.join(__dirname, EXTENSION_FOLDER);
+const DISPLAY_NAME_ENTRY = /(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/;
+
+function hostDisplayName(config) {
+  const name = config.ios?.infoPlist?.CFBundleDisplayName ?? config.name;
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new Error(`${PLUGIN_NAME}: the app has no display name to give its extensions`);
+  }
+  return name;
+}
+
+function escapeXml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function copyInfoPlistWithHostDisplayName(source, destination, config) {
+  const template = fs.readFileSync(source, 'utf8');
+  if (!DISPLAY_NAME_ENTRY.test(template)) {
+    throw new Error(`${PLUGIN_NAME}: ${source} has no CFBundleDisplayName entry`);
+  }
+  const name = escapeXml(hostDisplayName(config));
+  fs.writeFileSync(
+    destination,
+    template.replace(DISPLAY_NAME_ENTRY, (_, open, close) => `${open}${name}${close}`),
+  );
+}
 
 function unquote(value) {
   return typeof value === 'string' ? value.replace(/^"|"$/g, '') : value;
@@ -178,7 +203,11 @@ function withCopyShareExtensionSources(config) {
         if (!fs.existsSync(source)) {
           throw new Error(`${PLUGIN_NAME}: required source is missing at ${source}`);
         }
-        fs.copyFileSync(source, path.join(destination, fileName));
+        if (fileName === EXTENSION_INFO_PLIST) {
+          copyInfoPlistWithHostDisplayName(source, path.join(destination, fileName), c);
+        } else {
+          fs.copyFileSync(source, path.join(destination, fileName));
+        }
       }
       return c;
     },
@@ -218,6 +247,7 @@ function withAGIShareExtension(config) {
 
 module.exports = createRunOncePlugin(withAGIShareExtension, PLUGIN_NAME, PLUGIN_VERSION);
 module.exports.configureShareExtensionTarget = configureShareExtensionTarget;
+module.exports.copyInfoPlistWithHostDisplayName = copyInfoPlistWithHostDisplayName;
 module.exports.ensureTargetDependency = ensureTargetDependency;
 module.exports.getExtensionBuildSettings = getExtensionBuildSettings;
 module.exports.constants = {

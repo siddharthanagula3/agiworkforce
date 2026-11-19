@@ -47,7 +47,7 @@ import {
 import {
   SECRET_REDACTION_COUNT_HEADER,
   toSecretRedactionCountHeaderValue,
-} from '@/lib/chat-secret-redaction-notice';
+} from '@agiworkforce/cloud-contracts';
 import { freeModelProviderNotice } from '@/lib/named-provider-consent';
 import { loadNamedProviderConsent } from '@/lib/server/named-provider-consent';
 import {
@@ -114,14 +114,18 @@ import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import {
   buildTextOnlyPreamble,
-  type TextOnlyChatSetup,
   type TextOnlyPreambleInput,
 } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import type { TextOnlyChatSetup } from '@/lib/prompts/chat-system-prompt-assembly';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
+import { surfaceRendersWritingCards } from '@/lib/chat-surface-rendering';
 import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 import { promptVariantsForSubject } from '@/lib/prompts/prompt-variants';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
-import { persistAssistantTurn } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
+import {
+  persistAssistantTurn,
+  wireFinishReason,
+} from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import { freeModelLabel } from '@/features/chat/lib/freeLimitRecovery';
 import {
   ChatAttachmentHydrationError,
@@ -557,6 +561,7 @@ interface RecordedAnswer {
   content: string;
   usage: TokenUsage | null;
   complete: boolean;
+  finishReason?: string | null;
 }
 
 function recordedAnswerStream(
@@ -570,6 +575,7 @@ function recordedAnswerStream(
   let usage: TokenUsage | null = null;
   let failed = false;
   let recorded = false;
+  let finishReason: string | null = null;
 
   const read = (text: string): boolean => {
     const lines = (pending + text).split('\n');
@@ -589,6 +595,7 @@ function recordedAnswerStream(
         continue;
       }
       usage = readUsage(event.usage) ?? usage;
+      finishReason = wireFinishReason([event]) ?? finishReason;
       for (const choice of Array.isArray(event.choices) ? event.choices : []) {
         const delta = (choice as { delta?: { content?: unknown; x_stream_error?: unknown } } | null)
           ?.delta;
@@ -599,11 +606,17 @@ function recordedAnswerStream(
     return finished;
   };
 
-  const settle = async (complete: boolean) => {
+  const settle = async (complete: boolean, stoppedByReader = false) => {
     if (recorded) return;
     recorded = true;
     if (!content.trim()) return;
-    await record({ content, usage, complete }).catch((error: unknown) => {
+    const reason = failed ? null : finishReason;
+    await record({
+      content,
+      usage,
+      complete,
+      ...(reason !== null || !stoppedByReader ? { finishReason: reason } : {}),
+    }).catch((error: unknown) => {
       logger.error({ error }, '[free-quota] the Free Auto answer could not be saved on the server');
     });
   };
@@ -626,7 +639,7 @@ function recordedAnswerStream(
     },
     async cancel(reason) {
       await reader.cancel(reason).catch(() => undefined);
-      await settle(false);
+      await settle(false, true);
     },
   });
 }
@@ -1105,6 +1118,7 @@ export async function serveFreeQuotaTurn(
       servingModel: { kind: 'unattributed', name: offering.displayName },
       promptSelection: { variants: promptVariants },
       setup,
+      writingCards: surfaceRendersWritingCards(readSurfaceHint(request) ?? 'web'),
     });
     const memoryCommandNote =
       body.memory_command && latestUserPrompt
@@ -1370,7 +1384,7 @@ export async function serveFreeQuotaTurn(
     );
     return new Response(
       freeAuto && conversation.is_temporary !== true
-        ? recordedAnswerStream(answer, ({ content, usage, complete }) =>
+        ? recordedAnswerStream(answer, ({ content, usage, complete, finishReason }) =>
             persistAssistantTurn({
               processed: {
                 requestId: freeAuto.requestId,
@@ -1395,6 +1409,7 @@ export async function serveFreeQuotaTurn(
                 inputTokens: usage?.promptTokens ?? 0,
                 outputTokens: usage?.completionTokens ?? 0,
                 truncated: !complete,
+                ...(finishReason === undefined ? {} : { finishReason }),
                 ...(freeAuto.fallbackReason ? { fallbackReason: freeAuto.fallbackReason } : {}),
               },
             }),

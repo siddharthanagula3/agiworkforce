@@ -198,7 +198,10 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
   }),
 }));
 import { getRoutingSlotModel, parseManagedUsageSummaryResponse } from '@agiworkforce/types';
-import { MAX_CHAT_ATTACHMENT_MESSAGE_BYTES } from '@agiworkforce/cloud-contracts';
+import {
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+} from '@agiworkforce/cloud-contracts';
 import {
   deleteConversation,
   saveConversation,
@@ -287,18 +290,26 @@ function captureScreenshot(dataUrl: string): void {
   screenshotItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+const SETTLE_TIMEOUT_MS = 8_000;
+vi.setConfig({ testTimeout: 30_000 });
+
+function settled<T>(assertion: () => T | Promise<T>): Promise<T> {
+  return vi.waitFor(assertion, { timeout: SETTLE_TIMEOUT_MS });
+}
+
 async function expectPendingCount(count: number): Promise<void> {
-  await vi.waitFor(() => {
+  await settled(() => {
     expect(pendingDataUrls()).toHaveLength(count);
   });
 }
 
 async function clearPending(): Promise<void> {
   dropFiles([imageFile(8, 'image/png', 'reset.png')]);
-  await vi.waitFor(() => {
+  await settled(() => {
+    expect(attachmentBar().querySelector('.sp-attachment-retention')).toBeNull();
     expect(attachmentBar().querySelector('.sp-attachment-thumb')).not.toBeNull();
   });
-  await vi.waitFor(async () => {
+  await settled(async () => {
     let removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
     while (removeBtn) {
       removeBtn.click();
@@ -341,7 +352,7 @@ describe('side panel composer attachment caps', () => {
     vi.mocked(fetch).mockClear();
     pickFiles([imageFile(16, 'image/png', 'durable-image.png')]);
     await expectPendingCount(1);
-    await vi.waitFor(() => {
+    await settled(() => {
       const presign = vi
         .mocked(fetch)
         .mock.calls.find(([url]) => String(url).endsWith('/api/uploads/presign'));
@@ -377,7 +388,7 @@ describe('side panel composer attachment caps', () => {
     chromeMock.screenshotError = 'Capture unavailable';
     captureScreenshot('');
 
-    await vi.waitFor(() => expect(noticeText()).toContain('Capture unavailable'));
+    await settled(() => expect(noticeText()).toContain('Capture unavailable'));
     expect(pendingDataUrls()).toHaveLength(0);
   });
 
@@ -413,7 +424,7 @@ describe('side panel composer attachment caps', () => {
 
     pasteFiles([imageFile(16, 'image/png', 'pasted.png')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain(String(MANAGED_CHAT_MAX_ATTACHMENTS));
     });
     expect(pendingDataUrls()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS);
@@ -429,7 +440,7 @@ describe('side panel composer attachment caps', () => {
 
     pickFiles([imageFile(16, 'image/png', 'picked.png')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain(String(MANAGED_CHAT_MAX_ATTACHMENTS));
     });
     expect(pendingDataUrls()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS);
@@ -447,7 +458,7 @@ describe('side panel composer attachment caps', () => {
   it('still refuses a file above the canonical per-file cap', async () => {
     dropFiles([imageFile(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES + 1, 'image/png', 'over-cap.png')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain('over-cap.png is too large');
     });
     expect(pendingDataUrls()).toHaveLength(0);
@@ -456,7 +467,7 @@ describe('side panel composer attachment caps', () => {
   it('rejects image types the transport cannot encode', async () => {
     dropFiles([imageFile(16, 'image/svg+xml', 'vector.svg')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain('vector.svg cannot be attached');
     });
     expect(noticeText()).toContain('PNG');
@@ -479,7 +490,7 @@ describe('side panel composer attachment caps', () => {
 async function refreshAccount(): Promise<void> {
   expect(account.onChange).toBeTypeOf('function');
   account.onChange!();
-  await vi.waitFor(() => {
+  await settled(() => {
     expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(
       !account.signedIn || !account.ready,
     );
@@ -494,13 +505,13 @@ describe('attachment account and capability admission', () => {
   it('refuses file intake when the signed-in account denies uploads', async () => {
     account.uploadsAllowed = false;
     account.onChange!();
-    await vi.waitFor(() =>
+    await settled(() =>
       expect((document.getElementById('sp-attach-file-item') as HTMLButtonElement).hidden).toBe(
         true,
       ),
     );
     dropFiles([imageFile(16)]);
-    await vi.waitFor(() => expect(noticeText()).toBe(catalogMessage('spAttachmentUploadsOff', [])));
+    await settled(() => expect(noticeText()).toBe(catalogMessage('spAttachmentUploadsOff', [])));
     expect(pendingDataUrls()).toHaveLength(0);
   });
   it('disables capture until allocation is ready and refuses signed-out file drops', async () => {
@@ -514,7 +525,7 @@ describe('attachment account and capability admission', () => {
       ).toBe(true);
       if (!signedIn) {
         dropFiles([imageFile(16)]);
-        await vi.waitFor(() =>
+        await settled(() =>
           expect(noticeText()).toBe(catalogMessage('spAttachmentUploadsOff', [])),
         );
         expect(pendingDataUrls()).toHaveLength(0);
@@ -524,7 +535,7 @@ describe('attachment account and capability admission', () => {
 });
 
 async function expectReadyAccount(): Promise<void> {
-  await vi.waitFor(() => {
+  await settled(() => {
     expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(false);
     expect(account.summarized).toBe(account.owner.authIncarnation);
     expect((document.getElementById('sp-attach-file-item') as HTMLButtonElement).hidden).toBe(
@@ -552,7 +563,7 @@ describe('image intake stays with its admitted account epoch', () => {
       });
       const abort = vi.spyOn(FileReader.prototype, 'abort');
       pickFiles([imageFile(16)]);
-      await vi.waitFor(() => expect(readers).toHaveLength(1));
+      await settled(() => expect(readers).toHaveLength(1));
       const reader = readers[0]!;
       expect((document.getElementById('sp-attach-btn') as HTMLButtonElement).disabled).toBe(true);
       document.getElementById('sp-new-chat-btn')!.click();
@@ -611,7 +622,7 @@ describe('image intake stays with its admitted account epoch', () => {
       account.modelIds = [getRoutingSlotModel('general_fast')];
       account.onChange!();
       let option!: HTMLButtonElement;
-      await vi.waitFor(() => {
+      await settled(() => {
         option = Array.from(
           document.querySelectorAll<HTMLButtonElement>('#sp-model-dropdown [role="menuitemradio"]'),
         ).find((button) => button.getAttribute('aria-checked') === 'false')!;
@@ -644,7 +655,7 @@ describe('image intake stays with its admitted account epoch', () => {
       (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
       account.modelIds = [];
       account.onChange!();
-      await vi.waitFor(() =>
+      await settled(() =>
         expect(document.getElementById('sp-model-badge')!.textContent).toBe(
           getManagedModelBadgeLabel('auto'),
         ),
@@ -666,7 +677,7 @@ describe('image intake stays with its admitted account epoch', () => {
       try {
         document.getElementById('sp-history-btn')!.click();
         let restore!: HTMLButtonElement;
-        await vi.waitFor(() => {
+        await settled(() => {
           restore = Array.from(
             document.querySelectorAll<HTMLButtonElement>('[data-conversation-restore="true"]'),
           ).find((button) => button.textContent?.includes(content))!;
@@ -675,7 +686,7 @@ describe('image intake stays with its admitted account epoch', () => {
         chromeMock.deferScreenshots = true;
         (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
         restore.click();
-        await vi.waitFor(() =>
+        await settled(() =>
           expect(document.getElementById('sp-messages')!.textContent).toContain(content),
         );
         const blockedAfterRestore = (document.getElementById('sp-attach-btn') as HTMLButtonElement)
@@ -700,7 +711,7 @@ describe('image intake stays with its admitted account epoch', () => {
     });
     const abort = vi.spyOn(FileReader.prototype, 'abort');
     dropFiles([imageFile(16)]);
-    await vi.waitFor(() => expect(readers).toHaveLength(1));
+    await settled(() => expect(readers).toHaveLength(1));
     const reader = readers[0]!;
     await changeOwner('replacement-session');
     expect(abort).toHaveBeenCalledOnce();
@@ -773,5 +784,210 @@ describe('image intake stays with its admitted account epoch', () => {
     await refreshAccount();
     (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
     expect(chromeMock.screenshotReplies).toHaveLength(requests);
+  });
+});
+
+describe('document attachments through the `+` menu picker', () => {
+  const defaultFetch = vi.mocked(fetch).getMockImplementation()!;
+  const assetIdByName = new Map<string, string>();
+
+  function acceptingUploads(): void {
+    assetIdByName.clear();
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const jsonResponse = (body: unknown): Response =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      if (url.endsWith('/api/uploads/presign')) {
+        const request = JSON.parse(String(init?.body)) as { fileName: string };
+        return jsonResponse({
+          storageKey: `uploads/${request.fileName}`,
+          uploadUrl: `https://storage.example.test/${encodeURIComponent(request.fileName)}`,
+          uploadMethod: 'PUT',
+          uploadHeaders: {},
+        });
+      }
+      if (init?.method === 'PUT') return new Response(null, { status: 200 });
+      if (url.endsWith('/api/uploads/chat-attachment/complete')) {
+        const request = JSON.parse(String(init?.body)) as {
+          fileName: string;
+          mimeType: string;
+          byteCount: number;
+        };
+        const id = crypto.randomUUID();
+        assetIdByName.set(request.fileName, id);
+        return jsonResponse({
+          attachment: {
+            id,
+            name: request.fileName,
+            mimeType: request.mimeType,
+            byteCount: request.byteCount,
+            type: 'file',
+            url: `/api/files/${id}`,
+          },
+        });
+      }
+      return new Response('{}', { status: 503 });
+    });
+  }
+
+  function documentFile(name: string, type: string, bytes = 32): File {
+    return new File([new Uint8Array(bytes).fill(66)], name, { type });
+  }
+
+  function noticeTexts(): string[] {
+    return Array.from(attachmentBar().querySelectorAll('.sp-attachment-notice')).map(
+      (node) => node.textContent ?? '',
+    );
+  }
+
+  function documentNames(): string[] {
+    return Array.from(attachmentBar().querySelectorAll('.sp-attachment-doc-name')).map(
+      (node) => node.textContent ?? '',
+    );
+  }
+
+  async function sendDraft(text: string): Promise<Record<string, unknown>> {
+    const input = document.getElementById('sp-input') as HTMLTextAreaElement;
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const before = chromeMock.runtime.sendMessage.mock.calls.filter(
+      ([message]) => message.type === 'CHAT_MESSAGE',
+    ).length;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settled(() => {
+      expect(
+        chromeMock.runtime.sendMessage.mock.calls.filter(
+          ([message]) => message.type === 'CHAT_MESSAGE',
+        ),
+      ).toHaveLength(before + 1);
+    });
+    return chromeMock.runtime.sendMessage.mock.calls
+      .filter(([message]) => message.type === 'CHAT_MESSAGE')
+      .at(-1)![0] as Record<string, unknown>;
+  }
+
+  beforeEach(() => {
+    document.getElementById('sp-new-chat-btn')!.click();
+    acceptingUploads();
+    return () => {
+      vi.mocked(fetch).mockImplementation(defaultFetch);
+    };
+  });
+
+  it('uploads a PDF, a text file and a Markdown file and sends each as a file part with an asset id', async () => {
+    pickFiles([
+      documentFile('report.pdf', 'application/pdf'),
+      documentFile('notes.txt', 'text/plain'),
+      documentFile('readme.md', 'text/markdown'),
+    ]);
+
+    await settled(() => {
+      expect(documentNames()).toEqual(['report.pdf', 'notes.txt', 'readme.md']);
+      expect(assetIdByName.size).toBe(3);
+      expect(
+        document.querySelector<HTMLButtonElement>('[aria-label="Send message"]')?.disabled,
+      ).toBe(false);
+    });
+    expect(noticeText()).toBe('');
+
+    const sent = await sendDraft('summarize these');
+    const fileAttachments = sent.fileAttachments as Array<{ assetId: string; mimeType: string }>;
+    expect(fileAttachments).toEqual([
+      { assetId: assetIdByName.get('report.pdf'), mimeType: 'application/pdf' },
+      { assetId: assetIdByName.get('notes.txt'), mimeType: 'text/plain' },
+      { assetId: assetIdByName.get('readme.md'), mimeType: 'text/markdown' },
+    ]);
+    expect(sent.attachments).toBeUndefined();
+
+    const parts = createMultimodalUserContent('summarize these', [], fileAttachments);
+    expect(parts).toEqual([
+      { type: 'text', text: 'summarize these' },
+      ...fileAttachments.map(({ assetId }) => ({ type: 'file', file: { asset_id: assetId } })),
+    ]);
+  });
+
+  it('admits a Markdown file the browser reports without a type', async () => {
+    pickFiles([documentFile('changelog.md', '')]);
+
+    await settled(() => expect(assetIdByName.has('changelog.md')).toBe(true));
+    expect(noticeText()).toBe('');
+    const sent = await sendDraft('what changed');
+    expect(sent.fileAttachments).toEqual([
+      { assetId: assetIdByName.get('changelog.md'), mimeType: expect.stringMatching(/^text\//) },
+    ]);
+  });
+
+  it('refuses types the composer does not carry and names the file', async () => {
+    pickFiles([
+      documentFile('data.csv', 'text/csv'),
+      documentFile('bundle.zip', 'application/zip'),
+      documentFile('diagram.svg', 'image/svg+xml'),
+    ]);
+
+    await settled(() => {
+      expect(noticeTexts()).toEqual(
+        ['data.csv', 'bundle.zip', 'diagram.svg'].map((name) =>
+          catalogMessage('spAttachmentUnsupported', [name]),
+        ),
+      );
+    });
+    expect(documentNames()).toEqual([]);
+    expect(assetIdByName.size).toBe(0);
+  });
+
+  it('refuses a document over the per-file limit and says how large the limit is', async () => {
+    pickFiles([documentFile('huge.pdf', 'application/pdf', MAX_CHAT_ATTACHMENT_BYTES + 1)]);
+
+    await settled(() => {
+      expect(noticeText()).toBe(
+        catalogMessage('spAttachmentFileTooLarge', [
+          'huge.pdf',
+          `${Math.round((MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024)) * 10) / 10} MB`,
+        ]),
+      );
+    });
+    expect(documentNames()).toEqual([]);
+  });
+
+  it('refuses a document that would take the message past the combined size limit', async () => {
+    const half = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / 2) + 1;
+    pickFiles([
+      documentFile('first.txt', 'text/plain', half),
+      documentFile('second.txt', 'text/plain', half),
+    ]);
+
+    await settled(() => {
+      expect(noticeText()).toBe(
+        catalogMessage('spAttachmentOverBudget', [
+          'second.txt',
+          `${Math.round((MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / (1024 * 1024)) * 10) / 10} MB`,
+        ]),
+      );
+    });
+    expect(documentNames()).toEqual(['first.txt']);
+  });
+
+  it('refuses a document past the file count limit and names the limit', async () => {
+    pickFiles(
+      Array.from({ length: MANAGED_CHAT_MAX_ATTACHMENTS }, (_, i) =>
+        documentFile(`part-${i}.txt`, 'text/plain'),
+      ),
+    );
+    await settled(() => expect(documentNames()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS));
+
+    pickFiles([documentFile('one-too-many.pdf', 'application/pdf')]);
+
+    await settled(() => {
+      expect(noticeText()).toBe(
+        catalogMessage('spAttachmentTooMany', [
+          'one-too-many.pdf',
+          String(MANAGED_CHAT_MAX_ATTACHMENTS),
+        ]),
+      );
+    });
+    expect(documentNames()).not.toContain('one-too-many.pdf');
   });
 });

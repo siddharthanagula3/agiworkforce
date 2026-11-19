@@ -97,7 +97,7 @@ thiserror = "2.0"
 
 # Note: bundled-sqlcipher requires libclang at build time on some platforms.
 # Install via: brew install llvm (macOS) or apt install libclang-dev (Linux).
-rusqlite = { version = "0.41.1", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "backup", "blob", "cache", "chrono", "fallible_uint"] }
+rusqlite = { version = "0.42.0", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "backup", "blob", "cache", "chrono", "fallible_uint"] }
 # tokio-rusqlite removed, replaced by data/async_sqlite.rs wrapper to resolve libsqlite3-sys conflict
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
@@ -215,7 +215,7 @@ cap-std = "4.0.2"
 
 
 flate2 = "1.0"
-zip = "=9.3.0"
+zip = "=9.5.0"
 
 
 pdf-extract = "0.12"
@@ -240,7 +240,7 @@ llama-cpp-2 = { version = "0.1", optional = true }
 
 async-imap = "0.9"
 tokio-native-tls = "0.3"
-lettre = { version = "0.11.22", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
+lettre = { version = "0.11.24", features = ["tokio1-native-tls", "builder", "smtp-transport"] }
 mailparse = "0.15"
 
 

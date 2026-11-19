@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + desktop lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 The public AGI Desktop product is the Electron application under
 `apps/desktop/electron`. The Rust/Tauri implementation in
@@ -90,7 +90,8 @@ Desktop participates in two continuity domains without merging them:
   Electron dispatcher refuses every command in `LOCAL_INFERENCE_COMMANDS` with
   `unsupported-platform`. Desktop chat does not accept provider API keys or
   expose Local/BYOK chat; its device-registry profile reports
-  `localModels: false` and `localMcp: false`. Cloud conversations, projects,
+  `localModels: false`, and `localMcp: true` when the bundled CLI serves MCP
+  servers (managed on the Developer settings page). Cloud conversations, projects,
   memory, settings, connected apps, files/artifacts, and account state share
   the hosted contract with Web and later Mobile/eligible Chrome clients.
 - **Host Developer.** Desktop Code uses the host-owned developer runtime also
@@ -122,8 +123,9 @@ The executable owners are:
 ## Renderer and IPC boundary
 
 The window always loads the hosted web app, `https://agiworkforce.com`;
-`AGI_CLOUD_APP_ORIGIN` can point it at localhost or another first-party host
-for development. The main window
+in an unpackaged build `AGI_CLOUD_APP_ORIGIN` can point it at localhost or
+another first-party host, and a packaged build ignores that variable but honors
+`--agi-cloud-app-origin=` within the same allowlist. The main window
 uses context isolation, Chromium sandboxing, no renderer Node integration, and
 the Electron preload. The preload exposes the host bridge only to the allowed
 AGI origin; OAuth pages do not inherit it.

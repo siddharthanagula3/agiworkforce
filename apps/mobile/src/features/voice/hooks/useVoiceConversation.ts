@@ -4,10 +4,16 @@ import * as Haptics from 'expo-haptics';
 import { meteringToAmplitude } from '@agiworkforce/utils/voice';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import { isMicPermissionRequestPending } from '@/src/features/voice/services/micPermissionRequest';
 import {
   activeSpeechLanguage,
   autoListenEnabled,
 } from '@/src/features/voice/services/speechSettings';
+import {
+  VOICE_INPUT_DISABLED_MESSAGE,
+  voiceFailureMessage,
+} from '@/src/features/voice/services/voiceFailure';
+import type { VoiceHandoff } from '@/src/features/voice/services/voiceHandoff';
 import type {
   VoiceOutputHandle,
   VoiceOutputOptions,
@@ -18,6 +24,9 @@ export type VoiceConversationPhase = 'idle' | 'listening' | 'thinking' | 'speaki
 
 export interface UseVoiceConversationOptions {
   enabled: boolean;
+  listenOnEnable?: boolean;
+  openingTurn?: VoiceHandoff | null;
+  onOpeningTurnStarted?: () => void;
   pttMode?: boolean;
   hapticsEnabled: boolean;
   sendMessage: (text: string) => Promise<string | null | undefined>;
@@ -36,23 +45,10 @@ interface CaptureEntry {
   capture: VoiceInput.VoiceCaptureSession | null;
 }
 
-export const VOICE_INPUT_DISABLED_MESSAGE =
-  'Voice Input is off. Turn it on in Settings, Voice to use the microphone.';
+export { VOICE_INPUT_DISABLED_MESSAGE };
 
 export function voiceCaptureErrorMessage(err: unknown): string {
-  if (err instanceof VoiceInput.VoiceCaptureError) {
-    if (err.code === 'mic-permission-denied') {
-      return 'Microphone access is off. Enable microphone permission in Settings to use voice.';
-    }
-    if (err.code === 'on-device-recognition-unavailable') {
-      return 'On-device speech recognition is not available for this device or language yet.';
-    }
-    if (err.code === 'already-active') return 'Voice capture is already running.';
-    if (err.code === 'max-duration-reached') return err.message;
-    if (err.code === 'voice-input-disabled') return VOICE_INPUT_DISABLED_MESSAGE;
-    return err.message;
-  }
-  return 'Voice input could not start. Please try again.';
+  return voiceFailureMessage(err);
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions) {
@@ -62,6 +58,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcriptPreview, setTranscriptPreview] = useState('');
 
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   const activeRef = useRef(false);
   const autoListenRef = useRef(false);
   const voiceInputEnabledRef = useRef(voiceInputEnabled);
@@ -73,6 +71,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   const speechRef = useRef<VoiceOutputHandle | null>(null);
   const sessionRef = useRef(0);
   const startListeningRef = useRef<() => void>(() => {});
+  const openingReplyRef = useRef<Promise<string | null | undefined> | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
@@ -98,6 +97,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   }, []);
 
   const respondToText = useCallback(async (text: string): Promise<boolean> => {
+    const openingReply = openingReplyRef.current;
+    openingReplyRef.current = null;
     const turnOptions = optionsRef.current;
     const owner = turnOptions.speechOwner;
     if (!activeRef.current || turnInFlightRef.current || !owner?.isCurrent()) return false;
@@ -122,7 +123,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
 
     let aiResponse: string | null | undefined;
     try {
-      aiResponse = await turnOptions.sendMessage(trimmed);
+      aiResponse = await (openingReply ?? turnOptions.sendMessage(trimmed));
     } catch (err) {
       if (current()) {
         const message =
@@ -157,8 +158,11 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     if (!current() || speechRef.current !== speech) return true;
     speechRef.current = null;
     setAudioLevel(0);
-    if (outcome.status === 'done' && autoListenRef.current) startListeningRef.current();
-    else setPhase('idle');
+    if (outcome.status === 'done' && autoListenRef.current && !mutedRef.current) {
+      startListeningRef.current();
+    } else {
+      setPhase('idle');
+    }
     return true;
   }, []);
 
@@ -288,11 +292,9 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     [hapticTap, processTranscript, stopListeningAndProcess],
   );
 
-  useEffect(() => {
-    startListeningRef.current = () => {
-      void startListening();
-    };
-  }, [startListening]);
+  startListeningRef.current = () => {
+    void startListening();
+  };
 
   const handleOrbPress = useCallback(() => {
     if (phase === 'idle') {
@@ -337,6 +339,20 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, [muted, hapticTap, cancelCapture]);
 
+  const handleMicPress = useCallback(() => {
+    if (mutedRef.current) {
+      setMuted(false);
+      mutedRef.current = false;
+      hapticTap();
+    } else if (phase !== 'idle') {
+      toggleMute();
+      return;
+    }
+    if (phase !== 'idle') return;
+    autoListenRef.current = autoListenEnabled();
+    void startListening();
+  }, [hapticTap, phase, startListening, toggleMute]);
+
   const endConversation = useCallback(async () => {
     sessionRef.current += 1;
     turnInFlightRef.current = null;
@@ -358,12 +374,22 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         return;
       }
       if (!optionsRef.current.enabled) return;
+      const awaitingPermission =
+        isMicPermissionRequestPending() &&
+        !captureRef.current?.capture &&
+        speechRef.current === null;
+      if (awaitingPermission) return;
+      const interrupted =
+        phaseRef.current !== 'idle' ||
+        captureRef.current !== null ||
+        turnInFlightRef.current !== null ||
+        speechRef.current !== null;
       activeRef.current = false;
       autoListenRef.current = false;
       pttHeldRef.current = false;
       setPhase('idle');
       setAudioLevel(0);
-      setTranscriptPreview('Voice paused when AGI left the foreground.');
+      if (interrupted) setTranscriptPreview('Voice paused when AGI left the foreground.');
       void endConversation();
     });
     return () => subscription.remove();
@@ -378,6 +404,16 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
       mutedRef.current = false;
       setAudioLevel(0);
       setTranscriptPreview('');
+      const openingTurn = optionsRef.current.openingTurn;
+      if (openingTurn) {
+        autoListenRef.current = autoListenEnabled();
+        openingReplyRef.current = openingTurn.reply;
+        optionsRef.current.onOpeningTurnStarted?.();
+        void respondToText(openingTurn.text);
+      } else if (optionsRef.current.listenOnEnable) {
+        autoListenRef.current = autoListenEnabled();
+        startListeningRef.current();
+      }
     } else {
       activeRef.current = false;
       void endConversation();
@@ -386,7 +422,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
       activeRef.current = false;
       void endConversation();
     };
-  }, [options.enabled, options.speechOwner, endConversation]);
+  }, [options.enabled, options.speechOwner, endConversation, respondToText]);
 
   return {
     phase,
@@ -398,6 +434,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     handleOrbPressIn,
     handleOrbPressOut,
     toggleMute,
+    handleMicPress,
     endConversation,
   };
 }

@@ -144,6 +144,21 @@ describe('settingsStore (device-global)', () => {
       useSettingsStore.getState().setTemporaryChat(true);
       expect(useSettingsStore.getState().isTemporaryChat).toBe(true);
     });
+
+    it('starts each launch in a normal chat even when Temporary was on before', () => {
+      const options = useSettingsStore.persist.getOptions();
+      const saved = options.partialize!({
+        ...useSettingsStore.getState(),
+        isTemporaryChat: true,
+      }) as Record<string, unknown>;
+      expect(saved).not.toHaveProperty('isTemporaryChat');
+
+      const restored = options.merge!(
+        { ...saved, isTemporaryChat: true },
+        useSettingsStore.getState(),
+      ) as { isTemporaryChat: boolean };
+      expect(restored.isTemporaryChat).toBe(false);
+    });
   });
 
   describe('migratePersistedSettings, retired fields', () => {

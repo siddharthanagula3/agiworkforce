@@ -23,6 +23,13 @@ import type {
   BrowserUploadBinding,
   BrowserUploadedFileMetadata,
 } from './features/computer-use/userFileUpload';
+import type { BrowserSiteToolBinding } from './features/tools/browserAgentSiteTools';
+import type { CallerBrowserContext } from './features/cloud-bridge/callerBrowserContext';
+import type { ChatToolCursor } from './features/computer-use/chatToolResults';
+import type { ContextHandoffDestinationId } from './features/context-handoff';
+import type { FormFillPlan } from './features/content/formFillPlan';
+import type { FormObservationReference } from './features/browser-tools/documentBridge';
+import type { PageMetadata } from './page-metadata';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -64,14 +71,21 @@ export type NativeMessageType =
   | 'AGI_CU_SHOW_ACTION'
   | 'AGI_CU_WATCH_INPUT'
   | 'IN_PAGE_PROMPT'
+  | 'CANCEL_IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_EXTENSION_SETTINGS'
   | 'GET_SIDE_PANEL_OPEN'
+  | 'SIDE_PANEL_CLOSED'
+  | 'GET_PAGE_ACCESS'
+  | 'PAGE_ACCESS_CHANGED'
+  | 'GET_AUTOFILL_PROFILE'
+  | 'AUTHORIZE_SITE_TOOL_DESTINATION'
   | 'GET_ACCESSIBILITY_TREE'
   | 'START_RECORDING'
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
   | 'SET_RECORDING_VALUE_CAPTURE'
+  | 'RECORDING_ACTION'
   | 'FIND_ELEMENTS'
   | 'FILL_FIELDS'
   | 'BUILD_ACCESSIBILITY_TREE'
@@ -99,6 +113,7 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
+  | 'SAVE_CONVERSATION_NOW'
   | 'ENSURE_CLOUD_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION'
   | 'START_DOWNLOAD'
@@ -231,7 +246,7 @@ export interface GetPageInfoResponse {
   title?: string;
   html?: string;
   selectedText?: string;
-  metadata?: import('./page-metadata').PageMetadata;
+  metadata?: PageMetadata;
   error?: string;
 }
 
@@ -394,15 +409,15 @@ export interface SyncPageContextMessage extends BaseMessage {
     selectedText?: string;
     timestamp?: number;
     reason?: string;
-    metadata?: import('./page-metadata').PageMetadata;
+    metadata?: PageMetadata;
   };
-  metadata?: import('./page-metadata').PageMetadata;
+  metadata?: PageMetadata;
 }
 
 export interface ApproveContextHandoffMessage extends BaseMessage {
   type: 'APPROVE_CONTEXT_HANDOFF';
   handoffId: string;
-  destination?: import('./features/context-handoff').ContextHandoffDestinationId;
+  destination?: ContextHandoffDestinationId;
 }
 
 export interface CancelContextHandoffMessage extends BaseMessage {
@@ -445,8 +460,8 @@ export interface RunPageActionsResponse {
 
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
-  browserObservation?: import('./features/browser-tools/documentBridge').FormObservationReference;
-  browserContext?: import('./features/cloud-bridge/callerBrowserContext').CallerBrowserContext;
+  browserObservation?: FormObservationReference;
+  browserContext?: CallerBrowserContext;
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
@@ -485,13 +500,13 @@ export interface ChatToolHandoffMessage {
   id: string;
   handoffId: string;
   calls: ToolCall[];
-  callerCheckpoint?: import('./features/computer-use/chatToolResults').ChatToolCursor;
+  callerCheckpoint?: ChatToolCursor;
   recoveryContext?: {
     historyConversationId: string;
     projectId: string | null;
     organizationId: string | null;
-    browserContext: import('./features/cloud-bridge/callerBrowserContext').CallerBrowserContext;
-    observation?: import('./features/browser-tools/documentBridge').FormObservationReference;
+    browserContext: CallerBrowserContext;
+    observation?: FormObservationReference;
   };
 }
 
@@ -559,11 +574,17 @@ export interface AdoptChatTurnMessage extends BaseMessage {
   historyConversationId: string;
 }
 
+export type AdoptedChatToolHandoff = Pick<
+  ChatToolHandoffMessage,
+  'handoffId' | 'calls' | 'callerCheckpoint' | 'recoveryContext'
+>;
+
 export interface AdoptedChatTurn {
   id: string;
   text: string;
   cloudRun?: ManagedCloudAgentRunReference;
   assistantMessageId?: string;
+  toolHandoffs?: AdoptedChatToolHandoff[];
 }
 
 export interface ResolveChatApprovalMessage extends BaseMessage {
@@ -634,10 +655,15 @@ export type InPagePromptOutcome =
   | 'request_rejected'
   | 'retryable_error';
 
+export interface CancelInPagePromptMessage extends BaseMessage {
+  type: 'CANCEL_IN_PAGE_PROMPT';
+}
+
 export interface InPagePromptMessage extends BaseMessage {
   type: 'IN_PAGE_PROMPT';
   prompt: string;
   pageContext?: string;
+  requestId?: string;
 }
 
 export type InPagePromptResponse =
@@ -664,6 +690,28 @@ export interface OpenExtensionSettingsMessage extends BaseMessage {
 
 export interface GetSidePanelOpenMessage extends BaseMessage {
   type: 'GET_SIDE_PANEL_OPEN';
+}
+
+export interface SidePanelClosedMessage extends BaseMessage {
+  type: 'SIDE_PANEL_CLOSED';
+  windowId: number;
+}
+
+export interface GetPageAccessMessage extends BaseMessage {
+  type: 'GET_PAGE_ACCESS';
+}
+
+export interface PageAccessChangedMessage extends BaseMessage {
+  type: 'PAGE_ACCESS_CHANGED';
+}
+
+export interface GetAutofillProfileMessage extends BaseMessage {
+  type: 'GET_AUTOFILL_PROFILE';
+}
+
+export interface AuthorizeSiteToolDestinationMessage extends BaseMessage {
+  type: 'AUTHORIZE_SITE_TOOL_DESTINATION';
+  url: string;
 }
 
 export interface GetAccessibilityTreeMessage extends BaseMessage {
@@ -695,6 +743,11 @@ export interface GetRecordedActionsMessage extends BaseMessage {
 export interface SetRecordingValueCaptureMessage extends BaseMessage {
   type: 'SET_RECORDING_VALUE_CAPTURE';
   enabled: boolean;
+}
+
+export interface RecordingActionMessage extends BaseMessage {
+  type: 'RECORDING_ACTION';
+  action: unknown;
 }
 
 export interface RecordingResponse {
@@ -747,7 +800,7 @@ export interface WebMCPCallToolMessage extends BaseMessage {
   type: 'WEBMCP_CALL_TOOL';
   toolName: string;
   arguments?: Record<string, unknown>;
-  browserAgentBinding?: import('./features/tools/browserAgentSiteTools').BrowserSiteToolBinding;
+  browserAgentBinding?: BrowserSiteToolBinding;
   browserAgentCallId?: string;
 }
 
@@ -797,6 +850,7 @@ export interface SavedShortcut {
   prompt?: string;
   startUrl?: string;
   scheduled?: boolean;
+  ownerAccountId?: string | null;
 }
 
 export interface SaveShortcutMessage extends BaseMessage {
@@ -957,6 +1011,20 @@ export interface SyncConversationMessage extends BaseMessage {
   streaming?: boolean;
 }
 
+export interface SaveConversationNowMessage extends BaseMessage {
+  type: 'SAVE_CONVERSATION_NOW';
+  owner: ManagedCloudOwner;
+  conversationId: string;
+}
+
+export interface SaveConversationNowResponse {
+  success: boolean;
+  status?: 'saved' | 'not-saved' | 'refused' | 'mirroring-off' | 'streaming';
+  reason?: string;
+  retryAt?: number;
+  error?: string;
+}
+
 export interface EnsureCloudConversationMessage extends BaseMessage {
   type: 'ENSURE_CLOUD_CONVERSATION';
   owner: ManagedCloudOwner;
@@ -991,7 +1059,7 @@ export interface FillObservedFormMessage extends Omit<BaseMessage, 'type'> {
   pageUrl: string;
   documentId: string;
   formSnapshotId: string;
-  plan: import('./features/content/formFillPlan').FormFillPlan;
+  plan: FormFillPlan;
   owner: ManagedCloudOwner;
 }
 
@@ -1059,6 +1127,7 @@ export interface CancelComputerUseMessage extends BaseMessage {
   type: 'CANCEL_COMPUTER_USE';
   runId?: string;
   reason?: 'account_changed' | 'panel_closed' | 'user_cleared' | 'user_stopped';
+  windowId?: number;
 }
 
 /**
@@ -1090,6 +1159,7 @@ export interface ComputerUseCommandResponse {
   paused?: boolean;
   pauseReason?: string;
   tabId?: number;
+  windowId?: number;
   error?: string;
 }
 
@@ -1229,15 +1299,22 @@ export type ExtensionMessage =
   | RevokeSiteOnceMessage
   | CheckSiteOnceMessage
   | InPagePromptMessage
+  | CancelInPagePromptMessage
   | OpenSidePanelMessage
   | OpenExtensionSettingsMessage
   | GetSidePanelOpenMessage
+  | SidePanelClosedMessage
+  | GetPageAccessMessage
+  | PageAccessChangedMessage
+  | GetAutofillProfileMessage
+  | AuthorizeSiteToolDestinationMessage
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
   | StartRecordingMessage
   | StopRecordingMessage
   | GetRecordedActionsMessage
   | SetRecordingValueCaptureMessage
+  | RecordingActionMessage
   | FindElementsMessage
   | FillFieldsMessage
   | BridgeUrlChangedMessage
@@ -1267,6 +1344,7 @@ export type ExtensionMessage =
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage
+  | SaveConversationNowMessage
   | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage

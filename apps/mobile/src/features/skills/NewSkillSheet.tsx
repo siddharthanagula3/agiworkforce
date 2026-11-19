@@ -5,6 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { toUserMessage } from '@/services/userMessage';
 import { createPersonalSkill, updatePersonalSkill, type SkillDraftInput } from './service';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
@@ -96,6 +97,7 @@ export function NewSkillSheet({
       >
         <ScrollView
           style={{
+            ...contentColumn('reading'),
             flexGrow: 0,
             backgroundColor: colors.surfaceElevated,
             borderTopLeftRadius: 16,
@@ -111,7 +113,7 @@ export function NewSkillSheet({
             {editing ? 'Edit skill' : 'New skill'}
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
-            A personal skill is only yours. Name it with lowercase letters, numbers and hyphens.
+            Only you can use it. Name it with lowercase letters, numbers and hyphens.
           </Text>
           <TextInput
             value={name}

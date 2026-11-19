@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -93,9 +93,9 @@ const GENERAL_LEDGER: readonly LedgerRow[] = [
       <>
         We may update these terms. The current version is always at this URL with a revision date,
         and material changes are recorded on{' '}
-        <Link href="/changelog" className="agi-ds-link">
+        <PageLink href="/changelog" className="agi-ds-link">
           /changelog
-        </Link>
+        </PageLink>
         . No mailing path in this product can reach an arbitrary list of customers, so we do not
         promise emailed notice. A material change takes effect no sooner than{' '}
         {MATERIAL_TERMS_NOTICE_DAYS} days after it is posted here. Until that day an account that
@@ -152,9 +152,9 @@ const DATA_PROTECTION_LEDGER: readonly LedgerRow[] = [
       <>
         If India&rsquo;s Digital Personal Data Protection Act, 2023 applies to our processing of
         your personal data, the notice at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
           /privacy/india
-        </Link>{' '}
+        </PageLink>{' '}
         governs your rights, and it prevails over the general privacy policy where the two differ.
         It states plainly which of those rights are self-serve today and which are not.
       </>
@@ -166,9 +166,9 @@ const DATA_PROTECTION_LEDGER: readonly LedgerRow[] = [
       <>
         Where we rely on your consent, we ask for it per purpose, we record the decision against the
         revision of the notice you were shown, and you can withdraw any of it at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           /privacy/requests
-        </Link>
+        </PageLink>
         . Withdrawing an optional consent never costs you access to anything you did not withdraw.
         Withdrawal applies going forward and does not undo processing that already lawfully
         happened.
@@ -185,9 +185,9 @@ const DATA_PROTECTION_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         We maintain security safeguards described at{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
           /security
-        </Link>
+        </PageLink>
         , and we operate a written incident procedure with a 72-hour clock for regulator
         notification where a law requires one. No safeguard is a guarantee, and we do not claim one.
       </>
@@ -301,17 +301,17 @@ export default function TermsPage() {
                     These terms are an agreement between you (and, where you accept on behalf of an
                     organisation, that organisation) and {LEGAL_ENTITY}, {LEGAL_ENTITY_DESCRIPTOR}.
                     They incorporate the{' '}
-                    <Link href="/acceptable-use" className="agi-ds-link">
+                    <PageLink href="/acceptable-use" className="agi-ds-link">
                       acceptable use policy
-                    </Link>
+                    </PageLink>
                     , the{' '}
-                    <Link href="/privacy" className="agi-ds-link">
+                    <PageLink href="/privacy" className="agi-ds-link">
                       privacy policy
-                    </Link>
+                    </PageLink>
                     , and, where AGI processes personal data on your behalf, the{' '}
-                    <Link href="/dpa" className="agi-ds-link">
+                    <PageLink href="/dpa" className="agi-ds-link">
                       data processing addendum
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </Stack>
@@ -361,9 +361,9 @@ export default function TermsPage() {
                     You need our written permission to use them, except to refer to the product
                     accurately by name. Do not use them in a way that suggests we sponsor, endorse,
                     or are affiliated with you or your work, and do not alter the mark. The{' '}
-                    <Link href="/press" className="agi-ds-link">
+                    <PageLink href="/press" className="agi-ds-link">
                       press page
-                    </Link>{' '}
+                    </PageLink>{' '}
                     has the logo files and the rules for using them.
                   </Prose>
                 </Stack>
@@ -380,9 +380,9 @@ export default function TermsPage() {
                     provider credentials in your operating system credential store, or in owner-only
                     files on Linux or when the keyring is turned off; Cloud does not receive those
                     keys. See the{' '}
-                    <Link href="/byok" className="agi-ds-link">
+                    <PageLink href="/byok" className="agi-ds-link">
                       BYOK posture
-                    </Link>
+                    </PageLink>
                     . Tell us promptly if you believe your account has been compromised.
                   </Prose>
                 </Stack>
@@ -420,9 +420,9 @@ export default function TermsPage() {
                     handle that content under their applicable terms and data-use policies. Our
                     statement that AGI does not train AGI-owned models is not a promise about a
                     third party&rsquo;s handling. The current provider list is published at{' '}
-                    <Link href="/subprocessors" className="agi-ds-link">
+                    <PageLink href="/subprocessors" className="agi-ds-link">
                       /subprocessors
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <Prose>
@@ -451,9 +451,9 @@ export default function TermsPage() {
                     routing setting restricts which upstream providers may serve a request; it does
                     not turn off Experiential Labs&rsquo; own content capture. The provider&rsquo;s
                     private mode requires an eligible paid or grandfathered organization. See our{' '}
-                    <Link href="/privacy" className="agi-ds-link">
+                    <PageLink href="/privacy" className="agi-ds-link">
                       privacy policy
-                    </Link>{' '}
+                    </PageLink>{' '}
                     and its{' '}
                     <a href="https://platform.experientiallabs.ai/privacy" className="agi-ds-link">
                       current platform privacy policy
@@ -479,9 +479,9 @@ export default function TermsPage() {
                     it may change, break, lose features, or be discontinued, and capacity and model
                     availability may vary. No service level agreement applies to it during alpha;
                     the targets published at{' '}
-                    <Link href="/sla" className="agi-ds-link">
+                    <PageLink href="/sla" className="agi-ds-link">
                       /sla
-                    </Link>{' '}
+                    </PageLink>{' '}
                     are stated intentions for general availability, not commitments you can enforce
                     today. Do not build a production dependency on Cloud without accepting that.
                     Local and BYOK modes run on your own device and your own provider account
@@ -498,9 +498,9 @@ export default function TermsPage() {
                   <Prose>
                     AGI can execute code, act on accounts you connect, and run unattended on a
                     schedule. The{' '}
-                    <Link href="/acceptable-use" className="agi-ds-link">
+                    <PageLink href="/acceptable-use" className="agi-ds-link">
                       acceptable use policy
-                    </Link>{' '}
+                    </PageLink>{' '}
                     sets out what you must not do with those capabilities, what your obligations are
                     when the agent acts on your behalf, and what we do about violations. It is part
                     of these terms and breaching it is a breach of this agreement.
@@ -556,33 +556,33 @@ export default function TermsPage() {
                   <Prose>
                     Paid subscriptions are billed in advance through Stripe, our payment processor,
                     or the applicable app store, at the price and billing period shown at{' '}
-                    <Link href="/pricing" className="agi-ds-link">
+                    <PageLink href="/pricing" className="agi-ds-link">
                       /pricing
-                    </Link>{' '}
+                    </PageLink>{' '}
                     or in your order form when you subscribe. <strong>Auto-renewal:</strong>{' '}
                     subscriptions renew automatically at the end of each billing period until you{' '}
-                    <Link href="/settings/billing" className="agi-ds-link">
+                    <PageLink href="/settings/billing" className="agi-ds-link">
                       cancel
-                    </Link>
+                    </PageLink>
                     . Cancelling stops the next renewal; access continues through the period you
                     have paid for, and the current period is not automatically refunded. Refund
                     terms are at{' '}
-                    <Link href="/refund-policy" className="agi-ds-link">
+                    <PageLink href="/refund-policy" className="agi-ds-link">
                       /refund-policy
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <Prose>
                     Prices exclude taxes unless stated otherwise; you are responsible for applicable
                     sales, use, VAT, GST and similar taxes, excluding taxes on our income. We may
                     change pricing with 30 days&rsquo; notice posted on{' '}
-                    <Link href="/pricing" className="agi-ds-link">
+                    <PageLink href="/pricing" className="agi-ds-link">
                       /pricing
-                    </Link>{' '}
+                    </PageLink>{' '}
                     and{' '}
-                    <Link href="/changelog" className="agi-ds-link">
+                    <PageLink href="/changelog" className="agi-ds-link">
                       /changelog
-                    </Link>
+                    </PageLink>
                     ; an existing annual subscription keeps its price through the end of its current
                     term. Purchases made through an app store are also subject to that store&rsquo;s
                     terms, and refunds for them are handled by the store.
@@ -612,9 +612,9 @@ export default function TermsPage() {
                     service. We give notice where it is reasonable to do so, and we act with the
                     narrowest measure that addresses the problem. Suspended accounts may appeal: the
                     route is in section 04 of the{' '}
-                    <Link href="/acceptable-use" className="agi-ds-link">
+                    <PageLink href="/acceptable-use" className="agi-ds-link">
                       acceptable use policy
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </Stack>
@@ -632,13 +632,15 @@ export default function TermsPage() {
                   </Prose>
                   <Prose>
                     You can export your data at any time while your account is active. An account
-                    deletion request schedules permanent erasure 24 hours later; a daily job then
-                    removes your user-scoped records and stored files and deletes your identity at
-                    our authentication provider. No confirmation email is sent, but cancellation is
-                    self-serve: sign back in and cancel from Settings &gt; Account any time within
-                    the 24-hour window. Sections that by their nature survive (licence restrictions,
-                    your content representations, intellectual property, disclaimers, limitation of
-                    liability, indemnification, governing law and disputes) survive termination.
+                    deletion request schedules erasure 24 hours later; a daily job then removes your
+                    user-scoped records and stored files and deletes your identity at our
+                    authentication provider. If an active legal hold covers your account, erasure
+                    waits until the hold is released. No confirmation email is sent, but
+                    cancellation is self-serve: sign back in and cancel from Settings &gt; Account
+                    any time within the 24-hour window. Sections that by their nature survive
+                    (licence restrictions, your content representations, intellectual property,
+                    disclaimers, limitation of liability, indemnification, governing law and
+                    disputes) survive termination.
                   </Prose>
                 </Stack>
               </Section>
@@ -657,9 +659,12 @@ export default function TermsPage() {
                     service to such a territory or person. You must not use AGI in connection with
                     any prohibited end use, including weapons of mass destruction. Where the service
                     is offered, and the countries and regions where it is not, are set out on the{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.supportedCountries} className="agi-ds-link">
+                    <PageLink
+                      href={CANONICAL_POLICY_ROUTES.supportedCountries}
+                      className="agi-ds-link"
+                    >
                       supported countries page
-                    </Link>
+                    </PageLink>
                     . You may not use AGI while you are in a country or region where it is not
                     offered, or use a VPN or other means to get around that. An organisation
                     incorporated or headquartered in one of those places, or majority owned or
@@ -743,9 +748,9 @@ export default function TermsPage() {
                   <Prose>
                     These terms are governed by the laws of {GOVERNING_LAW}, without regard to
                     conflict-of-laws principles, except that the{' '}
-                    <Link href="/dpa" className="agi-ds-link">
+                    <PageLink href="/dpa" className="agi-ds-link">
                       data processing addendum
-                    </Link>{' '}
+                    </PageLink>{' '}
                     may select a different governing law for cross-border transfer obligations, and
                     that selection prevails for those obligations.
                   </Prose>
@@ -788,14 +793,14 @@ export default function TermsPage() {
                   </h2>
                   <Prose>
                     Our processing of personal data is governed by the{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
                       privacy policy
-                    </Link>
+                    </PageLink>
                     , which forms part of these terms. Where you contract with us as a business
                     customer and we process personal data on your behalf, the{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.dpa} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.dpa} className="agi-ds-link">
                       DPA
-                    </Link>{' '}
+                    </PageLink>{' '}
                     applies and prevails over these terms on data protection matters.
                   </Prose>
                   <Ledger caption="Data protection" rows={DATA_PROTECTION_LEDGER} />
@@ -815,21 +820,21 @@ export default function TermsPage() {
                     with any question about these terms.
                   </Prose>
                   <nav aria-label="Related legal pages" className="agi-ds-btn-row">
-                    <Link href="/acceptable-use" className="agi-ds-link">
+                    <PageLink href="/acceptable-use" className="agi-ds-link">
                       Acceptable use
-                    </Link>
-                    <Link href="/privacy" className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href="/privacy" className="agi-ds-link">
                       Privacy
-                    </Link>
-                    <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-ds-link">
                       India: DPDP notice
-                    </Link>
-                    <Link href="/dpa" className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href="/dpa" className="agi-ds-link">
                       DPA
-                    </Link>
-                    <Link href="/refund-policy" className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href="/refund-policy" className="agi-ds-link">
                       Refunds
-                    </Link>
+                    </PageLink>
                   </nav>
                 </Stack>
               </Section>

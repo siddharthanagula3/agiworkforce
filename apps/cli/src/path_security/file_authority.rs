@@ -143,7 +143,10 @@ impl DirectoryAuthority {
             nix::unistd::fsync(&directory)?;
         }
         #[cfg(not(unix))]
-        self.file.sync_all()?;
+        anyhow::ensure!(
+            Metadata::from_file(self.file.as_ref())?.is_dir(),
+            "the held directory handle is no longer a directory"
+        );
         Ok(())
     }
 
@@ -396,6 +399,7 @@ impl DirectoryAuthority {
         let mut staged = match confined::open(&stage_parent, stage_leaf, &options) {
             Ok(file) => file,
             Err(error) => {
+                drop(stage_parent);
                 let _ = confined::remove_dir(&parent, &temporary);
                 return Err(error.into());
             }
@@ -438,7 +442,9 @@ impl DirectoryAuthority {
             confined::rename(&stage_parent, stage_leaf, &parent, &leaf)?;
             Ok(true)
         })();
+        drop(staged);
         let _ = confined::remove_file(&stage_parent, stage_leaf);
+        drop(stage_parent);
         let _ = confined::remove_dir(&parent, &temporary);
         result
     }

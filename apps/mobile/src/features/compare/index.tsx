@@ -11,9 +11,10 @@ import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Trophy, Zap, Hash, Clock } from 'lucide-react-native';
+import { ArrowLeft, Trophy, Zap, Hash, Clock, Flag } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Card } from '@/components/ui/Card';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -35,6 +36,20 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { CloudSyncBlockedBanner } from '@/src/features/settings/Common';
 import { EgressBlockedError } from '@/lib/egressGuard';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
+
+const REPORT_THIS_ANSWER = 'Report this answer';
+
+function compareReportTarget(slot: 'A' | 'B', modelId: string, content: string): ReportTarget {
+  const answerId = `${slot}:${modelId}`;
+  return {
+    messageId: `compare:${answerId}`,
+    conversationId: 'compare',
+    contentExcerpt: content,
+    subject: { kind: 'compare-answer', id: answerId },
+  };
+}
 
 interface CompareStreamState {
   content: string;
@@ -75,7 +90,7 @@ function stopUnfinishedAnswer(state: CompareStreamState): CompareStreamState {
 }
 
 const ONE_ANSWER_AT_A_TIME_NOTE =
-  'Your plan runs one answer at a time, so the second answer starts when the first finishes.';
+  'Your plan runs one answer at a time, so the second waits for the first.';
 
 function runsOneAnswerAtATime(tier: string): boolean {
   const limit = getPlanMaxConcurrentTurns(tier);
@@ -381,7 +396,7 @@ export default function CompareScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 12,
-            height: 48,
+            minHeight: 48,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
             gap: 8,
@@ -395,7 +410,12 @@ export default function CompareScreen() {
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
           </PressableBox>
-          <Text className="flex-1 text-[15px] font-semibold text-white">Compare Models</Text>
+          <Text
+            className="flex-1 text-[15px] font-semibold text-white"
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          >
+            Compare Models
+          </Text>
         </View>
 
         {/* Local Mode: state the boundary and stop. Rendering the pickers and
@@ -461,8 +481,9 @@ export default function CompareScreen() {
               {!lastPrompt && !stateA.isStreaming && !stateB.isStreaming && (
                 <View className="flex-1 items-center justify-center py-16 px-8">
                   <Text className="text-fg-muted text-center text-sm leading-5">
-                    Type a prompt below to send to both models simultaneously and compare the
-                    responses.
+                    {oneAnswerAtATime
+                      ? 'Type a prompt below to compare two models. Your plan runs one answer at a time, so the second starts when the first finishes.'
+                      : 'Type a prompt below to send to both models simultaneously and compare the responses.'}
                   </Text>
                 </View>
               )}
@@ -583,6 +604,8 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
   const colors = useThemeColors();
   const displayName = getDisplayName(modelId);
   const slotColor = slot === 'A' ? colors.teal : colors.terraCotta;
+  const [reporting, setReporting] = useState(false);
+  const reportable = state.content.trim().length > 0 && !state.isStreaming;
 
   return (
     <Card variant="outline" className="border-white/8">
@@ -607,6 +630,23 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
             </Text>
           </View>
         )}
+
+        {reportable ? (
+          <PressableBox
+            testID={`compare-report-${slot}`}
+            onPress={() => setReporting(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${REPORT_THIS_ANSWER} from ${displayName}`}
+            style={{
+              width: FULL_SCREEN_TOUCH_TARGET,
+              height: FULL_SCREEN_TOUCH_TARGET,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Flag size={14} color={colors.textMuted} />
+          </PressableBox>
+        ) : null}
       </View>
 
       {state.isStreaming && (
@@ -657,6 +697,14 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
           )}
         </View>
       )}
+      {reportable && reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(false)}
+          title={REPORT_THIS_ANSWER}
+          target={compareReportTarget(slot, modelId, state.content)}
+        />
+      ) : null}
     </Card>
   );
 }

@@ -27,8 +27,11 @@ import {
   providerForExecutionMode,
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
+import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
 import { reconcileLoadedCloudMessages } from './reconcileCloudMessages';
+import { hydrateStoredCloudMessage } from './hydrateCloudMessage';
+import { settleRunningSteps } from './conversationTurnState';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
@@ -37,13 +40,24 @@ import {
   ManagedCloudCreateConversationBranchResponseSchema,
   managedCloudConversationBranchesPath,
   normalizeManagedCloudConversation,
+  RESPONSE_RATING_COMMENT_MAX_CHARS,
+  RESPONSE_RATING_RATE_LIMITED,
+  RESPONSE_RATING_REMOVE_FAILED,
+  RESPONSE_RATING_SEND_FAILED,
+  resolveSurvivingLeaf,
   type ManagedCloudConversation,
   type ManagedCloudConversationHistoryStats,
+  type ResponseRating,
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { managedCloudChat } from '@/services/managedCloudChat';
+import { releaseDeletedConversationAttachments } from '@/services/localChatAttachments';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
-import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
+import {
+  recordResponseRatingRemote,
+  setCloudMessageReactionRemote,
+  type ResponseRatingDetailsInput,
+} from '@/src/features/chat/services/cloudMessageMutations';
 import {
   cancelImageGeneration,
   getDurableGeneratedImagePath,
@@ -56,8 +70,14 @@ import {
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import { resolveInterruptedGeneration } from '@/stores/chat/chatCloudMessageStore';
 import { getConversationMessageStore } from './conversationRepository';
-import { cancelVideoGeneration } from '@/src/features/video/services/videogen';
+import {
+  cancelVideoGeneration,
+  generatedVideoFromStatus,
+  getVideoStatus,
+} from '@/src/features/video/services/videogen';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
+import { ResponseRatingError } from './responseRatingError';
+import { ApiHttpError } from '@/services/apiErrors';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from './chatViewStore';
 import {
   beginCloudHistoryLoad,
@@ -67,6 +87,25 @@ import {
   publishCloudHistoryLoading,
   subscribeCloudHistoryLoading,
 } from './cloudHistoryLoad';
+
+const NOT_FOUND_STATUS = 404;
+const RATING_TARGET_MISSING_MESSAGE =
+  'This response is no longer saved in AGI Cloud, so your rating was not kept.';
+const TOO_MANY_REQUESTS_STATUS = 429;
+
+const RATING_DETAILS_CLOUD_ONLY = 'A reason can be sent only for an answer in a Cloud chat.';
+const RATING_DETAILS_EMPTY = 'Choose a reason or add details first.';
+
+function responseRatingOf(reaction: MessageReaction): ResponseRating | null {
+  return reaction === 'thumbsUp' ? 'up' : reaction === 'thumbsDown' ? 'down' : null;
+}
+
+function responseRatingFailureMessage(error: unknown, reaction: MessageReaction): string {
+  if (error instanceof ApiHttpError && error.status === TOO_MANY_REQUESTS_STATUS) {
+    return RESPONSE_RATING_RATE_LIMITED;
+  }
+  return reaction === null ? RESPONSE_RATING_REMOVE_FAILED : RESPONSE_RATING_SEND_FAILED;
+}
 
 const CLOUD_CONVERSATION_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
 const CLOUD_MESSAGE_PAGE_SIZE = 500;
@@ -84,6 +123,126 @@ const cloudReactionWrites = new Map<
   string,
   { tail: Promise<void>; committedReaction: MessageReaction }
 >();
+
+async function rateMessage(
+  conversationId: string,
+  messageId: string,
+  reaction: MessageReaction,
+  details?: ResponseRatingDetailsInput,
+): Promise<void> {
+  const ownerStore = getConversationMessageStore(conversationId);
+  const conversation = ownerStore
+    .getState()
+    .conversations.find((candidate) => candidate.id === conversationId);
+  const isCloud =
+    conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
+  const accountEpoch = isCloud ? captureCloudAccountEpoch() : null;
+  if (isCloud && !isCloudAccountEpochCurrent(accountEpoch)) {
+    throw new ResponseRatingError('Sign in to rate this Cloud message.');
+  }
+  let previousReaction: MessageReaction = null;
+  const rated: { message: ChatMessage | null } = { message: null };
+  ownerStore.setState((state) => {
+    const msgs = state.messages[conversationId];
+    if (!msgs) return state;
+    return {
+      messages: {
+        ...state.messages,
+        [conversationId]: msgs.map((message) => {
+          if (message.id !== messageId) return message;
+          const storedReaction = message.metadata?.reaction;
+          previousReaction =
+            storedReaction === 'thumbsUp' || storedReaction === 'thumbsDown'
+              ? storedReaction
+              : null;
+          rated.message = {
+            ...message,
+            metadata: { ...message.metadata, reaction },
+          };
+          return rated.message;
+        }),
+      },
+    };
+  });
+  const optimisticMessage = rated.message;
+  if (isCloud && optimisticMessage) {
+    if (accountEpoch === null) throw new ResponseRatingError('Sign in to rate this Cloud message.');
+    const key = `${accountEpoch.ownerId}:${accountEpoch.epoch}:${conversationId}:${messageId}`;
+    const pending = cloudReactionWrites.get(key) ?? {
+      tail: Promise.resolve(),
+      committedReaction: previousReaction,
+    };
+    const previousWrite = pending.tail;
+    const write = (async () => {
+      await previousWrite.catch(() => undefined);
+      if (!isCloudAccountEpochCurrent(accountEpoch)) return;
+      const currentMessage = ownerStore
+        .getState()
+        .messages[conversationId]?.find((message) => message.id === messageId);
+      if (currentMessage !== optimisticMessage) return;
+      const stillOptimistic = () =>
+        isCloudAccountEpochCurrent(accountEpoch) &&
+        ownerStore
+          .getState()
+          .messages[conversationId]?.find((message) => message.id === messageId) ===
+          optimisticMessage;
+      const restoreCommittedReaction = () =>
+        ownerStore.setState((state) => ({
+          messages: {
+            ...state.messages,
+            [conversationId]: (state.messages[conversationId] ?? []).map((message) =>
+              message === optimisticMessage
+                ? {
+                    ...message,
+                    metadata: { ...message.metadata, reaction: pending.committedReaction },
+                  }
+                : message,
+            ),
+          },
+        }));
+      try {
+        const rating = responseRatingOf(reaction);
+        await (details
+          ? recordResponseRatingRemote(conversationId, messageId, rating, accountEpoch, details)
+          : recordResponseRatingRemote(conversationId, messageId, rating, accountEpoch));
+      } catch (error) {
+        if (!stillOptimistic()) return;
+        restoreCommittedReaction();
+        throw new ResponseRatingError(responseRatingFailureMessage(error, reaction));
+      }
+      if (details && pending.committedReaction === reaction) return;
+      try {
+        await setCloudMessageReactionRemote(conversationId, messageId, reaction, accountEpoch);
+      } catch (error) {
+        if (!stillOptimistic()) return;
+        const missingOnServer = error instanceof ApiHttpError && error.status === NOT_FOUND_STATUS;
+        if (missingOnServer && optimisticMessage.serverVersion === undefined) {
+          useCloudSyncStateStore.getState().markMessageDirty(conversationId, messageId);
+          pending.committedReaction = reaction;
+          return;
+        }
+        restoreCommittedReaction();
+        throw new ResponseRatingError(
+          missingOnServer
+            ? RATING_TARGET_MISSING_MESSAGE
+            : 'Could not save your rating. Check your connection and retry.',
+        );
+      }
+      if (isCloudAccountEpochCurrent(accountEpoch)) pending.committedReaction = reaction;
+    })();
+    pending.tail = write;
+    cloudReactionWrites.set(key, pending);
+    void write.then(
+      () => {
+        if (cloudReactionWrites.get(key)?.tail === write) cloudReactionWrites.delete(key);
+      },
+      () => {
+        if (cloudReactionWrites.get(key)?.tail === write) cloudReactionWrites.delete(key);
+      },
+    );
+    await write;
+  }
+}
 
 function appendNewConversations(
   into: ManagedCloudConversation[],
@@ -125,6 +284,7 @@ interface MessageState {
   conversationLoadError: string | null;
   isLoadingMessages: boolean;
   messageLoadErrorConversationId: string | null;
+  missingConversationId: string | null;
   clearMessageLoadError: () => void;
 
   setCurrentConversationId: (id: string | null) => void;
@@ -137,6 +297,8 @@ interface MessageState {
     options?: ForkConversationOptions,
   ) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
+  /** Removes a chat created for a first message that was never sent. */
+  discardUnsentConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
   setConversationModel: (id: string, model: string) => Promise<boolean>;
@@ -147,10 +309,20 @@ interface MessageState {
   markConversationRead: (id: string) => void;
   markConversationUnread: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  rememberFollowUpSuggestions: (
+    conversationId: string,
+    messageId: string,
+    suggestions: readonly string[],
+  ) => void;
   setMessageReaction: (
     conversationId: string,
     messageId: string,
     reaction: 'thumbsUp' | 'thumbsDown' | null,
+  ) => Promise<void>;
+  submitResponseRatingDetails: (
+    conversationId: string,
+    messageId: string,
+    details: ResponseRatingDetailsInput,
   ) => Promise<void>;
   enqueueOfflineMessage: (
     conversationId: string,
@@ -181,6 +353,7 @@ interface MessageState {
     conversationId: string,
     assistantMessageId: string,
     errorMessage: string,
+    retryAt?: number,
   ) => void;
   stopImageGeneration: (conversationId: string, assistantMessageId: string) => void;
   beginVideoGeneration: (
@@ -235,6 +408,14 @@ function setConversationUnread(id: string, unread: boolean): void {
   }
 }
 
+function stoppedByAppExit(message: ChatMessage): ChatMessage {
+  return settleRunningSteps({
+    ...message,
+    isStreaming: false,
+    metadata: { ...message.metadata, finishReason: 'stopped' },
+  });
+}
+
 export const useChatMessageStore = create<MessageState>()(
   persist(
     (set, get) => ({
@@ -247,6 +428,7 @@ export const useChatMessageStore = create<MessageState>()(
       conversationLoadError: null,
       isLoadingMessages: false,
       messageLoadErrorConversationId: null,
+      missingConversationId: null,
 
       clearMessageLoadError: () => set({ messageLoadErrorConversationId: null }),
 
@@ -428,7 +610,10 @@ export const useChatMessageStore = create<MessageState>()(
         const sourceConversation = sourceState.conversations.find(
           (conversation) => conversation.id === sourceConversationId,
         );
-        const sourceMessages = sourceState.messages[sourceConversationId] ?? [];
+        const sourceMessages = visibleThreadFor(
+          sourceState.messages[sourceConversationId] ?? [],
+          sourceConversation,
+        );
         const sourceMode = sourceConversation
           ? executionModeForConversation(sourceConversation)
           : executionModeForModel(options?.model);
@@ -444,9 +629,13 @@ export const useChatMessageStore = create<MessageState>()(
             options?.forkPointMessageId ?? sourceMessages[sourceMessages.length - 1]?.id;
           if (!branchPointId) throw new Error('There is no message to branch from yet.');
           const branchId = await createCloudBranch(sourceConversationId, branchPointId);
-          if (forkModel && forkModel !== sourceConversation?.model) {
-            await managedCloudChat.updateConversation(branchId, { model: forkModel });
-            getCloudStore().getState().patchCloudConversation(branchId, { model: forkModel });
+          const branchPatch = {
+            ...(forkModel && forkModel !== sourceConversation?.model ? { model: forkModel } : {}),
+            ...(options?.title?.trim() ? { title: options.title.trim() } : {}),
+          };
+          if (Object.keys(branchPatch).length > 0) {
+            await managedCloudChat.updateConversation(branchId, branchPatch);
+            getCloudStore().getState().patchCloudConversation(branchId, branchPatch);
           }
           set({ currentConversationId: branchId });
           return branchId;
@@ -476,6 +665,7 @@ export const useChatMessageStore = create<MessageState>()(
             isQueued: _isQueued,
             offlineQueueId: _offlineQueueId,
             queueFailed: _queueFailed,
+            parentId: _parentId,
             ...safeMessage
           } = message;
 
@@ -550,6 +740,7 @@ export const useChatMessageStore = create<MessageState>()(
           );
           return;
         }
+        const deletedMessages = get().messages[id] ?? [];
         set((state) => {
           const { [id]: _, ...remainingMessages } = state.messages;
           return {
@@ -559,6 +750,29 @@ export const useChatMessageStore = create<MessageState>()(
               state.currentConversationId === id ? null : state.currentConversationId,
           };
         });
+        await releaseDeletedConversationAttachments(deletedMessages, {
+          ...getCloudStore().getState().messages,
+          ...get().messages,
+        }).catch((error: unknown) => {
+          console.warn('[chatMessageStore] Could not remove the files of a deleted chat:', error);
+        });
+      },
+
+      discardUnsentConversation: async (id) => {
+        if (get().conversations.some((c) => c.id === id)) {
+          if ((get().messages[id] ?? []).length === 0) await get().deleteConversation(id);
+          return;
+        }
+        const cloudStore = getCloudStore();
+        const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
+        if (!cloudConversation || (cloudStore.getState().messages[id] ?? []).length > 0) return;
+        cloudStore.getState().removeCloudConversation(id);
+        set((state) =>
+          state.currentConversationId === id ? { currentConversationId: null } : state,
+        );
+        if (shouldSyncConversationRemote(cloudConversation)) {
+          await deleteCloudConversationWithRetry(id);
+        }
       },
 
       loadMessages: async (conversationId) => {
@@ -587,6 +801,9 @@ export const useChatMessageStore = create<MessageState>()(
         const accountEpoch = captureCloudAccountEpoch();
         if (!isCloudAccountEpochCurrent(accountEpoch)) return;
         const requestStartMessages = cloudStore.getState().messages[conversationId] ?? [];
+        const requestStartById = new Map(
+          requestStartMessages.map((message) => [message.id, message]),
+        );
         const load = beginCloudHistoryLoad(conversationId);
         const isCurrent = () =>
           isCloudHistoryLoadCurrent(load) &&
@@ -609,7 +826,11 @@ export const useChatMessageStore = create<MessageState>()(
             if (page.conversation.id !== conversationId) {
               throw new Error('Cloud message history returned a different conversation.');
             }
-            normalizedMessages.push(...(page.messages as ChatMessage[]));
+            normalizedMessages.push(
+              ...(page.messages as ChatMessage[]).map((message) =>
+                hydrateStoredCloudMessage(message, requestStartById.get(message.id)),
+              ),
+            );
             loadedConversation = page.conversation;
             hasMoreMessages = page.hasMore;
             const nextOffset = messageOffset + page.messages.length;
@@ -677,6 +898,10 @@ export const useChatMessageStore = create<MessageState>()(
           );
         } catch (error) {
           if (!isCurrent()) return;
+          if (error instanceof ManagedCloudChatHttpError && error.status === NOT_FOUND_STATUS) {
+            set({ missingConversationId: conversationId });
+            return;
+          }
           console.warn('[chatMessageStore] Messages could not be loaded:', error);
           set({ messageLoadErrorConversationId: conversationId });
         } finally {
@@ -689,7 +914,7 @@ export const useChatMessageStore = create<MessageState>()(
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
-          cloudStore.getState().patchCloudConversation(id, { title });
+          cloudStore.getState().patchCloudConversation(id, { title, userTitlePending: true });
           if (
             shouldSyncConversationRemote(
               cloudStore.getState().conversations.find((c) => c.id === id),
@@ -837,110 +1062,85 @@ export const useChatMessageStore = create<MessageState>()(
 
       deleteMessage: (conversationId, messageId) => {
         const ownerStore = getConversationMessageStore(conversationId);
+        const { messages, conversations } = ownerStore.getState();
+        const rows = messages[conversationId];
+        const removed = rows?.find((m) => m.id === messageId);
+        if (!rows || !removed) return;
+        const heir = removed.parentId ?? null;
+        const handedDown = rows.map((m) =>
+          m.parentId === messageId ? { ...m, parentId: heir } : m,
+        );
+        const remaining = handedDown.filter((m) => m.id !== messageId);
+        const leafWasRemoved =
+          conversations.find((c) => c.id === conversationId)?.activeLeafMessageId === messageId;
+        const survivingLeaf = leafWasRemoved ? resolveSurvivingLeaf(handedDown, messageId) : null;
+        const cloudStore = getCloudStore();
+        if (ownerStore === cloudStore) {
+          ownerStore.setState((state) => ({
+            messages: { ...state.messages, [conversationId]: remaining },
+          }));
+          if (leafWasRemoved) {
+            cloudStore
+              .getState()
+              .patchCloudConversation(conversationId, { activeLeafMessageId: survivingLeaf });
+          }
+          return;
+        }
+        ownerStore.setState((state) => ({
+          messages: { ...state.messages, [conversationId]: remaining },
+          ...(leafWasRemoved
+            ? {
+                conversations: state.conversations.map((c) =>
+                  c.id === conversationId ? { ...c, activeLeafMessageId: survivingLeaf } : c,
+                ),
+              }
+            : {}),
+        }));
+      },
+
+      rememberFollowUpSuggestions: (conversationId, messageId, suggestions) => {
+        const ownerStore = getConversationMessageStore(conversationId);
         ownerStore.setState((state) => {
           const msgs = state.messages[conversationId];
-          if (!msgs) return state;
+          if (!msgs?.some((m) => m.id === messageId)) return state;
           return {
             messages: {
               ...state.messages,
-              [conversationId]: msgs.filter((m) => m.id !== messageId),
+              [conversationId]: msgs.map((m) =>
+                m.id === messageId
+                  ? {
+                      ...m,
+                      metadata: { ...m.metadata, followUpSuggestions: [...suggestions] },
+                    }
+                  : m,
+              ),
             },
           };
         });
       },
 
-      setMessageReaction: async (conversationId, messageId, reaction) => {
-        const ownerStore = getConversationMessageStore(conversationId);
-        const conversation = ownerStore
-          .getState()
-          .conversations.find((candidate) => candidate.id === conversationId);
-        const isCloud =
-          conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
-        const accountEpoch = isCloud ? captureCloudAccountEpoch() : null;
-        if (isCloud && !isCloudAccountEpochCurrent(accountEpoch)) {
-          throw new Error('Sign in to rate this Cloud message.');
+      setMessageReaction: (conversationId, messageId, reaction) =>
+        rateMessage(conversationId, messageId, reaction),
+
+      submitResponseRatingDetails: async (conversationId, messageId, details) => {
+        const ownerState = getConversationMessageStore(conversationId).getState();
+        const conversation = ownerState.conversations.find(
+          (candidate) => candidate.id === conversationId,
+        );
+        if (!conversation || executionModeForConversation(conversation) !== 'cloud') {
+          throw new ResponseRatingError(RATING_DETAILS_CLOUD_ONLY);
         }
-        let previousReaction: MessageReaction = null;
-        let optimisticMessage: ChatMessage | null = null;
-        ownerStore.setState((state) => {
-          const msgs = state.messages[conversationId];
-          if (!msgs) return state;
-          return {
-            messages: {
-              ...state.messages,
-              [conversationId]: msgs.map((message) => {
-                if (message.id !== messageId) return message;
-                const storedReaction = message.metadata?.reaction;
-                previousReaction =
-                  storedReaction === 'thumbsUp' || storedReaction === 'thumbsDown'
-                    ? storedReaction
-                    : null;
-                optimisticMessage = {
-                  ...message,
-                  metadata: { ...message.metadata, reaction },
-                };
-                return optimisticMessage;
-              }),
-            },
-          };
+        if (!ownerState.messages[conversationId]?.some((message) => message.id === messageId)) {
+          throw new ResponseRatingError(RESPONSE_RATING_SEND_FAILED);
+        }
+        const comment = details.comment.trim().slice(0, RESPONSE_RATING_COMMENT_MAX_CHARS);
+        if (details.reason === null && comment.length === 0) {
+          throw new ResponseRatingError(RATING_DETAILS_EMPTY);
+        }
+        await rateMessage(conversationId, messageId, 'thumbsDown', {
+          reason: details.reason,
+          comment,
         });
-        if (isCloud && optimisticMessage) {
-          if (accountEpoch === null) throw new Error('Sign in to rate this Cloud message.');
-          const key = `${accountEpoch.ownerId}:${accountEpoch.epoch}:${conversationId}:${messageId}`;
-          const pending = cloudReactionWrites.get(key) ?? {
-            tail: Promise.resolve(),
-            committedReaction: previousReaction,
-          };
-          const previousWrite = pending.tail;
-          const write = (async () => {
-            await previousWrite.catch(() => undefined);
-            if (!isCloudAccountEpochCurrent(accountEpoch)) return;
-            const currentMessage = ownerStore
-              .getState()
-              .messages[conversationId]?.find((message) => message.id === messageId);
-            if (currentMessage !== optimisticMessage) return;
-            try {
-              await setCloudMessageReactionRemote(
-                conversationId,
-                messageId,
-                reaction,
-                accountEpoch,
-              );
-            } catch {
-              if (!isCloudAccountEpochCurrent(accountEpoch)) return;
-              const latestMessage = ownerStore
-                .getState()
-                .messages[conversationId]?.find((message) => message.id === messageId);
-              if (latestMessage !== optimisticMessage) return;
-              ownerStore.setState((state) => ({
-                messages: {
-                  ...state.messages,
-                  [conversationId]: (state.messages[conversationId] ?? []).map((message) =>
-                    message === optimisticMessage
-                      ? {
-                          ...message,
-                          metadata: { ...message.metadata, reaction: pending.committedReaction },
-                        }
-                      : message,
-                  ),
-                },
-              }));
-              throw new Error('Could not save your rating. Check your connection and retry.');
-            }
-            if (isCloudAccountEpochCurrent(accountEpoch)) pending.committedReaction = reaction;
-          })();
-          pending.tail = write;
-          cloudReactionWrites.set(key, pending);
-          void write.then(
-            () => {
-              if (cloudReactionWrites.get(key)?.tail === write) cloudReactionWrites.delete(key);
-            },
-            () => {
-              if (cloudReactionWrites.get(key)?.tail === write) cloudReactionWrites.delete(key);
-            },
-          );
-          await write;
-        }
       },
 
       enqueueOfflineMessage: (conversationId, content, model, queueId) => {
@@ -1157,7 +1357,7 @@ export const useChatMessageStore = create<MessageState>()(
         }
       },
 
-      failImageGeneration: (conversationId, assistantMessageId, errorMessage) => {
+      failImageGeneration: (conversationId, assistantMessageId, errorMessage, retryAt) => {
         if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
         const now = new Date().toISOString();
         const finalContent = `Image generation failed: ${presentableMediaError(errorMessage)}`;
@@ -1185,6 +1385,8 @@ export const useChatMessageStore = create<MessageState>()(
                       imageGenStatus: 'failed',
                       imageGenProgress: 100,
                       imageGenError: errorMessage,
+                      imageGenRetryAt:
+                        retryAt !== undefined && Number.isFinite(retryAt) ? retryAt : undefined,
                     }
                   : message,
               ),
@@ -1209,12 +1411,26 @@ export const useChatMessageStore = create<MessageState>()(
 
       stopImageGeneration: (conversationId, assistantMessageId) => {
         if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
-        void cancelImageGeneration(assistantMessageId).catch(() =>
-          patchGenerationMessage(conversationId, assistantMessageId, {
-            imageGenError:
-              'Stopped on this phone, but AGI Cloud could not be reached to stop the job, so it may still finish.',
-          }),
-        );
+        void cancelImageGeneration(assistantMessageId)
+          .then((receipt) => {
+            const image = receipt?.status === 'completed' ? receipt.images?.[0] : undefined;
+            const imageUrl = getDurableGeneratedImagePath(image);
+            if (!imageUrl) return;
+            patchGenerationMessage(conversationId, assistantMessageId, {
+              isGeneratingImage: true,
+            });
+            get().completeImageGeneration(conversationId, assistantMessageId, {
+              imageUrl,
+              persisted: true,
+              model: receipt?.model,
+            });
+          })
+          .catch(() =>
+            patchGenerationMessage(conversationId, assistantMessageId, {
+              imageGenError:
+                'Stopped on this device, but AGI Cloud could not be reached to stop the job, so it may still finish.',
+            }),
+          );
         patchGenerationMessage(conversationId, assistantMessageId, {
           content: 'Image generation stopped.',
           isGeneratingImage: false,
@@ -1435,6 +1651,39 @@ export const useChatMessageStore = create<MessageState>()(
 
         try {
           const outcome = await cancelVideoGeneration(target.videoTaskId);
+          if (
+            outcome.cancel_requested !== true &&
+            (outcome.status === 'completed' ||
+              outcome.status === 'failed' ||
+              outcome.status === 'timeout')
+          ) {
+            const finished = await getVideoStatus(target.videoTaskId);
+            if (
+              videoGenerationMessage(conversationId, assistantMessageId)?.isGeneratingVideo !== true
+            ) {
+              return;
+            }
+            if (finished.status === 'completed') {
+              const video = generatedVideoFromStatus(finished);
+              get().completeVideoGeneration(conversationId, assistantMessageId, {
+                videoUrl: video.videoUrl,
+                ...(video.thumbnailUrl ? { thumbnailUrl: video.thumbnailUrl } : {}),
+              });
+              return;
+            }
+            if (finished.status === 'failed' || finished.status === 'timeout') {
+              get().failVideoGeneration(
+                conversationId,
+                assistantMessageId,
+                finished.error || `Video generation ${finished.status}`,
+              );
+              return;
+            }
+            patchGenerationMessage(conversationId, assistantMessageId, {
+              videoGenCancelRequested: false,
+            });
+            return;
+          }
           patchGenerationMessage(conversationId, assistantMessageId, {
             content: outcome.message ?? 'Video generation stopped.',
             isGeneratingVideo: false,
@@ -1496,7 +1745,9 @@ export const useChatMessageStore = create<MessageState>()(
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
           if (conversationIds.has(id)) {
-            messages[id] = msgs.filter((m) => !m.isStreaming).map(resolveInterruptedGeneration);
+            messages[id] = msgs
+              .filter((m) => !m.isStreaming || m.role === 'assistant')
+              .map((m) => resolveInterruptedGeneration(m.isStreaming ? stoppedByAppExit(m) : m));
           }
         }
         return { conversations, messages, currentConversationId: state.currentConversationId };
@@ -1506,6 +1757,7 @@ export const useChatMessageStore = create<MessageState>()(
 );
 
 subscribeCloudHistoryLoading((isLoadingMessages) => {
+  if (useChatMessageStore.getState().isLoadingMessages === isLoadingMessages) return;
   useChatMessageStore.setState({ isLoadingMessages });
 });
 
@@ -1525,6 +1777,7 @@ export function clearCloudConversationPagination(): void {
     hasMoreCloudConversations: false,
     conversationLoadError: null,
     messageLoadErrorConversationId: null,
+    missingConversationId: null,
   });
 }
 
@@ -1625,7 +1878,6 @@ function captureArtifactsForLoadedMessages(
           message.id,
           message.createdAt,
           conversationTitle,
-          agiNativeColors.dark,
           provenance,
         ),
       );
@@ -1642,6 +1894,9 @@ function shouldLoadCloudConversationList(): boolean {
     useAuthStore.getState().isClerkSignedIn
   );
 }
+
+export const PROJECT_UNAVAILABLE_MESSAGE =
+  'That project is no longer available, so it was removed from this chat. Send again to start the chat without it.';
 
 function resolveCloudProjectId(explicit?: string): string | undefined {
   const { activeProjectId, projects } = useCloudProjectStore.getState();
@@ -1709,6 +1964,7 @@ async function createConversationForMode(
       title: title ?? 'New Chat',
       projectId,
       isTemporary,
+      ...(model ? { model } : {}),
     });
     assertCloudAccountEpochCurrent(account);
     const conversation: ConversationSummary = {
@@ -1723,8 +1979,16 @@ async function createConversationForMode(
     markConversationForSync(conversation.id);
     set(() => ({ currentConversationId: conversation.id }));
     return conversation.id;
-  } catch {
-    throw new Error('AGI Cloud conversation could not be created.');
+  } catch (error) {
+    if (projectId && error instanceof ManagedCloudChatHttpError && error.status === 404) {
+      if (useCloudProjectStore.getState().activeProjectId === projectId) {
+        useCloudProjectStore.getState().setActiveCloudProject(null);
+      }
+      throw new Error('AGI Cloud conversation could not be created.', {
+        cause: new ApiHttpError(PROJECT_UNAVAILABLE_MESSAGE, 404, 'project_not_found'),
+      });
+    }
+    throw new Error('AGI Cloud conversation could not be created.', { cause: error });
   }
 }
 

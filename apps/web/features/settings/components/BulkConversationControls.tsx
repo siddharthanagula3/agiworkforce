@@ -95,7 +95,7 @@ function BulkRows({
                   ? 'Delete all chats in this workspace'
                   : 'Archive all chats in this workspace'}
               </div>
-              <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                 {deleting
                   ? 'Remove every active and archived conversation in this workspace from history. Restore them from Recently deleted within 30 days.'
                   : 'Move every chat out of the sidebar. You can restore them later.'}
@@ -105,6 +105,7 @@ function BulkRows({
               type="button"
               onClick={() => onChoose(item)}
               disabled={disabled}
+              className="shrink-0 whitespace-nowrap"
               style={{
                 padding: 'var(--space-2) var(--space-4)',
                 fontSize: 14,

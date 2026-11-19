@@ -4,7 +4,11 @@ import { useShallow } from 'zustand/react/shallow';
 import { toDataURL } from 'qrcode';
 import { Check, Copy, Maximize2, RefreshCw, Smartphone, WifiOff } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { MOBILE_REMOTE_SCREEN_LABEL, PRODUCT_NAMES } from '@agiworkforce/types';
+import {
+  MOBILE_ADD_DEVICE_LABEL,
+  MOBILE_CODE_SCREEN_LABEL,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -106,16 +110,17 @@ export function QRPairingCard() {
             <p className="mt-1 text-xs leading-5 text-slate-500">
               On your phone, open{' '}
               <span className="font-medium text-slate-700">
-                {PRODUCT_NAMES.mobile} &rarr; {MOBILE_REMOTE_SCREEN_LABEL}
+                {PRODUCT_NAMES.mobile} &rarr; {MOBILE_CODE_SCREEN_LABEL}
               </span>
-              , then select <span className="font-medium text-slate-700">Scan QR Code</span>.
+              , then select{' '}
+              <span className="font-medium text-slate-700">{MOBILE_ADD_DEVICE_LABEL}</span>.
             </p>
           </div>
         </div>
 
         <ol className="list-inside list-decimal space-y-1 text-xs text-slate-600">
-          <li>Open {MOBILE_REMOTE_SCREEN_LABEL} on your phone</li>
-          <li>Select Scan QR Code</li>
+          <li>Open {MOBILE_CODE_SCREEN_LABEL} on your phone</li>
+          <li>Select {MOBILE_ADD_DEVICE_LABEL}</li>
           <li>Scan the QR, or copy the pairing link and paste it into Enter code manually</li>
         </ol>
 
@@ -224,7 +229,8 @@ export function QRPairingCard() {
           <DialogHeader>
             <DialogTitle>Scan with your phone</DialogTitle>
             <DialogDescription>
-              In {PRODUCT_NAMES.mobile}, open {MOBILE_REMOTE_SCREEN_LABEL} and select Scan QR Code.
+              In {PRODUCT_NAMES.mobile}, open {MOBILE_CODE_SCREEN_LABEL} and select{' '}
+              {MOBILE_ADD_DEVICE_LABEL}.
             </DialogDescription>
           </DialogHeader>
           {qrImage && (

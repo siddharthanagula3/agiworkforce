@@ -725,6 +725,9 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     stop,
     state: () => state,
     handleSessionEvent,
+    /** Whether the paired phone has this session open right now. */
+    phoneWatches: (rootId: string, threadId: string) =>
+      Boolean(dispatch && proved) && controller.isAttached(rootId, threadId),
     reportDispatchTask,
     dispatchPageGone,
   };

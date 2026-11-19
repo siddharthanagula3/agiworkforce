@@ -18,6 +18,7 @@ import {
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
   type RemoteCodeTestRun,
+  type RemoteCodeThinking,
   type RemoteCodeToolRecord,
   type RemoteCodeTranscriptEntry,
 } from '@agiworkforce/types';
@@ -48,6 +49,8 @@ export interface RemoteCodeThread {
   diffs: RemoteCodeDiff[];
   testRuns: RemoteCodeTestRun[];
   tools: RemoteCodeToolRecord[];
+  thinking: RemoteCodeThinking[];
+  runningTasks: number;
   transcript: RemoteCodeTranscript | null;
   queuedGuidance: string[];
   hostMessage: string | null;
@@ -71,13 +74,25 @@ export interface RemoteCodeApprovalHoldNotice {
 
 function holdsFor(
   holds: Record<string, RemoteCodeApprovalHoldNotice>,
-  approvals: readonly RemoteCodePendingApproval[],
+  waiting: ReadonlyArray<{ requestId: string }>,
 ): Record<string, RemoteCodeApprovalHoldNotice> {
   return Object.fromEntries(
-    approvals.flatMap((approval) => {
-      const hold = holds[approval.requestId];
-      return hold ? [[approval.requestId, hold]] : [];
+    waiting.flatMap((entry) => {
+      const hold = holds[entry.requestId];
+      return hold ? [[entry.requestId, hold]] : [];
     }),
+  );
+}
+
+function appendThinking(
+  thinking: RemoteCodeThinking[],
+  turnId: string,
+  delta: string,
+): RemoteCodeThinking[] {
+  const kept = thinking.find((entry) => entry.turnId === turnId);
+  const text = ((kept?.text ?? '') + delta).slice(-REMOTE_CODE_LIMITS.thinkingLength);
+  return [...thinking.filter((entry) => entry.turnId !== turnId), { turnId, text }].slice(
+    -REMOTE_CODE_LIMITS.thinkingTurns,
   );
 }
 
@@ -188,6 +203,13 @@ function updateThread(
   });
 }
 
+function appendMessage(
+  thread: RemoteCodeThread,
+  message: RemoteCodeTranscriptEntry,
+): RemoteCodeTranscriptEntry[] {
+  return [...thread.messages, message].slice(-REMOTE_CODE_LIMITS.transcriptMessages);
+}
+
 function upsertByKey<T>(items: T[], item: T, key: (entry: T) => string, max: number): T[] {
   const id = key(item);
   return [...items.filter((entry) => key(entry) !== id), item].slice(-max);
@@ -221,12 +243,20 @@ export function ingestRemoteCodeSnapshot(payload: unknown): boolean {
         partialResponse: parsed.partialResponse,
         messages: parsed.messages,
         pendingApprovals: parsed.pendingApprovals,
-        approvalHolds: holdsFor(state.threads[key]?.approvalHolds ?? {}, parsed.pendingApprovals),
+        approvalHolds: holdsFor(state.threads[key]?.approvalHolds ?? {}, [
+          ...parsed.pendingApprovals,
+          ...parsed.pendingQuestions,
+        ]),
         pendingQuestions: parsed.pendingQuestions,
         fileChanges: parsed.fileChanges,
         diffs: state.threads[key]?.diffs ?? [],
         testRuns: state.threads[key]?.testRuns ?? [],
         tools: parsed.tools.length > 0 ? parsed.tools : (state.threads[key]?.tools ?? []),
+        thinking:
+          parsed.thinking && parsed.thinking.length > 0
+            ? parsed.thinking
+            : (state.threads[key]?.thinking ?? []),
+        runningTasks: parsed.runningTasks ?? 0,
         transcript: state.threads[key]?.transcript ?? null,
         queuedGuidance: parsed.queuedGuidance,
         hostMessage: null,
@@ -258,6 +288,8 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
             -REMOTE_CODE_LIMITS.partialResponseLength,
           ),
         };
+      case 'thinking-delta':
+        return { ...thread, thinking: appendThinking(thread.thinking, event.turnId, event.delta) };
       case 'tool-started':
         return {
           ...thread,
@@ -269,6 +301,7 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
               summary: event.summary,
               state: 'running',
               output: '',
+              turnId: event.turnId,
             },
             (tool) => tool.toolCallId,
             REMOTE_CODE_LIMITS.tools,
@@ -310,12 +343,17 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
         return {
           ...thread,
           pendingApprovals,
-          approvalHolds: holdsFor(thread.approvalHolds, pendingApprovals),
+          approvalHolds: holdsFor(thread.approvalHolds, [
+            ...pendingApprovals,
+            ...thread.pendingQuestions,
+          ]),
           status: pendingApprovals.length === 0 && thread.activeTurnId ? 'running' : thread.status,
         };
       }
       case 'approval-held':
-        return thread.pendingApprovals.some((approval) => approval.requestId === event.requestId)
+        return [...thread.pendingApprovals, ...thread.pendingQuestions].some(
+          (waiting) => waiting.requestId === event.requestId,
+        )
           ? {
               ...thread,
               approvalHolds: {
@@ -329,18 +367,30 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
           ...thread,
           pendingQuestions: upsertByKey(
             thread.pendingQuestions,
-            { turnId: event.turnId, requestId: event.requestId, question: event.question },
+            {
+              turnId: event.turnId,
+              requestId: event.requestId,
+              question: event.question,
+              ...(event.options ? { options: event.options } : {}),
+              ...(event.answerable ? { answerable: true } : {}),
+            },
             (question) => question.requestId,
             REMOTE_CODE_LIMITS.pendingQuestions,
           ),
         };
-      case 'user-input-answered':
+      case 'user-input-answered': {
+        const pendingQuestions = thread.pendingQuestions.filter(
+          (question) => question.requestId !== event.requestId,
+        );
         return {
           ...thread,
-          pendingQuestions: thread.pendingQuestions.filter(
-            (question) => question.requestId !== event.requestId,
-          ),
+          pendingQuestions,
+          approvalHolds: holdsFor(thread.approvalHolds, [
+            ...thread.pendingApprovals,
+            ...pendingQuestions,
+          ]),
         };
+      }
       case 'turn-finished':
         return {
           ...thread,
@@ -351,11 +401,15 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
           approvalHolds: {},
           pendingQuestions: [],
           tools: settleTools(thread.tools),
-          messages: event.response
-            ? [...thread.messages, { role: 'assistant' as const, text: event.response }].slice(
-                -REMOTE_CODE_LIMITS.transcriptMessages,
-              )
-            : thread.messages,
+          ...(event.response
+            ? {
+                messages: appendMessage(thread, {
+                  role: 'assistant',
+                  text: event.response,
+                  turnId: event.turnId,
+                }),
+              }
+            : {}),
         };
       case 'diff':
         return {
@@ -378,8 +432,21 @@ export function ingestRemoteCodeEvent(payload: unknown): boolean {
           ),
         };
       case 'guidance-queued':
-      case 'guidance-delivered':
         return { ...thread, queuedGuidance: event.queuedGuidance };
+      case 'guidance-delivered':
+        return {
+          ...thread,
+          queuedGuidance: event.queuedGuidance,
+          ...(event.text
+            ? {
+                messages: appendMessage(thread, {
+                  role: 'user',
+                  text: event.text,
+                  turnId: event.turnId,
+                }),
+              }
+            : {}),
+        };
       case 'runtime-stopped':
         return {
           ...thread,

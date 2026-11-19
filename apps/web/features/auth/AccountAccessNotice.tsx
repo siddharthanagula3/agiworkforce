@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import { ACCOUNT_DENIAL_NOTICE, type AccountAccessDenied } from '@/lib/auth/account-status';
 import { AuthLegalFooter } from './AuthLegalFooter';
@@ -34,19 +34,19 @@ export function AccountAccessNotice({
         <div data-account-denial={denial.reason}>
           <SuspensionAppeal signedIn />
           <div className={AUTH_STEP_LINKS_CLASS}>
-            <Link href="/terms#s-11" className={AUTH_STANDALONE_LINK_CLASS}>
+            <PageLink href="/terms#s-11" className={AUTH_STANDALONE_LINK_CLASS}>
               When accounts are suspended
-            </Link>
+            </PageLink>
           </div>
         </div>
       ) : (
-        <Link
+        <PageLink
           href={denial.recoveryPath ?? signInHref}
           className={AUTH_PRIMARY_BUTTON_CLASS}
           data-account-denial={denial.reason}
         >
           {action}
-        </Link>
+        </PageLink>
       )}
     </AuthStepFrame>
   );

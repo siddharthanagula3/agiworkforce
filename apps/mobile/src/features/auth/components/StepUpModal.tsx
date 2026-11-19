@@ -80,7 +80,7 @@ export function StepUpModal(props: StepUpModalProps) {
   const [binding] = useState(() => props);
   const { challenge, onCancel, onSatisfied } = binding;
   const colors = useThemeColors();
-  const signOut = useAuthStore((state) => state.signOut);
+  const signOutAllAccounts = useAuthStore((state) => state.signOutAllAccounts);
   const [prompt, setPrompt] = useState<Prompt>({ kind: 'loading' });
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -367,7 +367,9 @@ export function StepUpModal(props: StepUpModalProps) {
                   onPress={() => {
                     if (!interactionCurrent()) return;
                     cancel();
-                    void signOut();
+                    void signOutAllAccounts().catch((err: unknown) => {
+                      console.warn('[StepUpModal] sign-out for a fresh sign-in failed:', err);
+                    });
                   }}
                 />
               ) : prompt.kind === 'retry' ? (

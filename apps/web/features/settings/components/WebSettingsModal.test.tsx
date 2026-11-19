@@ -508,7 +508,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     openConnectorsSection();
 
     const failure = await within(settingsPane()).findByText(
-      'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
+      'Connectors could not be loaded because the service is temporarily unavailable. Try again in a moment.',
     );
     expect(failure).toBeTruthy();
 
@@ -517,7 +517,7 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(await within(settingsPane()).findByRole('button', { name: 'Notion' })).toBeTruthy();
     expect(
       screen.queryByText(
-        'Connectors could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.',
+        'Connectors could not be loaded because the service is temporarily unavailable. Try again in a moment.',
       ),
     ).toBeNull();
   });

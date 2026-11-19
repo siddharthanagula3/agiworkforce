@@ -3,7 +3,7 @@ import { syncNow } from '@/services/cloudSyncEngine';
 import { listReplacedMemoryFacts, restoreReplacedMemoryFact } from '@/storage/memory';
 
 export const MEMORY_CONFLICT_RULE =
-  'Pinned, then added, then newer memories win, and the replaced one is kept here.';
+  'Pinned, added, then newer memories win. The replaced one is kept here.';
 
 export interface MemoryConflict {
   id: string;

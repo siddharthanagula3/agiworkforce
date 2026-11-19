@@ -54,7 +54,9 @@ import {
   getTierPolicy,
   isCapabilityDocumentStale,
   modelsCatalog,
+  normalizeBillingPlanTier,
   surfaceCapabilityGrant,
+  wirePlanOf,
   type CapabilityDenialReason,
   type CapabilityDocumentRef,
   type CapabilityLayerGrant,
@@ -228,8 +230,9 @@ function buildLimits(
 ): CapabilityLimit[] {
   const policy = getTierPolicy(tier);
   const tierSource = `tier:${policy.tier}`;
-  const usageSource = `managed-usage-caps:${policy.tier}`;
-  const allowance = { tier: policy.tier, catalogVersion, revenueContext };
+  const billingTier = normalizeBillingPlanTier(tier);
+  const usageSource = `managed-usage-caps:${wirePlanOf(billingTier).tier}`;
+  const allowance = { tier: billingTier, catalogVersion, revenueContext };
   const uncapped = isPlanUsageUncapped(allowance);
   const limits: CapabilityLimit[] = [
     {
@@ -273,22 +276,12 @@ function buildLimits(
       policySource: tierSource,
     });
   }
-  if (policy.tokenCapPerMonth != null) {
-    limits.push({
-      id: 'tokens_per_month',
-      capabilityId: 'canUseCloudModels',
-      limit: policy.tokenCapPerMonth,
-      unit: 'tokens',
-      window: 'month',
-      resetsAt: resets.billingPeriodEndsAt,
-      policySource: tierSource,
-    });
-  }
-  // `flagshipDailyTokenCap` is not published. It has never been enforced: this
-  // was its only reader, nothing counts against it and no request has ever been
-  // refused by it, so publishing it told Pro clients about a 50,000-token daily
-  // ceiling that does not exist. A limit nobody applies is worse than no limit,
-  // because a client can ration itself against it.
+  // `tokenCapPerMonth` and `flagshipDailyTokenCap` are not published. Neither
+  // has ever been enforced: this was their only reader, nothing counts against
+  // them and no request has ever been refused by them, so publishing them told
+  // clients about token ceilings that do not exist. A limit nobody applies is
+  // worse than no limit, because a client can ration itself against it; the
+  // usage budget windows above are the limit that is applied.
   if (policy.imageQuotaPerMonth != null && canUseBillingPlanCapability(tier, 'image_generation')) {
     limits.push({
       id: 'images_per_month',

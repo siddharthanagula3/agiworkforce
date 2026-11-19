@@ -1,4 +1,5 @@
 import {
+  freeUsageLimitMessage,
   statableRetryAfterSeconds,
   statedWait,
   withoutExternalPurchaseSteering,
@@ -36,10 +37,12 @@ export function parseStreamFailure(raw: unknown): StreamFailure | undefined {
   const frame = raw as Record<string, unknown>;
   const sent = frame['message'];
   if (typeof sent !== 'string' || !sent) return undefined;
-  const message = withoutExternalPurchaseSteering(sent);
   const code = frame['code'];
   const retryable = frame['retryable'];
   const retryAfterSeconds = statableRetryAfterSeconds(frame['retryAfterSeconds']);
+  const message =
+    freeUsageLimitMessage({ code: typeof code === 'string' ? code : null, retryAfterSeconds }) ??
+    withoutExternalPurchaseSteering(sent);
   const requestId = frame['requestId'];
   return {
     message,

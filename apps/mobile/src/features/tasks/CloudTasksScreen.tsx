@@ -1,8 +1,11 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   AppState,
+  BackHandler,
+  Platform,
   RefreshControl,
   ScrollView,
   SectionList,
@@ -12,7 +15,16 @@ import {
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BellOff, Bot, Clock3, Cloud, Plus, RefreshCw } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  BellOff,
+  Bot,
+  Clock3,
+  Cloud,
+  Plus,
+  RefreshCw,
+  Search,
+} from 'lucide-react-native';
 import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -33,7 +45,9 @@ import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudRunCard } from './components/CloudRunCard';
 import { CloudRunDetailSheet } from './components/CloudRunDetailSheet';
+import { CloudTasksSearchButton, CloudTasksSearchField } from './components/CloudTasksSearch';
 import { StartWorkSheet, type StartWorkSubmission } from './components/StartWorkSheet';
+import { WorkIntroCard } from './components/WorkIntroCard';
 import { startCloudWorkRun, startWorkFailureMessage } from './startWork';
 import {
   cloudRunTitle,
@@ -44,15 +58,19 @@ import {
 } from './runPresentation';
 import { useCloudTaskStore } from './store';
 import { useCloudRunApprovalSignal } from './useApprovalSignal';
-import { rerunGoalFromRun, shareCloudRun } from './taskActions';
+import { canRerunCloudRun, loadRerunGoal, shareCloudRun } from './taskActions';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const CLOUD_TASK_LIST_POLL_INTERVAL_MS = 15_000;
+export const CLOUD_TASK_SEARCH_DEBOUNCE_MS = 300;
 
 const SCREEN_TITLE = 'AGI Work';
 const SCREEN_SUBTITLE = 'AGI Cloud';
-const SCOPE_NOTE = `Every agent run on your AGI Cloud account; paired desktops are in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
+const SCOPE_NOTE = FEATURES.companion
+  ? `Every agent run on your AGI Cloud account; paired desktops are in ${MOBILE_REMOTE_SCREEN_LABEL}.`
+  : 'Every agent run on your AGI Cloud account.';
 const BACKGROUND_ALERTS_OFF_NOTE =
-  'Background approval alerts are off, so a task that pauses while the app is closed will wait silently.';
+  'Approval alerts are off. Paused tasks wait silently while the app is closed.';
 
 function Header({ onBack, onOpenSchedules }: { onBack: () => void; onOpenSchedules?: () => void }) {
   const colors = useThemeColors();
@@ -200,19 +218,21 @@ function ScopeNote({ onOpenRemote }: { onOpenRemote: () => void }) {
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
         {SCOPE_NOTE}
       </Text>
-      <PressableBox
-        onPress={onOpenRemote}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
-        hitSlop={6}
-        style={{ minHeight: 32, justifyContent: 'center' }}
-      >
-        <Text
-          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '700' }}
+      {FEATURES.companion ? (
+        <PressableBox
+          onPress={onOpenRemote}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
+          hitSlop={6}
+          style={{ minHeight: 32, justifyContent: 'center' }}
         >
-          {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
-        </Text>
-      </PressableBox>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '700' }}
+          >
+            {`Open ${MOBILE_REMOTE_SCREEN_LABEL}`}
+          </Text>
+        </PressableBox>
+      ) : null}
     </View>
   );
 }
@@ -252,8 +272,67 @@ function BackgroundAlertsNote({ onOpenSettings }: { onOpenSettings: () => void }
   );
 }
 
-function EmptyState({ filtered }: { filtered: boolean }) {
+function EmptyState({
+  filtered,
+  searchQuery,
+  scanning,
+  canStartWork,
+  onNewTask,
+  onConnectSources,
+}: {
+  filtered: boolean;
+  searchQuery: string;
+  scanning: boolean;
+  canStartWork: boolean;
+  onNewTask: () => void;
+  onConnectSources: () => void;
+}) {
   const colors = useThemeColors();
+
+  if (searchQuery && scanning) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          minHeight: 260,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 12,
+          padding: 32,
+        }}
+      >
+        <LoadingIndicator />
+        <Text style={{ color: colors.textMuted }}>Searching Cloud tasks…</Text>
+      </View>
+    );
+  }
+
+  if (searchQuery) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          minHeight: 260,
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 32,
+        }}
+      >
+        <Search size={32} color={colors.textMuted} />
+        <Text
+          variant="subheading"
+          accessibilityLiveRegion="polite"
+          style={{ color: colors.textPrimary, textAlign: 'center', marginTop: 16 }}
+        >
+          {`No tasks match "${searchQuery}"`}
+        </Text>
+      </View>
+    );
+  }
+
+  if (!filtered && canStartWork) {
+    return <WorkIntroCard onNewTask={onNewTask} onConnectSources={onConnectSources} />;
+  }
 
   return (
     <View
@@ -273,7 +352,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
         {filtered ? 'No tasks match this filter' : 'No Cloud tasks yet'}
       </Text>
       <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 7 }}>
-        Start an AGI work or research turn on any surface. Its durable run shows up here.
+        AGI Work and research runs from any device show up here.
       </Text>
     </View>
   );
@@ -314,6 +393,8 @@ export function CloudTasksScreen() {
   const backgroundFetchEnabled = useSettingsStore((state) => state.backgroundFetchEnabled);
 
   const filter = useCloudTaskStore((state) => state.filter);
+  const searchQuery = useCloudTaskStore((state) => state.searchQuery);
+  const searchAvailable = useCloudTaskStore((state) => state.searchAvailable);
   const runs = useCloudTaskStore((state) => state.runs);
   const status = useCloudTaskStore((state) => state.status);
   const refreshing = useCloudTaskStore((state) => state.refreshing);
@@ -322,6 +403,7 @@ export function CloudTasksScreen() {
   const error = useCloudTaskStore((state) => state.error);
   const detail = useCloudTaskStore((state) => state.detail);
   const setFilter = useCloudTaskStore((state) => state.setFilter);
+  const setSearchQuery = useCloudTaskStore((state) => state.setSearchQuery);
   const load = useCloudTaskStore((state) => state.load);
   const loadMore = useCloudTaskStore((state) => state.loadMore);
   const openRun = useCloudTaskStore((state) => state.openRun);
@@ -331,6 +413,8 @@ export function CloudTasksScreen() {
   const reset = useCloudTaskStore((state) => state.reset);
 
   const grantedCapabilities = useTierStore((state) => state.grantedCapabilities);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [startWorkVisible, setStartWorkVisible] = useState(false);
   const [startWorkSubmitting, setStartWorkSubmitting] = useState(false);
   const [startWorkError, setStartWorkError] = useState<string | null>(null);
@@ -354,11 +438,12 @@ export function CloudTasksScreen() {
     () => (detail ? runs.find((run) => run.id === detail.runId) : undefined),
     [detail, runs],
   );
-  const rerunGoal = useMemo(() => {
+  const canRerun = useMemo(() => {
     const source = listedRun ?? detail?.run;
-    return source ? rerunGoalFromRun(source) : null;
+    return source ? canRerunCloudRun(source) : false;
   }, [detail, listedRun]);
   const [rerunning, setRerunning] = useState(false);
+  const [rerunGoal, setRerunGoal] = useState<string | undefined>(undefined);
   const routineDraft = useMemo(() => {
     const source = listedRun ?? detail?.run;
     return source ? routineDraftFromRun(source) : null;
@@ -366,6 +451,7 @@ export function CloudTasksScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', setAppState);
+    setAppState(AppState.currentState ?? 'active');
     return () => subscription.remove();
   }, []);
 
@@ -381,6 +467,58 @@ export function CloudTasksScreen() {
     const timer = setInterval(() => void load('background'), CLOUD_TASK_LIST_POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [canLoad, detail, hasSteerableRuns, isForeground, load]);
+
+  useEffect(() => {
+    if (!searchOpen) return undefined;
+    const timer = setTimeout(
+      () => setSearchQuery(searchText.trim()),
+      CLOUD_TASK_SEARCH_DEBOUNCE_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [searchOpen, searchText, setSearchQuery]);
+
+  useEffect(() => {
+    if (searchAvailable) return;
+    setSearchOpen(false);
+    setSearchText('');
+  }, [searchAvailable]);
+
+  const handleOpenSearch = useCallback(() => setSearchOpen(true), []);
+
+  const handleCancelSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchText('');
+    setSearchQuery('');
+  }, [setSearchQuery]);
+
+  useEffect(() => {
+    if (!searchOpen) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleCancelSearch();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [handleCancelSearch, searchOpen]);
+
+  const scanningForMatches =
+    searchQuery !== '' && runs.length === 0 && nextCursor !== null && status === 'loaded' && !error;
+
+  useEffect(() => {
+    if (!scanningForMatches || loadingMore) return;
+    void loadMore();
+  }, [loadMore, loadingMore, scanningForMatches]);
+
+  const searchAnnouncement = useMemo(() => {
+    if (!searchQuery || status !== 'loaded' || scanningForMatches || loadingMore) return null;
+    if (runs.length === 0) return `No tasks match "${searchQuery}"`;
+    return `${runs.length} ${runs.length === 1 ? 'task' : 'tasks'} found`;
+  }, [loadingMore, runs.length, scanningForMatches, searchQuery, status]);
+
+  useEffect(() => {
+    if (searchAnnouncement && Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(searchAnnouncement);
+    }
+  }, [searchAnnouncement]);
 
   const handleApprovalSignal = useCallback(() => {
     if (!canLoad) return;
@@ -414,6 +552,10 @@ export function CloudTasksScreen() {
     router.push('/(app)/schedules' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  const handleOpenCustomize = useCallback(() => {
+    router.push('/(app)/customize' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const handleOpenStartWork = useCallback(() => {
     setStartWorkError(null);
     setStartWorkVisible(true);
@@ -422,6 +564,7 @@ export function CloudTasksScreen() {
   const handleCloseStartWork = useCallback(() => {
     setStartWorkVisible(false);
     setStartWorkError(null);
+    setRerunGoal(undefined);
   }, []);
 
   const handleStartWork = useCallback(
@@ -435,6 +578,7 @@ export function CloudTasksScreen() {
         .then(() => {
           setStartWorkSubmitting(false);
           setStartWorkVisible(false);
+          setRerunGoal(undefined);
           void load('refresh');
         })
         .catch((error: unknown) => {
@@ -454,18 +598,41 @@ export function CloudTasksScreen() {
   );
 
   const handleRerun = useCallback(() => {
-    if (!rerunGoal || rerunning) return;
+    const run = listedRun ?? detail?.run;
+    if (!run || rerunning) return;
+    const runId = run.id;
     setRerunning(true);
-    void startCloudWorkRun({ goal: rerunGoal })
-      .then(({ conversationId }) => {
+    void loadRerunGoal(run)
+      .then((goal) => {
+        if (useCloudTaskStore.getState().detail?.runId !== runId) return;
+        if (!goal) {
+          Alert.alert('Could not run it again', 'The original request could not be found.');
+          return;
+        }
         closeRun();
-        router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversationId } });
+        setRerunGoal(goal);
+        setStartWorkError(null);
+        setStartWorkVisible(true);
       })
-      .catch((error: unknown) => {
-        Alert.alert('Could not run it again', startWorkFailureMessage(error));
+      .catch(() => {
+        Alert.alert(
+          'Could not run it again',
+          'The original request could not be loaded. Check your connection and try again.',
+        );
       })
       .finally(() => setRerunning(false));
-  }, [closeRun, rerunGoal, rerunning, router]);
+  }, [closeRun, detail, listedRun, rerunning]);
+
+  const handleConfirmStop = useCallback(() => {
+    Alert.alert(
+      'Stop this task?',
+      'AGI stops working on it now and this run cannot be resumed. You can run it again from the start.',
+      [
+        { text: 'Keep it running', style: 'cancel' },
+        { text: 'Stop task', style: 'destructive', onPress: () => void stopRun() },
+      ],
+    );
+  }, [stopRun]);
 
   const handleShareRun = useCallback(() => {
     const run = listedRun ?? detail?.run;
@@ -503,15 +670,25 @@ export function CloudTasksScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: pageBackground }}>
       <Header onBack={handleBack} onOpenSchedules={handleOpenSchedules} />
 
+      {searchOpen ? (
+        <CloudTasksSearchField
+          value={searchText}
+          onChangeText={setSearchText}
+          onCancel={handleCancelSearch}
+        />
+      ) : null}
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={{ ...contentColumn('reading'), flexGrow: 0, flexShrink: 0 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 14, gap: 8 }}
       >
         {CLOUD_RUN_FILTERS.map((item) => {
           const selected = item.key === filter;
           return (
             <PressableBox
+              hitSlop={{ top: 4, bottom: 4 }}
               key={item.key}
               onPress={() => setFilter(item.key)}
               accessibilityRole="button"
@@ -542,7 +719,7 @@ export function CloudTasksScreen() {
         })}
       </ScrollView>
 
-      {status === 'loading' && runs.length === 0 ? (
+      {(status === 'idle' || status === 'loading') && runs.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
           <LoadingIndicator />
           <Text style={{ color: colors.textMuted }}>Loading Cloud tasks…</Text>
@@ -554,7 +731,10 @@ export function CloudTasksScreen() {
           sections={sections}
           keyExtractor={(run) => run.id}
           stickySectionHeadersEnabled={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={{
+            ...contentColumn('reading'),
             paddingHorizontal: 16,
             paddingBottom: FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
             gap: 10,
@@ -592,9 +772,18 @@ export function CloudTasksScreen() {
               onPress={(runId) => void openRun(runId)}
             />
           )}
-          ListEmptyComponent={<EmptyState filtered={filter !== CLOUD_RUN_FILTERS[0].key} />}
+          ListEmptyComponent={
+            <EmptyState
+              filtered={filter !== CLOUD_RUN_FILTERS[0].key}
+              searchQuery={searchQuery}
+              scanning={scanningForMatches}
+              canStartWork={canStartWork}
+              onNewTask={handleOpenStartWork}
+              onConnectSources={handleOpenCustomize}
+            />
+          }
           ListFooterComponent={
-            nextCursor ? (
+            nextCursor && !scanningForMatches ? (
               <PressableBox
                 onPress={() => void loadMore()}
                 disabled={loadingMore}
@@ -621,6 +810,10 @@ export function CloudTasksScreen() {
         />
       )}
 
+      {searchAvailable && !searchOpen && runs.length > 0 ? (
+        <CloudTasksSearchButton onPress={handleOpenSearch} />
+      ) : null}
+
       {canStartWork ? (
         <FloatingPrimaryAction
           label="New task"
@@ -635,6 +828,7 @@ export function CloudTasksScreen() {
         visible={startWorkVisible}
         submitting={startWorkSubmitting}
         error={startWorkError}
+        initialGoal={rerunGoal}
         onClose={handleCloseStartWork}
         onSubmit={handleStartWork}
       />
@@ -644,17 +838,15 @@ export function CloudTasksScreen() {
         title={detailTitle}
         onClose={closeRun}
         onResolveApproval={(decision) => void resolveApproval(decision)}
-        onStop={() => void stopRun()}
+        onStop={handleConfirmStop}
         onOpenConversation={handleOpenConversation}
         onMakeRoutine={routineDraft ? handleMakeRoutine : undefined}
-        onRerun={rerunGoal ? handleRerun : undefined}
+        onRerun={canRerun ? handleRerun : undefined}
         rerunning={rerunning}
         onPause={() => void useCloudTaskStore.getState().pauseRun()}
         onResume={() => void useCloudTaskStore.getState().resumeRun()}
         onShare={
-          (listedRun ?? detail?.run)?.conversationId && rerunGoal !== null
-            ? handleShareRun
-            : undefined
+          (listedRun ?? detail?.run)?.conversationId && canRerun ? handleShareRun : undefined
         }
       />
     </SafeAreaView>

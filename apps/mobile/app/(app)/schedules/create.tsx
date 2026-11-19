@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Alert } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
+import { Button } from '@/components/ui/Button';
 import {
   CloudSchedulesGate,
   ScheduleForm,
@@ -12,6 +14,7 @@ import {
   scheduleDraftFromPrompt,
   useScheduleStore,
   type CreateScheduleInput,
+  type Schedule,
 } from '@/src/features/schedules';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -22,6 +25,8 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
+import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { confirmScheduleDeletion } from '@/src/features/schedules/deleteConfirmation';
 
 export default function CreateScheduleScreen() {
   const colors = useThemeColors();
@@ -75,6 +80,22 @@ export default function CreateScheduleScreen() {
 
   const isEditing = Boolean(existingSchedule);
   const attemptedScheduleFetch = useRef(false);
+  const [formGeneration, setFormGeneration] = useState(0);
+  const formKey = [
+    params.id,
+    params.template,
+    params.prompt,
+    params.model,
+    params.agentId,
+    params.projectId,
+    formGeneration,
+  ].join('|');
+
+  const leaveScreen = useCallback(() => {
+    setFormGeneration((generation) => generation + 1);
+    if (router.canGoBack()) router.back();
+    else router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+  }, [router]);
 
   useEffect(() => {
     clearError();
@@ -111,7 +132,7 @@ export default function CreateScheduleScreen() {
           } as Parameters<typeof createSchedule>[0]);
           if (!created) return;
         }
-        router.back();
+        leaveScreen();
       } catch {
         // Error is handled in the store and shown via the error banner on the list screen
       }
@@ -123,14 +144,10 @@ export default function CreateScheduleScreen() {
       createSchedule,
       updateSchedule,
       router,
+      leaveScreen,
       params.projectId,
     ],
   );
-
-  const handleCancel = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
-  }, [router]);
 
   const handleActivateCloud = useCallback(() => {
     if (!cloudUnlocked) {
@@ -143,21 +160,10 @@ export default function CreateScheduleScreen() {
   const handleDelete = useCallback(() => {
     if (!existingSchedule) return;
 
-    Alert.alert(
-      'Delete Schedule',
-      `Are you sure you want to delete "${existingSchedule.name}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (await deleteSchedule(existingSchedule.id)) router.back();
-          },
-        },
-      ],
-    );
-  }, [existingSchedule, deleteSchedule, router]);
+    confirmScheduleDeletion(existingSchedule.name, async () => {
+      if (await deleteSchedule(existingSchedule.id)) leaveScreen();
+    });
+  }, [existingSchedule, deleteSchedule, leaveScreen]);
 
   const handleRetryLoad = useCallback(() => {
     attemptedScheduleFetch.current = true;
@@ -170,7 +176,7 @@ export default function CreateScheduleScreen() {
     return (
       <CloudSchedulesGate
         signedIn={cloudUnlocked}
-        onBack={handleCancel}
+        onBack={leaveScreen}
         onContinue={handleActivateCloud}
       />
     );
@@ -179,9 +185,9 @@ export default function CreateScheduleScreen() {
   if (!params.id && !canCreateSchedule) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-        <View className="flex-row items-center px-4 h-12">
+        <View className="flex-row items-center px-4 min-h-12">
           <PressableBox
-            onPress={handleCancel}
+            onPress={leaveScreen}
             className="p-2 -ml-2 rounded-lg active:bg-white/5"
             accessibilityLabel="Go back"
           >
@@ -200,16 +206,15 @@ export default function CreateScheduleScreen() {
               : 'Free Cloud chat remains available.'}
           </Text>
           {NATIVE_PURCHASES_AVAILABLE ? (
-            <PressableBox
+            <Button
+              title="View Plans"
+              size="lg"
               onPress={() =>
                 router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
               }
-              className="mt-6 min-h-[52px] min-w-[220px] items-center justify-center rounded-2xl bg-white"
-              accessibilityRole="button"
+              className="mt-6 min-w-[220px]"
               accessibilityLabel="View plans for scheduled tasks"
-            >
-              <Text className="font-semibold text-black">View Plans</Text>
-            </PressableBox>
+            />
           ) : null}
         </View>
       </SafeAreaView>
@@ -230,8 +235,8 @@ export default function CreateScheduleScreen() {
   if (params.id && !existingSchedule && !loading) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-        <View className="flex-row items-center px-4 h-12">
-          <PressableBox onPress={handleCancel} className="p-2 -ml-2" accessibilityLabel="Go back">
+        <View className="flex-row items-center px-4 min-h-12">
+          <PressableBox onPress={leaveScreen} className="p-2 -ml-2" accessibilityLabel="Go back">
             <ArrowLeft size={22} color={colors.textSecondary} />
           </PressableBox>
         </View>
@@ -245,14 +250,12 @@ export default function CreateScheduleScreen() {
               : 'It may have been deleted, or this account may not have access to it.'}
           </Text>
           {error ? (
-            <PressableBox
+            <Button
+              title="Try Again"
               onPress={handleRetryLoad}
-              className="mt-6 min-h-[48px] min-w-[180px] items-center justify-center rounded-xl bg-white"
-              accessibilityRole="button"
+              className="mt-6 min-w-[180px]"
               accessibilityLabel="Retry loading schedule"
-            >
-              <Text className="font-semibold text-black">Try Again</Text>
-            </PressableBox>
+            />
           ) : null}
         </View>
       </SafeAreaView>
@@ -260,8 +263,45 @@ export default function CreateScheduleScreen() {
   }
 
   return (
+    <ScheduleEditor
+      key={formKey}
+      existingSchedule={existingSchedule}
+      initialData={existingSchedule ?? newScheduleData}
+      onSubmit={handleSubmit}
+      onLeave={leaveScreen}
+      onDelete={isEditing ? handleDelete : undefined}
+      isLoading={loading}
+      submitError={error}
+    />
+  );
+}
+
+function ScheduleEditor({
+  existingSchedule,
+  initialData,
+  onSubmit,
+  onLeave,
+  onDelete,
+  isLoading,
+  submitError,
+}: {
+  existingSchedule: Schedule | undefined;
+  initialData: Partial<Schedule> | undefined;
+  onSubmit: (data: Partial<CreateScheduleInput>) => void;
+  onLeave: () => void;
+  onDelete: (() => void) | undefined;
+  isLoading: boolean;
+  submitError: string | null;
+}) {
+  const colors = useThemeColors();
+  const router = useRouter();
+  const [formDirty, setFormDirty] = useState(false);
+  const guardLeave = useUnsavedChangesGuard(formDirty);
+  const handleCancel = useCallback(() => guardLeave(onLeave), [guardLeave, onLeave]);
+
+  return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-4 h-12">
+      <View className="flex-row items-center px-4 min-h-12">
         <PressableBox
           onPress={handleCancel}
           className="p-2 -ml-2 rounded-lg active:bg-white/5"
@@ -269,8 +309,12 @@ export default function CreateScheduleScreen() {
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
         </PressableBox>
-        <Text variant="subheading" className="ml-2 flex-1">
-          {isEditing ? 'Edit Schedule' : 'New Schedule'}
+        <Text
+          variant="subheading"
+          className="ml-2 flex-1"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        >
+          {existingSchedule ? 'Edit Schedule' : 'New Schedule'}
         </Text>
         {existingSchedule ? (
           <PressableBox
@@ -290,12 +334,13 @@ export default function CreateScheduleScreen() {
       </View>
 
       <ScheduleForm
-        initialData={existingSchedule ?? newScheduleData}
-        onSubmit={handleSubmit}
+        initialData={initialData}
+        onSubmit={onSubmit}
         onCancel={handleCancel}
-        onDelete={isEditing ? handleDelete : undefined}
-        isLoading={loading}
-        submitError={error}
+        onDelete={onDelete}
+        isLoading={isLoading}
+        submitError={submitError}
+        onDirtyChange={setFormDirty}
       />
     </SafeAreaView>
   );

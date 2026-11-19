@@ -39,7 +39,7 @@ describe('voice replaces the composer everywhere a voice bar mounts', () => {
         src
           .slice(0, composerAt)
           .matchAll(
-            /(liveVoiceVisible \|\| )?voiceInlineVisible( \|\| liveVoiceVisible)? \? null : \(/g,
+            /(liveVoiceVisible \|\| )?voiceInlineVisible( \|\| liveVoiceVisible)?(?: \|\| [A-Za-z_$][\w$]*)* \? null : \(/g,
           ),
       );
       const guard = guards[guards.length - 1];

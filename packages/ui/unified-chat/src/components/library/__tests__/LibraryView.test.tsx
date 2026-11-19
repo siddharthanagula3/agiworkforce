@@ -12,7 +12,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { LIBRARY_DEFAULT_PAGE_SIZE } from '@agiworkforce/cloud-contracts';
+import {
+  LIBRARY_DEFAULT_PAGE_SIZE,
+  MAX_CHAT_ATTACHMENT_BYTES,
+} from '@agiworkforce/cloud-contracts';
 import { LibraryView, isLibraryTab, type LibraryTransport } from '../LibraryView';
 
 function jsonResponse(body: unknown, ok = true): Response {
@@ -465,6 +468,60 @@ describe('shared LibraryView', () => {
       expect(inlinePreviewUri).toHaveBeenCalledWith('/api/files/asset-1');
     });
 
+    it('draws the tile from the small thumbnail the server offers instead of the whole file', async () => {
+      const image = {
+        ...ITEM,
+        file_name: 'chart.png',
+        mime_type: 'image/png',
+        previewable: true,
+        thumbnail_uri: '/api/files/asset-1/thumbnail',
+      };
+      render(
+        <LibraryView
+          transport={makeTransport({ listPage: pageOf([image]), inlinePreviewUri: (uri) => uri })}
+        />,
+      );
+
+      expect((await screen.findByTestId('library-thumbnail')).getAttribute('src')).toBe(
+        '/api/files/asset-1/thumbnail',
+      );
+    });
+
+    it('draws the whole file when the server cannot make the small thumbnail', async () => {
+      const image = {
+        ...ITEM,
+        file_name: 'panorama.png',
+        mime_type: 'image/png',
+        previewable: true,
+        thumbnail_uri: '/api/files/asset-1/thumbnail',
+      };
+      const fetchAsset = vi.fn(async () => ({ status: 404, ok: false }) as Response);
+      render(
+        <LibraryView
+          transport={makeTransport({
+            fetchAsset,
+            inlinePreviewUri: (uri) => uri,
+            listPage: pageOf([image]),
+          })}
+        />,
+      );
+
+      fireEvent.error(await screen.findByTestId('library-thumbnail'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('library-thumbnail').getAttribute('src')).toBe(
+          '/api/files/asset-1',
+        ),
+      );
+      expect(fetchAsset).not.toHaveBeenCalled();
+      expect(screen.queryByText(/file is unavailable right now/i)).toBeNull();
+
+      fireEvent.error(screen.getByTestId('library-thumbnail'));
+
+      await waitFor(() => expect(fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'));
+      expect(await screen.findByText(/file is unavailable right now/i)).toBeTruthy();
+    });
+
     it('carries no provenance chip and no readiness badge on the face', async () => {
       render(
         <LibraryView
@@ -573,6 +630,129 @@ describe('shared LibraryView', () => {
 
       const message = await screen.findByText(/went wrong on our side/i);
       expect(message.textContent).not.toMatch(/HTTP\s+\d/i);
+    });
+
+    describe('a file above the inline chat attachment limit', () => {
+      const large = {
+        ...ITEM,
+        file_name: 'survey-footage.zip',
+        mime_type: 'application/zip',
+        byte_count: MAX_CHAT_ATTACHMENT_BYTES + 1,
+        origin: 'uploaded',
+      };
+
+      async function downloadFromRowMenu(fileName: string) {
+        await screen.findByText(fileName);
+        openRowMenu(fileName);
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Download' }));
+      }
+
+      it('hands the download to the browser instead of reading it into the page', async () => {
+        const downloadInBrowser = vi.fn();
+        const transport = makeTransport({ listPage: pageOf([large]), downloadInBrowser });
+        render(<LibraryView transport={transport} />);
+
+        await downloadFromRowMenu('survey-footage.zip');
+
+        await waitFor(() => expect(downloadInBrowser).toHaveBeenCalledWith('/api/files/asset-1'));
+        expect(downloadInBrowser).toHaveBeenCalledTimes(1);
+        expect(transport.fetchAsset).not.toHaveBeenCalled();
+        expect(screen.queryByText(/could not be downloaded/i)).toBeNull();
+      });
+
+      it('keeps a file at the limit on the host fetch', async () => {
+        const downloadInBrowser = vi.fn();
+        const transport = makeTransport({
+          listPage: pageOf([{ ...large, byte_count: MAX_CHAT_ATTACHMENT_BYTES }]),
+          downloadInBrowser,
+        });
+        render(<LibraryView transport={transport} />);
+
+        await downloadFromRowMenu('survey-footage.zip');
+
+        await waitFor(() =>
+          expect(transport.fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'),
+        );
+        expect(downloadInBrowser).not.toHaveBeenCalled();
+      });
+
+      it('keeps the host fetch for a host that cannot hand downloads to the browser', async () => {
+        const transport = makeTransport({ listPage: pageOf([large]) });
+        render(<LibraryView transport={transport} />);
+
+        await downloadFromRowMenu('survey-footage.zip');
+
+        await waitFor(() =>
+          expect(transport.fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'),
+        );
+      });
+
+      it.each([
+        ['a generated file', { origin: 'generated' }],
+        ['an uploaded video', { file_name: 'survey-footage.mp4', mime_type: 'video/mp4' }],
+      ])(
+        'keeps %s on the host fetch, which the server never hands to storage',
+        async (_, shape) => {
+          const downloadInBrowser = vi.fn();
+          const item = { ...large, ...shape };
+          const transport = makeTransport({ listPage: pageOf([item]), downloadInBrowser });
+          render(<LibraryView transport={transport} />);
+
+          await downloadFromRowMenu(item.file_name);
+
+          await waitFor(() =>
+            expect(transport.fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'),
+          );
+          expect(downloadInBrowser).not.toHaveBeenCalled();
+        },
+      );
+
+      it('says so and requests nothing when the file is larger than the downloads left', async () => {
+        const downloadInBrowser = vi.fn();
+        const transport = makeTransport({
+          listPage: vi.fn(async () =>
+            jsonResponse({
+              items: [large],
+              has_more: false,
+              next_offset: null,
+              download_used_bytes: 4 * MAX_CHAT_ATTACHMENT_BYTES,
+              download_limit_bytes: 5 * MAX_CHAT_ATTACHMENT_BYTES,
+            }),
+          ),
+          downloadInBrowser,
+        });
+        render(<LibraryView transport={transport} />);
+
+        await downloadFromRowMenu('survey-footage.zip');
+
+        expect(
+          await screen.findByText('This file is larger than the file downloads left this month.'),
+        ).toBeTruthy();
+        expect(downloadInBrowser).not.toHaveBeenCalled();
+        expect(transport.fetchAsset).not.toHaveBeenCalled();
+      });
+
+      it('hands it to the browser when the downloads left cover it', async () => {
+        const downloadInBrowser = vi.fn();
+        const transport = makeTransport({
+          listPage: vi.fn(async () =>
+            jsonResponse({
+              items: [large],
+              has_more: false,
+              next_offset: null,
+              download_used_bytes: 0,
+              download_limit_bytes: 5 * MAX_CHAT_ATTACHMENT_BYTES,
+            }),
+          ),
+          downloadInBrowser,
+        });
+        render(<LibraryView transport={transport} />);
+
+        await downloadFromRowMenu('survey-footage.zip');
+
+        await waitFor(() => expect(downloadInBrowser).toHaveBeenCalledTimes(1));
+        expect(screen.queryByText(/downloads left this month/i)).toBeNull();
+      });
     });
 
     it('turns a failed delete status into useful user copy', async () => {

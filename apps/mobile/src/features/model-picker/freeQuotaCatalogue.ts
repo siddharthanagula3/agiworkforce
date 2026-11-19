@@ -68,12 +68,12 @@ export const useFreeQuotaCatalogueStore = create<FreeQuotaCatalogueState>((set) 
           loading: false,
           error:
             error instanceof ApiHttpError && error.status === 401
-              ? 'Sign in again to check provider-funded Free models.'
+              ? 'Sign in again to check Free models.'
               : error instanceof ApiHttpError && error.status === 403
-                ? 'Provider-funded Free models are unavailable on this plan.'
+                ? 'Free models are unavailable on this plan.'
                 : error instanceof ApiHttpError && error.status === 404
-                  ? 'Provider-funded Free models are unavailable from AGI Cloud right now.'
-                  : 'Could not check provider-funded Free models. Check your connection and retry.',
+                  ? 'Free models are unavailable from AGI Cloud right now.'
+                  : 'Could not check Free models. Check your connection and retry.',
         });
       })
       .finally(() => {

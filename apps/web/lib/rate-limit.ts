@@ -274,6 +274,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'page-read-account-day': {
+    limit: 500,
+    window: '1 d',
+    failClosed: true,
+  },
   'chat-conversation': {
     limit: 60,
     window: '1 m', // 60 conversation operations per minute
@@ -303,6 +308,14 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'skills-catalog-read': {
+    // The skills page and every CLI or desktop skills mirror read the catalogue,
+    // each skill's body, its file list and its files. Spending that from
+    // `chat-conversation` let one mirror's first sync refuse /api/chat/sync.
+    limit: 300,
+    window: '1 m',
+    failClosed: false,
+  },
   'connector-directory-icon': {
     limit: 600,
     window: '1 m',
@@ -326,6 +339,11 @@ export const rateLimitConfigs = {
   'uploads-resumable-part': {
     limit: 600,
     window: '1 m', // one 256 MiB upload is 32 parts; several concurrent uploads must still fit
+    failClosed: false,
+  },
+  'uploads-intake-status': {
+    limit: 120,
+    window: '1 m', // a large file's status polls and cancels; several files are checked at once
     failClosed: false,
   },
   'files-serve': {
@@ -407,6 +425,11 @@ export const rateLimitConfigs = {
     limit: 5,
     window: '1 m', // 5 share creations per minute (prevents share spam)
     failClosed: false,
+  },
+  'share-create-account-day': {
+    limit: 50,
+    window: '1 d',
+    failClosed: true,
   },
   'share-view': {
     limit: 60,

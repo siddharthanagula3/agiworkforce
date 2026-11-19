@@ -2,7 +2,7 @@
 
 Status: Draft. Nothing below has been exercised against a real App Store Connect or Play Console account; the code paths are covered by unit tests only.
 Owner: Founder / billing operator
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 This runbook creates the in-app purchase products the mobile app sells, connects
 both stores' server notifications, and sets the server configuration that turns
@@ -16,6 +16,11 @@ in `apps/web/app/api/mobile/iap/catalog/route.ts`. Nothing in the app build
 decides it. Opening purchases to everyone is a server change (section 7) and
 needs no new build, provided the build that is in the stores was reviewed with
 in-app purchases declared (section 6).
+
+Version 1 of the app sells nothing: `apps/mobile/src/features/billing/storePurchases.json`
+holds `"nativePurchases": false` and both listings declare no in-app purchases
+(`mobile-store-first-release.md`). Nothing below applies until a build with that
+value `true` is submitted and reviewed.
 
 ## 1. What is sold
 
@@ -34,7 +39,7 @@ own localized price in each storefront; the app shows only the store's string.
 | `top_up_50`                    | 2,500 credits     | 50.00       | consumable                 |
 | `top_up_100`                   | 5,000 credits     | 100.00      | consumable                 |
 
-The 200 USD plan is named Max 20x everywhere a person reads it. `max_15x` is an
+The 200 USD plan is named Ultra everywhere a person reads it. `max_15x` is an
 internal id only and must not appear in a store display name or description.
 
 A top-up is sold only to an account that already holds an active paid plan; the
@@ -462,14 +467,17 @@ goodwill credit with its own expiry, not a restored purchase.
 ## 6. What the store submission has to match
 
 `apps/mobile/store-listing/LISTING-METADATA-IOS.json` and
-`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json` declare in-app
-purchases, and the two reviewer notes describe the purchase screens. Before
-submitting a build:
+`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json` declare no in-app
+purchases today, and the two reviewer notes describe a build without purchase
+screens. For a build with `nativePurchases` set to `true`, set both listings'
+purchase declarations to `true` and rewrite the reviewer notes' purchase
+sections first; `scripts/release/check-store-listing-claims.mjs` fails the
+release if the listings and the value disagree. Before submitting that build:
 
 - App Store Connect: attach all eight in-app purchases to the app version, with
   a review screenshot for each.
 - Give App Review and Play review a signed-in test account (email and password;
-  Clerk production has Device Trust off so sign-in needs no one-time code).
+  Clerk production has Client Trust off so sign-in needs no one-time code).
 - `apps/mobile/src/features/release-state/mobileReleaseState.json` records both
   stores as unpublished. While a store is unpublished the app does not name it
   and shows no link to its subscription settings, so a store subscriber is told
@@ -477,8 +485,8 @@ submitting a build:
   ships to a store, set that store's status to published together with the
   listing id, listing URL and subscription management URL of the live listing.
   This file is compiled into the app, so it is the one billing value that does
-  need a build. Its evidence text still describes a listing with no purchases
-  and should be rewritten in the same change.
+  need a build. Its evidence text describes a listing with no purchases; rewrite it in the
+  same change.
 
 ## 7. Opening purchases
 

@@ -9,6 +9,7 @@ type ScanModule3 = typeof import('../../../lib/connector-tool-permissions');
 type ScanModule4 = typeof import('../../../lib/tool-approval-policy');
 type ScanModule5 = typeof import('@/lib/services/cloud-agent-run-service');
 type ScanModule6 = typeof import('@/lib/services/managed-usage-request-service');
+type FreeTrialModule = typeof import('@/lib/services/free-trial-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CHECKPOINT_ID = '0190a000-0000-7000-8000-000000000002';
@@ -102,6 +103,12 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   finalizeManagedUsageRequest: vi.fn(async () => ({ actualCostCents: 0 })),
 }));
 
+const freeTrialMocks = vi.hoisted(() => ({ settle: vi.fn(async () => 0) }));
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialModule>()),
+  settleFreeTrialRequest: freeTrialMocks.settle,
+}));
+
 import {
   CloudAgentApprovalCheckpointConflictError,
   CloudAgentApprovalCheckpointNotFoundError,
@@ -109,6 +116,7 @@ import {
 import { buildApprovalCheckpointRequest } from '../../../lib/approval-checkpoint-request';
 import type { ModelSelection } from '../../../lib/capability-preamble';
 import type { ChatCompletionRequest } from '../../../lib/request-processor';
+import { loadMcpToolDefs } from '../../../lib/tool-loop';
 import { POST } from './route';
 
 const pausedMessages = [
@@ -149,6 +157,25 @@ const claim = {
 };
 
 const context = { params: Promise.resolve({ runId: RUN_ID }) };
+
+const freeTrialReservation = {
+  userId: 'user-1',
+  requestId: 'resume-request-1',
+  reservedMicrousd: 5_000_000,
+};
+
+function freeProcessedRequest() {
+  return {
+    ok: true,
+    requestId: 'resume-request-1',
+    provider: 'anthropic',
+    subscriptionTier: 'free',
+    chatRequest: { model: 'claude-test', messages: [], stream: true },
+    llmRequest: { model: 'claude-test', messages: [], max_tokens: 4096, stream: true },
+    quotaWarningHeader: null,
+    freeTrial: freeTrialReservation,
+  };
+}
 
 function makeRequest(body: unknown): NextRequest {
   return new NextRequest(`http://localhost/api/llm/v1/chat/completions/runs/${RUN_ID}/resume`, {
@@ -360,6 +387,46 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
       leaseToken: LEASE_TOKEN,
     });
     expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('settles the Free reservation and returns the pause when neither transport can start the turn', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    workflowMocks.start.mockRejectedValueOnce(new Error('workflow service unavailable'));
+
+    const response = await POST(makeRequest({}), context);
+
+    expect(response.status).toBe(503);
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'workflow_start_failed' },
+    });
+    expect(runMocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('settles the Free reservation when tool discovery fails before execution', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+    vi.mocked(loadMcpToolDefs).mockRejectedValueOnce(new Error('tool registry unavailable'));
+
+    const response = await POST(makeRequest({}), context);
+
+    expect(response.status).toBe(500);
+    expect(freeTrialMocks.settle).toHaveBeenCalledExactlyOnceWith({
+      reservation: freeTrialReservation,
+      outcome: 'failed',
+      attempt: { outcome: 'failed', errorClass: 'tool_discovery_failed' },
+    });
+    expect(runMocks.release).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the Free reservation to the resumed turn once the workflow has started', async () => {
+    mockProcessRequest.mockResolvedValue(freeProcessedRequest());
+
+    const response = await POST(makeRequest({}), context);
+
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(freeTrialMocks.settle).not.toHaveBeenCalled();
   });
 
   it('revalidates the resumed turn under the workspace controls', async () => {

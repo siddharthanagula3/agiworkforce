@@ -71,7 +71,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'How do I delete everything, or get a copy of it?',
-    body: 'Both are self-serve in account settings. Export returns your data as a download. Deletion is scheduled 24 hours out and then performed by a daily job that also deletes your identity at our authentication provider. No confirmation email is sent, but cancellation is self-serve too: sign back in and cancel from Settings, Account any time before the 24 hours are up. A short list of things is kept on purpose, and the privacy policy has a table of exactly what and why.',
+    body: 'Both are self-serve in account settings. Export returns your data as a download. Deletion is scheduled 24 hours out and then carried out by a daily job that also deletes your identity at our authentication provider. If an active legal hold covers your account, deletion waits until the hold is released. No confirmation email is sent, but cancellation is self-serve too: sign back in and cancel from Settings, Account any time before the 24 hours are up. A short list of things is kept on purpose, and the privacy policy has a table of exactly what and why.',
   },
   {
     title: 'What if I never made an account: can you still delete what you hold?',

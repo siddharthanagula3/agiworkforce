@@ -16,6 +16,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { CloudSyncBlockedBanner, SettingsScreenShell } from '@/src/features/settings/Common';
+import { SHARED_LINKS_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
 import { translatePlural } from '@/src/i18n/plural';
 
@@ -42,7 +43,7 @@ type LoadState =
 
 const LOAD_FAILED_MESSAGE = 'Check your connection and try again.';
 const INCOMPLETE_LIST_MESSAGE =
-  'This list may not include every link you shared. Older links stay open until they expire.';
+  'Some older links may be missing. They stay open until they expire.';
 const REVOKE_FAILED_MESSAGE =
   'Could not confirm whether the link was revoked. Refresh the list before trying again.';
 
@@ -299,7 +300,7 @@ export default function SharedLinksScreen() {
 
   return (
     <SettingsScreenShell
-      title="Shared links"
+      title={SHARED_LINKS_SCREEN_TITLE}
       help={{ docId: 'sharing-conversations', label: 'How shared links work' }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />

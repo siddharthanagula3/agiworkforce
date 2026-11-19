@@ -2,6 +2,7 @@ import {
   getDefaultModel as getCatalogDefaultModel,
   getShippableModels as getCatalogShippableModels,
 } from '@agiworkforce/local-llm';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { isSelectableLocalCatalogModel } from './catalogSelectability';
 import type { OnDeviceModel, PickerModelTier } from '@agiworkforce/types';
 import {
@@ -136,14 +137,13 @@ function runtimeLabel(model: OnDeviceModel): string {
   return 'llama.rn';
 }
 
-function formatSize(bytes: number): string {
+export function formatModelFileSize(bytes: number): string {
   if (bytes <= 0) return 'Built in';
-  const gib = bytes / 1024 / 1024 / 1024;
-  return `${gib >= 1 ? gib.toFixed(gib >= 10 ? 0 : 1) : '<1'} GB`;
+  return formatAttachmentSize(bytes);
 }
 
 function detailForLocalModel(model: OnDeviceModel): string {
-  const parts = [runtimeLabel(model), formatSize(model.fileSizeBytes)];
+  const parts = [runtimeLabel(model), formatModelFileSize(model.fileSizeBytes)];
   if (model.capabilities.visionIn) parts.push('Vision');
   if (model.capabilities.structuredOutput) parts.push('Structured');
   return parts.join(' - ');

@@ -29,6 +29,11 @@ jest.mock('../lib/constants', () => ({
   TIMEOUTS: { DEFAULT: 10_000, UPLOAD: 30_000 },
 }));
 
+const mockOpenWebContentPage = jest.fn();
+jest.mock('../src/platform/webContentPage', () => ({
+  openWebContentPage: (...args: unknown[]) => mockOpenWebContentPage(...args),
+}));
+
 jest.mock('../lib/abortSignal', () => ({
   combineAbortSignals: (signals: AbortSignal[]) => signals[0],
 }));
@@ -50,6 +55,11 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
 const mockClearLocalCloudAccountState = jest.fn();
 jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
   clearLocalCloudAccountState: () => mockClearLocalCloudAccountState(),
+}));
+
+const mockForgetRememberedAccount = jest.fn();
+jest.mock('../src/features/auth/services/rememberedAccount', () => ({
+  forgetRememberedAccount: () => mockForgetRememberedAccount(),
 }));
 
 const mockAnnouncePasskeyRequired = jest.fn();
@@ -75,6 +85,7 @@ import {
   apiFetch,
   apiFetchBinary,
   ApiFreeCapacityError,
+  ApiHttpError,
   ApiPaywallError,
   resetApiAccountState,
   recoverStreamSession,
@@ -400,6 +411,7 @@ describe('Cloud account request isolation', () => {
     expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
     expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
     expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(mockForgetRememberedAccount).not.toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 
@@ -505,6 +517,38 @@ describe('Cloud account request isolation', () => {
     expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
     expect(mockClearLocalCloudAccountState).toHaveBeenCalledTimes(1);
     expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('forgets the remembered account when the server says the account is unavailable', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, {
+        error: { code: 'ACCOUNT_UNAVAILABLE', message: 'Account unavailable' },
+      }),
+    );
+
+    await expect(api.get('/api/me')).rejects.toThrow('HTTP 403: Account unavailable');
+    expect(mockForgetRememberedAccount).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the recovery page it names as the marked page in the in-app sheet', async () => {
+    const { Alert } = jest.requireMock('react-native') as { Alert: { alert: jest.Mock } };
+    Alert.alert.mockClear();
+    mockOpenWebContentPage.mockReset().mockResolvedValue(true);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, {
+        error: {
+          code: 'ACCOUNT_UNAVAILABLE',
+          message: 'Your account is locked.',
+          details: { recoveryPath: '/auth/reset-password' },
+        },
+      }),
+    );
+
+    await expect(api.get('/api/me')).rejects.toThrow('HTTP 403: Your account is locked.');
+    const buttons = Alert.alert.mock.calls[0]![2] as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Open on the web')!.onPress!();
+
+    expect(mockOpenWebContentPage).toHaveBeenCalledWith('/auth/reset-password');
   });
 
   it('returns same-owner binary bytes and preserves bodyless responses', async () => {
@@ -705,6 +749,27 @@ describe('Cloud account request isolation', () => {
     expect(mockClearAuthSession).not.toHaveBeenCalled();
   });
 
+  it('starts no second presign when the upload is canceled while the session refreshes', async () => {
+    const controller = new AbortController();
+    mockRefreshAuthSession.mockImplementationOnce(async () => {
+      controller.abort();
+      return true;
+    });
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
+
+    await expect(
+      api.uploadFile(
+        { name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' },
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow('Upload timed out');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockCreateUploadTask).not.toHaveBeenCalled();
+  });
+
   it('refreshes an expired session at attachment completion without uploading the file again', async () => {
     mockGetAuthToken
       .mockResolvedValueOnce('old-token')
@@ -855,7 +920,7 @@ describe('429 free-capacity payload', () => {
     return {
       error: {
         message:
-          'No free capacity right now. Try again shortly, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
+          'No free capacity right now. Try again shortly, or use your own provider key. Paid plans carry more capacity. If upgrades are not open to your account yet, the pricing page offers the upgrade waitlist or takes an access code.',
         type: 'insufficient_quota',
         code: 'free_capacity_unavailable',
         ...(retryAt ? { retry_at: retryAt } : {}),
@@ -971,6 +1036,38 @@ describe('429 without paywall payload', () => {
       'Too many requests right now. Please wait a moment and try again.',
     );
   });
+
+  it('carries the stated wait on a typed HTTP error so a Retry countdown can start', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(429, {
+        error: { code: 'rate_limited', message: 'Slow down', retry_after_seconds: 30 },
+      }),
+    );
+
+    const caught = await api.post('/api/images/generate', {}).catch((e) => e);
+
+    expect(caught).toBeInstanceOf(ApiHttpError);
+    expect((caught as ApiHttpError).status).toBe(429);
+    expect((caught as ApiHttpError).retryAfterSeconds).toBe(30);
+    expect((caught as ApiHttpError).code).toBe('rate_limited');
+    expect((caught as ApiHttpError).message).toBe('Slow down');
+  });
+
+  it('names the stated wait when the server gives a wait but no sentence', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        makeResponse(429, { error: { code: 'rate_limited', retry_after_seconds: 30 } }),
+      );
+
+    const caught = await api.get('/api/test').catch((e) => e);
+
+    expect(caught).toBeInstanceOf(ApiHttpError);
+    expect((caught as ApiHttpError).retryAfterSeconds).toBe(30);
+    expect((caught as ApiHttpError).message).toBe(
+      'Too many requests right now. Try again in about 30 seconds.',
+    );
+  });
 });
 
 describe('non-429 errors pass through', () => {
@@ -1045,6 +1142,7 @@ describe('403 subscription feature classification', () => {
         code === 'subscription_required'
           ? 'No active subscription found. Please subscribe to use image generation.'
           : 'Your subscription is past_due. Please update your payment method.';
+      const shown = code === 'subscription_required' ? 'No active subscription found.' : message;
       jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
         makeResponse(403, {
           error: { code, type: 'invalid_request_error', message },
@@ -1058,14 +1156,15 @@ describe('403 subscription feature classification', () => {
         code,
         feature: 'image_generation',
         requiredTier: 'pro',
-        reason: message,
+        reason: shown,
         recoveryAction: code === 'subscription_required' ? 'subscribe' : 'manage_billing',
       });
+      expect((error as ApiPaywallError).reason).not.toMatch(/subscribe/i);
       expect(paywallErrorStateFromApiError(error as ApiPaywallError)).toMatchObject({
         code,
         recoveryAction: code === 'subscription_required' ? 'subscribe' : 'manage_billing',
       });
-      expect(paywallActivityErrorFromApiError(error as ApiPaywallError)).toBe(message);
+      expect(paywallActivityErrorFromApiError(error as ApiPaywallError)).toBe(shown);
     },
   );
 

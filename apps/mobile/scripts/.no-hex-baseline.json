@@ -840,12 +840,6 @@
       "rule": "named-color"
     },
     {
-      "file": "apps/mobile/components/ui/BottomSheet.tsx",
-      "line": 38,
-      "literal": "rgba(",
-      "rule": "rgba"
-    },
-    {
       "file": "apps/mobile/components/ui/Input.tsx",
       "line": 18,
       "literal": "rgba(",

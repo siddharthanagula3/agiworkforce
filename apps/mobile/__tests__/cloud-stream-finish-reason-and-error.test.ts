@@ -73,7 +73,8 @@ jest.mock('../lib/mmkv', () => ({
 import { Alert } from 'react-native';
 import { api } from '../services/api';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
-import { ApiHttpError } from '../services/apiErrors';
+import { ApiHttpError, httpErrorFrom } from '../services/apiErrors';
+import { streamFailureNoticeText } from '../src/features/chat/utils/messageStreamError';
 import { managedCloudChat } from '../services/managedCloudChat';
 import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
@@ -686,6 +687,53 @@ describe('cloud send: canonical agent activity', () => {
     });
   });
 
+  it('settles an activity the stream never closed as complete when the answer ends normally', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'session-mobile-unclosed',
+          turnId: 'turn-mobile-unclosed',
+          sequence: 0,
+          emittedAtMs: 4_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({ content: 'The whole answer.' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'answer this', CLOUD_MODEL);
+
+    const activity = lastAssistantMessage()?.metadata?.agentActivity as
+      { status?: string; completedAtMs?: number } | undefined;
+    expect(activity?.status).toBe('completed');
+    expect(typeof activity?.completedAtMs).toBe('number');
+  });
+
+  it('leaves an unclosed activity open when the answer was stopped or failed', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'session-mobile-stopped',
+          turnId: 'turn-mobile-stopped',
+          sequence: 0,
+          emittedAtMs: 5_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({ content: 'Partial answer', finish_reason: 'stopped' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'answer this', CLOUD_MODEL);
+
+    const activity = lastAssistantMessage()?.metadata?.agentActivity as
+      { status?: string } | undefined;
+    expect(activity?.status).not.toBe('completed');
+  });
+
   it('settles a started activity as failed with safe UI copy on transport error', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({
@@ -729,6 +777,49 @@ describe('cloud send: canonical agent activity', () => {
 
     state.clearError();
     expect(useChatExecutionStore.getState().failureCode).toBeNull();
+  });
+
+  describe('when the Free allowance is spent before the stream opens', () => {
+    const FREE_LIMIT_SENTENCE =
+      'You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going. Paid plans carry more capacity. If upgrades are not open to your account yet, the pricing page offers the upgrade waitlist or takes an access code.';
+
+    function refuseWithFreeLimit(resetsAt?: string) {
+      const body = JSON.stringify({
+        error: {
+          message: FREE_LIMIT_SENTENCE,
+          type: 'insufficient_quota',
+          code: 'free_trial_token_budget_reached',
+          ...(resetsAt ? { resets_at: resetsAt } : {}),
+        },
+      });
+      mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+        callbacks.onError(httpErrorFrom(429, body));
+      });
+    }
+
+    it('says when replies come back and that Local mode keeps working', async () => {
+      refuseWithFreeLimit(new Date(Date.now() + 130 * 60 * 1_000).toISOString());
+
+      await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hello', CLOUD_MODEL);
+
+      const expected =
+        'You have reached the free usage limit on your account. Try again in about 2 hours. Local mode keeps working.';
+      expect(useChatExecutionStore.getState().error).toBe(expected);
+      expect(streamFailureNoticeText(lastAssistantMessage())).toBe(expected);
+    });
+
+    it('keeps after it resets when the refusal names no reset time', async () => {
+      refuseWithFreeLimit();
+
+      await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hello', CLOUD_MODEL);
+
+      const shown = useChatExecutionStore.getState().error;
+      expect(shown).toBe(
+        'You have reached the free usage limit on your account. Try again after it resets. Local mode keeps working.',
+      );
+      expect(shown).not.toMatch(/provider key|upgrade|pricing|waitlist|access code|paid plan/i);
+      expect(streamFailureNoticeText(lastAssistantMessage())).toBe(shown);
+    });
   });
 
   it('settles and persists the current Cloud activity when the user taps Stop', async () => {

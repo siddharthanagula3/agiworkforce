@@ -5,14 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
-import {
-  ArrowLeft,
-  Calendar,
-  CheckCircle,
-  XCircle,
-  HelpCircle,
-  ExternalLink,
-} from 'lucide-react-native';
+import { Calendar, CheckCircle, XCircle, HelpCircle, ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
@@ -25,9 +18,12 @@ import {
   type PermissionStatus,
 } from '@/src/features/integrations/services/deviceIntegrations';
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
+import { DEVICE_INTEGRATIONS_SCREEN_TITLE } from '@/src/features/integrations/presentation';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function statusLabel(status: PermissionStatus): string {
   switch (status) {
@@ -77,7 +73,7 @@ function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }
 
 export default function IntegrationsScreen() {
   const router = useRouter();
-  const handleBack = useGoBack('/(app)/(tabs)/settings');
+  const handleBack = useGoBack('/(app)/settings');
   const colors = useThemeColors();
 
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
@@ -149,23 +145,16 @@ export default function IntegrationsScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-4 h-12">
-        <Pressable
-          onPress={handleBack}
-          className="p-2 -ml-2 rounded-lg"
-          style={({ pressed }) => ({ backgroundColor: pressed ? colors.surfaceHover : undefined })}
-          accessibilityLabel="Go back"
-        >
-          <ArrowLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1">
-          Integrations
-        </Text>
-      </View>
+      <ScreenHeader title={DEVICE_INTEGRATIONS_SCREEN_TITLE} onBack={handleBack} />
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 24 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+          gap: 24,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>
@@ -174,15 +163,14 @@ export default function IntegrationsScreen() {
 
         <View>
           <SectionHeader title="Device" colors={colors} />
-          <DeviceIntegrationStatus />
+          <DeviceIntegrationStatus
+            refreshKey={calendarStatus}
+            onPermissionChange={() => void refreshPermissionStatus()}
+          />
         </View>
 
         <View>
           <SectionHeader title="Permissions" colors={colors} />
-
-          <Text className="text-sm leading-5 mb-4" style={{ color: colors.textMuted }}>
-            Fine-grained permission controls for device features used in AI context injection.
-          </Text>
 
           {isChecking && (
             <View className="flex-row items-center justify-center py-6">
@@ -196,25 +184,26 @@ export default function IntegrationsScreen() {
           {!isChecking && (
             <View className="gap-4">
               <Card>
-                <View className="flex-row items-center justify-between mb-3">
-                  <View className="flex-row items-center gap-3">
+                <View className="flex-row items-center gap-3 mb-3">
+                  <View
+                    className="w-9 h-9 rounded-lg items-center justify-center"
+                    style={{ backgroundColor: colors.accentSurface }}
+                  >
+                    <Calendar size={18} color={colors.agentActive} />
+                  </View>
+                  <View testID="integrations-calendar-text" className="flex-1">
+                    <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                      Calendar
+                    </Text>
                     <View
-                      className="w-9 h-9 rounded-lg items-center justify-center"
-                      style={{ backgroundColor: colors.accentSurface }}
+                      testID="integrations-calendar-status"
+                      className="flex-row flex-wrap items-center gap-1.5 mt-0.5"
                     >
-                      <Calendar size={18} color={colors.agentActive} />
-                    </View>
-                    <View>
-                      <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
-                        Calendar
-                      </Text>
-                      <View className="flex-row items-center gap-1.5 mt-0.5">
-                        <StatusIcon status={calendarStatus} colors={colors} />
-                        <Badge
-                          label={statusLabel(calendarStatus)}
-                          color={statusBadgeColor(calendarStatus)}
-                        />
-                      </View>
+                      <StatusIcon status={calendarStatus} colors={colors} />
+                      <Badge
+                        label={statusLabel(calendarStatus)}
+                        color={statusBadgeColor(calendarStatus)}
+                      />
                     </View>
                   </View>
                   <Switch
@@ -224,7 +213,7 @@ export default function IntegrationsScreen() {
                 </View>
                 <Separator className="mb-3" />
                 <Text className="text-sm leading-5" style={{ color: colors.textMuted }}>
-                  Lets AGI use your upcoming events to suggest better times for tasks.
+                  Lets AGI suggest times around your upcoming events.
                 </Text>
               </Card>
 

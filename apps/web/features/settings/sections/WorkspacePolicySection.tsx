@@ -307,7 +307,7 @@ export function WorkspacePolicySection() {
         <p style={{ margin: 'var(--space-2) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
           {overview.configured
             ? 'These rules bind every member of this workspace. Personal accounts are unaffected.'
-            : 'This workspace has no policy yet, so nothing is restricted. The values below are what your first save would apply.'}
+            : 'No policy yet, so nothing is restricted. Your first save applies these values.'}
         </p>
       </header>
 
@@ -394,7 +394,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Preview before Local leaves the device"
-        description="Members must review the exact payload before a Local chat continues on your own provider keys. The server states this requirement on every decision; the CLI owns that transition but does not consume this workspace policy yet, so today it binds policy rather than the client."
+        description="Members review the exact payload before Local moves to their own keys. The CLI does not enforce this yet."
         control={
           <Toggle
             label="Require a preview before Local moves to your own keys"
@@ -416,9 +416,8 @@ export function WorkspacePolicySection() {
             margin: 'var(--space-1) 0 var(--space-3)',
           }}
         >
-          Which clients your members may sign in to and sync from. This reads the app&apos;s own
-          identifier, so treat it as a deployment setting rather than a security boundary, the
-          privacy-mode rules above are what bind regardless of client.
+          Which apps members may sign in to and sync from. A deployment setting, not a security
+          boundary.
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           {SYNC_SURFACES.map((surface) => (
@@ -459,7 +458,7 @@ export function WorkspacePolicySection() {
         description={
           draft.externalSharingEnabled
             ? 'Members may publish a chat or an artifact to an anonymous public link.'
-            : 'Off. Members cannot create new public links. Links already published stay reachable, revoking those is a separate action.'
+            : 'Off. No new public links. Existing links stay up until revoked.'
         }
         control={
           <Toggle
@@ -476,7 +475,7 @@ export function WorkspacePolicySection() {
         description={
           draft.allowMemory
             ? 'Members may use account memory. Each member still controls their own memory in personal settings.'
-            : 'Memory is off for the workspace until the owner turns it on. No member gets account memory while this is off, regardless of their personal setting.'
+            : 'Off for every member, whatever their personal setting.'
         }
         control={
           <Toggle
@@ -492,8 +491,8 @@ export function WorkspacePolicySection() {
         title="Product analytics"
         description={
           draft.allowProductAnalytics
-            ? 'Each member decides in their own privacy choices whether AGI records product usage events such as a stopped response or an accepted edit. Nothing is recorded for a member who has not allowed it.'
-            : 'Off for every member. AGI records no product usage events for anyone in this workspace, whatever their own privacy choice says.'
+            ? 'Each member chooses in their own privacy settings. Nothing is recorded without consent.'
+            : 'Off. No product usage events are recorded for anyone here.'
         }
         control={
           <Toggle
@@ -507,7 +506,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Audit export"
-        description="Lets owners and admins download this workspace's audit trail as JSONL. Every export, and every refusal, is itself written to the trail."
+        description="Owners and admins can download the audit trail as JSONL. Each export is logged."
         control={
           <Toggle
             checked={draft.auditExportEnabled}
@@ -520,7 +519,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Retention window"
-        description="How long a workspace conversation is kept after its last activity. Measured from last activity, not from when it was created. Nothing is deleted until Enforce retention below is on, on any plan."
+        description="Days a chat is kept after its last activity. Nothing is deleted until enforced below."
         control={
           <input
             type="number"
@@ -548,8 +547,8 @@ export function WorkspacePolicySection() {
         title="Enforce retention"
         description={
           draft.retentionEnforced
-            ? `A nightly sweep permanently deletes workspace conversations with no activity for ${draft.retentionDays} days. Conversations under legal hold are withheld. Every sweep is recorded.`
-            : 'Off. Nothing is deleted until this is on, whatever the window above says: the window is recorded as this workspace\u2019s position only. Turning this on starts permanent deletion and cannot recover what it removes.'
+            ? `Each night, chats idle for ${draft.retentionDays} days are permanently deleted, except under legal hold.`
+            : 'Off. Nothing is deleted. Turning it on starts permanent deletion that cannot be undone.'
         }
         control={
           <Toggle
@@ -609,11 +608,11 @@ export function WorkspacePolicySection() {
         description={
           !draft.requireMfa && twoFactor.data?.enrollmentAvailable !== true
             ? twoFactor.data?.enrollmentAvailable === false
-              ? 'Temporarily unavailable. Members cannot set up an authenticator app yet, so requiring one would lock them out.'
+              ? 'Unavailable. Members cannot set up an authenticator app yet, so this would lock them out.'
               : twoFactor.isLoading
-                ? 'Checking whether members can set up an authenticator app before enabling this requirement.'
-                : 'Authenticator setup availability could not be confirmed. Try again before enabling this requirement.'
-            : 'Members must have multi-factor authentication enabled on their account to sign in to this workspace.'
+                ? 'Checking whether members can set up an authenticator app.'
+                : 'Could not confirm authenticator setup. Try again before turning this on.'
+            : 'Members need multi-factor authentication to sign in to this workspace.'
         }
         control={
           <Toggle
@@ -663,7 +662,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Zero data retention only"
-        description="Route every AGI-managed request through providers that commit to zero data retention. A request that cannot be routed that way fails instead of falling back to a provider without that guarantee."
+        description="Use only providers with zero data retention. Requests that cannot are refused, not rerouted."
         control={
           <Toggle
             checked={draft.zeroDataRetentionOnly}

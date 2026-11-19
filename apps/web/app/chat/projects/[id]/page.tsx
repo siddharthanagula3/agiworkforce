@@ -453,10 +453,10 @@ export default function ProjectDetailPage() {
       <WebAppShell>
         <section
           data-design="agi"
+          className="px-8 py-12 max-md:px-4 max-md:pt-6"
           style={{
             minHeight: '100%',
             background: 'hsl(var(--background))',
-            padding: 'var(--space-7) var(--space-6)',
             color: 'hsl(var(--foreground))',
           }}
         >
@@ -510,10 +510,10 @@ export default function ProjectDetailPage() {
       >
         {/* Single centered column, ChatGPT-style */}
         <div
+          className="px-6 max-md:px-4"
           style={{
             maxWidth: 720,
             margin: '0 auto',
-            padding: '0 var(--space-5)',
             display: 'flex',
             flexDirection: 'column',
             minHeight: '100%',
@@ -538,9 +538,8 @@ export default function ProjectDetailPage() {
               aria-label="Back to projects"
               data-testid="project-detail-back"
               title="Back to projects"
+              className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11"
               style={{
-                width: 36,
-                height: 36,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -567,9 +566,8 @@ export default function ProjectDetailPage() {
                   aria-label="Project options"
                   data-testid="project-detail-menu-btn"
                   onClick={() => setMenuOpen((o) => !o)}
+                  className="h-9 w-9 pointer-coarse:h-11 pointer-coarse:w-11"
                   style={{
-                    width: 36,
-                    height: 36,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1045,9 +1043,8 @@ export default function ProjectDetailPage() {
                   color: 'var(--agi-ink-2)',
                 }}
               >
-                Your other chats never use anything from Health: its chats, files, connected health
-                records and memories stay out of them. Health chats only use models that keep your
-                chats out of training.{' '}
+                Health stays out of your other chats, and only uses models that keep chats out of
+                training.{' '}
                 <Link
                   href={HEALTH_RECORDS_HREF}
                   style={{
@@ -1141,6 +1138,7 @@ export default function ProjectDetailPage() {
                   fontWeight: tab === t ? 600 : 400,
                   cursor: 'pointer',
                   textTransform: 'capitalize',
+                  whiteSpace: 'nowrap',
                   marginBottom: 'calc(var(--stroke-hairline) * -1)',
                   transition: 'color 0.15s, border-color 0.15s',
                 }}
