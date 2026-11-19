@@ -26,7 +26,6 @@ import {
   ShellCommandRefused,
   approvedRootId,
   developerApprovalAllows,
-  evaluateShellPolicy,
   isBackgroundWorkKind,
   isDesktopCapability,
   isSshEnvironmentId,
@@ -2033,15 +2032,15 @@ const SHELL_INPUT_SHOWN = { head: 400, tail: 0 };
 
 /**
  * Text typed into a command that is still running reaches whatever that
- * program is waiting for, so it is asked about unless its first line is a
- * command the allowed list already runs without asking.
+ * program is waiting for, and a shell, an interpreter or a prompt reads it
+ * by its own rules rather than as one program and its arguments. The allowed
+ * list names programs this app may start, so it never answers for typed
+ * text: every input is asked about.
  */
 async function approveShellInput(
   window: BrowserWindow | null,
   { program, input }: ShellInputApprovalRequest,
 ): Promise<boolean> {
-  const line = input.split('\n')[0]?.trim() ?? '';
-  if (line !== '' && evaluateShellPolicy(readShellPolicy(), line).decision === 'allow') return true;
   const shownProgram = shownValue(program, SHELL_PROGRAM_SHOWN);
   return confirmInMain(
     window,

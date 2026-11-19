@@ -27311,6 +27311,10 @@
     "compiledSourceWitness": [
       "scripts/public-runtime/proof.mjs"
     ],
+    "compileGlob": [
+      "packages/client/ide-runtime/src/index.ts",
+      "packages/client/ide-runtime/src/workspace.ts"
+    ],
     "complete": [
       "apps/cli/src/app_server/upload_destination.rs",
       "apps/cli/src/cloud/project_files/upload.rs",
@@ -61058,8 +61062,6 @@
     ],
     "globToRegExp": [
       "apps/extension-vscode/src/data/contextExclusion.ts",
-      "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "scripts/check-model-change-suites.mjs"
     ],
     "glyph": [

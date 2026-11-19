@@ -8,6 +8,8 @@ const LISTEN_HOST = '127.0.0.1';
 const DEFAULT_PORT = 5433;
 const PATH = '/v1';
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+const BROWSER_ORIGIN_HEADERS = ['origin', 'sec-websocket-origin'];
+const HTTP_FORBIDDEN = 403;
 const CLOSE_POLICY_VIOLATION = 1008;
 const CLOSE_UPSTREAM_FAILURE = 1011;
 
@@ -26,11 +28,28 @@ function parseTarget(rawUrl) {
   return { host, port: targetPort };
 }
 
+// Security: binding to loopback does not keep web pages out, because a browser lets any site open
+// a WebSocket to 127.0.0.1. Browsers stamp every handshake with an Origin header that page script
+// cannot remove, while the Node clients this proxy serves send none, so a handshake carrying one
+// is refused before it is upgraded. Accepting it would hand any page raw TCP to local services.
+function comesFromBrowser(request) {
+  return BROWSER_ORIGIN_HEADERS.some((header) => request.headers[header] !== undefined);
+}
+
 const server = createServer((_request, response) => {
   response.statusCode = 404;
   response.end();
 });
-const sockets = new WebSocketServer({ server });
+const sockets = new WebSocketServer({
+  server,
+  verifyClient: ({ req }, respond) => {
+    if (comesFromBrowser(req)) {
+      respond(false, HTTP_FORBIDDEN, 'browser origins are not allowed');
+      return;
+    }
+    respond(true);
+  },
+});
 
 sockets.on('connection', (socket, request) => {
   const target = parseTarget(request.url);

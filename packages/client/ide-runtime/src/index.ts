@@ -28,7 +28,7 @@ export type {
 
 export {
   BINARY_SNIFF_BYTES,
-  globToRegExp,
+  compileGlob,
   grepLines,
   GREP_PREVIEW_LIMIT,
   isSkippedDirectory,
