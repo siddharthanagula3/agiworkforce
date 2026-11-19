@@ -45,7 +45,15 @@ import {
   type APIKeyMutationScope,
   APIKeyMutationRejectedError,
 } from '@features/settings/hooks/use-settings-queries';
-import { formatCredits } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityUpgradeMessage,
+  canUseBillingPlanCapability,
+  formatCredits,
+} from '@agiworkforce/types';
+import { useKnownPlanTier } from '@features/chat/lib/default-model-preference';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { useDeveloperProjects } from '@/features/developers/hooks/use-developer-projects';
 import { useDeveloperUsage } from '@/features/developers/hooks/use-developer-usage';
 import type { DeveloperUsageFigures } from '@/features/developers/types';
@@ -64,6 +72,7 @@ import {
 import { StepUpCancelledError } from '@/features/auth/step-up-fetch';
 
 const DEFAULT_PROJECT_LABEL = 'Default project';
+const MANAGED_API_UPGRADE_MESSAGE = billingPlanCapabilityUpgradeMessage('managed_api');
 
 function keyUsageLabel(usage: DeveloperUsageFigures | undefined): string {
   if (!usage || usage.requests + usage.unsettledRequests === 0) return 'No requests this month';
@@ -103,6 +112,11 @@ interface ApiKeyProject {
   name: string;
 }
 
+interface ApiKeysUpgrade {
+  message: string;
+  action: React.ReactNode;
+}
+
 interface ApiKeysPanelProps {
   apiKeys: ApiKey[];
   projects?: readonly ApiKeyProject[];
@@ -115,6 +129,7 @@ interface ApiKeysPanelProps {
   isCreatePending: boolean;
   isLoading?: boolean;
   loadError?: string | null;
+  upgrade?: ApiKeysUpgrade | null;
   onRetry?: () => void;
   onSetShowAPIKeyDialog: (open: boolean) => void;
   onSetKeyToDelete: (id: string | null) => void;
@@ -159,6 +174,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
   isCreatePending,
   isLoading = false,
   loadError = null,
+  upgrade = null,
   onRetry,
   onSetShowAPIKeyDialog,
   onSetKeyToDelete,
@@ -176,15 +192,19 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
               Manage API keys for external integrations
             </CardDescription>
           </div>
-          <Button
-            onClick={() => onSetShowAPIKeyDialog(true)}
-            className="bg-success-fill text-success-on-fill hover:brightness-95"
-            size="sm"
-            disabled={Boolean(loadError) || isLoading || busy}
-          >
-            <Plus className="me-2 h-4 w-4" />
-            New Key
-          </Button>
+          {upgrade ? (
+            upgrade.action
+          ) : (
+            <Button
+              onClick={() => onSetShowAPIKeyDialog(true)}
+              className="bg-success-fill text-success-on-fill hover:brightness-95"
+              size="sm"
+              disabled={Boolean(loadError) || isLoading || busy}
+            >
+              <Plus className="me-2 h-4 w-4" />
+              New Key
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -210,55 +230,66 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
             <div className="py-8 text-center text-muted-foreground">
               <Key className="mx-auto mb-2 h-12 w-12 opacity-50" />
               <p>No API keys yet</p>
-              <p className="text-sm">Generate your first API key to get started</p>
+              <p role={upgrade ? 'status' : undefined} className="text-sm">
+                {upgrade ? upgrade.message : 'Generate your first API key to get started'}
+              </p>
             </div>
           ) : (
-            apiKeys.map((apiKey) => (
-              <div
-                key={apiKey.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-accent/50 p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium text-foreground">{apiKey.name}</p>
-                  <p className="font-mono text-sm text-muted-foreground">{apiKey.key_prefix}...</p>
-                  {projectLabel(apiKey.project_id, projects)}
-                  {usageByKey ? (
-                    <p className="text-xs text-muted-foreground">
-                      {keyUsageLabel(usageByKey.get(apiKey.id))}
+            <>
+              {upgrade ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {upgrade.message}
+                </p>
+              ) : null}
+              {apiKeys.map((apiKey) => (
+                <div
+                  key={apiKey.id}
+                  className="flex items-center justify-between rounded-lg border border-border bg-accent/50 p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{apiKey.name}</p>
+                    <p className="font-mono text-sm text-muted-foreground">
+                      {apiKey.key_prefix}...
                     </p>
-                  ) : null}
-                  <p className="text-xs text-muted-foreground">
-                    {apiKey.scopes
-                      .map(
-                        (scope) =>
-                          API_KEY_SCOPE_OPTIONS.find((option) => option.value === scope)?.label ??
-                          scope,
-                      )
-                      .join(' · ')}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Created: {new Date(apiKey.created_at).toLocaleDateString()}
-                    {apiKey.last_used_at &&
-                      ` - Last used: ${new Date(apiKey.last_used_at).toLocaleDateString()}`}
-                    {apiKey.expires_at
-                      ? ` - ${new Date(apiKey.expires_at).getTime() <= Date.now() ? 'Expired' : 'Expires'}: ${new Date(apiKey.expires_at).toLocaleDateString()}`
-                      : ' - Never expires'}
-                  </p>
+                    {projectLabel(apiKey.project_id, projects)}
+                    {usageByKey ? (
+                      <p className="text-xs text-muted-foreground">
+                        {keyUsageLabel(usageByKey.get(apiKey.id))}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-muted-foreground">
+                      {apiKey.scopes
+                        .map(
+                          (scope) =>
+                            API_KEY_SCOPE_OPTIONS.find((option) => option.value === scope)?.label ??
+                            scope,
+                        )
+                        .join(' · ')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Created: {new Date(apiKey.created_at).toLocaleDateString()}
+                      {apiKey.last_used_at &&
+                        ` - Last used: ${new Date(apiKey.last_used_at).toLocaleDateString()}`}
+                      {apiKey.expires_at
+                        ? ` - ${new Date(apiKey.expires_at).getTime() <= Date.now() ? 'Expired' : 'Expires'}: ${new Date(apiKey.expires_at).toLocaleDateString()}`
+                        : ' - Never expires'}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onSetKeyToDelete(apiKey.id)}
+                      disabled={busy}
+                      aria-label={`Delete ${apiKey.name}`}
+                      className="text-danger hover:text-danger"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onSetKeyToDelete(apiKey.id)}
-                    disabled={busy}
-                    aria-label={`Delete ${apiKey.name}`}
-                    className="text-danger hover:text-danger"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            ))
+              ))}
+            </>
           )}
         </div>
       </CardContent>
@@ -470,6 +501,27 @@ const EMPTY_VIEW: KeyView = { intent: null, secret: '', error: null, notice: nul
 const UNCERTAIN =
   'We could not confirm whether this API key action completed. Refresh API keys before repeating it. A generated secret cannot be recovered.';
 
+function ManagedApiUpgradeButton() {
+  const router = useGuardedRouter();
+  const { closeSettings } = useSettingsModal();
+  return (
+    <Button
+      size="sm"
+      onClick={() => {
+        closeSettings();
+        openUpgrade((href) => router.push(href));
+      }}
+    >
+      Upgrade
+    </Button>
+  );
+}
+
+const MANAGED_API_UPGRADE: ApiKeysUpgrade = {
+  message: MANAGED_API_UPGRADE_MESSAGE,
+  action: <ManagedApiUpgradeButton />,
+};
+
 function IntentFormPanel(props: Omit<ApiKeysPanelProps, 'apiKeyForm'>) {
   const apiKeyForm = useForm<CreateApiKeyFormData>({
     resolver: zodResolver(createApiKeySchema),
@@ -498,6 +550,11 @@ function OwnedApiKeysManager({
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
   const { confirm, dialog } = useConfirmAction();
+  const planTier = useKnownPlanTier();
+  const [planRefusal, setPlanRefusal] = useState<{ tier: string | null } | null>(null);
+  const needsUpgrade =
+    (planTier !== null && !canUseBillingPlanCapability(planTier, 'managed_api')) ||
+    planRefusal?.tier === planTier;
   const lane = useMemo(
     () => ({
       active: false,
@@ -645,6 +702,9 @@ function OwnedApiKeysManager({
       if (!current(intent)) return;
       if (intent.dispatched && !(error instanceof APIKeyMutationRejectedError)) {
         finish(intent, null, UNCERTAIN);
+      } else if (error instanceof APIKeyMutationRejectedError && error.recovery === 'upgrade') {
+        setPlanRefusal({ tier: planTier });
+        finish(intent);
       } else {
         intent.phase = 'editing';
         intent.dispatched = false;
@@ -711,7 +771,7 @@ function OwnedApiKeysManager({
 
   return (
     <>
-      {projectQuery.isLoading ? (
+      {needsUpgrade ? null : projectQuery.isLoading ? (
         <p role="status" className="text-sm text-muted-foreground">
           Loading project choices
         </p>
@@ -732,7 +792,7 @@ function OwnedApiKeysManager({
           </Button>
         </div>
       ) : null}
-      {usageQuery.isLoading ? (
+      {needsUpgrade ? null : usageQuery.isLoading ? (
         <p role="status" className="text-sm text-muted-foreground">
           Loading key usage
         </p>
@@ -770,7 +830,9 @@ function OwnedApiKeysManager({
         apiKeys={apiKeys}
         projects={projects.filter((project) => project.archivedAt === null)}
         usageByKey={
-          usage ? new Map(usage.keys.map((entry) => [entry.apiKeyId, entry] as const)) : null
+          usage && !needsUpgrade
+            ? new Map(usage.keys.map((entry) => [entry.apiKeyId, entry] as const))
+            : null
         }
         showAPIKeyDialog={!!intent && intent.keyId === null}
         generatedAPIKey={view.secret}
@@ -779,6 +841,7 @@ function OwnedApiKeysManager({
         isCreatePending={intent?.phase === 'writing'}
         isLoading={isLoading}
         loadError={isError ? toUserMessage(error, 'Unable to load API keys. Try again.') : null}
+        upgrade={needsUpgrade ? MANAGED_API_UPGRADE : null}
         onRetry={() => {
           if (readCurrent()) void refetch();
         }}

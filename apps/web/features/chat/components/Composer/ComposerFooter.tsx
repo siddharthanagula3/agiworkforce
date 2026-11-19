@@ -44,7 +44,7 @@ import {
   useUiTranslation,
 } from '@agiworkforce/ui';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
-import type { WebSettingsContentSection } from '@features/settings/lib/web-settings-sections';
+import { LOCAL_MODELS_SETTINGS_SECTION } from '@features/settings/lib/web-settings-sections';
 import { formatLocalModelSize, type LocalModel } from '@agiworkforce/local-runtime-contract';
 import { useLocalModelSelection, useLocalModels } from '@features/desktop-host';
 import { useLeaveLocalModel } from '@features/chat/hooks/useLeaveLocalModel';
@@ -200,7 +200,6 @@ const FREE_QUOTA_BADGE_LABEL = 'Free';
 const LOCAL_GRANT_LABEL = 'Use models on this device';
 const LOCAL_GRANT_GUIDANCE = 'Asks once, then lists what Ollama and LM Studio have loaded';
 const LOCAL_EMPTY_TEXT = 'No models loaded on this device yet.';
-const LOCAL_MODELS_SETTINGS_SECTION: WebSettingsContentSection = 'capabilities';
 
 const PLAN_PAGE_LINK_TEXT = 'What each plan includes';
 const AUTO_GUIDANCE = 'Picks the best model for each message';

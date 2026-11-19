@@ -1,8 +1,13 @@
 'use client';
 
-import { Switch, translateUiPlural } from '@agiworkforce/ui';
-import { ErrorCode, connectorsReleased } from '@agiworkforce/types';
-import { useCapability } from '@agiworkforce/unified-chat';
+import { Button, Spinner, Switch, translateUiPlural } from '@agiworkforce/ui';
+import {
+  BILLING_PLAN_CAPABILITY_LABELS,
+  ErrorCode,
+  billingPlanCapabilityUpgradeMessage,
+  connectorsReleased,
+} from '@agiworkforce/types';
+import { useCapability, useCapabilityDecision } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { z } from 'zod';
@@ -68,6 +73,10 @@ import {
   requestConnectorConsent,
 } from '../lib/open-connector-authorization';
 import { lockConnectorDirectory } from '../lib/connector-release-lock';
+import { planLockConnectorDirectory } from '@/features/directory/services/connectors-directory';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
 
@@ -379,12 +388,53 @@ export interface ConnectorsSettingsAdapterResult {
   adapter: ConnectorsSettingsAdapterSlice;
   clearCustomConnectorPreset: () => void;
   directoryAdapter: DirectoryAdapter;
+  directoryHeaderActions: Partial<Record<string, ReactNode>> | undefined;
+  planPane: ReactNode | null;
   navBadges: Partial<Record<string, SettingsNavBadge>> | undefined;
   toolPermissionsConnector: ToolPermissionsConnector | null;
   setToolPermissionsConnectorId: (id: string | null) => void;
 }
 
 const CONNECTORS_UNAVAILABLE_COPY = 'Connectors are unavailable right now';
+
+function ConnectorsUpgradeButton({ className }: { className?: string }) {
+  const router = useGuardedRouter();
+  const { closeSettings } = useSettingsModal();
+  return (
+    <Button
+      size="sm"
+      className={className}
+      onClick={() => {
+        closeSettings();
+        openUpgrade((href) => router.push(href));
+      }}
+    >
+      Upgrade
+    </Button>
+  );
+}
+
+function ConnectorsPlanNotice() {
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-h4 text-foreground">{BILLING_PLAN_CAPABILITY_LABELS.connectors}</h2>
+      <div role="status" className="rounded-lg border border-border bg-muted/40 px-4 py-4">
+        <p className="text-sm text-muted-foreground">
+          {billingPlanCapabilityUpgradeMessage('connectors')}
+        </p>
+        <ConnectorsUpgradeButton className="mt-3" />
+      </div>
+    </div>
+  );
+}
+
+function ConnectorsPlanLoading() {
+  return (
+    <div className="flex justify-center py-16">
+      <Spinner aria-label="Loading connectors" />
+    </div>
+  );
+}
 
 export function useConnectorsSettingsAdapter({
   open,
@@ -394,6 +444,9 @@ export function useConnectorsSettingsAdapter({
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
   const router = useRouter();
   const connectorsAllowed = useCapability('canUseConnectors');
+  const connectorsDecision = useCapabilityDecision('canUseConnectors');
+  const planLocked =
+    connectorsDecision?.allowed === false && connectorsDecision.reason === 'requires_upgrade';
   const [connectedConnectors, setConnectedConnectors] = useState<ParsedConnectorRow[]>([]);
   const [customConnectorPreset, setCustomConnectorPreset] = useState<CustomConnectorPreset | null>(
     null,
@@ -427,6 +480,7 @@ export function useConnectorsSettingsAdapter({
   );
 
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
+  const [connectorsLoaded, setConnectorsLoaded] = useState(false);
   const [connectorsNotice, setConnectorsNotice] = useState<string | null>(null);
   const [githubInstallationsNotice, setGithubInstallationsNotice] = useState<string | null>(null);
 
@@ -539,6 +593,8 @@ export function useConnectorsSettingsAdapter({
                   : error,
               ),
         );
+      } finally {
+        if (!signal?.aborted) setConnectorsLoaded(true);
       }
     },
     [authedHeaders],
@@ -1207,17 +1263,22 @@ export function useConnectorsSettingsAdapter({
     onConnectConnector: connectConnector,
     onDisconnectConnector: disconnectConnector,
   });
-  const directoryAdapter = useMemo(
-    () =>
-      connectorsReleased()
-        ? releasedDirectoryAdapter
-        : lockConnectorDirectory(releasedDirectoryAdapter),
-    [releasedDirectoryAdapter],
-  );
+  const directoryAdapter = useMemo(() => {
+    const releaseLocked = connectorsReleased()
+      ? releasedDirectoryAdapter
+      : lockConnectorDirectory(releasedDirectoryAdapter);
+    return planLocked ? planLockConnectorDirectory(releaseLocked) : releaseLocked;
+  }, [releasedDirectoryAdapter, planLocked]);
+  const holdsConnections = mergedConnectedConnectors.length > 0 || customConnectors.length > 0;
+  const planPane = !planLocked ? null : !connectorsLoaded ? (
+    <ConnectorsPlanLoading />
+  ) : connectorsError === null && !holdsConnections ? (
+    <ConnectorsPlanNotice />
+  ) : null;
 
   return {
     adapter: {
-      ...(connectorsReleased() ? { addCustomConnector } : {}),
+      ...(connectorsReleased() && !planLocked ? { addCustomConnector } : {}),
       customConnectorAuthTokenSupported: true,
       customConnectorOAuthClientSupported: true,
       ...(oauthRedirectUri ? { customConnectorOAuthRedirectUri: oauthRedirectUri } : {}),
@@ -1225,6 +1286,8 @@ export function useConnectorsSettingsAdapter({
     },
     clearCustomConnectorPreset,
     directoryAdapter,
+    directoryHeaderActions: planLocked ? { connectors: <ConnectorsUpgradeButton /> } : undefined,
+    planPane,
     navBadges,
     toolPermissionsConnector,
     setToolPermissionsConnectorId,
