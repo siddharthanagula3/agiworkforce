@@ -63,6 +63,9 @@ jobs:
           workspaces: '. -> target'
           cache-on-failure: true
           cache-bin: false
+          # A pull request restores the cache main saved; a second copy per
+          # pull request only spends the repository's cache allowance.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install pinned cargo-audit
         env:

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-11-11
+Last updated: 2026-11-17
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -198,6 +198,6 @@ outputs. The Rust lane runs only when native code changed _and_ only on `main`.
 `pnpm check:llm-operability` is the guard chain and is what `.husky/pre-push`
 runs. Per-surface release workflows are separate from CI.
 
-Two behaviors to know before trusting a green run: the chain is `&&` and stops
-at the first failure, and `pnpm test:affected` stops at the first failing
-package. Either can hide later problems.
+Two behaviors to know before reading a red run: the chain runs every guard and
+lists each failure at its end, while `pnpm test:affected` stops at the first
+failing package and can hide later problems.

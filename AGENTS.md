@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-24
+Last updated: 2026-11-17
 
 The canonical, tool-neutral operating contract for every coding agent in this
 repository. `CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped
@@ -232,8 +232,10 @@ What bites:
   local run says nothing about what you committed. Stage first, then run, then
   commit. `check:llm-failures:staged` reads immutable index blobs and rejects an
   index that changes during validation.
-- **The guard chain is `&&`** and hides every failure after the first. When
-  diagnosing, run the individual guards.
+- **The guard chain runs every guard and lists each failure at its end.**
+  `scripts/run-guard-chain.mjs` runs four at a time (`AGI_GUARD_CONCURRENCY`
+  to change it), and a guard that fails beside others counts as green only if
+  it then passes alone. When diagnosing, run the individual guard.
 - **Priority tiers match a token against `apps/*/__tests__` paths**, and a tier
   matching nothing exits 1. Only `priority-level-1` and `security` resolve.
 - **`apps/web` runs its own Vitest major.** Run its tests through the package

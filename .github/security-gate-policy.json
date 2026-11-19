@@ -199,7 +199,12 @@
           "services/upload-scanner"
         ]
       },
-      "reason": "The advisory (CVE-2026-112366, a regular expression denial of service) covers every released picomatch version and upstream has published no fix, so no override or upgrade can clear the audit. Readings on 2026-11-17 found picomatch 4.0.7 used only by build, lint and test tooling (bundlers, command-line tools, code generation, test runners), with no shipped code that lets another party supply a pattern to it; four workspaces install it through production dependencies whose build-time parts pull it in. The owner approved a dated exception on 2026-11-17.",
+      "patch": {
+        "version": "4.0.7",
+        "path": "patches/picomatch@4.0.7.patch",
+        "sha256": "e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547"
+      },
+      "reason": "The advisory (CVE-2026-112366, a regular expression denial of service) covers every released picomatch version and upstream has published no fix, so no override or upgrade can clear the audit. The committed source patch makes picomatch treat a repeated extglob as literal text when its body nests an unbounded quantifier (a wildcard, a negation extglob or another repeat), which is the exponential backtracking the advisory describes; the guard verifies the exact patch bytes, the manifest and lockfile bindings and every affected dependency reference, and installed-package regressions run in blocking CI. Readings on 2026-11-17 found picomatch 4.0.7 used only by build, lint and test tooling (bundlers, command-line tools, code generation, test runners), with no shipped code that lets another party supply a pattern to it; four workspaces install it through production dependencies whose build-time parts pull it in. The owner approved a dated exception on 2026-11-17.",
       "owner": "Founder",
       "tracking": "DEPS-PICOMATCH-REDOS-ADVISORY-01 (audit/registers/known-flaws.md)",
       "expires": "2026-12-17"

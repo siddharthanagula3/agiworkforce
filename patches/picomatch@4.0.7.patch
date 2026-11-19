@@ -1,0 +1,150 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index 29207512c60183b4bb9bf5112be3b9b5f4a9a9fd..a1263124e86d96a85d86bfbf72b8327996503387 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -139,6 +139,123 @@ const normalizeSimpleBranch = branch => {
+   return value.replace(/\\(.)/g, '$1');
+ };
+ 
++/**
++ * True when a repeated extglob body holds an unbounded wildcard at any depth,
++ * outside brackets and escapes: a `*` or `**`, or a negation extglob `!(...)`,
++ * which compiles to a lookahead followed by `*`. Repeating a group that
++ * contains one nests an unbounded quantifier inside another
++ * (`(?:[^/]*?a)+`), which backtracks exponentially on a short string that does
++ * not match. A `*` that opens a nested `*(...)` is a repeat of its own and is
++ * counted by `nestedRepeatDepth`. A quoted `*` counts as a wildcard, since
++ * quoting does not always make it a literal.
++ */
++
++const hasUnboundedWildcard = body => {
++  let bracket = 0;
++  let escaped = false;
++
++  for (let i = 0; i < body.length; i++) {
++    const ch = body[i];
++
++    if (escaped === true) {
++      escaped = false;
++      continue;
++    }
++
++    if (ch === '\\') {
++      escaped = true;
++      continue;
++    }
++
++    if (ch === '[') {
++      bracket++;
++      continue;
++    }
++
++    if (ch === ']' && bracket > 0) {
++      bracket--;
++      continue;
++    }
++
++    if (bracket > 0) {
++      continue;
++    }
++
++    if (ch === '*' && body[i + 1] !== '(') {
++      return true;
++    }
++
++    if (ch === '!' && body[i + 1] === '(') {
++      return true;
++    }
++  }
++
++  return false;
++};
++
++/**
++ * How deeply `+(...)` and `*(...)` are nested inside a repeated extglob body,
++ * wherever in a branch they sit. `repeatedExtglobRecursion` only sees a branch
++ * that is one repeated extglob as a whole, so `+(a*(a))` passed with a nested
++ * unbounded quantifier (`(?:a(?:a)*)+`).
++ */
++
++const nestedRepeatDepth = body => {
++  const repeats = [];
++  let bracket = 0;
++  let depth = 0;
++  let deepest = 0;
++  let escaped = false;
++  let prev = '';
++
++  for (const ch of body) {
++    if (escaped === true) {
++      escaped = false;
++      prev = '';
++      continue;
++    }
++
++    if (ch === '\\') {
++      escaped = true;
++      continue;
++    }
++
++    if (ch === '[') {
++      bracket++;
++      prev = '';
++      continue;
++    }
++
++    if (ch === ']' && bracket > 0) {
++      bracket--;
++      prev = '';
++      continue;
++    }
++
++    if (bracket > 0) {
++      continue;
++    }
++
++    if (ch === '(') {
++      const repeat = prev === '+' || prev === '*';
++      repeats.push(repeat);
++
++      if (repeat === true) {
++        depth++;
++        deepest = Math.max(deepest, depth);
++      }
++    } else if (ch === ')' && repeats.length > 0) {
++      if (repeats.pop() === true) {
++        depth--;
++      }
++    }
++
++    prev = ch;
++  }
++
++  return deepest;
++};
++
+ const hasRepeatedCharPrefixOverlap = branches => {
+   const values = branches.map(normalizeSimpleBranch).filter(Boolean);
+ 
+@@ -294,6 +411,10 @@ const analyzeRepeatedExtglob = (body, options) => {
+       ? options.maxExtglobRecursion
+       : constants.DEFAULT_MAX_EXTGLOB_RECURSION;
+ 
++  if (hasUnboundedWildcard(body)) {
++    return { risky: true };
++  }
++
+   const branches = splitTopLevel(body).map(branch => branch.trim());
+ 
+   if (branches.length > 1) {
+@@ -343,6 +464,10 @@ const analyzeRepeatedExtglob = (body, options) => {
+       : { risky: true };
+   }
+ 
++  if (nestedRepeatDepth(body) > max) {
++    return { risky: true };
++  }
++
+   return { risky: false };
+ };
+ 

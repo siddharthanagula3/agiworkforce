@@ -2457,7 +2457,7 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 609,
+      "files": 610,
       "roles": {
         "asset": 12,
         "config": 6,
@@ -2465,7 +2465,7 @@
         "other": 31,
         "source": 243,
         "style": 3,
-        "test": 311
+        "test": 312
       }
     },
     {
@@ -5066,10 +5066,10 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 18,
+      "files": 19,
       "roles": {
         "config": 1,
-        "other": 16,
+        "other": 17,
         "source": 1
       }
     },
@@ -5087,13 +5087,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 728,
+      "files": 731,
       "roles": {
         "config": 68,
         "doc": 1,
         "other": 21,
-        "source": 380,
-        "test": 258
+        "source": 381,
+        "test": 260
       }
     },
     {
