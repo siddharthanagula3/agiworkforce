@@ -83,6 +83,7 @@ export function DictationBar() {
           bars={dictation.bars}
           error={dictation.error}
           reducedMotion={dictation.reducedMotion}
+          usageLimited={dictation.usageLimited}
           onCancel={discard}
           onStop={stop}
           onSend={dictation.send}

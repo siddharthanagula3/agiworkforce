@@ -6,16 +6,21 @@ import {
   connectorDirectoryEntryPath,
   connectorDirectoryIconPath,
 } from '@agiworkforce/cloud-contracts';
+import { billingPlanCapabilityUpgradeMessage } from '@agiworkforce/types';
 import {
   isUnverifiedCustomConnector,
   type ConnectedConnector,
+  type DirectoryAdapter,
   type DirectoryBadgeKind,
   type DirectoryConnectableMode,
   type DirectoryConnectorDetail,
+  type DirectoryDetail,
   type DirectoryEntry,
   type DirectoryFilterGroup,
+  type DirectoryLockNotice,
   type DirectoryQuery,
   type DirectorySection,
+  type DirectorySectionKey,
   type DirectorySortKey,
   type DirectoryToggle,
   type SettingsConnector,
@@ -949,4 +954,90 @@ export function connectorReauthorizationErrors(
     }
   }
   return errors;
+}
+
+const CONNECTORS_PLAN_MESSAGE = billingPlanCapabilityUpgradeMessage('connectors');
+
+export const CONNECTORS_PLAN_LOCK: DirectoryLockNotice = {
+  label: CONNECTORS_PLAN_MESSAGE,
+  message: 'Connectors you already added stay here so you can disconnect them.',
+};
+
+const PLAN_LOCKED_SECTION: DirectorySectionKey = 'connectors';
+
+export function planLockConnectorEntry(entry: DirectoryEntry): DirectoryEntry {
+  if (entry.installed === true) return entry;
+  const locked: DirectoryEntry = { ...entry, installable: false };
+  delete locked.statusLabel;
+  delete locked.installNotice;
+  delete locked.setupPending;
+  return locked;
+}
+
+export function planLockConnectorSection(section: DirectorySection): DirectorySection {
+  return {
+    ...section,
+    installable: false,
+    entries: section.entries.map(planLockConnectorEntry),
+    locked: CONNECTORS_PLAN_LOCK,
+  };
+}
+
+export function planLockConnectorDetail(detail: DirectoryDetail): DirectoryDetail {
+  if (detail.kind !== 'connector') return detail;
+  const related = detail.related?.map(planLockConnectorEntry);
+  const locked: DirectoryConnectorDetail = { ...detail, ...(related ? { related } : {}) };
+  if (detail.connected === true) {
+    delete locked.needsReauthorization;
+    return locked;
+  }
+  delete locked.authorizationPending;
+  delete locked.setupNotice;
+  delete locked.desktopHref;
+  return { ...locked, listingNote: CONNECTORS_PLAN_MESSAGE };
+}
+
+type DetailLoader = NonNullable<DirectoryAdapter['loadDetail']>;
+
+/*
+ * The directory reloads a detail whenever its loader changes identity, and the
+ * adapter is re-wrapped on every state change, so each loader keeps one wrapper.
+ */
+const planLockedDetailLoaders = new WeakMap<DetailLoader, DetailLoader>();
+
+function planLockedDetailLoader(loadDetail: DetailLoader): DetailLoader {
+  const cached = planLockedDetailLoaders.get(loadDetail);
+  if (cached) return cached;
+  const locked: DetailLoader = async (section, id) => {
+    const detail = await loadDetail(section, id);
+    return detail && section === PLAN_LOCKED_SECTION ? planLockConnectorDetail(detail) : detail;
+  };
+  planLockedDetailLoaders.set(loadDetail, locked);
+  return locked;
+}
+
+export function planLockConnectorDirectory(adapter: DirectoryAdapter): DirectoryAdapter {
+  const { connectors, loadDetail, install, requestCredentials, createEntry } = adapter;
+  const locked: DirectoryAdapter = {
+    ...adapter,
+    ...(connectors ? { connectors: planLockConnectorSection(connectors) } : {}),
+    ...(loadDetail ? { loadDetail: planLockedDetailLoader(loadDetail) } : {}),
+  };
+  if (install) {
+    locked.install = (section, id) =>
+      section === PLAN_LOCKED_SECTION
+        ? Promise.resolve(CONNECTORS_PLAN_MESSAGE)
+        : install(section, id);
+  }
+  if (requestCredentials) {
+    locked.requestCredentials = (section, id) => {
+      if (section !== PLAN_LOCKED_SECTION) requestCredentials(section, id);
+    };
+  }
+  if (createEntry) {
+    locked.createEntry = (section) => {
+      if (section !== PLAN_LOCKED_SECTION) createEntry(section);
+    };
+  }
+  return locked;
 }

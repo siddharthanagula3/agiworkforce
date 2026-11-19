@@ -30,24 +30,31 @@ impl Utf8StreamDecoder {
     /// Any incomplete trailing codepoint is retained for the next call.
     pub fn push(&mut self, bytes: &[u8]) -> String {
         self.buf.extend_from_slice(bytes);
-        match std::str::from_utf8(&self.buf) {
-            Ok(s) => {
-                let out = s.to_string();
-                self.buf.clear();
-                out
-            }
-            Err(e) => {
-                let valid = e.valid_up_to();
-                if valid == 0 {
-                    // Nothing complete yet (buffer holds only a partial codepoint).
-                    return String::new();
+        let mut out = String::new();
+        loop {
+            match std::str::from_utf8(&self.buf) {
+                Ok(s) => {
+                    out.push_str(s);
+                    self.buf.clear();
+                    return out;
                 }
-                // SAFETY of unwrap: `valid_up_to()` guarantees `buf[..valid]` is
-                // valid UTF-8.
-                let out = String::from_utf8(self.buf[..valid].to_vec())
-                    .expect("valid_up_to guarantees a valid UTF-8 prefix");
-                self.buf.drain(..valid);
-                out
+                Err(e) => {
+                    let valid = e.valid_up_to();
+                    out.push_str(
+                        std::str::from_utf8(&self.buf[..valid])
+                            .expect("valid_up_to guarantees a valid UTF-8 prefix"),
+                    );
+                    match e.error_len() {
+                        Some(invalid) => {
+                            out.push(char::REPLACEMENT_CHARACTER);
+                            self.buf.drain(..valid + invalid);
+                        }
+                        None => {
+                            self.buf.drain(..valid);
+                            return out;
+                        }
+                    }
+                }
             }
         }
     }
@@ -146,5 +153,14 @@ mod tests {
         assert_eq!(d.push(&bytes[..2]), "");
         // finish must not silently drop them.
         assert!(!d.finish().is_empty());
+    }
+
+    #[test]
+    fn an_invalid_byte_does_not_hold_back_the_rest_of_the_stream() {
+        let mut d = Utf8StreamDecoder::new();
+        assert_eq!(d.push(b"a\xffb"), "a\u{FFFD}b");
+        assert_eq!(d.push(b"\xfehello"), "\u{FFFD}hello");
+        assert_eq!(d.push(b" world"), " world");
+        assert_eq!(d.finish(), "");
     }
 }

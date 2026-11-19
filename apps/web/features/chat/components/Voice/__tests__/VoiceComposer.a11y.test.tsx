@@ -97,7 +97,6 @@ function renderSurface() {
       onNewChat={() => undefined}
       onOpenLibrary={() => undefined}
       onOpenConnectors={() => undefined}
-      onIntelligenceChange={() => undefined}
     />,
   );
 }
@@ -161,7 +160,6 @@ describe('voice live-region announcements', () => {
           onNewChat={() => undefined}
           onOpenLibrary={() => undefined}
           onOpenConnectors={() => undefined}
-          onIntelligenceChange={() => undefined}
         />,
       );
       expect(screen.getByTestId('voice-live-status').textContent).toBe(expected);

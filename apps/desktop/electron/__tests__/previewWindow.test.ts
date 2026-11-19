@@ -67,12 +67,14 @@ vi.mock('electron', () => ({
 
 const { openLocalPreview, readPreviewConsoleErrors, closeLocalPreview } =
   await import('../previewWindow');
+const { shell } = await import('electron');
 
 const PAGE = 'http://localhost:5173/';
 
 beforeEach(() => {
   closeLocalPreview();
   FakeWindow.last = null;
+  vi.mocked(shell.openExternal).mockClear();
 });
 
 describe('reading the errors of the preview window', () => {
@@ -159,5 +161,40 @@ describe('reading the errors of the preview window', () => {
     closeLocalPreview();
 
     expect(readPreviewConsoleErrors(false)).toEqual({ url: null, errors: [], dropped: 0 });
+  });
+});
+
+describe('where the preview window may go', () => {
+  function redirect(url: string, isMainFrame = true) {
+    const event = { url, isMainFrame, preventDefault: vi.fn() };
+    FakeWindow.last!.webContents.emit('will-redirect', event);
+    return event;
+  }
+
+  it('hands a server redirect off this computer to the browser instead of showing it', async () => {
+    await openLocalPreview(PAGE);
+
+    const event = redirect('https://accounts.example.com/sign-in');
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(shell.openExternal).toHaveBeenCalledWith('https://accounts.example.com/sign-in');
+  });
+
+  it('follows a redirect that stays on this computer', async () => {
+    await openLocalPreview(PAGE);
+
+    const event = redirect('http://localhost:5173/dashboard');
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(shell.openExternal).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing for a redirect to an address that is not a web page', async () => {
+    await openLocalPreview(PAGE);
+
+    const event = redirect('file:///etc/hosts');
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(shell.openExternal).not.toHaveBeenCalled();
   });
 });

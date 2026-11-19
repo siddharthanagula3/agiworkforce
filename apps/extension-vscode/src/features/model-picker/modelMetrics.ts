@@ -103,8 +103,14 @@ export class ModelMetricsPanel {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
 
     this.panel.webview.onDidReceiveMessage(
-      (msg: { type: string }) => {
+      async (msg: { type: string }) => {
         if (msg.type === 'reset') {
+          const choice = await vscode.window.showWarningMessage(
+            'Reset the model dashboard? The request counts and average latency recorded for every model are deleted and cannot be recovered.',
+            { modal: true },
+            'Reset',
+          );
+          if (choice !== 'Reset') return;
           getModelMetrics().reset();
           this.update();
           vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: Model metrics reset.`);

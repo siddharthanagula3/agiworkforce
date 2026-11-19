@@ -534,8 +534,9 @@ const DESTRUCTIVE_INNER_PATTERNS = [
 
 const INVISIBLE_UNICODE_CHARS = new RegExp(
   '[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u206F\\uFEFF]',
-  'g',
 );
+
+const ESCAPE_CHARACTER = '\u001B';
 
 const MAX_SUGGESTED_COMMAND_CHARS = 512;
 
@@ -662,12 +663,19 @@ function checkAgainstPolicy(
 /**
  * The gate every model-authored command passes before any host may run it.
  * Returns the reason it is refused, or undefined when it may run.
+ *
+ * Escapes and invisible characters are refused, never stripped: a stripped copy
+ * is neither the text a reviewer is shown nor the text a host types.
  */
 export function validateSuggestedCommand(cmd: string): string | undefined {
-  const clean = stripAnsiEscapes(cmd).replace(INVISIBLE_UNICODE_CHARS, '').trim();
+  const clean = cmd.trim();
 
   if (clean.length === 0) {
     return 'Command is empty.';
+  }
+
+  if (clean.includes(ESCAPE_CHARACTER) || INVISIBLE_UNICODE_CHARS.test(clean)) {
+    return 'Command rejected: contains a terminal escape or an invisible or text-reordering character, so what the QuickPick shows is not what would run.';
   }
 
   if (clean.length > MAX_SUGGESTED_COMMAND_CHARS) {
@@ -710,17 +718,19 @@ export function describeTerminalOutsideWorkspace(
 
 /**
  * The only path model-authored text may take to a host's shell. The gate runs at
- * the sink, so no cached or refactored suggestion reaches it unvalidated.
+ * the sink, so no cached or refactored suggestion reaches it unvalidated, and the
+ * shell is sent the exact text the gate judged.
  */
 export function runSuggestedCommand(
   session: CodeTerminalSession,
   command: string,
 ): string | undefined {
+  const judged = command.trim();
   const refusal =
-    validateSuggestedCommand(command) ??
+    validateSuggestedCommand(judged) ??
     describeTerminalOutsideWorkspace(session.workspaceRoot(), session.terminalCwd());
   if (refusal !== undefined) return refusal;
-  session.runCommand(command);
+  session.runCommand(judged);
   return undefined;
 }
 

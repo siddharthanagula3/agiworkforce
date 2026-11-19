@@ -17,14 +17,30 @@ const authMocks = vi.hoisted(() => ({
   db: { query: async () => [], execute: async () => 0 },
   getClerkAuthUser: vi.fn(),
 }));
-vi.mock('@/lib/server/rls-db', async () => ({
-  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+vi.mock('@/lib/server/rls-db', async () => {
+  const { resolveAuthenticatedSurface } = await vi.importActual<RequestSurfaceModule>(
+    '@/app/api/llm/v1/chat/completions/lib/request-surface',
+  );
+  return {
+    ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
 
-  getUserScopedDb: async (...args: unknown[]) => {
-    const { userId } = (await authMocks.getClerkAuthUser(...args)) as { userId: string };
-    return { db: authMocks.db, userId, organizationId: null };
-  },
-}));
+    getUserScopedDb: async (...args: unknown[]) => {
+      const auth = (await authMocks.getClerkAuthUser(...args)) as {
+        userId: string;
+        surfaceClass?: 'developer';
+        boundSurface?: 'web' | 'chrome';
+      };
+      const request = args[0] as NextRequest;
+      const token = request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '';
+      return {
+        db: authMocks.db,
+        userId: auth.userId,
+        organizationId: null,
+        surface: resolveAuthenticatedSurface(request, { ...auth, token }),
+      };
+    },
+  };
+});
 vi.mock('@/lib/api-auth', async () => ({
   ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
 
@@ -86,6 +102,7 @@ import {
 type RateLimitModule = typeof import('@/lib/rate-limit');
 type CorsModule = typeof import('@/lib/cors');
 type RlsDbModule = typeof import('@/lib/server/rls-db');
+type RequestSurfaceModule = typeof import('@/app/api/llm/v1/chat/completions/lib/request-surface');
 type ApiAuthModule = typeof import('@/lib/api-auth');
 type NeonDbModule = typeof import('@/lib/server/neon-db');
 type ProviderAdapterServiceModule = typeof import('@/lib/services/provider-adapter-service');
@@ -306,5 +323,79 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
       object: 'list',
       x_agi_workforce: { user_tier: 'max' },
     });
+  });
+});
+
+describe('GET /api/llm/v1/models for the surface the credential is bound to', () => {
+  type ModelsPayload = {
+    data: Array<{ id: string }>;
+    x_agi_workforce: {
+      user_tier: string;
+      total_available: number;
+      allowed_auto_modes: string[];
+      temporarily_unavailable: string[];
+    };
+  };
+
+  async function listFor(
+    planTier: string,
+    auth: { surfaceClass?: 'developer'; boundSurface?: 'web' },
+    headers: Record<string, string> = {},
+  ): Promise<ModelsPayload> {
+    authMocks.getClerkAuthUser.mockResolvedValueOnce({ userId: 'user-1', ...auth });
+    subscriptionMocks.getSubscription.mockResolvedValueOnce({
+      plan_tier: planTier,
+      status: 'active',
+    });
+    const response = await GET(request({ Authorization: 'Bearer session-token', ...headers }));
+    expect(response.status).toBe(200);
+    return (await response.json()) as ModelsPayload;
+  }
+
+  const ids = (payload: ModelsPayload) => payload.data.map((model) => model.id);
+
+  it.each([
+    ['free', 'the CLI', {}],
+    ['free', 'VS Code', { 'x-client': 'vscode-extension' }],
+    ['basic', 'the CLI', {}],
+  ])(
+    'lists nothing to a %s developer credential from %s, whose turns the gateway refuses',
+    async (planTier, _surface, headers) => {
+      const payload = await listFor(planTier, { surfaceClass: 'developer' }, headers);
+
+      expect(payload.data).toEqual([]);
+      expect(payload.x_agi_workforce).toMatchObject({
+        user_tier: planTier,
+        total_available: 0,
+        allowed_auto_modes: [],
+        temporarily_unavailable: [],
+      });
+    },
+  );
+
+  it('keeps the free catalog for the same account in the web and desktop apps', async () => {
+    const web = await listFor('free', { boundSurface: 'web' });
+    const desktop = await listFor('free', { boundSurface: 'web' }, { 'x-agi-surface': 'desktop' });
+
+    expect(web.data.length).toBeGreaterThan(0);
+    expect(web.x_agi_workforce.allowed_auto_modes.length).toBeGreaterThan(0);
+    expect(ids(desktop)).toEqual(ids(web));
+  });
+
+  it('does not let a header claim a developer surface for a web token', async () => {
+    const claimed = await listFor('free', { boundSurface: 'web' }, { 'x-agi-surface': 'cli' });
+
+    expect(claimed.data.length).toBeGreaterThan(0);
+  });
+
+  it('keeps the full catalog for a developer credential on a plan that includes the CLI', async () => {
+    const developer = await listFor('pro', { surfaceClass: 'developer' });
+    const web = await listFor('pro', { boundSurface: 'web' });
+
+    expect(developer.data.length).toBeGreaterThan(0);
+    expect(ids(developer)).toEqual(ids(web));
+    expect(developer.x_agi_workforce.allowed_auto_modes).toEqual(
+      web.x_agi_workforce.allowed_auto_modes,
+    );
   });
 });

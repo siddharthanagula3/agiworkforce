@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/features/projects');
 
 const push = vi.fn();
+const router = { push };
 const schedulePageProps = vi.fn();
+const composerProps = vi.fn();
 const billing = vi.hoisted(() => ({
   state: {
     subscription: { tier: 'enterprise' },
@@ -37,7 +39,7 @@ const projectsSession = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => router,
   useParams: () => ({ id: 'project-1' }),
 }));
 
@@ -70,7 +72,10 @@ vi.mock('@/lib/hooks/useConversations', async (importOriginal) => ({
 }));
 
 vi.mock('@/features/chat/components/Composer/ChatComposerNew', () => ({
-  ChatComposerNew: () => <div data-testid="project-composer-stub" />,
+  ChatComposerNew: (props: { onUpgradeRequest?: () => void }) => {
+    composerProps(props);
+    return <div data-testid="project-composer-stub" />;
+  },
 }));
 
 vi.mock('@/features/schedules', () => ({
@@ -98,6 +103,7 @@ vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
 
 import ProjectDetailPage from './page';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
+import { onAppCommand, PLANS_PAGE_PATH } from '@shared/lib/app-commands';
 
 beforeEach(() => {
   projectsSession.accountId = 'user-1';
@@ -116,6 +122,8 @@ beforeEach(() => {
     initialized: true,
   };
   schedulePageProps.mockClear();
+  composerProps.mockClear();
+  push.mockClear();
   useChatProjectStore.setState({ projects: [projectFixture], activeProjectId: null });
 });
 
@@ -186,6 +194,49 @@ describe('project detail page scheduled tab', () => {
     expect(screen.getByRole('status', { name: 'Loading schedule access' })).toBeInTheDocument();
     expect(screen.queryByTestId('project-schedules-section')).toBeNull();
     expect(schedulePageProps).not.toHaveBeenCalled();
+  });
+});
+
+describe('project detail composer upgrade entry', () => {
+  function latestUpgradeRequest(): () => void {
+    const props = composerProps.mock.lastCall?.[0] as { onUpgradeRequest?: () => void };
+    if (!props?.onUpgradeRequest) throw new Error('the project composer has no upgrade entry');
+    return props.onUpgradeRequest;
+  }
+
+  it('opens the in-app plan dialog from the project composer', () => {
+    const openDialog = vi.fn();
+    const stopListening = onAppCommand('open-upgrade', openDialog);
+    try {
+      render(<ProjectDetailPage />);
+      latestUpgradeRequest()();
+    } finally {
+      stopListening();
+    }
+
+    expect(openDialog).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the plans page where no plan dialog is listening', () => {
+    render(<ProjectDetailPage />);
+    latestUpgradeRequest()();
+
+    expect(push).toHaveBeenCalledWith(PLANS_PAGE_PATH);
+  });
+
+  it('keeps the same upgrade entry across renders so the composer stays memoised', async () => {
+    const user = userEvent.setup();
+    render(<ProjectDetailPage />);
+    await user.click(screen.getByTestId('project-detail-tab-scheduled'));
+
+    const entries = new Set(
+      composerProps.mock.calls.map(
+        ([props]) => (props as { onUpgradeRequest?: () => void }).onUpgradeRequest,
+      ),
+    );
+    expect(composerProps.mock.calls.length).toBeGreaterThan(1);
+    expect(entries.size).toBe(1);
   });
 });
 

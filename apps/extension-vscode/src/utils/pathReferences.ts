@@ -6,15 +6,31 @@ export interface PathReference {
   length: number;
 }
 
-const DRIVE_OR_ROOT = String.raw`(?:[A-Za-z]:[\\/]|[\\/])?`;
-const SEGMENT = String.raw`[\w.\-+@$%~]+`;
+const SEGMENT_CHARS = String.raw`\w.\-+@$%~`;
+const SEGMENT = `[${SEGMENT_CHARS}]+`;
 const EXTENSION = String.raw`\.[A-Za-z][\w]{0,9}`;
+/**
+ * A path starts at a drive letter, at a separator that follows no segment, or
+ * at a segment that follows neither. The lookbehinds refuse every other start:
+ * each lies inside a run an earlier start already scanned to its end, so it
+ * cannot match, and trying it rescans the rest of that run. Without them a long
+ * token with no extension costs quadratic time, on text a workspace file or the
+ * model controls.
+ */
+const DRIVE_START = String.raw`[A-Za-z]:[\\/]`;
+const ROOT_START = String.raw`(?<![${SEGMENT_CHARS}])[\\/]`;
+const RUN_START = String.raw`(?<![${SEGMENT_CHARS}\\/])`;
 const PATH_PATTERN = new RegExp(
-  `${DRIVE_OR_ROOT}(?:${SEGMENT}[\\\\/])*${SEGMENT}${EXTENSION}`,
+  `(?:${DRIVE_START}|${ROOT_START}|${RUN_START})(?:${SEGMENT}[\\\\/])*${SEGMENT}${EXTENSION}`,
   'gu',
 );
 
-const URL_PATTERN = /[a-z][a-z0-9+.-]*:\/\/\S+/giu;
+/**
+ * Only the first letter of a scheme run may start a URL, for the same reason: a
+ * later letter ends its scheme at the same character and cannot match where the
+ * first did not. The lookbehind follows the letter so it runs at letters only.
+ */
+const URL_PATTERN = /[a-z](?<![a-z][0-9+.-]*[a-z])[a-z0-9+.-]*:\/\/\S+/giu;
 const SEPARATOR = /[\\/]/u;
 const LOWERCASE_EXTENSION = /^[a-z0-9]+$/u;
 const MAX_PATH_LENGTH = 1024;
