@@ -31,6 +31,11 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { isAccountUnavailableError } from '@/lib/api-auth';
 import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
+import {
+  canUseManagedCloudChatSurface,
+  getCloudChatSurfaceCapability,
+  type CloudChatSurface,
+} from '@/lib/free-chat-surface-policy';
 import { acceptedRequestParameters } from '../chat/completions/lib/request-parameters';
 
 type OpenAiCompatibleModel = {
@@ -155,7 +160,23 @@ async function getVisibleModelsForTier(
   return { available, temporarilyUnavailable };
 }
 
-async function listModelsForRequest(request: NextRequest, userTier: string, userId: string) {
+/**
+ * The CLI caches this list as what the plan runs on it and routes a listed
+ * model to the gateway ahead of the user's own provider key, so a developer
+ * credential whose plan the gateway refuses must be told the plan runs nothing.
+ */
+function planServesSurface(userTier: string, surface: CloudChatSurface | undefined): boolean {
+  if (surface === undefined || getCloudChatSurfaceCapability(surface) !== 'developer_surfaces') {
+    return true;
+  }
+  return canUseManagedCloudChatSurface(userTier, surface);
+}
+
+async function visibleModelsForAccount(
+  request: NextRequest,
+  userTier: string,
+  userId: string,
+): Promise<VisibleModels> {
   const gate = await readKillSwitchGate(
     buildFlagSubject(request, {
       userId,
@@ -165,7 +186,19 @@ async function listModelsForRequest(request: NextRequest, userTier: string, user
       surface: null,
     }),
   );
-  const { available, temporarilyUnavailable } = await getVisibleModelsForTier(userTier, gate);
+  return getVisibleModelsForTier(userTier, gate);
+}
+
+async function listModelsForRequest(
+  request: NextRequest,
+  userTier: string,
+  userId: string,
+  surface?: CloudChatSurface,
+) {
+  const served = planServesSurface(userTier, surface);
+  const { available, temporarilyUnavailable }: VisibleModels = served
+    ? await visibleModelsForAccount(request, userTier, userId)
+    : { available: [], temporarilyUnavailable: [] };
 
   return NextResponse.json(
     {
@@ -174,7 +207,7 @@ async function listModelsForRequest(request: NextRequest, userTier: string, user
       x_agi_workforce: {
         user_tier: normalizeSubscriptionAccessTier(userTier),
         total_available: available.length,
-        allowed_auto_modes: getAllowedAutoModesForTier(userTier),
+        allowed_auto_modes: served ? getAllowedAutoModesForTier(userTier) : [],
         routing_profiles: ROUTING_PROFILE_CHOICE_OPTIONS.map(({ choice, label, description }) => ({
           id: choice,
           label,
@@ -287,6 +320,7 @@ async function handleListModels(request: NextRequest) {
     request,
     await resolveEntitledPlanTier(scoped.db, scoped.userId),
     scoped.userId,
+    scoped.surface,
   );
 }
 

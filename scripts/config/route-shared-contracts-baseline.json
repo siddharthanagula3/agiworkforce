@@ -91,7 +91,6 @@
     "settings/2fa/setup",
     "settings/2fa/verify",
     "settings/activity",
-    "settings/api-keys",
     "settings/api-keys/[keyId]",
     "settings/approvals",
     "settings/audit-logs",

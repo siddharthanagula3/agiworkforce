@@ -2,8 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockGetUserScopedDb, mockQuery, mockExecute, mockAudit } = vi.hoisted(() => ({
+const { mockGetUserScopedDb, mockQuery, mockExecute, mockAudit, mockPlanTier } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
+  mockPlanTier: vi.fn(),
   mockQuery: vi.fn(),
   mockExecute: vi.fn(async (..._args: unknown[]) => 1),
   mockAudit: vi.fn(async () => {}),
@@ -11,6 +12,10 @@ const { mockGetUserScopedDb, mockQuery, mockExecute, mockAudit } = vi.hoisted(()
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
+}));
+vi.mock('@/lib/services/entitlement-resolution', async () => ({
+  ...(await vi.importActual<EntitlementResolutionModule>('@/lib/services/entitlement-resolution')),
+  resolveEntitledPlanTier: (...args: unknown[]) => mockPlanTier(...args),
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -25,12 +30,24 @@ vi.mock('@/lib/security-audit', () => ({
 
 process.env['CSRF_SECRET'] = 'api-key-reveal-step-up-secret-long-enough';
 
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+
+import {
+  BILLING_PLAN_PRICING,
+  billingPlanCapabilityWireTiers,
+  canUseBillingPlanCapability,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { GET, POST } from '../route';
 import { DELETE } from '../[keyId]/route';
 
 const KEY_ID = '11111111-2222-4333-8444-555555555555';
+const PLAN_WITH_API = billingPlanCapabilityWireTiers('managed_api')[0] as BillingPlanTier;
+const PLAN_WITHOUT_API = (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).find(
+  (plan) => !canUseBillingPlanCapability(plan, 'managed_api'),
+) as BillingPlanTier;
 
 function req(url = 'http://localhost:3000/api/settings/api-keys', init?: RequestInit) {
   return new Request(url, init) as never;
@@ -71,6 +88,7 @@ function createdRow(expiresAt: string | null) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPlanTier.mockResolvedValue(PLAN_WITH_API);
   let active = false;
   const outerQuery = (sql: string, params: unknown[]) => {
     if (active || /insert into api_keys/i.test(sql)) {
@@ -215,6 +233,25 @@ describe('creating an API key', () => {
     expect(response.status).toBe(400);
     expect(mockQuery).not.toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO api_keys'),
+      expect.anything(),
+    );
+    expect(mockAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'api_key_created' }),
+    );
+  });
+});
+
+describe('creating an API key on a plan without API access', () => {
+  it('refuses with an upgrade and creates nothing', async () => {
+    mockPlanTier.mockResolvedValue(PLAN_WITHOUT_API);
+
+    const response = await POST(createRequest({ name: 'New key', scopes: ['models:read'] }));
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(JSON.stringify(body)).toContain('managed_api_plan_required');
+    expect(mockQuery).not.toHaveBeenCalledWith(
+      expect.stringMatching(/insert into api_keys/i),
       expect.anything(),
     );
     expect(mockAudit).not.toHaveBeenCalledWith(

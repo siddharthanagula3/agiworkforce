@@ -50,9 +50,10 @@ import {
 } from '@features/chat/lib/live-voice-session';
 import type { LiveVoiceReasoning } from '@features/chat/lib/live-voices';
 
-const MESSAGE = {
+export const VOICE_SESSION_MESSAGE = {
   sendFailed: 'That turn could not be sent. Try again.',
   mutedHint: 'Muted, tap the mic to talk',
+  unavailableInChat: "Voice mode isn't available in this chat.",
 } as const;
 
 const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connection_lost']);
@@ -827,7 +828,7 @@ export function useVoiceSession({
     if (!managed) {
       dispatch({
         type: VOICE_SESSION_EVENT.fail,
-        message: 'Live voice requires a Cloud conversation.',
+        message: VOICE_SESSION_MESSAGE.unavailableInChat,
       });
       return undefined;
     }
@@ -1006,7 +1007,7 @@ export function useVoiceSession({
       if (!trimmed) return;
       dispatch({ type: VOICE_SESSION_EVENT.typedSubmit });
       if (!onSend(trimmed)) {
-        dispatch({ type: VOICE_SESSION_EVENT.fail, message: MESSAGE.sendFailed });
+        dispatch({ type: VOICE_SESSION_EVENT.fail, message: VOICE_SESSION_MESSAGE.sendFailed });
       }
     },
     [dispatch, onSend],
@@ -1032,7 +1033,7 @@ export function useVoiceSession({
     reconnecting: reconnect.active,
     reconnectAttempt: reconnect.attempt,
     reconnectMaxAttempts: RECONNECT_MAX_ATTEMPTS,
-    mutedHint: MESSAGE.mutedHint,
+    mutedHint: VOICE_SESSION_MESSAGE.mutedHint,
     enter,
     exit,
     toggleMute,

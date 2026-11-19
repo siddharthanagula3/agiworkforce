@@ -4840,6 +4840,9 @@
     "allow_with_warning": [
       "apps/desktop/src-tauri/src/automation/computer_use/safety.rs"
     ],
+    "AllowanceRefusal": [
+      "apps/web/features/chat/stores/voice-input-store.ts"
+    ],
     "AllowanceReservation": [
       "apps/web/lib/free-quota-authorization.ts"
     ],
@@ -6108,6 +6111,9 @@
     ],
     "ApiKeyProviderSummary": [
       "apps/cli/src/auth.rs"
+    ],
+    "APIKeyRefusalRecovery": [
+      "apps/web/features/settings/hooks/use-settings-queries.ts"
     ],
     "ApiKeyRotationRefusal": [
       "apps/web/lib/services/api-key-service.ts"
@@ -25380,6 +25386,12 @@
     "CODE_SESSION_COPY": [
       "apps/mobile/src/features/companion/components/codeSessionTimeline.ts"
     ],
+    "CODE_SESSION_GROUP_IDS": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "CODE_SESSION_GROUP_LABELS": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "CODE_SESSION_IDES": [
       "packages/client/ide-runtime/src/index.ts",
       "packages/client/ide-runtime/src/session.ts"
@@ -25397,6 +25409,15 @@
       "apps/desktop/gpui/src/lib.rs"
     ],
     "CODE_SIZES": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "CODE_SORT_LABELS": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "CODE_SORT_OPTIONS": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "CODE_STATUS_FILTERS": [
       "apps/web/features/code/code-surface.ts"
     ],
     "CODE_TAB_SIZE": [
@@ -25745,6 +25766,9 @@
       "packages/client/ide-runtime/src/index.ts",
       "packages/client/ide-runtime/src/session.ts"
     ],
+    "CodeProvisioningStep": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "CodeQuestionCard": [
       "apps/mobile/src/features/companion/components/CodeSessionParts.tsx"
     ],
@@ -25867,6 +25891,18 @@
     "CodeSessionDetail": [
       "apps/cli/src/cloud/code_sessions.rs"
     ],
+    "CodeSessionFilters": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "CodeSessionGroup": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "codeSessionGroupId": [
+      "apps/web/features/code/code-surface.ts"
+    ],
+    "CodeSessionGroupId": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "codeSessionHref": [
       "apps/mobile/src/features/companion/components/CodeSessionsCard.tsx"
     ],
@@ -25929,11 +25965,20 @@
     "CodeSnippetContextItem": [
       "packages/contracts/types/src/context.ts"
     ],
+    "CodeSortOption": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "CodeSplitPane": [
       "apps/web/features/code/hooks/use-code-panes.ts"
     ],
+    "CodeStatusFilter": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "CodeStep": [
       "apps/cli/src/cloud/code_sessions.rs"
+    ],
+    "CodeStepState": [
+      "apps/web/features/code/code-surface.ts"
     ],
     "CodeTab": [
       "apps/web/features/marketing/components/system/CodeTabs.tsx",
@@ -30331,6 +30376,9 @@
     "CONNECTORS_FAILED_COPY": [
       "apps/web/features/directory/constants.ts"
     ],
+    "CONNECTORS_PLAN_LOCK": [
+      "apps/web/features/directory/services/connectors-directory.ts"
+    ],
     "CONNECTORS_REFRESH_INTERVAL_MS": [
       "apps/extension-vscode/src/features/connectors/connectorsTree.ts",
       "apps/extension-vscode/src/features/connectors/index.ts"
@@ -31592,6 +31640,9 @@
     ],
     "ContextWarningChip": [
       "apps/mobile/src/features/chat/components/ContextWarningChip.tsx"
+    ],
+    "contextWindowLabel": [
+      "apps/web/features/code/code-surface.ts"
     ],
     "ContextWithholdReason": [
       "apps/extension-vscode/src/data/contextExclusion.ts"
@@ -37598,6 +37649,9 @@
     "DEFAULT_CODE_ENVIRONMENT": [
       "apps/web/features/code/code-surface.ts"
     ],
+    "DEFAULT_CODE_FILTERS": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "DEFAULT_CODE_FONT": [
       "apps/mobile/src/features/settings/code/codeAppearance.ts"
     ],
@@ -42503,6 +42557,9 @@
     ],
     "DictationLanguageEnvironment": [
       "apps/extension/src/features/side-panel/dictation-language.ts"
+    ],
+    "DictationLimit": [
+      "apps/web/features/chat/hooks/use-dictation.ts"
     ],
     "DictationMachineState": [
       "apps/web/features/chat/lib/dictation-machine.ts"
@@ -52403,6 +52460,9 @@
     "filter_tools_by_capabilities": [
       "apps/desktop/src-tauri/src/sys/commands/chat/tools.rs"
     ],
+    "filterAndSortSessions": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "filterCatalogueEntries": [
       "apps/web/features/models/lib/model-filters.ts"
     ],
@@ -52429,6 +52489,9 @@
     ],
     "filterNavByWorkspaceFeatures": [
       "apps/desktop/src/features/v3/useWorkspacePolicy.ts"
+    ],
+    "filtersAreDefault": [
+      "apps/web/features/code/code-surface.ts"
     ],
     "filterSkillsByInstallOverrides": [
       "apps/web/lib/services/skill-catalog-service.ts"
@@ -54452,6 +54515,7 @@
       "apps/web/features/admin/lib/operator-format.ts"
     ],
     "formatElapsed": [
+      "apps/web/features/code/code-surface.ts",
       "apps/web/features/code/simulator-pane.ts"
     ],
     "formatEpochMs": [
@@ -54672,6 +54736,9 @@
     "formatResearchElapsed": [
       "apps/mobile/src/features/chat/utils/researchRunState.ts"
     ],
+    "formatResetIn": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "formatResetLabel": [
       "packages/ui/unified-chat/src/components/MessageLimitCard.tsx",
       "packages/ui/unified-chat/src/index.ts"
@@ -54781,6 +54848,7 @@
     ],
     "formatTokenCount": [
       "apps/web/features/admin/lib/operator-format.ts",
+      "apps/web/features/code/code-surface.ts",
       "apps/web/features/schedules/types/index.ts"
     ],
     "formatTokens": [
@@ -61363,6 +61431,9 @@
     ],
     "groupCodeListEntries": [
       "apps/mobile/src/features/cloud-code/presentation.ts"
+    ],
+    "groupCodeSessions": [
+      "apps/web/features/code/code-surface.ts"
     ],
     "groupConsecutiveActivity": [
       "apps/web/features/settings/components/RecentActivityPanel.tsx"
@@ -76703,6 +76774,9 @@
     "LOCAL_CLAMD": [
       "services/upload-scanner/src/clamd.ts"
     ],
+    "LOCAL_CLI_PROGRAM": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "LOCAL_CLIENT_BRIDGE_FILE": [
       "apps/cli/src/browser_bridge.rs",
       "packages/contracts/types/src/browser-bridge.ts"
@@ -76831,8 +76905,17 @@
     "LOCAL_MODEL_SETUP_HEADING": [
       "apps/web/features/code/local-code.ts"
     ],
+    "LOCAL_MODEL_UPGRADE_HEADING": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "local_models": [
       "apps/cli/src/lib.rs"
+    ],
+    "LOCAL_MODELS_HELP_ARTICLE": [
+      "apps/web/features/code/local-code.ts"
+    ],
+    "LOCAL_MODELS_SETTINGS_SECTION": [
+      "apps/web/features/settings/lib/web-settings-sections.ts"
     ],
     "LOCAL_NO_MODEL_MESSAGE": [
       "apps/mobile/stores/chat/chatExecutionStore.ts",
@@ -77071,6 +77154,12 @@
     "localClientToken": [
       "apps/desktop/electron/browser/localClient.ts"
     ],
+    "localCloudModelsPlan": [
+      "apps/web/features/code/local-code.ts"
+    ],
+    "localCloudModelsPlanLine": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "LocalCloudSyncPlan": [
       "apps/mobile/src/features/settings/data-controls/localCloudSyncService.ts"
     ],
@@ -77164,6 +77253,9 @@
     ],
     "LocalDocumentLike": [
       "packages/platform/files/src/surface-files.ts"
+    ],
+    "localDraftNeedsPlan": [
+      "apps/web/features/code/local-code.ts"
     ],
     "LocalEndpointScope": [
       "apps/desktop/src-tauri/src/core/llm/providers/local_endpoint.rs"
@@ -77369,6 +77461,9 @@
     "LocalModelPartition": [
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/inference.ts"
+    ],
+    "localModelPlanLine": [
+      "apps/web/features/code/local-code.ts"
     ],
     "LocalModelProvider": [
       "crates/agiworkforce-protocol/bindings/LocalModelProvider.ts",
@@ -77721,6 +77816,12 @@
     "LocalSessionMemory": [
       "apps/web/features/code/local-session-memory.ts"
     ],
+    "localSessionModels": [
+      "apps/web/features/code/local-code.ts"
+    ],
+    "LocalSessionModels": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "localSessionOriginLabel": [
       "apps/web/features/code/local-code.ts"
     ],
@@ -77733,9 +77834,6 @@
     "localSessionPath": [
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/local-session-route.ts"
-    ],
-    "localSessionResumeCommand": [
-      "apps/web/features/code/code-surface.ts"
     ],
     "LocalSessionsSection": [
       "apps/web/features/code/components/LocalSessionsSection.tsx"
@@ -77877,9 +77975,6 @@
       "apps/web/features/code/components/LocalTurnControls.tsx"
     ],
     "LocalTurnDiff": [
-      "apps/web/features/code/local-code.ts"
-    ],
-    "localTurnFailureSentence": [
       "apps/web/features/code/local-code.ts"
     ],
     "LocalTurnInput": [
@@ -80604,6 +80699,9 @@
     ],
     "ManagedImageModelAsk": [
       "apps/web/app/api/media/image/lib/managed-image-generation.ts"
+    ],
+    "managedLocalModelsIncluded": [
+      "apps/web/features/code/local-code.ts"
     ],
     "ManagedMediaIdempotencyIdentity": [
       "packages/platform/utils/src/index.ts",
@@ -97087,6 +97185,9 @@
       "packages/ai/agent-core/src/index.ts",
       "packages/ai/agent-core/src/memory.ts"
     ],
+    "parseExtraHosts": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "parseFactoryObjectKeys": [
       "scripts/check-mock-exports.mjs"
     ],
@@ -100527,6 +100628,18 @@
     "PlanLimitAlternativeKind": [
       "apps/web/lib/server/plan-limit-alternative.ts"
     ],
+    "planLockConnectorDetail": [
+      "apps/web/features/directory/services/connectors-directory.ts"
+    ],
+    "planLockConnectorDirectory": [
+      "apps/web/features/directory/services/connectors-directory.ts"
+    ],
+    "planLockConnectorEntry": [
+      "apps/web/features/directory/services/connectors-directory.ts"
+    ],
+    "planLockConnectorSection": [
+      "apps/web/features/directory/services/connectors-directory.ts"
+    ],
     "planMarketplaceDependencies": [
       "apps/web/features/plugins/server/directory/dependencies.ts"
     ],
@@ -100635,6 +100748,9 @@
     ],
     "PlansScreen": [
       "apps/mobile/src/features/settings/plans/index.tsx"
+    ],
+    "planStartingModelId": [
+      "apps/web/features/code/local-code.ts"
     ],
     "PlanStep": [
       "apps/cli/src/features/plan/plan_mode.rs",
@@ -107158,6 +107274,9 @@
     ],
     "provisionEnterpriseSignIn": [
       "apps/web/lib/server/sso/jit-provisioning.ts"
+    ],
+    "provisioningSteps": [
+      "apps/web/features/code/code-surface.ts"
     ],
     "ProvisionInput": [
       "apps/web/lib/server/sso/clerk-enterprise-connections.ts"
@@ -130133,6 +130252,9 @@
       "apps/desktop/src-tauri/src/features/terminal/mod.rs",
       "apps/desktop/src-tauri/src/features/terminal/session_manager.rs"
     ],
+    "sessionContextChip": [
+      "apps/web/features/code/code-surface.ts"
+    ],
     "SessionCookie": [
       "apps/web/lib/session-cookie.ts"
     ],
@@ -130379,6 +130501,9 @@
     ],
     "SessionTimeoutState": [
       "apps/web/shared/hooks/useSessionTimeout.ts"
+    ],
+    "sessionTitleMatches": [
+      "apps/web/features/code/code-surface.ts"
     ],
     "SessionTrustBoundary": [
       "packages/contracts/types/src/sessions/taxonomy.ts"
@@ -155167,9 +155292,6 @@
       "apps/mobile/src/features/voice/hooks/useVoiceConversation.ts",
       "apps/mobile/src/features/voice/services/voiceFailure.ts"
     ],
-    "VOICE_INTELLIGENCE": [
-      "apps/web/features/chat/stores/voice-session-store.ts"
-    ],
     "VOICE_INTRO_HINT_VISIBLE_MS": [
       "apps/mobile/src/features/chat/components/VoiceIntroHint.tsx"
     ],
@@ -155234,6 +155356,9 @@
     "VOICE_SESSION_EVENT": [
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/voice/voice-session-machine.ts"
+    ],
+    "VOICE_SESSION_MESSAGE": [
+      "apps/web/features/chat/hooks/use-voice-session.ts"
     ],
     "VOICE_SESSION_STATUS": [
       "packages/ui/unified-chat/src/index.ts",
@@ -155372,6 +155497,9 @@
     "VoiceChatDockProps": [
       "apps/web/features/chat/components/Voice/VoiceChatDock.tsx"
     ],
+    "VoiceChatIntelligence": [
+      "apps/web/features/chat/components/Voice/VoiceSettingsModal.tsx"
+    ],
     "voiceCheckLocalWhisper": [
       "apps/desktop/src/api/voice.ts"
     ],
@@ -155490,9 +155618,6 @@
     "VoiceInputState": [
       "apps/web/features/chat/stores/voice-input-store.ts",
       "packages/ui/unified-chat/src/hooks/useVoiceInput.ts"
-    ],
-    "VoiceIntelligence": [
-      "apps/web/features/chat/stores/voice-session-store.ts"
     ],
     "VoiceIntroHint": [
       "apps/mobile/src/features/chat/components/VoiceIntroHint.tsx"
@@ -157907,6 +158032,15 @@
     ],
     "withPersistedSources": [
       "apps/mobile/src/features/chat/utils/messageSources.ts"
+    ],
+    "withPlanModelHistory": [
+      "apps/web/features/code/local-code.ts"
+    ],
+    "withPlanModelVerdicts": [
+      "apps/web/features/code/local-code.ts"
+    ],
+    "withPlanTurnFailure": [
+      "apps/web/features/code/local-code.ts"
     ],
     "withPopularRanks": [
       "apps/web/features/directory/services/connectors-directory.ts"

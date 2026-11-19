@@ -1,13 +1,16 @@
 import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import type { SessionAuthority } from '@/lib/identity/request-authority';
+import { SLACK_INSTALL_PATH } from '@/lib/slack/slack-contract';
 import {
   observeWorkspaceOwner,
   beginWorkspaceSwitch,
   finishWorkspaceSwitch,
 } from '@/features/workspaces/lib/workspace-admission';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { onAppCommand, PLANS_PAGE_PATH } from '@shared/lib/app-commands';
 import { SlackSection } from './SlackSection';
 
 const fixture = vi.hoisted(() => ({
@@ -19,10 +22,17 @@ const fixture = vi.hoisted(() => ({
   },
   listeners: new Set<() => void>(),
   confirmations: [] as Array<{ onConfirm: () => unknown; onCancel?: () => void }>,
+  host: null as HostBridge | null,
+  routerPush: vi.fn(),
+}));
+vi.mock('@/features/desktop-host/lib/host', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  useDesktopHost: () => fixture.host,
 }));
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: fixture.routerPush, replace: vi.fn() }),
 }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule1>()),
@@ -132,6 +142,8 @@ beforeEach(() => {
   session(`account-${++caseNumber}`, `session-${caseNumber}`);
   fixture.data = { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null };
   fixture.confirmations.length = 0;
+  fixture.host = null;
+  fixture.routerPush.mockReset();
   vi.mocked(getCsrfToken).mockReset().mockResolvedValue('csrf');
   fetchMock
     .mockReset()
@@ -333,8 +345,101 @@ it('fails closed on duplicate overview resource IDs before rendering actionable 
   expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
 });
 
+function desktopHost(openExternal: HostBridge['openExternal']): HostBridge {
+  return { shell: 'electron', openExternal } as unknown as HostBridge;
+}
+const overviewReads = () =>
+  fetchMock.mock.calls.filter(
+    ([url, init]) => !String(url).endsWith('/channels') && (init?.method ?? 'GET') === 'GET',
+  ).length;
+
+it('keeps Add to Slack a link to the install route in a browser', async () => {
+  render(<SlackSection />);
+  const add = await screen.findByRole('link', { name: 'Add to Slack' });
+  expect(add.getAttribute('href')).toBe(SLACK_INSTALL_PATH);
+});
+
+it('runs the whole Slack install in the system browser from the desktop app and reloads on return', async () => {
+  const openExternal = vi.fn(async () => undefined);
+  fixture.host = desktopHost(openExternal);
+  const { container } = render(<SlackSection />);
+  const add = await screen.findByRole('button', { name: 'Add to Slack' });
+  expect(container.querySelector('a[href^="/api/"]')).toBeNull();
+
+  fireEvent.click(add);
+
+  expect(openExternal).toHaveBeenCalledWith(new URL(SLACK_INSTALL_PATH, window.location.href).href);
+  expect(
+    await screen.findByText(
+      'Finish adding the app in your browser. This page updates when you come back.',
+    ),
+  ).toHaveAttribute('role', 'status');
+  expect(mutations()).toHaveLength(0);
+  const readsBeforeReturn = overviewReads();
+
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'));
+  });
+
+  await waitFor(() => expect(overviewReads()).toBe(readsBeforeReturn + 1));
+  expect(screen.queryByText(/Finish adding the app in your browser/)).toBeNull();
+});
+
+it('says so when the desktop app could not open the browser for the Slack install', async () => {
+  fixture.host = desktopHost(vi.fn(async () => Promise.reject(new Error('blocked'))));
+  render(<SlackSection />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Add to Slack' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Your browser could not be opened. Try again.',
+  );
+  expect(screen.queryByText(/Finish adding the app in your browser/)).toBeNull();
+});
+
+function onPlanWithoutSlack() {
+  fetchMock.mockImplementation(async (url) =>
+    json(String(url).endsWith('/channels') ? policies() : { ...overview(), planAllowed: false }),
+  );
+}
+
+it('offers Upgrade through the in-app plan dialog when the plan does not include Slack', async () => {
+  onPlanWithoutSlack();
+  const openPlans = vi.fn();
+  const stop = onAppCommand('open-upgrade', openPlans);
+  try {
+    const { container } = render(<SlackSection />);
+    expect(await screen.findByText('Answers in Slack are available on Pro plans.')).toBeVisible();
+    expect(container.querySelector('a[href="/pricing"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+  } finally {
+    stop();
+  }
+
+  expect(openPlans).toHaveBeenCalledOnce();
+  expect(fixture.routerPush).not.toHaveBeenCalled();
+});
+
+it('falls back to the plans page when no surface hosts the plan dialog', async () => {
+  onPlanWithoutSlack();
+  render(<SlackSection />);
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Upgrade' }));
+
+  expect(fixture.routerPush).toHaveBeenCalledWith(PLANS_PAGE_PATH);
+});
+
+it('shows no Upgrade when the plan includes Slack', async () => {
+  render(<SlackSection />);
+
+  await screen.findByRole('combobox');
+  expect(screen.queryByRole('button', { name: 'Upgrade' })).toBeNull();
+  expect(screen.queryByText(/Answers in Slack are available on/)).toBeNull();
+});
+
 type ImportedModule0 = typeof import('next/navigation');
 type ImportedModule1 = typeof import('@agiworkforce/ui');
 type ImportedModule2 = typeof import('@/lib/client/csrf');
 type ImportedModule3 = typeof import('@/lib/identity/useSessionSnapshot');
 type ImportedModule4 = typeof import('@/features/workspaces/hooks/use-workspaces');
+type ImportedModule5 = typeof import('@/features/desktop-host/lib/host');
