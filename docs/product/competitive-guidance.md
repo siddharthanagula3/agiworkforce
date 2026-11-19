@@ -549,10 +549,11 @@ research workspace at `/Users/siddhartha/Desktop/reverse-engineer` (dated
 desktop captures of the leaders, build notes and earlier audits). It exists on
 the owner's machine only; where it is absent, work from this repository alone.
 
-- Enter through its `README.md`, then one guide under its `docs/topics/`.
-  Desktop parity starts at `docs/topics/build.md`, Track A. Read one row and
-  the one capture folder it names; never load the corpus, its indexes or its
-  unpacked vendor bundles.
+- Enter through the README at its root, then one guide in its topics folder.
+  Desktop parity starts at
+  `/Users/siddhartha/Desktop/reverse-engineer/docs/topics/build.md`, Track A.
+  Read one row and the one capture folder it names; never load the corpus, its
+  indexes or its unpacked vendor bundles.
 - Build only from what it marks **Proposed**. **Observed** and **Public
   documentation** are dated leads to reopen against the current official page,
   and **NOT_RUN** is unfinished evidence.

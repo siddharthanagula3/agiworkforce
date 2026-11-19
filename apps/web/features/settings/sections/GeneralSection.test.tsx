@@ -8,6 +8,8 @@ import { GeneralSection } from './GeneralSection';
 import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
 import { safePlatform } from '@shared/utils/browser-utils';
 
+type SettingsStoreModule = typeof import('@shared/stores/web-settings-store');
+
 const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
   setFollowUpBehavior: vi.fn(),
@@ -54,17 +56,21 @@ vi.mock('@shared/stores/thinking-store', () => ({
     selector({ enabled: false, effort: 'medium', setEnabled: vi.fn(), setEffort: vi.fn() }),
 }));
 
-vi.mock('@shared/stores/web-settings-store', () => ({
-  useSettingsStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      hiddenNavIds: [],
-      setNavItemVisible: vi.fn(),
-      sendWithEnter: true,
-      setSendWithEnter: vi.fn(),
-      followUpBehavior: mocks.settings.followUpBehavior,
-      setFollowUpBehavior: mocks.setFollowUpBehavior,
-    }),
-}));
+vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
+  const actual = await importOriginal<SettingsStoreModule>();
+  return {
+    ...actual,
+    useSettingsStore: (selector: (state: unknown) => unknown) =>
+      selector({
+        hiddenNavIds: [],
+        setNavItemVisible: vi.fn(),
+        sendWithEnter: true,
+        setSendWithEnter: vi.fn(),
+        followUpBehavior: mocks.settings.followUpBehavior,
+        setFollowUpBehavior: mocks.setFollowUpBehavior,
+      }),
+  };
+});
 
 vi.mock('@/lib/hooks/useTTS', () => ({
   useTTS: () => ({
