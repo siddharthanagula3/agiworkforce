@@ -18705,8 +18705,6 @@
       "apps/web/lib/prompts/chat-system-prompt.ts"
     ],
     "ChatTabScreen": [
-      "apps/mobile/app/(app)/(tabs)/chat.tsx",
-      "apps/mobile/app/(app)/(tabs)/chat.tsx",
       "apps/mobile/app/(app)/(tabs)/chat.tsx"
     ],
     "ChatTextSize": [
@@ -36774,8 +36772,6 @@
       "apps/mobile/app/_layout.tsx",
       "apps/mobile/app/(app)/_layout.tsx",
       "apps/mobile/app/(app)/(tabs)/_layout.tsx",
-      "apps/mobile/app/(app)/(tabs)/chat.tsx",
-      "apps/mobile/app/(app)/(tabs)/chat.tsx",
       "apps/mobile/app/(app)/(tabs)/chat.tsx",
       "apps/mobile/app/(app)/(tabs)/index.tsx",
       "apps/mobile/app/(app)/(tabs)/projects.tsx",

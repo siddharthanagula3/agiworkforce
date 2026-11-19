@@ -171,28 +171,6 @@
     {
       "surface": "mobile",
       "kind": "page",
-      "url": "/chat",
-      "file": "apps/mobile/app/(app)/(tabs)/chat.tsx",
-      "segments": [
-        "(app)",
-        "(tabs)",
-        "chat"
-      ]
-    },
-    {
-      "surface": "mobile",
-      "kind": "page",
-      "url": "/chat",
-      "file": "apps/mobile/app/(app)/(tabs)/chat.tsx",
-      "segments": [
-        "(app)",
-        "(tabs)",
-        "chat"
-      ]
-    },
-    {
-      "surface": "mobile",
-      "kind": "page",
       "url": "/chats",
       "file": "apps/mobile/app/(app)/chats/index.tsx",
       "segments": [
