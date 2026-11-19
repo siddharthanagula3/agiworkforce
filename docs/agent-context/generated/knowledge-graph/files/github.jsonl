@@ -38,6 +38,7 @@
 {"path":".github/workflows/evals.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/guardian.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/model-probe.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
+{"path":".github/workflows/package-desktop-native.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/release-chrome-extension.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/release-cli.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":".github/workflows/release-desktop-cloud.yml","unit":".github","role":"config","lanes":["release-ci"],"unparsed":"notCode"}
