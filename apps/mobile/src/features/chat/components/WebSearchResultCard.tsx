@@ -1,11 +1,14 @@
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Globe } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import {
+  canOpenSource,
+  openSource,
+  sourcePublisher,
+} from '@/src/features/chat/utils/sourceDisplay';
 import type { ToolSearchResult } from '@/types/chat';
 import { formatSourcePublishedDate } from '@/src/features/chat/utils/sourcePublishedDate';
 
@@ -28,22 +31,15 @@ function badgeColorFor(hostname: string, colors: ColorScheme): string {
 
 export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   const colors = useThemeColors();
-  const hostname = hostnameOf(result.url);
+  const hostname = sourcePublisher(result);
   const published = formatSourcePublishedDate(result.publishedDate);
-
-  const handlePress = async () => {
-    if (isValidExternalHttpUrl(result.url)) {
-      const opened = await openUntrustedUrlInAppBrowser(result.url);
-      if (!opened) {
-        Alert.alert('Could not open source', 'Check your connection and try again.');
-      }
-    }
-  };
+  const canOpen = canOpenSource(result.url);
 
   return (
     <PressableBox
-      onPress={handlePress}
-      accessibilityRole="link"
+      onPress={canOpen ? () => void openSource(result.url) : undefined}
+      disabled={!canOpen}
+      accessibilityRole={canOpen ? 'link' : 'text'}
       accessibilityLabel={[result.title, `web page on ${hostname}`, published]
         .filter(Boolean)
         .join(', ')}
@@ -54,6 +50,7 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 10,
+            minHeight: 44,
             paddingVertical: 8,
             paddingHorizontal: 10,
             borderRadius: 8,

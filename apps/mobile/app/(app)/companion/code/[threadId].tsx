@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { CodeSessionView } from '@/src/features/companion/components/CodeSessionView';
 import { manualReconnect } from '@/services/companion';
@@ -90,7 +91,7 @@ export default function CodeSessionScreen() {
         />
       ) : (
         <>
-          <View className="flex-row items-center px-3 h-12">
+          <View className="flex-row items-center px-3 min-h-12">
             <PressableBox
               onPress={handleBack}
               className="p-2 rounded-lg active:bg-white/5"
@@ -99,7 +100,11 @@ export default function CodeSessionScreen() {
             >
               <ArrowLeft size={20} color={colors.textSecondary} />
             </PressableBox>
-            <Text variant="subheading" className="ml-2 flex-1">
+            <Text
+              variant="subheading"
+              className="ml-2 flex-1"
+              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+            >
               {CLOUD_CODE_SCREEN_TITLE}
             </Text>
           </View>

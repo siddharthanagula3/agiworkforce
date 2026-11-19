@@ -42,6 +42,7 @@ function Pill({
   const colors = useThemeColors();
   return (
     <Pressable
+      hitSlop={{ top: 4, bottom: 4 }}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}

@@ -136,7 +136,6 @@ vi.mock('@/lib/services/managed-compute-access', () => ({
 }));
 vi.mock('@/lib/server/side-call-training-policy', () => ({
   noTrainingProviderIds: vi.fn(),
-  sideCallRoutingRequest: vi.fn(),
   sideCallTrainingOptOut: vi.fn(),
   sideCallProviderAllowed: mocks.sideCallProviderAllowed,
 }));

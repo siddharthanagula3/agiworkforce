@@ -12,7 +12,7 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-import { resolveWebCloudModelRoute } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import { resolveProviderFromModel } from '@/lib/services/provider-adapter-service';
 
 const ZHIPU_MODEL_ID = (() => {

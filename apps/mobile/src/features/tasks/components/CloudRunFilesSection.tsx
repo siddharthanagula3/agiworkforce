@@ -3,11 +3,12 @@ import { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { FileText, Share } from 'lucide-react-native';
 import { resolveGeneratedFileUri } from '@agiworkforce/cloud-contracts';
-import { formatBytes } from '@agiworkforce/utils/format';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { API_URL } from '@/lib/constants';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { CloudRunProducedFile } from '../runPresentation';
@@ -25,8 +26,11 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
         file.name,
       );
       await shareFile(localUri);
-    } catch {
-      Alert.alert('Could not open this file', 'The file could not be downloaded.');
+    } catch (error) {
+      Alert.alert(
+        'Could not open this file',
+        toUserMessage(error, 'The file could not be downloaded.'),
+      );
     } finally {
       setOpeningId(null);
     }
@@ -79,7 +83,7 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
               </Text>
               {file.sizeBytes !== undefined ? (
                 <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
-                  {formatBytes(file.sizeBytes, 1)}
+                  {formatAttachmentSize(file.sizeBytes)}
                 </Text>
               ) : null}
             </View>

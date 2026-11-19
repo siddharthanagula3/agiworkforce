@@ -5,10 +5,16 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { NextRequest } from 'next/server';
 
+type StoppedRunTurnModule = typeof import('@/app/api/llm/v1/chat/completions/lib/stopped-run-turn');
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/stopped-run-turn', async (importOriginal) => ({
+  ...(await importOriginal<StoppedRunTurnModule>()),
+  recordStoppedRunAssistantTurn: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/services/cloud-agent-run-service', async () => {
   const { HUMAN_HELD_TASK_STATES } = await vi.importActual<ImportedModule0>(
     '@/lib/services/cloud-agent-run-service',
@@ -31,6 +37,7 @@ import {
   getCloudAgentRun,
   requestCloudAgentRunCancellation,
 } from '@/lib/services/cloud-agent-run-service';
+import { recordStoppedRunAssistantTurn } from '@/app/api/llm/v1/chat/completions/lib/stopped-run-turn';
 import { GET, OPTIONS, POST } from '@/app/api/llm/v1/chat/completions/runs/[runId]/route';
 
 const db = { query: vi.fn() };
@@ -165,6 +172,46 @@ describe('/api/llm/v1/chat/completions/runs/[runId]', () => {
       },
     });
     expect(cancelHumanHeldCloudAgentRun).not.toHaveBeenCalled();
+  });
+
+  it('records the turn as stopped by the person once the cancel request is stored', async () => {
+    vi.mocked(getUserScopedDb).mockResolvedValue({
+      db,
+      userId: 'user-1',
+      organizationId: '0190a000-0000-7000-8000-0000000000aa',
+    } as never);
+    vi.mocked(requestCloudAgentRunCancellation).mockResolvedValue({
+      ...run,
+      cancellationRequestedAt: '2026-07-17T20:00:02.000Z',
+    } as never);
+
+    const response = await POST(
+      new NextRequest(`http://localhost/api/llm/v1/chat/completions/runs/${run.id}`, {
+        method: 'POST',
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(202);
+    expect(recordStoppedRunAssistantTurn).toHaveBeenCalledWith({
+      userId: 'user-1',
+      organizationId: '0190a000-0000-7000-8000-0000000000aa',
+      runId: run.id,
+    });
+    expect(vi.mocked(recordStoppedRunAssistantTurn).mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(requestCloudAgentRunCancellation).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('records no stop when only the run is read', async () => {
+    vi.mocked(getCloudAgentRun).mockResolvedValue({ run, events: [event] } as never);
+
+    await GET(
+      new NextRequest(`http://localhost/api/llm/v1/chat/completions/runs/${run.id}`),
+      context,
+    );
+
+    expect(recordStoppedRunAssistantTurn).not.toHaveBeenCalled();
   });
 
   it('ends a run parked on a person at once, for every state that parks one', async () => {

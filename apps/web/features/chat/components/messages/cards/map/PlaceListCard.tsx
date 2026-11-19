@@ -3,9 +3,14 @@
 import { useState } from 'react';
 import { MapPinned, Star } from '@agiworkforce/icons';
 import type { PlacesCardPlace } from '@agiworkforce/types';
-import { placePhotoUrl, PLACE_PHOTO_THUMBNAIL_WIDTH_PX } from '@/lib/maps/place-photo-url';
+import { placePhotoUrl, PLACE_PHOTO_THUMBNAIL_WIDTH_PX } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
-import { openNowLabel, placeSummaryLine, ratingLabel, reviewCountLabel } from './placeFacts';
+import {
+  openNowLabel,
+  placeSummaryLine,
+  ratingLabel,
+  reviewCountLabel,
+} from '@agiworkforce/unified-chat/place-facts';
 
 interface PlaceListCardProps {
   place: PlacesCardPlace;

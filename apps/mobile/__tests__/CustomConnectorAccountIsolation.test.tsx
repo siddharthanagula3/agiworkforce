@@ -3,6 +3,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 
 jest.mock('../lib/mmkv', () => ({
+  rehydrateWhenMmkvReady: jest.fn(),
   storage: {
     getString: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
@@ -40,7 +41,10 @@ jest.mock('@/services/connectors', () => ({
   addCustomConnector: (...args: unknown[]) => mockAddCustomConnector(...args),
 }));
 
-import { AddCustomConnectorModal } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
+import {
+  AddCustomConnectorModal,
+  CUSTOM_CONNECTOR_HTTPS_REQUIRED,
+} from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
 import { ApiHttpError } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
@@ -158,5 +162,22 @@ describe('AddCustomConnectorModal account isolation', () => {
 
     expect(await screen.findByText('Connectors are coming soon.')).toBeTruthy();
     expect(screen.queryByText(/Check its URL/)).toBeNull();
+  });
+
+  it('says why Add is off when the address is not https', () => {
+    const screen = render(
+      <SafeAreaProvider initialMetrics={METRICS}>
+        <AddCustomConnectorModal visible onClose={jest.fn()} onAdded={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+    fireEvent.changeText(screen.getByLabelText('Connector name'), 'My tools');
+    expect(screen.queryByTestId('custom-connector.url-reason')).toBeNull();
+    fireEvent.changeText(screen.getByLabelText('Connector URL'), 'http://tools.example.com/sse');
+    expect(screen.getByText(CUSTOM_CONNECTOR_HTTPS_REQUIRED)).toBeTruthy();
+    expect(screen.getByLabelText('Add connector').props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true }),
+    );
+    fireEvent.changeText(screen.getByLabelText('Connector URL'), 'https://tools.example.com/sse');
+    expect(screen.queryByText(CUSTOM_CONNECTOR_HTTPS_REQUIRED)).toBeNull();
   });
 });

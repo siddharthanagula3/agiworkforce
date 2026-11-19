@@ -8,7 +8,7 @@ import { managedCloudMessagePath, SYNC_PROTOCOL_VERSION } from '@agiworkforce/cl
 import {
   ASSISTANT_CONTENT_CHANGED_REASON,
   ASSISTANT_CONTENT_EDIT_METADATA_KEY,
-} from '@/features/chat/lib/assistant-content-edit-contract';
+} from '@agiworkforce/cloud-contracts';
 import {
   SAVE_ASSISTANT_CONTENT_EDIT_SQL,
   assertAssistantContinuationSeed,
@@ -35,6 +35,7 @@ const NEW_MESSAGE_ID = '33333333-3333-4333-8333-333333333333';
 const MODEL = getDefaultModelFor('pro', 'chat');
 const PROVIDER = getModelMetadataById(MODEL)?.provider;
 if (!PROVIDER) throw new Error('The model catalog must supply the persistence fixture provider.');
+const MARKUP = '\uE200cite\uE202turn0search0\uE201';
 const SOURCE = 'Before.\n\n```writing\nOriginal draft.\n```\n\nAfter.';
 const EDITED = 'Before.\n\n```writing\nSaved draft.\n```\n\nAfter.';
 const scope = { userId: USER_ID, organizationId: null, conversationId: CONVERSATION_ID };
@@ -139,6 +140,16 @@ function editRequest(source = 'Original draft.', content = 'Saved draft.'): Next
   );
 }
 
+function syncPushMessages(messages: Array<Record<string, unknown>>) {
+  return syncPush(
+    new NextRequest('http://localhost/api/chat/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ protocolVersion: SYNC_PROTOCOL_VERSION, messages }),
+    }),
+  );
+}
+
 function persistOnServer(content: string, truncated = false, admitted?: EditedAssistantContent) {
   return persistAssistantTurn({
     userId: USER_ID,
@@ -192,7 +203,7 @@ async function stored() {
   return row;
 }
 
-// llm-guardrail-allow: requires the guarded disposable private-socket database; all 19 cases were verified locally.
+// llm-guardrail-allow: requires the guarded disposable private-socket database; the sync cases need the workspace-policy tables the setup creates.
 describe.skipIf(!connectionString)('saved assistant edits against disposable PostgreSQL', () => {
   beforeAll(async () => {
     db = createDatabaseClient({
@@ -210,7 +221,8 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
     )?.[0];
     if (!assignVersion) throw new Error('The canonical sync version trigger was not found.');
     await db.execute(`
-      drop table if exists public.web_messages, public.web_conversations, public.cloud_agent_runs cascade;
+      drop table if exists public.web_messages, public.web_conversations, public.cloud_agent_runs,
+        public.user_settings, public.organization_members, public.organizations cascade;
       drop function if exists public.assign_cloud_sync_version() cascade;
       drop sequence if exists public.cloud_sync_version_seq cascade;
     `);
@@ -232,6 +244,12 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
         server_version bigint not null default 0
       );
       create table public.cloud_agent_runs (conversation_id uuid not null, state text not null);
+      create table public.user_settings (user_id text primary key, settings jsonb not null default '{}');
+      create table public.organizations (id uuid primary key, owner_user_id text not null);
+      create table public.organization_members (
+        organization_id uuid not null references public.organizations, user_id text not null,
+        status text not null
+      );
       ${assignVersion}
       create trigger version_conversations before insert or update on public.web_conversations
         for each row execute function public.assign_cloud_sync_version();
@@ -250,7 +268,8 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
 
   afterAll(async () => {
     await db?.execute(`
-      drop table if exists public.web_messages, public.web_conversations, public.cloud_agent_runs cascade;
+      drop table if exists public.web_messages, public.web_conversations, public.cloud_agent_runs,
+        public.user_settings, public.organization_members, public.organizations cascade;
       drop function if exists public.assign_cloud_sync_version() cascade;
       drop sequence if exists public.cloud_sync_version_seq cascade;
     `);
@@ -398,6 +417,35 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
     ).rejects.toMatchObject({ statusCode: 409 });
     expect((await stored()).content).toBe(expected);
     expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it('rewrites an edited row that held citation markup to its cleaned form so the client copy of the continued answer is accepted', async () => {
+    expect((await PATCH(editRequest(), context)).status).toBe(200);
+    const revision = (await stored()).metadata?.[ASSISTANT_CONTENT_EDIT_METADATA_KEY];
+    await db.execute('update web_messages set content = $2 where id = $1', [
+      MESSAGE_ID,
+      EDITED.replace('Before.', `Before.${MARKUP}`),
+    ]);
+
+    const seed = await assertAssistantContinuationSeed({
+      db,
+      ...scope,
+      messageId: MESSAGE_ID,
+      seed: EDITED,
+    });
+
+    expect(seed).toEqual({ content: EDITED, editRevision: revision });
+    expect(await stored()).toMatchObject({
+      content: EDITED,
+      metadata: { [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: revision },
+    });
+    await persistOnServer('A new sentence.', false, seed!);
+    const expected = `${EDITED} A new sentence.`;
+    expect((await stored()).content).toBe(expected);
+    const saved = await persistOnClient(expected, db, 'assistant', {
+      [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: seed!.editRevision,
+    });
+    expect(saved.content).toBe(expected);
   });
 
   it('accepts equal/full-prefix snapshots without duplicating the edited seed or losing provenance', async () => {
@@ -641,7 +689,7 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
   });
 
   it.each([false, true])(
-    'preserves nullable metadata on an ordinary sync update (explicit=%s)',
+    'stores nullable metadata as an object on an ordinary sync update (explicit=%s)',
     async (explicit) => {
       await db.execute("update web_messages set metadata = 'null'::jsonb where id = $1", [
         MESSAGE_ID,
@@ -669,12 +717,14 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ applied: { messages: [{ id: MESSAGE_ID }] } });
-      expect((await stored()).metadata).toBeNull();
+      const after = await stored();
+      expect(after.content).toBe(`${SOURCE}\nSynced.`);
+      expect(after.metadata).toEqual({});
       expect(mocks.logError).not.toHaveBeenCalled();
     },
   );
 
-  it('accepts nullable metadata on new sync messages without minting provenance', async () => {
+  it('stores nullable metadata on new sync messages as an object without minting provenance', async () => {
     const response = await syncPush(
       new NextRequest('http://localhost/api/chat/sync', {
         method: 'POST',
@@ -703,7 +753,70 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
       'select metadata from web_messages where id = $1',
       [NEW_MESSAGE_ID],
     );
-    expect(row?.metadata).toBeNull();
+    expect(row?.metadata).toEqual({});
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it('takes no new version when a device keeps pushing null metadata for an unchanged message', async () => {
+    const pushUnchanged = async (id: string, content: string, baseVersion: string) => {
+      const response = await syncPushMessages([
+        {
+          id,
+          conversationId: CONVERSATION_ID,
+          role: 'assistant',
+          content,
+          metadata: null,
+          baseVersion,
+        },
+      ]);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        applied: { messages: Array<{ id: string; server_version: string }> };
+      };
+      expect(body.applied.messages).toEqual([{ id, server_version: expect.any(String) }]);
+      return body.applied.messages[0]!.server_version;
+    };
+
+    const serverWritten = await stored();
+    expect(serverWritten.metadata).toEqual({});
+    expect(await pushUnchanged(MESSAGE_ID, SOURCE, serverWritten.server_version)).toBe(
+      serverWritten.server_version,
+    );
+    expect(await pushUnchanged(MESSAGE_ID, SOURCE, serverWritten.server_version)).toBe(
+      serverWritten.server_version,
+    );
+    expect(await stored()).toEqual(serverWritten);
+
+    const created = await pushUnchanged(NEW_MESSAGE_ID, 'New synced turn.', '0');
+    expect(await pushUnchanged(NEW_MESSAGE_ID, 'New synced turn.', created)).toBe(created);
+    const [row] = await db.query<{ metadata: unknown; server_version: string }>(
+      'select metadata, server_version::text from web_messages where id = $1',
+      [NEW_MESSAGE_ID],
+    );
+    expect(row).toEqual({ metadata: {}, server_version: created });
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it('keeps saved edit provenance and the version when a device pushes null metadata over an edited answer', async () => {
+    expect((await PATCH(editRequest(), context)).status).toBe(200);
+    const edited = await stored();
+    const response = await syncPushMessages([
+      {
+        id: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        role: 'assistant',
+        content: EDITED,
+        metadata: null,
+        baseVersion: edited.server_version,
+      },
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      applied: { messages: [{ id: MESSAGE_ID, server_version: edited.server_version }] },
+    });
+    expect(await stored()).toEqual(edited);
+    expect(edited.metadata).toEqual({ [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: expect.any(String) });
     expect(mocks.logError).not.toHaveBeenCalled();
   });
 

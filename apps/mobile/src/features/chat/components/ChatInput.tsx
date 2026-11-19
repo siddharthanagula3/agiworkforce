@@ -8,7 +8,24 @@ import {
   useLayoutEffect,
   useMemo,
 } from 'react';
-import { Alert, View, TextInput, Keyboard } from 'react-native';
+import {
+  Alert,
+  View,
+  TextInput,
+  Keyboard,
+  ScrollView,
+  type GestureResponderEvent,
+  type LayoutChangeEvent,
+  type LayoutRectangle,
+} from 'react-native';
+import { create } from 'zustand';
+import {
+  cacheDirectory,
+  deleteAsync,
+  EncodingType,
+  getInfoAsync,
+  writeAsStringAsync,
+} from 'expo-file-system/legacy';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -24,6 +41,7 @@ import {
   Sparkles,
   Clock,
 } from 'lucide-react-native';
+import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
 import {
   canUseBillingPlanCapability,
   getModelMetadataById,
@@ -34,15 +52,18 @@ import {
   type WorkUsageRecovery,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
-import { AttachmentPreview, type Attachment } from './AttachmentPreview';
+import { AttachmentPreview, type Attachment, type PreparingAttachment } from './AttachmentPreview';
 import { SendPreview } from './SendPreview';
 import { VoiceIntroHint, dismissVoiceIntroHint } from './VoiceIntroHint';
-import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
+import { admitAttachments } from '@/src/features/chat/utils/attachmentValidation';
+import { unreadableImagesNotice } from '@/src/features/chat/utils/unreadableImagesNotice';
 import { SendButton } from './SendButton';
 import { useComposerAttachmentScope } from '../useComposerAttachmentScope';
 import type { ComposerAttachmentOperation } from '../utils/runComposerAttachmentPick';
+import { wasCloudUploadDeclined } from '../utils/cloudUploadConsent';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
 import { ModelSelectorButton } from './ModelSelectorButton';
+import { HEADER_TEXT_SCALE_LIMIT } from './WorkModeSwitch';
 import { ComposerEffortButton, ComposerEffortPanel, useComposerEffort } from './ComposerEffort';
 import {
   COMPOSER_ACTION_CIRCLE_SIZE,
@@ -51,12 +72,18 @@ import {
 } from './composerMetrics';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { FileMentionPalette } from './FileMentionPalette';
+import { SkillMentionPalette } from '@/src/features/skills/SkillMentionPalette';
+import { enableSkillCodeExecution } from '@/src/features/skills/skillRequirements';
+import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { trailingMention, withoutTrailingMention } from '@/src/features/chat/utils/fileMention';
 import { MediaModeChip } from './MediaModeChip';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
 import { resolveUploadContext } from '@/src/features/chat/upload/uploadContext';
-import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
+import {
+  isUploadInFlight,
+  useUploadLifecycleStore,
+} from '@/src/features/chat/upload/uploadLifecycle';
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
 import {
@@ -66,6 +93,7 @@ import {
 } from '@/src/features/voice/components/VoiceInputButton';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { Waveform } from '@/src/features/voice/components/Waveform';
+import { HOLD_TO_TALK_THRESHOLD_MS } from '@/src/features/voice/holdToTalk';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -80,14 +108,21 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  mergePrefill,
+  prefillComposer,
+  useComposerPrefillStore,
+} from '@/src/features/chat/store/composerPrefillStore';
 import { useTheme, radii } from '@/src/ui/theme';
 import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
-import { getShortDisplayName } from '@/src/features/model-picker/service';
+import { getShortDisplayName, isFreeQuotaTurnModelId } from '@/src/features/model-picker/service';
+import { useCloudLatestMessageMaxChars } from '@/src/features/chat/upload/messageLimits';
 import { MAX_INPUT_LINES } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   getDraft,
+  getDraftAttachments,
   setDraft,
   clearDraft,
   type DraftProvenance,
@@ -102,15 +137,31 @@ import {
 import { useCapability } from '@/src/lib/Capabilities';
 import {
   LARGE_PASTE_THRESHOLD,
+  PASTED_BLOCK_SEPARATOR,
   PASTED_TEXT_MIME_TYPE,
   isLargePaste,
   isPastedTextFileName,
+  pastedBlocksToAttach,
   pastedTextFileName,
 } from '@agiworkforce/utils/composer-paste';
 
 type ComposerUploadPhase = 'uploading' | 'unsent' | 'settled';
 
-const STACK_LAYOUT_MIN_HEIGHT = 34;
+const WRAPPED_CONTENT_IN_LINES = 1.5;
+// The expand glyph sits 6pt inside the card's top-right corner, measured from
+// the text block, which the card insets by its own padding.
+const EXPAND_BUTTON_OFFSET = { top: -6, right: -4 } as const;
+const CARD_BORDER_WIDTH = 1;
+const CARD_PADDING = { left: 16, right: 10, top: 12, bottom: 4 } as const;
+const DICTATION_CARD_PADDING = { horizontal: 6, vertical: 3 } as const;
+const LIVE_TRANSCRIPT_MAX_LINES = 3;
+const FIELD_HOLD_RETENTION = 20;
+
+interface FieldHold {
+  timer: ReturnType<typeof setTimeout> | null;
+  engaged: boolean;
+  outside: boolean;
+}
 
 function mergeTranscript(previous: string, transcript: string): string {
   const cleanedTranscript = cleanupVoiceDictation(transcript);
@@ -119,15 +170,224 @@ function mergeTranscript(previous: string, transcript: string): string {
   return previous ? `${previous} ${cleanedTranscript}` : cleanedTranscript;
 }
 
-function attachmentIdentity(attachment: Attachment): string {
-  if (attachment.pastedText !== undefined) return `text:${attachment.id}`;
-  return attachment.assetId ? `asset:${attachment.assetId}` : `uri:${attachment.uri}`;
+function attachmentIdentities(attachment: Attachment): string[] {
+  if (attachment.pastedText !== undefined) return [`text:${attachment.id}`];
+  if (attachment.assetId) return [`asset:${attachment.assetId}`];
+  const identities = [`uri:${attachment.uri}`];
+  if (attachment.pickerAssetId) identities.push(`picker:${attachment.pickerAssetId}`);
+  if (typeof attachment.fileSize === 'number' && attachment.mimeType.startsWith('image/')) {
+    identities.push(`photo:${attachment.fileName}:${attachment.fileSize}`);
+  }
+  return identities;
+}
+
+function draftAttachmentsFor(
+  draftKey: string | undefined,
+  draftProvenance: DraftProvenance | undefined,
+): Attachment[] {
+  return draftKey && draftProvenance ? getDraftAttachments(draftKey, draftProvenance) : [];
+}
+
+const LOCAL_FILE_URI = /^file:/i;
+
+const PASTED_TEXT_FILE_PREFIX = 'pasted-text-';
+
+function removePastedTextFiles(attachments: readonly Attachment[] | undefined): void {
+  if (!cacheDirectory) return;
+  const prefix = `${cacheDirectory}${PASTED_TEXT_FILE_PREFIX}`;
+  for (const attachment of attachments ?? []) {
+    if (attachment.uri.startsWith(prefix)) {
+      void deleteAsync(attachment.uri, { idempotent: true }).catch(() => undefined);
+    }
+  }
+}
+
+async function pastedTextFileAttachment(chip: Attachment): Promise<Attachment> {
+  if (!cacheDirectory) throw new Error(`"${chip.fileName}" could not be prepared on this device.`);
+  const text = chip.pastedText ?? '';
+  const uri = `${cacheDirectory}${PASTED_TEXT_FILE_PREFIX}${chip.id}.txt`;
+  await writeAsStringAsync(uri, text, { encoding: EncodingType.UTF8 });
+  return {
+    id: `${chip.id}-file`,
+    uri,
+    mimeType: PASTED_TEXT_MIME_TYPE,
+    fileName: chip.fileName,
+    fileSize: new TextEncoder().encode(text).length,
+  };
+}
+
+async function preparePastedTextFiles(
+  chips: readonly Attachment[],
+  staged: readonly Attachment[],
+  planTier: string,
+): Promise<Attachment[] | null> {
+  const files: Attachment[] = [];
+  try {
+    for (const chip of chips) files.push(await pastedTextFileAttachment(chip));
+  } catch (error) {
+    removePastedTextFiles(files);
+    throw error;
+  }
+  const { accepted, rejected } = admitAttachments(staged, files, 'cloud', planTier);
+  if (rejected.length === 0) return accepted;
+  removePastedTextFiles(files);
+  Alert.alert(
+    rejected.length === 1 ? 'Attachment not added' : 'Some attachments not added',
+    rejected.map((r) => r.reason).join('\n'),
+  );
+  return null;
+}
+
+function pastedTextUploadFailure(files: readonly Attachment[]): string | null {
+  const { uploads } = useUploadLifecycleStore.getState();
+  for (const file of files) {
+    const entry = uploads[file.id];
+    if (entry?.phase === 'failed' && entry.error) return entry.error;
+  }
+  return null;
+}
+
+const TRAILING_WORD = /\S+\s*$/;
+const AUTOCORRECT_COMMIT_WINDOW_MS = 500;
+
+/**
+ * iOS commits a pending autocorrect candidate on the last word after the send
+ * press, so the field can report the sent text with that word replaced.
+ */
+function isSentTextOrItsCorrection(current: string, sent: string): boolean {
+  if (current === sent) return true;
+  const sentWord = TRAILING_WORD.exec(sent)?.[0].trim();
+  const currentWord = TRAILING_WORD.exec(current)?.[0].trim();
+  if (!sentWord || !currentWord || currentWord.length < 2) return false;
+  if (current.replace(TRAILING_WORD, '') !== sent.replace(TRAILING_WORD, '')) return false;
+  return currentWord[0]!.toLowerCase() === sentWord[0]!.toLowerCase();
+}
+
+function textAfterSentText(current: string, sent: string): string | null {
+  if (isSentTextOrItsCorrection(current, sent)) return '';
+  if (current.startsWith(sent)) return current.slice(sent.length).trimStart();
+  const sentWords = sent.trim().split(/\s+/).length;
+  if (sentWords < 2) return null;
+  const head = new RegExp(`^\\s*(?:\\S+\\s+){${sentWords - 1}}\\S+`).exec(current)?.[0];
+  if (head === undefined || !isSentTextOrItsCorrection(head, sent)) return null;
+  return current.slice(head.length).trimStart();
+}
+
+/**
+ * React Native drops a value set from JS while a newer keystroke is still on
+ * its way from the native field (the event-count check in setTextAndSelection
+ * on iOS and Android), so after a send the field can keep reporting the sent
+ * words with the new typing after them until JS catches up with the typing.
+ * Each such echo restarts the window.
+ */
+const SENT_TEXT_ECHO_WINDOW_MS = 5_000;
+
+interface SentTextEcho {
+  text: string;
+  at: number;
+  exact: boolean;
+  handedTo?: string;
+  handed?: string;
+  handedOver?: 'mirrored' | 'cleared';
+}
+
+function sentTextEcho(sentText: string): SentTextEcho | null {
+  return sentText.trim() ? { text: sentText, at: Date.now(), exact: false } : null;
+}
+
+function textAfterEcho(current: string, echo: SentTextEcho): string | null {
+  if (!echo.exact) return textAfterSentText(current, echo.text);
+  return current.startsWith(echo.text) ? current.slice(echo.text.length).trimStart() : null;
+}
+
+function typedAfterSentEcho(
+  next: string,
+  current: string,
+  echo: SentTextEcho,
+  now: number,
+): string | null {
+  const elapsed = now - echo.at;
+  if (elapsed > SENT_TEXT_ECHO_WINDOW_MS || textAfterEcho(current, echo) !== null) return null;
+  const typedOn = textAfterEcho(next, echo);
+  if (typedOn === null || typedOn) return typedOn;
+  if (echo.exact) return next.length > echo.text.length ? '' : null;
+  const ranOn = next.startsWith(echo.text) ? next.slice(echo.text.length) : '';
+  if (ranOn && !/\s$/.test(ranOn)) return ranOn;
+  return elapsed <= AUTOCORRECT_COMMIT_WINDOW_MS ? '' : null;
+}
+
+export type ComposerSendOutcome = void | boolean | { openedConversationId: string };
+
+function openedConversationIdOf(outcome: ComposerSendOutcome): string | undefined {
+  return typeof outcome === 'object' && outcome !== null ? outcome.openedConversationId : undefined;
+}
+
+interface ComposerHandOver {
+  take?: () => string;
+  typed: string;
+  focus: boolean;
+}
+
+const useComposerHandOverStore = create<{ pending: Record<string, ComposerHandOver> }>(() => ({
+  pending: {},
+}));
+
+function updateHandOver(
+  conversationId: string,
+  change: (earlier: ComposerHandOver | undefined) => ComposerHandOver | undefined,
+): ComposerHandOver | undefined {
+  const earlier = useComposerHandOverStore.getState().pending[conversationId];
+  const next = change(earlier);
+  useComposerHandOverStore.setState((state) => {
+    const { [conversationId]: _replaced, ...rest } = state.pending;
+    return { pending: next ? { ...rest, [conversationId]: next } : rest };
+  });
+  return earlier;
+}
+
+function offerHandOver(conversationId: string, focus: boolean, take: () => string): void {
+  updateHandOver(conversationId, () => ({ take, typed: '', focus }));
+}
+
+function forwardHandOver(conversationId: string, typed: string): void {
+  if (!typed) return;
+  updateHandOver(conversationId, (earlier) => ({
+    ...(earlier?.take ? { take: earlier.take } : {}),
+    typed: `${earlier?.typed ?? ''}${typed}`,
+    focus: earlier?.focus ?? false,
+  }));
+}
+
+function withdrawHandOverTake(conversationId: string): ComposerHandOver | undefined {
+  return updateHandOver(conversationId, (earlier) =>
+    earlier ? { typed: earlier.typed, focus: earlier.focus } : undefined,
+  );
+}
+
+async function missingLocalFileIds(attachments: readonly Attachment[]): Promise<Set<string>> {
+  const missing = new Set<string>();
+  await Promise.all(
+    attachments
+      .filter((a) => !a.assetId && a.pastedText === undefined && LOCAL_FILE_URI.test(a.uri))
+      .map(async (a) => {
+        try {
+          if (!(await getInfoAsync(a.uri)).exists) missing.add(a.id);
+        } catch {
+          missing.add(a.id);
+        }
+      }),
+  );
+  return missing;
 }
 
 interface QueuedFollowUp {
   id: string;
   text: string;
   attachments: Attachment[];
+}
+
+function storedDraftText(queued: readonly QueuedFollowUp[], draft: string): string {
+  return [...queued.map((item) => item.text), draft].filter((part) => part.trim()).join('\n\n');
 }
 
 export interface ChatInputHandle {
@@ -137,10 +397,15 @@ export interface ChatInputHandle {
   ) => ComposerAttachmentOperation | null;
   focus?: () => void;
   restoreText?: (text: string) => void;
+  retrySend?: () => void;
+  handOverTypingTo?: (conversationId: string) => void;
 }
 
 interface ChatInputProps {
-  onSend: (text: string, attachments?: Attachment[]) => void | boolean | Promise<void | boolean>;
+  onSend: (
+    text: string,
+    attachments?: Attachment[],
+  ) => ComposerSendOutcome | Promise<ComposerSendOutcome>;
   isStreaming?: boolean;
   onStop?: () => void;
   onOpenModelPicker?: () => void;
@@ -162,6 +427,8 @@ interface ChatInputProps {
   onClearSelectedSkill?: () => void;
   exhaustedUsageRecovery?: WorkUsageRecovery | null;
   onMultilineChange?: (multiline: boolean) => void;
+  onRefusedSendChange?: (refused: boolean) => void;
+  onHasTextChange?: (hasText: boolean) => void;
 }
 
 export function ChatInput({
@@ -187,43 +454,72 @@ export function ChatInput({
   onClearSelectedSkill,
   exhaustedUsageRecovery = null,
   onMultilineChange,
+  onRefusedSendChange,
+  onHasTextChange,
 }: ChatInputProps) {
   const voiceAllowed = useCapability('canUseVoice');
   const [text, setText] = useState(() =>
     draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance) || (initialText ?? ''),
   );
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>(() =>
+    draftAttachmentsFor(draftKey, draftProvenance),
+  );
+  const [refusedSend, setRefusedSend] = useState(false);
+  const [preparingAttachments, setPreparingAttachments] = useState<PreparingAttachment[]>([]);
+  const preparingSeqRef = useRef(0);
   const attachmentsRef = useRef<Attachment[]>(attachments);
   attachmentsRef.current = attachments;
   const keyboardVisible = useKeyboardVisible();
+  const keyboardVisibleRef = useRef(keyboardVisible);
+  keyboardVisibleRef.current = keyboardVisible;
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [voiceResetSignal, setVoiceResetSignal] = useState(0);
   const [voiceStartSignal, setVoiceStartSignal] = useState(0);
-  const [isMultiline, setIsMultiline] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [voiceHoldAvailable, setVoiceHoldAvailable] = useState(false);
+  const [textFrame, setTextFrame] = useState<LayoutRectangle | null>(null);
+  const [fieldHoldActive, setFieldHoldActive] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const fieldHoldRef = useRef<FieldHold | null>(null);
+  const liveTranscriptScrollRef = useRef<ScrollView>(null);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [singleLineHeight, setSingleLineHeight] = useState(0);
   const [expandedEditorVisible, setExpandedEditorVisible] = useState(false);
   const [queuedFollowUps, setQueuedFollowUps] = useState<QueuedFollowUp[]>([]);
   const inputRef = useRef<TextInput>(null);
   const voiceControlRef = useRef<VoiceInputHandle | null>(null);
+  // Change events and the Send tap that queued while JS was busy reach the
+  // handlers of one render before React draws again, so the latest field text
+  // lives in a ref, and every change to the text goes through updateText,
+  // which builds it from that ref rather than from the drawn text.
   const textRef = useRef(text);
-  textRef.current = text;
+  const updateText = useCallback((next: string | ((current: string) => string)) => {
+    const value = typeof next === 'function' ? next(textRef.current) : next;
+    textRef.current = value;
+    setText(value);
+  }, []);
+  const [caretRequest, setCaretRequest] = useState<{ start: number; end: number }>();
   const sendPendingRef = useRef(false);
+  const clearedSendRef = useRef<SentTextEcho | null>(null);
+  const handOverSourceRef = useRef<{ text: string; identity: string; focus: boolean } | null>(null);
+  const handOverTargetRef = useRef<string | null>(null);
+  const sendComposerMessageRef = useRef<(sourceText: string) => void>(() => undefined);
   const heldSendRef = useRef<string | null>(null);
   const [sendHeld, setSendHeld] = useState(false);
   const [effortOpenForModel, setEffortOpenForModel] = useState<string | null>(null);
   const queuedFollowUpsRef = useRef<QueuedFollowUp[]>(queuedFollowUps);
   queuedFollowUpsRef.current = queuedFollowUps;
   const queuedFollowUpSeqRef = useRef(0);
+  const preparedPastedFilesRef = useRef(new Map<string, Attachment>());
   const wasStreamingRef = useRef(isStreaming === true);
   const draftIdentity = draftIdentityKey(draftKey, draftProvenance);
   const previousDraftIdentityRef = useRef(draftIdentity);
-  const previousDraftTargetRef = useRef<{ key?: string; provenance?: DraftProvenance }>({
-    key: draftKey,
-    provenance: draftProvenance,
-  });
+  const mountedRef = useRef(true);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const cloudLatestMessageMaxChars = useCloudLatestMessageMaxChars();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const autoCorrectEnabled = useLocalSettingsStore((s) => s.autoCorrectEnabled);
   const chatFeatures = useChatStore((s) => s.features);
@@ -235,6 +531,8 @@ export function ChatInput({
     appMode,
   );
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const selectSkill = useMobileSkillSelectionStore((s) => s.selectSkill);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
@@ -307,37 +605,49 @@ export function ChatInput({
       : []),
   ];
 
-  const applyTranscript = useCallback((transcript: string) => {
-    if (!cleanupVoiceDictation(transcript)) {
-      return;
-    }
-    setText((prev) => mergeTranscript(prev, transcript));
-    inputRef.current?.focus();
-  }, []);
+  const applyTranscript = useCallback(
+    (transcript: string) => {
+      if (!cleanupVoiceDictation(transcript)) {
+        return;
+      }
+      updateText((prev) => mergeTranscript(prev, transcript));
+      inputRef.current?.focus();
+    },
+    [updateText],
+  );
 
   const addAttachments = useCallback(
     (items: Attachment[], isCurrent: () => boolean = () => true) => {
       if (!isCurrent()) return;
-      const { accepted, rejected } = validateAttachments(items, appMode);
-      const seen = new Set(attachmentsRef.current.map(attachmentIdentity));
-      const fresh: Attachment[] = [];
+      const seen = new Set(attachmentsRef.current.flatMap(attachmentIdentities));
+      const unique: Attachment[] = [];
       const duplicates: string[] = [];
-      for (const item of accepted) {
-        const identity = attachmentIdentity(item);
-        if (seen.has(identity)) {
+      for (const item of items) {
+        const identities = attachmentIdentities(item);
+        if (identities.some((identity) => seen.has(identity))) {
           duplicates.push(item.fileName);
           continue;
         }
-        seen.add(identity);
-        fresh.push(item);
+        for (const identity of identities) seen.add(identity);
+        unique.push(item);
       }
+      const { accepted: fresh, rejected } = admitAttachments(
+        attachmentsRef.current,
+        unique,
+        appMode,
+        subscriptionTier,
+      );
       if (fresh.length > 0) {
+        attachmentsRef.current = [...attachmentsRef.current, ...fresh];
         setAttachments((prev) => {
           if (!isCurrent()) return prev;
-          const currentIdentities = new Set(prev.map(attachmentIdentity));
+          const currentIdentities = new Set(prev.flatMap(attachmentIdentities));
           return [
             ...prev,
-            ...fresh.filter((item) => !currentIdentities.has(attachmentIdentity(item))),
+            ...fresh.filter(
+              (item) =>
+                !attachmentIdentities(item).some((identity) => currentIdentities.has(identity)),
+            ),
           ];
         });
       }
@@ -355,7 +665,7 @@ export function ChatInput({
         );
       }
     },
-    [appMode],
+    [appMode, subscriptionTier],
   );
 
   useImperativeHandle(
@@ -365,7 +675,31 @@ export function ChatInput({
         inputRef.current?.focus();
       },
       restoreText: (restored: string) => {
-        setText((current) => (current.trim() ? `${current}\n\n${restored}` : restored));
+        updateText((current) => (current.trim() ? `${current}\n\n${restored}` : restored));
+      },
+      retrySend: () => sendComposerMessageRef.current(textRef.current),
+      handOverTypingTo: (openedConversationId: string) => {
+        const source = handOverSourceRef.current;
+        if (!source || !openedConversationId || openedConversationId === conversationId) return;
+        handOverTargetRef.current = openedConversationId;
+        offerHandOver(openedConversationId, source.focus, () => {
+          if (
+            handOverSourceRef.current !== source ||
+            previousDraftIdentityRef.current !== source.identity
+          ) {
+            return '';
+          }
+          const typed = textRef.current;
+          clearedSendRef.current = {
+            text: clearedSendRef.current?.text ?? source.text,
+            at: Date.now(),
+            exact: clearedSendRef.current?.exact ?? true,
+            handedTo: openedConversationId,
+            handed: typed,
+            handedOver: 'mirrored',
+          };
+          return typed;
+        });
       },
       addAttachments,
       captureAttachmentOperation: (executionMode: 'local' | 'cloud') => {
@@ -374,43 +708,151 @@ export function ChatInput({
           ? {
               isCurrent: scope.isCurrent,
               addAttachments: (items: Attachment[]) => addAttachments(items, scope.isCurrent),
+              beginPreparing: () => {
+                preparingSeqRef.current += 1;
+                const id = `preparing-${preparingSeqRef.current}`;
+                setPreparingAttachments((current) => [...current, { id, failed: false }]);
+                return {
+                  settle: () =>
+                    setPreparingAttachments((current) => current.filter((item) => item.id !== id)),
+                  fail: () =>
+                    setPreparingAttachments((current) =>
+                      current.map((item) => (item.id === id ? { ...item, failed: true } : item)),
+                    ),
+                };
+              },
             }
           : null;
       },
     }),
-    [addAttachments, captureAttachmentScope],
+    [addAttachments, captureAttachmentScope, conversationId, updateText],
+  );
+
+  const markMissingRestoredFiles = useCallback(
+    (restored: readonly Attachment[], identity: string) => {
+      if (!restored.some((a) => LOCAL_FILE_URI.test(a.uri))) return;
+      void missingLocalFileIds(restored).then((missing) => {
+        if (missing.size === 0 || previousDraftIdentityRef.current !== identity) return;
+        setAttachments((prev) =>
+          prev.map((a) => (missing.has(a.id) ? { ...a, unavailable: true } : a)),
+        );
+      });
+    },
+    [],
   );
 
   useLayoutEffect(() => {
     if (previousDraftIdentityRef.current !== draftIdentity) {
       previousDraftIdentityRef.current = draftIdentity;
-      const stranded = queuedFollowUpsRef.current;
-      const previousTarget = previousDraftTargetRef.current;
-      if (stranded.length > 0 && previousTarget.key && previousTarget.provenance) {
-        const parked = getDraft(previousTarget.key, previousTarget.provenance);
-        setDraft(
-          previousTarget.key,
-          [...stranded.map((item) => item.text), parked].filter(Boolean).join('\n\n'),
-          previousTarget.provenance,
-        );
-      }
-      previousDraftTargetRef.current = { key: draftKey, provenance: draftProvenance };
+      clearedSendRef.current = null;
       queuedFollowUpsRef.current = [];
       setQueuedFollowUps([]);
       heldSendRef.current = null;
       setSendHeld(false);
-      setText(draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance));
-      setAttachments([]);
+      const restoredText = draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance);
+      updateText(restoredText);
+      setCaretRequest(undefined);
+      const restored = draftAttachmentsFor(draftKey, draftProvenance);
+      setAttachments(restored);
+      markMissingRestoredFiles(restored, draftIdentity);
+      setPreparingAttachments([]);
+      setRefusedSend(false);
       return;
     }
     if (!draftKey || !draftProvenance) return;
-    setDraft(draftKey, text, draftProvenance);
-  }, [draftIdentity, draftKey, draftProvenance, text]);
+    if (clearedSendRef.current?.handedOver === 'mirrored') return;
+    const draftAttachments = [
+      ...queuedFollowUps.flatMap((item) => item.attachments),
+      ...attachments,
+    ];
+    const storedText = storedDraftText(queuedFollowUps, text);
+    if (draftAttachments.length > 0) {
+      setDraft(draftKey, storedText, draftProvenance, draftAttachments);
+    } else {
+      setDraft(draftKey, storedText, draftProvenance);
+    }
+  }, [
+    attachments,
+    draftIdentity,
+    draftKey,
+    draftProvenance,
+    markMissingRestoredFiles,
+    queuedFollowUps,
+    text,
+    updateText,
+  ]);
+
+  // The field's own layout effect has already sent the requested caret with
+  // the text it belongs to, so the request ends with that commit. Kept any
+  // longer, React Native would send it again whenever the person moves the
+  // caret, and the caret would jump back.
+  useLayoutEffect(() => {
+    if (caretRequest) setCaretRequest(undefined);
+  }, [caretRequest]);
+
+  useEffect(() => {
+    markMissingRestoredFiles(attachmentsRef.current, previousDraftIdentityRef.current);
+  }, [markMissingRestoredFiles]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const prepared = preparedPastedFilesRef.current;
+    return () => {
+      mountedRef.current = false;
+      removePastedTextFiles([...prepared.values()]);
+      prepared.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!text.trim() && attachments.length === 0) setRefusedSend(false);
+  }, [attachments.length, text]);
+
+  useEffect(() => {
+    onRefusedSendChange?.(refusedSend);
+  }, [onRefusedSendChange, refusedSend]);
+
+  useEffect(() => () => onRefusedSendChange?.(false), [onRefusedSendChange]);
+
+  const prefillKey = conversationId ?? draftKey ?? '';
+  const pendingPrefill = useComposerPrefillStore((state) => state.pending[prefillKey]);
+
+  useEffect(() => {
+    if (pendingPrefill === undefined) return;
+    updateText((current) => mergePrefill(current, pendingPrefill));
+    useComposerPrefillStore.getState().consume(prefillKey);
+    inputRef.current?.focus();
+  }, [pendingPrefill, prefillKey, updateText]);
+
+  const handOver = useComposerHandOverStore((state) =>
+    conversationId ? state.pending[conversationId] : undefined,
+  );
+
+  useEffect(() => {
+    if (!conversationId || !handOver) return;
+    const taken = updateHandOver(conversationId, () => undefined);
+    if (!taken) return;
+    const arrived = `${taken.take?.() ?? ''}${taken.typed}`;
+    if (arrived) {
+      updateText((current) => `${current}${arrived}`);
+      const end = textRef.current.length;
+      setCaretRequest({ start: end, end });
+    }
+    if (taken.focus || arrived) inputRef.current?.focus();
+  }, [conversationId, handOver, updateText]);
+
+  const hasText = text.trim().length > 0;
+
+  useEffect(() => {
+    onHasTextChange?.(hasText);
+  }, [hasText, onHasTextChange]);
+
+  useEffect(() => () => onHasTextChange?.(false), [onHasTextChange]);
 
   const uploads = useUploadLifecycleStore((state) => state.uploads);
   const attachmentUploadPhase = useMemo<ComposerUploadPhase>(() => {
     const entries = attachments.map((a) => uploads[a.id]).filter(Boolean);
-    if (entries.some((entry) => entry.phase === 'uploading')) return 'uploading';
+    if (entries.some(isUploadInFlight)) return 'uploading';
     if (entries.some((entry) => entry.phase === 'failed' || entry.phase === 'canceled'))
       return 'unsent';
     return 'settled';
@@ -421,20 +863,84 @@ export function ChatInput({
       if (sendPendingRef.current || usageBlocked) return;
       const trimmed = sourceText.trim();
       if (!trimmed && attachments.length === 0) return;
+      const missing = attachments.filter((a) => a.unavailable);
+      if (missing.length > 0) {
+        Alert.alert(
+          missing.length === 1 ? 'File no longer available' : 'Files no longer available',
+          `${missing.map((a) => a.fileName).join('\n')}\n\nRemove ${missing.length === 1 ? 'it' : 'them'} or attach again, then send.`,
+        );
+        return;
+      }
       if (attachmentUploadPhase === 'uploading') {
         heldSendRef.current = sourceText;
         setSendHeld(true);
         return;
       }
+      const pastedChips = attachments.filter((a) => a.pastedText);
+      const attachedChipIndexes =
+        appMode === 'cloud'
+          ? pastedBlocksToAttach(
+              pastedChips.map((chip) => chip.pastedText ?? ''),
+              trimmed,
+              isFreeQuotaTurnModelId(selectedModel)
+                ? MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH
+                : cloudLatestMessageMaxChars,
+            )
+          : new Set<number>();
+      const chipsToAttach = pastedChips.filter((_, index) => attachedChipIndexes.has(index));
+      const attachedChipIds = new Set(chipsToAttach.map((chip) => chip.id));
+      for (const [chipId, file] of preparedPastedFilesRef.current) {
+        if (attachedChipIds.has(chipId)) continue;
+        preparedPastedFilesRef.current.delete(chipId);
+        removePastedTextFiles([file]);
+      }
+      const unpreparedChips = chipsToAttach.filter(
+        (chip) => !preparedPastedFilesRef.current.has(chip.id),
+      );
+      if (unpreparedChips.length > 0) {
+        sendPendingRef.current = true;
+        const staged = [
+          ...attachments.filter((a) => !a.pastedText),
+          ...preparedPastedFilesRef.current.values(),
+        ];
+        void preparePastedTextFiles(unpreparedChips, staged, subscriptionTier)
+          .then((prepared) => {
+            sendPendingRef.current = false;
+            if (!prepared) return;
+            unpreparedChips.forEach((chip, index) =>
+              preparedPastedFilesRef.current.set(chip.id, prepared[index]!),
+            );
+            if (textRef.current !== sourceText) return;
+            sendComposerMessageRef.current(sourceText);
+          })
+          .catch(() => {
+            sendPendingRef.current = false;
+            Alert.alert(
+              'Pasted text not attached',
+              'Your message is still here. Try sending again.',
+            );
+          });
+        return;
+      }
+
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
-      const pastedBlocks = attachments
-        .map((a) => a.pastedText)
-        .filter((t): t is string => Boolean(t));
-      const fileAttachments = attachments.filter((a) => !a.pastedText);
-      const outgoing = [...pastedBlocks, trimmed].filter(Boolean).join('\n\n');
+      const pastedFiles = chipsToAttach.flatMap((chip) => {
+        const file = preparedPastedFilesRef.current.get(chip.id);
+        preparedPastedFilesRef.current.delete(chip.id);
+        return file ? [file] : [];
+      });
+      const fileAttachments = [...attachments.filter((a) => !a.pastedText), ...pastedFiles];
+      const outgoing = [
+        ...pastedChips
+          .filter((_, index) => !attachedChipIndexes.has(index))
+          .map((chip) => chip.pastedText),
+        trimmed,
+      ]
+        .filter(Boolean)
+        .join(PASTED_BLOCK_SEPARATOR);
 
       if (isStreaming) {
         queuedFollowUpSeqRef.current += 1;
@@ -445,55 +951,147 @@ export function ChatInput({
         };
         queuedFollowUpsRef.current = [...queuedFollowUpsRef.current, queued];
         setQueuedFollowUps(queuedFollowUpsRef.current);
-        clearDraft(draftKey, draftProvenance);
-        setText('');
+        clearedSendRef.current = sentTextEcho(sourceText);
+        updateText('');
+        setCaretRequest(undefined);
         setAttachments([]);
         return;
       }
 
       const sentText = sourceText;
+      const sentDraftIdentity = previousDraftIdentityRef.current;
       const sentAttachmentIds = new Set(attachments.map((a) => a.id));
+      const unsentBeforeIds = new Set(attachments.filter((a) => a.sendFailed).map((a) => a.id));
       const markSendFailed = () => {
+        setRefusedSend(true);
         setAttachments((current) =>
           current.map((a) => (sentAttachmentIds.has(a.id) ? { ...a, sendFailed: true } : a)),
         );
       };
+      const restoreUnsentMarks = () => {
+        setAttachments((current) =>
+          current.map((a) => (unsentBeforeIds.has(a.id) ? { ...a, sendFailed: true } : a)),
+        );
+      };
+      const restoreSentText = () => {
+        if (mountedRef.current && previousDraftIdentityRef.current === sentDraftIdentity) {
+          clearedSendRef.current = null;
+          updateText((current) => (current.trim() ? `${sentText}\n\n${current}` : sentText));
+          return;
+        }
+        if (!draftKey || !draftProvenance) return;
+        const kept = getDraft(draftKey, draftProvenance);
+        setDraft(
+          draftKey,
+          kept.trim() ? `${sentText}\n\n${kept}` : sentText,
+          draftProvenance,
+          draftAttachmentsFor(draftKey, draftProvenance),
+        );
+      };
+      const releaseHandOver = () => {
+        const target = handOverTargetRef.current;
+        if (target) withdrawHandOverTake(target);
+        if (clearedSendRef.current?.handedOver) {
+          clearedSendRef.current = null;
+          updateText('');
+        }
+      };
+      const outgoingAttachments =
+        fileAttachments.length > 0
+          ? fileAttachments.map(({ sendFailed: _sendFailed, ...rest }) => rest)
+          : undefined;
       sendPendingRef.current = true;
       setAttachments((current) =>
         current.map((a) => (a.sendFailed ? { ...a, sendFailed: false } : a)),
       );
+      clearedSendRef.current = sentTextEcho(sentText);
+      updateText('');
+      setCaretRequest(undefined);
+      handOverSourceRef.current = {
+        text: sentText,
+        identity: sentDraftIdentity,
+        focus: inputRef.current?.isFocused() === true || keyboardVisibleRef.current,
+      };
+      handOverTargetRef.current = null;
 
-      Promise.resolve(
-        onSend(
-          outgoing,
-          fileAttachments.length > 0
-            ? fileAttachments.map(({ sendFailed: _sendFailed, ...rest }) => rest)
-            : undefined,
-        ),
-      )
-        .then((accepted) => {
-          if (accepted === false) {
-            markSendFailed();
+      let pendingSend: Promise<ComposerSendOutcome>;
+      try {
+        pendingSend = Promise.resolve(onSend(outgoing, outgoingAttachments));
+      } catch (error) {
+        pendingSend = Promise.reject(error);
+      }
+      pendingSend
+        .then((outcome) => {
+          if (outcome === false) {
+            const pastedFailure = pastedTextUploadFailure(pastedFiles);
+            if (pastedFailure) Alert.alert('Pasted text not sent', pastedFailure);
+            if (wasCloudUploadDeclined(outgoingAttachments)) restoreUnsentMarks();
+            else markSendFailed();
+            releaseHandOver();
+            restoreSentText();
             return;
           }
           clearDraft(draftKey, draftProvenance);
-          setText((current) => (current === sentText ? '' : current));
+          setRefusedSend(false);
+          if (previousDraftIdentityRef.current !== sentDraftIdentity) return;
+          const openedConversationId = openedConversationIdOf(outcome);
+          if (openedConversationId && openedConversationId !== conversationId) {
+            const typedAfterSend = textRef.current;
+            const echo = clearedSendRef.current;
+            if (echo?.handedOver && echo.handedTo === openedConversationId) {
+              clearedSendRef.current = {
+                ...echo,
+                at: Date.now(),
+                handed: typedAfterSend,
+                handedOver: 'cleared',
+              };
+              inputRef.current?.blur();
+            } else {
+              const offered = withdrawHandOverTake(openedConversationId);
+              clearedSendRef.current = {
+                text: echo?.text ?? sentText,
+                at: Date.now(),
+                exact: echo?.exact ?? true,
+                handedTo: openedConversationId,
+                handed: typedAfterSend,
+              };
+              prefillComposer(openedConversationId, typedAfterSend);
+              if (!offered?.focus) inputRef.current?.blur();
+            }
+            updateText('');
+          }
           setAttachments((current) => current.filter((a) => !sentAttachmentIds.has(a.id)));
         })
-        .catch(markSendFailed)
+        .catch(() => {
+          markSendFailed();
+          releaseHandOver();
+          restoreSentText();
+        })
         .finally(() => {
           sendPendingRef.current = false;
+          const target = handOverTargetRef.current;
+          if (target) withdrawHandOverTake(target);
+          handOverSourceRef.current = null;
+          handOverTargetRef.current = null;
+          removePastedTextFiles(fileAttachments);
+          for (const file of pastedFiles) useUploadLifecycleStore.getState().clear(file.id);
         });
     },
     [
+      appMode,
       attachments,
       attachmentUploadPhase,
+      cloudLatestMessageMaxChars,
+      subscriptionTier,
       onSend,
       hapticsEnabled,
+      conversationId,
       draftKey,
       draftProvenance,
       isStreaming,
+      selectedModel,
       usageBlocked,
+      updateText,
     ],
   );
 
@@ -518,42 +1116,54 @@ export function ChatInput({
     setSendHeld(false);
   }, [text]);
 
-  const handleSend = useCallback(() => {
-    sendComposerMessage(text);
-  }, [sendComposerMessage, text]);
+  sendComposerMessageRef.current = sendComposerMessage;
 
-  const returnQueuedToComposer = useCallback((item: QueuedFollowUp) => {
-    setText((current) => (current ? `${item.text}\n\n${current}` : item.text));
-    if (item.attachments.length > 0) {
-      setAttachments((current) => [
-        ...item.attachments.map((attachment) => ({ ...attachment, sendFailed: true })),
-        ...current,
-      ]);
-    }
-  }, []);
+  const handleSend = useCallback(() => {
+    sendComposerMessage(textRef.current);
+  }, [sendComposerMessage]);
+
+  const returnQueuedToComposer = useCallback(
+    (item: QueuedFollowUp, unsent: boolean) => {
+      if (unsent) setRefusedSend(true);
+      updateText((current) => (current ? `${item.text}\n\n${current}` : item.text));
+      if (item.attachments.length > 0) {
+        setAttachments((current) => [
+          ...item.attachments.map((attachment) =>
+            unsent ? { ...attachment, sendFailed: true } : attachment,
+          ),
+          ...current,
+        ]);
+      }
+    },
+    [updateText],
+  );
 
   const cancelQueuedFollowUp = useCallback((id: string) => {
+    removePastedTextFiles(queuedFollowUpsRef.current.find((item) => item.id === id)?.attachments);
     queuedFollowUpsRef.current = queuedFollowUpsRef.current.filter((item) => item.id !== id);
     setQueuedFollowUps(queuedFollowUpsRef.current);
   }, []);
 
-  const editQueuedFollowUp = useCallback((item: QueuedFollowUp) => {
-    queuedFollowUpsRef.current = queuedFollowUpsRef.current.filter(
-      (queued) => queued.id !== item.id,
-    );
-    setQueuedFollowUps(queuedFollowUpsRef.current);
-    setText((current) =>
-      current
-        ? `${item.text}
+  const editQueuedFollowUp = useCallback(
+    (item: QueuedFollowUp) => {
+      queuedFollowUpsRef.current = queuedFollowUpsRef.current.filter(
+        (queued) => queued.id !== item.id,
+      );
+      setQueuedFollowUps(queuedFollowUpsRef.current);
+      updateText((current) =>
+        current
+          ? `${item.text}
 
 ${current}`
-        : item.text,
-    );
-    if (item.attachments.length > 0) {
-      setAttachments((current) => [...item.attachments, ...current]);
-    }
-    inputRef.current?.focus();
-  }, []);
+          : item.text,
+      );
+      if (item.attachments.length > 0) {
+        setAttachments((current) => [...item.attachments, ...current]);
+      }
+      inputRef.current?.focus();
+    },
+    [updateText],
+  );
 
   useEffect(() => {
     const streaming = isStreaming === true;
@@ -566,9 +1176,13 @@ ${current}`
           onSend(next.text, next.attachments.length > 0 ? next.attachments : undefined),
         )
           .then((accepted) => {
-            if (accepted === false) returnQueuedToComposer(next);
+            if (accepted === false) {
+              returnQueuedToComposer(next, !wasCloudUploadDeclined(next.attachments));
+              return;
+            }
+            removePastedTextFiles(next.attachments);
           })
-          .catch(() => returnQueuedToComposer(next));
+          .catch(() => returnQueuedToComposer(next, true));
       }
     }
     wasStreamingRef.current = streaming;
@@ -576,24 +1190,84 @@ ${current}`
 
   const handleChangeText = useCallback(
     (next: string) => {
-      const inserted = next.length - text.length;
+      const current = textRef.current;
+      const echo = clearedSendRef.current;
+      clearedSendRef.current = null;
+      if (echo !== null) {
+        const now = Date.now();
+        if (
+          echo.handedOver &&
+          echo.handedTo !== undefined &&
+          now - echo.at <= SENT_TEXT_ECHO_WINDOW_MS
+        ) {
+          const shown = textAfterEcho(next, echo) ?? next;
+          const handed = echo.handed ?? '';
+          const mirrored = echo.handedOver === 'mirrored';
+          let fresh = shown;
+          if (mirrored) fresh = shown.length > handed.length ? shown.slice(handed.length) : '';
+          else if (handed && shown.startsWith(handed)) fresh = shown.slice(handed.length);
+          forwardHandOver(echo.handedTo, fresh);
+          clearedSendRef.current = { ...echo, at: now, handed: shown };
+          if (mirrored) updateText(shown);
+          return;
+        }
+        let typedOn = typedAfterSentEcho(next, current, echo, now);
+        if (
+          typedOn === null &&
+          echo.handedTo !== undefined &&
+          echo.handed &&
+          now - echo.at <= SENT_TEXT_ECHO_WINDOW_MS &&
+          next.startsWith(echo.handed)
+        ) {
+          typedOn = next;
+        }
+        if (typedOn !== null) {
+          const head = next.slice(0, next.length - typedOn.length);
+          const seen: SentTextEcho = {
+            ...echo,
+            text: head.trim() ? head : echo.text,
+            at: now,
+            exact: true,
+          };
+          if (echo.handedTo === undefined) {
+            clearedSendRef.current = seen;
+            updateText(typedOn);
+            setCaretRequest({ start: typedOn.length, end: typedOn.length });
+            return;
+          }
+          const handed = echo.handed ?? '';
+          const stillPending =
+            useComposerPrefillStore.getState().pending[echo.handedTo] !== undefined;
+          prefillComposer(
+            echo.handedTo,
+            stillPending || !typedOn.startsWith(handed) ? typedOn : typedOn.slice(handed.length),
+          );
+          clearedSendRef.current = { ...seen, handed: typedOn || handed };
+          return;
+        }
+      }
+      const inserted = next.length - current.length;
       if (inserted >= LARGE_PASTE_THRESHOLD) {
         let prefix = 0;
-        while (prefix < text.length && prefix < next.length && text[prefix] === next[prefix]) {
+        while (
+          prefix < current.length &&
+          prefix < next.length &&
+          current[prefix] === next[prefix]
+        ) {
           prefix++;
         }
         let suffix = 0;
         while (
-          suffix < text.length - prefix &&
+          suffix < current.length - prefix &&
           suffix < next.length - prefix &&
-          text[text.length - 1 - suffix] === next[next.length - 1 - suffix]
+          current[current.length - 1 - suffix] === next[next.length - 1 - suffix]
         ) {
           suffix++;
         }
         const pasted = next.slice(prefix, next.length - suffix);
         if (isLargePaste(pasted)) {
           const id = `pasted-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-          setText(next.slice(0, prefix) + next.slice(next.length - suffix));
+          updateText(next.slice(0, prefix) + next.slice(next.length - suffix));
           setAttachments((prev) => [
             ...prev,
             {
@@ -611,25 +1285,43 @@ ${current}`
           return;
         }
       }
-      setText(next);
+      updateText(next);
     },
-    [text],
+    [updateText],
   );
 
-  const handleExpandPastedText = useCallback((id: string) => {
-    setAttachments((prev) => {
-      const target = prev.find((a) => a.id === id);
-      if (!target?.pastedText) return prev;
-      const pasted = target.pastedText;
-      setText((t) => (t ? `${t}\n\n${pasted}` : pasted));
-      return prev.filter((a) => a.id !== id);
-    });
-    inputRef.current?.focus();
+  const discardPreparedPastedFile = useCallback((chipId: string) => {
+    const prepared = preparedPastedFilesRef.current.get(chipId);
+    if (!prepared) return;
+    preparedPastedFilesRef.current.delete(chipId);
+    removePastedTextFiles([prepared]);
   }, []);
 
-  const handleRemoveAttachment = useCallback((id: string) => {
-    useUploadLifecycleStore.getState().clear(id);
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  const handleExpandPastedText = useCallback(
+    (id: string) => {
+      discardPreparedPastedFile(id);
+      const pasted = attachmentsRef.current.find((a) => a.id === id)?.pastedText;
+      if (pasted) {
+        updateText((t) => (t ? `${t}\n\n${pasted}` : pasted));
+        setAttachments((prev) => prev.filter((a) => a.id !== id));
+      }
+      inputRef.current?.focus();
+    },
+    [discardPreparedPastedFile, updateText],
+  );
+
+  const handleRemoveAttachment = useCallback(
+    (id: string) => {
+      discardPreparedPastedFile(id);
+      removePastedTextFiles(attachmentsRef.current.filter((a) => a.id === id));
+      useUploadLifecycleStore.getState().clear(id);
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    },
+    [discardPreparedPastedFile],
+  );
+
+  const handleDismissPreparing = useCallback((id: string) => {
+    setPreparingAttachments((current) => current.filter((item) => item.id !== id));
   }, []);
 
   const handleRetryUpload = useCallback(
@@ -673,6 +1365,7 @@ ${current}`
   );
 
   const handleDictationFailure = useCallback(() => {
+    setLiveTranscript('');
     Alert.alert("Didn't catch that", "Audio isn't saved, so say it again.", [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Try again', onPress: () => setVoiceStartSignal((value) => value + 1) },
@@ -684,18 +1377,18 @@ ${current}`
       setIsRecording(false);
       setIsTranscribing(false);
       setAudioLevel(0);
+      setLiveTranscript('');
       if (!cleanupVoiceDictation(transcribedText)) {
         handleDictationFailure();
         return;
       }
       if (intent === 'send') {
         const merged = mergeTranscript(textRef.current, transcribedText);
-        textRef.current = merged;
-        setText(merged);
+        updateText(merged);
         sendComposerMessage(merged);
       } else applyTranscript(transcribedText);
     },
-    [applyTranscript, handleDictationFailure, sendComposerMessage],
+    [applyTranscript, handleDictationFailure, sendComposerMessage, updateText],
   );
 
   const resetRecordingUi = useCallback(() => {
@@ -715,11 +1408,89 @@ ${current}`
     setAudioLevel(meteringToAmplitude(event.metering));
   }, []);
 
+  const handleProcessingChange = useCallback((processing: boolean) => {
+    setIsTranscribing(processing);
+    if (!processing) setLiveTranscript('');
+  }, []);
+
   const handleDictationCancel = useCallback(() => {
     voiceControlRef.current?.cancel();
     resetRecordingUi();
     setIsTranscribing(false);
+    setLiveTranscript('');
   }, [resetRecordingUi]);
+
+  const endFieldHold = useCallback(() => {
+    const hold = fieldHoldRef.current;
+    if (hold?.timer) clearTimeout(hold.timer);
+    fieldHoldRef.current = null;
+    setFieldHoldActive(false);
+    return hold;
+  }, []);
+
+  useEffect(
+    () => () => {
+      const hold = fieldHoldRef.current;
+      if (hold?.timer) clearTimeout(hold.timer);
+    },
+    [],
+  );
+
+  const handleFieldHoldGrant = useCallback(() => {
+    const hold: FieldHold = { timer: null, engaged: false, outside: false };
+    hold.timer = setTimeout(() => {
+      hold.timer = null;
+      if (fieldHoldRef.current !== hold || hold.outside) return;
+      hold.engaged = true;
+      if (hapticsEnabled) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      voiceControlRef.current?.hold();
+    }, HOLD_TO_TALK_THRESHOLD_MS);
+    fieldHoldRef.current = hold;
+    setFieldHoldActive(true);
+  }, [hapticsEnabled]);
+
+  const handleFieldHoldMove = useCallback(
+    (event: GestureResponderEvent) => {
+      const hold = fieldHoldRef.current;
+      if (!hold || !textFrame) return;
+      const { locationX, locationY } = event.nativeEvent;
+      hold.outside =
+        locationX < -FIELD_HOLD_RETENTION ||
+        locationY < -FIELD_HOLD_RETENTION ||
+        locationX > textFrame.width + FIELD_HOLD_RETENTION ||
+        locationY > textFrame.height + FIELD_HOLD_RETENTION;
+    },
+    [textFrame],
+  );
+
+  const handleFieldHoldRelease = useCallback(() => {
+    const hold = endFieldHold();
+    if (!hold) return;
+    if (hold.engaged) {
+      if (hold.outside) handleDictationCancel();
+      else voiceControlRef.current?.stop('insert');
+      return;
+    }
+    if (!hold.outside) inputRef.current?.focus();
+  }, [endFieldHold, handleDictationCancel]);
+
+  const handleFieldHoldTerminate = useCallback(() => {
+    if (endFieldHold()?.engaged) handleDictationCancel();
+  }, [endFieldHold, handleDictationCancel]);
+
+  const handleInputFocus = useCallback(() => setInputFocused(true), []);
+  const handleInputBlur = useCallback(() => setInputFocused(false), []);
+
+  useEffect(() => {
+    if (voiceHoldAvailable) setInputFocused(inputRef.current?.isFocused() === true);
+  }, [voiceHoldAvailable]);
+
+  const handleTextBlockLayout = useCallback((event: LayoutChangeEvent) => {
+    const frame = event.nativeEvent.layout;
+    if (frame.width > 0 && frame.height > 0) setTextFrame(frame);
+  }, []);
 
   const handleDictationStop = useCallback(() => {
     voiceControlRef.current?.stop('insert');
@@ -732,6 +1503,7 @@ ${current}`
   const handleVoiceError = useCallback(
     (message: string, permissionDenied?: boolean) => {
       resetRecordingUi();
+      setLiveTranscript('');
       setVoiceResetSignal((value) => value + 1);
       if (permissionDenied) showVoicePermissionAlert(message);
       else Alert.alert('Voice input unavailable', message);
@@ -739,9 +1511,10 @@ ${current}`
     [resetRecordingUi],
   );
 
-  useEffect(() => {
-    if (text.length === 0) setIsMultiline(false);
-  }, [text]);
+  const isMultiline =
+    text.length > 0 &&
+    singleLineHeight > 0 &&
+    contentHeight > singleLineHeight * WRAPPED_CONTENT_IN_LINES;
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
   const dictating = isRecording || isTranscribing;
@@ -752,6 +1525,18 @@ ${current}`
   const effortPanelOpen =
     effortValue !== undefined && !dictating && effortOpenForModel === selectedModel;
   const multiline = isMultiline && !dictating && !effortPanelOpen;
+  const livePreview =
+    dictating && cleanupVoiceDictation(liveTranscript) ? mergeTranscript(text, liveTranscript) : '';
+  const holdToTalkOffered = voiceAllowed && voiceHoldAvailable;
+  const holdToTalkReady =
+    textFrame !== null &&
+    holdToTalkOffered &&
+    !keyboardVisible &&
+    !inputFocused &&
+    !dictating &&
+    !effortPanelOpen;
+  const fieldHoldOverlayFrame =
+    textFrame && (fieldHoldActive || (holdToTalkReady && text.length === 0)) ? textFrame : null;
 
   useEffect(() => {
     onMultilineChange?.(multiline);
@@ -777,16 +1562,16 @@ ${current}`
   const handleSelectCommand = useCallback(
     (command: ChatCommand) => {
       if (command === '/image') {
-        setText('/image ');
+        updateText('/image ');
         inputRef.current?.focus();
         return;
       }
-      setText('');
+      updateText('');
       if (command === '/voice') onOpenVoiceMode?.();
       if (command === '/compare') onOpenCompare?.();
       if (command === '/export') onOpenExport?.();
     },
-    [onOpenCompare, onOpenExport, onOpenVoiceMode],
+    [onOpenCompare, onOpenExport, onOpenVoiceMode, updateText],
   );
 
   const sendButtonState = isStreaming
@@ -862,7 +1647,22 @@ ${current}`
           ? 'Reply to AGI'
           : agiWorkActive
             ? 'Work with AGI'
-            : "What's on your mind?";
+            : holdToTalkReady
+              ? 'Type or hold to talk'
+              : "What's on your mind?";
+
+  const attachmentStrip = (
+    <AttachmentPreview
+      attachments={attachments}
+      onRemove={handleRemoveAttachment}
+      onExpandPastedText={handleExpandPastedText}
+      onRetryUpload={handleRetryUpload}
+      privacyShortLabel={attachmentPrivacyShortLabel}
+      preparing={preparingAttachments}
+      onDismissPreparing={handleDismissPreparing}
+      numberImages={mediaMode !== 'text'}
+    />
+  );
 
   return (
     <View
@@ -938,13 +1738,7 @@ ${current}`
         </View>
       ) : null}
 
-      <AttachmentPreview
-        attachments={attachments}
-        onRemove={handleRemoveAttachment}
-        onExpandPastedText={handleExpandPastedText}
-        onRetryUpload={handleRetryUpload}
-        privacyShortLabel={attachmentPrivacyShortLabel}
-      />
+      {dictating ? attachmentStrip : null}
 
       {unreadableImages ? (
         <Text
@@ -956,8 +1750,30 @@ ${current}`
             color: themeColors.agentWarning,
           }}
         >
-          {`${selectedModelMetadata?.name ?? modelName} cannot read images. Choose a model that can, or remove the images before sending.`}
+          {unreadableImagesNotice({
+            selectedModelId: selectedModel,
+            selectedModelName: selectedModelMetadata?.name ?? modelName,
+            executionMode: appMode,
+            subscriptionTier,
+            message: text,
+            attachments,
+          })}
         </Text>
+      ) : null}
+
+      {mentionQuery !== null && FEATURES.skills && clerkUserId ? (
+        <SkillMentionPalette
+          query={mentionQuery}
+          onSelect={(skill) => {
+            updateText((current) => withoutTrailingMention(current));
+            selectSkill({
+              ownerId: clerkUserId,
+              name: skill.name,
+              ...(skill.requiredTools ? { requiredTools: skill.requiredTools } : {}),
+            });
+            enableSkillCodeExecution(skill.requiredTools);
+          }}
+        />
       ) : null}
 
       {mentionQuery !== null ? (
@@ -965,7 +1781,7 @@ ${current}`
           destinationKey={draftIdentity}
           query={mentionQuery}
           onSelect={(attachment) => {
-            setText((current) => withoutTrailingMention(current));
+            updateText((current) => withoutTrailingMention(current));
             addAttachments([attachment]);
           }}
         />
@@ -1104,7 +1920,7 @@ ${current}`
       <View
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
+          alignItems: livePreview ? 'flex-end' : 'center',
           gap: 8,
         }}
       >
@@ -1132,46 +1948,50 @@ ${current}`
         ) : null}
 
         <View
+          testID="chat.composer.card"
           style={{
             flex: 1,
-            flexDirection: dictating ? 'row' : 'column',
-            alignItems: dictating ? 'center' : 'stretch',
+            flexDirection: dictating && !livePreview ? 'row' : 'column',
+            alignItems: dictating && !livePreview ? 'center' : 'stretch',
             backgroundColor: themeColors.surfaceElevated,
-            borderRadius: dictating ? radii.full : radii['2xl'],
-            borderWidth: 1,
+            borderRadius: dictating && !livePreview ? radii.full : radii['2xl'],
+            borderWidth: CARD_BORDER_WIDTH,
             borderColor: themeColors.composerBorder,
-            paddingLeft: dictating ? 6 : 16,
-            paddingRight: dictating ? 6 : 10,
-            paddingTop: dictating ? 3 : 12,
-            paddingBottom: dictating ? 3 : 4,
+            paddingLeft: dictating ? DICTATION_CARD_PADDING.horizontal : CARD_PADDING.left,
+            paddingRight: dictating ? DICTATION_CARD_PADDING.horizontal : CARD_PADDING.right,
+            paddingTop: dictating ? DICTATION_CARD_PADDING.vertical : CARD_PADDING.top,
+            paddingBottom: dictating ? DICTATION_CARD_PADDING.vertical : CARD_PADDING.bottom,
             minHeight: 44,
           }}
         >
-          {/* Expand to a full-screen editor. Pinned inside the card's top-right
-              corner and shown only once the text wraps, matching the
-              reference's appearance threshold (IMG_0672), one line has nothing
-              to expand. The wrapped TextInput reserves room for it on the right
-              so the first line never runs underneath the glyph. */}
-          {multiline ? (
-            <PressableBox
-              onPress={handleExpandEditor}
+          {livePreview ? (
+            <ScrollView
+              ref={liveTranscriptScrollRef}
+              testID="chat.composer.live-transcript"
+              accessible={isTranscribing || undefined}
+              accessibilityRole={isTranscribing ? 'alert' : undefined}
+              accessibilityLabel={isTranscribing ? `Transcribing, ${livePreview}` : undefined}
+              accessibilityLiveRegion={isTranscribing ? 'polite' : undefined}
               style={{
-                position: 'absolute',
-                top: 6,
-                right: 6,
-                width: 44,
-                height: 44,
-                borderRadius: radii.full,
-                alignItems: 'center',
-                justifyContent: 'center',
+                maxHeight:
+                  (singleLineHeight || chatTypography.body.lineHeight) * LIVE_TRANSCRIPT_MAX_LINES,
+                marginLeft: CARD_PADDING.left - DICTATION_CARD_PADDING.horizontal,
+                marginRight: CARD_PADDING.right - DICTATION_CARD_PADDING.horizontal,
+                marginTop: CARD_PADDING.top - DICTATION_CARD_PADDING.vertical,
+                marginBottom: isRecording ? 0 : CARD_PADDING.top - DICTATION_CARD_PADDING.vertical,
               }}
-              testID="chat.composer.expand"
-              accessibilityLabel="Expand message"
-              accessibilityHint="Opens the message in a full-screen editor"
-              accessibilityRole="button"
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={() =>
+                liveTranscriptScrollRef.current?.scrollToEnd({ animated: false })
+              }
             >
-              <Maximize2 size={16} color={themeColors.textMuted} />
-            </PressableBox>
+              <Text
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                style={{ color: themeColors.textPrimary, ...chatTypography.body }}
+              >
+                {livePreview}
+              </Text>
+            </ScrollView>
           ) : null}
 
           {/* Dictation state, in place of the input: a live waveform while
@@ -1202,7 +2022,7 @@ ${current}`
                 />
               </View>
             </View>
-          ) : isTranscribing ? (
+          ) : isTranscribing && !livePreview ? (
             <View
               style={{
                 flex: 1,
@@ -1236,39 +2056,125 @@ ${current}`
             />
           ) : null}
 
-          <TextInput
-            ref={inputRef}
-            testID="chat.composer.input"
+          {/* Attachments sit inside the card, above the text, as they do in
+              ChatGPT and Claude (founder, 2026-11-14). The dictation pill has
+              no room for them, so they stay above it while recording. */}
+          {dictating || effortPanelOpen ? null : attachmentStrip}
+
+          <View
+            onLayout={handleTextBlockLayout}
             style={{
               alignSelf: 'stretch',
-              paddingRight: multiline ? 44 : 0,
-              color: themeColors.textPrimary,
-              ...chatTypography.body,
-              paddingVertical: 0,
-              minHeight: multiline ? 44 : 24,
-              maxHeight: 160,
               display: dictating || effortPanelOpen ? 'none' : 'flex',
             }}
-            placeholder={placeholder}
-            placeholderTextColor={themeColors.textMuted}
-            value={text}
-            onChangeText={handleChangeText}
-            onContentSizeChange={(event) => {
-              if (event.nativeEvent.contentSize.height > STACK_LAYOUT_MIN_HEIGHT) {
-                setIsMultiline(true);
+          >
+            {/* Android 14 scales large text sizes non-linearly, so one line's
+                height is read from the platform rather than multiplied out. */}
+            <Text
+              testID="chat.composer.line-probe"
+              numberOfLines={1}
+              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              pointerEvents="none"
+              onLayout={(event) => setSingleLineHeight(event.nativeEvent.layout.height)}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                opacity: 0,
+                ...chatTypography.body,
+              }}
+            >
+              I
+            </Text>
+            <TextInput
+              ref={inputRef}
+              testID="chat.composer.input"
+              style={{
+                alignSelf: 'stretch',
+                paddingRight: multiline ? 44 : 0,
+                color: themeColors.textPrimary,
+                ...chatTypography.body,
+                paddingVertical: 0,
+                minHeight: multiline ? 44 : 24,
+                maxHeight: 160,
+              }}
+              placeholder={placeholder}
+              placeholderTextColor={themeColors.textMuted}
+              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+              value={text}
+              selection={caretRequest}
+              onChangeText={handleChangeText}
+              onFocus={holdToTalkOffered ? handleInputFocus : undefined}
+              onBlur={holdToTalkOffered ? handleInputBlur : undefined}
+              onContentSizeChange={(event) =>
+                setContentHeight(event.nativeEvent.contentSize.height)
               }
-            }}
-            multiline
-            autoCorrect={autoCorrectEnabled}
-            spellCheck={autoCorrectEnabled}
-            numberOfLines={MAX_INPUT_LINES}
-            selectionColor={themeColors.teal}
-            returnKeyType="default"
-            blurOnSubmit={false}
-            accessible={true}
-            accessibilityLabel="Message input"
-            accessibilityHint="Type your message to the AI assistant"
-          />
+              multiline
+              autoCorrect={autoCorrectEnabled}
+              spellCheck={autoCorrectEnabled}
+              numberOfLines={MAX_INPUT_LINES}
+              selectionColor={themeColors.teal}
+              returnKeyType="default"
+              blurOnSubmit={false}
+              accessible={true}
+              accessibilityLabel="Message input"
+              accessibilityHint="Type your message to the AI assistant"
+            />
+            {/* Expand to a full-screen editor. Pinned to the text block's
+              top-right corner and shown only once the text wraps, matching the
+              reference's appearance threshold (IMG_0672), one line has nothing
+              to expand. The wrapped TextInput reserves room for it on the right
+              so the first line never runs underneath the glyph. */}
+            {multiline ? (
+              <PressableBox
+                onPress={handleExpandEditor}
+                style={{
+                  position: 'absolute',
+                  top: EXPAND_BUTTON_OFFSET.top,
+                  right: EXPAND_BUTTON_OFFSET.right,
+                  width: 44,
+                  height: 44,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                testID="chat.composer.expand"
+                accessibilityLabel="Expand message"
+                accessibilityHint="Opens the message in a full-screen editor"
+                accessibilityRole="button"
+              >
+                <Maximize2 size={16} color={themeColors.textMuted} />
+              </PressableBox>
+            ) : null}
+          </View>
+
+          {/* Hold the empty field to talk. It lies over the field so the
+              platform's own long press (loupe, paste menu) never starts, and it
+              stays mounted at the field's frame until release, because the
+              field itself is hidden once dictation begins. */}
+          {fieldHoldOverlayFrame ? (
+            <View
+              testID="chat.composer.hold-to-talk"
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+              onStartShouldSetResponder={() => true}
+              onResponderTerminationRequest={() => fieldHoldRef.current?.engaged !== true}
+              onResponderGrant={handleFieldHoldGrant}
+              onResponderMove={handleFieldHoldMove}
+              onResponderRelease={handleFieldHoldRelease}
+              onResponderTerminate={handleFieldHoldTerminate}
+              style={{
+                position: 'absolute',
+                left: fieldHoldOverlayFrame.x - CARD_BORDER_WIDTH,
+                top: fieldHoldOverlayFrame.y - CARD_BORDER_WIDTH,
+                width: fieldHoldOverlayFrame.width,
+                height: fieldHoldOverlayFrame.height,
+              }}
+            />
+          ) : null}
 
           {/* Kept mounted while recording -- VoiceInputButton owns the live
               capture session; unmounting it mid-recording would kill it, so
@@ -1333,8 +2239,10 @@ ${current}`
               <VoiceInputButton
                 controlRef={voiceControlRef}
                 scopeKey={JSON.stringify([draftIdentity, appMode, selectedModel])}
-                onProcessingChange={setIsTranscribing}
+                onProcessingChange={handleProcessingChange}
                 onTranscription={handleTranscription}
+                onPartialTranscript={setLiveTranscript}
+                onHoldAvailableChange={setVoiceHoldAvailable}
                 onRecordingStart={handleRecordingStart}
                 onRecordingStop={handleRecordingStop}
                 onMetering={handleMetering}

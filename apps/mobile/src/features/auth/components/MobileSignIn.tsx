@@ -1,7 +1,7 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
-import { useSignIn } from '@clerk/expo';
+import { useClerk, useSignIn } from '@clerk/expo';
 import { useSignInWithApple } from '@clerk/expo/apple';
 import { useSSO } from '@clerk/expo/experimental';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -28,11 +28,26 @@ import {
   POST_AUTH_INTENT_PARAM,
   type PostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
+import {
+  appleFlowWithoutSession,
+  buildIncludesSignInWithApple,
+  loginProvidersToRender,
+} from '@/src/features/auth/services/loginProviders';
+import {
+  forgetRememberedAccount,
+  readRememberedAccountForSignIn,
+  REMEMBERED_EMAIL_METHOD,
+  rememberAccount,
+  type RememberedAccount,
+  type RememberedAccountMethod,
+} from '@/src/features/auth/services/rememberedAccount';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { useAuthEmailFieldReveal } from './useAuthEmailFieldReveal';
 
 WebBrowser.maybeCompleteAuthSession();
 
 type SignInStep = 'email' | 'password' | 'code';
+type CodeFactor = 'first' | 'second';
 
 export function MobileSignIn({
   addingAccount = false,
@@ -46,37 +61,49 @@ export function MobileSignIn({
   postAuthIntent?: PostAuthIntent | null;
 }) {
   const { colors, isDark } = useTheme();
+  const clerk = useClerk();
   const { signIn, fetchStatus } = useSignIn();
   const signInRef = useRef(signIn);
   signInRef.current = signIn;
   const { startSSOFlow } = useSSO();
   const { startAppleAuthenticationFlow } = useSignInWithApple();
-  const providers = resolveAuthProviders(process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS).filter(
-    (provider) => provider.id !== 'apple' || Platform.OS === 'ios',
-  );
-  const appleConfigured = providers.some((provider) => provider.id === 'apple');
+  const appleSignInBuilt = Platform.OS === 'ios' && buildIncludesSignInWithApple();
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const providers = loginProvidersToRender(
+    resolveAuthProviders(process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS),
+    Platform.OS,
+    appleSignInBuilt && appleAvailable,
+  );
   const [step, setStep] = useState<SignInStep>('email');
   const [email, setEmail] = useState('');
   const [admittedEmail, setAdmittedEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [codeFactor, setCodeFactor] = useState<CodeFactor>('first');
+  const [codeRecipient, setCodeRecipient] = useState('');
   const [codeDeliveryFailed, setCodeDeliveryFailed] = useState(false);
   const [working, setWorking] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<AuthProviderId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accountMissing, setAccountMissing] = useState(false);
+  const [remembered, setRemembered] = useState<RememberedAccount | null>(null);
   const requestInFlight = useRef(false);
+  const admittedEmailRef = useRef('');
   const busy = working || fetchStatus === 'fetching';
+  const continueAsAccount =
+    !addingAccount &&
+    remembered &&
+    (remembered.method === REMEMBERED_EMAIL_METHOD ||
+      providers.some((provider) => provider.id === remembered.method))
+      ? remembered
+      : null;
   const emailCodeAvailable = signIn?.supportedFirstFactors.some(
     (factor) => factor.strategy === 'email_code',
   );
-  const hasVisibleProvider = providers.some(
-    (provider) => provider.id !== 'apple' || appleAvailable,
-  );
+  const hasVisibleProvider = providers.length > 0;
 
   useEffect(() => {
-    if (!appleConfigured) return;
+    if (!appleSignInBuilt) return;
     let active = true;
     void AppleAuthentication.isAvailableAsync()
       .then((available) => {
@@ -88,7 +115,22 @@ export function MobileSignIn({
     return () => {
       active = false;
     };
-  }, [appleConfigured]);
+  }, [appleSignInBuilt]);
+
+  useEffect(() => {
+    let active = true;
+    void readRememberedAccountForSignIn().then((account) => {
+      if (active) setRemembered(account);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const rememberSignedIn = async (method: RememberedAccountMethod, knownEmail?: string) => {
+    const email = knownEmail ?? clerk.user?.primaryEmailAddress?.emailAddress;
+    if (email) await rememberAccount({ email, method });
+  };
 
   const perform = async (action: () => Promise<void>) => {
     if (requestInFlight.current) return;
@@ -112,10 +154,51 @@ export function MobileSignIn({
         if (session?.currentTask) onNativeFallback();
       },
     });
-    if (result.error) setError(authErrorMessage(result.error, 'sign-in'));
+    if (result.error) {
+      setError(authErrorMessage(result.error, 'sign-in'));
+      return;
+    }
+    await rememberSignedIn(REMEMBERED_EMAIL_METHOD, admittedEmailRef.current);
   };
 
-  const resolveState = async () => {
+  const ssoRedirectUrl = () =>
+    createURL(
+      '/login',
+      postAuthIntent ? { queryParams: { [POST_AUTH_INTENT_PARAM]: postAuthIntent } } : undefined,
+    );
+
+  const settleSSOResult = async (
+    result: Awaited<ReturnType<typeof startSSOFlow>>,
+    method: RememberedAccountMethod,
+    knownEmail?: string,
+  ) => {
+    if (result.authSessionResult?.type === 'cancel' || result.authSessionResult?.type === 'dismiss')
+      return;
+    if (!result.authSessionResult && !result.createdSessionId) {
+      setError('Sign-in is still loading. Please try again.');
+      return;
+    }
+    if (
+      result.createdSessionId ||
+      result.signIn?.existingSession ||
+      result.signUp?.existingSession
+    ) {
+      await rememberSignedIn(method, knownEmail);
+      return;
+    }
+    if (result.authSessionResult?.type === 'success') onNativeFallback();
+  };
+
+  const startEnterpriseSso = async (identifier: string) => {
+    const result = await startSSOFlow({
+      strategy: 'enterprise_sso',
+      identifier,
+      redirectUrl: ssoRedirectUrl(),
+    });
+    await settleSSOResult(result, REMEMBERED_EMAIL_METHOD, identifier);
+  };
+
+  const resolveState = async (identifier: string) => {
     const current = signInRef.current;
     if (current.status === 'complete') {
       await finalize();
@@ -125,19 +208,47 @@ export function MobileSignIn({
       onNativeFallback();
       return;
     }
+    if (current.supportedFirstFactors.some((factor) => factor.strategy === 'enterprise_sso')) {
+      await startEnterpriseSso(identifier);
+      return;
+    }
     if (current.supportedFirstFactors.some((factor) => factor.strategy === 'password')) {
       setStep('password');
       return;
     }
     if (current.supportedFirstFactors.some((factor) => factor.strategy === 'email_code')) {
-      await sendEmailCode();
+      await sendEmailCode('first');
       return;
     }
     onNativeFallback();
   };
 
-  const sendEmailCode = async () => {
-    const sent = await signInRef.current.emailCode.sendCode();
+  const continueAfterFirstFactor = async () => {
+    const current = signInRef.current;
+    if (current.status === 'complete') {
+      await finalize();
+      return;
+    }
+    const secondStepByEmail =
+      (current.status === 'needs_second_factor' || current.status === 'needs_client_trust') &&
+      current.supportedSecondFactors.some((factor) => factor.strategy === 'email_code');
+    if (secondStepByEmail) {
+      await sendEmailCode('second');
+      return;
+    }
+    onNativeFallback();
+  };
+
+  const sendEmailCode = async (factor: CodeFactor) => {
+    const current = signInRef.current;
+    const emailFactor =
+      factor === 'second'
+        ? current.supportedSecondFactors.find((candidate) => candidate.strategy === 'email_code')
+        : undefined;
+    const sent =
+      factor === 'first' ? await current.emailCode.sendCode() : await current.mfa.sendEmailCode();
+    setCodeFactor(factor);
+    setCodeRecipient(emailFactor?.strategy === 'email_code' ? emailFactor.safeIdentifier : '');
     setStep('code');
     setCode('');
     if (sent.error) {
@@ -148,10 +259,10 @@ export function MobileSignIn({
     setCodeDeliveryFailed(false);
   };
 
-  const startEmail = () =>
+  const signInWithEmail = (typed: string) =>
     void perform(async () => {
       setAccountMissing(false);
-      const identifier = email.trim();
+      const identifier = typed.trim();
       if (!identifier) return;
       if (!validateEmail(identifier)) {
         setError('Enter a valid email address.');
@@ -165,8 +276,11 @@ export function MobileSignIn({
         return;
       }
       setAdmittedEmail(identifier);
-      await resolveState();
+      admittedEmailRef.current = identifier;
+      await resolveState(identifier);
     });
+
+  const startEmail = () => signInWithEmail(email);
 
   const submitPassword = () =>
     void perform(async () => {
@@ -176,16 +290,23 @@ export function MobileSignIn({
         setError(authErrorMessage(result.error, 'sign-in'));
         return;
       }
-      if (signInRef.current.status === 'complete') await finalize();
-      else onNativeFallback();
+      await continueAfterFirstFactor();
     });
 
   const submitCode = () =>
     void perform(async () => {
       if (!code.trim()) return;
-      const result = await signInRef.current.emailCode.verifyCode({ code: code.trim() });
+      const current = signInRef.current;
+      const result =
+        codeFactor === 'first'
+          ? await current.emailCode.verifyCode({ code: code.trim() })
+          : await current.mfa.verifyEmailCode({ code: code.trim() });
       if (result.error) {
         setError(authErrorMessage(result.error, 'sign-in'));
+        return;
+      }
+      if (codeFactor === 'first') {
+        await continueAfterFirstFactor();
         return;
       }
       if (signInRef.current.status === 'complete') await finalize();
@@ -194,7 +315,7 @@ export function MobileSignIn({
 
   const resendCode = () =>
     void perform(async () => {
-      await sendEmailCode();
+      await sendEmailCode(codeFactor);
     });
 
   const switchToEmailCode = () =>
@@ -203,7 +324,7 @@ export function MobileSignIn({
         !signInRef.current.supportedFirstFactors.some((factor) => factor.strategy === 'email_code')
       )
         return;
-      await sendEmailCode();
+      await sendEmailCode('first');
     });
 
   const startProvider = (provider: AuthProviderId) =>
@@ -211,36 +332,16 @@ export function MobileSignIn({
       setPendingProvider(provider);
       const result = await startSSOFlow({
         strategy: `oauth_${provider}`,
-        redirectUrl: createURL(
-          '/login',
-          postAuthIntent
-            ? { queryParams: { [POST_AUTH_INTENT_PARAM]: postAuthIntent } }
-            : undefined,
-        ),
+        redirectUrl: ssoRedirectUrl(),
       });
-      if (
-        result.authSessionResult?.type === 'cancel' ||
-        result.authSessionResult?.type === 'dismiss'
-      )
-        return;
-      if (!result.authSessionResult && !result.createdSessionId) {
-        setError('Sign-in is still loading. Please try again.');
-        return;
-      }
-      if (
-        result.authSessionResult?.type === 'success' &&
-        !result.createdSessionId &&
-        !result.signIn?.existingSession &&
-        !result.signUp?.existingSession
-      ) {
-        onNativeFallback();
-      }
+      await settleSSOResult(result, provider);
     });
 
   const startApple = () =>
     void perform(async () => {
       if (!appleAvailable) return;
       setPendingProvider('apple');
+      const before = { signIn: clerk.client?.signIn?.id, signUp: clerk.client?.signUp?.id };
       let result: Awaited<ReturnType<typeof startAppleAuthenticationFlow>>;
       try {
         result = await startAppleAuthenticationFlow();
@@ -255,8 +356,27 @@ export function MobileSignIn({
             if (session?.currentTask) onNativeFallback();
           },
         });
+        await rememberSignedIn('apple');
+        return;
       }
+      const outcome = appleFlowWithoutSession(result, before);
+      if (outcome === 'not_loaded') setError('Sign-in is still loading. Please try again.');
+      else if (outcome === 'incomplete') onNativeFallback();
     });
+
+  const continueAs = (account: RememberedAccount) => {
+    if (account.method === REMEMBERED_EMAIL_METHOD) {
+      setEmail(account.email);
+      signInWithEmail(account.email);
+    } else if (account.method === 'apple') startApple();
+    else startProvider(account.method);
+  };
+
+  const forgetAccount = () => {
+    if (remembered && email.trim().toLowerCase() === remembered.email.toLowerCase()) setEmail('');
+    setRemembered(null);
+    void forgetRememberedAccount();
+  };
 
   const changeEmail = () =>
     void perform(async () => {
@@ -267,9 +387,13 @@ export function MobileSignIn({
       }
       setPassword('');
       setCode('');
+      setCodeFactor('first');
+      setCodeRecipient('');
       setCodeDeliveryFailed(false);
       setStep('email');
     });
+
+  const emailReveal = useAuthEmailFieldReveal();
 
   const button = (label: string, onPress: () => void, disabled: boolean, testID: string) => (
     <Pressable
@@ -304,6 +428,7 @@ export function MobileSignIn({
       testID="mobile-custom-sign-in"
     >
       <ScrollView
+        ref={emailReveal.scrollRef}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           flexGrow: 1,
@@ -312,6 +437,7 @@ export function MobileSignIn({
           paddingTop: 42,
           paddingBottom: 32,
         }}
+        {...emailReveal.scrollProps}
       >
         <View style={{ width: '100%', maxWidth: 340, alignSelf: 'center' }}>
           <Text
@@ -337,26 +463,24 @@ export function MobileSignIn({
               <View style={{ gap: 12 }}>
                 {providers.map((provider) =>
                   provider.id === 'apple' ? (
-                    appleAvailable ? (
-                      <View
-                        key={provider.id}
-                        testID="mobile-sign-in-apple"
-                        pointerEvents={busy ? 'none' : 'auto'}
-                        style={{ opacity: busy ? 0.5 : 1 }}
-                      >
-                        <AppleAuthentication.AppleAuthenticationButton
-                          buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                          buttonStyle={
-                            isDark
-                              ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
-                              : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                          }
-                          cornerRadius={26}
-                          style={{ height: 52, width: '100%' }}
-                          onPress={startApple}
-                        />
-                      </View>
-                    ) : null
+                    <View
+                      key={provider.id}
+                      testID="mobile-sign-in-apple"
+                      pointerEvents={busy ? 'none' : 'auto'}
+                      style={{ opacity: busy ? 0.5 : 1 }}
+                    >
+                      <AppleAuthentication.AppleAuthenticationButton
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                        buttonStyle={
+                          isDark
+                            ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                            : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                        }
+                        cornerRadius={26}
+                        style={{ height: 52, width: '100%' }}
+                        onPress={startApple}
+                      />
+                    </View>
                   ) : (
                     <Pressable
                       key={provider.id}
@@ -388,8 +512,58 @@ export function MobileSignIn({
                     </Pressable>
                   ),
                 )}
+                {continueAsAccount ? (
+                  <Pressable
+                    testID="mobile-sign-in-continue-as"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Continue as ${continueAsAccount.email}`}
+                    disabled={busy}
+                    onPress={() => continueAs(continueAsAccount)}
+                    style={{
+                      minHeight: 52,
+                      borderRadius: 26,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingHorizontal: 20,
+                      paddingVertical: 8,
+                      opacity: busy ? 0.5 : 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.textPrimary,
+                        fontSize: typeScale.callout,
+                        fontWeight: '500',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {`Continue as ${continueAsAccount.email}`}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
-              {hasVisibleProvider ? (
+              {continueAsAccount ? (
+                <Pressable
+                  testID="mobile-sign-in-not-you"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Not you? Forget ${continueAsAccount.email} on this device`}
+                  disabled={busy}
+                  onPress={forgetAccount}
+                  style={{
+                    minHeight: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginTop: 4,
+                  }}
+                >
+                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                    Not you?
+                  </Text>
+                </Pressable>
+              ) : null}
+              {hasVisibleProvider || continueAsAccount ? (
                 <View
                   style={{
                     flexDirection: 'row',
@@ -411,46 +585,49 @@ export function MobileSignIn({
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
                 </View>
               ) : null}
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: typeScale.subhead,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  marginBottom: 10,
-                }}
-              >
-                Email address
-              </Text>
-              <TextInput
-                testID="mobile-sign-in-email"
-                accessibilityLabel="Email address"
-                value={email}
-                onChangeText={(value) => {
-                  setEmail(value);
-                  setAccountMissing(false);
-                  setError(null);
-                }}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={startEmail}
-                style={{
-                  minHeight: 52,
-                  borderRadius: 26,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surfaceElevated,
-                  fontSize: typeScale.callout,
-                  textAlign: 'center',
-                  paddingHorizontal: 20,
-                }}
-              />
-              {button('Continue', startEmail, busy || !email.trim(), 'mobile-sign-in-continue')}
+              <View {...emailReveal.blockProps}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                    textAlign: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  Email address
+                </Text>
+                <TextInput
+                  {...emailReveal.inputProps}
+                  testID="mobile-sign-in-email"
+                  accessibilityLabel="Email address"
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    setAccountMissing(false);
+                    setError(null);
+                  }}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={startEmail}
+                  style={{
+                    minHeight: 52,
+                    borderRadius: 26,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceElevated,
+                    fontSize: typeScale.callout,
+                    textAlign: 'center',
+                    paddingHorizontal: 20,
+                  }}
+                />
+                {button('Continue', startEmail, busy || !email.trim(), 'mobile-sign-in-continue')}
+              </View>
             </>
           ) : (
             <>
@@ -458,8 +635,8 @@ export function MobileSignIn({
                 {step === 'password'
                   ? admittedEmail
                   : codeDeliveryFailed
-                    ? `We couldn't send a code to ${admittedEmail}. Try sending it again.`
-                    : `Enter the code sent to ${admittedEmail}.`}
+                    ? `We couldn't send a code to ${codeRecipient || admittedEmail}. Try sending it again.`
+                    : `Enter the code sent to ${codeRecipient || admittedEmail}.`}
               </Text>
               {step === 'code' && codeDeliveryFailed ? null : (
                 <TextInput

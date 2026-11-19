@@ -1,6 +1,14 @@
 import React from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import {
+  AccessibilityInfo,
+  Alert,
+  AppState,
+  BackHandler,
+  Platform,
+  ScrollView,
+  type AppStateStatus,
+} from 'react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -43,8 +51,10 @@ jest.mock('lucide-react-native', () => {
     Clock3: icon,
     Check: icon,
     Cloud: icon,
+    Flag: icon,
     Plus: icon,
     RefreshCw: icon,
+    Search: icon,
     X: icon,
   };
 });
@@ -91,7 +101,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
-import { CloudTasksScreen } from '../CloudTasksScreen';
+import { CLOUD_TASK_SEARCH_DEBOUNCE_MS, CloudTasksScreen } from '../CloudTasksScreen';
 import { useCloudTaskStore } from '../store';
 
 const RUN = {
@@ -155,12 +165,29 @@ describe('Cloud tasks screen', () => {
     expect(mockListRuns).not.toHaveBeenCalled();
   });
 
+  it('keeps the filter chip row at its own height so the run list cannot squeeze or stretch it', async () => {
+    const { UNSAFE_getAllByType, getByText } = render(<CloudTasksScreen />);
+
+    await waitFor(() => expect(getByText('Research task')).toBeTruthy());
+    const row = UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
+    expect(row?.props.style).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+  });
+
   it('lists a run started on another surface and says where it came from', async () => {
     const { getByText } = render(<CloudTasksScreen />);
 
     await waitFor(() => expect(getByText('Research task')).toBeTruthy());
     expect(getByText('CLI')).toBeTruthy();
     expect(getByText('Waiting for your approval')).toBeTruthy();
+  });
+
+  it('states the scope with no Open Remote control while version 1 ships with Remote hidden', async () => {
+    const { getByText, queryByLabelText, queryByText } = render(<CloudTasksScreen />);
+
+    await waitFor(() => expect(getByText('Research task')).toBeTruthy());
+    expect(getByText('Every agent run on your AGI Cloud account.')).toBeTruthy();
+    expect(queryByText(/paired desktops/)).toBeNull();
+    expect(queryByLabelText('Open Remote')).toBeNull();
   });
 
   it('previews the task prompt under the title, and drops it when it repeats the title', async () => {
@@ -203,6 +230,31 @@ describe('Cloud tasks screen', () => {
         expect.anything(),
       ),
     );
+  });
+
+  it('asks what stopping a task costs before it stops, and stops only when confirmed', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockCancelRun.mockResolvedValue({ ...RUN, state: 'cancelled', pendingApproval: null });
+    const { getByLabelText, getByText } = render(<CloudTasksScreen />);
+
+    await waitFor(() => expect(getByText('Research task')).toBeTruthy());
+    fireEvent.press(getByLabelText('Open Research task. Waiting for input. Started on CLI'));
+    await waitFor(() => expect(getByLabelText('Stop this task')).toBeTruthy());
+
+    fireEvent.press(getByLabelText('Stop this task'));
+
+    expect(alert).toHaveBeenCalledWith(
+      'Stop this task?',
+      expect.stringContaining('cannot be resumed'),
+      expect.any(Array),
+    );
+    expect(mockCancelRun).not.toHaveBeenCalled();
+
+    const buttons = alert.mock.calls[0]?.[2] as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Stop task')?.onPress?.();
+
+    await waitFor(() => expect(mockCancelRun).toHaveBeenCalledWith(RUN.id, expect.anything()));
+    alert.mockRestore();
   });
 
   it('offers a finished task as a routine and reopens its full original request for review', async () => {
@@ -251,5 +303,298 @@ describe('Cloud tasks screen', () => {
         expect.any(Function),
       ),
     );
+  });
+
+  describe('searching tasks', () => {
+    const MATCH = {
+      ...RUN,
+      id: '22222222-2222-4222-8222-222222222222',
+      conversationPreview: 'Invoice sweep for the third quarter',
+    };
+    const SEARCH_LABEL = 'Search Cloud tasks';
+
+    function serverThatSearches(): void {
+      mockListRuns.mockImplementation(async (options: { q?: string }) => ({
+        runs: options.q ? (options.q === 'invoice' ? [MATCH] : []) : [RUN],
+        nextCursor: null,
+        searchSupported: true,
+      }));
+    }
+
+    function typeSearch(screen: ReturnType<typeof render>, text: string): void {
+      fireEvent.changeText(screen.getByLabelText(SEARCH_LABEL), text);
+    }
+
+    function pastDebounce(): void {
+      act(() => {
+        jest.advanceTimersByTime(CLOUD_TASK_SEARCH_DEBOUNCE_MS);
+      });
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('offers no search until the server has said it answers one', async () => {
+      const { getByText, queryByLabelText } = render(<CloudTasksScreen />);
+
+      await waitFor(() => expect(getByText('Research task')).toBeTruthy());
+
+      expect(queryByLabelText(SEARCH_LABEL)).toBeNull();
+    });
+
+    it('offers no search over an empty list', async () => {
+      mockListRuns.mockResolvedValue({ runs: [], nextCursor: null, searchSupported: true });
+      const { findByText, queryByLabelText } = render(<CloudTasksScreen />);
+
+      await findByText('No Cloud tasks yet');
+
+      expect(queryByLabelText(SEARCH_LABEL)).toBeNull();
+    });
+
+    it('opens a focused field with Cancel, waits for a pause in typing, then lists the matches', async () => {
+      serverThatSearches();
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      expect(screen.getByLabelText('Cancel search')).toBeTruthy();
+      expect(screen.getByLabelText(SEARCH_LABEL).props.autoFocus).toBe(true);
+      mockListRuns.mockClear();
+
+      typeSearch(screen, 'inv');
+      typeSearch(screen, 'invoice');
+      act(() => {
+        jest.advanceTimersByTime(CLOUD_TASK_SEARCH_DEBOUNCE_MS - 1);
+      });
+      expect(mockListRuns).not.toHaveBeenCalled();
+
+      pastDebounce();
+
+      await waitFor(() =>
+        expect(screen.getByText('Invoice sweep for the third quarter')).toBeTruthy(),
+      );
+      expect(mockListRuns).toHaveBeenCalledTimes(1);
+      expect(mockListRuns).toHaveBeenCalledWith(expect.objectContaining({ q: 'invoice' }));
+      expect(screen.getAllByText('Research task')).toHaveLength(1);
+    });
+
+    it('says plainly when nothing matches', async () => {
+      serverThatSearches();
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      typeSearch(screen, 'zzz');
+      pastDebounce();
+
+      expect(await screen.findByText('No tasks match "zzz"')).toBeTruthy();
+      expect(screen.queryByText('No tasks match this filter')).toBeNull();
+    });
+
+    it('shows the loading state while the search runs', async () => {
+      serverThatSearches();
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+      let finish: (value: unknown) => void = () => undefined;
+      mockListRuns.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      typeSearch(screen, 'invoice');
+      pastDebounce();
+
+      expect(await screen.findByText('Loading Cloud tasks…')).toBeTruthy();
+      await act(async () => {
+        finish({ runs: [MATCH], nextCursor: null, searchSupported: true });
+      });
+      expect(await screen.findByText('Invoice sweep for the third quarter')).toBeTruthy();
+    });
+
+    it('offers a retry that repeats the search after a network error', async () => {
+      serverThatSearches();
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+      mockListRuns.mockRejectedValueOnce(new Error('offline'));
+
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      typeSearch(screen, 'invoice');
+      pastDebounce();
+      expect(await screen.findByText('Tasks could not be loaded')).toBeTruthy();
+
+      fireEvent.press(screen.getByText('Try again'));
+
+      expect(await screen.findByText('Invoice sweep for the third quarter')).toBeTruthy();
+      expect(mockListRuns).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'invoice' }));
+    });
+
+    it('keeps searching instead of saying nothing matches while older runs are still unread', async () => {
+      mockListRuns.mockImplementation(async (options: { q?: string; cursor?: string }) => {
+        if (!options.q) return { runs: [RUN], nextCursor: null, searchSupported: true };
+        if (!options.cursor) return { runs: [], nextCursor: 'cursor-1', searchSupported: true };
+        return { runs: [MATCH], nextCursor: null, searchSupported: true };
+      });
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      typeSearch(screen, 'invoice');
+      pastDebounce();
+
+      expect(await screen.findByText('Invoice sweep for the third quarter')).toBeTruthy();
+      expect(screen.queryByText('No tasks match "invoice"')).toBeNull();
+      expect(mockListRuns).toHaveBeenLastCalledWith(
+        expect.objectContaining({ q: 'invoice', cursor: 'cursor-1' }),
+      );
+    });
+
+    it('says nothing matches only after the last page has been read', async () => {
+      mockListRuns.mockImplementation(async (options: { q?: string; cursor?: string }) => {
+        if (!options.q) return { runs: [RUN], nextCursor: null, searchSupported: true };
+        return {
+          runs: [],
+          nextCursor: options.cursor ? null : 'cursor-1',
+          searchSupported: true,
+        };
+      });
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      typeSearch(screen, 'zzz');
+      pastDebounce();
+
+      expect(await screen.findByText('No tasks match "zzz"')).toBeTruthy();
+      expect(screen.queryByLabelText('Load more Cloud tasks')).toBeNull();
+    });
+
+    describe('announcements and hardware Back', () => {
+      const platform = Platform.OS;
+      let announce: jest.SpyInstance;
+
+      beforeEach(() => {
+        announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation();
+      });
+
+      afterEach(() => {
+        Platform.OS = platform;
+        announce.mockRestore();
+      });
+
+      it('tells VoiceOver how many tasks the search found and when none match', async () => {
+        Platform.OS = 'ios';
+        serverThatSearches();
+        const screen = render(<CloudTasksScreen />);
+        await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+        fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+
+        typeSearch(screen, 'invoice');
+        pastDebounce();
+        await screen.findByText('Invoice sweep for the third quarter');
+        expect(announce).toHaveBeenLastCalledWith('1 task found');
+
+        typeSearch(screen, 'zzz');
+        pastDebounce();
+        await screen.findByText('No tasks match "zzz"');
+        expect(announce).toHaveBeenLastCalledWith('No tasks match "zzz"');
+      });
+
+      it('leaves the announcement to the live region on Android', async () => {
+        Platform.OS = 'android';
+        serverThatSearches();
+        const screen = render(<CloudTasksScreen />);
+        await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+        fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+
+        typeSearch(screen, 'zzz');
+        pastDebounce();
+        await screen.findByText('No tasks match "zzz"');
+
+        expect(announce).not.toHaveBeenCalled();
+      });
+
+      it('closes the search field on hardware Back instead of leaving the screen', async () => {
+        let onBack: Parameters<typeof BackHandler.addEventListener>[1] | undefined;
+        const remove = jest.fn();
+        const add = jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_, handler) => {
+          onBack = handler;
+          return { remove };
+        });
+        serverThatSearches();
+        const screen = render(<CloudTasksScreen />);
+        await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+        expect(onBack).toBeUndefined();
+
+        fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+        expect(onBack).toBeDefined();
+        let handled = false;
+        act(() => {
+          handled = onBack?.({ type: 'hardwareBackPress', timeStamp: 0 }) === true;
+        });
+
+        expect(handled).toBe(true);
+        expect(screen.queryByLabelText('Cancel search')).toBeNull();
+        expect(screen.getByLabelText(SEARCH_LABEL)).toBeTruthy();
+        expect(remove).toHaveBeenCalled();
+        add.mockRestore();
+      });
+    });
+
+    it('restores the full list and the search button on Cancel', async () => {
+      serverThatSearches();
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Research task')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText(SEARCH_LABEL));
+      typeSearch(screen, 'invoice');
+      pastDebounce();
+      await screen.findByText('Invoice sweep for the third quarter');
+
+      fireEvent.press(screen.getByLabelText('Cancel search'));
+
+      expect(await screen.findByText('Research task')).toBeTruthy();
+      expect(screen.queryByLabelText('Cancel search')).toBeNull();
+      expect(screen.getByLabelText(SEARCH_LABEL)).toBeTruthy();
+      expect(mockListRuns.mock.calls.at(-1)?.[0]).not.toHaveProperty('q');
+    });
+  });
+
+  describe('before the app is active', () => {
+    afterEach(() => {
+      Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
+    });
+
+    it('loads the list when the app became active between the first render and the subscription', async () => {
+      let reads = 0;
+      Object.defineProperty(AppState, 'currentState', {
+        configurable: true,
+        get: () => (reads++ === 0 ? 'inactive' : 'active'),
+      });
+
+      const { findByText } = render(<CloudTasksScreen />);
+
+      expect(await findByText('Research task')).toBeTruthy();
+      expect(mockListRuns).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows loading instead of the empty list while the first load has not started', async () => {
+      Object.defineProperty(AppState, 'currentState', {
+        configurable: true,
+        value: 'inactive',
+      });
+
+      const { getByText, queryByText } = render(<CloudTasksScreen />);
+
+      expect(getByText('Loading Cloud tasks…')).toBeTruthy();
+      expect(queryByText('No Cloud tasks yet')).toBeNull();
+      expect(mockListRuns).not.toHaveBeenCalled();
+    });
   });
 });

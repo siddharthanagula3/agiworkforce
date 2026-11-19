@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('@/stores/connectionStore', () => {
   const mockSendControl = jest.fn().mockResolvedValue(true);
   const mockConnect = jest.fn();

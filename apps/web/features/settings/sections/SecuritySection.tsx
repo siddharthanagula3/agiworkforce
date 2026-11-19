@@ -28,6 +28,7 @@ import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/useStepUp';
 import { SettingsSectionLink } from '@features/settings/components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 import { readApiError } from './AccountSection';
 
 const sessionRowStyle = {
@@ -49,6 +50,7 @@ function SessionsPanel() {
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const signedOutPath = useEmbeddedSignInPath() ?? '/login';
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
@@ -67,16 +69,16 @@ function SessionsPanel() {
       if (!response.ok) throw new Error(readApiError(data, 'Unable to log out every device.'));
       sessionsRevoked = true;
       await logout();
-      await identitySignOut({ redirectUrl: '/login' });
+      await identitySignOut({ redirectUrl: signedOutPath });
     } catch (err) {
       if (sessionsRevoked) {
-        router.replace('/login');
+        router.replace(signedOutPath);
         return;
       }
       if (!isStepUpCancelled(err)) setLogoutError(toUserMessage(err, 'Sign out failed.'));
       setLoggingOut(false);
     }
-  }, [identitySignOut, logout, router, withStepUp]);
+  }, [identitySignOut, logout, router, signedOutPath, withStepUp]);
 
   return (
     <section

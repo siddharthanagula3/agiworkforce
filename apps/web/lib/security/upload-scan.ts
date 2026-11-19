@@ -60,7 +60,11 @@ export interface UploadScanFinding {
     | 'sensitive_filename'
     | 'unsafe_filename'
     | 'external_scanner'
-    | 'encrypted_content';
+    | 'encrypted_content'
+    | 'limits_exceeded'
+    | 'scan_unavailable'
+    | 'storage_full'
+    | 'changed_during_check';
   detail: string;
 }
 
@@ -217,26 +221,129 @@ export function scanUploadForCredentials(
 
   if (!isTextualMime(declaredMime)) return findings;
 
-  for (const detection of scanForSecrets(textPrefix(bytes, CREDENTIAL_SCAN_BYTES), {
-    includeHighEntropy: true,
-  })) {
-    findings.push({
-      code: 'credential_material',
-      detail: `${detection.name} at byte ${detection.position}`,
-    });
+  const text = textPrefix(bytes, CREDENTIAL_SCAN_BYTES);
+  const names = new Set<string>();
+  for (const detection of scanForSecrets(text, { includeHighEntropy: true })) {
+    names.add(detection.name);
+    findings.push(credentialFinding(detection.name, detection.position));
+  }
+  if (text.includes(NULL_CHARACTER)) {
+    for (const detection of scanForSecrets(withoutNulls(text), { includeHighEntropy: true })) {
+      if (names.has(detection.name)) continue;
+      names.add(detection.name);
+      findings.push(credentialFinding(detection.name, detection.position));
+    }
   }
 
+  return findings;
+}
+
+const NULL_CHARACTER = '\u0000';
+
+/**
+ * A reader that stores or sends a file's text drops its null characters, so
+ * the detectors read the text without them as well as with them: a credential
+ * that only exists once they are gone, as in a UTF-16 file read as UTF-8, is
+ * text the product produces.
+ */
+function withoutNulls(text: string): string {
+  return text.replaceAll(NULL_CHARACTER, '');
+}
+
+const CREDENTIAL_POSITION_SEPARATOR = ' at byte ';
+
+function credentialFinding(name: string, position: number): UploadScanFinding {
+  return {
+    code: 'credential_material',
+    detail: `${name}${CREDENTIAL_POSITION_SEPARATOR}${position}`,
+  };
+}
+
+/** The detector that produced a credential finding. */
+export function credentialFindingName(finding: UploadScanFinding): string {
+  return finding.detail.slice(0, finding.detail.lastIndexOf(CREDENTIAL_POSITION_SEPARATOR));
+}
+
+/** Whether the credential detectors read this type's content at all; a binary type is not read. */
+export function credentialScanReadsContent(declaredMime: string): boolean {
+  return isTextualMime(declaredMime);
+}
+
+/**
+ * The longest stretch of a file one credential detection is guaranteed to fit
+ * in. The longest bounded detector match is the JWT pattern, 4,356 bytes. A
+ * detector's other unbounded part is either a trailing run, which a shorter
+ * match at the same start already satisfies, or the whitespace between a
+ * keyword and its value, which this leaves about 16,000 bytes for.
+ */
+export const CREDENTIAL_SCAN_GUARD_BYTES = 16_384;
+
+export interface CredentialScanRange {
+  /** Where `bytes` starts in the file. */
+  bytesStart: number;
+  /** The part of the file this read answers for: a detection is reported when it starts here. */
+  ownedStart: number;
+  ownedEnd: number;
+}
+
+/**
+ * The credential detections `scanUploadForCredentials` makes, over one window
+ * of a file read in pieces. The window holds the owned range plus up to
+ * `CREDENTIAL_SCAN_GUARD_BYTES` either side; only a detection that starts in
+ * the owned range is reported, so owned ranges that tile the file report each
+ * match once, a match that straddles the edge of one owned range included.
+ */
+export function scanUploadRangeForCredentials(
+  bytes: Uint8Array,
+  declaredMime: string,
+  range: CredentialScanRange,
+): UploadScanFinding[] {
+  if (!isTextualMime(declaredMime)) return [];
+  const before = range.ownedStart - range.bytesStart;
+  const owned = range.ownedEnd - range.ownedStart;
+  if (before < 0 || owned < 0 || before + owned > bytes.byteLength) {
+    throw new RangeError('The owned range must lie inside the bytes read.');
+  }
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const lead = decoder.decode(bytes.subarray(0, before), { stream: true });
+  const middle = decoder.decode(bytes.subarray(before, before + owned), { stream: true });
+  const tail = decoder.decode(bytes.subarray(before + owned));
+  const findings: UploadScanFinding[] = [];
+  const names = new Set<string>();
+  const report = (parts: readonly [string, string, string], unseenOnly: boolean) => {
+    const from = parts[0].length;
+    const to = from + parts[1].length;
+    for (const detection of scanForSecrets(parts.join(''), { includeHighEntropy: true })) {
+      if (detection.position < from || detection.position >= to) continue;
+      if (unseenOnly && names.has(detection.name)) continue;
+      names.add(detection.name);
+      findings.push(
+        credentialFinding(detection.name, range.ownedStart + detection.position - from),
+      );
+    }
+  };
+  report([lead, middle, tail], false);
+  if (
+    lead.includes(NULL_CHARACTER) ||
+    middle.includes(NULL_CHARACTER) ||
+    tail.includes(NULL_CHARACTER)
+  ) {
+    report([withoutNulls(lead), withoutNulls(middle), withoutNulls(tail)], true);
+  }
   return findings;
 }
 
 export function uploadFindingRejects(finding: UploadScanFinding): boolean {
   if (finding.code === 'sensitive_filename' || finding.code === 'unsafe_filename') return true;
   if (finding.code !== 'credential_material') return true;
-  const name = finding.detail.slice(0, finding.detail.lastIndexOf(' at byte '));
-  return isHighConfidenceSecretName(name);
+  return isHighConfidenceSecretName(credentialFindingName(finding));
 }
 
-export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): UploadScanResult {
+export function inspectUploadBytes(
+  bytes: Uint8Array,
+  declaredMime: string,
+  readAsPdf = false,
+): UploadScanResult {
   const mime = essenceOf(declaredMime);
   const findings: UploadScanFinding[] = [];
 
@@ -283,7 +390,7 @@ export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): Upl
   }
 
   if (mime === 'image/svg+xml') findings.push(...scanSvg(bytes));
-  if (mime === 'application/pdf') findings.push(...scanPdf(bytes));
+  if (mime === 'application/pdf' || readAsPdf) findings.push(...scanPdf(bytes));
 
   return { ok: findings.length === 0, findings };
 }
@@ -374,13 +481,35 @@ export const UPLOAD_REJECTED_MESSAGE =
 export const UPLOAD_ENCRYPTED_MESSAGE =
   'This file is password protected, so its contents could not be checked. Remove the password and upload it again.';
 
+export const UPLOAD_SCAN_UNAVAILABLE_MESSAGE =
+  "We couldn't check this file for safety. Try again later.";
+
+export const UPLOAD_LIMITS_EXCEEDED_MESSAGE =
+  "This file is too complex for us to check for safety, so it wasn't added. Try a smaller or simpler file.";
+
+export const UPLOAD_STORAGE_FULL_MESSAGE =
+  "There isn't enough storage left for this file. Delete files in your Library to make room.";
+
+export const UPLOAD_CHANGED_DURING_CHECK_MESSAGE =
+  'This file changed while we were checking it. Upload it again.';
+
+const REFUSAL_COPY: Partial<Record<UploadScanFinding['code'], string>> = {
+  encrypted_content: UPLOAD_ENCRYPTED_MESSAGE,
+  limits_exceeded: UPLOAD_LIMITS_EXCEEDED_MESSAGE,
+  scan_unavailable: UPLOAD_SCAN_UNAVAILABLE_MESSAGE,
+  storage_full: UPLOAD_STORAGE_FULL_MESSAGE,
+  changed_during_check: UPLOAD_CHANGED_DURING_CHECK_MESSAGE,
+};
+
 export function uploadRefusalMessage(
   findings: readonly UploadScanFinding[],
   fallback: string,
 ): string {
-  return findings.some((finding) => finding.code === 'encrypted_content')
-    ? UPLOAD_ENCRYPTED_MESSAGE
-    : fallback;
+  for (const finding of findings) {
+    const copy = REFUSAL_COPY[finding.code];
+    if (typeof copy === 'string') return copy;
+  }
+  return fallback;
 }
 
 /**
@@ -425,16 +554,15 @@ export interface UploadScanPosition {
 const NO_STRUCTURAL_FINDINGS: UploadScanResult = { ok: true, findings: [] };
 const NO_EXTERNAL_FINDINGS: UploadScanFinding[] = [];
 
-export async function scanUploadBytes(
-  bytes: Uint8Array,
+export const UPLOAD_INSPECTION_BYTES = 256_000;
+
+function verdictOf(
   declaredMime: string,
-  position: UploadScanPosition,
-): Promise<UploadScanResult> {
-  const { leadsObject, filename, externalScan = true } = position;
-  const structural = leadsObject ? inspectUploadBytes(bytes, declaredMime) : NO_STRUCTURAL_FINDINGS;
-  const credentials = scanUploadForCredentials(bytes, declaredMime, filename);
-  const external = externalScan ? await runExternalScanner(bytes) : NO_EXTERNAL_FINDINGS;
-  const findings = [...structural.findings, ...credentials, ...external];
+  structural: readonly UploadScanFinding[],
+  credentials: readonly UploadScanFinding[],
+  external: readonly UploadScanFinding[],
+): UploadScanResult {
+  const findings = [...structural, ...credentials, ...external];
 
   const reported = credentials.filter((finding) => !uploadFindingRejects(finding));
   if (reported.length > 0) {
@@ -445,4 +573,39 @@ export async function scanUploadBytes(
   }
 
   return { ok: findings.every((finding) => !uploadFindingRejects(finding)), findings };
+}
+
+/**
+ * `credentialMime` is the type the credential detectors read the bytes as.
+ * Where the product reads a file as text whatever type the client declared, it
+ * passes a text type here, so the declared type cannot switch the detectors off.
+ * `readAsPdf` does the same for the PDF active-content check: where a reader
+ * opens the file as a PDF by its name, the check runs whatever type was declared.
+ */
+export function inspectUploadHead(
+  bytes: Uint8Array,
+  declaredMime: string,
+  filename: string,
+  credentialMime: string = declaredMime,
+  readAsPdf = false,
+): UploadScanResult {
+  const head = bytes.subarray(0, UPLOAD_INSPECTION_BYTES);
+  return verdictOf(
+    declaredMime,
+    inspectUploadBytes(head, declaredMime, readAsPdf).findings,
+    scanUploadForCredentials(head, credentialMime, filename),
+    NO_EXTERNAL_FINDINGS,
+  );
+}
+
+export async function scanUploadBytes(
+  bytes: Uint8Array,
+  declaredMime: string,
+  position: UploadScanPosition,
+): Promise<UploadScanResult> {
+  const { leadsObject, filename, externalScan = true } = position;
+  const structural = leadsObject ? inspectUploadBytes(bytes, declaredMime) : NO_STRUCTURAL_FINDINGS;
+  const credentials = scanUploadForCredentials(bytes, declaredMime, filename);
+  const external = externalScan ? await runExternalScanner(bytes) : NO_EXTERNAL_FINDINGS;
+  return verdictOf(declaredMime, structural.findings, credentials, external);
 }

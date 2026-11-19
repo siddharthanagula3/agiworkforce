@@ -374,6 +374,8 @@
     "toolRequestsNeedReview_other": "{{count}} tool requests need your review.",
     "viewSources_one": "View {{count}} source",
     "viewSources_other": "View {{count}} sources",
+    "viewSourcesSoFar_one": "View {{count}} source so far",
+    "viewSourcesSoFar_other": "View {{count}} sources so far",
     "uncapturedSources_one": "This report refers to {{count}} numbered source, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.",
     "uncapturedSources_other": "This report refers to {{count}} numbered sources, but the run recorded no links for them. The references in the text above are the report's own and cannot be opened from here.",
     "forgetMemoriesTitle_one": "Forget this memory?",

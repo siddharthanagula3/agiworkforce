@@ -2,7 +2,11 @@ import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';
-import { MODEL_FAMILY_REGISTRY } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier,
+  getMinimumRequiredTier,
+  getRoutingSlotModel,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('react-i18next');
 type ScanModule1 = typeof import('@/app/settings/_lib/preferences-client');
 type ScanModule2 = typeof import('@/lib/hooks/useMediaGeneration');
@@ -281,16 +285,13 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () =
 import WebChatPage from '../WebChatPage';
 
 const workspaceFixture = createWebChatWorkspaceFixture();
-import promotionConfig from '@/config/free-model-promotion.json';
-import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
-import { useModelStore } from '@shared/stores/model-store';
+import { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { isSelectableModelId, useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 
-const PROMOTED_MODEL = Object.values(MODEL_FAMILY_REGISTRY).find(
-  (family) =>
-    family.provider === promotionConfig.provider && family.tier === promotionConfig.modelFamilyTier,
-)?.activeModelId;
+const FAST_ANTHROPIC_MODEL = getRoutingSlotModel('fast_anthropic');
+const PAID_ONLY_MODEL = getAllowedModelsForTier('pro_additions').find(isSelectableModelId);
 function stubFetch() {
   vi.stubGlobal(
     'fetch',
@@ -337,9 +338,11 @@ describe('a Free account on the chat page once the free model promotion is over'
     });
   });
 
-  it('drops a persisted promoted selection back to the Free model and sends that', async () => {
-    expect(PROMOTED_MODEL).toBeDefined();
-    useModelStore.getState().setSelectedModelId(PROMOTED_MODEL!);
+  it('drops a persisted selection of a model outside the Free plan back to the Free model and sends that', async () => {
+    expect(PAID_ONLY_MODEL).toBeDefined();
+    expect(getMinimumRequiredTier(PAID_ONLY_MODEL!)).not.toBe('free');
+    expect(FREE_TRIAL_MODELS).not.toContain(PAID_ONLY_MODEL);
+    useModelStore.getState().setSelectedModelId(PAID_ONLY_MODEL!);
 
     render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
@@ -351,5 +354,22 @@ describe('a Free account on the chat page once the free model promotion is over'
     const [, options] = mocks.sendMessage.mock.calls[0]! as unknown as [string, { model?: string }];
 
     expect(options.model).toBe(FREE_TRIAL_MODEL);
+  });
+
+  it('keeps a persisted selection of the second Free model, the fast Anthropic one, and sends that', async () => {
+    expect(FREE_TRIAL_MODELS).toContain(FAST_ANTHROPIC_MODEL);
+    expect(FAST_ANTHROPIC_MODEL).not.toBe(FREE_TRIAL_MODEL);
+    useModelStore.getState().setSelectedModelId(FAST_ANTHROPIC_MODEL);
+
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+    await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
+    act(() => {
+      mocks.composerOnSend!('hello', undefined, undefined, { projectId: null });
+    });
+    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
+    const [, options] = mocks.sendMessage.mock.calls[0]! as unknown as [string, { model?: string }];
+
+    expect(options.model).toBe(FAST_ANTHROPIC_MODEL);
+    expect(useModelStore.getState().selectedModelId).toBe(FAST_ANTHROPIC_MODEL);
   });
 });

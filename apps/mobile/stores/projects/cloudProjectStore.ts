@@ -176,9 +176,15 @@ export const useCloudProjectStore = create<CloudProjectState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[cloudProjectStore] Hydration failed:', error);
       },
+      // activeProjectId scopes one new chat started from a project; persisting it
+      // would put every later chat into that project.
       partialize: (state) => ({
         projects: state.projects,
-        activeProjectId: state.activeProjectId,
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        projects:
+          (persisted as Partial<CloudProjectState> | undefined)?.projects ?? current.projects,
       }),
     },
   ),

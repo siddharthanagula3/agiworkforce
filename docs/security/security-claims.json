@@ -710,7 +710,10 @@
       "section": "Read this first: no scope string is hardcoded in this repository",
       "kind": "prose",
       "sentence": "It exists so that the first operator who configures a provider cannot quietly request more than this file permits.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "implementation": [
+        "packages/contracts/cloud-contracts/src/connector-scopes.ts",
+        "apps/web/lib/connectors/oauth-scope-allowlist.ts"
+      ],
       "proof": [
         {
           "kind": "guard",
@@ -797,8 +800,11 @@
       "id": "ceiling-test-pins-the-whole-rule",
       "section": "Enforcement",
       "kind": "prose",
-      "sentence": "`apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts` pins all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one survives, that the authorization URL carries only the survivors, that every `oauth2` connector in the catalog has an entry, and that no enforced ceiling admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in `oauth-scope-allowlist.ts` (`admin`, `full`, `default`, `https://mail.google.com/`, the bare Google `drive`, `calendar`, or `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and `Mail.ReadWrite`).",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "sentence": "`apps/web/lib/connectors/__tests__/oauth-registry.scope-allowlist.test.ts` pins all of this: it asserts an over-ceiling scope is dropped and an on-ceiling one survives, that the authorization URL carries only the survivors, that every `oauth2` connector in the catalog has an entry, and that no enforced ceiling admits a scope from `FORBIDDEN_CONNECTOR_OAUTH_SCOPES` in `connector-scopes.ts` (`admin`, `full`, `default`, `https://mail.google.com/`, the bare Google `drive`, `calendar`, or `cloud-platform` scopes, `Files.ReadWrite.All`, `Sites.FullControl.All`, and `Mail.ReadWrite`).",
+      "implementation": [
+        "packages/contracts/cloud-contracts/src/connector-scopes.ts",
+        "apps/web/lib/connectors/oauth-scope-allowlist.ts"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -811,8 +817,8 @@
       "id": "scope-guard-runs-outside-vitest",
       "section": "Enforcement",
       "kind": "prose",
-      "sentence": "`pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into `pnpm check:llm-operability`) statically parses the manifest and `scope-descriptions.ts` on every run, independent of the vitest suite, and fails the build if a ceiling admits a forbidden scope, a ceiling scope has no description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced ceiling is declared a second time anywhere else under `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or `apps/web/lib/user-connector-tools.ts`.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "sentence": "`pnpm check:connector-scopes` (`scripts/check-connector-scopes.mjs`, wired into `pnpm check:llm-operability`) statically parses the manifest, `connector-scopes.ts`, which also holds `SCOPE_DESCRIPTIONS`, on every run, independent of the vitest suite, and fails the build if a ceiling admits a forbidden scope, a ceiling scope has no description in `SCOPE_DESCRIPTIONS`, or a scope literal from an enforced ceiling is declared a second time anywhere else under `apps/web/lib/connectors`, `apps/web/app/api/connectors`, or `apps/web/lib/user-connector-tools.ts`.",
+      "implementation": ["packages/contracts/cloud-contracts/src/connector-scopes.ts"],
       "proof": [
         {
           "kind": "guard",
@@ -824,8 +830,8 @@
       "id": "scope-literals-live-in-one-file",
       "section": "Enforcement",
       "kind": "prose",
-      "sentence": "That last check is what keeps \"the manifest is the only place a scope may be added\" true going forward rather than as a one-time fact: nothing outside `oauth-scope-allowlist.ts` can introduce a scope string without the guard catching the duplicate.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "sentence": "That last check is what keeps \"the manifest is the only place a scope may be added\" true going forward rather than as a one-time fact: nothing outside `connector-scopes.ts` can introduce a scope string without the guard catching the duplicate.",
+      "implementation": ["packages/contracts/cloud-contracts/src/connector-scopes.ts"],
       "proof": [
         {
           "kind": "guard",
@@ -838,7 +844,10 @@
       "section": "Ceiling table",
       "kind": "prose",
       "sentence": "Connector ids not in this table have no reviewed ceiling and are not filtered.",
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "implementation": [
+        "packages/contracts/cloud-contracts/src/connector-scopes.ts",
+        "apps/web/lib/connectors/oauth-scope-allowlist.ts"
+      ],
       "proof": [
         {
           "kind": "guard",
@@ -1684,7 +1693,7 @@
       "section": "Ceiling table",
       "kind": "rows",
       "rows": 66,
-      "implementation": ["apps/web/lib/connectors/oauth-scope-allowlist.ts"],
+      "implementation": ["packages/contracts/cloud-contracts/src/connector-scopes.ts"],
       "proof": [
         {
           "kind": "guard",
@@ -1701,8 +1710,12 @@
       "id": "encrypted-columns-and-their-keys",
       "section": "What is encrypted, and with which key",
       "kind": "rows",
-      "rows": 6,
-      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "rows": 13,
+      "implementation": [
+        "apps/web/lib/crypto/envelope.ts",
+        "apps/web/lib/crypto/connector-secret-reseal.ts",
+        "scripts/reencrypt.mjs"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -1713,6 +1726,68 @@
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.test.ts",
           "name": "migration 0104_key_version"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/reencrypt.test.mjs",
+          "name": "every connector secret column has a rotation sweep target or a recorded reason it has none"
+        }
+      ]
+    },
+    {
+      "id": "derived-connector-stores-are-not-swept",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "The two HKDF rows are sealed under a ring derived from the connector key per user or per workspace, and re-sealing one needs that derived ring and the row's associated data, which the sweep does not build; `runOrganizationKeyRewrap` covers a workspace only once it has brought its own key.",
+      "implementation": [
+        "apps/web/lib/server/organization-encryption-keys.ts",
+        "apps/web/lib/services/developer-webhook-service.ts",
+        "apps/web/lib/services/audit-streaming-service.ts",
+        "scripts/reencrypt.mjs"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext belongs to one tenant and one key version"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/cmek.test.ts",
+          "name": "which ring an organization gets"
+        }
+      ]
+    },
+    {
+      "id": "unswept-connector-rows-need-the-retired-key",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "The rows marked \"not swept\" in the first table are still sealed under the old version, and dropping it leaves every one of them unreadable, so users would have to reconnect Slack, bank accounts, MCP clients and OAuth connectors and re-create webhook and audit destination secrets.",
+      "implementation": ["scripts/reencrypt.mjs", "apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/reencrypt.test.mjs",
+          "name": "every connector secret column has a rotation sweep target or a recorded reason it has none"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        }
+      ]
+    },
+    {
+      "id": "connector-key-rotation-keeps-the-exposed-key",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "A rotation of this key on suspected exposure therefore does not yet take the exposed key out of service.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/reencrypt.test.mjs",
+          "name": "every connector secret column has a rotation sweep target or a recorded reason it has none"
         }
       ]
     },
@@ -1734,17 +1809,24 @@
       "id": "ring-aware-readers",
       "section": "Which readers understand the ring",
       "kind": "rows",
-      "rows": 4,
+      "rows": 7,
       "implementation": [
         "apps/web/lib/custom-connector-crypto.ts",
         "apps/web/lib/github-app.ts",
-        "apps/web/lib/crypto/totp-envelope.ts"
+        "apps/web/lib/crypto/totp-envelope.ts",
+        "apps/web/lib/services/developer-webhook-service.ts",
+        "apps/web/lib/services/audit-streaming-service.ts"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.test.ts",
           "name": "production readers survive a rotation"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext belongs to one tenant and one key version"
         }
       ]
     },

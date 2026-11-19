@@ -6,6 +6,7 @@ import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { AppMode } from './ModeSwitchModal';
+import { HEADER_TEXT_SCALE_LIMIT } from './WorkModeSwitch';
 
 export interface ModeToggleProps {
   mode?: AppMode;
@@ -19,6 +20,7 @@ const TRACK_PADDING = 3;
 const SEGMENT_HEIGHT = MINIMUM_TOUCH_TARGET - TRACK_PADDING * 2;
 const SEGMENT_HIT_SLOP = { top: TRACK_PADDING, bottom: TRACK_PADDING };
 const ICON_SIZE = 16;
+const LABEL_MINIMUM_FONT_SCALE = 0.7;
 
 function Segment({
   testID,
@@ -52,7 +54,7 @@ function Segment({
       style={{
         flex: 1,
         minWidth: MINIMUM_TOUCH_TARGET,
-        height: SEGMENT_HEIGHT,
+        minHeight: SEGMENT_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
@@ -66,11 +68,15 @@ function Segment({
       accessibilityState={{ selected }}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
+      accessibilityShowsLargeContentViewer
+      accessibilityLargeContentTitle={label}
     >
       <Icon size={ICON_SIZE} color={color} />
       <Text
         numberOfLines={1}
-        maxFontSizeMultiplier={1.4}
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        adjustsFontSizeToFit
+        minimumFontScale={LABEL_MINIMUM_FONT_SCALE}
         style={{
           fontSize: typeScale.body,
           fontWeight: selected ? '600' : '500',

@@ -4,6 +4,11 @@ import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BuildError, parseFrontmatter } from './lib/support-frontmatter.mjs';
+import {
+  assertNoPurchaseVocabulary,
+  isPhoneListedArticle,
+  resolvePurchasePassages,
+} from './lib/support-purchase-passages.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB_ROOT = resolve(HERE, '..');
@@ -101,16 +106,22 @@ function chunkBody(body, docTitle, file) {
       .trim()
       .replace(/\n{3,}/g, '\n\n');
     if (!text) continue;
-    if (text.length > MAX_CHUNK_CHARS) {
+    const { web, phone } = resolvePurchasePassages(
+      text,
+      `${file}: section "${section.heading ?? '(intro)'}"`,
+    );
+    if (!web) continue;
+    if (web.length > MAX_CHUNK_CHARS) {
       throw new BuildError(
-        `${file}: section "${section.heading ?? '(intro)'}" is ${text.length} chars, ` +
+        `${file}: section "${section.heading ?? '(intro)'}" is ${web.length} chars, ` +
           `over the ${MAX_CHUNK_CHARS} limit. Split it under another heading.`,
       );
     }
     chunks.push({
       heading: section.heading,
       headingPath: section.heading ? `${docTitle} › ${section.heading}` : docTitle,
-      text,
+      text: web,
+      phone,
     });
   }
   if (chunks.length === 0) throw new BuildError(`${file}: document has no body content`);
@@ -154,13 +165,30 @@ export function buildCorpus(contentDir = CONTENT_DIR) {
     if (tags.length === 0) throw new BuildError(`${file}: tags must not be empty`);
 
     const platforms = parsePlatforms(data['platforms'], file);
+    const onPhone = isPhoneListedArticle(data['category']) && data['phone'] !== 'unlisted';
+    const sections = chunkBody(body, data['title'], file);
 
-    const chunks = chunkBody(body, data['title'], file).map((chunk, index) => ({
+    if (onPhone) {
+      assertNoPurchaseVocabulary(data['title'], `${file}: title`);
+      assertNoPurchaseVocabulary(data['tags'], `${file}: tags`);
+      if (data['description']) {
+        assertNoPurchaseVocabulary(data['description'], `${file}: description`);
+      }
+      for (const section of sections) {
+        if (!section.phone) continue;
+        const where = `${file}: section "${section.heading ?? '(intro)'}"`;
+        if (section.heading) assertNoPurchaseVocabulary(section.heading, `${where} heading`);
+        assertNoPurchaseVocabulary(section.phone, where);
+      }
+    }
+
+    const chunks = sections.map((chunk, index) => ({
       id: `${data['id']}#${index}`,
       ordinal: index,
       heading: chunk.heading,
       headingPath: chunk.headingPath,
       text: chunk.text,
+      ...(onPhone && chunk.phone !== chunk.text ? { phoneText: chunk.phone || null } : {}),
     }));
 
     documents.push({
@@ -173,6 +201,7 @@ export function buildCorpus(contentDir = CONTENT_DIR) {
       ...(data['description'] ? { description: data['description'] } : {}),
       updated: data['updated'],
       source: file,
+      onPhone,
       chunks,
     });
   }

@@ -13,11 +13,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useAuthStore } from '@/src/features/auth/store';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
 import { assureAgeWithOs } from '@/src/features/age-assurance';
+import {
+  AGE_ENTRY_PARAMS,
+  PARENTAL_CONTROLS_ROUTE,
+} from '@/src/features/settings/parental-controls/entry';
 import { APP_PATH, CLOUD_SIGN_IN_RETURN_PATH } from '@/src/features/auth/services/rootRouting';
 import {
   clearPostAuthIntent,
@@ -25,7 +31,7 @@ import {
   POST_AUTH_INTENT_PARAM,
 } from '@/src/features/auth/services/postAuthIntent';
 
-const PARENTAL_CONTROLS_RETURN_PATH = '/(app)/settings/parental-controls' as const;
+const PARENTAL_CONTROLS_RETURN_PATH = PARENTAL_CONTROLS_ROUTE;
 
 const RETURN_PATHS = [PARENTAL_CONTROLS_RETURN_PATH, CLOUD_SIGN_IN_RETURN_PATH] as const;
 type ReturnPath = (typeof RETURN_PATHS)[number];
@@ -34,10 +40,19 @@ export function resolveReturnPath(raw: string | undefined): ReturnPath | null {
   return RETURN_PATHS.find((path) => path === raw) ?? null;
 }
 
+export function resolveReturnEntry(
+  returnTo: ReturnPath | null,
+  raw: string | string[] | undefined,
+): typeof AGE_ENTRY_PARAMS.entry | null {
+  return returnTo === PARENTAL_CONTROLS_RETURN_PATH && raw === AGE_ENTRY_PARAMS.entry
+    ? AGE_ENTRY_PARAMS.entry
+    : null;
+}
+
 export default function AgeGateScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnTo?: string }>();
+  const params = useLocalSearchParams<{ returnTo?: string; entry?: string }>();
   const [ageText, setAgeText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refused, setRefused] = useState(isMinorMode);
@@ -51,13 +66,20 @@ export default function AgeGateScreen() {
   const disabledButtonBg = isDark ? colors.surfaceHover : colors.surfaceHover;
   const disabledButtonTextColor = colors.textMuted;
   const returnTo = resolveReturnPath(params.returnTo);
+  const returnEntry = resolveReturnEntry(returnTo, params.entry);
 
   const handleBack = useCallback(() => {
     if (returnTo) {
       if (returnTo === CLOUD_SIGN_IN_RETURN_PATH) clearPostAuthIntent();
-      router.replace(returnTo === CLOUD_SIGN_IN_RETURN_PATH ? APP_PATH : returnTo);
+      router.replace(
+        returnTo === CLOUD_SIGN_IN_RETURN_PATH
+          ? APP_PATH
+          : returnEntry
+            ? { pathname: returnTo, params: AGE_ENTRY_PARAMS }
+            : returnTo,
+      );
     }
-  }, [returnTo, router]);
+  }, [returnEntry, returnTo, router]);
 
   const handleComplete = useCallback(() => {
     if (returnTo === CLOUD_SIGN_IN_RETURN_PATH) {
@@ -69,8 +91,12 @@ export default function AgeGateScreen() {
       );
       return;
     }
-    router.replace(returnTo ?? ('/(public)/onboarding' as const));
-  }, [returnTo, router]);
+    router.replace(
+      returnTo && returnEntry
+        ? { pathname: returnTo, params: AGE_ENTRY_PARAMS }
+        : (returnTo ?? ('/(public)/onboarding' as const)),
+    );
+  }, [returnEntry, returnTo, router]);
 
   const osCheckStarted = useRef(false);
   useEffect(() => {
@@ -118,7 +144,13 @@ export default function AgeGateScreen() {
       >
         <ArrowLeft size={22} color={colors.textPrimary} />
       </Pressable>
-      <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Review Age Settings</Text>
+      <Text
+        accessibilityRole="header"
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        style={[styles.headerTitle, { color: colors.textPrimary }]}
+      >
+        Review Age Settings
+      </Text>
     </View>
   ) : null;
 
@@ -275,7 +307,7 @@ export default function AgeGateScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    height: 58,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
@@ -294,6 +326,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   scrollContent: {
+    ...contentColumn('form'),
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',

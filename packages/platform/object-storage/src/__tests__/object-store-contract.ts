@@ -2,7 +2,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { objectChecksum } from '../checksum';
 import { isPresignedUrlExpired, presignedUrlExpiresAt } from '../presign';
-import { supportsMultipartUploads, type ObjectStore } from '../types';
+import { supportsMultipartUploads, supportsObjectListing, type ObjectStore } from '../types';
 
 const BUCKET = 'contract-bucket';
 const KEY = 'object.png';
@@ -267,6 +267,44 @@ export function runObjectStoreContract(name: string, createStore: () => ObjectSt
 
       expect(await store.listPendingMultipartUploads(BUCKET)).toEqual([]);
       expect(await store.get(BUCKET, MULTIPART_KEY)).toBeNull();
+    });
+
+    it('lists every object under a prefix in key order, across pages, and nothing beside it', async () => {
+      const store = createStore();
+      if (!supportsObjectListing(store)) return;
+      const listedKeys = ['pieces/b', 'pieces/a', 'pieces/c'];
+      for (const key of [...listedKeys, 'piecework', 'other/a']) {
+        await store.put({ bucket: BUCKET, key, body: BYTES, contentType: CONTENT_TYPE });
+      }
+
+      const listed = await store.listObjects(BUCKET, 'pieces/');
+
+      expect(listed.map((object) => object.key)).toEqual(['pieces/a', 'pieces/b', 'pieces/c']);
+      for (const object of listed) expect(object.lastModifiedMs).toEqual(expect.any(Number));
+    });
+
+    it('lists no more objects than the limit allows', async () => {
+      const store = createStore();
+      if (!supportsObjectListing(store)) return;
+      for (const key of ['pieces/a', 'pieces/b', 'pieces/c']) {
+        await store.put({ bucket: BUCKET, key, body: BYTES, contentType: CONTENT_TYPE });
+      }
+
+      const listed = await store.listObjects(BUCKET, 'pieces/', 2);
+
+      expect(listed.map((object) => object.key)).toEqual(['pieces/a', 'pieces/b']);
+    });
+
+    it('lists from the key after the one it is given, across pages', async () => {
+      const store = createStore();
+      if (!supportsObjectListing(store)) return;
+      for (const key of ['pieces/a', 'pieces/b', 'pieces/c', 'pieces/d', 'pieces/e']) {
+        await store.put({ bucket: BUCKET, key, body: BYTES, contentType: CONTENT_TYPE });
+      }
+
+      const listed = await store.listObjects(BUCKET, 'pieces/', 3, 'pieces/a');
+
+      expect(listed.map((object) => object.key)).toEqual(['pieces/b', 'pieces/c', 'pieces/d']);
     });
   });
 }

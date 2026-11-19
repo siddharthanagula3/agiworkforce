@@ -126,6 +126,7 @@ jest.mock('@/src/features/voice/services/voiceInput', () => ({
       this.code = code;
     }
   },
+  onDeviceRecognizerGuaranteed: () => true,
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

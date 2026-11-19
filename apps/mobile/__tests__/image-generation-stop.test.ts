@@ -18,6 +18,10 @@ jest.mock('@/services/api', () => ({
   ApiPaywallError: class extends Error {},
 }));
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { imageGen: true } }));
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
+}));
 jest.mock('expo-crypto', () => ({ randomUUID: () => '12345678-abcd-4abc-8abc-1234567890ab' }));
 
 import { ApiHttpError } from '../services/apiErrors';
@@ -213,6 +217,9 @@ describe('stopping an image generation', () => {
       await settle();
 
       expect(assistantMessage()?.imageGenError).toMatch(/may still finish/);
+      expect(assistantMessage()?.imageGenError).toBe(
+        'Stopped on this device, but AGI Cloud could not be reached to stop the job, so it may still finish.',
+      );
     });
 
     it('shows the image when the server had already finished it', async () => {

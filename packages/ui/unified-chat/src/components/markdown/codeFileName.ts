@@ -1,4 +1,4 @@
-import { resolveHighlightLanguage, type LanguageId } from './shikiHighlighter';
+import { resolveHighlightLanguage, type LanguageId } from './highlightLanguages';
 
 const CODE_FILE_BASE_NAME = 'code';
 const PLAIN_TEXT_EXTENSION = 'txt';
@@ -95,6 +95,7 @@ const UNHIGHLIGHTED_LANGUAGE_EXTENSIONS: Readonly<Record<string, string>> = {
   groovy: 'groovy',
   julia: 'jl',
   matlab: 'm',
+  mermaid: 'mmd',
   ocaml: 'ml',
   plaintext: PLAIN_TEXT_EXTENSION,
   solidity: 'sol',

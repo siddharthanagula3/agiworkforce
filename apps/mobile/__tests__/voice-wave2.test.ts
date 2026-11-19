@@ -128,6 +128,12 @@ describe('voiceInput service', () => {
   });
 
   it('fails closed when speech recognition permission is denied', async () => {
+    speechRecognitionMock.ExpoSpeechRecognitionModule.getPermissionsAsync.mockResolvedValueOnce({
+      granted: false,
+      status: 'denied',
+      canAskAgain: false,
+      expires: 'never',
+    });
     speechRecognitionMock.ExpoSpeechRecognitionModule.requestPermissionsAsync.mockResolvedValueOnce(
       {
         granted: false,

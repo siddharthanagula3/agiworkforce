@@ -309,17 +309,57 @@ describe('time and focus account ownership', () => {
     },
   );
 
-  it('cancels pending work on unmount', async () => {
+  it('sends a pending save at once when the page closes before the timer fires', async () => {
     const { result, unmount } = await readyHook();
-    act(() => result.current.push());
-    unmount();
-    act(() => jest.advanceTimersByTime(600));
+    const account = captureCloudAccountEpoch();
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: 120 });
+      result.current.push();
+      jest.advanceTimersByTime(300);
+    });
+    expect(mockPut).not.toHaveBeenCalled();
+    await act(async () => {
+      unmount();
+    });
+    expect(mockPut).toHaveBeenCalledTimes(1);
+    expect(mockPut).toHaveBeenCalledWith(
+      MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+      {
+        namespace: TIME_FOCUS_PREFERENCES_NAMESPACE,
+        value: expect.objectContaining({ breakReminderMinutes: 120 }),
+      },
+      { accountEpoch: account, signal: expect.any(AbortSignal) },
+    );
+    expect(mockPut.mock.calls[0][2].signal.aborted).toBe(false);
+    await act(async () => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(mockPut).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends nothing on unmount when no save is pending', async () => {
+    const { unmount } = await readyHook();
+    await act(async () => {
+      unmount();
+    });
     expect(mockPut).not.toHaveBeenCalled();
     expect(mockGet.mock.calls[0][1].signal.aborted).toBe(true);
   });
 
+  it('aborts an in-flight read on unmount', async () => {
+    const pending = deferred<unknown>();
+    mockGet.mockImplementationOnce(() => pending.promise);
+    const { unmount } = renderHook(() => useTimeFocusSync());
+    unmount();
+    expect(mockGet.mock.calls[0][1].signal.aborted).toBe(true);
+    await act(async () => {
+      pending.resolve({ settings: { breakReminderMinutes: 60 } });
+    });
+    expect(useNotificationPrefsStore.getState().breakReminderMinutes).not.toBe(60);
+  });
+
   it.each(['resolve', 'reject'])(
-    'aborts an in-flight save on unmount before it can %s',
+    'lets an in-flight save finish after the page closes and %s without touching state',
     async (outcome) => {
       const { result, unmount } = await readyHook();
       const old = deferred<void>();
@@ -329,14 +369,105 @@ describe('time and focus account ownership', () => {
         jest.advanceTimersByTime(600);
       });
       unmount();
-      expect(mockPut.mock.calls[0][2].signal.aborted).toBe(true);
+      expect(mockPut.mock.calls[0][2].signal.aborted).toBe(false);
       await act(async () => {
         if (outcome === 'resolve') old.resolve(undefined);
-        else old.reject(new Error('unmounted'));
+        else old.reject(new Error('offline'));
       });
       expect(mockPut).toHaveBeenCalledTimes(1);
     },
   );
+
+  it.each(['mode', 'account-b'])(
+    'still aborts an in-flight save on a %s change while the page is open',
+    async (kind) => {
+      const { result } = await readyHook();
+      const old = deferred<void>();
+      mockPut.mockImplementationOnce(() => old.promise);
+      act(() => {
+        result.current.push();
+        jest.advanceTimersByTime(600);
+      });
+      act(() => {
+        if (kind === 'mode') useChatAppModeStore.setState({ appMode: 'local' });
+        else {
+          activateCloudAccount('account-b');
+          useAuthStore.setState({ clerkUserId: 'account-b' });
+        }
+      });
+      expect(mockPut.mock.calls[0][2].signal.aborted).toBe(true);
+      await act(async () => {
+        old.resolve(undefined);
+      });
+    },
+  );
+
+  it.each(['mode', 'account-b'])(
+    'does not flush a pending save on unmount after the %s changed',
+    async (kind) => {
+      const { result, unmount } = await readyHook();
+      act(() => {
+        result.current.push();
+        if (kind === 'mode') useChatAppModeStore.setState({ appMode: 'local' });
+        else {
+          activateCloudAccount('account-b');
+          useAuthStore.setState({ clerkUserId: 'account-b' });
+        }
+      });
+      await act(async () => {
+        unmount();
+      });
+      expect(mockPut).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reads again only after a save sent on close has settled, so the new value survives', async () => {
+    const first = await readyHook();
+    let server: unknown = {};
+    const saved = deferred<void>();
+    mockPut.mockImplementationOnce(async (_path: string, body: { value: unknown }) => {
+      await saved.promise;
+      server = body.value;
+    });
+    mockGet.mockImplementation(async () => ({ settings: server }));
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: 120 });
+      first.result.current.push();
+    });
+    await act(async () => {
+      first.unmount();
+    });
+    expect(mockPut).toHaveBeenCalledTimes(1);
+    mockGet.mockClear();
+
+    const second = renderHook(() => useTimeFocusSync());
+    await act(async () => {});
+    expect(mockGet).not.toHaveBeenCalled();
+    expect(second.result.current.status).toBe('loading');
+
+    await act(async () => {
+      saved.resolve(undefined);
+    });
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(second.result.current.status).toBe('synced');
+    expect(useNotificationPrefsStore.getState().breakReminderMinutes).toBe(120);
+  });
+
+  it('still reads after a save sent on close failed', async () => {
+    const first = await readyHook();
+    mockPut.mockRejectedValueOnce(new Error('offline'));
+    act(() => {
+      first.result.current.push();
+    });
+    await act(async () => {
+      first.unmount();
+    });
+    mockGet.mockClear();
+    const second = renderHook(() => useTimeFocusSync());
+    await act(async () => {});
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(second.result.current.status).toBe('synced');
+  });
 
   it('reports current-owner failure and lets the next edit retry', async () => {
     const { result } = await readyHook();

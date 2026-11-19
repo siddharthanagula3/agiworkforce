@@ -22,6 +22,7 @@ import {
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { DECLINED_WEB_SEARCH_ANSWER } from '@agiworkforce/cloud-contracts';
 import { getImageModelLabel } from '../../lib/imageGenerationOptions';
 import {
   WORKBOOK_PREVIEW_TOO_LARGE,
@@ -2858,6 +2859,52 @@ describe('MessageBubble', () => {
         />,
       );
 
+      expect(noSourcesNotice()).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Retry this response with web search' }),
+      ).toBeNull();
+    });
+
+    it('stays quiet when the person declined the search the answer needed', () => {
+      render(
+        <MessageBubble
+          message={makeMessage({
+            role: 'assistant',
+            content: DECLINED_WEB_SEARCH_ANSWER,
+            metadata: {
+              webSearchRequested: true,
+              webSearchAskedInText: true,
+              agentActivity: {
+                schemaVersion: 1,
+                sessionId: 's1',
+                turnId: 't1',
+                lastSequence: 3,
+                status: 'completed',
+                startedAtMs: 0,
+                updatedAtMs: 100,
+                entries: [
+                  {
+                    kind: 'tool',
+                    id: 'search-1',
+                    toolCallId: 'call-1',
+                    name: 'web_search',
+                    category: 'web-search',
+                    summary: 'Tool use denied',
+                    status: 'failed',
+                    error: 'Tool use denied',
+                    approval: { id: 'call-1', decision: 'denied' },
+                    startedAtMs: 0,
+                    completedAtMs: 50,
+                  },
+                ],
+              },
+            },
+          })}
+          onRegenerate={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText(DECLINED_WEB_SEARCH_ANSWER)).toBeInTheDocument();
       expect(noSourcesNotice()).not.toBeInTheDocument();
       expect(
         screen.queryByRole('button', { name: 'Retry this response with web search' }),

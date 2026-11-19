@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-import { deriveFollowUps, FollowUpSuggestions } from './FollowUpSuggestions';
+import { deriveFollowUps } from '@agiworkforce/unified-chat/follow-ups';
+import { FollowUpSuggestions } from './FollowUpSuggestions';
 
 describe('deriveFollowUps() · guard clauses', () => {
   it('returns [] for empty string', () => {
@@ -506,6 +507,41 @@ describe('FollowUpSuggestions component', () => {
     expect(screen.queryByText('Search the web to verify')).toBeNull();
     expect(screen.queryByText('Could you browse online for another source?')).toBeNull();
     expect(screen.getByText('Tell me more about this')).toBeVisible();
+  });
+
+  it('shows and sends a written suggestion as the plain line the phone shows', () => {
+    const onSelect = vi.fn();
+    render(
+      <FollowUpSuggestions
+        lastAssistantContent={CONTENT_WITH_CODE}
+        suggestions={[
+          'How do I center a <div>?',
+          'How is the energy equation \\(E = mc^2\\) derived?',
+          'What is the difference between $HOME and $PATH?',
+        ]}
+        onSelect={onSelect}
+      />,
+    );
+
+    expect(suggestionPills().map((pill) => pill.textContent)).toEqual([
+      'How do I center a <div>?',
+      'How is the energy equation E = mc^2 derived?',
+      'What is the difference between $HOME and $PATH?',
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: /energy equation/ }));
+    expect(onSelect).toHaveBeenCalledWith('How is the energy equation E = mc^2 derived?');
+  });
+
+  it('shows two suggestions that read the same once cleaned as one pill', () => {
+    render(
+      <FollowUpSuggestions
+        lastAssistantContent={CONTENT_WITH_CODE}
+        suggestions={['Why is **Rust** safe?', 'Why is Rust safe?']}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(suggestionPills().map((pill) => pill.textContent)).toEqual(['Why is Rust safe?']);
   });
 
   it('filters the heuristic web-search pill after an unavailable search', () => {

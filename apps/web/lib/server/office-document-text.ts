@@ -4,6 +4,12 @@ import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { XLSX_NOT_CALCULATED } from '@agiworkforce/unified-chat/tabular';
+import { CellFormatTable, styleIndex } from '@agiworkforce/unified-chat/workbook-cell-formats';
+import {
+  displayCellNumber,
+  type NumberFormat,
+} from '@agiworkforce/unified-chat/workbook-number-formats';
 import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 import {
@@ -19,6 +25,30 @@ export const MAX_OFFICE_TEXT_CHARS = MAX_FILE_TEXT_CHARS;
 
 const MAX_SHEET_ROWS = 5_000;
 const MAX_SLIDES = 200;
+
+/**
+ * How an archive is sized before anything inflates. `all-members` counts every
+ * member's declared size, as project knowledge and chat have always done;
+ * `text-parts` counts only the XML parts text is read from, so a deck heavy
+ * with media is still read and its media are never inflated; `per-member`
+ * leaves the total to a caller that checks each member as it reads it.
+ */
+export type OfficeArchiveSizing = 'all-members' | 'text-parts' | 'per-member';
+
+export interface OfficeDocumentTextOptions {
+  maxSlides?: number;
+  maxSheetRows?: number;
+  maxChars?: number;
+  sizing?: OfficeArchiveSizing;
+  /** Filled in by a presentation read: the slides past `maxSlides` that were left unread. */
+  coverage?: { slidesOmitted: number };
+}
+
+const TEXT_PART = /\.(?:xml|rels)$/i;
+
+export function isOfficeTextPart(path: string): boolean {
+  return TEXT_PART.test(path);
+}
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -85,15 +115,15 @@ export function officeDocumentKind(fileName: string, mimeType: string): OfficeDo
   return null;
 }
 
-function boundText(value: string): string {
+function boundText(value: string, maxChars: number): string {
   const normalized = value
     .replace(/\r\n?/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return truncateExtractedText(normalized, MAX_OFFICE_TEXT_CHARS);
+  return truncateExtractedText(normalized, maxChars);
 }
 
-function decodeXmlEntities(value: string): string {
+export function decodeXmlEntities(value: string): string {
   return value
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -145,12 +175,16 @@ function htmlToText(html: string): string {
   return lines.join('\n');
 }
 
-interface BoundedZip {
+export interface BoundedZip {
   zip: JSZip;
   budget: DecompressionBudget;
 }
 
-async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
+export async function openOfficeArchive(
+  data: Buffer,
+  filename: string,
+  sizing: OfficeArchiveSizing = 'all-members',
+): Promise<BoundedZip> {
   if (isEncryptedOfficeContainer(data)) {
     throw new OfficeDocumentUnreadableError(filename, 'encrypted');
   }
@@ -174,8 +208,13 @@ async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
   try {
     budget.admitMembers(entries.length);
     let declared = 0;
-    for (const entry of entries) declared += declaredMemberSize(entry);
-    if (declared > budget.ceiling) throw new DecompressionLimitError('total_bytes');
+    for (const entry of entries) {
+      if (sizing === 'text-parts' && !isOfficeTextPart(entry.name)) continue;
+      declared += declaredMemberSize(entry);
+    }
+    if (sizing !== 'per-member' && declared > budget.ceiling) {
+      throw new DecompressionLimitError('total_bytes');
+    }
   } catch (error) {
     if (error instanceof DecompressionLimitError) {
       throw new OfficeDocumentUnreadableError(filename, 'archive_bomb');
@@ -186,21 +225,70 @@ async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
   return { zip, budget };
 }
 
-async function entryText(bounded: BoundedZip, path: string): Promise<string | null> {
+export async function officeArchiveEntryText(
+  bounded: BoundedZip,
+  path: string,
+): Promise<string | null> {
   const entry = bounded.zip.file(path);
   if (!entry) return null;
   const bytes = await readArchiveMember(entry, bounded.budget);
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 }
 
-function xmlTextRuns(xml: string, tag: string): string {
-  return [...xml.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'g'))]
-    .map((match) => decodeXmlEntities(match[1] ?? ''))
-    .join('');
+function isWordCharacter(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    (code >= 0x61 && code <= 0x7a) ||
+    code === 0x5f
+  );
 }
 
-async function extractDocx(data: Buffer, filename: string): Promise<string> {
-  const bounded = await readZip(data, filename);
+/**
+ * The bodies `<tag\b[^>]*>([\s\S]*?)</tag>` would match, found by index scans:
+ * once an opener has no closing tag after it, no later one has either, so the
+ * scan stops where the pattern would rescan the rest of the XML per opener.
+ */
+function* xmlElementBodies(xml: string, tag: string): Generator<string> {
+  const open = `<${tag}`;
+  const close = `</${tag}>`;
+  let position = 0;
+  for (;;) {
+    const start = xml.indexOf(open, position);
+    if (start === -1) return;
+    const nameEnd = start + open.length;
+    if (nameEnd >= xml.length || isWordCharacter(xml.charCodeAt(nameEnd))) {
+      position = start + 1;
+      continue;
+    }
+    const tagEnd = xml.indexOf('>', nameEnd);
+    if (tagEnd === -1) return;
+    const closeAt = xml.indexOf(close, tagEnd + 1);
+    if (closeAt === -1) return;
+    yield xml.slice(tagEnd + 1, closeAt);
+    position = closeAt + close.length;
+  }
+}
+
+export function xmlTextRuns(xml: string, tag: string): string {
+  let text = '';
+  for (const body of xmlElementBodies(xml, tag)) text += decodeXmlEntities(body);
+  return text;
+}
+
+function slideParagraphs(xml: string): string[] {
+  return [...xmlElementBodies(xml, 'a:p')].map((body) =>
+    xmlTextRuns(body, 'a:t').replace(/\s+/g, ' ').trim(),
+  );
+}
+
+async function extractDocx(
+  data: Buffer,
+  filename: string,
+  sizing: OfficeArchiveSizing,
+): Promise<string> {
+  const bounded = await openOfficeArchive(data, filename, sizing);
+  const textPartsOnly = sizing === 'text-parts';
   try {
     const accepted = new JSZip();
     const comment =
@@ -208,6 +296,7 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
         ? bounded.zip.comment
         : undefined;
     for (const entry of Object.values(bounded.zip.files)) {
+      if (textPartsOnly && !entry.dir && !isOfficeTextPart(entry.name)) continue;
       const bytes = entry.dir ? new Uint8Array() : await readArchiveMember(entry, bounded.budget);
       accepted.file(entry.name, bytes, {
         dir: entry.dir,
@@ -224,7 +313,12 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
       compression: 'STORE',
       comment,
     });
-    const result = await mammoth.convertToHtml({ buffer });
+    const result = await mammoth.convertToHtml(
+      { buffer },
+      textPartsOnly
+        ? { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' })) }
+        : undefined,
+    );
     return htmlToText(result.value);
   } catch (error) {
     if (
@@ -237,8 +331,137 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
   }
 }
 
-function columnLabel(reference: string): string {
-  return reference.replace(/\d+/g, '');
+export interface XmlElement {
+  attributes: string;
+  body: string;
+}
+
+function endsTagName(code: number): boolean {
+  return (
+    code === 0x3e ||
+    code === 0x2f ||
+    code === 0x20 ||
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0d
+  );
+}
+
+/**
+ * Start tags named `tag`, by index scans rather than a backtracking pattern:
+ * an opener with no `>` after it ends the scan, since none after it has one.
+ */
+export function* xmlStartTags(
+  xml: string,
+  tag: string,
+): Generator<{ attributes: string; end: number }> {
+  const open = `<${tag}`;
+  let position = 0;
+  for (;;) {
+    const start = xml.indexOf(open, position);
+    if (start === -1) return;
+    const nameEnd = start + open.length;
+    if (!endsTagName(xml.charCodeAt(nameEnd))) {
+      position = nameEnd;
+      continue;
+    }
+    const tagEnd = xml.indexOf('>', nameEnd);
+    if (tagEnd === -1) return;
+    yield { attributes: xml.slice(nameEnd, tagEnd), end: tagEnd + 1 };
+    position = tagEnd + 1;
+  }
+}
+
+/**
+ * Elements named `tag` with their bodies; a self-closing one has an empty
+ * body. An element with no closing tag ends the scan, since no later one can
+ * close either, so the work stays linear in the XML whatever it holds.
+ */
+export function* xmlElements(xml: string, tag: string): Generator<XmlElement> {
+  const close = `</${tag}>`;
+  const starts = xmlStartTags(xml, tag);
+  let resumeAt = 0;
+  for (;;) {
+    const next = starts.next();
+    if (next.done) return;
+    const { attributes, end } = next.value;
+    if (end <= resumeAt) continue;
+    if (attributes.endsWith('/')) {
+      yield { attributes: attributes.slice(0, -1), body: '' };
+      continue;
+    }
+    const closeAt = xml.indexOf(close, end);
+    if (closeAt === -1) return;
+    yield { attributes, body: xml.slice(end, closeAt) };
+    resumeAt = closeAt + close.length;
+  }
+}
+
+interface CellStyles {
+  formats: readonly (NumberFormat | null)[];
+  date1904: boolean;
+}
+
+function formatCode(attributes: string): string {
+  const raw = /formatCode="([^"]*)"/.exec(attributes)?.[1] ?? '';
+  try {
+    return decodeXmlEntities(raw);
+  } catch (error) {
+    if (error instanceof RangeError) return '';
+    throw error;
+  }
+}
+
+/**
+ * The number format of each cell style, under the same bounds as the workbook
+ * viewer: past them, or without a closed `cellXfs`, every number keeps its
+ * stored value.
+ */
+export function cellStyleFormats(xml: string): (NumberFormat | null)[] {
+  const table = new CellFormatTable();
+  const declared = xmlElements(xml, 'numFmts').next();
+  if (!declared.done) {
+    for (const { attributes } of xmlStartTags(declared.value.body, 'numFmt')) {
+      const id = /numFmtId="([^"]*)"/.exec(attributes)?.[1];
+      if (!table.addCustomFormat(id, formatCode(attributes))) return [];
+    }
+  }
+  const cellXfs = xmlElements(xml, 'cellXfs').next();
+  if (cellXfs.done) return [];
+  for (const { attributes } of xmlStartTags(cellXfs.value.body, 'xf')) {
+    if (!table.addCellFormat(/numFmtId="([^"]*)"/.exec(attributes)?.[1])) return [];
+  }
+  return table.formats();
+}
+
+/**
+ * The styles part is read only when it fits what is left of the archive
+ * budget, and any failure to read it leaves every number at its stored value.
+ */
+async function cellStyles(
+  bounded: BoundedZip,
+  path: string,
+  date1904: boolean,
+): Promise<CellStyles> {
+  try {
+    const entry = bounded.zip.file(path);
+    if (!entry || declaredMemberSize(entry) > bounded.budget.ceiling - bounded.budget.spent) {
+      return { formats: [], date1904 };
+    }
+    const xml = await officeArchiveEntryText(bounded, path);
+    return { formats: xml === null ? [] : cellStyleFormats(xml), date1904 };
+  } catch {
+    return { formats: [], date1904 };
+  }
+}
+
+function columnName(index: number): string {
+  if (!Number.isSafeInteger(index) || index < 1) return '';
+  let name = '';
+  for (let rest = index; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+    name = String.fromCharCode(65 + ((rest - 1) % 26)) + name;
+  }
+  return name;
 }
 
 function rowNumber(reference: string): number {
@@ -263,75 +486,107 @@ interface Sheet {
   omitted: boolean;
 }
 
-async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> {
-  const bounded = await readZip(data, filename);
-  const workbook = await entryText(bounded, 'xl/workbook.xml');
+async function readXlsxSheets(
+  data: Buffer,
+  filename: string,
+  maxSheetRows: number = MAX_SHEET_ROWS,
+  sizing: OfficeArchiveSizing = 'all-members',
+): Promise<Sheet[]> {
+  const bounded = await openOfficeArchive(data, filename, sizing);
+  const workbook = await officeArchiveEntryText(bounded, 'xl/workbook.xml');
   if (!workbook) throw new OfficeDocumentUnreadableError(filename);
 
-  const relationships = (await entryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
+  const relationships = (await officeArchiveEntryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targetByRelationshipId = new Map<string, string>();
-  for (const match of relationships.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = /Id="([^"]+)"/.exec(match[0])?.[1];
-    const target = /Target="([^"]+)"/.exec(match[0])?.[1];
-    if (id && target) targetByRelationshipId.set(id, target.replace(/^\/?xl\//, ''));
+  let stylesTarget: string | undefined;
+  for (const { attributes } of xmlStartTags(relationships, 'Relationship')) {
+    const id = /Id="([^"]+)"/.exec(attributes)?.[1];
+    const target = /Target="([^"]+)"/.exec(attributes)?.[1]?.replace(/^\/?xl\//, '');
+    if (id && target) targetByRelationshipId.set(id, target);
+    if (target && /Type="([^"]*)"/.exec(attributes)?.[1]?.endsWith('/styles')) {
+      stylesTarget ??= target;
+    }
   }
+  const workbookProperties = xmlStartTags(workbook, 'workbookPr').next();
+  const date1904Attribute = workbookProperties.done
+    ? undefined
+    : /date1904="([^"]*)"/.exec(workbookProperties.value.attributes)?.[1]?.trim();
+  const date1904 = date1904Attribute === '1' || date1904Attribute === 'true';
 
-  const sharedStringsXml = (await entryText(bounded, 'xl/sharedStrings.xml')) ?? '';
-  const sharedStrings = [...sharedStringsXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((match) =>
-    xmlTextRuns(match[1] ?? '', 't'),
+  const sharedStringsXml = (await officeArchiveEntryText(bounded, 'xl/sharedStrings.xml')) ?? '';
+  const sharedStrings = [...xmlElements(sharedStringsXml, 'si')].map((element) =>
+    xmlTextRuns(element.body, 't'),
   );
 
   const sheets: Sheet[] = [];
+  let styles: CellStyles | undefined;
   let sheetIndex = 0;
-  for (const sheetMatch of workbook.matchAll(/<sheet\b[^>]*>/g)) {
+  for (const { attributes: sheetAttributes } of xmlStartTags(workbook, 'sheet')) {
     sheetIndex += 1;
     const name = decodeXmlEntities(
-      /name="([^"]*)"/.exec(sheetMatch[0])?.[1] ?? `Sheet${sheetIndex}`,
+      /name="([^"]*)"/.exec(sheetAttributes)?.[1] ?? `Sheet${sheetIndex}`,
     );
-    const relationshipId = /r:id="([^"]+)"/.exec(sheetMatch[0])?.[1];
+    const relationshipId = /r:id="([^"]+)"/.exec(sheetAttributes)?.[1];
     const target = relationshipId ? targetByRelationshipId.get(relationshipId) : undefined;
     const sheetXml =
-      (target ? await entryText(bounded, `xl/${target}`) : null) ??
-      (await entryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
+      (target ? await officeArchiveEntryText(bounded, `xl/${target}`) : null) ??
+      (await officeArchiveEntryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
     if (!sheetXml) continue;
+    const sheetStyles = (styles ??= await cellStyles(
+      bounded,
+      `xl/${stylesTarget ?? 'styles.xml'}`,
+      date1904,
+    ));
 
     const rows: SheetRow[] = [];
     let omitted = false;
-    for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
-      if (rows.length >= MAX_SHEET_ROWS) {
+    let lastRow = 0;
+    for (const row of xmlElements(sheetXml, 'row')) {
+      if (rows.length >= maxSheetRows) {
         omitted = true;
         break;
       }
+      const declaredRow = /\sr="(\d+)"/.exec(row.attributes)?.[1];
+      lastRow = declaredRow === undefined ? lastRow + 1 : Number(declaredRow);
       const cells: SheetCell[] = [];
-      for (const cellMatch of (rowMatch[1] ?? '').matchAll(
-        /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g,
-      )) {
-        const attributes = cellMatch[1] ?? '';
-        const body = cellMatch[2] ?? '';
-        const reference = /r="([A-Z]+\d+)"/.exec(attributes)?.[1] ?? '';
+      let lastColumn = 0;
+      for (const { attributes, body } of xmlElements(row.body, 'c')) {
+        const declaredColumn = /\sr="([A-Z]+)\d+"/.exec(attributes)?.[1];
+        lastColumn = declaredColumn === undefined ? lastColumn + 1 : columnIndex(declaredColumn);
         const type = /t="([^"]+)"/.exec(attributes)?.[1] ?? 'n';
-        const formula = /<f\b[^>]*>([\s\S]*?)<\/f>/.exec(body)?.[1];
-        const rawValue = /<v>([\s\S]*?)<\/v>/.exec(body)?.[1] ?? '';
+        const formulaElement = xmlElements(body, 'f').next();
+        const formula = formulaElement.done ? undefined : formulaElement.value.body;
+        const valueStart = body.indexOf('<v>');
+        const valueEnd = valueStart === -1 ? -1 : body.indexOf('</v>', valueStart + 3);
+        const rawValue = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
         let value: string;
         if (type === 's') {
-          value = sharedStrings[Number(rawValue)] ?? '';
+          value = rawValue === '' ? '' : (sharedStrings[Number(rawValue)] ?? '');
         } else if (type === 'inlineStr') {
           value = xmlTextRuns(body, 't');
         } else {
           value = decodeXmlEntities(rawValue);
+          if (type === 'n' && value) {
+            const style = styleIndex(/\ss="([^"]*)"/.exec(attributes)?.[1] ?? '0');
+            value = displayCellNumber(
+              value,
+              sheetStyles.formats[style] ?? null,
+              sheetStyles.date1904,
+            );
+          }
+        }
+        if (!formulaElement.done && !formula && !value && type !== 'str') {
+          value = XLSX_NOT_CALCULATED;
         }
         if (formula || value) {
           cells.push({
-            column: columnLabel(reference),
+            column: declaredColumn ?? columnName(lastColumn),
             value,
             formula: formula ? decodeXmlEntities(formula) : null,
           });
         }
       }
-      if (cells.length > 0) {
-        const number = /<row\b[^>]*r="(\d+)"/.exec(rowMatch[0])?.[1] ?? String(rows.length + 1);
-        rows.push({ number, cells });
-      }
+      if (cells.length > 0) rows.push({ number: declaredRow ?? String(lastRow), cells });
     }
     sheets.push({ name, rows, omitted });
   }
@@ -345,8 +600,13 @@ function sheetCellText(cell: SheetCell): string {
   return `${cell.column}: =${cell.formula}${cell.value ? ` (${cell.value})` : ''}`;
 }
 
-async function extractXlsx(data: Buffer, filename: string): Promise<string> {
-  const sheets = await readXlsxSheets(data, filename);
+async function extractXlsx(
+  data: Buffer,
+  filename: string,
+  maxSheetRows: number,
+  sizing: OfficeArchiveSizing,
+): Promise<string> {
+  const sheets = await readXlsxSheets(data, filename, maxSheetRows, sizing);
   return sheets
     .map((sheet) => {
       const rows = sheet.rows.map(
@@ -411,34 +671,29 @@ export async function extractSpreadsheetTable(
   }
 }
 
-async function extractPptx(data: Buffer, filename: string): Promise<string> {
-  const bounded = await readZip(data, filename);
-  const slidePaths = Object.keys(bounded.zip.files)
+async function extractPptx(
+  data: Buffer,
+  filename: string,
+  maxSlides: number,
+  sizing: OfficeArchiveSizing,
+  coverage?: { slidesOmitted: number },
+): Promise<string> {
+  const bounded = await openOfficeArchive(data, filename, sizing);
+  const allSlidePaths = Object.keys(bounded.zip.files)
     .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
-    .sort((a, b) => rowNumber(a) - rowNumber(b))
-    .slice(0, MAX_SLIDES);
+    .sort((a, b) => rowNumber(a) - rowNumber(b));
+  const slidePaths = allSlidePaths.slice(0, maxSlides);
   if (slidePaths.length === 0) throw new OfficeDocumentUnreadableError(filename);
+  if (coverage) coverage.slidesOmitted = allSlidePaths.length - slidePaths.length;
 
   const sections: string[] = [];
   for (const [index, path] of slidePaths.entries()) {
-    const slideXml = (await entryText(bounded, path)) ?? '';
-    const lines = [...slideXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
-      .map((match) =>
-        xmlTextRuns(match[1] ?? '', 'a:t')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      )
-      .filter(Boolean);
+    const slideXml = (await officeArchiveEntryText(bounded, path)) ?? '';
+    const lines = slideParagraphs(slideXml).filter(Boolean);
     const slideNumber = rowNumber(path);
     const notesXml =
-      (await entryText(bounded, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
-    const notes = [...notesXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
-      .map((match) =>
-        xmlTextRuns(match[1] ?? '', 'a:t')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      )
-      .filter((line) => line && line !== String(slideNumber));
+      (await officeArchiveEntryText(bounded, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
+    const notes = slideParagraphs(notesXml).filter((line) => line && line !== String(slideNumber));
     sections.push(
       [
         `## Slide ${index + 1}`,
@@ -454,15 +709,23 @@ export async function extractOfficeDocumentText(
   data: Buffer,
   fileName: string,
   kind: OfficeDocumentKind,
+  options: OfficeDocumentTextOptions = {},
 ): Promise<string> {
+  const sizing = options.sizing ?? 'all-members';
   try {
     const text =
       kind === 'docx'
-        ? await extractDocx(data, fileName)
+        ? await extractDocx(data, fileName, sizing)
         : kind === 'xlsx'
-          ? await extractXlsx(data, fileName)
-          : await extractPptx(data, fileName);
-    return boundText(text);
+          ? await extractXlsx(data, fileName, options.maxSheetRows ?? MAX_SHEET_ROWS, sizing)
+          : await extractPptx(
+              data,
+              fileName,
+              options.maxSlides ?? MAX_SLIDES,
+              sizing,
+              options.coverage,
+            );
+    return boundText(text, options.maxChars ?? MAX_OFFICE_TEXT_CHARS);
   } catch (error) {
     if (error instanceof DecompressionLimitError) {
       throw new OfficeDocumentUnreadableError(fileName, 'archive_bomb');

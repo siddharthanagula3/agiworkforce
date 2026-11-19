@@ -1,17 +1,22 @@
 import { useMemo } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import {
   BarChart3,
   Box,
+  Globe,
   HardDrive,
   Languages,
+  Map as MapIcon,
   MessageSquareDashed,
   Smartphone,
   SpellCheck,
   Vibrate,
 } from 'lucide-react-native';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
+import { useLocalSettingsStore, type LinkBrowser } from '@/stores/settings/localSettingsStore';
+import { useActionMenu } from '@/src/shared/hooks/useActionMenu';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { MAP_PROVIDER_LABEL } from '@/src/features/settings/general/MapProviderScreen';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -37,6 +42,14 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { languageFor } from '@agiworkforce/i18n';
 import { DEVICE_LANGUAGE_PREFERENCE, useLanguagePreferenceStore } from '@/src/i18n';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+
+const LINK_BROWSER_LABEL: Readonly<Record<LinkBrowser, string>> = {
+  system: 'Default browser',
+  'in-app': 'In-app browser',
+};
+
+const LINK_BROWSER_CHOICES: readonly LinkBrowser[] = ['system', 'in-app'];
 
 export default function GeneralSettingsScreen() {
   const router = useRouter();
@@ -47,6 +60,20 @@ export default function GeneralSettingsScreen() {
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
   const autoCorrectEnabled = useLocalSettingsStore((s) => s.autoCorrectEnabled);
   const setAutoCorrectEnabled = useLocalSettingsStore((s) => s.setAutoCorrectEnabled);
+  const linkBrowser = useLocalSettingsStore((s) => s.linkBrowser);
+  const setLinkBrowser = useLocalSettingsStore((s) => s.setLinkBrowser);
+  const mapProvider = useLocalSettingsStore((s) => s.mapProvider);
+  const browserMenu = useActionMenu();
+  const chooseLinkBrowser = () =>
+    browserMenu.open(
+      'Browser',
+      LINK_BROWSER_CHOICES.map((browser) => ({
+        key: `browser-${browser}`,
+        label: LINK_BROWSER_LABEL[browser],
+        selected: browser === linkBrowser,
+        run: () => setLinkBrowser(browser),
+      })),
+    );
   const selectedModel = useModelStore((s) => s.selectedModel);
   const subscriptionTier = useTierStore((s) => s.tier);
   const colors = useThemeColors();
@@ -63,21 +90,48 @@ export default function GeneralSettingsScreen() {
   );
 
   return (
-    <SettingsScreenShell title={t('settings:general')}>
+    <SettingsScreenShell
+      title={t('settings:general')}
+      overlay={
+        FEATURES.linkBrowser ? (
+          <ActionMenuSheet menu={browserMenu.menu} dismissLabel="Dismiss browser choices" />
+        ) : null
+      }
+    >
       <SettingsInfo
         title="Local defaults"
         body="These apply to this device only, not AGI Cloud."
         icon={Smartphone}
       />
       <SettingsGroup>
-        <SettingsRow
-          label="App language"
-          icon={Languages}
-          value={languageValue}
-          onPress={() =>
-            router.push('/(app)/settings/app-language' as Parameters<typeof router.push>[0])
-          }
-        />
+        {FEATURES.appLanguage ? (
+          <SettingsRow
+            label="App language"
+            icon={Languages}
+            value={languageValue}
+            onPress={() =>
+              router.push('/(app)/settings/app-language' as Parameters<typeof router.push>[0])
+            }
+          />
+        ) : null}
+        {FEATURES.linkBrowser ? (
+          <SettingsRow
+            label="Browser"
+            icon={Globe}
+            value={LINK_BROWSER_LABEL[linkBrowser]}
+            onPress={chooseLinkBrowser}
+          />
+        ) : null}
+        {Platform.OS === 'ios' ? (
+          <SettingsRow
+            label="Map provider"
+            icon={MapIcon}
+            value={MAP_PROVIDER_LABEL[mapProvider]}
+            onPress={() =>
+              router.push('/(app)/settings/map-provider' as Parameters<typeof router.push>[0])
+            }
+          />
+        ) : null}
         <SettingsSwitchRow
           label={t('settings:autoCorrectSpelling')}
           icon={SpellCheck}

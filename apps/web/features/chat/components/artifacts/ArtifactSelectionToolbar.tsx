@@ -14,10 +14,10 @@ import {
 import { Check, ChevronDown, MessageSquarePlus, Sparkles, Wand2, X } from 'lucide-react';
 import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { normalizeEditInstruction } from './artifact-edit-request';
+import { normalizeEditInstruction } from '@agiworkforce/unified-chat/artifact-edit-request';
 import { SELECTION_ACTIONS } from './artifact-selection-request';
 import { commentUiProps, readRangeContext } from './comments/use-comment-highlights';
-import type { OccurrenceContext } from './text-occurrence';
+import type { OccurrenceContext } from '@agiworkforce/unified-chat/artifact-selection-request';
 
 export const SELECTION_TOOLBAR_LABEL = 'Selection actions';
 export const EDIT_SELECTION_LABEL = 'Edit with AI';

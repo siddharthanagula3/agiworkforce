@@ -3,7 +3,10 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { providerForExecutionMode } from '@/src/features/chat/utils/conversationMode';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
-import type { ManagedCloudConversationHistoryStats } from '@agiworkforce/cloud-contracts';
+import {
+  resolveSurvivingLeaf,
+  type ManagedCloudConversationHistoryStats,
+} from '@agiworkforce/cloud-contracts';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import {
   invalidateAllCloudHistoryLoads,
@@ -13,6 +16,7 @@ import {
   recordCloudHistoryLeafWrite,
   type CloudHistoryLoad,
 } from './cloudHistoryLoad';
+import { settleRunningSteps } from './conversationTurnState';
 
 interface CloudMessageState {
   conversations: ConversationSummary[];
@@ -51,6 +55,10 @@ const INTERRUPTED_VIDEO_MESSAGE =
   'Video generation stopped when the app closed. Retry to generate it again.';
 
 export function resolveInterruptedGeneration(message: ChatMessage): ChatMessage {
+  return settleRunningSteps(resolveInterruptedMedia(message));
+}
+
+function resolveInterruptedMedia(message: ChatMessage): ChatMessage {
   if (message.isGeneratingImage === true) {
     return {
       ...message,
@@ -84,9 +92,33 @@ function stripEphemeralGeneratedImage(message: ChatMessage): ChatMessage {
   };
 }
 
+/**
+ * The server learns about a new answer only when it is saved, so until then it reports the
+ * question above it as the leaf. Adopting that would end the visible thread at the question and
+ * hide the answer being written.
+ */
+function serverLeafHidesAnswerBeingWritten(
+  local: ConversationSummary | undefined,
+  rows: ChatMessage[] | undefined,
+  serverLeaf: string | null | undefined,
+): boolean {
+  const localLeaf = local?.activeLeafMessageId;
+  if (!localLeaf || !serverLeaf || serverLeaf === localLeaf) return false;
+  const byId = new Map((rows ?? []).map((row) => [row.id, row]));
+  const written = byId.get(localLeaf);
+  if (written?.isStreaming !== true) return false;
+  const seen = new Set<string>([localLeaf]);
+  for (let parent = written.parentId; parent && !seen.has(parent);) {
+    if (parent === serverLeaf) return true;
+    seen.add(parent);
+    parent = byId.get(parent)?.parentId;
+  }
+  return false;
+}
+
 export const useChatCloudMessageStore = create<CloudMessageState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       conversations: [],
       messages: {},
       historyStats: null,
@@ -102,7 +134,8 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
             // detail carries it. Dropping a leaf already learned there would
             // silently collapse a branched transcript on the next refresh.
             const activeLeafMessageId =
-              c.activeLeafMessageId !== undefined
+              c.activeLeafMessageId !== undefined &&
+              !serverLeafHidesAnswerBeingWritten(local, state.messages[c.id], c.activeLeafMessageId)
                 ? c.activeLeafMessageId
                 : local?.activeLeafMessageId;
             const base: ConversationSummary = {
@@ -157,16 +190,32 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
       },
 
       deleteCloudMessage: (conversationId, messageId) => {
-        set((state) => {
-          const msgs = state.messages[conversationId];
-          if (!msgs) return state;
-          return {
-            messages: {
-              ...state.messages,
-              [conversationId]: msgs.filter((m) => m.id !== messageId),
-            },
-          };
-        });
+        const { messages, conversations } = get();
+        const rows = messages[conversationId];
+        const removed = rows?.find((m) => m.id === messageId);
+        if (!rows || !removed) return;
+        const heir = removed.parentId ?? null;
+        const handedDown = rows.map((m) =>
+          m.parentId === messageId ? { ...m, parentId: heir } : m,
+        );
+        const leafWasRemoved = conversations.some(
+          (c) => c.id === conversationId && c.activeLeafMessageId === messageId,
+        );
+        const survivingLeaf = leafWasRemoved ? resolveSurvivingLeaf(handedDown, messageId) : null;
+        if (leafWasRemoved) recordCloudHistoryLeafWrite(conversationId);
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [conversationId]: handedDown.filter((m) => m.id !== messageId),
+          },
+          ...(leafWasRemoved
+            ? {
+                conversations: state.conversations.map((c) =>
+                  c.id === conversationId ? { ...c, activeLeafMessageId: survivingLeaf } : c,
+                ),
+              }
+            : {}),
+        }));
       },
 
       addCloudConversation: (conversation) => {
@@ -210,7 +259,16 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
           recordCloudHistoryLeafWrite(id);
         }
         set((state) => ({
-          conversations: state.conversations.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+          conversations: state.conversations.map((c) => {
+            if (c.id !== id) return c;
+            if (
+              serverLeafHidesAnswerBeingWritten(c, state.messages[id], patch.activeLeafMessageId)
+            ) {
+              const { activeLeafMessageId: _hidden, ...kept } = patch;
+              return { ...c, ...kept };
+            }
+            return { ...c, ...patch };
+          }),
         }));
       },
 
@@ -228,7 +286,11 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
 
       restoreCloudConversation: (conversation, index, messages) => {
         set((state) => {
-          if (state.conversations.some((c) => c.id === conversation.id)) return state;
+          if (state.conversations.some((c) => c.id === conversation.id)) {
+            return messages?.length && !state.messages[conversation.id]?.length
+              ? { messages: { ...state.messages, [conversation.id]: messages } }
+              : state;
+          }
           invalidateCloudHistoryLoad(conversation.id);
           const conversations = [...state.conversations];
           const at = Math.max(0, Math.min(index, conversations.length));

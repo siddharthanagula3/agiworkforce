@@ -44,34 +44,79 @@ export interface DerivedCodeBlock {
   lineCount: number;
 }
 
-const FENCED_CODE_RE = /^```([^\n`]*)\r?\n([\s\S]*?)^```/gm;
+const FENCE_OPEN_LINE = /^(`{3,})([^`]*)$/;
+const FENCE_CLOSE_LINE = /^(`{3,})\s*$/;
 
 function parseFenceLanguage(info: string | undefined): string {
   return (info ?? '').trim().split(/\s+/)[0]?.toLowerCase() || 'text';
 }
 
+interface MarkdownLine {
+  text: string;
+  start: number;
+}
+
+function markdownLines(markdown: string): MarkdownLine[] {
+  const lines: MarkdownLine[] = [];
+  let start = 0;
+  while (start <= markdown.length) {
+    const newline = markdown.indexOf('\n', start);
+    const end = newline === -1 ? markdown.length : newline;
+    const raw = markdown.slice(start, end);
+    lines.push({ text: raw.endsWith('\r') ? raw.slice(0, -1) : raw, start });
+    if (newline === -1) break;
+    start = newline + 1;
+  }
+  return lines;
+}
+
+// A marked document wrapped in a fence often holds blocks fenced with the same
+// three backticks. Inside one, a fence line with an info string opens a nested
+// block whose bare fence closes it, so only a bare fence at depth zero closes
+// the document.
 export function extractCodeBlocks(markdown: string): DerivedCodeBlock[] {
   const blocks: DerivedCodeBlock[] = [];
-  const re = new RegExp(FENCED_CODE_RE.source, FENCED_CODE_RE.flags);
-  let match: RegExpExecArray | null;
-  let ordinal = 0;
-  while ((match = re.exec(markdown)) !== null) {
-    const content = (match[2] ?? '').trim();
+  const lines = markdownLines(markdown);
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index]!;
+    const open = FENCE_OPEN_LINE.exec(line.text);
+    if (!open || index + 1 >= lines.length) {
+      index += 1;
+      continue;
+    }
+    const fenceLength = open[1]!.length;
+    const nests = isArtifactMarkerLine(lines[index + 1]!.text.trim());
+    let depth = 0;
+    let close = index + 1;
+    for (; close < lines.length; close += 1) {
+      const text = lines[close]!.text;
+      const closing = FENCE_CLOSE_LINE.exec(text);
+      if (closing) {
+        if (depth > 0) depth -= 1;
+        else if (closing[1]!.length >= fenceLength) break;
+      } else if (nests && FENCE_OPEN_LINE.exec(text)?.[2]?.trim()) {
+        depth += 1;
+      }
+    }
+    if (close >= lines.length) break;
+    const content = markdown.slice(lines[index + 1]!.start, lines[close]!.start).trim();
     blocks.push({
-      language: parseFenceLanguage(match[1]),
+      language: parseFenceLanguage(open[2]),
       content,
-      startIndex: match.index,
-      endIndex: match.index + match[0].length,
-      ordinal,
+      startIndex: line.start,
+      endIndex: lines[close]!.start + FENCE_CLOSE_LINE.exec(lines[close]!.text)![1]!.length,
+      ordinal: blocks.length,
       lineCount: content.split('\n').filter((l) => l.trim().length > 0).length,
     });
-    ordinal += 1;
+    index = close + 1;
   }
   return blocks;
 }
 
 export function isRenderableArtifact(language: string, content: string): boolean {
   const lang = language.toLowerCase();
+  if (MARKDOWN_LANGUAGES.has(lang)) return isMarkedMarkdownDocument(lang, content);
   if (lang === 'html' || lang === 'htm') return true;
   if (lang === 'jsx' || lang === 'tsx' || lang === 'react') return true;
   if (lang === 'svg' || content.trim().startsWith('<svg')) return true;
@@ -123,6 +168,13 @@ function isArtifactMarkerLine(trimmedLine: string): boolean {
   return EXPLICIT_ARTIFACT_MARKERS.some((marker) => trimmedLine === marker);
 }
 
+export function withoutArtifactMarker(content: string): string {
+  const newline = content.indexOf('\n');
+  const firstLine = newline === -1 ? content : content.slice(0, newline);
+  if (!isArtifactMarkerLine(firstLine.trim())) return content;
+  return newline === -1 ? '' : content.slice(newline + 1);
+}
+
 export function hasExplicitArtifactMarker(content: string): boolean {
   return EXPLICIT_ARTIFACT_MARKERS.some((marker) => content.includes(marker));
 }
@@ -137,6 +189,7 @@ export function detectArtifactType(language: string, content: string): SharedArt
     return DECK_LINE.test(stripMarkdownMarker(content)) ? 'presentation' : 'document';
   }
   const lang = language.toLowerCase();
+  if (MARKDOWN_LANGUAGES.has(lang)) return 'code';
   if (lang === 'mermaid') return 'mermaid';
   if (lang === 'svg' || content.trim().startsWith('<svg')) return 'svg';
   if (lang === 'jsx' || lang === 'tsx' || lang === 'react') return 'react';
@@ -152,9 +205,23 @@ export function detectArtifactType(language: string, content: string): SharedArt
 }
 
 const MAX_TITLE_CHARS = 60;
+const TITLE_DIRECTIVE = /(?:\/\/|<!--|#)\s*@title:?\s*/i;
+const TITLE_DIRECTIVE_LINE = new RegExp(`^${TITLE_DIRECTIVE.source}`, 'i');
+const TABULAR_LANGUAGES: ReadonlySet<string> = new Set(['csv', 'tsv']);
+
+function isTabularLanguage(language: string | undefined): boolean {
+  return TABULAR_LANGUAGES.has(language?.trim().toLowerCase() ?? '');
+}
+
+export function withoutTitleDirectives(content: string): string {
+  return content
+    .split('\n')
+    .filter((line) => !TITLE_DIRECTIVE_LINE.test(line.trim()))
+    .join('\n');
+}
 
 function extractTitleComment(content: string): string | undefined {
-  const marker = /(?:\/\/|<!--|#)\s*@title:?\s*/i.exec(content);
+  const marker = TITLE_DIRECTIVE.exec(content);
   if (!marker) return undefined;
   const start = marker.index + marker[0].length;
   const newline = content.indexOf('\n', start);
@@ -180,7 +247,31 @@ function betweenTags(content: string, openTag: string, closeTag: string): string
   return end === -1 ? undefined : content.slice(start, end);
 }
 
-export function extractArtifactTitle(content: string): string | undefined {
+const TITLE_FENCE_LINE = /^(?:`{3,}|~{3,})/;
+const MARKDOWN_HEADING_LINE = /^#{1,6}\s+\S/;
+
+function titleCandidateLines(content: string): string[] {
+  const lines: string[] = [];
+  let fence: string | null = null;
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    const marker = TITLE_FENCE_LINE.exec(trimmed)?.[0];
+    if (marker) {
+      if (fence === null) fence = marker;
+      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      continue;
+    }
+    if (fence !== null || trimmed.length === 0 || isArtifactMarkerLine(trimmed)) continue;
+    lines.push(trimmed);
+  }
+  return lines;
+}
+
+function usableTitle(text: string): string | undefined {
+  return text.length > 2 && text.length <= MAX_TITLE_CHARS ? text : undefined;
+}
+
+function explicitArtifactTitle(content: string, language?: string): string | undefined {
   const titleText = betweenTags(content, '<title', '</title>');
   if (titleText?.trim()) return titleText.trim();
 
@@ -199,17 +290,117 @@ export function extractArtifactTitle(content: string): string | undefined {
     if (trimmed) return trimmed;
   }
 
-  const first =
-    content.split('\n').find((line) => {
-      const trimmed = line.trim();
-      return trimmed.length > 0 && !isArtifactMarkerLine(trimmed) && !trimmed.startsWith('<');
-    }) ?? '';
-  const cleaned = first
-    .replace(/^#+\s+/, '')
-    .replace(/^\/\/+\s*/, '')
-    .trim();
-  if (cleaned.length > 2 && cleaned.length <= MAX_TITLE_CHARS) return cleaned;
+  if (language === undefined || !MARKDOWN_LANGUAGES.has(language.toLowerCase())) return undefined;
+  const heading = titleCandidateLines(content).find((line) => MARKDOWN_HEADING_LINE.test(line));
+  return (heading && usableTitle(heading.replace(/^#+\s+/, '').trim())) || undefined;
+}
 
+function firstLineTitle(content: string): string | undefined {
+  const first = titleCandidateLines(content).find((line) => !line.startsWith('<')) ?? '';
+  return usableTitle(
+    first
+      .replace(/^#+\s+/, '')
+      .replace(/^\/\/+\s*/, '')
+      .trim(),
+  );
+}
+
+export function extractArtifactTitle(content: string, language?: string): string | undefined {
+  return (
+    explicitArtifactTitle(content, language) ??
+    (isTabularLanguage(language) ? undefined : firstLineTitle(content))
+  );
+}
+
+// em-dash-allow: a model writes it between a title and its counter
+const COUNTER_SEPARATORS = '\\s:\\-\\u2013\\u2014|\\u00b7,.';
+
+function counterPattern(nouns: string, abbreviation?: string): RegExp {
+  const position = '\\s*#?\\s*\\d{1,3}\\s*';
+  const spelled = `(?:${nouns})${position}(?:of|out\\s+of|/)`;
+  const prefix = abbreviation
+    ? `(?:${spelled}|${abbreviation}${position}(?:of|out\\s+of))`
+    : spelled;
+  const counter = `${prefix}\\s*\\d{1,3}\\b`;
+  return new RegExp(
+    `^[${COUNTER_SEPARATORS}(\\[]*${counter}[${COUNTER_SEPARATORS})\\]]*|(?:^|[${COUNTER_SEPARATORS}(\\[]+)${counter}[${COUNTER_SEPARATORS})\\]]*$`,
+    'gi',
+  );
+}
+
+const QUIZ_COUNTER = counterPattern('question', 'q');
+const CARD_COUNTER = counterPattern('flashcard|card');
+
+/**
+ * A model sometimes writes its own position counter into a title ("Cells:
+ * Question 1 of 2"); every view counts the entries the set actually holds, so
+ * the written one is dropped. A year is not a total, so "Q1 of 2025" and
+ * "Q4/24" stay.
+ */
+export function withoutQuizCounter(title: string): string {
+  return title.replace(QUIZ_COUNTER, '').trim();
+}
+
+export function withoutFlashcardsCounter(title: string): string {
+  return title.replace(CARD_COUNTER, '').trim();
+}
+
+const STUDY_SETS = {
+  quiz: { entries: 'questions', label: 'Quiz', withoutCounter: withoutQuizCounter },
+  flashcards: { entries: 'cards', label: 'Flashcards', withoutCounter: withoutFlashcardsCounter },
+} as const;
+type StudySetKind = keyof typeof STUDY_SETS;
+const STUDY_FENCE_OPEN = /^[ \t]*(`{3,}|~{3,})[ \t]*([a-z-]+)[ \t]*$/i;
+const STUDY_FENCE_CLOSE = /^[ \t]*(`{3,}|~{3,})[ \t]*$/;
+
+function isStudySetKind(value: string): value is StudySetKind {
+  return value === 'quiz' || value === 'flashcards';
+}
+
+function studySetSourceTitle(kind: StudySetKind, source: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source);
+  } catch {
+    return undefined;
+  }
+  const { entries, label, withoutCounter } = STUDY_SETS[kind];
+  const root = Array.isArray(parsed) ? { [entries]: parsed } : parsed;
+  if (!root || typeof root !== 'object') return undefined;
+  const set = root as Record<string, unknown>;
+  const items = set[entries];
+  if (!Array.isArray(items) || items.length === 0) return undefined;
+  const title =
+    typeof set['title'] === 'string'
+      ? withoutCounter(set['title'].replace(/\s+/g, ' ').trim())
+      : '';
+  return title && title.length <= MAX_TITLE_CHARS ? title : label;
+}
+
+function studySetTitle(
+  language: string,
+  content: string,
+  markedDocument: boolean,
+): string | undefined {
+  const fence = language.toLowerCase();
+  if (isStudySetKind(fence)) return studySetSourceTitle(fence, content);
+  if (!markedDocument) return undefined;
+  const lines = content.split('\n').map((line) => line.replace(/\r$/, ''));
+  for (let index = 0; index < lines.length; index += 1) {
+    const open = STUDY_FENCE_OPEN.exec(lines[index]!);
+    const kind = open?.[2]?.toLowerCase() ?? '';
+    if (!open || !isStudySetKind(kind)) continue;
+    const marker = open[1]!;
+    let close = index + 1;
+    while (close < lines.length) {
+      const run = STUDY_FENCE_CLOSE.exec(lines[close]!)?.[1];
+      if (run && run[0] === marker[0] && run.length >= marker.length) break;
+      close += 1;
+    }
+    const title = studySetSourceTitle(kind, lines.slice(index + 1, close).join('\n'));
+    if (title) return title;
+    index = close;
+  }
   return undefined;
 }
 
@@ -237,7 +428,7 @@ export interface TrailingUnclosedBlock {
   startIndex: number;
 }
 
-const OPEN_FENCE_RE = /^```([^\n`]*)\r?\n/m;
+const OPEN_FENCE_RE = /^`{3,}([^\n`]*)\r?\n/m;
 
 export function extractTrailingUnclosedBlock(
   markdown: string,
@@ -301,10 +492,18 @@ export function deriveArtifacts(
     if (!blockIncluded(block, include, minCodeLines)) continue;
     const markedDocument = isMarkedMarkdownDocument(block.language, block.content);
     const content = markedDocument ? stripMarkdownMarker(block.content) : block.content;
+    const type = detectArtifactType(block.language, block.content);
+    const titleLanguage = markedDocument ? 'markdown' : block.language;
     artifacts.push({
       id: computeDerivedArtifactId(conversationId, messageId, block.ordinal),
-      type: detectArtifactType(block.language, block.content),
-      title: extractArtifactTitle(content) ?? defaultTitle(block),
+      type,
+      title:
+        explicitArtifactTitle(content, titleLanguage) ??
+        (type === 'presentation'
+          ? undefined
+          : studySetTitle(block.language, content, markedDocument)) ??
+        (isTabularLanguage(block.language) ? undefined : firstLineTitle(content)) ??
+        defaultTitle(block, markedDocument),
       content,
       language: markedDocument ? 'markdown' : block.language,
       version: 1,
@@ -318,7 +517,33 @@ export function deriveArtifacts(
   return artifacts;
 }
 
-function defaultTitle(block: DerivedCodeBlock): string {
+export function artifactKindLabel(type: string): string {
+  switch (type) {
+    case 'html':
+    case 'react':
+    case 'svg':
+    case 'mermaid':
+    case 'code':
+      return 'Code';
+    case 'spreadsheet':
+    case 'csv':
+    case 'table':
+      return 'Spreadsheet';
+    case 'presentation':
+      return 'Slides';
+    case 'email':
+      return 'Email';
+    case 'image':
+      return 'Image';
+    case 'document':
+    default:
+      return 'Document';
+  }
+}
+
+function defaultTitle(block: DerivedCodeBlock, markedDocument: boolean): string {
+  if (markedDocument) return artifactKindLabel(detectArtifactType(block.language, block.content));
+  if (isTabularLanguage(block.language)) return artifactKindLabel('csv');
   const lang =
     block.language && block.language !== 'text' ? `${block.language} snippet` : 'Code snippet';
   return block.ordinal === 0 ? lang : `${lang} ${block.ordinal + 1}`;

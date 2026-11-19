@@ -56,15 +56,36 @@ describe('mobile privacy declarations match what the cloud path actually uploads
     }
   });
 
-  it('marks every collected type as linked and non-tracking, with product interaction the only analytics type', () => {
+  it('declares what every launch sends Expo and what search and support tickets send AGI Cloud', () => {
+    const declared = configuredCollected.map((entry) => entry.NSPrivacyCollectedDataType);
+    for (const dataType of [
+      'NSPrivacyCollectedDataTypeSearchHistory',
+      'NSPrivacyCollectedDataTypeOtherDiagnosticData',
+      'NSPrivacyCollectedDataTypeCrashData',
+    ]) {
+      expect(declared).toContain(dataType);
+    }
+  });
+
+  it('marks every collected type non-tracking and linked except crash data, with analytics only for product interaction and device IDs', () => {
+    const PURPOSES: Record<string, string[]> = {
+      NSPrivacyCollectedDataTypeProductInteraction: ['NSPrivacyCollectedDataTypePurposeAnalytics'],
+      NSPrivacyCollectedDataTypeDeviceID: [
+        'NSPrivacyCollectedDataTypePurposeAppFunctionality',
+        'NSPrivacyCollectedDataTypePurposeAnalytics',
+      ],
+    };
     for (const entry of configuredCollected) {
-      expect(entry.NSPrivacyCollectedDataTypeLinked).toBe(true);
+      const type = entry.NSPrivacyCollectedDataType;
+      expect({ type, linked: entry.NSPrivacyCollectedDataTypeLinked }).toEqual({
+        type,
+        linked: type !== 'NSPrivacyCollectedDataTypeCrashData',
+      });
       expect(entry.NSPrivacyCollectedDataTypeTracking).toBe(false);
-      expect(entry.NSPrivacyCollectedDataTypePurposes).toEqual([
-        entry.NSPrivacyCollectedDataType === 'NSPrivacyCollectedDataTypeProductInteraction'
-          ? 'NSPrivacyCollectedDataTypePurposeAnalytics'
-          : 'NSPrivacyCollectedDataTypePurposeAppFunctionality',
-      ]);
+      expect({ type, purposes: entry.NSPrivacyCollectedDataTypePurposes }).toEqual({
+        type,
+        purposes: PURPOSES[type] ?? ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+      });
     }
   });
 

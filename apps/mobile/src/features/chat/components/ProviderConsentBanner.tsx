@@ -5,6 +5,7 @@ import { Globe, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { setChineseHqProviderConsent } from '@/services/providerConsent';
 import { NamedProviderConsentModal } from '@/src/features/settings/cloud-privacy/NamedProviderConsentModal';
 import {
@@ -55,48 +56,55 @@ export function ProviderConsentBanner({ state, onEnabled, onDismiss }: ProviderC
         accessibilityRole="alert"
         accessibilityLabel={message}
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 16,
-          paddingVertical: 10,
           backgroundColor: colors.accentSurface,
           borderTopWidth: 1,
           borderTopColor: colors.border,
-          gap: 8,
         }}
       >
-        <Globe size={14} color={colors.teal} strokeWidth={2} />
-        <Text
+        <View
+          testID="provider-consent-banner.content"
           style={{
-            fontSize: typeScale.caption,
-            color: colors.textPrimary,
-            fontWeight: '500',
-            flex: 1,
+            ...contentColumn('reading'),
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            gap: 8,
           }}
-          numberOfLines={3}
         >
-          {message}
-        </Text>
-        <PressableBox
-          testID={PROVIDER_CONSENT_ENABLE_TEST_ID}
-          onPress={() => setReviewing(true)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Review ${state.displayName} provider consent`}
-        >
-          <Text style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '600' }}>
-            {ENABLE_LABEL}
+          <Globe size={14} color={colors.teal} strokeWidth={2} />
+          <Text
+            style={{
+              fontSize: typeScale.caption,
+              color: colors.textPrimary,
+              fontWeight: '500',
+              flex: 1,
+            }}
+            numberOfLines={3}
+          >
+            {message}
           </Text>
-        </PressableBox>
-        <PressableBox
-          testID={PROVIDER_CONSENT_DISMISS_TEST_ID}
-          onPress={onDismiss}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`Leave ${state.displayName} turned off`}
-        >
-          <X size={14} color={colors.textMuted} />
-        </PressableBox>
+          <PressableBox
+            testID={PROVIDER_CONSENT_ENABLE_TEST_ID}
+            onPress={() => setReviewing(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Review ${state.displayName} provider consent`}
+          >
+            <Text style={{ fontSize: typeScale.caption, color: colors.teal, fontWeight: '600' }}>
+              {ENABLE_LABEL}
+            </Text>
+          </PressableBox>
+          <PressableBox
+            testID={PROVIDER_CONSENT_DISMISS_TEST_ID}
+            onPress={onDismiss}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`Leave ${state.displayName} turned off`}
+          >
+            <X size={14} color={colors.textMuted} />
+          </PressableBox>
+        </View>
       </View>
       <NamedProviderConsentModal
         providerId={reviewing ? state.providerId : null}

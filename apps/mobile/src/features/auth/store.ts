@@ -228,11 +228,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const clerk = getDeviceAccountsClerk();
     const accounts = readDeviceAccounts(clerk);
     if (!clerk || !accounts.multiSession) {
-      throw new DeviceAccountError('This phone can hold only one account.');
+      throw new DeviceAccountError('This device can hold only one account.');
     }
     const target = accounts.accounts.find((account) => account.sessionId === sessionId);
     if (!target) {
-      throw new DeviceAccountError('That account is no longer signed in on this phone.');
+      throw new DeviceAccountError('That account is no longer signed in on this device.');
     }
     if (target.active) return;
 

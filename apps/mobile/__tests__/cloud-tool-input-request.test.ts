@@ -98,6 +98,7 @@ beforeEach(() => {
   __resetCloudAccountSessionForTests();
   activateCloudAccount('input-resume-test-user');
   __resetPendingApprovalTurnsForTests();
+  useChatExecutionStore.setState({ toolInputSendErrors: {} });
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
@@ -182,9 +183,12 @@ describe('chat tool input requests (MCP input_required)', () => {
 
   it('resumes the same run with the answers and continues the reply', async () => {
     const assistantId = await pauseOnInput();
+    let formWhileSending: unknown;
+    let formAfterAccepted: unknown = 'not read';
     mockInputResume.mockImplementationOnce(async (body, callbacks: StreamCallbacks) => {
-      expect(lastAssistantMessage()?.pendingToolInput).toBeUndefined();
+      formWhileSending = lastAssistantMessage()?.pendingToolInput;
       callbacks.onDelta({ content: 'Filed the issue in acme/app.' });
+      formAfterAccepted = lastAssistantMessage()?.pendingToolInput;
       callbacks.onDone();
     });
 
@@ -200,8 +204,38 @@ describe('chat tool input requests (MCP input_required)', () => {
         },
       ],
     });
+    expect(formWhileSending).toMatchObject({ runId: RUN_ID });
+    expect(formAfterAccepted).toBeUndefined();
     expect(lastAssistantMessage()?.content).toContain('Filed the issue in acme/app.');
     expect(lastAssistantMessage()?.pendingToolInput).toBeUndefined();
+  });
+
+  it('closes the form when the run accepts the answers without further text', async () => {
+    const assistantId = await pauseOnInput();
+    mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(lastAssistantMessage()?.pendingToolInput).toBeUndefined();
+    expect(lastAssistantMessage()?.metadata?.toolInputOutcome).toBe('sent');
+  });
+
+  it('keeps the answered request on the message so the chat can show what was sent', async () => {
+    const assistantId = await pauseOnInput();
+    const request = lastAssistantMessage()?.pendingToolInput;
+    mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'Filed the issue in acme/app.' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(request).toBeDefined();
+    expect(lastAssistantMessage()?.pendingToolInput).toBeUndefined();
+    expect(lastAssistantMessage()?.metadata?.toolInputOutcome).toBe('sent');
+    expect(lastAssistantMessage()).toMatchObject({ answeredToolInput: request });
   });
 
   it('ignores answers for a tool call the run is not paused on', async () => {
@@ -225,7 +259,85 @@ describe('chat tool input requests (MCP input_required)', () => {
     await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
 
     expect(lastAssistantMessage()?.pendingToolInput).toBeUndefined();
-    expect(useChatExecutionStore.getState().error).toBe(reason);
+    expect(lastAssistantMessage()?.metadata?.toolInputOutcome).toBe('expired');
+    expect(useChatExecutionStore.getState().error).toBe('This request is no longer active.');
+  });
+
+  it.each([404, 410])('keeps the request that expired on the message (%i)', async (status) => {
+    const assistantId = await pauseOnInput();
+    const request = lastAssistantMessage()?.pendingToolInput;
+    mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(new ApiHttpError('Gone', status));
+    });
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(request).toBeDefined();
+    expect(lastAssistantMessage()?.pendingToolInput).toBeUndefined();
+    expect(lastAssistantMessage()?.metadata?.toolInputOutcome).toBe('expired');
+    expect(lastAssistantMessage()).toMatchObject({ answeredToolInput: request });
+  });
+
+  it('says the answer could not be sent and clears that on the next attempt', async () => {
+    const assistantId = await pauseOnInput();
+    mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(new ApiHttpError('Service unavailable', 503));
+    });
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(lastAssistantMessage()?.pendingToolInput?.runId).toBe(RUN_ID);
+    expect(useChatExecutionStore.getState().toolInputSendErrors[assistantId]).toBe(
+      'Could not send your answer. Check your connection and try again.',
+    );
+
+    let errorWhileSending: unknown = 'not read';
+    mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      errorWhileSending = useChatExecutionStore.getState().toolInputSendErrors[assistantId];
+      callbacks.onDone();
+    });
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(errorWhileSending).toBeUndefined();
+    expect(useChatExecutionStore.getState().toolInputSendErrors).not.toHaveProperty(assistantId);
+  });
+
+  it('says the answer could not be sent when the request throws before the run answers', async () => {
+    const assistantId = await pauseOnInput();
+    mockInputResume.mockImplementationOnce(async () => {
+      throw new TypeError('Network request failed');
+    });
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(lastAssistantMessage()?.pendingToolInput?.runId).toBe(RUN_ID);
+    expect(useChatExecutionStore.getState().toolInputSendErrors[assistantId]).toBe(
+      'Could not send your answer. Check your connection and try again.',
+    );
+  });
+
+  it('asks the person to sign in when the answer is sent without an AGI Cloud account', async () => {
+    const assistantId = await pauseOnInput();
+    __resetCloudAccountSessionForTests();
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(mockInputResume).not.toHaveBeenCalled();
+    expect(lastAssistantMessage()?.pendingToolInput?.runId).toBe(RUN_ID);
+    expect(useChatExecutionStore.getState().toolInputSendErrors[assistantId]).toBe(
+      'Sign in to resume this AGI Cloud task.',
+    );
+  });
+
+  it('records no send failure when the run says the request is gone', async () => {
+    const assistantId = await pauseOnInput();
+    mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(new ApiHttpError('Gone', 410));
+    });
+
+    await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
+
+    expect(useChatExecutionStore.getState().toolInputSendErrors).not.toHaveProperty(assistantId);
   });
 
   it('offers the form again when the resume fails for a transient reason', async () => {
@@ -237,6 +349,7 @@ describe('chat tool input requests (MCP input_required)', () => {
     await useChatExecutionStore.getState().answerToolInput(CONV_ID, assistantId, ANSWER);
 
     expect(lastAssistantMessage()?.pendingToolInput?.runId).toBe(RUN_ID);
+    expect(lastAssistantMessage()).not.toHaveProperty('answeredToolInput');
     expect(useChatExecutionStore.getState().error).toContain('Service unavailable');
 
     mockInputResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {

@@ -494,6 +494,7 @@ describe('applyMemoryToolCapability', () => {
       memoryEnabled: true,
       isTemporary: false,
       ambientToolsAllowed: true,
+      userMessage: 'Remember that I prefer metric units.',
       ...overrides,
     });
     return (request.tools ?? [])
@@ -509,5 +510,25 @@ describe('applyMemoryToolCapability', () => {
     expect(offeredMemoryTools({ surface: 'api' })).toEqual([]);
     expect(offeredMemoryTools({ memoryEnabled: false })).toEqual([]);
     expect(offeredMemoryTools({ isTemporary: true })).toEqual([]);
+  });
+
+  it('offers the memory tools only to a message that asks to remember, forget, update or recall something', () => {
+    for (const userMessage of [
+      'Remember that I prefer metric units.',
+      'Forget my old home address.',
+      'Update my memory: I moved to Austin last month.',
+      'What do you remember about my coffee order?',
+      'Can you recall what I said about my job?',
+    ]) {
+      expect(offeredMemoryTools({ userMessage })).toEqual(MEMORY_TOOLS);
+    }
+    for (const userMessage of [
+      'Explain compound interest.',
+      'I moved to Austin last month.',
+      "I can't remember the capital of Australia.",
+      'Explain how an in-memory cache works.',
+    ]) {
+      expect(offeredMemoryTools({ userMessage })).toEqual([]);
+    }
   });
 });

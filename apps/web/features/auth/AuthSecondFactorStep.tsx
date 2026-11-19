@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { useState } from 'react';
 
 import { ACCOUNT_RECOVERY_PATH } from './authRoutes';
@@ -128,11 +128,15 @@ export function AuthSecondFactorStep({
             ))
           : null}
 
-        <Link href={`${ACCOUNT_RECOVERY_PATH}?lost=factor`} className={AUTH_STANDALONE_LINK_CLASS}>
+        <PageLink
+          href={`${ACCOUNT_RECOVERY_PATH}?lost=factor`}
+          omitWhenEmbedded
+          className={AUTH_STANDALONE_LINK_CLASS}
+        >
           {hasBackupCode
             ? copy.text('flow.secondFactor.lostEverything', 'Lost your device and backup codes?')
             : copy.text('flow.secondFactor.lostDevice', 'Lost the device with your codes?')}
-        </Link>
+        </PageLink>
 
         <button
           type="button"

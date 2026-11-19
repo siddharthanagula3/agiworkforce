@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   buildArtifactConnectorPlan: vi.fn(),
   completeArtifactPrompt: vi.fn(),
   evaluateActiveWorkspacePolicy: vi.fn(),
-  resolveZeroDataRetentionPolicy: vi.fn(),
   resolveEntitlementBundle: vi.fn(),
   evaluateManagedComputeAccess: vi.fn(),
   buildManagedComputeAccessGateResponse: vi.fn(),
@@ -147,7 +146,6 @@ vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
   resolveSecretHandlingPolicy: vi.fn(),
   evaluateActiveWorkspacePolicy: mocks.evaluateActiveWorkspacePolicy,
   evaluateWorkspacePolicyFor: vi.fn(),
-  resolveZeroDataRetentionPolicy: mocks.resolveZeroDataRetentionPolicy,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
   ensureSeatMemberCreditAccount: vi.fn(),
@@ -294,7 +292,6 @@ beforeEach(() => {
   mocks.resolveEntitlementBundle.mockResolvedValue({ plan: 'pro', subscription: { tier: 'pro' } });
   mocks.evaluateManagedComputeAccess.mockResolvedValue({ allowed: true });
   mocks.buildManagedComputeAccessGateResponse.mockReturnValue(null);
-  mocks.resolveZeroDataRetentionPolicy.mockResolvedValue({ required: false });
   mocks.moderateManagedPrompt.mockReturnValue({ allowed: true });
   mocks.enforceManagedContentSafetyPreference.mockResolvedValue({ allowed: true });
   mocks.applySecretHandlingToTexts.mockResolvedValue({ action: 'allowed', texts: ['Summarize'] });
@@ -512,15 +509,6 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
     expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
   });
 
-  it('refuses when the workspace requires zero data retention', async () => {
-    mocks.resolveZeroDataRetentionPolicy.mockResolvedValue({ required: true });
-
-    const response = await call({ prompt: 'Summarize' });
-
-    expect(response.status).toBe(403);
-    expect(await errorCode(response)).toBe('organization_policy');
-  });
-
   it('refuses a prompt that fails moderation', async () => {
     mocks.moderateManagedPrompt.mockReturnValue({ allowed: false, refusal: 'Not allowed' });
 
@@ -566,8 +554,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.selectArtifactRuntimeRoute).toHaveBeenCalledWith(
-      mocks.db,
-      'user-1',
+      { db: mocks.db, userId: 'user-1', organizationId: 'org-1' },
       'Summarize',
       'pro',
       { needsTools: true, googleUserData },
@@ -585,8 +572,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
       ARTIFACT.publishedArtifactId,
     );
     expect(mocks.selectArtifactRuntimeRoute).toHaveBeenCalledWith(
-      mocks.db,
-      'user-1',
+      { db: mocks.db, userId: 'user-1', organizationId: 'org-1' },
       'Summarize',
       'pro',
       { needsTools: false, googleUserData: true },

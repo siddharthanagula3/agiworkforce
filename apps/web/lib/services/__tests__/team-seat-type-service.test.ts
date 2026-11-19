@@ -131,6 +131,7 @@ type Role = 'owner' | 'admin' | 'member' | null;
 
 interface World {
   requesterRole: Role;
+  requesterStatus?: string;
   target: { seat_type: string; premium_paid_through: string | null } | null;
   assignedPremium: number;
   organization?: Record<string, unknown> | null;
@@ -151,7 +152,14 @@ function fakeDatabases(world: World) {
       if (sql.includes('as assigned')) return [{ assigned: String(world.assignedPremium) }];
       if (sql.includes('from public.organization_members')) {
         return world.requesterRole
-          ? [{ organization_id: ORGANIZATION, user_id: 'admin-1', role: world.requesterRole }]
+          ? [
+              {
+                organization_id: ORGANIZATION,
+                user_id: 'admin-1',
+                role: world.requesterRole,
+                status: world.requesterStatus ?? 'active',
+              },
+            ]
           : [];
       }
       return [];
@@ -297,6 +305,24 @@ describe('who may change what the workspace pays', () => {
       changeMemberSeatType(world.db, { privileged: world.privileged, stripe }, request('premium')),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('refuses an admin whose membership is suspended', async () => {
+    grantPermissions('admin');
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'admin',
+      requesterStatus: 'suspended',
+      target: STANDARD_TARGET,
+      assignedPremium: 0,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 0 }));
+
+    await expect(
+      changeMemberSeatType(world.db, { privileged: world.privileged, stripe }, request('premium')),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(update).not.toHaveBeenCalled();
+    expect(world.writes).toEqual([]);
   });
 
   it('refuses a workspace API key, because a seat type changes what the workspace pays', async () => {

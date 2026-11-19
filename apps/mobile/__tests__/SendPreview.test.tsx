@@ -34,6 +34,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 import { SendPreview } from '@/src/features/chat/components/SendPreview';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 
 const FIXTURE_LOCAL_MODEL_LABEL = 'Fixture Local Model';
 
@@ -46,6 +47,14 @@ function localPresentation(): SendPreviewPresentation {
 }
 
 describe('Mobile SendPreview', () => {
+  it('caps the compact label at the header text scale so the action row stays on screen', () => {
+    const { getByText } = render(
+      <SendPreview presentation={localPresentation()} variant="compact" />,
+    );
+
+    expect(getByText('Stays on device').props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+  });
+
   it('renders the local destination + privacy banner', () => {
     const { getByText, queryByTestId } = render(<SendPreview presentation={localPresentation()} />);
     expect(getByText('Stays on this device')).toBeTruthy();

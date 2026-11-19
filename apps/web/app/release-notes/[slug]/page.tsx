@@ -12,6 +12,7 @@ import {
 } from '@/features/marketing/components/system';
 import { releasePath, releaseSlug } from '@/lib/changelog-entries';
 import { buildMetadata } from '@/lib/seo/metadata';
+import { EmbeddedVariant } from '../EmbeddedVariant';
 import { RELEASE_NOTES, releaseStateLine } from '../release-notes-data';
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -38,29 +39,52 @@ export default async function ReleaseAnnouncementPage({ params }: PageProps) {
   const note = findRelease((await params).slug);
   if (!note) notFound();
 
+  const allReleaseNotesButton = (
+    <ButtonRow>
+      <Button href="/release-notes" variant="secondary">
+        All release notes
+      </Button>
+    </ButtonRow>
+  );
+
+  const announcement = (
+    <Stack gap="loose">
+      <div>
+        <Eyebrow>
+          {note.date} · {releaseStateLine(note)}
+        </Eyebrow>
+        <h1 className="agi-ds-h1" id="agi-release-title">
+          {note.headline}
+        </h1>
+      </div>
+      {note.body.map((line) => (
+        <Prose key={line}>{line}</Prose>
+      ))}
+      {allReleaseNotesButton}
+    </Stack>
+  );
+
   return (
     <div data-design="agi" className="agi-ds-page">
       <Header />
       <main id="main-content">
         <Section id="release" labelledBy="agi-release-title">
-          <Stack gap="loose">
-            <div>
-              <Eyebrow>
-                {note.date} · {releaseStateLine(note)}
-              </Eyebrow>
-              <h1 className="agi-ds-h1" id="agi-release-title">
-                {note.headline}
-              </h1>
-            </div>
-            {note.body.map((line) => (
-              <Prose key={line}>{line}</Prose>
-            ))}
-            <ButtonRow>
-              <Button href="/release-notes" variant="secondary">
-                All release notes
-              </Button>
-            </ButtonRow>
-          </Stack>
+          {note.billing ? (
+            <EmbeddedVariant
+              standard={announcement}
+              embedded={
+                <Stack gap="loose">
+                  <h1 className="agi-ds-h1" id="agi-release-title">
+                    Release note
+                  </h1>
+                  <Prose>This release note is not shown in the app.</Prose>
+                  {allReleaseNotesButton}
+                </Stack>
+              }
+            />
+          ) : (
+            announcement
+          )}
         </Section>
       </main>
       <MarketingFooter />

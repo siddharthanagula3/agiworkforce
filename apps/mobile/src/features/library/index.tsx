@@ -1,32 +1,30 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
-import { useNavigation, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { stageComposerAttachments, stageComposerText } from '@/src/features/chat/composerHandoff';
 import { enterMediaMode, listMediaModels } from '@/src/features/chat/actions/mediaMode';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import {
-  BookImage,
-  Check,
-  FileText,
-  ImageIcon,
-  MoreHorizontal,
-  Sparkles,
-  Video,
-} from 'lucide-react-native';
+import { BookImage, Check, FileText, MoreHorizontal, Sparkles, Video } from 'lucide-react-native';
 import {
   LIBRARY_DEFAULT_SORT,
   LIBRARY_SORTS,
   type LibrarySort,
 } from '@agiworkforce/cloud-contracts';
-import { formatBytes } from '@agiworkforce/utils/format';
 import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
-import { typeScale, zIndex } from '@/src/ui/theme/tokens';
+import { HEADER_TEXT_SCALE_LIMIT, spacing, typeScale, zIndex } from '@/src/ui/theme/tokens';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
@@ -52,6 +50,9 @@ import {
   type LocalVideoPlayer,
 } from '@/services/fileCreation';
 import { VideoPlayerModal } from '@/src/features/chat/components/VideoPlayerModal';
+import { FileViewerScreen } from '@/src/features/chat/components/artifact-viewers/FileViewerScreen';
+import type { FileViewerSource } from '@/src/features/chat/components/artifact-viewers/ArtifactViewer';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
 import { reportAssetFor } from '@/services/contentReportAsset';
 import { API_URL } from '@/lib/constants';
@@ -60,17 +61,24 @@ import {
   useResponsiveLayout,
 } from '@/src/shared/hooks/useResponsiveLayout';
 import type { LibraryAsset, LibraryScope } from './libraryClient';
+import { useLibraryThumbnail } from './useLibraryThumbnail';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { useLibraryAssets } from './useLibraryAssets';
 import { MediaJobsSection } from './MediaJobsSection';
 import { LibraryFeaturePromoSheet } from './LibraryFeaturePromoSheet';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 import { generateImage } from '@/src/features/image/services/imagegen';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
+import { CloudProviderConsentRequiredError } from '@/services/llmGate';
 import { showToast } from '@/src/shared/components/Toast';
 import { toUserMessage } from '@/services/userMessage';
 import { useChatStore } from '@/stores/chatStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { useActionMenu } from '@/src/shared/hooks/useActionMenu';
 
 const CARD_GAP = 14;
+const TILE_PREVIEW_LINES = 4;
 const HORIZONTAL_PADDING = 16;
 const SEARCH_DEBOUNCE_MS = 350;
 const LIBRARY_HEADER_SLOT_WIDTH = 56;
@@ -93,6 +101,23 @@ type LibraryFilter =
   | 'generated'
   | 'artifacts'
   | ArtifactKindFilter;
+
+const LIBRARY_FILTERS: ReadonlySet<string> = new Set<LibraryFilter>([
+  'all',
+  'images',
+  'videos',
+  'documents',
+  'uploads',
+  'generated',
+  'artifacts',
+  'code',
+  'charts',
+  'research',
+]);
+
+function isLibraryFilter(value: string | undefined): value is LibraryFilter {
+  return value !== undefined && LIBRARY_FILTERS.has(value);
+}
 
 const ARTIFACT_KIND_FOR_FILTER: Record<ArtifactKindFilter, MobileArtifactKind> = {
   code: 'code',
@@ -138,13 +163,23 @@ function isGeneratedMedia(
   return (asset.kind === 'image' || asset.kind === 'video') && Boolean(asset.prompt || asset.model);
 }
 
-export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
+export function LibraryScreen({
+  initialImageId,
+  initialFilter,
+}: {
+  initialImageId?: string;
+  initialFilter?: string;
+}) {
   const { colors: c, isDark } = useTheme();
   const pageBackground = isDark ? c.background : c.surfaceBase;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { contentWidth, gridColumns } = useResponsiveLayout();
-  const [filter, setFilter] = useState<LibraryFilter>('all');
+  const { contentWidth, gridColumns: layoutColumns } = useResponsiveLayout();
+  const largeText = useLargeTextRows();
+  const gridColumns = largeText ? Math.max(1, layoutColumns - 1) : layoutColumns;
+  const [filter, setFilter] = useState<LibraryFilter>(
+    isLibraryFilter(initialFilter) ? initialFilter : 'all',
+  );
   const [sort, setSort] = useState<LibrarySort>(LIBRARY_DEFAULT_SORT);
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
@@ -160,11 +195,16 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   } | null>(null);
   const videoLoadingRef = useRef(false);
   const videoScopeRef = useRef<AccountScopedUiState | null>(null);
+  const [openFile, setOpenFile] = useState<FileViewerSource | null>(null);
+  const [openFileChatId, setOpenFileChatId] = useState<string | null>(null);
+  const openFileScopeRef = useRef<AccountScopedUiState | null>(null);
   const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [deletingSelected, setDeletingSelected] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const openedInitialImageRef = useRef<string | null>(null);
+  const actionMenu = useActionMenu();
+  const openActionMenu = actionMenu.open;
 
   const appMode = useChatAppModeStore((s) => s.appMode);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
@@ -178,20 +218,39 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, [query]);
 
   const library = useLibraryAssets(search, sort, scopeForFilter(filter, showDeleted));
+  const revalidateRef = useRef(library.revalidate);
+  revalidateRef.current = library.revalidate;
+  const focusedBeforeRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedBeforeRef.current) revalidateRef.current();
+      focusedBeforeRef.current = true;
+      setFilter(isLibraryFilter(initialFilter) ? initialFilter : 'all');
+      return () => setFilter('all');
+    }, [initialFilter]),
+  );
+
+  const downloadMeter =
+    library.downloadUsedBytes != null && library.downloadLimitBytes != null
+      ? { used: library.downloadUsedBytes, limit: library.downloadLimitBytes }
+      : null;
 
   const selectionActive =
     selectedIds !== null && isAccountScopedUiStateOwned(selectionScopeRef.current);
 
   const openSortOptions = useCallback(() => {
-    const sortOption = (value: LibrarySort) => ({
-      text: `${sort === value ? '✓ ' : ''}${SORT_LABELS[value]}`,
-      onPress: () => setSort(value),
-    });
-    Alert.alert('Sort saved files', 'Artifacts keep their own order.', [
-      ...LIBRARY_SORTS.map(sortOption),
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [sort]);
+    openActionMenu(
+      'Sort saved files',
+      LIBRARY_SORTS.map((value) => ({
+        key: `sort-${value}`,
+        label: SORT_LABELS[value],
+        selected: sort === value,
+        run: () => setSort(value),
+      })),
+      'Artifacts keep their own order.',
+    );
+  }, [openActionMenu, sort]);
 
   const beginSelection = useCallback(() => {
     const scope = captureAccountScopedUiState('cloud');
@@ -210,27 +269,27 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, []);
 
   const openLibraryOptions = useCallback(() => {
-    Alert.alert('Library', undefined, [
+    openActionMenu('Library', [
       ...(library.signedOut || showDeleted
         ? []
-        : [{ text: 'Select saved files', onPress: beginSelection }]),
-      { text: 'Sort saved files', onPress: openSortOptions },
+        : [{ key: 'select', label: 'Select saved files', run: beginSelection }]),
+      { key: 'sort', label: 'Sort saved files', run: openSortOptions },
       ...(library.signedOut
         ? []
         : [
             showDeleted
-              ? { text: 'Back to Library', onPress: () => setShowDeleted(false) }
+              ? { key: 'back', label: 'Back to Library', run: () => setShowDeleted(false) }
               : {
-                  text: 'Recently deleted',
-                  onPress: () => {
+                  key: 'deleted',
+                  label: 'Recently deleted',
+                  run: () => {
                     setFilter('all');
                     setShowDeleted(true);
                   },
                 },
           ]),
-      { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [beginSelection, library.signedOut, openSortOptions, showDeleted]);
+  }, [beginSelection, library.signedOut, openActionMenu, openSortOptions, showDeleted]);
 
   useLayoutEffect(() => {
     if (!previewImage) return;
@@ -245,6 +304,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     videoScopeRef.current = null;
     setVideoPlayer(null);
   }, [clerkUserId, videoPlayer]);
+
+  useLayoutEffect(() => {
+    if (!openFile) return;
+    if (isAccountScopedUiStateOwned(openFileScopeRef.current)) return;
+    openFileScopeRef.current = null;
+    setOpenFile(null);
+  }, [clerkUserId, openFile]);
 
   useLayoutEffect(() => {
     if (selectedIds === null || isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
@@ -324,22 +390,28 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     (edit: ImageAreaEdit) => {
       const asset = previewImage;
       if (!asset) return;
-      handleCloseImage();
-      showToast('Editing the image. The new version appears in your Library.');
-      void generateImage({
-        prompt: edit.prompt,
-        ...(asset.model ? { model: asset.model } : {}),
-        ...(asset.conversationId ? { conversation_id: asset.conversationId } : {}),
-        operation: 'inpaint',
-        source_image: { b64_json: edit.sourceBase64 },
-        mask_image: { b64_json: edit.maskBase64 },
-        size: '1024x1024',
-        n: 1,
-        quality: 'standard',
-        transparent_background: false,
-      })
-        .then(() => library.refresh())
+      const scope = previewImageScopeRef.current;
+      void sharingWithProvidersAllowed()
+        .then((allowed) => {
+          if (!allowed) return;
+          if (previewImageScopeRef.current !== scope || !isAccountScopedUiStateOwned(scope)) return;
+          handleCloseImage();
+          showToast('Editing the image. The new version appears in your Library.');
+          return generateImage({
+            prompt: edit.prompt,
+            ...(asset.model ? { model: asset.model } : {}),
+            ...(asset.conversationId ? { conversation_id: asset.conversationId } : {}),
+            operation: 'inpaint',
+            source_image: { b64_json: edit.sourceBase64 },
+            mask_image: { b64_json: edit.maskBase64 },
+            size: '1024x1024',
+            n: 1,
+            quality: 'standard',
+            transparent_background: false,
+          }).then(() => library.refresh());
+        })
         .catch((error: unknown) => {
+          if (error instanceof CloudProviderConsentRequiredError) return;
           Alert.alert('Could not edit the image', toUserMessage(error, 'Try again in a moment.'));
         });
     },
@@ -369,10 +441,38 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     try {
       const localUri = await downloadGeneratedFile(absoluteAssetUrl(asset.uri), asset.fileName);
       await shareFile(localUri, { isCurrent });
-    } catch {
+    } catch (error) {
       if (!isCurrent()) return;
-      Alert.alert('Could not open this file', 'The file could not be downloaded. Try again.');
+      Alert.alert(
+        'Could not open this file',
+        toUserMessage(error, 'The file could not be downloaded. Try again.'),
+      );
     }
+  }, []);
+
+  const handleOpenFile = useCallback((asset: LibraryAsset) => {
+    const scope = captureAccountScopedUiState('cloud');
+    if (!scope) return;
+    openFileScopeRef.current = scope;
+    setOpenFileChatId(asset.conversationId ?? null);
+    setOpenFile({
+      title: asset.fileName,
+      fileName: asset.fileName,
+      mimeType: asset.mimeType,
+      url: absoluteAssetUrl(asset.uri),
+      ...(asset.byteCount ? { byteCount: asset.byteCount } : {}),
+    });
+  }, []);
+
+  const isOpenFileCurrent = useCallback(
+    () => isAccountScopedUiStateOwned(openFileScopeRef.current),
+    [],
+  );
+
+  const handleCloseFile = useCallback(() => {
+    openFileScopeRef.current = null;
+    setOpenFile(null);
+    setOpenFileChatId(null);
   }, []);
 
   const handlePlayVideo = useCallback(
@@ -406,6 +506,11 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, []);
 
   const router = useRouter();
+  const handleOpenFileChat = useCallback(() => {
+    if (!openFileChatId) return;
+    handleCloseFile();
+    router.push(`/(app)/chat/${openFileChatId}` as Parameters<typeof router.push>[0]);
+  }, [handleCloseFile, openFileChatId, router]);
   const handleOpenArtifact = useCallback(
     (artifact: MobileArtifact) => {
       router.push({ pathname: '/(app)/artifacts', params: { artifactId: artifact.id } });
@@ -498,30 +603,46 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const handleAssetActions = useCallback(
     (asset: LibraryAsset) => {
       if (showDeleted) {
-        Alert.alert(asset.fileName, undefined, [
-          { text: 'Restore', onPress: () => handleRestoreAsset(asset) },
+        openActionMenu(asset.fileName, [
+          { key: 'restore', label: 'Restore', run: () => handleRestoreAsset(asset) },
           {
-            text: 'Delete permanently',
-            style: 'destructive',
-            onPress: () => handlePermanentDelete(asset),
+            key: 'delete-permanently',
+            label: 'Delete permanently',
+            destructive: true,
+            run: () => handlePermanentDelete(asset),
           },
-          { text: 'Cancel', style: 'cancel' },
         ]);
         return;
       }
-      Alert.alert(asset.fileName, undefined, [
+      openActionMenu(asset.fileName, [
         ...(appMode === 'cloud' && asset.kind !== 'video'
-          ? [{ text: 'Add to chat', onPress: () => handleAddToChat(asset) }]
+          ? [{ key: 'add-to-chat', label: 'Add to chat', run: () => handleAddToChat(asset) }]
           : []),
         ...(appMode === 'cloud' && asset.kind === 'image'
-          ? [{ text: 'Remix', onPress: () => handleRemix(asset) }]
+          ? [{ key: 'remix', label: 'Remix', run: () => handleRemix(asset) }]
           : []),
-        { text: 'Share', onPress: () => void handleShareAsset(asset) },
+        ...(asset.conversationId
+          ? [
+              {
+                key: 'open-chat',
+                label: 'Open chat',
+                run: () =>
+                  router.push(
+                    `/(app)/chat/${asset.conversationId}` as Parameters<typeof router.push>[0],
+                  ),
+              },
+            ]
+          : []),
+        { key: 'share', label: 'Share', run: () => void handleShareAsset(asset) },
         ...(isGeneratedMedia(asset)
-          ? [{ text: 'Report', onPress: () => setReportedAsset(asset) }]
+          ? [{ key: 'report', label: 'Report', run: () => setReportedAsset(asset) }]
           : []),
-        { text: 'Delete', style: 'destructive', onPress: () => handleDeleteAsset(asset) },
-        { text: 'Cancel', style: 'cancel' },
+        {
+          key: 'delete',
+          label: 'Delete',
+          destructive: true,
+          run: () => handleDeleteAsset(asset),
+        },
       ]);
     },
     [
@@ -532,6 +653,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       handlePermanentDelete,
       handleRestoreAsset,
       handleShareAsset,
+      openActionMenu,
+      router,
       showDeleted,
     ],
   );
@@ -665,7 +788,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
               ? onPress
               : asset.kind === 'video'
                 ? () => void handlePlayVideo(asset)
-                : () => void handleShareAsset(asset)
+                : () => handleOpenFile(asset)
           }
           onLongPress={onLongPress}
         />
@@ -676,9 +799,9 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       gridColumns,
       handleAssetActions,
       handleOpenArtifact,
+      handleOpenFile,
       handleOpenImage,
       handlePlayVideo,
-      handleShareAsset,
       selectedIds,
       selectionActive,
       showDeleted,
@@ -688,12 +811,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
-      <View className="h-12 flex-row items-center px-3 gap-2">
+      <View testID="library-header" className="min-h-12 flex-row items-center px-3 gap-2">
         <View style={{ width: LIBRARY_HEADER_SLOT_WIDTH, alignItems: 'flex-start' }}>
           <DrawerButton testID="library-open-drawer" onPress={openDrawer} />
         </View>
         <Text
           accessibilityRole="header"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
           style={{
             flex: 1,
             color: c.textPrimary,
@@ -717,7 +841,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           }}
         >
           {selectionActive ? (
-            <Text style={{ color: c.teal, fontWeight: '600' }}>Done</Text>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+              style={{ color: c.teal, fontWeight: '600' }}
+            >
+              Done
+            </Text>
           ) : (
             <MoreHorizontal size={22} color={c.textPrimary} />
           )}
@@ -746,8 +877,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           testID="library-filter-row"
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0, paddingBottom: 16 }}
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, alignItems: 'center' }}
+          style={{ flexGrow: 0, flexShrink: 0 }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.sm,
+            paddingBottom: spacing.lg,
+            gap: spacing.sm,
+            alignItems: 'center',
+          }}
         >
           <FilterChip label="All" active={filter === 'all'} onPress={() => setFilter('all')} />
           <FilterChip
@@ -830,15 +967,31 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
                 }
               />
             ) : null}
-            {!showDeleted && library.storageUsedBytes !== null ? (
-              <Text
-                testID="library-storage-used"
-                style={{ color: c.textMuted, fontSize: typeScale.caption, marginBottom: 12 }}
-              >
-                {library.storageLimitBytes !== null
-                  ? `${formatBytes(library.storageUsedBytes, 1)} of ${formatBytes(library.storageLimitBytes, 0)} file storage used`
-                  : `${formatBytes(library.storageUsedBytes, 1)} of file storage used`}
-              </Text>
+            {!showDeleted && (library.storageUsedBytes != null || downloadMeter !== null) ? (
+              <View style={{ gap: 2, marginBottom: 12 }}>
+                {library.storageUsedBytes != null ? (
+                  <Text
+                    testID="library-storage-used"
+                    numberOfLines={2}
+                    maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                    style={{ color: c.textMuted, fontSize: typeScale.caption }}
+                  >
+                    {library.storageLimitBytes != null
+                      ? `${formatAttachmentSize(library.storageUsedBytes)} of ${formatAttachmentSize(library.storageLimitBytes)} file storage used`
+                      : `${formatAttachmentSize(library.storageUsedBytes)} of file storage used`}
+                  </Text>
+                ) : null}
+                {downloadMeter !== null ? (
+                  <Text
+                    testID="library-downloads-used"
+                    numberOfLines={2}
+                    maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                    style={{ color: c.textMuted, fontSize: typeScale.caption }}
+                  >
+                    {`${formatAttachmentSize(downloadMeter.used)} of ${formatAttachmentSize(downloadMeter.limit)} file downloads used this month`}
+                  </Text>
+                ) : null}
+              </View>
             ) : null}
             {appMode === 'cloud' &&
             !showDeleted &&
@@ -899,11 +1052,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             {selectedIds?.size ?? 0} selected
           </Text>
           <View
+            testID="library-selection-buttons"
             style={{
               flexDirection: 'row',
+              flexWrap: 'wrap',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 12,
+              columnGap: 12,
+              rowGap: 8,
             }}
           >
             <Pressable
@@ -946,6 +1102,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           accessibilityLabel="Search library"
           clearAccessibilityLabel="Clear library search"
           testID="library-search"
+          columnKind="grid"
         />
       )}
 
@@ -984,6 +1141,15 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         reportTarget={videoPlayer?.reportTarget}
         failureHint="Long-press the video and choose Share to open it in another app."
       />
+
+      <FileViewerScreen
+        source={openFile}
+        onClose={handleCloseFile}
+        isCurrent={isOpenFileCurrent}
+        {...(openFileChatId ? { onOpenChat: handleOpenFileChat } : {})}
+      />
+
+      <ActionMenuSheet menu={actionMenu.menu} dismissLabel="Dismiss Library actions" />
 
       <LibraryFeaturePromoSheet />
     </SafeAreaView>
@@ -1132,9 +1298,7 @@ function LibraryEmptyState({
 
 function formatAssetSize(size: number | null): string {
   if (size == null) return 'Saved to your account';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return formatAttachmentSize(size);
 }
 
 function LibraryFileCard({
@@ -1155,8 +1319,10 @@ function LibraryFileCard({
   onLongPress: () => void;
 }) {
   const c = useThemeColors();
+  const { fontScale } = useWindowDimensions();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
   const isVideo = asset.kind === 'video';
+  const showNameInTile = fontScale <= 1;
 
   return (
     <Pressable
@@ -1174,6 +1340,7 @@ function LibraryFileCard({
       accessibilityState={{ selected }}
     >
       <View
+        testID={`library-${asset.kind}-tile-${asset.id}`}
         style={{
           height: previewHeight,
           borderRadius: 16,
@@ -1181,10 +1348,10 @@ function LibraryFileCard({
           backgroundColor: c.surfaceElevated,
           borderWidth: 1,
           borderColor: selected ? c.teal : c.border,
+          overflow: 'hidden',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 10,
-          padding: 16,
+          paddingHorizontal: 16,
         }}
       >
         {selectionMode ? (
@@ -1207,36 +1374,49 @@ function LibraryFileCard({
           </View>
         ) : null}
         <View
-          style={{
-            width: 46,
-            height: 46,
-            borderRadius: 15,
-            borderCurve: 'continuous',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: c.accentSurface,
-            borderWidth: 1,
-            borderColor: c.accentBorder,
-          }}
+          testID={`library-${asset.kind}-tile-content-${asset.id}`}
+          style={{ flexShrink: 1, alignItems: 'center', gap: 10 }}
         >
-          {isVideo ? (
-            <Video size={23} color={c.textPrimary} />
-          ) : (
-            <FileText size={23} color={c.textPrimary} />
-          )}
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 15,
+              borderCurve: 'continuous',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: c.accentSurface,
+              borderWidth: 1,
+              borderColor: c.accentBorder,
+            }}
+          >
+            {isVideo ? (
+              <Video size={23} color={c.textPrimary} />
+            ) : (
+              <FileText size={23} color={c.textPrimary} />
+            )}
+          </View>
+          <Badge label={isVideo ? 'Video' : 'Document'} color="gray" />
+          {showNameInTile ? (
+            <View
+              testID={`library-${asset.kind}-tile-name-${asset.id}`}
+              style={{ flexShrink: 1, overflow: 'hidden' }}
+            >
+              <Text
+                numberOfLines={2}
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                style={{
+                  color: c.textPrimary,
+                  fontSize: typeScale.footnote,
+                  lineHeight: 18,
+                  textAlign: 'center',
+                }}
+              >
+                {asset.fileName}
+              </Text>
+            </View>
+          ) : null}
         </View>
-        <Badge label={isVideo ? 'Video' : 'Document'} color="gray" />
-        <Text
-          numberOfLines={2}
-          style={{
-            color: c.textPrimary,
-            fontSize: typeScale.footnote,
-            lineHeight: 18,
-            textAlign: 'center',
-          }}
-        >
-          {asset.fileName}
-        </Text>
       </View>
       <Text
         numberOfLines={1}
@@ -1278,7 +1458,15 @@ function LibraryImageCard({
 }) {
   const c = useThemeColors();
   const height = Math.max(120, Math.round(width * 0.9));
-  const { source, status } = useGeneratedImageSource(asset.uri, false);
+  const thumbnail = useLibraryThumbnail(asset);
+  const { source, status } = useGeneratedImageSource(thumbnail.uri, false);
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const pictureFailed = failedUri === thumbnail.uri;
+  const { fallBackToFullFile } = thumbnail;
+  const handlePictureError = useCallback(() => {
+    if (thumbnail.uri === asset.uri) setFailedUri(asset.uri);
+    else fallBackToFullFile();
+  }, [asset.uri, fallBackToFullFile, thumbnail.uri]);
   return (
     <Pressable
       testID={`library-image-card-${asset.id}`}
@@ -1324,24 +1512,25 @@ function LibraryImageCard({
             {selected ? <Check size={15} color={c.accentText} /> : null}
           </View>
         ) : null}
-        <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
-          <ImageIcon size={12} color={c.terraCotta} />
-          <Badge label="Image" color="terra-cotta" />
-        </View>
-        {status === 'ready' && source ? (
+        {status === 'ready' && source && !pictureFailed ? (
           <Image
             source={source}
             style={{ width, height }}
             contentFit="cover"
             transition={150}
             cachePolicy="memory"
+            onError={handlePictureError}
             accessibilityLabel={asset.prompt ?? asset.fileName}
           />
         ) : (
           <View
             style={{ width, height, alignItems: 'center', justifyContent: 'center', padding: 16 }}
           >
-            <Text style={{ color: c.textMuted, fontSize: typeScale.caption, textAlign: 'center' }}>
+            <Text
+              numberOfLines={3}
+              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+              style={{ color: c.textMuted, fontSize: typeScale.caption, textAlign: 'center' }}
+            >
               {status === 'signed-out'
                 ? 'Sign in to view'
                 : status === 'authorizing'
@@ -1381,26 +1570,47 @@ function LibraryArtifactCard({
       accessibilityRole="button"
     >
       <View
-        className="rounded-2xl border overflow-hidden justify-end px-3 pb-3 pt-10"
+        testID={`library-artifact-tile-${artifact.id}`}
+        className="rounded-2xl border overflow-hidden"
         style={{ height: previewHeight, backgroundColor: c.surfaceHover, borderColor: c.border }}
       >
-        <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
+        <View
+          testID={`library-artifact-kind-row-${artifact.id}`}
+          className="flex-row items-center gap-1.5 px-3 pt-3"
+        >
           <Sparkles size={12} color={artifact.accentColor} />
-          <Badge label={artifact.language ?? artifact.kind} color="gray" />
-        </View>
-        {artifact.previewLines.slice(0, 5).map((line, index) => (
           <Text
-            key={`${artifact.id}-${index}`}
-            className="text-sm leading-[18px]"
+            testID={`library-artifact-kind-${artifact.id}`}
             numberOfLines={1}
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
             style={{
-              color: index === 0 ? artifact.accentColor : c.textSecondary,
-              opacity: index === 0 ? 1 : Math.max(0.35, 1 - index * 0.18),
+              flexShrink: 1,
+              fontSize: typeScale.caption,
+              color: c.textSecondary,
+              textTransform: 'uppercase',
             }}
           >
-            {line}
+            {artifact.language ?? artifact.kind}
           </Text>
-        ))}
+        </View>
+        <View
+          testID={`library-artifact-preview-${artifact.id}`}
+          className="flex-1 justify-end px-3 pb-3 mt-2 overflow-hidden"
+        >
+          {artifact.previewLines.slice(0, TILE_PREVIEW_LINES).map((line, index) => (
+            <Text
+              key={`${artifact.id}-${index}`}
+              className="text-sm leading-[18px]"
+              numberOfLines={1}
+              style={{
+                color: index === 0 ? artifact.accentColor : c.textSecondary,
+                opacity: index === 0 ? 1 : Math.max(0.35, 1 - index * 0.18),
+              }}
+            >
+              {line}
+            </Text>
+          ))}
+        </View>
       </View>
       <Text
         className="text-[15px] leading-[20px] mt-2.5 font-semibold"

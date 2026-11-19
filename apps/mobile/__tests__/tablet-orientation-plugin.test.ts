@@ -51,6 +51,65 @@ class MainActivity : ReactActivity() {
 }
 `;
 
+const WAVE_2_MAIN_ACTIVITY = `package com.agiworkforce.app
+import expo.modules.splashscreen.SplashScreenManager
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+
+import android.os.Build
+import android.os.Bundle
+
+import com.facebook.react.ReactActivity
+import com.facebook.react.ReactActivityDelegate
+import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
+import com.facebook.react.defaults.DefaultReactActivityDelegate
+
+import expo.modules.ReactActivityDelegateWrapper
+
+private const val LARGE_SCREEN_MIN_WIDTH_DP = 600
+
+class MainActivity : ReactActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    // @generated begin expo-splashscreen - expo prebuild (DO NOT MODIFY) sync-f3ff59a
+    SplashScreenManager.registerOnActivity(this)
+    // @generated end expo-splashscreen
+    applyScreenOrientation(resources.configuration)
+    super.onCreate(null)
+  }
+
+  /**
+   * Returns the name of the main component registered from JavaScript. This is used to schedule
+   * rendering of the component.
+   */
+  override fun getMainComponentName(): String = "main"
+
+  override fun createReactActivityDelegate(): ReactActivityDelegate {
+    return ReactActivityDelegateWrapper(
+          this,
+          BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
+          object : DefaultReactActivityDelegate(
+              this,
+              mainComponentName,
+              fabricEnabled
+          ){})
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    applyScreenOrientation(newConfig)
+  }
+
+  private fun applyScreenOrientation(configuration: Configuration) {
+    requestedOrientation =
+      if (configuration.smallestScreenWidthDp >= LARGE_SCREEN_MIN_WIDTH_DP) {
+        ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+      } else {
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+      }
+  }
+}
+`;
+
 function occurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
@@ -82,6 +141,40 @@ describe('withAGITabletOrientation patchMainActivity', () => {
     const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
     expect(out).toContain('override fun onConfigurationChanged(newConfig: Configuration)');
     expect(out).toContain('applyScreenOrientation(newConfig)');
+  });
+
+  it('locks a phone to portrait once per screen size class, so a lock set from JavaScript survives a turn', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('private var appliedLargeScreen: Boolean? = null');
+    const method = out.slice(out.indexOf('private fun applyScreenOrientation'));
+    const guard = method.indexOf('if (largeScreen == appliedLargeScreen) return');
+    expect(guard).toBeGreaterThan(-1);
+    expect(guard).toBeLessThan(method.indexOf('appliedLargeScreen = largeScreen'));
+    expect(method.indexOf('appliedLargeScreen = largeScreen')).toBeLessThan(
+      method.indexOf('requestedOrientation ='),
+    );
+    expect(occurrences(out, 'requestedOrientation =')).toBe(1);
+  });
+
+  it('upgrades a MainActivity that still puts portrait back on every turn, without a clean prebuild', () => {
+    const fresh = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(patchMainActivity(WAVE_2_MAIN_ACTIVITY)).toBe(fresh);
+
+    const withShareIntent = patchMainActivity(patchShareIntent(WAVE_2_MAIN_ACTIVITY));
+    expect(occurrences(withShareIntent, 'private var appliedLargeScreen: Boolean? = null')).toBe(1);
+    expect(occurrences(withShareIntent, 'private fun applyScreenOrientation')).toBe(1);
+    expect(occurrences(withShareIntent, 'requestedOrientation =')).toBe(1);
+    expect(occurrences(withShareIntent, 'override fun onConfigurationChanged')).toBe(1);
+    expect(braceBalance(withShareIntent)).toBe(0);
+    expect(patchMainActivity(withShareIntent)).toBe(withShareIntent);
+  });
+
+  it('stops the build when an earlier orientation patch has a shape it cannot upgrade', () => {
+    const unknown = WAVE_2_MAIN_ACTIVITY.replace(
+      '  private fun applyScreenOrientation(configuration: Configuration) {',
+      '  fun applyScreenOrientation(configuration: Configuration) {',
+    );
+    expect(() => patchMainActivity(unknown)).toThrow('expo prebuild --clean');
   });
 
   it('is idempotent and keeps the class closed', () => {

@@ -5,10 +5,14 @@ import {
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
   CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE,
   chatAttachmentAcceptAttribute,
+  chatImageTooLargeMessage,
+  chatLargeFileKindMaxBytes,
   isSupportedChatAttachment,
 } from '@/lib/chat-attachment-policy';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   PICTURE_METADATA_REFUSAL,
   carriesPictureMetadata,
@@ -20,6 +24,7 @@ import {
 const MAX_FILE_COUNT = MAX_CHAT_ATTACHMENT_COUNT;
 const MAX_FILE_SIZE_BYTES = MAX_CHAT_ATTACHMENT_BYTES;
 const MAX_MESSAGE_BYTES = MAX_CHAT_ATTACHMENT_MESSAGE_BYTES;
+const MAX_IMAGE_BYTES = MAX_CHAT_IMAGE_ATTACHMENT_BYTES;
 
 export function getAcceptAttribute(): string {
   return chatAttachmentAcceptAttribute();
@@ -36,6 +41,7 @@ export interface AttachmentPreview {
 export interface UseAttachmentsOptions {
   maxFiles?: number;
   maxFileSize?: number;
+  maxImageSize?: number;
   maxTotalBytes?: number;
   /**
    * The plan's largest upload. A file above what chat sends inline but within
@@ -76,19 +82,31 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Rounded down, so the draft never promises room the account does not have. */
+function formatStorageLeft(bytes: number): string {
+  if (bytes < 1024 * 1024) return formatFileSize(bytes);
+  return `${Math.floor(bytes / (1024 * 1024))} MB`;
+}
+
 type IntakeIssueReason =
   | 'empty'
   | 'too_large'
+  | 'image_too_large'
+  | 'kind_too_large'
+  | 'storage_full'
   | 'needs_project'
   | 'unsupported'
   | 'too_many'
   | 'over_message_budget'
+  | 'over_inline_budget'
   | 'duplicate'
   | typeof PICTURE_METADATA_REFUSAL;
 
 interface IntakeIssue {
   file: File;
   reason: IntakeIssueReason;
+  /** The cap for this file's kind, on a `kind_too_large` issue. */
+  limitBytes?: number;
 }
 
 interface HeldFile {
@@ -99,13 +117,42 @@ interface HeldFile {
 interface IntakeLimits {
   maxFiles: number;
   maxFileSize: number;
+  maxImageSize: number;
   maxTotalBytes: number;
   planFileLimitBytes?: number | undefined;
   planLabel?: string | undefined;
+  inlineMessageBytes?: number | undefined;
+  storageRemainingBytes?: number | null | undefined;
+}
+
+/**
+ * What a handshake that offers large files adds to the draft. Files within the
+ * inline limit still go inline, so together they keep today's message budget.
+ */
+interface LargeFileOffer {
+  inlineMessageBytes: number;
+  storageRemainingBytes: number | null;
+}
+
+/**
+ * The server lowers an offered limit to exactly the remaining storage, never
+ * below today's, so only that value means storage and not a cap set the limit.
+ */
+function storageSetsLimit(limit: number, floor: number, remaining: number | null): boolean {
+  return remaining !== null && limit === Math.max(floor, remaining);
 }
 
 function fileIdentity(file: File): string {
   return JSON.stringify([file.name, file.size, file.lastModified, file.type]);
+}
+
+function imageTooLargeMessage(limits: IntakeLimits): string {
+  return chatImageTooLargeMessage({
+    maxFileBytes: limits.maxFileSize,
+    maxImageBytes: limits.maxImageSize,
+    maxMessageBytes: limits.maxTotalBytes,
+    maxFilesPerMessage: limits.maxFiles,
+  });
 }
 
 function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
@@ -117,6 +164,12 @@ function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
       return limits.planLabel && limits.planFileLimitBytes !== undefined
         ? `"${file.name}" is too large (${formatFileSize(file.size)}). ${limits.planLabel} accounts can upload files up to ${formatFileSize(limits.planFileLimitBytes)} each.`
         : `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(limits.maxFileSize)}.`;
+    case 'image_too_large':
+      return `"${file.name}" is too large. ${imageTooLargeMessage(limits)}`;
+    case 'kind_too_large':
+      return `"${file.name}" is too large (${formatFileSize(file.size)}). Files of this type can be up to ${formatFileSize(issue.limitBytes ?? limits.maxFileSize)}.`;
+    case 'storage_full':
+      return `"${file.name}" was not attached. You have ${formatStorageLeft(limits.storageRemainingBytes ?? 0)} of storage left. Delete files in your Library to make room.`;
     case 'needs_project':
       return `"${file.name}" was not attached. ${CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE}`;
     case 'unsupported':
@@ -125,6 +178,8 @@ function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
       return `Maximum ${limits.maxFiles} files allowed.`;
     case 'over_message_budget':
       return `"${file.name}" was not attached. Files on one message must total ${formatFileSize(limits.maxTotalBytes)} or less.`;
+    case 'over_inline_budget':
+      return `"${file.name}" was not attached. Files on one message must total ${formatFileSize(limits.inlineMessageBytes ?? limits.maxTotalBytes)} or less.`;
     case 'duplicate':
       return `"${file.name}" is already attached.`;
     default:
@@ -132,12 +187,18 @@ function singleIssueNotice(issue: IntakeIssue, limits: IntakeLimits): string {
   }
 }
 
-function issueReasonPhrase(reason: IntakeIssueReason, limits: IntakeLimits): string {
-  switch (reason) {
+function issueReasonPhrase(issue: IntakeIssue, limits: IntakeLimits): string {
+  switch (issue.reason) {
     case 'empty':
       return 'empty';
     case 'too_large':
       return `larger than ${formatFileSize(limits.planFileLimitBytes ?? limits.maxFileSize)}`;
+    case 'image_too_large':
+      return `an image over ${formatFileSize(limits.maxImageSize)}`;
+    case 'kind_too_large':
+      return `larger than ${formatFileSize(issue.limitBytes ?? limits.maxFileSize)} for its type`;
+    case 'storage_full':
+      return `more than the ${formatStorageLeft(limits.storageRemainingBytes ?? 0)} of storage left`;
     case 'needs_project':
       return `over ${formatFileSize(limits.maxFileSize)}, add it to a project`;
     case 'unsupported':
@@ -146,6 +207,8 @@ function issueReasonPhrase(reason: IntakeIssueReason, limits: IntakeLimits): str
       return `over the ${limits.maxFiles}-file limit`;
     case 'over_message_budget':
       return `over the ${formatFileSize(limits.maxTotalBytes)} total for one message`;
+    case 'over_inline_budget':
+      return `over the ${formatFileSize(limits.inlineMessageBytes ?? limits.maxTotalBytes)} total for one message`;
     case 'duplicate':
       return 'already attached';
     default:
@@ -166,7 +229,7 @@ function intakeNotice(
     return singleIssueNotice(first, limits);
   }
   const list = issues
-    .map((issue) => `"${issue.file.name}" (${issueReasonPhrase(issue.reason, limits)})`)
+    .map((issue) => `"${issue.file.name}" (${issueReasonPhrase(issue, limits)})`)
     .join(', ');
   return attached > 0
     ? `Attached ${attached} of ${total} files. Not attached: ${list}.`
@@ -174,22 +237,38 @@ function intakeNotice(
 }
 
 function refusalOf(issue: IntakeIssue): ChatDraftRefusal | null {
-  if (issue.reason === 'duplicate') return null;
-  return {
-    filename: issue.file.name,
-    reason: issue.reason === 'needs_project' ? 'too_large' : issue.reason,
-  };
+  switch (issue.reason) {
+    case 'duplicate':
+      return null;
+    case 'needs_project':
+    case 'image_too_large':
+    case 'kind_too_large':
+    case 'storage_full':
+      return { filename: issue.file.name, reason: 'too_large' };
+    case 'over_inline_budget':
+      return { filename: issue.file.name, reason: 'over_message_budget' };
+    default:
+      return { filename: issue.file.name, reason: issue.reason };
+  }
 }
 
 export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachmentsReturn {
   const {
     maxFiles = MAX_FILE_COUNT,
     maxFileSize = MAX_FILE_SIZE_BYTES,
+    maxImageSize = MAX_IMAGE_BYTES,
     maxTotalBytes = MAX_MESSAGE_BYTES,
     planFileLimitBytes,
     planLabel,
     onError,
   } = options;
+  const publishedLimits = useBillingStore((state) => state.attachmentLimits);
+  const offeredInlineMessageBytes =
+    publishedLimits?.largeFilesAvailable === true ? publishedLimits.inlineMessageBytes : undefined;
+  const offeredStorageRemainingBytes =
+    offeredInlineMessageBytes === undefined
+      ? undefined
+      : (publishedLimits?.storageRemainingBytes ?? null);
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
@@ -251,13 +330,31 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     (incoming: File[]): Promise<File[]> => {
       if (incoming.length === 0) return Promise.resolve([]);
 
+      const offer: LargeFileOffer | null =
+        offeredInlineMessageBytes === undefined || offeredStorageRemainingBytes === undefined
+          ? null
+          : {
+              inlineMessageBytes: offeredInlineMessageBytes,
+              storageRemainingBytes: offeredStorageRemainingBytes,
+            };
       const limits: IntakeLimits = {
         maxFiles,
         maxFileSize,
+        maxImageSize,
         maxTotalBytes,
-        planFileLimitBytes,
+        planFileLimitBytes:
+          offer && planFileLimitBytes !== undefined
+            ? Math.max(planFileLimitBytes, maxFileSize)
+            : planFileLimitBytes,
         planLabel,
+        ...(offer
+          ? {
+              inlineMessageBytes: offer.inlineMessageBytes,
+              storageRemainingBytes: offer.storageRemainingBytes,
+            }
+          : {}),
       };
+      const storageLeft = offer?.storageRemainingBytes ?? null;
       const report = (attached: number, issues: readonly IntakeIssue[]) => {
         const notice = intakeNotice(incoming.length, attached, issues, limits);
         if (notice) onError?.(notice);
@@ -266,7 +363,11 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       const batch: HeldFile[] = [];
       const batchKeys = new Set<string>();
       const availableSlots = maxFiles - heldCountRef.current;
-      let messageBytes = [...heldBytesRef.current.values()].reduce((sum, bytes) => sum + bytes, 0);
+      const heldSizes = [...heldBytesRef.current.values()];
+      let messageBytes = heldSizes.reduce((sum, bytes) => sum + bytes, 0);
+      let inlineBytes = heldSizes
+        .filter((bytes) => bytes <= MAX_FILE_SIZE_BYTES)
+        .reduce((sum, bytes) => sum + bytes, 0);
 
       for (const file of incoming) {
         const key = fileIdentity(file);
@@ -283,10 +384,18 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           continue;
         }
         if (file.size > maxFileSize) {
+          if (
+            storageLeft !== null &&
+            file.size > storageLeft &&
+            storageSetsLimit(maxFileSize, MAX_FILE_SIZE_BYTES, storageLeft)
+          ) {
+            issues.push({ file, reason: 'storage_full' });
+            continue;
+          }
           issues.push({
             file,
             reason:
-              planFileLimitBytes !== undefined && file.size <= planFileLimitBytes
+              limits.planFileLimitBytes !== undefined && file.size <= limits.planFileLimitBytes
                 ? 'needs_project'
                 : 'too_large',
           });
@@ -296,11 +405,37 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           issues.push({ file, reason: 'unsupported' });
           continue;
         }
+        if (classifyFile(file) === 'image' && file.size > maxImageSize) {
+          issues.push({ file, reason: 'image_too_large' });
+          continue;
+        }
+        const inline = file.size <= MAX_FILE_SIZE_BYTES;
+        if (offer && !inline) {
+          const kindMaxBytes =
+            chatLargeFileKindMaxBytes(file.name, file.type) ?? MAX_FILE_SIZE_BYTES;
+          if (file.size > kindMaxBytes) {
+            issues.push({ file, reason: 'kind_too_large', limitBytes: kindMaxBytes });
+            continue;
+          }
+        }
+        if (offer && inline && inlineBytes + file.size > offer.inlineMessageBytes) {
+          issues.push({ file, reason: 'over_inline_budget' });
+          continue;
+        }
         if (messageBytes + file.size > maxTotalBytes) {
-          issues.push({ file, reason: 'over_message_budget' });
+          issues.push({
+            file,
+            reason:
+              storageLeft !== null &&
+              messageBytes + file.size > storageLeft &&
+              storageSetsLimit(maxTotalBytes, MAX_MESSAGE_BYTES, storageLeft)
+                ? 'storage_full'
+                : 'over_message_budget',
+          });
           continue;
         }
         messageBytes += file.size;
+        if (inline) inlineBytes += file.size;
         batchKeys.add(key);
         batch.push({ file, key });
       }
@@ -368,7 +503,18 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       });
       return taken;
     },
-    [admit, maxFiles, maxFileSize, maxTotalBytes, planFileLimitBytes, planLabel, onError],
+    [
+      admit,
+      maxFiles,
+      maxFileSize,
+      maxImageSize,
+      maxTotalBytes,
+      planFileLimitBytes,
+      planLabel,
+      offeredInlineMessageBytes,
+      offeredStorageRemainingBytes,
+      onError,
+    ],
   );
 
   const addFiles = useCallback(

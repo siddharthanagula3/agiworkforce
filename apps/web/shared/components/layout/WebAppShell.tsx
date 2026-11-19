@@ -355,8 +355,10 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
       if (!convo) return;
       void toggleConversationArchive(
         convo.isArchived ?? false,
-        (archived) => updateConversation(id, { archived }),
+        (archived, pinned) =>
+          updateConversation(id, pinned === undefined ? { archived } : { archived, pinned }),
         () => openShellSettings('archived'),
+        convo.isPinned ?? false,
       );
     },
     [conversations, openShellSettings, updateConversation],

@@ -8,7 +8,7 @@ vi.mock('@/lib/logger', () => ({
 
 import type { ModelAccessPolicy } from '@agiworkforce/routing';
 
-import { resolveWebCloudModelRoute } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 
 const AUTO_SELECTION = 'auto';
 const TASK_TYPE = 'general' as const;

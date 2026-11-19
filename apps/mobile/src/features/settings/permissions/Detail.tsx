@@ -7,6 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { usePermissionsStore } from '@/stores/permissionsStore';
@@ -17,6 +18,7 @@ import {
   type MobilePermissionKind,
   type OsPermissionStatus,
 } from './types';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function isMobilePermissionKind(value: string | undefined): value is MobilePermissionKind {
   return typeof value === 'string' && value in PERMISSION_REGISTRY;
@@ -109,7 +111,12 @@ export default function PermissionDetailScreen() {
       <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
         <StatusBar style={statusBarStyle} />
         <View
-          style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
+          style={{
+            minHeight: 58,
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 8,
+          }}
         >
           <Pressable
             onPress={handleBack}
@@ -126,6 +133,7 @@ export default function PermissionDetailScreen() {
             <ArrowLeft size={22} color={c.textPrimary} />
           </Pressable>
           <Text
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
             style={{
               color: c.textPrimary,
               fontSize: typeScale.title3,
@@ -146,20 +154,23 @@ export default function PermissionDetailScreen() {
   const Icon = entry.icon;
   const granted = isPermissionGranted(osStatus);
   const canRequest = osStatus === 'undetermined';
+  const headline = entry.statusHeadlines?.[osStatus] ?? STATUS_HEADLINES[osStatus];
+  const explanation = entry.statusExplanations?.[osStatus] ?? STATUS_EXPLANATIONS[osStatus];
   const actionLabel = canRequest
     ? requesting
       ? `Asking for ${entry.label} access…`
-      : `Allow ${entry.label}`
+      : (entry.request?.label ?? `Allow ${entry.label}`)
     : 'Open Settings';
   const actionHint = canRequest
-    ? 'Your device asks you to decide. AGI never sees an answer you do not give.'
+    ? (entry.request?.hint ??
+      'Your device asks you to decide. AGI never sees an answer you do not give.')
     : `${entry.label} access is decided in your device Settings, not here.`;
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
       <StatusBar style={statusBarStyle} />
       <View
-        style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
+        style={{ minHeight: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}
       >
         <Pressable
           onPress={handleBack}
@@ -178,6 +189,7 @@ export default function PermissionDetailScreen() {
           <ArrowLeft size={22} color={c.textPrimary} />
         </Pressable>
         <Text
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
           style={{
             flex: 1,
             color: c.textPrimary,
@@ -192,12 +204,12 @@ export default function PermissionDetailScreen() {
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 44 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
       >
         <View
           accessibilityRole="summary"
-          accessibilityLabel={`${entry.label}. ${STATUS_HEADLINES[osStatus]}. ${entry.description}`}
+          accessibilityLabel={`${entry.label}. ${headline}. ${entry.description}`}
           style={{
             marginTop: 10,
             padding: 16,
@@ -224,7 +236,7 @@ export default function PermissionDetailScreen() {
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ color: c.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}>
-              {STATUS_HEADLINES[osStatus]}
+              {headline}
             </Text>
             <Text
               style={{
@@ -248,7 +260,7 @@ export default function PermissionDetailScreen() {
             paddingHorizontal: 2,
           }}
         >
-          {STATUS_EXPLANATIONS[osStatus]}
+          {explanation}
         </Text>
 
         {failureMessage ? (

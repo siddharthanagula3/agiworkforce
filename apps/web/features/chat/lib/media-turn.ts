@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { parseMediaAspectRatio } from '@agiworkforce/types';
 import { freeQuotaSelection } from './free-quota-selection';
 
 export type MediaTurnCategory = 'image' | 'video';
@@ -41,7 +42,6 @@ const TOOL_TYPE_CATEGORY: Readonly<Record<string, MediaTurnCategory>> = {
 const FREE_VIDEO_RESULT_TEXT = 'Video generated.';
 
 const PIXEL_SIZE = /^(\d+)\*(\d+)$/;
-const RATIO = /^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/;
 
 const SQUARE = 1;
 const WIDESCREEN = 16 / 9;
@@ -118,27 +118,16 @@ export function mediaTurnProse(message: MediaTurnMessage): string {
   return repeatsThePlayer ? '' : message.content;
 }
 
-function parseRatio(aspectRatio: string | undefined): number | null {
-  const match = RATIO.exec(aspectRatio ?? '');
-  if (!match) return null;
-  const ratio = Number(match[1]) / Number(match[2]);
-  return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
-}
-
-export function hasKnownMediaFrame(aspectRatio: string | undefined): boolean {
-  return parseRatio(aspectRatio) !== null;
-}
-
 export function mediaFrameStyle(frame: MediaFrame, aspectRatio: string | undefined): CSSProperties {
   if (frame === 'image-card') {
     return {
       width: `min(100%, ${IMAGE_CARD_SIDE_PX}px)`,
       maxHeight: IMAGE_CARD_SIDE_PX,
-      aspectRatio: String(parseRatio(aspectRatio) ?? SQUARE),
+      aspectRatio: String(parseMediaAspectRatio(aspectRatio) ?? SQUARE),
     };
   }
   const fitted = FITTED_FRAME[frame];
-  const ratio = parseRatio(aspectRatio) ?? fitted.ratio;
+  const ratio = parseMediaAspectRatio(aspectRatio) ?? fitted.ratio;
   return {
     width: `min(100%, ${Math.round(fitted.heightPx * ratio)}px)`,
     aspectRatio: String(ratio),

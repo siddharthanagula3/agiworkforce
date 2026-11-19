@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { useEffect, useId, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -85,23 +85,23 @@ export function TermsGate({
         />
         <span>
           I agree to the{' '}
-          <Link
+          <PageLink
             href={CANONICAL_POLICY_ROUTES.terms}
             target="_blank"
             rel="noopener noreferrer"
             className="auth-inline rounded-compact text-text-primary underline underline-offset-4"
           >
             Terms of Service
-          </Link>{' '}
+          </PageLink>{' '}
           and acknowledge the{' '}
-          <Link
+          <PageLink
             href={CANONICAL_POLICY_ROUTES.privacy}
             target="_blank"
             rel="noopener noreferrer"
             className="auth-inline rounded-compact text-text-primary underline underline-offset-4"
           >
             Privacy Policy
-          </Link>
+          </PageLink>
           .
         </span>
       </label>

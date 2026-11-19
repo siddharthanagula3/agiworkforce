@@ -5,7 +5,8 @@ import { Text } from '@/components/ui/Text';
 import { Switch } from '@/components/ui/Switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { API_URL } from '@/lib/constants';
 import type { ChineseHqProviderId, ShortDisclosureCopy } from '@agiworkforce/compliance';
 
@@ -64,6 +65,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
     >
       <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <View
+          testID="disclosure-sheet"
           style={[
             styles.sheet,
             {
@@ -105,7 +107,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <View style={styles.legalLinks}>
                 <PressableBox
                   testID="disclosure-privacy-policy-link"
-                  onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
+                  onPress={() => void openWebContentPage(PRIVACY_POLICY_URL)}
                   accessibilityRole="link"
                   accessibilityLabel="Read the AGI privacy policy"
                   style={styles.legalLink}
@@ -114,7 +116,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
                 </PressableBox>
                 <PressableBox
                   testID="disclosure-terms-link"
-                  onPress={() => void openInAppBrowser(TERMS_OF_USE_URL)}
+                  onPress={() => void openWebContentPage(TERMS_OF_USE_URL)}
                   accessibilityRole="link"
                   accessibilityLabel="Read the AGI terms of use"
                   style={styles.legalLink}
@@ -124,7 +126,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               </View>
               <PressableBox
                 testID="disclosure-dpdp-notice-link"
-                onPress={() => void openInAppBrowser(INDIA_DPDP_NOTICE_URL)}
+                onPress={() => void openWebContentPage(INDIA_DPDP_NOTICE_URL)}
                 accessibilityRole="link"
                 accessibilityLabel="Read the India DPDP notice"
                 style={styles.legalLink}
@@ -236,6 +238,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
+    ...contentColumn('reading'),
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',

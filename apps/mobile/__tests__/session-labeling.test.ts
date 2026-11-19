@@ -15,6 +15,11 @@ jest.mock('@/src/features/chat/store/appModeStore', () => ({
   },
 }));
 
+let mockSharingAllowed = true;
+jest.mock('@/services/providerConsent', () => ({
+  hasCurrentCloudProviderConsent: () => mockSharingAllowed,
+}));
+
 import { guardedFetch, EgressBlockedError } from '@/lib/egressGuard';
 import {
   labelMobileSession,
@@ -30,6 +35,7 @@ import type { ConversationExecutionMode } from '@/src/features/chat/utils/conver
 beforeEach(() => {
   mockSecureFetch.mockReset().mockResolvedValue(new Response('ok', { status: 200 }));
   mockAppMode = 'local';
+  mockSharingAllowed = true;
 });
 
 describe('labelMobileSession', () => {
@@ -153,12 +159,19 @@ describe('ExecutionProfile agreement with the REAL 4-layer egress enforcement (g
     expect(mockSecureFetch).not.toHaveBeenCalled();
   });
 
-  it('a cloud ExecutionProfile implies our-cloud egress is allowed, and guardedFetch actually allows it', async () => {
+  it('a cloud ExecutionProfile the account allowed to share with AI providers implies our-cloud egress is allowed, and guardedFetch actually allows it', async () => {
     mockAppMode = 'cloud';
     const profile = mobileExecutionProfileFor('cloud');
     expect(profile.tools.cloudExecutionAllowed).toBe(true);
     await guardedFetch(OUR_CLOUD_URL);
     expect(mockSecureFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('a cloud ExecutionProfile without that permission is still refused before any network I/O', async () => {
+    mockAppMode = 'cloud';
+    mockSharingAllowed = false;
+    await expect(guardedFetch(OUR_CLOUD_URL)).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(mockSecureFetch).not.toHaveBeenCalled();
   });
 
   it('agreement holds for every reachable ConversationExecutionMode value', async () => {

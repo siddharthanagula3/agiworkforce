@@ -9,7 +9,7 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { checkContentFilter } from '@agiworkforce/types';
+import { checkContentFilter, getDefaultModelFor } from '@agiworkforce/types';
 import { AI_GENERATED_HEADER, ARTICLE_50_2_WEB_SCOPE } from '@/lib/compliance/ai-act';
 import { SENSITIVE_DATA_CONNECTORS } from '@/lib/connectors/sensitive-data-connectors';
 import { decideEuAccess, euBlockEnabled } from '@/lib/eu-access';
@@ -20,6 +20,13 @@ import { resolveSubscriptionAccess } from '@/lib/services/subscription-access-po
 import { RELEASED_SURFACES } from '@/lib/surface-status';
 import { SUPPORTED_BROWSERS, UNSUPPORTED_BROWSER_NOTICE } from '@/lib/browser-support';
 import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n/languages';
+import {
+  CHAT_SYSTEM_PROMPT_ID,
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  CHAT_SYSTEM_PROMPT_VERSIONS,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
+import { promptReleaseAdmits, promptReleaseChannel } from '@/lib/prompts/prompt-release';
 
 type LoggerModule = typeof import('@/lib/logger');
 
@@ -143,6 +150,30 @@ describe('Reduce sensitive content, the one setting that touches self-harm', () 
       allowed: false,
       refusal: REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL,
     });
+  });
+
+  it('lets a message about feelings or a request for help through', () => {
+    for (const message of [
+      'I feel like everyone would be better off without me.',
+      'I want to kill myself.',
+      'What should I do if a friend says they feel hopeless?',
+      'What should I do if I want to kill myself?',
+      'suicide prevention hotline number',
+    ]) {
+      expect(checkContentFilter(message, true, REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL)).toEqual({
+        allowed: true,
+      });
+    }
+    expect(
+      checkContentFilter(
+        'I want to end my life. What is the most painless way?',
+        true,
+        REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL,
+      ),
+    ).toEqual({ allowed: false, refusal: REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL });
+    expect(prose('content/support/crisis-resources.md')).toContain(
+      'A message about how you feel, or a request for help for yourself or someone else, is not refused.',
+    );
   });
 
   it('answers with a refusal that names the setting and no helpline', () => {
@@ -314,16 +345,89 @@ describe('the two help articles', () => {
     expect([...RELEASED_SURFACES]).toEqual(['web']);
   });
 
-  it('prints crisis numbers and admits that no crisis feature exists', () => {
+  it('prints crisis numbers and keeps crisis copy off the web chat page', () => {
     const file = article('crisis-resources');
     expect(existsSync(file)).toBe(true);
     const text = readFileSync(file, 'utf8').replace(/\s+/g, ' ');
     expect(text).toContain('Call or text 988');
     expect(text).toContain('Tele MANAS on 14416');
-    expect(text).toContain('AGI has no feature that detects a message about suicide or self-harm.');
-    expect(text).toContain('A chat shows no crisis banner, helpline number or pop-up.');
+    expect(text).toContain(
+      'Apart from the Reduce sensitive content check below, AGI does not scan chats for messages about suicide or self-harm, and a message about self-harm alerts no person at AGI.',
+    );
+    expect(text).toContain(
+      'AGI adds no crisis banner or pop-up to a chat, and the only crisis note it adds is in the phone refusal described below.',
+    );
+    expect(text).not.toMatch(/Nothing special|has no feature that detects/u);
     const chat = read('features/chat/pages/WebChatPage.tsx');
     expect(chat).not.toMatch(/988|helpline|crisis/iu);
+  });
+});
+
+describe('what the crisis article says each mode does', () => {
+  const ARTICLE = prose('content/support/crisis-resources.md');
+  const MOBILE_ROOT = path.resolve(WEB_ROOT, '..', 'mobile');
+  const mobile = (relative: string) => readFileSync(path.join(MOBILE_ROOT, relative), 'utf8');
+
+  it('leaves Cloud answers to the provider because no public chat prompt carries a wellbeing section', () => {
+    const publicVersions = CHAT_SYSTEM_PROMPT_VERSIONS.filter(({ version }) =>
+      promptReleaseAdmits(promptReleaseChannel(CHAT_SYSTEM_PROMPT_ID, version), {
+        internalStaff: false,
+      }),
+    ).map(({ version }) => version);
+    expect(publicVersions).toContain(CHAT_SYSTEM_PROMPT_PINNED_VERSION);
+    for (const version of publicVersions) {
+      expect(
+        chatSystemPromptSections(version)['wellbeing'],
+        `chat.system@${version} now reaches everyone with a wellbeing section; say so in the crisis article`,
+      ).toBeUndefined();
+    }
+    expect(ARTICLE).toContain(
+      "In Managed Cloud and with your own provider key, the model you picked answers under its provider's own safety rules.",
+    );
+  });
+
+  it('sends a Local mode chat on the phone no self-harm instruction', () => {
+    const prompt = mobile('stores/chat/localSystemPrompt.ts');
+    expect(prompt).toContain(
+      "return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...rest];",
+    );
+    expect(prompt).not.toMatch(/suicid|self-harm|crisis|emergency number/iu);
+    expect(mobile('stores/chat/chatExecutionStore.ts')).toContain(
+      'const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(',
+    );
+    expect(ARTICLE).toContain(
+      'In Local mode in the AGI Mobile app, a small model runs on your phone, and AGI does not add an instruction about self-harm to what it sends that model.',
+    );
+  });
+
+  it('adds a helpline to a refused self-harm request on the phone, Local mode included, and not on the web', () => {
+    const filter = mobile('lib/contentFilter.ts');
+    expect(filter).toContain('export const SELF_HARM_HELPLINE');
+    expect(filter).toContain('988');
+    expect(filter).toContain('your local emergency number');
+    const store = mobile('stores/chat/chatExecutionStore.ts');
+    expect(filter).toContain('refusal: `${copy.selfHarmNotSent}\\n\\n${SELF_HARM_HELPLINE}`');
+    const send = store.slice(store.indexOf('  sendMessage: async ('));
+    const filtered = send.indexOf('if (refuseFilteredSend(content)) return false;');
+    expect(filtered).toBeGreaterThan(-1);
+    expect(filtered).toBeLessThan(send.indexOf('const shouldUseLocalRuntime ='));
+    const refusal = mobile('src/features/chat/utils/refuseFilteredSend.ts');
+    expect(refusal).toContain(
+      'if (!minorMode && !useSettingsStore.getState().reduceSensitiveContent) return false;',
+    );
+    expect(refusal).toMatch(
+      /const verdict = checkContentFilter\([^)]*\);\s+if \(verdict\.allowed\) return false;\s+Alert\.alert\('Content not available', verdict\.refusal\);\s+return true;/u,
+    );
+    expect(REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL).not.toMatch(/988|helpline|crisis/iu);
+    expect(ARTICLE).toContain(
+      'On the web, the refusal says the content is unavailable while the setting is on. It shows no helpline.',
+    );
+    expect(ARTICLE).toContain(
+      'In the AGI Mobile app the same check runs on the phone before a chat message you type or dictate reaches any model, in Local mode as well, and when it refuses a request about suicide or self-harm, the pop-up that says so adds a note that points to a crisis line and your local emergency number.',
+    );
+    expect(ARTICLE).toContain(
+      'A phone in minor-safe mode runs the check whether or not the setting is on.',
+    );
   });
 });
 
@@ -570,7 +674,7 @@ describe('where a Free plan chat on the default model is sent', () => {
     );
   });
 
-  it('names OpenAI because the Free plan model is an OpenAI model on its direct route', () => {
+  it('names OpenAI because the Free plan default model is an OpenAI model on its direct route', () => {
     const registry = JSON.parse(
       readFileSync(
         path.join(WEB_ROOT, '..', '..', 'packages/ai/model-registry/generated/registry.json'),
@@ -583,18 +687,25 @@ describe('where a Free plan chat on the default model is sent', () => {
         auto: {
           tierAllowedSlots: Record<string, string[]>;
           slots: Record<string, { modelKey: string }>;
+          tasks: Record<string, { preferredSlots: Record<string, string[]> }>;
         };
       };
     };
-    const freeModels = [
+    const auto = registry.policies.auto;
+    const autoReachable = new Set(
+      Object.values(auto.tasks).flatMap((task) => Object.values(task.preferredSlots).flat()),
+    );
+    const freeSlots = auto.tierAllowedSlots['free'] ?? [];
+    const freeDefaultModels = [
       ...new Set(
-        (registry.policies.auto.tierAllowedSlots['free'] ?? []).map(
-          (slot) => registry.policies.auto.slots[slot]?.modelKey,
+        [freeSlots[0], ...freeSlots.filter((slot) => autoReachable.has(slot))].map(
+          (slot) => auto.slots[slot as string]?.modelKey,
         ),
       ),
     ];
-    expect(freeModels).toHaveLength(1);
-    const freeModel = freeModels[0] as string;
+    expect(freeDefaultModels).toHaveLength(1);
+    const freeModel = freeDefaultModels[0] as string;
+    expect(getDefaultModelFor('free', 'chat')).toBe(freeModel);
     expect(registry.models[freeModel]?.identity.provider).toBe('openai');
     const defaultRoute = Object.values(registry.routes).find(
       (route) => route.modelKey === freeModel && route.isDefault,

@@ -7,6 +7,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListMultipartUploadsCommand,
+  ListObjectsV2Command,
   ListPartsCommand,
   PutObjectCommand,
   S3Client,
@@ -24,6 +25,7 @@ import {
   type CompleteMultipartUploadInput,
   type CopyObjectIfMatchInput,
   type CreateMultipartUploadInput,
+  type ListedObject,
   type MultipartUploadHandle,
   type ObjectEncryption,
   type ObjectStore,
@@ -54,11 +56,23 @@ const ENCRYPTION_METADATA_KEY = 'agi-encryption';
 export interface S3ClientTimeouts {
   connectionTimeoutMs: number;
   requestTimeoutMs: number;
+  /**
+   * The SDK's request handler only logs a request that passes
+   * `requestTimeoutMs` unless it is told to throw; this makes it end the
+   * request instead.
+   */
+  enforceRequestTimeout?: boolean;
+  /**
+   * The SDK retries a timed-out or 5xx request on its own, after the caller
+   * has already been answered; one attempt keeps a deadline the last word.
+   */
+  maxAttempts?: number;
 }
 
 export interface S3ObjectStoreOptions {
   client: S3Client;
   requestTimeoutMs: number;
+  copyTimeoutMs?: number;
   encryption?: ObjectEncryption;
   region?: string;
 }
@@ -76,9 +90,11 @@ export function createS3Client(config: ObjectStorageConfig, timeouts: S3ClientTi
     forcePathStyle: config.forcePathStyle,
     credentials: { accessKeyId, secretAccessKey },
     requestChecksumCalculation: CHECKSUM_ON_DEMAND,
+    ...(timeouts.maxAttempts === undefined ? {} : { maxAttempts: timeouts.maxAttempts }),
     requestHandler: {
       connectionTimeout: timeouts.connectionTimeoutMs,
       requestTimeout: timeouts.requestTimeoutMs,
+      ...(timeouts.enforceRequestTimeout ? { throwOnRequestTimeout: true } : {}),
     },
   });
 }
@@ -118,8 +134,23 @@ function withRequestTimeout<T>(timeoutMs: number, operation: () => Promise<T>): 
   return Promise.race([operation(), deadline]).finally(() => clearTimeout(timer));
 }
 
+function withAbortingDeadline<T>(
+  timeoutMs: number,
+  operation: (abortSignal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new ObjectStorageTimeoutError(timeoutMs));
+      controller.abort();
+    }, timeoutMs);
+  });
+  return Promise.race([operation(controller.signal), deadline]).finally(() => clearTimeout(timer));
+}
+
 export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore {
-  const { client, requestTimeoutMs, encryption, region } = options;
+  const { client, requestTimeoutMs, copyTimeoutMs, encryption, region } = options;
 
   function objectMetadata(
     extra: Readonly<Record<string, string>> | undefined,
@@ -236,17 +267,22 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
     },
 
     async copyIfMatch(input: CopyObjectIfMatchInput): Promise<boolean> {
+      const command = new CopyObjectCommand({
+        Bucket: input.bucket,
+        Key: input.destinationKey,
+        CopySource: encodeCopySource(input.bucket, input.sourceKey),
+        CopySourceIfMatch: input.etag,
+        MetadataDirective: COPY_METADATA_DIRECTIVE,
+        ...encryptionHeaders(),
+      });
       try {
-        await client.send(
-          new CopyObjectCommand({
-            Bucket: input.bucket,
-            Key: input.destinationKey,
-            CopySource: encodeCopySource(input.bucket, input.sourceKey),
-            CopySourceIfMatch: input.etag,
-            MetadataDirective: COPY_METADATA_DIRECTIVE,
-            ...encryptionHeaders(),
-          }),
-        );
+        if (copyTimeoutMs === undefined) {
+          await client.send(command);
+        } else {
+          await withAbortingDeadline(copyTimeoutMs, (abortSignal) =>
+            client.send(command, { abortSignal }),
+          );
+        }
         return true;
       } catch (error) {
         if (isPreconditionFailed(error)) return false;
@@ -283,6 +319,7 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
           ...(bound.contentDisposition
             ? { ResponseContentDisposition: bound.contentDisposition }
             : {}),
+          ...(bound.contentType ? { ResponseContentType: bound.contentType } : {}),
         }),
         { expiresIn: bound.expiresInSeconds },
       );
@@ -418,6 +455,34 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
         keyMarker = response.NextKeyMarker;
         uploadIdMarker = response.NextUploadIdMarker;
         if (!keyMarker && !uploadIdMarker) return pending;
+      }
+    },
+
+    async listObjects(
+      bucket: string,
+      prefix: string,
+      limit?: number,
+      startAfter?: string,
+    ): Promise<ListedObject[]> {
+      const listed: ListedObject[] = [];
+      let continuationToken: string | undefined;
+      for (;;) {
+        const response = await client.send(
+          new ListObjectsV2Command({
+            Bucket: bucket,
+            Prefix: prefix,
+            StartAfter: startAfter,
+            ContinuationToken: continuationToken,
+            MaxKeys: limit === undefined ? undefined : limit - listed.length,
+          }),
+        );
+        for (const object of response.Contents ?? []) {
+          if (!object.Key) continue;
+          listed.push({ key: object.Key, lastModifiedMs: object.LastModified?.getTime() });
+        }
+        if (limit !== undefined && listed.length >= limit) return listed.slice(0, limit);
+        if (!response.IsTruncated || !response.NextContinuationToken) return listed;
+        continuationToken = response.NextContinuationToken;
       }
     },
   };

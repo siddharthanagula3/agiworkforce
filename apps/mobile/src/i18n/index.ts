@@ -4,6 +4,7 @@ import { getLocales } from 'expo-localization';
 import { I18nManager } from 'react-native';
 import { create } from 'zustand';
 import { mmkvStorage } from '@/lib/mmkv';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   DEFAULT_LANGUAGE,
   SELECTABLE_LANGUAGES,
@@ -26,6 +27,7 @@ I18nManager.allowRTL(true);
 I18nManager.swapLeftAndRightInRTL(true);
 
 export function getDeviceLanguage(): string {
+  if (!FEATURES.appLanguage) return DEFAULT_LANGUAGE;
   for (const locale of getLocales()) {
     const base = locale.languageCode ?? locale.languageTag?.split('-')[0];
     if (base && isSelectableLanguage(base)) return base;
@@ -45,6 +47,7 @@ export const useLanguagePreferenceStore = create<{ preference: string }>(() => (
 }));
 
 export function readStoredLanguagePreference(): string {
+  if (!FEATURES.appLanguage) return DEVICE_LANGUAGE_PREFERENCE;
   try {
     const stored = mmkvStorage.getItem(LANGUAGE_STORAGE_KEY);
     if (
@@ -72,6 +75,7 @@ export async function restoreStoredLanguage(): Promise<LanguageChangeResult> {
 }
 
 export async function setLanguage(preference: string): Promise<LanguageChangeResult | null> {
+  if (!FEATURES.appLanguage) return null;
   if (preference !== DEVICE_LANGUAGE_PREFERENCE && !isSelectableLanguage(preference)) return null;
   const language = resolvePreference(preference);
   await i18n.changeLanguage(language);

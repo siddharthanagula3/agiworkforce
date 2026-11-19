@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { watchClamd, type Daemon } from '../src/daemons.ts';
+import { createSourceScanLiveness } from '../src/source-scan.ts';
 
 let daemon: Daemon | undefined;
 
@@ -111,6 +112,56 @@ describe('clamd watchdog', () => {
     expect(pending).toHaveLength(2);
     for (const resolve of pending) resolve(false);
     await Promise.resolve();
+
+    expect(onUnresponsive).toHaveBeenCalledOnce();
+  });
+});
+
+describe('clamd watchdog during a source scan', () => {
+  const signatures = { engine: '1.4.6', version: 27790, publishedAt: new Date(0) };
+
+  it('does not fire while a source scan is live, and fires after its limit once the scan reaches its deadline', async () => {
+    const liveness = createSourceScanLiveness();
+    let probeDetects = true;
+    const onUnresponsive = vi.fn();
+    daemon = watchClamd(
+      () =>
+        Promise.resolve(
+          liveness.observe({ scanning: probeDetects, signatures: probeDetects ? signatures : null })
+            .scanning,
+        ),
+      onUnresponsive,
+      100,
+      300,
+    );
+    await vi.advanceTimersByTimeAsync(100);
+
+    const scan = liveness.begin();
+    probeDetects = false;
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(onUnresponsive).not.toHaveBeenCalled();
+
+    scan.end('deadline');
+    await vi.advanceTimersByTimeAsync(299);
+    expect(onUnresponsive).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onUnresponsive).toHaveBeenCalledOnce();
+  });
+
+  it('gives a later scan no exemption after a deadline until a probe succeeds', async () => {
+    const liveness = createSourceScanLiveness();
+    liveness.observe({ scanning: true, signatures });
+    liveness.begin().end('deadline');
+    const onUnresponsive = vi.fn();
+    liveness.begin();
+    daemon = watchClamd(
+      () => Promise.resolve(liveness.observe({ scanning: false, signatures: null }).scanning),
+      onUnresponsive,
+      100,
+      300,
+    );
+
+    await vi.advanceTimersByTimeAsync(300);
 
     expect(onUnresponsive).toHaveBeenCalledOnce();
   });

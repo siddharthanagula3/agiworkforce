@@ -4,7 +4,40 @@ const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(
 const hostedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
+const fs = require('fs');
+const path = require('path');
+const { AndroidConfig, withInfoPlist, withStringsXml } = require('expo/config-plugins');
 const { nativePurchases } = require('./src/features/billing/storePurchases.json');
+
+function v1Feature(name) {
+  const flagsFile = path.join(__dirname, 'lib', 'v1FeatureFlags.ts');
+  const settings = [
+    ...fs
+      .readFileSync(flagsFile, 'utf8')
+      .matchAll(new RegExp(`^\\s*${name}:\\s*(true|false),?$`, 'gm')),
+  ];
+  if (settings.length !== 1) {
+    throw new Error(`[v1-features] ${flagsFile} must set ${name} to true or false exactly once.`);
+  }
+  return settings[0][1] === 'true';
+}
+
+const backgroundTasksEnabled = v1Feature('dispatch');
+const pairingLinksEnabled = v1Feature('companion') && v1Feature('dispatch');
+const BACKGROUND_TASK_MODES = ['fetch', 'processing'];
+
+// expo-task-manager is autolinked for its JavaScript API, so prebuild applies its
+// legacy plugin, which adds the fetch mode, whether or not a task is ever registered.
+function withoutBackgroundTaskModes(config) {
+  return withInfoPlist(config, (c) => {
+    const modes = (c.modResults.UIBackgroundModes ?? []).filter(
+      (mode) => !BACKGROUND_TASK_MODES.includes(mode),
+    );
+    if (modes.length > 0) c.modResults.UIBackgroundModes = modes;
+    else delete c.modResults.UIBackgroundModes;
+    return c;
+  });
+}
 
 if (
   (appEnv === 'production' || appEnv === 'preview') &&
@@ -37,6 +70,26 @@ const CAMERA_PURPOSE =
   'AGI Mobile uses the camera to scan documents and attach photos to your chats.';
 const PHOTOS_PURPOSE = 'AGI Mobile uses the photos you pick to attach them to your chats.';
 const FACE_ID_PURPOSE = 'AGI Mobile uses Face ID to unlock the app.';
+// The name under the icon and in system dialogs matches the store record. `name`
+// below stays the registry's product name, which also names the native target.
+const APP_DISPLAY_NAME = 'AGI Mobile';
+const ALL_INTERFACE_ORIENTATIONS = [
+  'UIInterfaceOrientationPortrait',
+  'UIInterfaceOrientationPortraitUpsideDown',
+  'UIInterfaceOrientationLandscapeLeft',
+  'UIInterfaceOrientationLandscapeRight',
+];
+
+function withAndroidDisplayName(config) {
+  return withStringsXml(config, (c) => {
+    const label = { name: 'app_name', value: APP_DISPLAY_NAME };
+    c.modResults = AndroidConfig.Strings.setStringItem(
+      [AndroidConfig.Resources.buildResourceItem(label)],
+      c.modResults,
+    );
+    return c;
+  });
+}
 
 const shouldUseProductionEntitlements =
   envIsTruthy('EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS') ||
@@ -78,6 +131,7 @@ const config = {
     buildNumber: '2',
     associatedDomains,
     infoPlist: {
+      CFBundleDisplayName: APP_DISPLAY_NAME,
       NSCameraUsageDescription: CAMERA_PURPOSE,
       NSMicrophoneUsageDescription:
         'AGI Mobile uses the microphone for voice input and real-time voice conversations with AI.',
@@ -89,12 +143,12 @@ const config = {
         'AGI Mobile uses speech recognition to transcribe voice input for AI conversations.',
       NSUserActivityTypes: ['com.agiworkforce.app.intent'],
       AGIApiBaseURL: hostedOrigin || 'https://agiworkforce.com',
-      'UISupportedInterfaceOrientations~ipad': [
-        'UIInterfaceOrientationPortrait',
-        'UIInterfaceOrientationPortraitUpsideDown',
-        'UIInterfaceOrientationLandscapeLeft',
-        'UIInterfaceOrientationLandscapeRight',
-      ],
+      // `orientation` above writes the portrait-only iPhone list, which is all the
+      // launch screen reads, so the app never opens sideways. Once running, the
+      // orientations come from expo-screen-orientation's app delegate answer,
+      // which lets Present and the video player turn.
+      'UISupportedInterfaceOrientations~ipad': ALL_INTERFACE_ORIENTATIONS,
+      'EXDefaultScreenOrientationMask~ipad': 'UIInterfaceOrientationMaskAll',
       ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
@@ -162,13 +216,40 @@ const config = {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeDeviceID',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
-          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+          NSPrivacyCollectedDataTypePurposes: [
+            'NSPrivacyCollectedDataTypePurposeAppFunctionality',
+            'NSPrivacyCollectedDataTypePurposeAnalytics',
+          ],
         },
         {
           NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeProductInteraction',
           NSPrivacyCollectedDataTypeLinked: true,
           NSPrivacyCollectedDataTypeTracking: false,
           NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAnalytics'],
+        },
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCustomerSupport',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeSearchHistory',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeOtherDiagnosticData',
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        },
+        {
+          NSPrivacyCollectedDataType: 'NSPrivacyCollectedDataTypeCrashData',
+          NSPrivacyCollectedDataTypeLinked: false,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
         },
       ],
       NSPrivacyTracking: false,
@@ -192,6 +273,8 @@ const config = {
       'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
       'android.permission.ACCESS_MEDIA_LOCATION',
       'android.permission.SYSTEM_ALERT_WINDOW',
+      // expo-sensors declares it for the pedometer, which the app never uses.
+      'android.permission.ACTIVITY_RECOGNITION',
       // The Play Billing library declares this permission whenever it is
       // linked, and Play labels a listing "In-app purchases" from it. A build
       // that sells nothing must not carry it.
@@ -223,8 +306,12 @@ const config = {
         autoVerify: true,
         category: ['DEFAULT', 'BROWSABLE'],
         data: [
-          { scheme: 'https', host: 'agiworkforce.com', path: '/pair' },
-          { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
+          ...(pairingLinksEnabled
+            ? [
+                { scheme: 'https', host: 'agiworkforce.com', path: '/pair' },
+                { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/pair/' },
+              ]
+            : []),
           { scheme: 'https', host: 'agiworkforce.com', path: '/auth/reset-password' },
           { scheme: 'https', host: 'agiworkforce.com', pathPrefix: '/open/' },
           { scheme: 'https', host: 'agiworkforce.com', path: '/github/installed' },
@@ -249,7 +336,8 @@ const config = {
         },
       },
     ],
-    'expo-background-task',
+    backgroundTasksEnabled ? 'expo-background-task' : withoutBackgroundTaskModes,
+    withAndroidDisplayName,
     'expo-image',
     hostedOrigin ? ['expo-router', { origin: hostedOrigin }] : 'expo-router',
     'expo-secure-store',
@@ -302,9 +390,8 @@ const config = {
     [
       'expo-calendar',
       {
-        calendarPermission:
-          'Allow $(PRODUCT_NAME) to read your calendars when you ask about your schedule, and to add the events you confirm in a chat.',
-        remindersPermission: 'Allow $(PRODUCT_NAME) to add the reminders you confirm in a chat.',
+        calendarPermission: `Allow ${APP_DISPLAY_NAME} to read your calendars when you ask about your schedule, and to add the events you confirm in a chat.`,
+        remindersPermission: `Allow ${APP_DISPLAY_NAME} to add the reminders you confirm in a chat.`,
       },
     ],
     [
@@ -339,6 +426,10 @@ const config = {
     ],
     'expo-document-picker',
     'expo-sharing',
+    ['expo-screen-orientation', { initialOrientation: 'PORTRAIT_UP' }],
+    // The accelerometer needs no permission; without this the plugin adds a
+    // motion purpose string for a prompt the app never shows.
+    ['expo-sensors', { motionPermission: false }],
     'llama.rn',
     './native/android/withAGITranslate.cjs',
     './native/android/withAGIVisionOCR.cjs',
@@ -376,6 +467,31 @@ const config = {
   extra: {
     eas: {
       projectId: easProjectId,
+    },
+  },
+};
+
+// EAS Build signs only the targets it is told about: each extension needs its own
+// provisioning profile, and only these targets get the remote build number. The
+// names match the targets native/ios/withAGIShareExtension.cjs and withAGIWidgets.cjs add.
+const appExtensionEntitlements = {
+  'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
+};
+config.extra.eas.build = {
+  experimental: {
+    ios: {
+      appExtensions: [
+        {
+          targetName: 'AGIShareExtension',
+          bundleIdentifier: `${config.ios.bundleIdentifier}.share-extension`,
+          entitlements: appExtensionEntitlements,
+        },
+        {
+          targetName: 'AGIWidgets',
+          bundleIdentifier: `${config.ios.bundleIdentifier}.widgets`,
+          entitlements: appExtensionEntitlements,
+        },
+      ],
     },
   },
 };

@@ -104,11 +104,16 @@ describe('workspace model policy covers every model-serving route', () => {
     // DIFFERENT model, and a policy enforced only on the happy path is not a
     // policy. The resolver refuses a governed candidate during admission.
     const text = source('app/api/llm/v1/chat/completions/lib/request-processor.ts');
+    const routingRequest = source('lib/server/managed-cloud-routing/routing-request.ts');
 
     expect(
-      text,
+      routingRequest,
       'resolveAutoRoute must receive organizationPolicy as an admission input',
     ).toContain('organizationPolicy');
+    expect(
+      text,
+      'the chat turn must hand the workspace policy it read to the routing request',
+    ).toContain('workspaceModelPolicy,');
     expect(
       text.indexOf('readWorkspaceModelPolicy('),
       'the policy must be read before routing, not after',

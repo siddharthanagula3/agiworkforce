@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 import { Text } from './Text';
 import { useThemeColors } from '@/src/ui/theme';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/ui/theme/tokens';
 
 interface BadgeProps {
   label: string;
@@ -63,7 +64,8 @@ export function Badge({ label, color = 'gray' }: BadgeProps) {
     >
       <Text
         className="text-sm font-medium uppercase tracking-wide"
-        numberOfLines={1}
+        numberOfLines={2}
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
         style={{ color: tone.color }}
       >
         {label}

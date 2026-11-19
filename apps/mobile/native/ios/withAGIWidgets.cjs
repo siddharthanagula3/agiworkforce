@@ -1,7 +1,16 @@
 const { withDangerousMod, withXcodeProject, createRunOncePlugin } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
-const { ensureTargetDependency } = require('./withAGIShareExtension.cjs');
+const {
+  ensureTargetDependency,
+  copyInfoPlistWithHostDisplayName,
+} = require('./withAGIShareExtension.cjs');
+const {
+  WIDGET_SHARED_INTENT_FILES,
+  appGroupKeyFor,
+  ensureSourceInTargets,
+} = require('./withAGINativeModulesIOS.cjs');
+const { iosProjectNameFor } = require('./iosProjectName.cjs');
 
 const PLUGIN_NAME = 'agi-widgets-ios-plugin';
 const PLUGIN_VERSION = '1.0.0';
@@ -121,6 +130,17 @@ function configureWidgetTarget(project, options) {
   for (const fileName of [EXTENSION_INFO_PLIST, EXTENSION_ENTITLEMENTS]) {
     if (!hasFileReference(project, fileName)) project.addFile(fileName, groupKey);
   }
+  const appGroupKey = appGroupKeyFor(project, options.appName);
+  if (!appGroupKey) {
+    throw new Error(`${PLUGIN_NAME}: could not locate the ${options.appName} group`);
+  }
+  for (const relPath of WIDGET_SHARED_INTENT_FILES) {
+    ensureSourceInTargets(project, {
+      projectPath: `${options.appName}/${relPath}`,
+      groupKey: appGroupKey,
+      targetUuids: [hostTarget.uuid, target.uuid],
+    });
+  }
   applyBuildSettings(project, target, buildSettings(options));
   project.addTargetAttribute('ProvisioningStyle', 'Automatic', target);
   return target;
@@ -137,7 +157,11 @@ function withCopyWidgetSources(config) {
         if (!fs.existsSync(source)) {
           throw new Error(`${PLUGIN_NAME}: required source is missing at ${source}`);
         }
-        fs.copyFileSync(source, path.join(destination, fileName));
+        if (fileName === EXTENSION_INFO_PLIST) {
+          copyInfoPlistWithHostDisplayName(source, path.join(destination, fileName), c);
+        } else {
+          fs.copyFileSync(source, path.join(destination, fileName));
+        }
       }
       return c;
     },
@@ -152,7 +176,8 @@ function withWidgetXcodeTarget(config) {
     if (!bundleIdentifier || !version || !buildNumber) {
       throw new Error(`${PLUGIN_NAME}: bundleIdentifier, version and buildNumber are required`);
     }
-    configureWidgetTarget(c.modResults, { bundleIdentifier, version, buildNumber });
+    const appName = c.modRequest.projectName ?? iosProjectNameFor(c.name);
+    configureWidgetTarget(c.modResults, { appName, bundleIdentifier, version, buildNumber });
     return c;
   });
 }
@@ -163,3 +188,4 @@ function withAGIWidgets(config) {
 
 module.exports = createRunOncePlugin(withAGIWidgets, PLUGIN_NAME, PLUGIN_VERSION);
 module.exports.configureWidgetTarget = configureWidgetTarget;
+module.exports.getExtensionBuildSettings = buildSettings;

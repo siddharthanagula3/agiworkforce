@@ -604,6 +604,28 @@ function oneOf(...allowed: readonly string[]): (value: string) => string | null 
     allowed.includes(value.trim().toLowerCase()) ? null : `it is not one of ${allowed.join(', ')}`;
 }
 
+function isExactly(...allowed: readonly string[]): (value: string) => string | null {
+  return (value) =>
+    allowed.includes(value) ? null : `it is not exactly one of ${allowed.join(', ')}`;
+}
+
+function isWebOriginList(value: string): string | null {
+  for (const entry of value.split(',')) {
+    const candidate = entry.trim();
+    if (!candidate) continue;
+    try {
+      const url = new URL(candidate);
+      const web = url.protocol === 'https:' || url.protocol === 'http:';
+      if (!web || url.hostname.includes('*') || url.origin !== candidate.replace(/\/+$/u, '')) {
+        return `${candidate} is not a bare http or https origin`;
+      }
+    } catch {
+      return `${candidate} is not an origin`;
+    }
+  }
+  return null;
+}
+
 const BOOLEAN_SPELLINGS = ['1', '0', 'true', 'false', 'yes', 'no', 'on', 'off'];
 
 function isMaintenanceWindow(value: string): string | null {
@@ -1545,6 +1567,24 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     defaultValue: null,
     requiredIn: [],
     description: 'the bearer credential the scanner submission carries',
+  }),
+  published('CHAT_LARGE_FILES_ENABLED', {
+    type: 'enum',
+    owner: 'apps/web/lib/server/chat-file-intake',
+    defaultValue: 'off',
+    requiredIn: [],
+    validate: isExactly('on', 'off'),
+    description:
+      'whether chat files over the inline limit may be uploaded once the readiness checks pass',
+  }),
+  published('UPLOAD_STORAGE_CORS_ORIGINS', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isWebOriginList,
+    description:
+      'browser origins beyond the app that the storage bucket CORS rule allows, comma separated',
   }),
   published('MODERATION_HASH_DENYLIST', {
     type: 'string',

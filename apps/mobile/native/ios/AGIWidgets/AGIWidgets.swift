@@ -87,14 +87,6 @@ struct AGIQuickActionsWidget: Widget {
 }
 
 @available(iOS 18.0, *)
-struct OpenAGIWorkforceIntent: AppIntent {
-    static var title: LocalizedStringResource = "Open AGI Mobile"
-    static var openAppWhenRun: Bool = true
-
-    func perform() async throws -> some IntentResult { .result() }
-}
-
-@available(iOS 18.0, *)
 struct AGIOpenControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.agiworkforce.app.open") {

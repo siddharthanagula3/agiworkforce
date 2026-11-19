@@ -13,7 +13,7 @@ import {
   PAST_CHAT_CITATIONS_HEADER,
   readPastChatSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
-import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
+import { SECRET_REDACTION_COUNT_HEADER } from '@agiworkforce/cloud-contracts';
 import {
   credentialSha256,
   readFreeQuotaDailyUse,

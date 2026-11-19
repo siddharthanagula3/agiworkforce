@@ -1,3 +1,5 @@
+import type { ContentReportSubject } from '@agiworkforce/cloud-contracts';
+
 import { getCsrfToken } from '@/lib/client/csrf';
 import { responseErrorMessage } from '@/shared/utils/api-error';
 
@@ -13,6 +15,7 @@ export interface AdminContentReport {
   contentExcerpt: string;
   userNote: string;
   asset: { kind: 'image' | 'video'; reference: string; inlineHeaderOnly: boolean } | null;
+  subject: ContentReportSubject | null;
   status: ContentReportStatus;
   reviewerId: string | null;
   reviewerNote: string | null;

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
@@ -39,6 +40,7 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 import { ComposerApprovalModeControl } from '../src/features/chat/components/ComposerApprovalModeControl';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 import {
   activateCloudAccount,
   __resetCloudAccountSessionForTests,
@@ -163,5 +165,20 @@ describe('ComposerApprovalModeControl', () => {
 
     await waitFor(() => expect(mockFetchNamespace).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByTestId('chat.approval-mode')).toBeNull());
+  });
+
+  it('stops the approval sheet at the reading column on a wide window', async () => {
+    const screen = render(<ComposerApprovalModeControl />);
+    await waitFor(() =>
+      expect(screen.getByTestId('chat.approval-mode').props.accessibilityState.disabled).toBe(
+        false,
+      ),
+    );
+
+    fireEvent.press(screen.getByTestId('chat.approval-mode'));
+
+    expect(
+      StyleSheet.flatten(screen.getByTestId('chat.approval-mode.sheet').props.style),
+    ).toMatchObject({ width: '100%', maxWidth: READING_COLUMN_MAX_WIDTH, alignSelf: 'center' });
   });
 });

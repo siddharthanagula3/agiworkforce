@@ -1,5 +1,13 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import React, { Children, isValidElement, useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, {
@@ -23,10 +31,10 @@ import {
 import { ModelFilterChips } from './ModelFilterChips';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
-import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { claimModelSelection } from '@/src/features/model-picker/selectionIntent';
+import { confirmModelDownload } from '@/src/features/model-picker/downloadConfirmation';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
@@ -49,11 +57,17 @@ import {
   type ModelDef,
 } from '@/src/features/model-picker/service';
 import { guardProviderSwitch } from '@/src/features/model-picker/tierGuard';
+import {
+  useBottomSheetPresence,
+  useHardwareBackDismiss,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
 import { groupByModelLine, leadModelOf } from '@/src/features/model-picker/modelLines';
 import { matchesModelFilters, type ModelFilterId } from '@/src/features/model-picker/modelFilters';
 import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { radii, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
 function establishedCloudModel(
   conversationId: string,
@@ -242,6 +256,7 @@ interface ModelPickerSheetProps {
   conversationId?: string;
   showSpeed?: boolean;
   showEffort?: boolean;
+  paneWidth?: number;
 }
 
 export function ModelPickerSheet({
@@ -254,8 +269,11 @@ export function ModelPickerSheet({
   conversationId,
   showSpeed = true,
   showEffort = true,
+  paneWidth,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
+  const layout = useResponsiveLayout();
+  const sheetInset = contentColumnInset('reading', paneWidth ?? layout.contentWidth);
   const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
@@ -266,7 +284,6 @@ export function ModelPickerSheet({
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const freeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.catalogue);
-  const freeQuotaAccount = useFreeQuotaCatalogueStore((s) => s.account);
   const freeQuotaLoading = useFreeQuotaCatalogueStore((s) => s.loading);
   const freeQuotaError = useFreeQuotaCatalogueStore((s) => s.error);
   const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
@@ -280,8 +297,10 @@ export function ModelPickerSheet({
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
   const hydrateInstalledModels = useModelInstallStore((s) => s.hydrateInstalledModels);
   const prepareModel = useModelInstallStore((s) => s.prepareModel);
+  const allowCellularDownloads = useModelInstallStore((s) => s.allowCellularDownloads);
   const statusForModel = useModelInstallStore((s) => s.statusForModel);
 
+  const downloadPromptOpen = useRef(false);
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
   const [openLineId, setOpenLineId] = useState<string | null>(null);
@@ -352,6 +371,10 @@ export function ModelPickerSheet({
   }, [cloudUnlocked, modelScope, openSignal, refreshFreeQuotaCatalogue, sheetRef]);
 
   const query = search.trim().toLowerCase();
+  const noModelToChoose =
+    cloudUnlocked &&
+    selectableAutoModes.length === 0 &&
+    !modelList.some((model) => model.availability !== 'locked');
   const filteredModels = useMemo(() => {
     if (!query) return modelList;
     return modelList.filter(
@@ -485,12 +508,20 @@ export function ModelPickerSheet({
       if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
 
       if (installStatus.status === 'download_required' || installStatus.status === 'failed') {
-        const stillWanted = claimModelSelection();
-        void prepareModel(chosenModel)
-          .then(() => {
-            if (stillWanted()) selectAndClose(id);
+        if (downloadPromptOpen.current) return;
+        downloadPromptOpen.current = true;
+        void confirmModelDownload(chosenModel, allowCellularDownloads)
+          .then((confirmed) => {
+            downloadPromptOpen.current = false;
+            if (!confirmed) return;
+            const stillWanted = claimModelSelection();
+            return prepareModel(chosenModel).then(() => {
+              if (stillWanted()) selectAndClose(id);
+            });
           })
-          .catch(() => undefined);
+          .catch(() => {
+            downloadPromptOpen.current = false;
+          });
         return;
       }
 
@@ -520,6 +551,7 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       prepareModel,
+      allowCellularDownloads,
       rowSelectedModel,
       selectAndClose,
       sheetRef,
@@ -547,6 +579,27 @@ export function ModelPickerSheet({
     setOpenLineId(null);
     setActiveFilters([]);
   }, []);
+
+  const [isOpen, sheetPresence] = useBottomSheetPresence();
+  useHardwareBackDismiss(isOpen, () => sheetRef.current?.close());
+
+  const handleSheetAnimate = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      sheetPresence.onAnimate(fromIndex, toIndex);
+      if (fromIndex === -1 || toIndex === -1) resetView();
+      if (fromIndex === -1 && toIndex >= 0) void hydrateInstalledModels();
+    },
+    [hydrateInstalledModels, resetView, sheetPresence],
+  );
+
+  const handleSheetClose = useCallback(() => {
+    sheetPresence.onClose();
+    resetView();
+  }, [resetView, sheetPresence]);
+
+  useEffect(() => {
+    if (openSignal) resetView();
+  }, [openSignal, resetView]);
 
   const toggleFilter = useCallback((id: ModelFilterId) => {
     setActiveFilters((current) =>
@@ -625,9 +678,12 @@ export function ModelPickerSheet({
         ref={sheetRef as React.RefObject<BottomSheet>}
         index={-1}
         accessible={false}
+        style={{ marginHorizontal: sheetInset }}
         snapPoints={snapPoints}
         enablePanDownToClose
-        onClose={resetView}
+        onClose={handleSheetClose}
+        onChange={sheetPresence.onChange}
+        onAnimate={handleSheetAnimate}
         enableDynamicSizing={false}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
@@ -677,7 +733,7 @@ export function ModelPickerSheet({
           </View>
           {showsFreeCatalogue && freeQuotaLoading ? (
             <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
-              Checking provider-funded Free models…
+              Checking Free models…
             </Text>
           ) : null}
           {showsFreeCatalogue && freeQuotaError ? (
@@ -686,9 +742,10 @@ export function ModelPickerSheet({
                 {freeQuotaError}
               </Text>
               <PressableBox
+                hitSlop={{ top: 2, bottom: 2 }}
                 onPress={() => void refreshFreeQuotaCatalogue()}
                 accessibilityRole="button"
-                accessibilityLabel="Retry loading provider-funded Free models"
+                accessibilityLabel="Retry loading Free models"
                 style={{ minHeight: 40, justifyContent: 'center' }}
               >
                 <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
@@ -696,17 +753,6 @@ export function ModelPickerSheet({
                 </Text>
               </PressableBox>
             </View>
-          ) : null}
-          {showsFreeCatalogue &&
-          isCloudAccountEpochCurrent(freeQuotaAccount) &&
-          !freeQuotaLoading &&
-          !freeQuotaError &&
-          !freeQuotaCatalogue?.models.some(
-            (model) => model.category === 'chat' && model.status === 'ready',
-          ) ? (
-            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
-              No provider-funded Free chat models are available right now.
-            </Text>
           ) : null}
         </View>
 
@@ -929,7 +975,7 @@ export function ModelPickerSheet({
             </View>
           ) : null}
 
-          {!filtering && filteredModels.length === 0 ? (
+          {!filtering && (filteredModels.length === 0 || noModelToChoose) ? (
             <View
               style={{
                 alignItems: 'center',
@@ -945,7 +991,9 @@ export function ModelPickerSheet({
                   textAlign: 'center',
                 }}
               >
-                No models matching “{search}”
+                {query && filteredModels.length === 0
+                  ? `No models matching “${search}”`
+                  : 'No models are available right now.'}
               </Text>
             </View>
           ) : null}

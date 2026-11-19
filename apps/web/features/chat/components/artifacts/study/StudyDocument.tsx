@@ -16,7 +16,7 @@ import {
   serializeQuiz,
   studySegments,
   studySourceIsLossless,
-} from './study-set';
+} from '@agiworkforce/unified-chat/study-set';
 import { flashcardsPrintHtml, printHtml, quizPrintHtml } from './study-print';
 
 export function StudyDocument({

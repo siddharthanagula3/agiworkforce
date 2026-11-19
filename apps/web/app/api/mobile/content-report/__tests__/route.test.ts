@@ -6,6 +6,8 @@ const { mockAuth, mockOptionalUser, mockNeonQuery } = vi.hoisted(() => ({
   mockNeonQuery: vi.fn(),
 }));
 
+vi.mock('server-only', () => ({}));
+
 vi.mock('@/lib/api-auth', () => ({
   getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: mockOptionalUser,
@@ -35,6 +37,8 @@ vi.mock('@/lib/server/neon-db', () => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
   })),
 }));
+
+import { CONTENT_REPORT_SUBJECT_KINDS } from '@agiworkforce/cloud-contracts';
 
 import { POST } from '../route';
 
@@ -216,6 +220,57 @@ describe('POST /api/mobile/content-report', () => {
     [{ sharedItem: { kind: 'project', id: 'p' } }],
     [{ sharedItem: { kind: 'project', id: 'p', sharerId: 'u', extra: true } }],
   ])('400s on a malformed asset or shared item: %o', async (extra) => {
+    const res = await POST(makeRequest({ ...validBody, ...extra }));
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('records the kind of content and its id as the report subject', async () => {
+    const res = await POST(
+      makeRequest({
+        ...validBody,
+        messageId: 'research-report:rep-7',
+        conversationId: 'conv-1',
+        subject: { kind: 'research-report', id: 'rep-7' },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const params = mockNeonQuery.mock.calls[0]?.[1] as unknown[];
+    expect(JSON.parse(params[7] as string)).toEqual({
+      source: 'mobile',
+      category: 'harmful',
+      subject: { kind: 'research-report', id: 'rep-7' },
+    });
+  });
+
+  it.each(CONTENT_REPORT_SUBJECT_KINDS.map((kind) => [kind]))(
+    'accepts the shared subject kind %s that every app files reports with',
+    async (kind) => {
+      const res = await POST(makeRequest({ ...validBody, subject: { kind, id: 'subject-1' } }));
+
+      expect(res.status).toBe(200);
+    },
+  );
+
+  it('accepts a report from an older app that sends no subject', async () => {
+    const res = await POST(makeRequest(validBody));
+
+    expect(res.status).toBe(200);
+    const params = mockNeonQuery.mock.calls[0]?.[1] as unknown[];
+    expect(JSON.parse(params[7] as string)).not.toHaveProperty('subject');
+  });
+
+  it.each([
+    [{ subject: { kind: 'podcast', id: 'x' } }],
+    [{ subject: { kind: 'artifact', id: '' } }],
+    [{ subject: { kind: 'artifact', id: '   ' } }],
+    [{ subject: { kind: 'artifact' } }],
+    [{ subject: { kind: 'artifact', id: 'a'.repeat(201) } }],
+    [{ subject: { kind: 'artifact', id: 'a', extra: true } }],
+    [{ subject: 'artifact:a' }],
+  ])('400s on a malformed subject: %o', async (extra) => {
     const res = await POST(makeRequest({ ...validBody, ...extra }));
 
     expect(res.status).toBe(400);

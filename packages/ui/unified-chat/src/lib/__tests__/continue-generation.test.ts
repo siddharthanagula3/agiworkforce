@@ -7,6 +7,7 @@ import {
   getStreamErrorNotice,
   getStreamErrorReference,
   CONTINUE_GENERATION_INSTRUCTION,
+  looksTruncated,
 } from '../continue-generation';
 
 function assistantMessage(overrides: Record<string, unknown> = {}) {
@@ -223,5 +224,15 @@ describe('CONTINUE_GENERATION_INSTRUCTION', () => {
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/continue/i);
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/do not repeat/i);
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/rather than commenting on it/i);
+  });
+});
+
+describe('looksTruncated', () => {
+  it('treats a short clause after a finished sentence as complete', () => {
+    expect(looksTruncated('The capital of France is Paris. BANANA')).toBe(false);
+  });
+
+  it('still reads a long unfinished clause after a finished sentence as cut off', () => {
+    expect(looksTruncated('The capital of France is Paris. And then the model was cut')).toBe(true);
   });
 });

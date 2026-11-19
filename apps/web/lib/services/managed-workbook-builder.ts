@@ -40,11 +40,33 @@ function columnLabel(index: number): string {
   return label;
 }
 
+const CANONICAL_DECIMAL = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+const MAX_EXACT_SIGNIFICANT_DIGITS = 15;
+const MAX_GENERAL_FORMAT_DIGITS = 11;
+
+export function exactCellNumber(text: string): number | undefined {
+  if (!CANONICAL_DECIMAL.test(text)) return undefined;
+  const significant = text.replace(/[-.]/g, '').replace(/^0+/, '');
+  return significant.length <= MAX_EXACT_SIGNIFICANT_DIGITS ? Number(text) : undefined;
+}
+
+export function isNumericCellText(text: string): boolean {
+  const number = exactCellNumber(text);
+  return (
+    number !== undefined &&
+    String(number) === text &&
+    text.replace(/\D/g, '').length <= MAX_GENERAL_FORMAT_DIGITS
+  );
+}
+
 function cellXml(reference: string, value: string | number): string {
   if (typeof value === 'number') {
     return `<c r="${reference}"><v>${value}</v></c>`;
   }
   const text = value.trim();
+  if (isNumericCellText(text)) {
+    return `<c r="${reference}"><v>${text}</v></c>`;
+  }
   if (text.startsWith('=')) {
     return `<c r="${reference}"><f>${escapeXml(text.slice(1))}</f></c>`;
   }

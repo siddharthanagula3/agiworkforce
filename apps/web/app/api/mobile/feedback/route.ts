@@ -17,10 +17,22 @@ const SafetyRefusalContextSchema = z.object({
   finishReason: z.string().trim().min(1).max(40).optional(),
 });
 
+const ClientContextSchema = z
+  .object({
+    appVersion: z.string().trim().min(1).max(50).nullable(),
+    appBuild: z.string().trim().min(1).max(50).nullable(),
+    platform: z.enum(['ios', 'android']),
+    osVersion: z.string().trim().min(1).max(50),
+    deviceClass: z.enum(['phone', 'tablet']),
+    appMode: z.enum(['local', 'cloud']),
+  })
+  .strict();
+
 const FeedbackSchema = z.object({
   type: z.enum(['bug', 'feature', 'general']),
   message: z.string().trim().min(1).max(2000),
   diagnostics: z.unknown().optional(),
+  client: z.unknown().optional(),
   context: SafetyRefusalContextSchema.optional(),
 });
 
@@ -44,6 +56,7 @@ async function handleSubmitFeedback(request: NextRequest) {
     releaseSha: releaseSha() ?? null,
     deployEnv: deployEnvironment() ?? null,
   });
+  const client = ClientContextSchema.safeParse(parsed.data.client);
 
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
 
@@ -67,6 +80,7 @@ async function handleSubmitFeedback(request: NextRequest) {
                 ...(context.finishReason ? { finish_reason: context.finishReason } : {}),
               }
             : {}),
+          ...(client.success ? { client: client.data } : {}),
           ...(diagnostics ? { diagnostics } : {}),
         }),
       ],

@@ -1,10 +1,12 @@
-import { View, TextInput, Modal, KeyboardAvoidingView } from 'react-native';
+import { View, TextInput, Modal, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Minimize2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useDismissOnScreenBlur } from '@/src/features/artifacts/useDismissOnScreenBlur';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SendButton } from './SendButton';
@@ -20,6 +22,8 @@ interface ComposerFullScreenEditorProps {
   onSend: () => void;
 }
 
+const INPUT_SIDE_PADDING = 16;
+
 export function ComposerFullScreenEditor({
   visible,
   value,
@@ -32,6 +36,7 @@ export function ComposerFullScreenEditor({
 }: ComposerFullScreenEditorProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const keyboard = useKeyboardSafeComposer('modal');
   const collapse = {
     onPress: onClose,
@@ -43,6 +48,8 @@ export function ComposerFullScreenEditor({
     back: collapse,
     close: collapse,
   });
+
+  useDismissOnScreenBlur(visible, onClose);
 
   if (!visible) return null;
 
@@ -113,7 +120,7 @@ export function ComposerFullScreenEditor({
           testID="chat.composer.fullscreen.input"
           style={{
             flex: 1,
-            paddingHorizontal: 16,
+            paddingHorizontal: INPUT_SIDE_PADDING + contentColumnInset('reading', windowWidth),
             paddingTop: 16,
             paddingBottom: Math.max(insets.bottom, 16),
             color: colors.textPrimary,

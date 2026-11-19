@@ -107,7 +107,9 @@ describe('Cloud sign-in in add-account mode', () => {
     const { getByText, getByTestId, getByLabelText, queryByTestId } = render(<LoginScreen />);
 
     expect(getByText('Add an account')).toBeTruthy();
-    expect(getByTestId('cloud-add-account-notice')).toBeTruthy();
+    expect(getByTestId('cloud-add-account-notice')).toHaveTextContent(
+      'Your other accounts stay signed in on this device.',
+    );
     expect(getByTestId('mobile-sign-in-email')).toBeTruthy();
     expect(getByLabelText('Close add account').props.accessibilityHint).toBe(
       'Returns to Settings without changing accounts',

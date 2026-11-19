@@ -2,9 +2,10 @@ import { SELECTED_ROUTE } from './fixtures/model-mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@agiworkforce/routing');
 
-vi.mock('@/lib/server/side-call-training-policy', () => ({
-  sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
-}));
+vi.mock('@/lib/server/managed-cloud-routing/policy-source', async () => {
+  const { supportPolicySource } = await import('./fixtures/model-mocks');
+  return { productionPolicySource: supportPolicySource };
+});
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

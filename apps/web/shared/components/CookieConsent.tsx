@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Cookie, X } from 'lucide-react';
 import { Button } from '@agiworkforce/ui/button';
@@ -193,7 +193,7 @@ export const CookieConsent = () => {
               <p className="mt-2 text-base leading-6 text-muted-foreground">
                 Cookies that keep you signed in are always on. Analytics stays off until you allow
                 it, and we never set advertising cookies. Read the{' '}
-                <Link
+                <PageLink
                   href="/cookies"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -201,7 +201,7 @@ export const CookieConsent = () => {
                   className="text-card-foreground underline underline-offset-2"
                 >
                   cookie policy
-                </Link>
+                </PageLink>
                 .
               </p>
 
@@ -249,7 +249,7 @@ export const CookieConsent = () => {
             <DialogTitle>{COOKIE_PREFERENCES_LABEL}</DialogTitle>
             <DialogDescription>
               These are the only cookie categories this site uses. See the{' '}
-              <Link
+              <PageLink
                 href="/cookies"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -257,7 +257,7 @@ export const CookieConsent = () => {
                 className="underline underline-offset-2"
               >
                 cookie policy
-              </Link>{' '}
+              </PageLink>{' '}
               for what each one covers.
             </DialogDescription>
           </DialogHeader>

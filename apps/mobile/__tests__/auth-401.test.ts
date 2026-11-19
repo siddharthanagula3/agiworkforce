@@ -9,6 +9,10 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+jest.mock('../src/platform/webContentPage', () => ({
+  openWebContentPage: jest.fn(),
+}));
+
 const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockRouterPush(...args) },
@@ -35,11 +39,19 @@ jest.mock('../src/features/auth/services/cloudAccountTeardown', () => ({
   clearLocalCloudAccountState: jest.fn(),
 }));
 
+jest.mock('../src/features/auth/services/rememberedAccount', () => ({
+  forgetRememberedAccount: jest.fn(async () => undefined),
+}));
+
 jest.mock('../src/platform/platformHeaders', () => ({
   platformRequestHeaders: () => ({}),
 }));
 
 import { api, resetApiAccountState } from '../services/api';
+import {
+  readAnswerDraft,
+  writeAnswerDraft,
+} from '../src/features/chat/components/answerDraftStore';
 import {
   clearAuthSession,
   getAuthHeaders,
@@ -382,5 +394,13 @@ describe('HTTP method helpers', () => {
 
     const init = fetchSpy.mock.calls[0]?.[1] as RequestInit;
     expect(init.method).toBe('DELETE');
+  });
+});
+
+describe('account switch', () => {
+  it('drops unsaved answer drafts held in memory for the previous account', () => {
+    writeAnswerDraft('message-1:form', { repo: 'acme/app' });
+    resetApiAccountState();
+    expect(readAnswerDraft('message-1:form')).toBeUndefined();
   });
 });

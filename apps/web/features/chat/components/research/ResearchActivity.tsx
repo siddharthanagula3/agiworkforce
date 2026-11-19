@@ -43,7 +43,8 @@ import { useResearchRunControls } from './research-run-controls';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 import { useBrowserReplyReadyPreference } from '../../hooks/use-browser-reply-ready-preference';
-import { isResearchGuidanceStep, researchAnswersGuidance } from '../../utils/research-plan';
+import { researchAnswersGuidance } from '@agiworkforce/unified-chat/research-plan';
+import { isResearchGuidanceStep } from '../../utils/research-plan';
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));

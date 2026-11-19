@@ -26,8 +26,10 @@ jest.mock('lucide-react-native', () => {
   return new Proxy({}, { get: (_target, name) => (name === '__esModule' ? true : icon) });
 });
 
+import { PROJECT_NAME_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 import { SettingsScreenShell } from '../src/features/settings/Common';
 import { ScreenHeader } from '../src/shared/components/cloud-screen';
+import { HEADER_TEXT_SCALE_LIMIT } from '../src/ui/theme/tokens';
 
 function titleStyle(title: string) {
   const header = screen.getByText(title);
@@ -83,6 +85,31 @@ describe('settings screen header', () => {
     expect(screen.getByText('Sources')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Go back'));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps the title at the header text limit so a large text size cannot crowd the back arrow', () => {
+    render(<ScreenHeader title="Device Integrations" onBack={jest.fn()} />);
+
+    expect(screen.getByText('Device Integrations').props.maxFontSizeMultiplier).toBe(
+      HEADER_TEXT_SCALE_LIMIT,
+    );
+  });
+
+  it('lets a long title shrink to fit before it is cut off', () => {
+    render(<ScreenHeader title="Report an incorrect refusal" onBack={jest.fn()} />);
+
+    const title = screen.getByText('Report an incorrect refusal');
+    expect(title.props.numberOfLines).toBe(1);
+    expect(title.props.adjustsFontSizeToFit).toBe(true);
+  });
+
+  it('keeps a title as long as a project name at full size with an ellipsis', () => {
+    const longName = 'a'.repeat(PROJECT_NAME_MAX_LENGTH);
+    render(<ScreenHeader title={longName} onBack={jest.fn()} />);
+
+    const title = screen.getByText(longName);
+    expect(title.props.numberOfLines).toBe(1);
+    expect(title.props.adjustsFontSizeToFit).toBe(false);
   });
 
   it('widens both header slots to the trailing action so the title stays centred', () => {

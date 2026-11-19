@@ -3,9 +3,12 @@ import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   getAllowedModelsForTier,
+  getDefaultModelFor,
   getModelMetadataById,
+  getRoutingSlotModel,
   listCanonicalModels,
   requireProviderDefaultModel,
+  resolveModelFamilySlot,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/free-trial-service');
 type ScanModule1 = typeof import('@/lib/services/managed-content-safety-service');
@@ -59,9 +62,9 @@ import {
   isFreeTierBlockedAddOn,
   resolveManagedUsageLeaseSeconds,
   processRequest,
-  resolveWebCloudModelRoute,
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import { webSearchToolOfferPolicyFor } from '@/lib/web-search/required-search';
 import * as requestProcessorModule from './request-processor';
 import {
@@ -774,14 +777,20 @@ describe('Free capability gate, model-agnostic web search', () => {
     }
   });
 
-  it('keeps the Free catalog limited to the one Free plan model', () => {
+  it('keeps the Free catalog to the fast OpenAI and fast Anthropic models, with the fast OpenAI one as the Free plan model', () => {
     const freeModels = getAllowedModelsForTier('economy').filter(
       (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
     );
-    expect(freeModels).toEqual([FREE_CHAT_MODEL]);
-    expect(getModelMetadataById(FREE_CHAT_MODEL)).toMatchObject({
-      capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: true },
-    });
+    expect([...freeModels].sort()).toEqual(
+      [resolveModelFamilySlot('openai/gpt-fast'), getRoutingSlotModel('fast_anthropic')].sort(),
+    );
+    expect(FREE_CHAT_MODEL).toBe(getDefaultModelFor('free', 'chat'));
+    expect(FREE_CHAT_MODEL).toBe(resolveModelFamilySlot('openai/gpt-fast'));
+    for (const modelId of freeModels) {
+      expect(getModelMetadataById(modelId)).toMatchObject({
+        capabilities: { streaming: true, tools: true, vision: true, json: true, thinking: true },
+      });
+    }
   });
 });
 

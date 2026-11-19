@@ -23,7 +23,6 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 vi.mock('@/lib/server/side-call-training-policy', () => ({
   sideCallProviderAllowed: (...args: unknown[]) => providerAllowedMock(...args),
   sideCallTrainingOptOut: vi.fn(),
-  sideCallRoutingRequest: vi.fn(),
   noTrainingProviderIds: vi.fn(),
 }));
 vi.mock('@agiworkforce/provider-protocol', () => ({

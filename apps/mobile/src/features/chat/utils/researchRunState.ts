@@ -4,8 +4,15 @@ import {
   normalizeResearchDeliverable,
   type ResearchDeliverableSpec,
   type ResearchGap,
+  type ResearchRunConfig,
+  type ResearchSourceRequest,
   type ResearchStep,
 } from '@agiworkforce/types';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
+import {
+  parseResearchPlanQuestions,
+  parseResearchRunConfig,
+} from '@agiworkforce/unified-chat/research-plan';
 import type { StreamDelta } from '@/services/streaming';
 import type { ToolSearchResult } from '@/types/chat';
 import { translatePlural } from '@/src/i18n/plural';
@@ -46,6 +53,8 @@ export interface ResearchRunState {
   gaps?: ResearchGap[];
   sourcesForRetry?: ToolSearchResult[];
   deliverable?: ResearchDeliverableSpec;
+  runConfig?: ResearchRunConfig;
+  questions?: string[];
 }
 
 export const RESEARCH_PHASE_LABELS: Record<ResearchPhase, string> = {
@@ -138,15 +147,6 @@ export function parseResearchPlanSteps(payload: unknown): ResearchStep[] | null 
   return steps.length > 0 ? steps : null;
 }
 
-export function parseResearchPlanDeliverable(payload: unknown): ResearchDeliverableSpec | null {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
-  const run = (payload as { run?: unknown }).run;
-  if (!run || typeof run !== 'object' || Array.isArray(run)) return null;
-  const deliverable = (run as { deliverable?: unknown }).deliverable;
-  if (!deliverable || typeof deliverable !== 'object') return null;
-  return normalizeResearchDeliverable(deliverable);
-}
-
 export function parseResearchGaps(payload: unknown): ResearchGap[] | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const rawGaps = (payload as { gaps?: unknown }).gaps;
@@ -165,8 +165,8 @@ export function parseResearchSearchSources(payload: unknown): ToolSearchResult[]
     const url = entry['url'];
     if (typeof url !== 'string' || !url) continue;
     const title = typeof entry['title'] === 'string' && entry['title'] ? entry['title'] : url;
-    const wireSnippet = entry['encrypted_content'] ?? entry['snippet'];
-    const snippet = typeof wireSnippet === 'string' ? wireSnippet : undefined;
+    const snippet =
+      displaySourceSnippet(entry['encrypted_content']) || displaySourceSnippet(entry['snippet']);
     results.push({ url, title, ...(snippet ? { snippet } : {}) });
   }
   return results;
@@ -202,12 +202,14 @@ export function reduceResearchDelta(
   let next = readResearchStatus(wire.x_research_status, prev, nowIso) ?? prev;
 
   const steps = parseResearchPlanSteps(wire.x_research_plan);
-  const deliverable = parseResearchPlanDeliverable(wire.x_research_plan);
-  if (steps || deliverable) {
+  const runConfig = parseResearchRunConfig(wire.x_research_plan);
+  const questions = parseResearchPlanQuestions(wire.x_research_plan);
+  if (steps || runConfig) {
     next = {
       ...(next ?? { phase: 'planning', startedAt: nowIso }),
       ...(steps ? { steps } : {}),
-      ...(deliverable ? { deliverable } : {}),
+      ...(runConfig ? { runConfig, deliverable: runConfig.deliverable } : {}),
+      ...(steps && questions.length > 0 ? { questions } : {}),
     };
   }
 
@@ -245,17 +247,55 @@ export function settleResearchRun(
   return next;
 }
 
+function readStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '')
+    : [];
+}
+
+function readPersistedSources(value: unknown): ResearchSourceRequest {
+  const raw =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    files: raw['files'] === true,
+    allowDomains: readStringList(raw['allowDomains']),
+    denyDomains: readStringList(raw['denyDomains']),
+    connectors: readStringList(raw['connectors']),
+  };
+}
+
+function readPersistedRunConfig(value: unknown): ResearchRunConfig | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const deliverable = raw['deliverable'];
+  if (!deliverable || typeof deliverable !== 'object') return undefined;
+  return {
+    sources: readPersistedSources(raw['sources']),
+    deliverable: normalizeResearchDeliverable(deliverable),
+  };
+}
+
+const readStates = new WeakMap<object, ResearchRunState>();
+
 export function readResearchRunState(value: unknown): ResearchRunState | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
   if (!RESEARCH_PHASES.includes(raw['phase'] as ResearchPhase)) return undefined;
-  const state = raw as unknown as ResearchRunState;
-  if (state.deliverable) return state;
-  const runConfig = raw['runConfig'];
-  if (!runConfig || typeof runConfig !== 'object' || Array.isArray(runConfig)) return state;
-  const persisted = (runConfig as { deliverable?: unknown }).deliverable;
-  if (!persisted || typeof persisted !== 'object') return state;
-  return { ...state, deliverable: normalizeResearchDeliverable(persisted) };
+  const known = readStates.get(raw);
+  if (known) return known;
+  const { runConfig: persistedRunConfig, questions: persistedQuestions, ...rest } = raw;
+  const state = rest as unknown as ResearchRunState;
+  const runConfig = readPersistedRunConfig(persistedRunConfig);
+  if (runConfig) {
+    state.runConfig = runConfig;
+    state.deliverable ??= runConfig.deliverable;
+  }
+  const questions = parseResearchPlanQuestions({ questions: persistedQuestions });
+  if (questions.length > 0) state.questions = questions;
+  readStates.set(raw, state);
+  return state;
 }
 
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {

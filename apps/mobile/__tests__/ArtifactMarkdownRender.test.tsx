@@ -170,7 +170,7 @@ describe('Artifacts gallery preview markdown rendering (PAR-M08)', () => {
     expect(screen.getByText('Ship the mobile viewer')).toBeTruthy();
     expect(screen.queryByText(DOCUMENT_CONTENT)).toBeNull();
 
-    const leaves = collectTextLeaves(screen.getByTestId('artifact-preview-content'));
+    const leaves = collectTextLeaves(screen.getByTestId('artifact-fullscreen-markdown'));
     expect(leaves).toContain('Quarterly Plan');
     expect(leaves).toContain('Ship the mobile viewer');
     expect(leaves.some((leaf) => leaf.includes('# '))).toBe(false);
@@ -199,7 +199,7 @@ describe('Artifacts gallery preview markdown rendering (PAR-M08)', () => {
 
     const screen = render(<ArtifactsGalleryScreen initialArtifactId="gallery-code" />);
 
-    expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+    expect(screen.getByTestId('artifact-fullscreen-source')).toBeTruthy();
     expect(screen.getByText(CODE_CONTENT)).toHaveStyle({ fontFamily: 'Menlo' });
   });
 });

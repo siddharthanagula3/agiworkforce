@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NATIVE_BROWSER_POLL_MESSAGE, NATIVE_BROWSER_UNPAIR_MESSAGE } from '@agiworkforce/types';
+import { NATIVE_RECONNECT_MAX_DELAY_MS } from '../src/features/native-bridge/reconnect';
 
 type DesktopAnswer = Record<string, unknown> | null;
 
@@ -24,6 +25,23 @@ const harness = vi.hoisted(() => {
   const page = { recording: true, reachable: true };
   const ports: Array<{ disconnect: ReturnType<typeof vi.fn>; exit: () => void }> = [];
 
+  // Every startWorker evaluates a fresh background module against these shared
+  // mocks, and nothing can unload the previous one. Each case is one worker
+  // generation, retired when the next case begins: a timer from a retired
+  // generation never runs, and an async chain it started that is still awaiting
+  // real work, such as WebCrypto, can no longer open the native host, post to a
+  // port or write storage. Generations are per case, not per startWorker: vitest
+  // builds its fake clock lazily from these globals, so its shouldAdvanceTime
+  // interval is one of these timers and has to outlive a startWorker in the case.
+  const workers = { generation: 0 };
+  const { AsyncLocalStorage } = process.getBuiltinModule('node:async_hooks');
+  const workerCalls = new AsyncLocalStorage<number>();
+  const asLiveWorker = <T>(run: () => T): T => workerCalls.run(workers.generation, run);
+  const fromRetiredWorker = (): boolean => {
+    const generation = workerCalls.getStore();
+    return generation !== undefined && generation !== workers.generation;
+  };
+
   const event = () => ({
     addListener: vi.fn(),
     removeListener: vi.fn(),
@@ -45,9 +63,11 @@ const harness = vi.hoisted(() => {
   const area = (store: Record<string, unknown>) => ({
     get: vi.fn(async (keys?: unknown) => pick(store, keys)),
     set: vi.fn(async (items: Record<string, unknown>) => {
+      if (fromRetiredWorker()) return;
       Object.assign(store, structuredClone(items));
     }),
     remove: vi.fn(async (keys: string | string[]) => {
+      if (fromRetiredWorker()) return;
       for (const key of Array.isArray(keys) ? keys : [keys]) delete store[key];
     }),
     clear: vi.fn(async () => undefined),
@@ -85,6 +105,7 @@ const harness = vi.hoisted(() => {
       },
       disconnect: vi.fn(),
       postMessage: vi.fn((envelope: { id: string; message: Record<string, unknown> }) => {
+        if (fromRetiredWorker()) return;
         const { id, message } = envelope;
         posted.push(message);
         const answer = desktop.answer(message);
@@ -114,6 +135,13 @@ const harness = vi.hoisted(() => {
     }
     return port;
   });
+  const retiredPort = () => ({
+    name: 'com.agiworkforce.browser',
+    onMessage: event(),
+    onDisconnect: event(),
+    postMessage: () => undefined,
+    disconnect: () => undefined,
+  });
 
   const chromeMock = {
     runtime: {
@@ -135,7 +163,7 @@ const harness = vi.hoisted(() => {
       onSuspend: event(),
       onSuspendCanceled: event(),
       sendMessage: vi.fn(() => Promise.resolve()),
-      connectNative,
+      connectNative: () => (fromRetiredWorker() ? retiredPort() : connectNative()),
     },
     storage: {
       local: area(localStore),
@@ -215,6 +243,58 @@ const harness = vi.hoisted(() => {
     i18n: { getMessage: (key: string) => key, getUILanguage: () => 'en' },
   };
 
+  const liveSetTimeout = globalThis.setTimeout;
+  const liveSetInterval = globalThis.setInterval;
+  const liveClearInterval = globalThis.clearInterval;
+  const ownedByLiveWorker = <Args extends unknown[]>(
+    handler: (...args: Args) => void,
+    onRetired: () => void = () => undefined,
+  ) => {
+    const generation = workers.generation;
+    return (...args: Args): void => {
+      if (generation === workers.generation) handler(...args);
+      else onRetired();
+    };
+  };
+  globalThis.setTimeout = ((
+    handler: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ) => liveSetTimeout(ownedByLiveWorker(handler), delay, ...args)) as unknown as typeof setTimeout;
+  globalThis.setInterval = ((
+    handler: (...args: unknown[]) => void,
+    delay?: number,
+    ...args: unknown[]
+  ) => {
+    const interval = liveSetInterval(
+      ownedByLiveWorker(handler, () => liveClearInterval(interval)),
+      delay,
+      ...args,
+    );
+    return interval;
+  }) as unknown as typeof setInterval;
+  const retireWorkers = (): void => {
+    workers.generation += 1;
+  };
+
+  // The worker signs and verifies every native envelope with real asynchronous
+  // WebCrypto, which fake timers cannot see. Counting it lets a fake-time test
+  // wait for that work instead of advancing the clock past it.
+  const envelopeCrypto = { inFlight: 0 };
+  const subtle = globalThis.crypto.subtle as unknown as Record<
+    'importKey' | 'sign',
+    (...args: unknown[]) => Promise<unknown>
+  >;
+  for (const method of ['importKey', 'sign'] as const) {
+    const run = subtle[method].bind(globalThis.crypto.subtle);
+    subtle[method] = (...args: unknown[]) => {
+      envelopeCrypto.inFlight += 1;
+      return run(...args).finally(() => {
+        envelopeCrypto.inFlight -= 1;
+      });
+    };
+  }
+
   Object.assign(globalThis, {
     chrome: chromeMock,
     fetch: vi.fn(() => Promise.reject(new Error('offline in tests'))),
@@ -232,11 +312,16 @@ const harness = vi.hoisted(() => {
     page,
     ports,
     connectNative,
+    retireWorkers,
+    asLiveWorker,
+    envelopeCrypto,
   };
 });
 
 const PAIR_TOKEN = 'e'.repeat(64);
 const OWED_TOKEN = 'f'.repeat(64);
+const POLL_PICKUP_BUDGET_MS = 5 * 60_000;
+const LONGER_THAN_ANY_RECONNECT_MS = 2 * NATIVE_RECONNECT_MAX_DELAY_MS;
 const OPTIONS_SENDER = {
   id: harness.EXTENSION_ID,
   url: `chrome-extension://${harness.EXTENSION_ID}/src/options.html`,
@@ -254,14 +339,25 @@ async function settled(predicate: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 5));
 }
 
+async function envelopeCryptoSettled(): Promise<void> {
+  while (harness.envelopeCrypto.inFlight > 0)
+    await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+function useFakeClock(): void {
+  harness.asLiveWorker(() =>
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'Date'] }),
+  );
+}
+
+async function advanceFakeTime(ms: number): Promise<void> {
+  await harness.asLiveWorker(() => vi.advanceTimersByTimeAsync(ms));
+  await envelopeCryptoSettled();
+}
+
 async function advanceUntilCounted(count: () => number, target: number): Promise<void> {
-  for (let step = 0; step < 200 && count() < target; step += 1) {
-    const before = count();
-    await vi.advanceTimersByTimeAsync(61_000);
-    const deadline = performance.now() + 250;
-    while (count() === before && performance.now() < deadline)
-      await new Promise<void>((resolve) => setImmediate(resolve));
-  }
+  for (let elapsed = 0; elapsed < POLL_PICKUP_BUDGET_MS && count() < target; elapsed += 1_000)
+    await advanceFakeTime(1_000);
 }
 
 function clearStore(store: Record<string, unknown>): void {
@@ -272,7 +368,7 @@ async function startWorker(): Promise<void> {
   harness.messageListeners.length = 0;
   harness.tabRemovedListeners.length = 0;
   vi.resetModules();
-  await import('../src/background');
+  await harness.asLiveWorker(() => import('../src/background'));
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
@@ -283,7 +379,9 @@ function dispatch(
   const listener = harness.messageListeners.at(-1);
   if (!listener) throw new Error('background did not register a runtime message listener');
   return new Promise((resolve) => {
-    listener(message, sender, (response) => resolve((response ?? {}) as Record<string, unknown>));
+    harness.asLiveWorker(() =>
+      listener(message, sender, (response) => resolve((response ?? {}) as Record<string, unknown>)),
+    );
   });
 }
 
@@ -292,6 +390,7 @@ function postedTypes(): unknown[] {
 }
 
 beforeEach(() => {
+  harness.retireWorkers();
   clearStore(harness.localStore);
   clearStore(harness.sessionStore);
   harness.posted.length = 0;
@@ -306,7 +405,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.useRealTimers();
-  for (const port of harness.ports) port.exit();
+  for (const port of harness.ports) harness.asLiveWorker(port.exit);
   await new Promise((resolve) => setTimeout(resolve, 20));
 });
 
@@ -339,6 +438,7 @@ describe('a profile proves its pairing before it runs Desktop work', () => {
   });
 
   it('drops a pairing Desktop no longer recognizes instead of retrying it', async () => {
+    useFakeClock();
     harness.localStore['connectedToDesktop'] = true;
     harness.localStore['agi_paired_desktop'] = {
       fingerprint: 'eeee',
@@ -351,7 +451,7 @@ describe('a profile proves its pairing before it runs Desktop work', () => {
         : { success: true };
     await startWorker();
     await settled(() => harness.localStore['agi_paired_desktop'] === undefined);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await advanceFakeTime(LONGER_THAN_ANY_RECONNECT_MS);
 
     expect(harness.localStore['agi_paired_desktop']).toBeUndefined();
     expect(harness.localStore['connectedToDesktop']).toBe(false);
@@ -362,7 +462,7 @@ describe('a profile proves its pairing before it runs Desktop work', () => {
 
 describe('command pickup after Desktop has been away', () => {
   it('keeps asking with backoff and picks up work once Desktop answers again', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'Date'] });
+    useFakeClock();
     harness.localStore['connectedToDesktop'] = true;
     harness.localStore['agi_paired_desktop'] = {
       fingerprint: 'eeee',
@@ -389,14 +489,14 @@ describe('command pickup after Desktop has been away', () => {
     await advanceUntilCounted(() => polls, whileAway + 1);
     expect(polls).toBeGreaterThan(whileAway);
     const resumed = polls;
-    await vi.advanceTimersByTimeAsync(10_000);
+    await advanceFakeTime(10_000);
     expect(polls).toBe(resumed);
   });
 });
 
 describe('a pairing Desktop removes while this browser is connected', () => {
   it('is dropped here at once, the port is closed and nothing polls again', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'Date'] });
+    useFakeClock();
     harness.localStore['connectedToDesktop'] = true;
     harness.localStore['agi_paired_desktop'] = {
       fingerprint: 'eeee',
@@ -420,7 +520,7 @@ describe('a pairing Desktop removes while this browser is connected', () => {
     expect(harness.localStore['connectedToDesktop']).toBe(false);
     expect(harness.ports[0]?.disconnect).toHaveBeenCalled();
     const afterRelease = polls;
-    for (let step = 0; step < 4; step += 1) await vi.advanceTimersByTimeAsync(61_000);
+    for (let step = 0; step < 4; step += 1) await advanceFakeTime(61_000);
     expect(polls).toBe(afterRelease);
     expect(harness.connectNative).toHaveBeenCalledTimes(1);
   });
@@ -506,6 +606,7 @@ describe('an unpair Desktop could not hear is finished later', () => {
   });
 
   it('delivers the owed unpair on a later worker start, with no action from the user', async () => {
+    useFakeClock();
     harness.localStore['agi_pending_desktop_revocation'] = { id: 'owed-1', token: OWED_TOKEN };
     harness.desktop.answer = (message) =>
       message['type'] === 'connect'
@@ -513,7 +614,7 @@ describe('an unpair Desktop could not hear is finished later', () => {
         : { success: true };
     await startWorker();
     await settled(() => harness.connectNative.mock.calls.length > 0);
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await advanceFakeTime(LONGER_THAN_ANY_RECONNECT_MS);
     expect(postedTypes()).not.toContain(NATIVE_BROWSER_UNPAIR_MESSAGE);
     expect(harness.connectNative).toHaveBeenCalledTimes(1);
 

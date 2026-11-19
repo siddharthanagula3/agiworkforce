@@ -30,6 +30,9 @@ jest.mock('../stores/memory/cloudMemoryStore', () => ({
 jest.mock('../stores/memory/memorySyncStateStore', () => ({
   useMemorySyncStateStore: { getState: () => ({ dirtyMemoryIds: [] }) },
 }));
+jest.mock('../stores/settings/cloudSettingsStore', () => ({
+  useCloudSettingsStore: { getState: () => ({ memoryEnabled: true }) },
+}));
 jest.mock('../services/cloudSyncEngine', () => ({
   syncNow: (...args: unknown[]) => mockSyncNow(...args),
   markMemoryForSync: jest.fn(),

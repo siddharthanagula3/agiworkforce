@@ -6,6 +6,7 @@ const mockMarkProjectForSync = jest.fn();
 let mockSearchParams: { id?: string } = { id: 'project-1' };
 let mockCanGoBack = true;
 
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('@/lib/mmkv', () => ({
   rehydrateWhenMmkvReady: jest.fn(),
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
@@ -155,12 +156,12 @@ describe('Project page more-actions menu', () => {
   });
 
   describe('Local project', () => {
-    it('opens Pin, Rename and Delete from an ellipsis button in the header', () => {
+    it('opens Pin, Edit project and Delete from an ellipsis button in the header', () => {
       const screen = render(<ProjectDetailScreen />);
 
       fireEvent.press(screen.getByLabelText('More project actions'));
 
-      expect(menuLabels(screen)).toEqual(['Pin', 'Rename', 'Delete', 'Cancel']);
+      expect(menuLabels(screen)).toEqual(['Pin', 'Edit project', 'Delete', 'Cancel']);
     });
 
     it('pins and then unpins the project', () => {
@@ -176,7 +177,7 @@ describe('Project page more-actions menu', () => {
       expect(useProjectStore.getState().projects[0]?.pinned).toBe(false);
     });
 
-    it('renames in the project editor and shows the new name in the header', () => {
+    it('edits in the project editor and shows the new name in the header', () => {
       const screen = render(<ProjectDetailScreen />);
 
       fireEvent.press(screen.getByLabelText('More project actions'));
@@ -252,7 +253,7 @@ describe('Project page more-actions menu', () => {
 
       fireEvent.press(screen.getByLabelText('More project actions'));
 
-      expect(menuLabels(screen)).toEqual(['Pin', 'Rename', 'Archive', 'Delete', 'Cancel']);
+      expect(menuLabels(screen)).toEqual(['Pin', 'Edit project', 'Archive', 'Delete', 'Cancel']);
     });
 
     it('pins with the synced server field', () => {
@@ -281,7 +282,7 @@ describe('Project page more-actions menu', () => {
       const screen = render(<ProjectDetailScreen />);
 
       fireEvent.press(screen.getByLabelText('More project actions'));
-      expect(menuLabels(screen)).toEqual(['Rename', 'Restore', 'Delete', 'Cancel']);
+      expect(menuLabels(screen)).toEqual(['Edit project', 'Restore', 'Delete', 'Cancel']);
       choose(screen, 'archive');
 
       expect(useCloudProjectStore.getState().projects[0]?.isArchived).toBe(false);
@@ -296,7 +297,7 @@ describe('Project page more-actions menu', () => {
 
       expect(Alert.alert).toHaveBeenCalledWith(
         'Delete project?',
-        '"Billing rewrite" is removed from all your devices. It cannot be restored from the app.',
+        '"Billing rewrite" and its sources are deleted from all your devices. Its chats move out of the project and stay in your chat list. It cannot be restored from the app.',
         expect.any(Array),
       );
       const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as {

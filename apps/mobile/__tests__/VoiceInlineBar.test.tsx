@@ -1,12 +1,15 @@
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
-import { MicOff } from 'lucide-react-native';
+import { Mic, MicOff, Plus, X } from 'lucide-react-native';
 import {
   VoiceInlineBar,
   type VoiceInlinePhase,
 } from '@/src/features/voice/components/VoiceInlineBar';
-import { colors } from '@/src/ui/theme';
+import { colors, lightColors, type ColorScheme } from '@/src/ui/theme/tokens';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 const HIDDEN_OK = { includeHiddenElements: true } as const;
@@ -41,9 +44,66 @@ function backgroundOf(node: { props: { style: unknown } }): string | undefined {
   return undefined;
 }
 
+function styleOf(node: { props: { style: unknown } }) {
+  return StyleSheet.flatten(node.props.style as Parameters<typeof StyleSheet.flatten>[0]) ?? {};
+}
+
 describe('VoiceInlineBar', () => {
   beforeEach(() => {
     useSettingsStore.setState({ hapticsEnabled: false });
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useLocalSettingsStore.setState({ themeMode: 'dark', accentColor: 'neutral' });
+  });
+
+  describe.each<['light' | 'dark', ColorScheme]>([
+    ['light', lightColors],
+    ['dark', colors],
+  ])('in %s appearance', (themeMode, palette) => {
+    beforeEach(() => {
+      useLocalSettingsStore.setState({ themeMode });
+    });
+
+    it('draws the notice and the composer pill from the current palette', () => {
+      const { getByTestId, getByText, getByLabelText, UNSAFE_getByType } = renderBar({
+        notice: 'Voice is paused',
+        onAttach: jest.fn(),
+        onOpenKeyboard: jest.fn(),
+      });
+
+      expect(styleOf(getByTestId('voice-inline-notice')).color).toBe(palette.textMuted);
+      expect(styleOf(getByText('Ask AGI')).color).toBe(palette.textMuted);
+      expect(UNSAFE_getByType(Plus).props.color).toBe(palette.textSecondary);
+      expect(styleOf(getByLabelText('Type a message instead')).backgroundColor).toBe(
+        palette.inputSurface,
+      );
+    });
+
+    it('draws the live microphone from the current palette', () => {
+      const idle = renderBar({ phase: 'idle' });
+      expect(styleOf(idle.getByLabelText('Start listening')).backgroundColor).toBe(
+        palette.inputSurface,
+      );
+      expect(idle.UNSAFE_getByType(Mic).props.color).toBe(palette.textSecondary);
+
+      const listening = renderBar({ phase: 'listening' });
+      expect(listening.UNSAFE_getByType(Mic).props.color).toBe(palette.agentActive);
+    });
+
+    it('draws the muted microphone from the current palette', () => {
+      const { getByLabelText, UNSAFE_getByType } = renderBar({ muted: true });
+      const mute = styleOf(getByLabelText('Unmute microphone'));
+
+      expect(mute.backgroundColor).toBe(palette.agentError);
+      expect(mute.borderColor).toBe(palette.dangerBorder);
+      expect(UNSAFE_getByType(MicOff).props.color).toBe(palette.accentText);
+    });
+
+    it('draws the exit control from the current palette', () => {
+      const { getByLabelText, UNSAFE_getByType } = renderBar();
+
+      expect(styleOf(getByLabelText('Exit voice mode')).backgroundColor).toBe(palette.textPrimary);
+      expect(UNSAFE_getByType(X).props.color).toBe(palette.surfaceBase);
+    });
   });
 
   it('renders nothing when not visible', () => {

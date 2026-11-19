@@ -19,10 +19,10 @@ import type {
   SupportAccountUsage,
 } from '@agiworkforce/cloud-contracts/support';
 import { getIdentityUser } from '@/lib/server/identity';
+import { IDENTITY_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
+import { planPeriodEndKind } from '@/features/billing/lib/subscription-owner-presentation';
 
 export const SUPPORT_API_KEY_CEILING = 20;
-
-const IDENTITY_LOOKUP_TIMEOUT_MS = 1500;
 
 function toIso(value: string | Date | null | undefined): string | null {
   if (!value) return null;
@@ -170,6 +170,14 @@ export async function resolveSupportAccountContext(
   const subscription = entitlement.subscription;
   const tier = subscription?.plan_tier || 'free';
   const status = subscription?.status || 'none';
+  const subscriptionSource = entitlement.seatSource
+    ? 'manual'
+    : resolveSubscriptionSource(subscription);
+  const periodEndKind = planPeriodEndKind({
+    subscription_source: subscriptionSource,
+    status,
+    cancel_at_period_end: subscription?.cancel_at_period_end === true,
+  });
 
   return {
     plan: {
@@ -177,10 +185,8 @@ export async function resolveSupportAccountContext(
       effectiveTier: entitlement.plan,
       displayName: getBillingPlanPricing(tier).label,
       status,
-      currentPeriodEnd: toIso(subscription?.current_period_end),
-      subscriptionSource: entitlement.seatSource
-        ? 'manual'
-        : resolveSubscriptionSource(subscription),
+      currentPeriodEnd: periodEndKind === null ? null : toIso(subscription?.current_period_end),
+      subscriptionSource,
     },
     usage,
     connectors,

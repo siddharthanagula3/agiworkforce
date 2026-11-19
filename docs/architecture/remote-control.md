@@ -73,8 +73,9 @@ pairing secret.
 `ALLOWED_CONTROL_ACTIONS` covers pairing, approvals and their snapshots, the
 agent list, sync, dispatch, heartbeat, cancellation, emergency stop and control
 receipts. `CODE_SESSION_CONTROL_ACTIONS` covers the
-coding session verbs: list, attach, detach, steer, interrupt, respond to an
-approval, and the snapshot and event streams back. An action outside both lists
+coding session verbs: list, start, attach, detach, steer, interrupt, read
+history, respond to an approval, answer a question, and the snapshot and event
+streams back. An action outside both lists
 is rejected at the relay, and payload size is capped separately for code session
 traffic and for everything else.
 

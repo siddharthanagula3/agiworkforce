@@ -4,7 +4,7 @@ import AppIntents
 struct SummarizeIntent: AppIntent {
     static var title: LocalizedStringResource = "Summarize with AGI"
     static var description = IntentDescription(
-        "Summarize text using AGI's on-device AI.",
+        "Summarize text with AGI Mobile.",
         categoryName: "Text"
     )
     static var openAppWhenRun: Bool = true

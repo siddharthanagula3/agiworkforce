@@ -2,7 +2,7 @@ import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, type ReactNode } from 'react';
 import { Alert, Share, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { Check, ChevronRight, Copy, Share2, TriangleAlert } from 'lucide-react-native';
+import { Check, ChevronRight, Copy, Flag, Share2, TriangleAlert } from 'lucide-react-native';
 import type { CloudCodeChanges, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import {
   CLOUD_CODE_SESSION_COPY,
@@ -14,12 +14,15 @@ import {
   type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
+import { TranscriptFontContext } from '@/components/ui/transcriptFont';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
+import { useTranscriptFontFamily } from '@/src/features/settings/code/useCodeAppearance';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CLOUD_CODE_REPLY_COPY } from '../presentation';
 import { CloudCodeChangesCard } from './CloudCodeChangesCard';
+import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
 
 const EXIT_CODE_OK = 0;
 const CHEVRON_SIZE = 14;
@@ -27,6 +30,7 @@ const EXPANDED_ROTATION = '90deg';
 const REPLY_ACTION_ICON_SIZE = 16;
 const SHARE_FAILED_TITLE = 'Could not share';
 const SHARE_FAILED_BODY = 'Sharing is not available right now. Try again, or copy the reply.';
+const REPORT_THIS_REPLY = 'Report this reply';
 
 function firstLine(output: string): string {
   return output.split('\n')[0]?.trim() ?? '';
@@ -185,6 +189,7 @@ function CommandGroup({ entries }: { entries: CloudCodeTerminalEntry[] }) {
 
 export function CloudCodeTaskBubble({ text }: { text: string }) {
   const colors = useThemeColors();
+  const fontFamily = useTranscriptFontFamily();
 
   return (
     <View
@@ -199,7 +204,12 @@ export function CloudCodeTaskBubble({ text }: { text: string }) {
     >
       <Text
         selectable
-        style={{ color: colors.textPrimary, fontSize: typeScale.callout, lineHeight: 24 }}
+        style={{
+          color: colors.textPrimary,
+          fontSize: typeScale.callout,
+          lineHeight: 24,
+          ...(fontFamily ? { fontFamily } : {}),
+        }}
       >
         {text}
       </Text>
@@ -272,28 +282,65 @@ export function CodeReplyActions({ text, extra }: { text: string; extra?: ReactN
 }
 
 function Reply({
+  id,
   text,
   stopReason,
+  sessionId,
 }: {
+  id: string;
   text: string;
   stopReason: CloudCodeAgentStopReason | null;
+  sessionId?: string;
 }) {
   const colors = useThemeColors();
+  const fontFamily = useTranscriptFontFamily();
+  const [reporting, setReporting] = useState(false);
+  const reportable = text.trim().length > 0;
 
   return (
     <View style={{ gap: 6 }}>
-      {text ? <View>{renderMarkdownContent(text, colors)}</View> : null}
+      {text ? (
+        <TranscriptFontContext.Provider value={fontFamily ?? null}>
+          <View>{renderMarkdownContent(text, colors)}</View>
+        </TranscriptFontContext.Provider>
+      ) : null}
       {stopReason ? (
         <Text
           style={{
             color: cloudCodeStopReasonIsFailure(stopReason) ? colors.agentError : colors.textMuted,
             fontSize: typeScale.footnote,
+            ...(fontFamily ? { fontFamily } : {}),
           }}
         >
           {CLOUD_CODE_STOP_REASON_LABELS[stopReason]}
         </Text>
       ) : null}
-      {text.trim() ? <CodeReplyActions text={text} /> : null}
+      {reportable ? (
+        <CodeReplyActions
+          text={text}
+          extra={
+            <CodeReplyActionButton
+              label={REPORT_THIS_REPLY}
+              icon={Flag}
+              color={colors.textMuted}
+              onPress={() => setReporting(true)}
+            />
+          }
+        />
+      ) : null}
+      {reportable && reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(false)}
+          title={REPORT_THIS_REPLY}
+          target={{
+            messageId: id,
+            conversationId: sessionId ? `cloud-code:${sessionId}` : 'cloud-code',
+            contentExcerpt: text,
+            subject: { kind: 'code-reply', id },
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -321,10 +368,12 @@ export function CloudCodeTranscript({
   items,
   changes,
   onOpenChanges,
+  sessionId,
 }: {
   items: CodeTranscriptItem[];
   changes?: CloudCodeChanges | null;
   onOpenChanges?: () => void;
+  sessionId?: string;
 }) {
   return (
     <View style={{ gap: 14 }}>
@@ -340,7 +389,15 @@ export function CloudCodeTranscript({
             </View>
           );
         }
-        return <Reply key={item.id} text={item.text} stopReason={item.stopReason} />;
+        return (
+          <Reply
+            key={item.id}
+            id={item.id}
+            text={item.text}
+            stopReason={item.stopReason}
+            sessionId={sessionId}
+          />
+        );
       })}
       {changes && onOpenChanges ? (
         <CloudCodeChangesCard changes={changes} onOpen={onOpenChanges} />

@@ -5,7 +5,12 @@ import {
   SESSION_AUTH_ROUTE_PREFIXES,
   SHELL_APP_ROUTE_PREFIXES,
   SIGN_IN_ENTRY_ROUTES,
+  EMBEDDABLE_ACCOUNT_PAGE_PATHS,
+  EMBEDDABLE_RECOVERY_PAGE_PATHS,
   isAuthPath,
+  isEmbeddableAccountPagePath,
+  isEmbeddableRecoveryPagePath,
+  isEmbeddablePagePath,
   isProductPath,
   isShellAppPath,
   isSignInEntryPath,
@@ -198,6 +203,45 @@ describe('product routes', () => {
       '/loginx',
     ]) {
       expect(isSignInEntryPath(path), path).toBe(false);
+    }
+  });
+
+  it('opens only the account and security sections as embeddable account pages', () => {
+    for (const path of [
+      '/settings/account',
+      '/settings/security/',
+      '/settings/account?from=mobile',
+    ]) {
+      expect(isEmbeddableAccountPagePath(path), path).toBe(true);
+    }
+    for (const path of [
+      '/settings',
+      '/settings/billing',
+      '/settings/usage',
+      '/settings/account/billing',
+      '/settings/accounts',
+      '/upgrade',
+      '/pricing',
+    ]) {
+      expect(isEmbeddableAccountPagePath(path), path).toBe(false);
+    }
+    for (const path of EMBEDDABLE_ACCOUNT_PAGE_PATHS) {
+      expect(isProductPath(path), path).toBe(true);
+      expect(isEmbeddablePagePath(path), path).toBe(false);
+    }
+  });
+
+  it('opens only the signed-out recovery pages as embeddable recovery pages', () => {
+    for (const path of ['/recover', '/appeal/', '/auth/reset-password?from=mobile']) {
+      expect(isEmbeddableRecoveryPagePath(path), path).toBe(true);
+    }
+    for (const path of ['/login', '/signup', '/recover/extra', '/auth', '/pricing', '/']) {
+      expect(isEmbeddableRecoveryPagePath(path), path).toBe(false);
+    }
+    for (const path of EMBEDDABLE_RECOVERY_PAGE_PATHS) {
+      expect(isProductPath(path), path).toBe(false);
+      expect(isEmbeddablePagePath(path), path).toBe(false);
+      expect(isEmbeddableAccountPagePath(path), path).toBe(false);
     }
   });
 });

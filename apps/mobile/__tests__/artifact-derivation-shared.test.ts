@@ -7,14 +7,17 @@ const PYTHON_BLOCK = ['```python', 'import os', 'print(os.getcwd())', 'x = 1', '
 
 const SHORT_BLOCK = ['```bash', 'ls -la', '```'].join('\n');
 
-const MARKDOWN_TWO_BLOCKS = [PYTHON_BLOCK, 'Some prose.', PYTHON_BLOCK].join('\n\n');
+const ARTIFACT_PAGE = [
+  '```html',
+  '<!-- @artifact -->',
+  '<!DOCTYPE html>',
+  '<html><head><title>Tiny Counter</title></head>',
+  '<body><button>Add one</button></body></html>',
+  '```',
+].join('\n');
 
-const THEME = {
-  teal: '#21808d',
-  terraCotta: '#da7756',
-  agentThinking: '#a855f7',
-  agentActive: '#3b82f6',
-};
+const MARKDOWN_TWO_PAGES = [ARTIFACT_PAGE, 'Some prose.', ARTIFACT_PAGE].join('\n\n');
+
 const LOCAL_PROVENANCE = { scope: 'local' } as const;
 
 describe('uuid v5 bundling in RN/Jest (no react-native-get-random-values required)', () => {
@@ -60,12 +63,11 @@ describe('uuid v5 bundling in RN/Jest (no react-native-get-random-values require
 describe('deriveAndMapToMobileArtifacts, delegation + mapping', () => {
   it('produces MobileArtifacts with deterministic ids from deriveArtifacts', () => {
     const result = deriveAndMapToMobileArtifacts(
-      PYTHON_BLOCK,
+      ARTIFACT_PAGE,
       'conv-42',
       'msg-99',
       '2026-06-21T00:00:00.000Z',
       'Test conversation',
-      THEME,
       LOCAL_PROVENANCE,
     );
 
@@ -84,21 +86,19 @@ describe('deriveAndMapToMobileArtifacts, delegation + mapping', () => {
 
   it('ids are stable across two calls with the same context', () => {
     const a = deriveAndMapToMobileArtifacts(
-      PYTHON_BLOCK,
+      ARTIFACT_PAGE,
       'conv-1',
       'msg-1',
       '2026-06-21T00:00:00.000Z',
       'Chat',
-      THEME,
       LOCAL_PROVENANCE,
     );
     const b = deriveAndMapToMobileArtifacts(
-      PYTHON_BLOCK,
+      ARTIFACT_PAGE,
       'conv-1',
       'msg-1',
       '2026-06-21T00:00:00.000Z',
       'Chat',
-      THEME,
       LOCAL_PROVENANCE,
     );
     expect(a[0]!.id).toBe(b[0]!.id);
@@ -112,7 +112,6 @@ describe('deriveAndMapToMobileArtifacts, delegation + mapping', () => {
       'msg-1',
       '2026-06-21T00:00:00.000Z',
       'Chat',
-      THEME,
       LOCAL_PROVENANCE,
     );
     if (result.length > 0) {
@@ -120,18 +119,65 @@ describe('deriveAndMapToMobileArtifacts, delegation + mapping', () => {
     }
   });
 
-  it('two blocks get distinct deterministic ids', () => {
-    const result = deriveAndMapToMobileArtifacts(
-      MARKDOWN_TWO_BLOCKS,
+  it('labels a bare svg picture as svg so it opens on its preview', () => {
+    const bare = [
+      '```',
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">',
+      '  <circle r="4" cx="5" cy="5" />',
+      '  <rect width="2" height="2" />',
+      '</svg>',
+      '```',
+    ].join('\n');
+    const [artifact] = deriveAndMapToMobileArtifacts(
+      bare,
       'conv-1',
       'msg-1',
       '2026-06-21T00:00:00.000Z',
       'Chat',
-      THEME,
+      LOCAL_PROVENANCE,
+    );
+    expect(artifact?.artifactType).toBe('svg');
+    expect(artifact?.language).toBe('svg');
+  });
+
+  it('two blocks get distinct deterministic ids', () => {
+    const result = deriveAndMapToMobileArtifacts(
+      MARKDOWN_TWO_PAGES,
+      'conv-1',
+      'msg-1',
+      '2026-06-21T00:00:00.000Z',
+      'Chat',
       LOCAL_PROVENANCE,
     );
     expect(result).toHaveLength(2);
     expect(result[0]!.id).not.toBe(result[1]!.id);
+  });
+
+  it('takes no palette from the caller and keeps the provenance it is given', () => {
+    const cloud = { scope: 'cloud', ownerId: 'user-a' } as const;
+    const result = deriveAndMapToMobileArtifacts(
+      ARTIFACT_PAGE,
+      'conv-1',
+      'msg-1',
+      '2026-06-21T00:00:00.000Z',
+      'Chat',
+      cloud,
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0]!.provenance).toEqual(cloud);
+    expect(deriveAndMapToMobileArtifacts.length).toBe(6);
+  });
+
+  it('lists no plain code sample, which the chat draws inline rather than as a card', () => {
+    const result = deriveAndMapToMobileArtifacts(
+      PYTHON_BLOCK,
+      'conv-1',
+      'msg-1',
+      '2026-06-21T00:00:00.000Z',
+      'Chat',
+      LOCAL_PROVENANCE,
+    );
+    expect(result).toHaveLength(0);
   });
 
   it('short blocks are excluded (mobile >=4 line policy)', () => {
@@ -141,7 +187,6 @@ describe('deriveAndMapToMobileArtifacts, delegation + mapping', () => {
       'msg-1',
       '2026-06-21T00:00:00.000Z',
       'Chat',
-      THEME,
       LOCAL_PROVENANCE,
     );
     expect(result).toHaveLength(0);

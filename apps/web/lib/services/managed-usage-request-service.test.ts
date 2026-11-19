@@ -802,6 +802,7 @@ describe('managed usage settlement feeds the COGS ledger', () => {
       model: 'fixture-image-model',
       routeId: 'openai/fixture-image-model',
       actualCostCents: 14,
+      providerEstimatedCostMicrousd: 140_000,
       customerCanonicalMicrousd: 140_000,
       sourceRef: `managed_usage:user_1:agi.image.web.turn_1:${'b'.repeat(64)}`,
       taskOutcome: 'delivered',

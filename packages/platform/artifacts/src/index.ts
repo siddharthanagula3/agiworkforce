@@ -12,3 +12,5 @@ export * from './artifacts';
 export * from './artifact-sync';
 export * from './artifact-store';
 export * from './artifact-changes';
+export * from './change-review';
+export { legacyArtifactIdAdoptions, type LegacyArtifactIdAdoption } from './legacy-derived-ids';

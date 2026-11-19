@@ -2,7 +2,11 @@ import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PresentationWorkspace } from './PresentationWorkspace';
-import { parseDeck, slideSegments } from './deck-model';
+import {
+  NEW_SLIDE_MARKDOWN,
+  parseDeck,
+  slideSegments,
+} from '@agiworkforce/unified-chat/deck-model';
 import { parseShapes } from './deck-shapes';
 
 const DECK =
@@ -198,6 +202,16 @@ describe('PresentationWorkspace', () => {
     openMenu('deck-slide-menu');
     fireEvent.click(screen.getByTestId('deck-menu-slide-delete'));
     expect(latest().slides).toHaveLength(3);
+  });
+
+  it('adds the starter slide after this one and keeps the deck line on a deck with no settings', () => {
+    const { onSave } = renderDeck();
+    openMenu('deck-slide-menu');
+    fireEvent.click(screen.getByTestId('deck-menu-slide-add'));
+    const saved = (onSave.mock.calls.at(-1) as [string])[0];
+    expect(saved.startsWith('<!-- deck -->\n\n# Launch')).toBe(true);
+    expect(parseDeck(saved).slides[1]).toBe(NEW_SLIDE_MARKDOWN);
+    expect(NEW_SLIDE_MARKDOWN).toBe('## New slide\n\n- First point\n- Second point');
   });
 
   it('starts a comment on the slide being viewed', () => {

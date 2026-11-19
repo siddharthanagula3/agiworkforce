@@ -5,6 +5,9 @@ type ProviderAdapterServiceModule = typeof import('@/lib/services/provider-adapt
 type AdapterResponseModule =
   typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-response');
 type LoggerModule = typeof import('@/lib/logger');
+type PolicySourceModule = typeof import('@/lib/server/managed-cloud-routing/policy-source');
+
+const owner = vi.hoisted(() => ({ trainingOptOut: false }));
 
 const mocks = vi.hoisted(() => ({
   buildAdapter: vi.fn(),
@@ -42,6 +45,24 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
     new Set(getManualOverrideModelIds().map((model) => catalogProvider(model))),
 }));
 
+vi.mock('@/lib/server/managed-cloud-routing/policy-source', async (importOriginal) => {
+  const actual = await importOriginal<PolicySourceModule>();
+  const { inMemoryPolicySource } =
+    await import('@/lib/server/managed-cloud-routing/__tests__/in-memory-policy-source');
+  return {
+    ...actual,
+    get productionPolicySource() {
+      return inMemoryPolicySource({
+        trainingOptOut: owner.trainingOptOut,
+        deploymentRegion: actual.productionPolicySource.deploymentRegion(),
+        availableProviderIds: new Set(
+          getManualOverrideModelIds().map((model) => catalogProvider(model)),
+        ),
+      });
+    },
+  };
+});
+
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importOriginal) => ({
   ...(await importOriginal<AdapterResponseModule>()),
   drainToLlmResponse: mocks.drain,
@@ -49,6 +70,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importO
 
 import { reviewPullRequestDiff, reviewSummaryBody } from '@/lib/code-review/pipeline';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 
 const DIFF = [
   'diff --git a/src/auth.ts b/src/auth.ts',
@@ -64,7 +86,8 @@ const TRAINING_MODEL = getManualOverrideModelIds().find(
   (model) => !modelKeepsInputsOutOfTraining(model),
 );
 
-function review(noTrainingOnly: boolean, preferredModel: string | null = null, planTier = 'pro') {
+function review(trainingOptOut: boolean, preferredModel: string | null = null, planTier = 'pro') {
+  owner.trainingOptOut = trainingOptOut;
   return reviewPullRequestDiff({
     diff: DIFF,
     prNumber: 7,
@@ -72,7 +95,6 @@ function review(noTrainingOnly: boolean, preferredModel: string | null = null, p
     postedCommentBodies: [],
     preferredModel,
     ownerUserId: 'user-1',
-    noTrainingOnly,
     billingDb: {} as never,
     reviewRef: 'attempt-1',
   });
@@ -130,7 +152,10 @@ describe('automated code review honours the provider-training opt-out', () => {
     const outcome = await review(false, TRAINING_MODEL!);
 
     expect(outcome.status).toBe('no-findings');
-    expect(mocks.buildAdapter).toHaveBeenCalledWith(catalogProvider(TRAINING_MODEL!));
+    expect(mocks.drain).toHaveBeenCalled();
+    for (const [, model] of mocks.drain.mock.calls) {
+      expect(model).toBe(TRAINING_MODEL);
+    }
   });
 
   it('reviews with Auto instead of a configured model that may train, and says so in the review', async () => {
@@ -176,5 +201,50 @@ describe('automated code review honours the provider-training opt-out', () => {
 
     expect(outcome.status).toBe('no-findings');
     expect(mocks.buildAdapter).toHaveBeenCalled();
+  });
+});
+
+describe('a configured review model passes the same admission as any other call', () => {
+  it('reviews with Auto, without the training note, when the catalogue does not know the model', async () => {
+    const outcome = await review(false, 'not-a-catalogue-model');
+
+    expect(outcome.status).toBe('no-findings');
+    expect(outcome.configuredModelSetAside).toBeUndefined();
+    for (const [, model] of mocks.drain.mock.calls) {
+      expect(model).not.toBe('not-a-catalogue-model');
+    }
+  });
+
+  it('never sends the review to a configured model the owner’s plan does not admit', async () => {
+    owner.trainingOptOut = false;
+    let locked: string | undefined;
+    for (const model of getManualOverrideModelIds()) {
+      const admission = await admitManagedCloudRoute({
+        kind: 'background',
+        account: { db: null, userId: 'user-1', organizationId: null },
+        planTier: 'free',
+        need: { taskType: 'coding', selection: model, exactSelection: true },
+      });
+      if (admission.status === 'refused' && admission.reason === 'no_route') {
+        locked = model;
+        break;
+      }
+    }
+    expect(locked).toBeDefined();
+
+    const outcome = await review(false, locked!, 'free');
+
+    expect(outcome.configuredModelSetAside).toBeUndefined();
+    for (const [, model] of mocks.drain.mock.calls) {
+      expect(model).not.toBe(locked);
+    }
+  });
+
+  it('resolves the route once for the whole review', async () => {
+    await review(false);
+
+    expect(mocks.drain.mock.calls.length).toBeGreaterThan(1);
+    const models = new Set(mocks.drain.mock.calls.map(([, model]) => model));
+    expect(models.size).toBe(1);
   });
 });

@@ -4,7 +4,7 @@ title: Run a task with AGI Work
 path: /agi-work
 category: work
 tags: agi work, work, agent, task, autonomous, session dock, outputs, progress, sources, approvals, work history, deliverables
-updated: 2026-11-11
+updated: 2026-11-16
 description: How AGI Work runs a multi-step task, shows progress, asks for approvals and keeps past sessions.
 scope: public
 ---
@@ -48,6 +48,16 @@ you to review and send, rather than re-running it unattended.
 
 ## Availability
 
-AGI Work is a paid-plan feature, included on {{PLANS.agi_work}}. A workspace
-administrator can also turn it off for a managed workspace. The pricing page
-carries the current details.
+{{#purchase}}
+
+AGI Work is a paid-plan feature, included on {{PLANS.agi_work}}.
+
+{{/purchase}}
+
+A workspace administrator can turn AGI Work off for a managed workspace.
+
+{{#purchase}}
+
+The pricing page carries the current details.
+
+{{/purchase}}

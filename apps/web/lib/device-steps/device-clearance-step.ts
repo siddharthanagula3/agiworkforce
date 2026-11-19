@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { deviceOperatingSystem } from '@agiworkforce/cloud-contracts';
+import { PRODUCT_COPYRIGHT_NAME, PRODUCT_NAMES } from '@agiworkforce/types';
 import { createAgentEventStreamEmitter } from '@/app/api/llm/v1/chat/completions/lib/agent-event-stream';
 import { logger } from '@/lib/logger';
 import { appendCloudAgentEvent, getCloudAgentRun } from '@/lib/services/cloud-agent-run-service';
@@ -96,17 +98,28 @@ export async function clearCloudAgentDevice(
 
 export type DeviceClearanceNotice = 'waiting' | 'back' | 'withdrawn';
 
-function deviceClearanceCopy(
+const MOBILE_APP_NAME = `${PRODUCT_COPYRIGHT_NAME} ${PRODUCT_NAMES.mobile}`;
+const DESKTOP_APP_NAME = `${PRODUCT_COPYRIGHT_NAME} ${PRODUCT_NAMES.desktop}`;
+
+function wakeInstruction(platform: string): string {
+  const os = deviceOperatingSystem(platform);
+  return os === 'ios' || os === 'android'
+    ? `Open ${MOBILE_APP_NAME} on that device`
+    : `Open ${DESKTOP_APP_NAME} on that computer`;
+}
+
+export function deviceClearanceCopy(
   notice: DeviceClearanceNotice,
-  deviceName: string,
+  device: { deviceName: string; platform: string },
   reason: string | null,
   waitMinutes: number,
 ): { summary: string; detail?: string; status: 'running' | 'completed' | 'failed' } {
+  const { deviceName } = device;
   switch (notice) {
     case 'waiting':
       return {
         summary: `Waiting for ${deviceName} to come online`,
-        detail: `${reason ? `${reason} ` : ''}Open AGI Desktop on that computer to let the task carry on. If it is still offline after ${waitMinutes} minutes, the task continues without it.`,
+        detail: `${reason ? `${reason} ` : ''}${wakeInstruction(device.platform)} to let the task carry on. If it is still offline after ${waitMinutes} minutes, the task continues without it.`,
         status: 'running',
       };
     case 'back':
@@ -148,7 +161,7 @@ export async function reportCloudAgentDeviceClearance(
   const emitted = emitter.emitWithEnvelope({
     type: 'progress-update',
     progressId: `device-clearance:${input.runId}:${declaration.deviceId}`,
-    ...deviceClearanceCopy(notice, declaration.deviceName, reason, waitMinutes),
+    ...deviceClearanceCopy(notice, declaration, reason, waitMinutes),
   });
   await appendCloudAgentEvent(db, {
     userId: input.userId,

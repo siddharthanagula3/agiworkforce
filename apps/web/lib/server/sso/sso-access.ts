@@ -26,7 +26,7 @@ async function administeredOrganizationPlans(
   userId: string,
 ): Promise<BillingPlanTier[]> {
   const memberships = await db.query<Pick<OrganizationMemberRow, 'organization_id' | 'role'>>(
-    'select organization_id, role from organization_members where user_id = $1',
+    "select organization_id, role from organization_members where user_id = $1 and status = 'active'",
     [userId],
   );
   return Promise.all(

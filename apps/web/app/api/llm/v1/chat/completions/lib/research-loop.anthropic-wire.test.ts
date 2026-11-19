@@ -351,6 +351,56 @@ describe('research loop over the REAL Anthropic wire', () => {
     expect(run.doneCount).toBe(1);
   });
 
+  it('shows only the report when a model would narrate a search before writing it', async () => {
+    const commentary =
+      'I cannot match these sources to the right claims yet, so I will check a few pages again.';
+    const synthesisAroundSearch: unknown[] = [
+      messageStart(),
+      ...textBlock(0, commentary),
+      ...webSearchBlocks(1, 'node.js release schedule', [
+        { url: 'https://nodejs.org/en/about/releases', title: 'Release schedule' },
+      ]),
+      ...textBlock(3, REPORT_TEXT),
+      ...messageEnd('end_turn'),
+    ];
+    const gathering = [PLAN_TURN, GATHER_TURN];
+    let call = 0;
+    streamMock.mockImplementation(
+      async (_provider, _processed, stepRequest, responseModel, sink) => {
+        const index = call++;
+        const toolsOffered = ((stepRequest as { tools?: unknown[] }).tools ?? []).length > 0;
+        const seq = gathering[index] ?? (toolsOffered ? synthesisAroundSearch : SYNTHESIS_TURN);
+        return anthropicWireStream(seq, responseModel, sink);
+      },
+    );
+    const persisted: ResearchRunReport[] = [];
+
+    const run = await collectRun(
+      runResearchLoop(
+        makeProcessed(),
+        { userId: 'user-1', token: 'tok' },
+        {
+          maxIterations: 3,
+          maxSearches: 12,
+          persistReport: async (report) => {
+            persisted.push(report);
+          },
+        },
+      ),
+    );
+
+    expect(streamMock).toHaveBeenCalledTimes(3);
+    expect((streamMock.mock.calls[1]?.[2] as { tools?: unknown[] }).tools).toHaveLength(1);
+    expect((streamMock.mock.calls[2]?.[2] as { tools?: unknown[] }).tools).toBeUndefined();
+    const content = run.events
+      .map((e) => delta(e)['content'])
+      .filter((c): c is string => typeof c === 'string')
+      .join('');
+    expect(content).toContain(REPORT_TEXT);
+    expect(content).not.toContain(commentary);
+    expect(persisted[0]?.content).toBe(REPORT_TEXT);
+  });
+
   it('forwards the wire thinking tags to the client while keeping them out of the thread', async () => {
     await collectRun(
       runResearchLoop(

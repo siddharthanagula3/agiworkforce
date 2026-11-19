@@ -1,10 +1,18 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import * as Calendar from 'expo-calendar/legacy';
+import * as LocalAuthentication from 'expo-local-authentication';
+import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { Platform } from 'react-native';
 import { Camera } from 'expo-camera';
 import {
+  toPushPermissionStatus,
+  trackPushPermissionRequest,
+} from '@/services/pushPermissionStatus';
+import {
   Mic,
+  AudioLines,
+  ScanFace,
   Camera as CameraIcon,
   Image,
   Bell,
@@ -26,6 +34,10 @@ export interface PermissionRegistryEntry {
   icon: LucideIcon;
   applicableLevels: MobilePermissionLevel[];
   levelLabels?: Partial<Record<MobilePermissionLevel, string>>;
+  statusHeadlines?: Partial<Record<OsPermissionStatus, string>>;
+  statusExplanations?: Partial<Record<OsPermissionStatus, string>>;
+  request?: { label: string; hint: string };
+  isAvailable?: () => Promise<boolean>;
   getStatus: () => Promise<OsPermissionStatus>;
   requestPermission: () => Promise<OsPermissionStatus>;
 }
@@ -43,6 +55,16 @@ async function getMicStatus(): Promise<OsPermissionStatus> {
 
 async function requestMic(): Promise<OsPermissionStatus> {
   const result = await Camera.requestMicrophonePermissionsAsync();
+  return toOsStatus(result.status);
+}
+
+async function getSpeechRecognitionStatus(): Promise<OsPermissionStatus> {
+  const result = await ExpoSpeechRecognitionModule.getSpeechRecognizerPermissionsAsync();
+  return toOsStatus(result.status);
+}
+
+async function requestSpeechRecognition(): Promise<OsPermissionStatus> {
+  const result = await ExpoSpeechRecognitionModule.requestSpeechRecognizerPermissionsAsync();
   return toOsStatus(result.status);
 }
 
@@ -68,14 +90,16 @@ async function requestPhotos(): Promise<OsPermissionStatus> {
 
 async function getNotificationsStatus(): Promise<OsPermissionStatus> {
   const result = await Notifications.getPermissionsAsync();
-  return toOsStatus(result.status);
+  return toOsStatus(toPushPermissionStatus(result));
 }
 
 async function requestNotifications(): Promise<OsPermissionStatus> {
-  const result = await Notifications.requestPermissionsAsync({
-    ios: { allowAlert: true, allowBadge: true, allowSound: true },
-  });
-  return toOsStatus(result.status);
+  const status = await trackPushPermissionRequest(() =>
+    Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowBadge: true, allowSound: true },
+    }),
+  );
+  return toOsStatus(status);
 }
 
 async function getCalendarStatus(): Promise<OsPermissionStatus> {
@@ -100,6 +124,40 @@ async function requestReminders(): Promise<OsPermissionStatus> {
   return toOsStatus(result.status);
 }
 
+async function isFaceIdDevice(): Promise<boolean> {
+  if (Platform.OS !== 'ios') return false;
+  const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+  return types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION);
+}
+
+let faceIdConfirmedThisSession = false;
+
+// iOS gives no Face ID status before an app uses it: canEvaluatePolicy succeeds
+// both before the person is asked and after they allow it, and fails once Face
+// ID is off for the app or has no face set up. Only a successful Face ID check
+// proves it is allowed.
+async function getFaceIdStatus(): Promise<OsPermissionStatus> {
+  const usable = (await isFaceIdDevice()) && (await LocalAuthentication.isEnrolledAsync());
+  if (!usable) {
+    faceIdConfirmedThisSession = false;
+    return 'denied';
+  }
+  return faceIdConfirmedThisSession ? 'granted' : 'undetermined';
+}
+
+async function requestFaceId(): Promise<OsPermissionStatus> {
+  const result = await LocalAuthentication.authenticateAsync({
+    promptMessage: 'Check Face ID for App Lock',
+    cancelLabel: 'Cancel',
+    disableDeviceFallback: true,
+  });
+  if (result.success) {
+    faceIdConfirmedThisSession = true;
+    return 'granted';
+  }
+  return getFaceIdStatus();
+}
+
 export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, PermissionRegistryEntry>> =
   Object.freeze({
     microphone: {
@@ -110,6 +168,15 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       applicableLevels: ['denied', 'ask_each_time', 'allow_while_using'],
       getStatus: getMicStatus,
       requestPermission: requestMic,
+    },
+    speechRecognition: {
+      kind: 'speechRecognition',
+      label: 'Speech Recognition',
+      description: 'Used to turn your voice input into text on this device.',
+      icon: AudioLines,
+      applicableLevels: ['denied', 'allow_while_using'],
+      getStatus: getSpeechRecognitionStatus,
+      requestPermission: requestSpeechRecognition,
     },
     camera: {
       kind: 'camera',
@@ -135,6 +202,9 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       description: 'Used for local model, download, and reminder alerts.',
       icon: Bell,
       applicableLevels: ['denied', 'allow_always'],
+      get statusHeadlines() {
+        return Platform.OS === 'android' ? { undetermined: 'Not Allowed Yet' } : undefined;
+      },
       getStatus: getNotificationsStatus,
       requestPermission: requestNotifications,
     },
@@ -153,19 +223,39 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       description: 'Used only to add reminders you create or confirm; never read.',
       icon: ListChecks,
       applicableLevels: ['denied', 'allow_always'],
-      levelLabels: { allow_always: 'Read & write' },
+      levelLabels: { allow_always: 'Full access' },
       getStatus: getRemindersStatus,
       requestPermission: requestReminders,
+    },
+    faceId: {
+      kind: 'faceId',
+      label: 'Face ID',
+      description: 'Used only to unlock the app when App Lock is on.',
+      icon: ScanFace,
+      applicableLevels: ['denied', 'allow_while_using'],
+      levelLabels: { allow_while_using: 'Allowed' },
+      statusHeadlines: { undetermined: 'Not Confirmed' },
+      statusExplanations: {
+        undetermined: 'Your device asks the first time Face ID is used, then keeps your answer.',
+      },
+      request: {
+        label: 'Check Face ID',
+        hint: 'Your device asks first if you have not decided yet.',
+      },
+      isAvailable: isFaceIdDevice,
+      getStatus: getFaceIdStatus,
+      requestPermission: requestFaceId,
     },
   });
 
 export const PERMISSION_KINDS: MobilePermissionKind[] = [
   'microphone',
+  ...(Platform.OS === 'ios' ? (['speechRecognition'] as const) : []),
   'camera',
   ...(Platform.OS === 'ios' ? (['photos'] as const) : []),
   'notifications',
   'calendar',
-  ...(Platform.OS === 'ios' ? (['reminders'] as const) : []),
+  ...(Platform.OS === 'ios' ? (['reminders', 'faceId'] as const) : []),
 ];
 
 export function osStatusToLevel(

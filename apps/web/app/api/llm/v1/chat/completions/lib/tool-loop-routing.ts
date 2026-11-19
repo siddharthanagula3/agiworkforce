@@ -7,6 +7,10 @@ import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { isManagedOfficeFileTool } from '@/lib/services/managed-office-file-service';
 import { isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { isAnswerUiTool } from '@/lib/services/answer-ui-tool-service';
+import { isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { isMemoryTool } from '@/lib/server/tools/memory-tools';
+import { isPluginDraftTool } from '@/lib/server/tools/plugin-draft-tool';
+import { isScheduleTool } from '@/lib/server/tools/schedule-tool';
 import {
   ITINERARY_TOOL_NAME,
   PLACES_SEARCH_TOOL_NAME,
@@ -34,6 +38,10 @@ export interface ToolLoopInputClassification {
   hasAnswerUiTools: boolean;
   hasImageTools: boolean;
   hasDeviceStepTools: boolean;
+  hasFileSearchTools: boolean;
+  hasScheduleTools: boolean;
+  hasPluginDraftTools: boolean;
+  hasMemoryTools: boolean;
   shouldRun: boolean;
   approvalMode: ToolLoopApprovalMode;
 }
@@ -90,6 +98,10 @@ export function classifyToolLoopInputs(
   // suspended. Without the loop there is nothing to suspend, and the raw tool
   // call would reach the client as a call nobody runs.
   const hasDeviceStepTools = names.some(isDeviceStepTool);
+  const hasFileSearchTools = names.some(isFileSearchTool);
+  const hasScheduleTools = names.some(isScheduleTool);
+  const hasPluginDraftTools = names.some(isPluginDraftTool);
+  const hasMemoryTools = names.some(isMemoryTool);
 
   return {
     hasMcpTools,
@@ -104,6 +116,10 @@ export function classifyToolLoopInputs(
     hasAnswerUiTools,
     hasImageTools,
     hasDeviceStepTools,
+    hasFileSearchTools,
+    hasScheduleTools,
+    hasPluginDraftTools,
+    hasMemoryTools,
     shouldRun:
       options.callerContinuation === true ||
       hasMcpTools ||
@@ -117,6 +133,10 @@ export function classifyToolLoopInputs(
       hasProductComparisonTools ||
       hasImageTools ||
       hasDeviceStepTools ||
+      hasFileSearchTools ||
+      hasScheduleTools ||
+      hasPluginDraftTools ||
+      hasMemoryTools ||
       // A provider-run search is not a function tool, so nothing above sees it.
       // The loop is the only place a required search the model skipped is asked
       // for again, so a required one has to run there.

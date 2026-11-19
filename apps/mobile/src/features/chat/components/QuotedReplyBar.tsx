@@ -4,8 +4,9 @@ import { X, Reply } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { getShortDisplayName } from '@/src/features/model-picker/service';
+import { getShortDisplayName, UNKNOWN_MODEL_LABEL } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
+import { answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
 import type { ChatMessage } from '@/types/chat';
 
 interface QuotedReplyBarProps {
@@ -13,17 +14,31 @@ interface QuotedReplyBarProps {
   onDismiss: () => void;
 }
 
+export function quotedReplyAuthor(
+  message: Pick<ChatMessage, 'role' | 'model'>,
+  subscriptionTier?: string,
+): string {
+  if (message.role === 'user') return 'You';
+  const modelName = message.model
+    ? getShortDisplayName(message.model, subscriptionTier)
+    : UNKNOWN_MODEL_LABEL;
+  return modelName === UNKNOWN_MODEL_LABEL ? 'Assistant' : modelName;
+}
+
+const QUOTED_REPLY_MAX_CHARACTERS = 150;
+
+export function quotedReplyText(content: string): string {
+  const text = answerPlainText(content).replace(/\s+/g, ' ').trim();
+  return text.length > QUOTED_REPLY_MAX_CHARACTERS
+    ? `${text.slice(0, QUOTED_REPLY_MAX_CHARACTERS).trim()}...`
+    : text;
+}
+
 export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
   const colors = useThemeColors();
   const subscriptionTier = useTierStore((s) => s.tier);
-  const isUser = message.role === 'user';
-  const label = isUser
-    ? 'You'
-    : message.model
-      ? getShortDisplayName(message.model, subscriptionTier)
-      : 'Assistant';
-  const preview =
-    message.content.length > 100 ? message.content.slice(0, 100).trim() + '...' : message.content;
+  const label = quotedReplyAuthor(message, subscriptionTier);
+  const preview = quotedReplyText(message.content);
 
   return (
     <View

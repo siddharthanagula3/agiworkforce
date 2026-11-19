@@ -75,6 +75,37 @@ describe('reduceResearchDelta', () => {
     ]);
   });
 
+  it('never keeps the provider opaque encrypted_content token as a snippet', () => {
+    const token = `EqoBCiQIBhgCIkA3NzQ1ZjU4YyhYmNkLTQ5ZTEtOGE4NiZWJhNzBkOWU5Nzk3EgxkMTJlZmNiZmU0NTYaDG1haW4${'Qx7Zk2'.repeat(12)}`;
+    const state = reduce([
+      { x_research_status: { phase: 'searching' } } as StreamDelta,
+      {
+        x_search_results: {
+          content: [
+            {
+              type: 'web_search_result',
+              url: 'https://a.example',
+              title: 'A',
+              encrypted_content: token,
+            },
+            {
+              type: 'web_search_result',
+              url: 'https://b.example',
+              title: 'B',
+              encrypted_content: token,
+              snippet: 'Readable summary of page B',
+            },
+          ],
+        },
+      } as StreamDelta,
+    ]);
+
+    expect(state?.sourcesForRetry).toEqual([
+      { url: 'https://a.example', title: 'A' },
+      { url: 'https://b.example', title: 'B', snippet: 'Readable summary of page B' },
+    ]);
+  });
+
   it('tracks progress counts and accumulates deduped sources', () => {
     const state = reduce([
       { x_research_status: { phase: 'searching', iteration: 2, max_iterations: 6 } } as StreamDelta,
@@ -307,5 +338,75 @@ describe('readResearchRunState', () => {
     expect(readResearchRunState({ phase: 'nonsense' })).toBeUndefined();
     expect(readResearchRunState(null)).toBeUndefined();
     expect(readResearchRunState([{ phase: 'complete' }])).toBeUndefined();
+  });
+
+  it('keeps only a well formed run configuration and plan questions from a stored run', () => {
+    const stored = {
+      phase: 'awaiting_approval',
+      questions: ['Which region?', 7, '   '],
+      runConfig: {
+        sources: { files: 'yes', allowDomains: ['iea.org', 3], denyDomains: 'x', connectors: [] },
+        deliverable: { depth: 'executive-summary', format: 'bullet-brief' },
+      },
+    };
+    const state = readResearchRunState(stored);
+    expect(state?.questions).toEqual(['Which region?']);
+    expect(state?.runConfig?.sources).toEqual({
+      files: false,
+      allowDomains: ['iea.org'],
+      denyDomains: [],
+      connectors: [],
+    });
+    expect(state?.runConfig?.deliverable).toMatchObject({ depth: 'executive-summary' });
+    expect(readResearchRunState(stored)).toBe(state);
+    expect(
+      readResearchRunState({ phase: 'paused', runConfig: { sources: {} }, questions: 'Why?' }),
+    ).toEqual({ phase: 'paused' });
+  });
+});
+
+describe('plan questions and run configuration', () => {
+  it('reads the questions and the run configuration the plan event carries', () => {
+    const state = reduce([
+      {
+        x_research_plan: {
+          steps: [{ id: 's1', type: 'search', description: 'One', status: 'pending' }],
+          questions: ['Which region?', '', 'Home or utility scale?'],
+          run: {
+            files: true,
+            allow_domains: ['iea.org'],
+            deny_domains: ['example-blog.com'],
+            connectors: ['gmail'],
+            deliverable: { depth: 'full-report', format: 'bullet-brief' },
+          },
+        },
+      } as StreamDelta,
+    ]);
+    expect(state?.questions).toEqual(['Which region?', 'Home or utility scale?']);
+    expect(state?.runConfig?.sources).toEqual({
+      files: true,
+      allowDomains: ['iea.org'],
+      denyDomains: ['example-blog.com'],
+      connectors: ['gmail'],
+    });
+    expect(state?.deliverable).toEqual(state?.runConfig?.deliverable);
+  });
+
+  it('keeps the questions when a later plan event updates the steps', () => {
+    const state = reduce([
+      {
+        x_research_plan: {
+          steps: [{ id: 's1', type: 'search', description: 'One', status: 'pending' }],
+          questions: ['Which region?'],
+        },
+      } as StreamDelta,
+      {
+        x_research_plan: {
+          steps: [{ id: 's1', type: 'search', description: 'One', status: 'running' }],
+        },
+      } as StreamDelta,
+    ]);
+    expect(state?.questions).toEqual(['Which region?']);
+    expect(state?.steps?.[0]?.status).toBe('running');
   });
 });

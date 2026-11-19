@@ -1,4 +1,4 @@
-import type { LibraryItem } from '@agiworkforce/cloud-contracts';
+import { LibraryListResponseSchema, type LibraryItem } from '@agiworkforce/cloud-contracts';
 
 import livePage from './__fixtures__/hosted-library-page.json';
 
@@ -13,6 +13,8 @@ import {
   mapLibraryItem,
 } from '@/src/features/library/libraryClient';
 import { useLibraryCacheStore } from '@/src/features/library/libraryCacheStore';
+import { getShortDisplayName, UNKNOWN_MODEL_LABEL } from '@/src/features/model-picker/service';
+import { requireMediaSlotModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 const mockApi = api as unknown as { get: jest.Mock; delete: jest.Mock };
 
@@ -79,11 +81,58 @@ describe('library client mapping', () => {
       byteCount: 2048,
       prompt: 'a cobalt circle',
       createdAt: '2026-09-01T00:00:00.000Z',
-      sourceLabel: 'sol-1',
+      sourceLabel: 'Generated',
       eraseAfter: null,
       model: 'sol-1',
       conversationId: null,
     });
+  });
+
+  it('keeps the small thumbnail the server offers for a picture next to the full file', () => {
+    const page = LibraryListResponseSchema.parse({
+      items: [item({ thumbnail_uri: '/api/files/asset-1/thumbnail' })],
+      has_more: false,
+      next_offset: null,
+    });
+
+    const asset = mapLibraryItem(page.items[0]!);
+
+    expect(asset.uri).toBe('/api/files/asset-1');
+    expect(asset.thumbnailUri).toBe('/api/files/asset-1/thumbnail');
+    expect(mapLibraryItem(item({})).thumbnailUri).toBeUndefined();
+  });
+
+  it('labels a generated row with the model display name, never its registry ID', () => {
+    const model = requireMobileCloudModel((candidate) => {
+      const name = getShortDisplayName(candidate.id);
+      return name !== candidate.id && name !== UNKNOWN_MODEL_LABEL;
+    }, 'Mobile Cloud model whose display name differs from its ID');
+
+    const asset = mapLibraryItem(item({ model: model.id }));
+
+    expect(asset.sourceLabel).toBe(getShortDisplayName(model.id));
+    expect(asset.sourceLabel).not.toBe(model.id);
+    expect(asset.model).toBe(model.id);
+  });
+
+  it('labels an image or video row with the catalog name of its model', () => {
+    for (const kind of ['image', 'video'] as const) {
+      const model = requireMediaSlotModel(kind);
+
+      const asset = mapLibraryItem(item({ model: model.id, kind }));
+
+      expect(asset.sourceLabel).toBe(model.name);
+      expect(asset.sourceLabel).not.toBe(model.id);
+    }
+  });
+
+  it('leaves an unknown model ID and the internal surface out of the label', () => {
+    expect(mapLibraryItem(item({ model: 'retired-model-id' })).sourceLabel).toBe('Generated');
+    expect(mapLibraryItem(item({ model: null, origin: 'uploaded' })).sourceLabel).toBe('Upload');
+    expect(
+      mapLibraryItem(item({ model: 'retired-model-id', source_surface: null, origin: 'uploaded' }))
+        .sourceLabel,
+    ).toBe('Upload');
   });
 
   it('reads the page and its cursor from the hosted response', async () => {
@@ -99,6 +148,30 @@ describe('library client mapping', () => {
     expect(page.assets.map((asset) => asset.kind)).toEqual(['image', 'video']);
     expect(page.hasMore).toBe(true);
     expect(page.nextOffset).toBe(24);
+  });
+
+  it('carries the month of downloads only when the route sends both figures', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      items: [item({})],
+      has_more: false,
+      next_offset: null,
+      download_used_bytes: 5242880,
+      download_limit_bytes: 1073741824,
+    });
+    mockApi.get.mockResolvedValueOnce({
+      items: [item({})],
+      has_more: false,
+      next_offset: null,
+      download_used_bytes: 5242880,
+    });
+
+    const both = await fetchLibraryPage({ offset: 0 });
+    const onlyUsed = await fetchLibraryPage({ offset: 0 });
+
+    expect(both.downloadUsedBytes).toBe(5242880);
+    expect(both.downloadLimitBytes).toBe(1073741824);
+    expect(onlyUsed.downloadUsedBytes).toBeUndefined();
+    expect(onlyUsed.downloadLimitBytes).toBeUndefined();
   });
 
   it('refuses a response that does not match the library contract', async () => {

@@ -189,7 +189,10 @@ describe('Clerk native pending-session policy', () => {
     );
     expect(source).toMatch(/const previousIsCloudRef = useRef\(isCloud\)/);
     expect(source).toMatch(/const enteredCloud = isCloud && !previousIsCloudRef\.current/);
-    expect(source).toMatch(/if \(enteredCloud && isMmkvReady\) void syncNow\(\)/);
+    expect(source).toMatch(
+      /if \(!enteredCloud\) return;[\s\S]{0,200}if \(isMmkvReady\) void syncNow\(\)/,
+    );
+    expect(source.match(/syncNow\(\)/g)).toHaveLength(1);
   });
 
   it('restarts every account-scoped root lifecycle on a direct Clerk account switch', () => {
@@ -230,12 +233,23 @@ describe('Clerk native pending-session policy', () => {
     );
     const accountScoped = dependencySets.filter((deps) => deps.includes('isClerkSignedIn'));
 
-    // Two effects are deliberately not account-scoped: one mirrors the signed-in
-    // boolean onto the notification service, the other reacts to a pairing URL.
+    // Three effects are deliberately not account-scoped: one mirrors the signed-in
+    // boolean onto the notification service, and two handle a link arrival once,
+    // a pairing link and a chat link that asks a signed-out person to sign in.
     const notAccountScoped = accountScoped.filter((deps) => !deps.includes('clerkUserId'));
     expect(notAccountScoped).toEqual([
       ['isClerkSignedIn'],
-      ['url', 'isClerkSignedIn', 'isInitialized', 'router'],
+      ['linkArrival', 'isClerkSignedIn', 'isInitialized', 'router'],
+      [
+        'linkArrival',
+        'authEnabled',
+        'isInitialized',
+        'isMmkvReady',
+        'isClerkLoaded',
+        'isClerkSignedIn',
+        'segments',
+        'router',
+      ],
     ]);
 
     // Everything else that reads the session must re-run when the person behind

@@ -4,60 +4,7 @@ import { RecipeCard } from './RecipeCard';
 import { ComparisonCard } from './ComparisonCard';
 import { StepsCard } from './StepsCard';
 import { CalculationCard } from './CalculationCard';
-
-export type CardType = 'recipe' | 'comparison' | 'calculation' | 'steps' | null;
-
-export function detectCardType(content: string): CardType {
-  if (!content || content.length < 40) return null;
-
-  const lower = content.toLowerCase();
-
-  const hasIngredients = /#+\s*ingredients/i.test(content) || /\*\*ingredients\*\*/i.test(content);
-  const hasInstructions =
-    /#+\s*(instructions|directions|steps|method|preparation)/i.test(content) ||
-    /\*\*(instructions|directions|steps|method|preparation)\*\*/i.test(content);
-  const hasRecipeSignals =
-    (lower.includes('prep time') || lower.includes('cook time') || lower.includes('servings')) &&
-    hasIngredients;
-  if (hasIngredients && hasInstructions) return 'recipe';
-  if (hasRecipeSignals) return 'recipe';
-
-  const calcPatterns = [
-    /(?:^|\n)\s*(?:result|answer|total|sum|difference|product|quotient)\s*[:=]\s*[-\d.,]+/im,
-    /\$\$[\s\S]+?=[\s\S]+?\$\$/m, // LaTeX block equations with =
-    /`[^`]*[+\-*/^]+[^`]*=\s*[-\d.,]+[^`]*`/m, // inline code with math
-    /\\\[[\s\S]+?=[\s\S]+?\\\]/m, // LaTeX display math
-  ];
-  const hasCalcHeader = /#+\s*(calculation|result|formula|equation|math)/i.test(content);
-  const hasCalcPattern = calcPatterns.some((p) => p.test(content));
-  if (hasCalcHeader && hasCalcPattern) return 'calculation';
-  const latexBlocks = content.match(/\$\$[\s\S]+?\$\$/g);
-  if (latexBlocks && latexBlocks.length >= 2 && hasCalcPattern) return 'calculation';
-
-  const hasVsHeading = /#+\s*.+\s+vs\.?\s+.+/i.test(content);
-  const hasComparisonTable = /\|.*\|.*\|/.test(content) && lower.includes('vs');
-  const prosConsCount = (
-    lower.match(/\b(pros?|cons?|advantages?|disadvantages?|strengths?|weaknesses?)\b/g) || []
-  ).length;
-  if (hasVsHeading) return 'comparison';
-  if (hasComparisonTable) return 'comparison';
-  if (prosConsCount >= 3 && (lower.includes(' vs ') || lower.includes(' versus ')))
-    return 'comparison';
-
-  const explicitSteps = content.match(/(?:^|\n)\s*(?:#{1,4}\s*)?step\s+\d+\b/gi);
-  const orderedLeadIns = content.match(/(?:^|\n)\s*\d+\.\s+\*\*[^*\n]+\*\*/g);
-  const hasProcedureHeading =
-    /#+\s*(guide|how to|tutorial|walkthrough|step-by-step|troubleshooting)/i.test(content);
-  if (explicitSteps && explicitSteps.length >= 3) return 'steps';
-  if (
-    hasProcedureHeading &&
-    ((explicitSteps && explicitSteps.length >= 2) || (orderedLeadIns && orderedLeadIns.length >= 3))
-  ) {
-    return 'steps';
-  }
-
-  return null;
-}
+import type { CardType } from '@agiworkforce/unified-chat/message-format';
 
 interface MessageCardRendererProps {
   content: string;

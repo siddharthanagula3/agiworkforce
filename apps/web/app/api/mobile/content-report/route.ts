@@ -4,7 +4,8 @@
  * POST /api/mobile/content-report, and the web alias /api/content-report,
  * accept trust-and-safety reports of harmful / inaccurate AI-generated content,
  * including image and video output (`asset`) and content other users shared in
- * the app (`sharedItem`, with the sharer's id), and write them into
+ * the app (`sharedItem`, with the sharer's id), with the kind of content and its
+ * id (`subject`, optional because older apps never send it), and write them into
  * public.content_reports. The mobile client keeps its
  * on-device copy as an OFFLINE fallback only.
  *
@@ -23,6 +24,10 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getOptionalAuthUser } from '@/lib/api-auth';
+import {
+  CONTENT_REPORT_SUBJECT_KINDS,
+  MAX_CONTENT_REPORT_SUBJECT_ID_LENGTH,
+} from '@agiworkforce/cloud-contracts';
 
 const MOBILE_INTAKE_PATH = '/api/mobile/';
 
@@ -45,6 +50,13 @@ const ContentReportSchema = z.object({
       kind: z.enum(['project', 'conversation', 'artifact', 'connector', 'agent']),
       id: z.string().trim().min(1).max(200),
       sharerId: z.string().trim().min(1).max(200),
+    })
+    .strict()
+    .optional(),
+  subject: z
+    .object({
+      kind: z.enum(CONTENT_REPORT_SUBJECT_KINDS),
+      id: z.string().trim().min(1).max(MAX_CONTENT_REPORT_SUBJECT_ID_LENGTH),
     })
     .strict()
     .optional(),
@@ -71,6 +83,7 @@ async function handleSubmitContentReport(request: NextRequest) {
     userNote,
     asset,
     sharedItem,
+    subject,
   } = parsed.data;
 
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
@@ -96,6 +109,7 @@ async function handleSubmitContentReport(request: NextRequest) {
           category,
           ...(asset ? { asset } : {}),
           ...(sharedItem ? { sharedItem } : {}),
+          ...(subject ? { subject } : {}),
         }),
       ],
     );

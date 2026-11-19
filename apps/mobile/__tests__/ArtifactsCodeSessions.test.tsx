@@ -313,7 +313,7 @@ describe('Artifacts gallery', () => {
 
     const screen = render(<ArtifactsGalleryScreen initialArtifactId="search-artifact" />);
 
-    expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+    expect(screen.getByTestId('artifact-fullscreen-markdown')).toBeTruthy();
     expect(screen.getByText('Exact artifact content')).toBeTruthy();
   });
 
@@ -336,14 +336,14 @@ describe('Artifacts gallery', () => {
     const screen = render(<ArtifactsGalleryScreen />);
 
     fireEvent.press(screen.getByTestId('artifact-card-account-a-artifact'));
-    expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+    expect(screen.getByTestId('artifact-fullscreen-markdown')).toBeTruthy();
 
     act(() => {
       activateCloudAccount('user-b');
       useAuthStore.setState({ clerkUserId: 'user-b' });
     });
 
-    expect(screen.queryByTestId('artifact-preview-content')).toBeNull();
+    expect(screen.queryByTestId('artifact-fullscreen-markdown')).toBeNull();
   });
 
   it('preserves a Local preview across Cloud account changes', () => {
@@ -365,14 +365,14 @@ describe('Artifacts gallery', () => {
     const screen = render(<ArtifactsGalleryScreen />);
 
     fireEvent.press(screen.getByTestId('artifact-card-local-artifact'));
-    expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+    expect(screen.getByTestId('artifact-fullscreen-markdown')).toBeTruthy();
 
     act(() => {
       activateCloudAccount('user-b');
       useAuthStore.setState({ clerkUserId: 'user-b' });
     });
 
-    expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+    expect(screen.getByTestId('artifact-fullscreen-markdown')).toBeTruthy();
   });
 
   it.each([

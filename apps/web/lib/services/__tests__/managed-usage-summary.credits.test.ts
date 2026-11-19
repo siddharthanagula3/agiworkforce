@@ -252,9 +252,9 @@ describe('managed usage summary, stated in credits', () => {
       weeklyUsagePercentage: 100,
       weeklyResetAt: '2026-10-03T00:00:00.000Z',
       hasUsageRemaining: false,
-      monthlyUsedMicrousd: credits(20),
-      weeklyUsedMicrousd: credits(15),
-      fiveHourUsedMicrousd: credits(2),
+      monthlyUsedMicrousd: credits(2_000),
+      weeklyUsedMicrousd: credits(1_500),
+      fiveHourUsedMicrousd: credits(200),
     });
 
     const summary = await getManagedUsageSummary(db, 'user-3');
@@ -263,7 +263,7 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.subscription_status).toBe('past_due');
     expect(summary.has_usage_remaining).toBe(false);
     expect(summary.usage_percentage).toBe(100);
-    expect(summary.credits?.monthly).toMatchObject({ allowance: 20, remaining: 0 });
+    expect(summary.credits?.monthly).toMatchObject({ allowance: 2_000, remaining: 0 });
     expect(summary).not.toHaveProperty('usage_allocation');
     expect(mockGetRollingUsage).not.toHaveBeenCalled();
   });
@@ -331,21 +331,21 @@ describe('managed usage summary, stated in credits', () => {
     const summary = await getManagedUsageSummary(db, 'user-2');
 
     expect(summary.credits?.monthly).toEqual({
-      allowance: 20,
+      allowance: 2_000,
       used: 5,
-      remaining: 15,
+      remaining: 1_995,
       reset_at: '2026-10-01T00:00:00.000Z',
     });
     expect(summary.credits?.weekly).toEqual({
-      allowance: 15,
+      allowance: 1_500,
       used: 3,
-      remaining: 12,
+      remaining: 1_497,
       reset_at: '2026-10-03T00:00:00.000Z',
     });
     expect(summary.credits?.five_hour).toEqual({
-      allowance: 2,
+      allowance: 200,
       used: 1,
-      remaining: 1,
+      remaining: 199,
       reset_at: '2026-09-27T15:00:00.000Z',
     });
     expect(summary.usage_percentage).toBe(25);

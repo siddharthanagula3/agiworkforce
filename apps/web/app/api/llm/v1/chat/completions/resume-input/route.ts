@@ -35,6 +35,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { withManagedTurnSlot, type ManagedTurnSlotHold } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
+import { settleRefusedFreeTrial } from '../lib/settle-refused-free-trial';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
 import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
@@ -360,6 +361,7 @@ async function handleToolInputResume(
             );
           });
         }
+        await settleRefusedFreeTrial(processed, 'tool_discovery_failed');
         await releaseClaim(db, userId, claim);
         throw error;
       }
@@ -479,6 +481,7 @@ async function handleToolInputResume(
         usage: { reason: 'workflow_start_failed' },
       }).catch(() => undefined);
     }
+    await settleRefusedFreeTrial(processed, 'workflow_start_failed');
     await releaseClaim(db, userId, claim);
     // Reaching here means both transports refused: `onDurableUnavailable:
     // 'inline'` already absorbed a Workflow-platform failure. The lease is released so the pause stays claimable and the user

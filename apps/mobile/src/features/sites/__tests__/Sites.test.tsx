@@ -250,6 +250,11 @@ describe('published sites on mobile', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const screen = render(<SiteDetailScreen />);
     expect(screen.queryByLabelText('Site name')).toBeNull();
+    expect(screen.getByText('Sites are available in AGI Cloud')).toBeTruthy();
+    expect(
+      screen.getByText('Sites live in AGI Cloud; switching won’t upload your local chats.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Published sites/)).toBeNull();
     expect(mockGet).not.toHaveBeenCalled();
   });
 
@@ -506,6 +511,11 @@ describe('published sites on mobile', () => {
       pathname: '/(app)/sites/[token]',
       params: { token: 'aaaaaaaaaaaaaaaaaaaaaaaa' },
     });
+  });
+
+  it('writes shared data sizes in B, KB and MB like every other file size', async () => {
+    const screen = render(<SiteDetailScreen />);
+    expect(await screen.findByText('1 shared entry, 12 B of 1 MB')).toBeTruthy();
   });
 
   it('limits a site to the workspace and renames it', async () => {

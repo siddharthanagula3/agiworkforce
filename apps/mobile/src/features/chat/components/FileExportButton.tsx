@@ -1,17 +1,19 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useState } from 'react';
-import { Alert, View, Modal, StyleSheet } from 'react-native';
+import { Alert, View, Modal, Share, StyleSheet } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native';
+import { FileText, FileDown, Copy, Share2, MessageSquareText, X, Check } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/Text';
 import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { preferredImpactHaptic, preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { exportToPDF, exportToText, shareFile } from '@/services/fileCreation';
+import { answerClipboardText, answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
 
 interface FileExportButtonProps {
   content: string;
@@ -21,7 +23,7 @@ interface FileExportButtonProps {
   onClose: () => void;
 }
 
-type ExportAction = 'pdf' | 'text' | 'copy' | 'share';
+type ExportAction = 'pdf' | 'text' | 'copy' | 'share' | 'share-text';
 
 interface ActionItem {
   key: ExportAction;
@@ -49,8 +51,15 @@ const ACTIONS: ActionItem[] = [
   {
     key: 'copy',
     label: 'Copy to Clipboard',
-    sublabel: 'Copy the raw message text',
+    sublabel: 'Copy the answer text',
     icon: Copy,
+    iconColorToken: 'textSecondary',
+  },
+  {
+    key: 'share-text',
+    label: 'Share Text',
+    sublabel: 'Send the answer as text to another app',
+    icon: MessageSquareText,
     iconColorToken: 'textSecondary',
   },
   {
@@ -106,15 +115,21 @@ export function FileExportButton({
           }
 
           case 'text': {
-            const result = await exportToText(content, title);
+            const result = await exportToText(answerPlainText(content), title);
             await shareFile(result.uri);
             showSuccess(action);
             break;
           }
 
           case 'copy':
-            if (await copy(content)) showSuccess(action);
+            if (await copy(answerClipboardText(content))) showSuccess(action);
             break;
+
+          case 'share-text': {
+            const result = await Share.share({ message: answerPlainText(content) });
+            if (result.action === Share.sharedAction) showSuccess(action);
+            break;
+          }
         }
       } catch {
         preferredNotificationHaptic(Haptics.NotificationFeedbackType.Error);
@@ -260,9 +275,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: {
-    width: '100%',
-  },
+  safeArea: contentColumn('reading'),
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
