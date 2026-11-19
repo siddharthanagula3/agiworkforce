@@ -64,9 +64,12 @@ const PATTERNS = [
 // live key into one.
 const DOCUMENTED = new Set(['AKIAIOSFODNN7EXAMPLE', 'ASIAIOSFODNN7EXAMPLE']);
 
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
+const ALWAYS_SKIP_DIRS = new Set(['node_modules', '.git']);
+
+// Build output directories are skipped only for files git does not track. A tracked file under a
+// directory that merely shares one of these names is source the repository ships, and skipping it
+// by path let a live key in `src/build/` pass.
+const UNTRACKED_SKIP_DIRS = new Set([
   'target',
   'dist',
   '.next',
@@ -75,6 +78,8 @@ const SKIP_DIRS = new Set([
   'coverage',
   'out',
 ]);
+
+const SKIP_DIRS = new Set([...ALWAYS_SKIP_DIRS, ...UNTRACKED_SKIP_DIRS]);
 
 const SKIP_FILE =
   /\.(png|jpe?g|gif|webp|ico|icns|woff2?|ttf|otf|mp4|mp3|wav|pdf|zip|gz|node|wasm|lock)$/i;
@@ -268,7 +273,11 @@ function workingTreeFiles() {
   const untracked = git(['ls-files', '--others', '--exclude-standard', '-z'])
     .split('\0')
     .filter(Boolean);
-  return [...new Set([...tracked, ...untracked])];
+  const trackedPaths = new Set(tracked);
+  return [...new Set([...tracked, ...untracked])].map((rel) => ({
+    rel,
+    tracked: trackedPaths.has(rel),
+  }));
 }
 
 function historyObjects() {
@@ -421,10 +430,11 @@ const scanHistory = process.argv.includes('--history');
 let historyObjectCount = 0;
 
 try {
-  for (const rel of workingTreeFiles()) {
+  for (const { rel, tracked } of workingTreeFiles()) {
     if (SELF.has(rel)) continue;
     if (SKIP_FILE.test(rel)) continue;
-    if (rel.split('/').some((segment) => SKIP_DIRS.has(segment))) continue;
+    const skipped = tracked ? ALWAYS_SKIP_DIRS : SKIP_DIRS;
+    if (rel.split('/').some((segment) => skipped.has(segment))) continue;
 
     const full = path.join(root, rel);
     let bytes;

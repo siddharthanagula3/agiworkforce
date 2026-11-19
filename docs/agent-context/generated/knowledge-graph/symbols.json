@@ -1,9 +1,6 @@
 {
   "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "symbols": {
-    "__ARTIFACT_SANDBOX_INTERNALS": [
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
-    ],
     "__clearSpendCacheForTests": [
       "apps/web/lib/services/spend-limit-service.ts"
     ],

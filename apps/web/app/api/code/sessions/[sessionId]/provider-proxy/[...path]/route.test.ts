@@ -686,6 +686,38 @@ describe('provider-proxy route', () => {
       vi.unstubAllGlobals();
     });
 
+    it('charges a finished non-stream answer even when the caller hangs up before reading it', async () => {
+      mockCalculateCostMicrousd.mockReturnValue(120_000);
+      mockCalculateListCostMicrousd.mockReturnValue(180_000);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({ model: MODEL, usage: { input_tokens: 100, output_tokens: 40 } }),
+              { status: 200, headers: { 'content-type': 'application/json' } },
+            ),
+        ),
+      );
+
+      const { req, context } = request({
+        headers: { 'x-api-key': token(), 'content-type': 'application/json' },
+        body: JSON.stringify({ model: MODEL, max_tokens: 512, messages: [{ role: 'user' }] }),
+      });
+      const response = await POST(req, context);
+      expect(response.status).toBe(200);
+      await response.body?.cancel();
+      await lastAfterPromise();
+
+      expect(mockFinalize).toHaveBeenCalledTimes(1);
+      expect(mockFinalize.mock.calls[0]?.[0]).toMatchObject({
+        outcome: 'completed',
+        actualCostMicrousd: 180_000,
+      });
+
+      vi.unstubAllGlobals();
+    });
+
     it('refunds in full when the upstream call returns no usage', async () => {
       const fetchMock = vi.fn(
         async () => new Response('{"error":{"message":"upstream is down"}}', { status: 500 }),

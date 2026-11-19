@@ -96,6 +96,16 @@ const clean = (body) => {
   assert.equal(result.status, 0, `expected no finding, got:\n${result.output}`);
 };
 
+test('a tracked file under a build-output directory name is still scanned', async (t) => {
+  for (const rel of ['src/build/config.ts', 'lib/out/config.ts', 'pkg/dist/config.ts']) {
+    await t.test(rel, () => {
+      const result = scan({ [rel]: `const k = '${STRIPE}';` }, undefined, { history: true });
+      assert.equal(result.status, 1, `expected a finding, got:\n${result.output}`);
+      assert.match(result.output, new RegExp(`${rel}:1 +Stripe live key`));
+    });
+  }
+});
+
 test('a marker appended to live key material does not exempt it', async (t) => {
   await t.test('Stripe', () => reported(`const k = '${STRIPE}_SAMPLE';`, 'Stripe live key'));
   await t.test('Anthropic', () =>

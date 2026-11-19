@@ -39,6 +39,7 @@ export type GuardedFetchOutcome =
 export interface Deadline {
   signal: AbortSignal;
   reason: () => 'timeout' | 'cancelled' | null;
+  stopClock: () => void;
   release: () => void;
 }
 
@@ -55,6 +56,7 @@ export function createDeadline(timeoutMs: number, callerSignal?: AbortSignal): D
       if (callerSignal?.aborted) return 'cancelled';
       return controller.signal.aborted ? 'timeout' : null;
     },
+    stopClock: () => clearTimeout(timer),
     release: () => {
       clearTimeout(timer);
       callerSignal?.removeEventListener('abort', cancel);
@@ -203,7 +205,7 @@ export async function guardedFetch(
 export async function readBodyCapped(
   response: Response,
   maxBytes: number,
-): Promise<Uint8Array | null> {
+): Promise<Uint8Array<ArrayBuffer> | null> {
   const body = response.body;
   if (!body) return new Uint8Array(0);
   const reader = body.getReader();
@@ -250,7 +252,7 @@ export async function readBodyTruncated(response: Response, maxBytes: number): P
   return join(chunks, total);
 }
 
-function join(chunks: readonly Uint8Array[], total: number): Uint8Array {
+function join(chunks: readonly Uint8Array[], total: number): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(total);
   let offset = 0;
   for (const chunk of chunks) {
