@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import {
@@ -22,6 +22,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Text } from '@/components/ui/Text';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { useRevealFocusedField } from '../cards/ChatScrollIntoView';
 
 const MAX_DOMAINS = 32;
 
@@ -60,6 +61,7 @@ function Choice({
       accessibilityRole="radio"
       accessibilityLabel={label}
       accessibilityState={{ selected }}
+      hitSlop={{ top: 4, bottom: 4 }}
       style={{
         minHeight: 36,
         paddingHorizontal: 12,
@@ -102,6 +104,8 @@ function DomainList({
   const colors = useThemeColors();
   const [draft, setDraft] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const fieldArea = useRef<View>(null);
+  const revealOnFocus = useRevealFocusedField(fieldArea);
 
   const commit = () => {
     const entries = draft.split(/[\s,]+/).filter(Boolean);
@@ -144,6 +148,7 @@ function DomainList({
                 onPress={() => onChange(domains.filter((entry) => entry !== domain))}
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${domain} from this research run`}
+                hitSlop={4}
                 style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
               >
                 <X size={12} color={colors.textMuted} />
@@ -152,40 +157,46 @@ function DomainList({
           ))}
         </View>
       ) : null}
-      <TextInput
-        testID={testID}
-        value={draft}
-        onChangeText={(text) => {
-          setDraft(text);
-          if (invalid) setInvalid(false);
-        }}
-        onSubmitEditing={commit}
-        onBlur={commit}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        accessibilityLabel={label}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        returnKeyType="done"
-        style={{
-          minHeight: 40,
-          fontSize: typeScale.caption,
-          color: colors.textPrimary,
-          borderWidth: 1,
-          borderColor: invalid ? colors.agentError : colors.border,
-          borderRadius: radii.md,
-          paddingHorizontal: 8,
-        }}
-      />
-      {invalid ? (
-        <Text
-          accessibilityRole="alert"
-          style={{ fontSize: typeScale.caption, color: colors.agentError }}
-        >
-          Enter site addresses such as example.com.
-        </Text>
-      ) : null}
+      <View ref={fieldArea} collapsable={false} style={{ gap: 6 }}>
+        <TextInput
+          testID={testID}
+          value={draft}
+          onChangeText={(text) => {
+            setDraft(text);
+            if (invalid) setInvalid(false);
+          }}
+          onSubmitEditing={commit}
+          onFocus={revealOnFocus.onFocus}
+          onBlur={() => {
+            revealOnFocus.onBlur();
+            commit();
+          }}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel={label}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          returnKeyType="done"
+          style={{
+            minHeight: 40,
+            fontSize: typeScale.caption,
+            color: colors.textPrimary,
+            borderWidth: 1,
+            borderColor: invalid ? colors.agentError : colors.border,
+            borderRadius: radii.md,
+            paddingHorizontal: 8,
+          }}
+        />
+        {invalid ? (
+          <Text
+            accessibilityRole="alert"
+            style={{ fontSize: typeScale.caption, color: colors.agentError }}
+          >
+            Enter site addresses such as example.com.
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -304,6 +315,7 @@ export function ResearchPlanOptions({
                     accessibilityRole="checkbox"
                     accessibilityLabel={option.label}
                     accessibilityState={{ checked: selected }}
+                    hitSlop={{ top: 4, bottom: 4 }}
                     style={{
                       minHeight: 36,
                       paddingHorizontal: 12,

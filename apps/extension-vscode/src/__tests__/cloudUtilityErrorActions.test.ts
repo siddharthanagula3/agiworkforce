@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
   BILLING_PLAN_PRICING,
+  billingPlanCapabilityUpgradeMessage,
   classifyManagedQuotaErrorCode,
   PRODUCT_NAMES,
   formatUsageResetIn,
@@ -18,6 +19,7 @@ import {
   AgiWorkforcePaywallError,
   AgiWorkforceUsageLimitError,
   fetchTierInfo,
+  parseCloudCompletionError,
   type ManagedQuotaRecovery,
   type TierInfo,
 } from '../utils/api';
@@ -333,5 +335,87 @@ describe('plan usage limit recovery', () => {
       'Upgrade',
       'View usage',
     );
+  });
+});
+
+describe('cloud utility failures that are not a lost sign-in', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows a lockdown as the server worded it and never offers Sign in', async () => {
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: { code: 'FORBIDDEN', message: 'This workspace is locked down. Contact support.' },
+      }),
+    );
+
+    await showCloudUtilityErrorActions(error, { title: `${PRODUCT_NAMES.code}: Request failed` });
+
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledTimes(1);
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      `${PRODUCT_NAMES.code}: Request failed, This workspace is locked down. Contact support.`,
+    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('shows a workspace policy refusal as the server worded it and never offers Sign in', async () => {
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: {
+          type: 'organization_policy',
+          code: 'surface_not_allowed',
+          message: 'Your workspace does not allow this client.',
+        },
+      }),
+    );
+
+    await showCloudUtilityErrorActions(error, { title: `${PRODUCT_NAMES.code}: Request failed` });
+
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      `${PRODUCT_NAMES.code}: Request failed, Your workspace does not allow this client.`,
+    );
+  });
+
+  it('offers a retry, not a sign-in, for a temporary outage', async () => {
+    vi.mocked(vscode.window.showErrorMessage).mockResolvedValue('Retry' as never);
+    const retry = vi.fn();
+    const error = parseCloudCompletionError(
+      503,
+      JSON.stringify({
+        error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' },
+      }),
+      { 'retry-after': '5' },
+    );
+
+    await showCloudUtilityErrorActions(error, {
+      title: `${PRODUCT_NAMES.code}: Request failed`,
+      retry,
+    });
+
+    expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+      `${PRODUCT_NAMES.code}: Request failed, Service temporarily unavailable`,
+      'Retry',
+    );
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it('puts the server wording of the developer surface plan refusal in front of the user', async () => {
+    const serverText = billingPlanCapabilityUpgradeMessage('developer_surfaces');
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({ error: { code: 'developer_surface_plan_required', message: serverText } }),
+    );
+
+    await showCloudUtilityErrorActions(error, { title: `${PRODUCT_NAMES.code}: Request failed` });
+
+    const [shown, ...actions] = vi.mocked(vscode.window.showWarningMessage).mock
+      .calls[0] as unknown as string[];
+    expect(shown).toBe(`${PRODUCT_NAMES.code}: Request failed, ${serverText}`);
+    expect(shown).not.toMatch(/browser extension/iu);
+    expect(actions).not.toContain('Sign in');
   });
 });

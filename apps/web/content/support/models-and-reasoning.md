@@ -4,7 +4,7 @@ title: Pick a model, and control how hard it thinks
 path: /models
 category: models
 tags: model picker, choose model, auto, switch model, extended thinking, reasoning effort, thinking budget, vision, image output, video output, tools, model unavailable, retired model, prompt cache
-updated: 2026-11-07
+updated: 2026-11-16
 description: How to pick a model by name, what the capability badges mean and how to control thinking effort.
 scope: public
 ---
@@ -23,7 +23,10 @@ replaced with a different provider.
 
 ## What the badges mean
 
+{{#purchase}}
 - **Upgrade**: the model exists but your plan does not include it.
+
+{{/purchase}}
 - **Coming soon, not yet available**: it is in the catalogue but not live.
 - **Unavailable right now**: it is live but not answering at the moment.
 - **Auto (free) · community models, capacity varies**: the free routing lane,

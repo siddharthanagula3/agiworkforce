@@ -31,7 +31,7 @@ describe('reviewing what a reply changed', () => {
     const call = vi
       .mocked(vscode.commands.executeCommand)
       .mock.calls.find((entry) => entry[0] === 'vscode.changes');
-    expect(call?.[1]).toBe('Changes in 2 files');
+    expect(call?.[1]).toBe('2 files since last commit');
     expect((call?.[2] as unknown[]).length).toBe(2);
   });
 });

@@ -89,7 +89,7 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
 
   const memberships = await db.query<Pick<OrganizationMemberRow, 'role'>>(
     `select role from organization_members
-      where organization_id = $1 and user_id = $2
+      where organization_id = $1 and user_id = $2 and status = 'active'
       limit 1`,
     [verified.organizationId, verified.createdByUserId],
   );

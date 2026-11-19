@@ -2,22 +2,12 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import { FileText } from 'lucide-react';
 import {
   formatProjectFileAnchor,
+  orderProjectFileCitationsByAnswer,
+  projectFileCitationHref,
   projectFileCitationKey,
   type ProjectFileCitation,
 } from '@agiworkforce/types';
 import { cn } from '../../lib/utils';
-
-/**
- * Where the reader goes to check the claim: the project's knowledge panel, with
- * the cited file open at the page the passage came from. Absent when the turn
- * did not carry an id for either, in which case the chip is not a link.
- */
-function citationHref(citation: ProjectFileCitation): string | undefined {
-  if (!citation.projectId || !citation.fileId) return undefined;
-  const params = new URLSearchParams({ knowledgeFile: citation.fileId });
-  if (typeof citation.anchor?.page === 'number') params.set('page', String(citation.anchor.page));
-  return `/chat/projects/${encodeURIComponent(citation.projectId)}?${params.toString()}`;
-}
 
 function ChipBody({
   citation,
@@ -44,7 +34,7 @@ function ChipBody({
 
 function ProjectFileChip({ citation }: { citation: ProjectFileCitation }) {
   const location = formatProjectFileAnchor(citation.anchor);
-  const href = citationHref(citation);
+  const href = projectFileCitationHref(citation);
   const label = location
     ? `Project file ${citation.fileName}, ${location}`
     : `Project file ${citation.fileName}`;
@@ -95,26 +85,6 @@ function ProjectFileChip({ citation }: { citation: ProjectFileCitation }) {
   );
 }
 
-/**
- * A turn is given every passage that fit its budget, which for one long file is
- * a run of adjacent pages. The place the answer actually named leads the row,
- * so the chip a reader wants is the first one rather than the seventh.
- */
-function orderByAnswer(
-  citations: readonly ProjectFileCitation[],
-  answerText: string,
-): readonly ProjectFileCitation[] {
-  if (!answerText) return citations;
-  const named = (citation: ProjectFileCitation): boolean => {
-    const location = formatProjectFileAnchor(citation.anchor);
-    return Boolean(location && answerText.includes(location));
-  };
-  const cited = citations.filter(named);
-  return cited.length === 0 || cited.length === citations.length
-    ? citations
-    : [...cited, ...citations.filter((citation) => !named(citation))];
-}
-
 /** The project files an answer drew on, one chip per place inside a file. */
 export function ProjectFileCitations({
   citations,
@@ -123,7 +93,7 @@ export function ProjectFileCitations({
   citations: readonly ProjectFileCitation[];
   answerText?: string;
 }) {
-  const ordered = orderByAnswer(citations, answerText);
+  const ordered = orderProjectFileCitationsByAnswer(citations, answerText);
   if (ordered.length === 0) return null;
 
   return (

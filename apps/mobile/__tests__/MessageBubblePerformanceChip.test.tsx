@@ -101,7 +101,7 @@ jest.mock('@/src/features/chat/components/ProvenanceFooter', () => ({
   ProvenanceFooter: () => null,
 }));
 jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
-  ReportFlagButton: () => null,
+  ReportSheet: () => null,
 }));
 
 jest.mock('@/src/features/chat/components/PerformanceChip', () => {

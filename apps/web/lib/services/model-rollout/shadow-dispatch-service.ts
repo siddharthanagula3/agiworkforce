@@ -169,18 +169,27 @@ export async function dispatchShadowRequest(
       resolveWireMode(dispatchProvider),
     );
     const durationMs = Date.now() - startedAtMs;
+    const shadowUsage = {
+      promptTokens: response.promptTokens,
+      completionTokens: response.completionTokens,
+      totalTokens: response.totalTokens,
+      cacheReadInputTokens: response.cachedInputTokens,
+      cacheCreationInputTokens: response.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
+    };
+    const costedAt = new Date();
     const providerCostCents = LLMCostCalculator.calculateCost(
       shadow.provider,
       shadow.modelKey,
-      {
-        promptTokens: response.promptTokens,
-        completionTokens: response.completionTokens,
-        totalTokens: response.totalTokens,
-        cacheReadInputTokens: response.cachedInputTokens,
-        cacheCreationInputTokens: response.cacheCreationInputTokens,
-        cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
-      },
-      new Date(),
+      shadowUsage,
+      costedAt,
+      shadow.routeId,
+    );
+    const providerCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
+      shadow.provider,
+      shadow.modelKey,
+      shadowUsage,
+      costedAt,
       shadow.routeId,
     );
     await recordProviderCostEvent({
@@ -192,6 +201,7 @@ export async function dispatchShadowRequest(
       unitBasis: 'token',
       units: response.totalTokens,
       providerCostCents,
+      providerEstimatedCostMicrousd: providerCostMicrousd,
       billedCents: 0,
       sourceRef: `${SHADOW_COST_SOURCE_PREFIX}:${input.requestId}`,
       routeId: shadow.routeId,

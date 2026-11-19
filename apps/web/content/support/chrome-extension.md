@@ -5,7 +5,7 @@ path: /chrome-extension
 category: surfaces
 tags: chrome, browser extension, browser companion, side panel, capture page, screenshot, tabs, browser automation, computer use
 platforms: chrome
-updated: 2026-10-15
+updated: 2026-11-16
 description: What the Chrome extension does, how it automates the browser and what to use without it.
 scope: public
 ---
@@ -35,7 +35,7 @@ still asks, because driving a browser is not a read.
 ## Managed cloud from the extension
 
 Managed chat in the Chrome side panel works on every cloud plan, {{PLAN.free}}
-included, and spends the same credits as the web app. The extension does not
+included, and is metered the same way as the web app. The extension does not
 accept provider keys, and neither do web, mobile or desktop; BYOK is a CLI and
 VS Code capability.
 

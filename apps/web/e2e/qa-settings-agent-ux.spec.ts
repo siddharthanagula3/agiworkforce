@@ -1041,7 +1041,7 @@ for (const width of [1440, 320]) {
       page.getByText('Runs continue on the server while you are away.', { exact: false }),
     ).toBeVisible();
     await expect(
-      page.getByText('Email is optional unless Advanced Account Security requires it.', {
+      page.getByText('Advanced Account Security needs email.', {
         exact: false,
       }),
     ).toBeVisible();

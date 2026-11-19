@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { COMPANY_SITE_NAME, getBillingPlanPricing } from '@agiworkforce/types';
 
 const billingMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(),
@@ -37,6 +37,7 @@ interface MockSubscription {
   status: string;
   current_period_end: number | null;
   subscription_source?: string;
+  billing_owner?: string;
   cancel_at_period_end?: boolean;
 }
 
@@ -414,6 +415,41 @@ describe('BillingSection', () => {
     });
   });
 
+  it('tells a personal account whose plan was granted by hand to contact support, not an administrator', () => {
+    mockSubscription.subscription_source = 'manual';
+    mockSubscription.billing_owner = 'personal';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    const blocked = screen.getByRole('status');
+    expect(blocked.textContent).toBe(
+      `This plan was set up for your account by ${COMPANY_SITE_NAME}. Contact support to change it.`,
+    );
+    expect(within(blocked).getByRole('link', { name: 'Contact support' })).toHaveAttribute(
+      'href',
+      '/support',
+    );
+    expect(screen.queryByText(/Contact an administrator/)).toBeNull();
+    expect(screen.queryByText('your organization')).toBeNull();
+    expect(screen.queryByText('Adjust plan')).toBeNull();
+  });
+
+  it('keeps the administrator copy for a plan an organization manages', () => {
+    mockSubscription.subscription_source = 'manual';
+    mockSubscription.billing_owner = 'organization';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(
+      screen.getByText(
+        'This plan is managed by your organization. Contact an administrator to change it.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('your organization')).toBeTruthy();
+  });
+
   it('offers web plans again after a store-owned subscription is terminal', () => {
     mockSubscription.subscription_source = 'apple';
     mockSubscription.status = 'expired';
@@ -590,6 +626,23 @@ describe('BillingSection', () => {
 
     const { unmount } = render(<BillingSection />);
     expect(screen.getByText('Renews on')).toBeTruthy();
+    unmount();
+
+    mockSubscription.cancel_at_period_end = true;
+    render(<BillingSection />);
+    expect(screen.getByText('Ends on')).toBeTruthy();
+    expect(screen.queryByText('Renews on')).toBeNull();
+  });
+
+  it('prints no renewal or period-end row for a plan given without a purchase until it is set to end', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    mockSubscription.subscription_source = 'manual';
+    mockSubscription.billing_owner = 'personal';
+
+    const { unmount } = render(<BillingSection />);
+    expect(screen.queryByText('Renews on')).toBeNull();
+    expect(screen.queryByText('Current period ends')).toBeNull();
+    expect(screen.queryByText('Ends on')).toBeNull();
     unmount();
 
     mockSubscription.cancel_at_period_end = true;

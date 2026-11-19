@@ -616,7 +616,10 @@ pub(crate) fn transcript_index(messages: &[Message], position: usize) -> usize {
         .count()
 }
 
-pub(crate) fn edited_paths(tool: &str, args: &Value, root: Option<&Path>) -> Vec<PathBuf> {
+pub(crate) async fn edited_paths(tool: &str, args: &Value, root: Option<&Path>) -> Vec<PathBuf> {
+    let base = root
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok());
     let mut raw: Vec<String> = Vec::new();
     if PATH_TOOLS.contains(&tool) {
         if let Some(path) = PATH_KEYS
@@ -626,29 +629,12 @@ pub(crate) fn edited_paths(tool: &str, args: &Value, root: Option<&Path>) -> Vec
             raw.push(path.to_string());
         }
     } else if tool == "apply_patch" {
-        if let Some(patch) = args.get("patch").and_then(Value::as_str) {
-            for line in patch.lines() {
-                let Some(target) = line
-                    .strip_prefix("--- ")
-                    .or_else(|| line.strip_prefix("+++ "))
-                else {
-                    continue;
-                };
-                let target = target.split('\t').next().unwrap_or(target).trim();
-                if target.is_empty() || target == "/dev/null" {
-                    continue;
-                }
-                let target = target
-                    .strip_prefix("a/")
-                    .or_else(|| target.strip_prefix("b/"))
-                    .unwrap_or(target);
-                raw.push(target.to_string());
+        if let (Some(patch), Some(base)) = (args.get("patch").and_then(Value::as_str), &base) {
+            if let Ok(targets) = crate::apply_patch::patch_targets(patch, base).await {
+                raw.extend(targets.into_iter().map(|target| target.name));
             }
         }
     }
-    let base = root
-        .map(Path::to_path_buf)
-        .or_else(|| std::env::current_dir().ok());
     let mut paths: Vec<PathBuf> = Vec::new();
     for entry in raw {
         let entry = entry.trim();

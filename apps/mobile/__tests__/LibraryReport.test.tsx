@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
+import { actionMenuLabels, chooseActionMenuItem } from '@/test-utils/actionMenu';
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -146,7 +146,10 @@ jest.mock('../src/features/library/useLibraryAssets', () => ({
     signedOut: false,
     storageUsedBytes: null,
     storageLimitBytes: null,
+    downloadUsedBytes: null,
+    downloadLimitBytes: null,
     refresh: jest.fn(),
+    revalidate: jest.fn(),
     loadMore: jest.fn(),
     removeAsset: jest.fn(),
     restoreAsset: jest.fn(),
@@ -156,18 +159,15 @@ jest.mock('../src/features/library/useLibraryAssets', () => ({
 
 import { LibraryScreen } from '../src/features/library';
 
-type AlertButton = { text: string; onPress?: () => void };
-
 describe('Library report', () => {
   beforeEach(() => mockReportSheetProps.mockClear());
 
   it('reports a generated image with its asset reference', () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<LibraryScreen />);
 
     fireEvent(screen.getByTestId('library-image-card-img-1'), 'longPress');
-    const options = alert.mock.calls.at(-1)?.[2] as AlertButton[];
-    act(() => options.find((option) => option.text === 'Report')?.onPress?.());
+    expect(actionMenuLabels()).toContain('Report');
+    chooseActionMenuItem('Report');
 
     expect(mockReportSheetProps).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -180,18 +180,15 @@ describe('Library report', () => {
         }),
       }),
     );
-    alert.mockRestore();
   });
 
   it('does not offer Report on a photo the user uploaded', () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<LibraryScreen />);
 
     fireEvent(screen.getByTestId('library-image-card-upload-1'), 'longPress');
-    const options = alert.mock.calls.at(-1)?.[2] as AlertButton[];
 
-    expect(options.map((option) => option.text)).not.toContain('Report');
-    alert.mockRestore();
+    expect(actionMenuLabels()).toContain('Share');
+    expect(actionMenuLabels()).not.toContain('Report');
   });
 
   it('lets the image viewer report a generated image, but not an upload', () => {

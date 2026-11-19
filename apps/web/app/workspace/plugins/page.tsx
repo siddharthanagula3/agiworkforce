@@ -11,7 +11,7 @@ export default function WorkspacePluginsPage() {
   return (
     <ConsolePage
       title="Plugins"
-      description="Plugins this workspace publishes to its members. Choose for each one whether it is required, installed for everyone, available to install or hidden, and give a group its own setting."
+      description="Choose whether each plugin is required, installed, available or hidden."
     >
       <WorkspacePlugins />
     </ConsolePage>

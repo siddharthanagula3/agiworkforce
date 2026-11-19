@@ -719,3 +719,53 @@ test('a hard-delete exclusion needs a reason and goes when erasure reaches the t
     errors.join('\n'),
   );
 });
+
+function retirementFixture(overrides = {}, files = {}) {
+  const declared = contract();
+  Object.assign(declared.resources.web_conversations.softDeleted, {
+    restoredBy: null,
+    purgedBy: 'apps/web/lib/physical-cleanup.ts',
+    retirement: {
+      retiredBy: 'apps/web/lib/retire.ts',
+      reason:
+        'Retirement is an explicitly confirmed irreversible deletion; queued physical cleanup cannot safely restore references while the object is being removed.',
+    },
+    ...overrides,
+  });
+  return fixture(declared, {
+    'apps/web/lib/retire.ts':
+      'export const sql = `update web_conversations set deleted_at = now() where id = $1`;',
+    'apps/web/lib/physical-cleanup.ts':
+      'export async function cleanup(input) { await input.remove(); }',
+    ...files,
+  });
+}
+
+test('irreversible retirement names both the marker writer and physical cleanup', () => {
+  const result = checkLifecycleSemantics(retirementFixture());
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.unrecorded, []);
+});
+
+for (const [name, overrides, files] of [
+  ['a restore claim', { restoredBy: 'apps/web/lib/restore.ts' }, {}],
+  ['a missing retirement writer', {}, { 'apps/web/lib/retire.ts': 'export const nothing = true;' }],
+  [
+    'a missing physical remover',
+    {},
+    { 'apps/web/lib/physical-cleanup.ts': 'export const nothing = true;' },
+  ],
+  [
+    'an unexplained exception',
+    { retirement: { retiredBy: 'apps/web/lib/retire.ts', reason: '' } },
+    {},
+  ],
+]) {
+  test(`retirement rejects ${name}`, () => {
+    assert.ok(
+      checkLifecycleSemantics(retirementFixture(overrides, files)).errors.some((error) =>
+        error.includes('retirement needs'),
+      ),
+    );
+  });
+}

@@ -30,6 +30,7 @@ export interface ConversationMenuAction {
 export interface ConversationMenuState {
   visible: boolean;
   title: string;
+  message?: string;
   actions: ConversationMenuAction[];
   close: () => void;
 }
@@ -48,6 +49,7 @@ export interface ConversationRenameState {
 export interface ConversationActionOptions {
   extraActions?: ConversationMenuAction[];
   onDeleted?: () => void;
+  onArchived?: () => void;
 }
 
 export interface ConversationActions {
@@ -129,7 +131,9 @@ export function useConversationActions(): ConversationActions {
             if (!isAccountScopedUiStateOwned(ownership)) return;
             const cloudStore = useChatCloudMessageStore.getState();
             const index = cloudStore.conversations.findIndex((c) => c.id === conversationId);
+            const archivedMessages = cloudStore.messages[conversationId];
             cloudStore.removeCloudConversation(conversationId);
+            options.onArchived?.();
             let undoConsumed = false;
             showToast('Chat archived. Find it in Settings, Archived chats.', {
               label: 'Undo',
@@ -138,14 +142,26 @@ export function useConversationActions(): ConversationActions {
                 undoConsumed = true;
                 void (async () => {
                   try {
-                    await restoreArchivedConversation(conversationId, account);
+                    await restoreArchivedConversation(
+                      conversationId,
+                      account,
+                      undefined,
+                      conversation.pinned === true,
+                    );
                     if (!isAccountScopedUiStateOwned(ownership)) return;
+                    const answerStillWriting = useChatStore
+                      .getState()
+                      .streamingConversationIds.includes(conversationId);
+                    const keptMessages =
+                      !answerStillWriting && archivedMessages?.some((m) => m.isStreaming)
+                        ? undefined
+                        : archivedMessages;
                     useChatCloudMessageStore
                       .getState()
-                      .restoreCloudConversation(
-                        { ...conversation, pinned: false },
-                        Math.max(0, index),
-                      );
+                      .restoreCloudConversation(conversation, Math.max(0, index), keptMessages);
+                    if (!useChatCloudMessageStore.getState().messages[conversationId]?.length) {
+                      void loadMessages(conversationId);
+                    }
                   } catch {
                     if (!isAccountScopedUiStateOwned(ownership)) return;
                     Alert.alert(
@@ -280,8 +296,8 @@ export function useConversationActions(): ConversationActions {
             Alert.alert(
               'Delete chat?',
               isCloudConversation
-                ? 'This chat is removed from every device; restore it from Recently deleted on the web.'
-                : 'This chat is deleted from this device and cannot be restored.',
+                ? `"${title || 'Chat'}" is removed from every device; restore it from Recently deleted on the web.`
+                : `"${title || 'Chat'}" is deleted from this device and cannot be restored.`,
               [
                 { text: 'Cancel', style: 'cancel' },
                 {

@@ -37,6 +37,7 @@ const CUSTOMER_CONTENT = [
   'cloud_agent_run_budgets',
   'cloud_agent_runs',
   'cloud_code_agent_turns',
+  'cloud_code_environments',
   'cloud_code_sessions',
   'cloud_code_terminal_entries',
   'content_reports',
@@ -105,6 +106,7 @@ const CUSTOMER_CONTENT = [
 ];
 
 const DERIVED_CONTENT = [
+  'chat_file_preparations',
   'context_manifests',
   'file_lineage',
   'retrieval_chunks',
@@ -134,6 +136,7 @@ const OPERATIONAL_RECORD = [
   'billing_disputes',
   'billing_refund_requests',
   'bonus_credit_grants',
+  'chat_file_intakes',
   'cloud_managed_waitlist',
   'cloud_waitlist',
   'cogs_adjustments',
@@ -218,6 +221,7 @@ const OPERATIONAL_RECORD = [
   'plugin_marketplace_sources',
   'plugin_submission_installs',
   'profiles',
+  'project_knowledge_objects',
   'provider_cost_events',
   'referral_codes',
   'referrals',
@@ -226,6 +230,7 @@ const OPERATIONAL_RECORD = [
   'scim_groups',
   'scim_provisioned_users',
   'scim_tokens',
+  'signaling_sessions',
   'slack_account_links',
   'slack_installations',
   'slack_link_requests',
@@ -307,6 +312,17 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
     cascadesFrom: null,
     maximumAgeDays: null,
     deletionPath: 'lib/server/account-erasure.ts eraseUserMedia, bytes before rows',
+    retainedReason: null,
+  },
+  {
+    store: 'chat file staging and derived objects',
+    kind: 'object_store',
+    dataClass: 'customer_content',
+    erasedWithSubject: true,
+    erasedWithTenant: true,
+    cascadesFrom: null,
+    maximumAgeDays: null,
+    deletionPath: 'lib/server/chat-file-intake/erasure.ts eraseChatFiles',
     retainedReason: null,
   },
   {
@@ -403,8 +419,20 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
   },
 ];
 
+const SIGNALING_SESSIONS_STORE = 'signaling_sessions';
+const SIGNALING_EXPIRY_SWEEP_PATH =
+  'services/signaling-server src/expired-pairings.ts expiry sweep of expired pairings';
+/**
+ * The relay is its own deployable, so its ceiling is stated rather than
+ * imported: a pairing ends at most seven days after it was made and the sweep
+ * deletes it about an hour after it expires, which rounds up to eight whole
+ * days. deletion-manifest.test.ts pins this to services/signaling-server.
+ */
+export const SIGNALING_SESSION_MAXIMUM_AGE_DAYS = 8;
+
 function maximumAgeDays(store: string): number | null {
   if (store === 'security_audit_logs') return SECURITY_AUDIT_LOG_RETENTION_DAYS;
+  if (store === SIGNALING_SESSIONS_STORE) return SIGNALING_SESSION_MAXIMUM_AGE_DAYS;
   const purges = FINANCIAL_RETENTION_RULES.filter(
     (rule) => rule.action === 'purge' && rule.table === store,
   );
@@ -430,7 +458,8 @@ function deletionPath(entry: {
   if (entry.erasedWithTenant) paths.push('lib/server/organization-erasure.ts');
   if (entry.cascadesFrom) paths.push(`cascade from ${entry.cascadesFrom}`);
   if (entry.anonymised) paths.push('subject detached at erasure');
-  if (entry.store === 'security_audit_logs') paths.push(SECURITY_LOG_RETENTION_CRON_PATH);
+  if (entry.store === SIGNALING_SESSIONS_STORE) paths.push(SIGNALING_EXPIRY_SWEEP_PATH);
+  else if (entry.store === 'security_audit_logs') paths.push(SECURITY_LOG_RETENTION_CRON_PATH);
   else if (entry.maximumAgeDays !== null) paths.push('lib/billing/financial-record-retention.ts');
   return paths.length > 0 ? paths.join('; ') : null;
 }

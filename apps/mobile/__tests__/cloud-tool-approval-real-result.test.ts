@@ -394,6 +394,28 @@ describe('resolveToolApproval, durable server-owned checkpoint', () => {
     },
   );
 
+  it('sends the approval scope the person chose and keeps it on the tool call', async () => {
+    const assistantId = await pauseOnApproval('call_scope');
+    let resumeBody: unknown;
+    mockStreamResume.mockImplementationOnce(async (body, callbacks: StreamCallbacks) => {
+      resumeBody = body;
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore
+      .getState()
+      .resolveToolApproval(CONV_ID, assistantId, 'call_scope', 'approved-for-session');
+
+    expect(resumeBody).toMatchObject({
+      tool_approvals: [{ tool_call_id: 'call_scope', decision: 'approved-for-session' }],
+    });
+    expect(lastAssistantMessage()?.toolCalls?.[0]).toMatchObject({
+      toolCallId: 'call_scope',
+      approvalDecision: 'approved',
+      approvalScope: 'approved-for-session',
+    });
+  });
+
   it('offers the approval again when resume fails for a transient reason', async () => {
     const assistantId = await pauseOnApproval('call_transient');
     mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {

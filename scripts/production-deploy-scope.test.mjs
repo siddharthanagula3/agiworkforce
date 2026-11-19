@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { devNull, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
@@ -303,6 +303,13 @@ test('Rust builds cover native execution inputs', () => {
     'rust-toolchain.toml',
     'apps/cli/src/main.rs',
     'apps/desktop/src-tauri/src/lib.rs',
+    'apps/desktop/gpui/src/ui/mod.rs',
+    'packages/contracts/cloud-contracts/src/conversation-contract.json',
+    'packages/contracts/cloud-contracts/src/project-contract.json',
+    'packages/contracts/cloud-contracts/src/upload-contract.json',
+    'packages/contracts/types/src/attachment-policy.json',
+    'packages/contracts/types/src/workspace-contract.json',
+    'packages/ui/design-tokens/src/foundation.css',
     'crates/agiworkforce-protocol/src/lib.rs',
   ]) {
     assert.equal(classifyDeployScope([file]).native, true, file);
@@ -317,6 +324,19 @@ test('Rust builds cover native execution inputs', () => {
     'packages/client/sync/src/cursor.ts',
   ]) {
     assert.equal(classifyDeployScope([file]).native, false, file);
+  }
+});
+
+test('the GPUI contract bridge inputs select native validation', () => {
+  const bridge = new URL('../apps/desktop/gpui/scripts/contracts.mjs', import.meta.url);
+  const source = fs.readFileSync(bridge, 'utf8');
+  const inputs = [...source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)].map((match) =>
+    relative(process.cwd(), fileURLToPath(new URL(match[1], bridge))),
+  );
+  assert.ok(inputs.length > 0, 'the bridge inputs were not read');
+  for (const file of inputs) {
+    assert.equal(fs.existsSync(file), true, file);
+    assert.equal(classifyDeployScope([file]).native, true, file);
   }
 });
 
@@ -342,6 +362,7 @@ test('native prerequisite changes select their owning expensive lanes', () => {
   }
 
   for (const file of [
+    'apps/desktop/gpui/src/ui/mod.rs',
     'apps/desktop/scripts/prepare-windows-native-messaging-sidecar.ps1',
     'apps/desktop/scripts/verify-windows-manifests.ps1',
   ]) {
@@ -360,6 +381,8 @@ test('the CI scope command emits native selection for its execution and configur
   for (const file of [
     '.github/workflows/ci.yml',
     '.cargo/audit.toml',
+    'apps/desktop/gpui/src/ui/mod.rs',
+    'packages/ui/design-tokens/src/index.ts',
     'scripts/prepare-linux-sandbox.py',
     'apps/desktop/scripts/verify-windows-manifests.ps1',
   ]) {

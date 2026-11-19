@@ -4,8 +4,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  buildWorkspaceAccessGateResponse,
+  buildWorkspaceFeatureGateResponse,
+} from '@/lib/managed-compute-gate';
 import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -16,7 +18,12 @@ import {
   getProjectLimitErrorMessage,
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
-import { ManagedCloudProjectCreateRequestSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_PROJECT_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_PROJECT_MAX_PAGE_SIZE,
+  MANAGED_CLOUD_PROJECT_MAX_OFFSET,
+  ManagedCloudProjectCreateRequestSchema,
+} from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
@@ -38,13 +45,28 @@ async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const url = new URL(request.url);
-  const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
+  const parsedLimit = parseInt(
+    url.searchParams.get('limit') ?? String(MANAGED_CLOUD_PROJECT_DEFAULT_PAGE_SIZE),
+    10,
+  );
   const parsedOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
-  const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
-  const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
+  const limit = Math.max(
+    1,
+    Math.min(
+      Number.isNaN(parsedLimit) ? MANAGED_CLOUD_PROJECT_DEFAULT_PAGE_SIZE : parsedLimit,
+      MANAGED_CLOUD_PROJECT_MAX_PAGE_SIZE,
+    ),
+  );
+  const offset = Math.min(
+    Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0),
+    MANAGED_CLOUD_PROJECT_MAX_OFFSET,
+  );
   // A cursor avoids offset shifts, but timestamp or visibility changes can still
   // affect later pages. Offset stays for clients that still send it.
   const cursor = decodeKeysetCursor(url.searchParams.get('cursor'));
@@ -114,7 +136,7 @@ async function handleGetProjects(request: NextRequest) {
 }
 
 async function handleCreateProject(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
@@ -126,7 +148,7 @@ async function handleCreateProject(request: NextRequest) {
     userId,
     request,
     'projects',
-    resolveCloudChatSurface(request),
+    surface ?? 'unknown',
   );
   if (featureGate) return featureGate;
 

@@ -20,6 +20,7 @@ jest.mock('../services/api', () => ({
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),
+  uuidV7TimestampMs: jest.requireActual('@agiworkforce/utils/uuidv7').uuidV7TimestampMs,
   setUuidV7RandomSource: jest.fn(),
 }));
 
@@ -33,9 +34,11 @@ jest.mock('../storage/memory', () => ({
 }));
 
 import { api } from '../services/api';
+import { ApiHttpError } from '../services/apiErrors';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useCloudMemoryStore } from '../stores/memory/cloudMemoryStore';
 import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { syncNow, markMemoryForSync } from '../services/cloudSyncEngine';
 import { useMemoryStore } from '../src/features/memory/store';
@@ -380,6 +383,10 @@ const mockListMemoryFacts = listMemoryFacts as jest.MockedFunction<typeof listMe
 const mockUpdateMemoryFact = updateMemoryFact as jest.MockedFunction<typeof updateMemoryFact>;
 
 describe('memory store, local/cloud separation', () => {
+  beforeEach(() => {
+    useCloudSettingsStore.setState({ memoryEnabled: true });
+  });
+
   it('a local-mode addMemory NEVER writes to the cloud store or dirty queue', async () => {
     useChatAppModeStore.getState().setAppMode('local');
     mockInsertMemoryFact.mockResolvedValue(undefined);
@@ -409,6 +416,10 @@ describe('memory store, local/cloud separation', () => {
 });
 
 describe('memory store, cloud pin/unpin persistence', () => {
+  beforeEach(() => {
+    useCloudSettingsStore.setState({ memoryEnabled: true });
+  });
+
   it('a cloud-mode togglePin writes to the cloud store and marks it dirty, not SQLite', async () => {
     useChatAppModeStore.getState().setAppMode('cloud');
     mockTogglePinMemoryFact.mockClear();
@@ -464,6 +475,102 @@ describe('memory store, cloud pin/unpin persistence', () => {
   });
 });
 
+describe('memory store, Cloud memory switched off', () => {
+  beforeEach(() => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useMemoryStore.getState().resetVisibleState();
+  });
+
+  it('refuses a typed Cloud memory while Memory is off and lists nothing', async () => {
+    useCloudSettingsStore.setState({ memoryEnabled: false });
+
+    const failure = await useMemoryStore.getState().addMemory('Likes zebra stripes');
+
+    expect(failure).toBe('Memory is off. Turn on Memory to add memories.');
+    expect(useMemoryStore.getState().entries).toEqual([]);
+    expect(useCloudMemoryStore.getState().entries).toEqual([]);
+    expect(useMemorySyncStateStore.getState().dirtyMemoryIds).toEqual([]);
+  });
+
+  it('refuses it when the account reports memory off even if this device still shows it on', async () => {
+    useCloudSettingsStore.setState({ memoryEnabled: true });
+    useMemorySyncStateStore.getState().setAccountMemoryEnabled(false);
+
+    const failure = await useMemoryStore.getState().addMemory('Prefers tea');
+
+    expect(failure).toBe('Memory is off. Turn on Memory to add memories.');
+    expect(useMemoryStore.getState().entries).toEqual([]);
+    expect(useCloudMemoryStore.getState().entries).toEqual([]);
+  });
+
+  it('drops an entry the server refused from the Memory list on the next read', async () => {
+    useCloudSettingsStore.setState({ memoryEnabled: true });
+    await useMemoryStore.getState().addMemory('Likes zebra stripes');
+    expect(useMemoryStore.getState().entries.map((entry) => entry.fact)).toEqual([
+      'Likes zebra stripes',
+    ]);
+    mockPost.mockImplementation(async (path: string, body: Record<string, unknown>) => {
+      if ((path as string) === MEMORY_SYNC_PATH) {
+        const mems = (body?.memories as Array<{ id: string }>) ?? [];
+        return {
+          protocolVersion: 2,
+          applied: [],
+          conflicts: [],
+          rejected: mems.map((m) => ({
+            id: m.id,
+            message: 'Memory is turned off in your settings.',
+          })),
+          cursor: '1',
+        } as never;
+      }
+      return {
+        protocolVersion: 2,
+        applied: { conversations: [], messages: [], artifacts: [] },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
+        cursor: '1',
+      } as never;
+    });
+
+    await syncNow();
+    await useMemoryStore.getState().fetchMemories();
+
+    expect(useCloudMemoryStore.getState().entries).toEqual([]);
+    expect(useMemoryStore.getState().entries).toEqual([]);
+  });
+
+  it('drops a refused entry from the Memory list as soon as the sync hears the refusal', async () => {
+    useCloudSettingsStore.setState({ memoryEnabled: true });
+    await useMemoryStore.getState().addMemory('Prefers tea');
+    expect(useMemoryStore.getState().entries.map((entry) => entry.fact)).toEqual(['Prefers tea']);
+    mockPost.mockImplementation(async (path: string, body: Record<string, unknown>) => {
+      if ((path as string) === MEMORY_SYNC_PATH) {
+        const mems = (body?.memories as Array<{ id: string }>) ?? [];
+        return {
+          protocolVersion: 2,
+          applied: [],
+          conflicts: [],
+          rejected: mems.map((m) => ({
+            id: m.id,
+            message: 'Memory is turned off in your settings.',
+          })),
+          cursor: '1',
+        } as never;
+      }
+      return {
+        protocolVersion: 2,
+        applied: { conversations: [], messages: [], artifacts: [] },
+        conflicts: { conversations: [], messages: [], artifacts: [] },
+        cursor: '1',
+      } as never;
+    });
+
+    await syncNow();
+    await Promise.resolve();
+
+    expect(useMemoryStore.getState().entries).toEqual([]);
+  });
+});
+
 describe('memory store, save outcome for the editor', () => {
   it('hands back the failure when the Local read rejects, so the editor can keep the draft', async () => {
     useChatAppModeStore.getState().setAppMode('local');
@@ -495,5 +602,62 @@ describe('memory store, save outcome for the editor', () => {
     const failure = await useMemoryStore.getState().updateMemory('fact-1', 'edited text');
 
     expect(failure).toBe('Could not update this memory. Try again.');
+  });
+});
+
+describe('a workspace that turns chat sync off for phones', () => {
+  const reason = 'Your workspace administrator has turned off cloud sync for Mobile.';
+
+  function refuseChatSync(body: Record<string, unknown>) {
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/chat/sync')) {
+        throw new ApiHttpError(reason, 403, 'surface_sync_disabled', { body });
+      }
+      return defaultPull(path as string) as never;
+    });
+  }
+
+  it('keeps memory and settings syncing and reports the workspace reason, not an error', async () => {
+    refuseChatSync({
+      error: { type: 'organization_policy', code: 'surface_sync_disabled', message: reason },
+    });
+
+    await syncNow();
+
+    const paths = mockGet.mock.calls.map((call) => call[0] as string);
+    expect(paths.some((path) => path.startsWith('/api/memory/sync'))).toBe(true);
+    expect(paths.some((path) => path.startsWith('/api/settings/sync'))).toBe(true);
+    expect(useCloudSyncStateStore.getState()).toMatchObject({
+      status: 'idle',
+      lastError: null,
+      chatSyncOffReason: reason,
+    });
+  });
+
+  it('clears the reason once the workspace allows chat sync again', async () => {
+    refuseChatSync({
+      error: { type: 'organization_policy', code: 'surface_sync_disabled', message: reason },
+    });
+    await syncNow();
+    mockGet.mockImplementation(async (path: string) => defaultPull(path as string) as never);
+
+    await syncNow();
+
+    expect(useCloudSyncStateStore.getState().chatSyncOffReason).toBeNull();
+  });
+
+  it('still reports a chat sync refusal that is not a workspace policy as a failure, and syncs memory anyway', async () => {
+    refuseChatSync({ error: { code: 'forbidden', message: reason } });
+
+    await syncNow();
+
+    expect(
+      mockGet.mock.calls.some((call) => (call[0] as string).startsWith('/api/memory/sync')),
+    ).toBe(true);
+    expect(useCloudSyncStateStore.getState()).toMatchObject({
+      status: 'error',
+      lastError: reason,
+      failedSyncSteps: ['chats'],
+    });
   });
 });

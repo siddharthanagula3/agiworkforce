@@ -1,6 +1,8 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
+  MANAGED_USAGE_BUCKET_COPY,
+  MANAGED_USAGE_BUCKET_ORDER,
   MONTHLY_METERED_UNIT_COPY,
   formatCreditWindowUsage,
   formatCredits,
@@ -20,13 +22,16 @@ import {
   type ManagedUsageCredits,
   type UsageLimitPromotionState,
 } from '@agiworkforce/types';
-import { View, Alert } from 'react-native';
+import { Alert, Modal, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
-import { BarChart3, Coins, RefreshCw } from 'lucide-react-native';
+import { BarChart3, Coins, Info, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
+import { StorageMeterBar } from '@/src/features/settings/StorageMeterBar';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -35,16 +40,29 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { useFastModeStore } from '@/src/features/model-picker/fastMode';
 import { useCloudUsageStore } from './store';
 import { useStoreTopUps } from './useStoreTopUps';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { ApiHttpError } from '@/services/apiErrors';
-import { applyLimitReset, fetchUsageAllowances, fetchUsageHistory } from '@/services/usage';
+import { billingRequestMessage } from '@/src/features/billing/mobileIapService';
+import {
+  applyLimitReset,
+  fetchUsageAllowances,
+  fetchUsageHistory,
+  fetchUsageOverage,
+  saveUsageOverage,
+  type UsageOverage,
+} from '@/services/usage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { getBillingPlanPricing, isFreeBillingPlanTier } from '@agiworkforce/types';
-import { formatBytes } from '@agiworkforce/utils/format';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import {
+  captureCloudAccountEpoch,
+  isStaleCloudAccountOperation,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 type HistoryRow = Pick<AccountUsageBreakdownRow, 'key' | 'label' | 'requests' | 'credits'>;
 
@@ -66,11 +84,13 @@ function UsagePercentBar({
   percentage,
   resetLabel,
   credits,
+  onInfo,
 }: {
   label: string;
   percentage: number;
   resetLabel: string | null;
   credits?: ManagedUsageCreditWindow | null;
+  onInfo?: () => void;
 }) {
   const colors = useThemeColors();
   const clamped = Math.min(100, Math.max(0, percentage));
@@ -84,9 +104,35 @@ function UsagePercentBar({
 
   return (
     <View style={{ gap: 8 }}>
-      <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
-        {label}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Text
+          style={{
+            color: colors.textPrimary,
+            fontSize: typeScale.body,
+            fontWeight: '600',
+            flexShrink: 1,
+          }}
+        >
+          {label}
+        </Text>
+        {onInfo ? (
+          <Pressable
+            onPress={onInfo}
+            accessibilityRole="button"
+            accessibilityLabel="About usage limits"
+            style={{
+              width: 44,
+              height: 44,
+              marginVertical: -12,
+              marginLeft: -8,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Info size={20} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
       <View
         style={{
           height: 8,
@@ -105,14 +151,26 @@ function UsagePercentBar({
           }}
         />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+      <View
+        testID="usage-meter-caption"
+        style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          columnGap: 12,
+          rowGap: 2,
+        }}
+      >
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, flexShrink: 1 }}>
           {credits
             ? formatCreditWindowUsage(credits.used, credits.allowance)
             : `${Math.round(clamped)}% used`}
         </Text>
         {resetLabel && (
-          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>{resetLabel}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, flexShrink: 1 }}>
+            {resetLabel}
+          </Text>
         )}
       </View>
     </View>
@@ -321,7 +379,7 @@ function bonusRow(bonus: ManagedUsageCredits['bonus']): { value: string; detail:
   if (bonus.remaining <= 0) {
     return {
       value: 'None',
-      detail: 'Credits from referrals and promotions show here with the date they expire.',
+      detail: 'Referral and promotion credits show here with their expiry date.',
     };
   }
   return {
@@ -351,18 +409,24 @@ function purchasedRow(credits: ManagedUsageCredits): { value: string; detail: st
 }
 
 function CreditBalancesCard({ credits }: { credits: ManagedUsageCredits }) {
+  const included = (
+    <DetailRow
+      label="Included in your plan"
+      value={`${formatCreditAmount(credits.monthly.remaining)} left`}
+      detail={`Of ${formatCreditAmount(credits.monthly.allowance)} this month`}
+    />
+  );
+  if (!NATIVE_PURCHASES_AVAILABLE) {
+    return <SectionCard title="Credit balances">{included}</SectionCard>;
+  }
   const bonus = bonusRow(credits.bonus);
   const purchased = purchasedRow(credits);
   return (
     <SectionCard
       title="Credit balances"
-      note="Once a plan limit is reached, bonus credits are used first, soonest to expire, then purchased credits."
+      note="Past a plan limit, bonus credits go first, soonest expiring, then purchased."
     >
-      <DetailRow
-        label="Included in your plan"
-        value={`${formatCreditAmount(credits.monthly.remaining)} left`}
-        detail={`Of ${formatCreditAmount(credits.monthly.allowance)} this month`}
-      />
+      {included}
       {bonus ? <DetailRow label="Bonus credits" value={bonus.value} detail={bonus.detail} /> : null}
       <DetailRow label="Purchased credits" value={purchased.value} detail={purchased.detail} />
     </SectionCard>
@@ -522,10 +586,18 @@ function StorageCard({ resource }: { resource: UsageResource<AccountUsageLimitsR
         label="Used"
         value={
           storage.limitBytes === null
-            ? formatBytes(storage.usedBytes, 1)
-            : `${formatBytes(storage.usedBytes, 1)} of ${formatBytes(storage.limitBytes, 1)}`
+            ? formatAttachmentSize(storage.usedBytes)
+            : `${formatAttachmentSize(storage.usedBytes)} of ${formatAttachmentSize(storage.limitBytes)}`
         }
       />
+      {storage.limitBytes !== null && storage.limitBytes > 0 ? (
+        <StorageMeterBar
+          testID="usage-storage-meter"
+          usedBytes={storage.usedBytes}
+          totalBytes={storage.limitBytes}
+          label={`File storage, ${formatAttachmentSize(storage.usedBytes)} of ${formatAttachmentSize(storage.limitBytes)} used`}
+        />
+      ) : null}
     </SectionCard>
   );
 }
@@ -587,7 +659,7 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
   return (
     <SectionCard
       title="Where your usage went"
-      note={`Settled usage by ${HISTORY_UNIT[granularity]}. Requests still settling are not counted yet.`}
+      note={`Settled usage by ${HISTORY_UNIT[granularity]}. Pending requests aren’t counted yet.`}
     >
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {HISTORY_OPTIONS.map((option) => {
@@ -661,6 +733,149 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
   );
 }
 
+const METERS_EXPLAINER = 'Meters refill when they reset. Larger models and tools use more.';
+const LIMIT_REACHED_EXPLAINER =
+  'At a limit, Cloud replies pause until reset. Local mode keeps working.';
+
+function UsageLimitsExplainer({ body }: { body: string }) {
+  return (
+    <SettingsInfo testID="usage.limits-explainer" title="How limits work" body={body} icon={Info} />
+  );
+}
+
+function UsageLimitsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const colors = useThemeColors();
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      accessibilityViewIsModal
+      allowSwipeDismissal
+      onRequestClose={onClose}
+    >
+      <PageSheetSafeArea style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <View
+          testID="usage-limits-sheet"
+          style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}
+        >
+          <Text
+            accessibilityRole="header"
+            style={{
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+              marginBottom: 12,
+            }}
+          >
+            How usage limits work
+          </Text>
+          <ScrollView contentContainerStyle={{ gap: 14, paddingBottom: 24 }}>
+            {MANAGED_USAGE_BUCKET_ORDER.map((bucket) => (
+              <View key={bucket} style={{ gap: 2 }}>
+                <Text
+                  style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+                >
+                  {managedUsageBucketLabel(bucket)}
+                </Text>
+                <Text
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.subhead,
+                    lineHeight: 21,
+                  }}
+                >
+                  {MANAGED_USAGE_BUCKET_COPY[bucket].description}
+                </Text>
+              </View>
+            ))}
+            <Text
+              style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 21 }}
+            >
+              {`${METERS_EXPLAINER} ${LIMIT_REACHED_EXPLAINER}`}
+            </Text>
+          </ScrollView>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+            style={{
+              minHeight: 44,
+              alignSelf: 'stretch',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 999,
+              backgroundColor: colors.textPrimary,
+            }}
+          >
+            <Text
+              style={{ color: colors.background, fontSize: typeScale.subhead, fontWeight: '600' }}
+            >
+              Done
+            </Text>
+          </Pressable>
+        </View>
+      </PageSheetSafeArea>
+    </Modal>
+  );
+}
+
+const USAGE_CREDITS_DESCRIPTION =
+  'Keep going past your plan limits by spending credits you already hold.';
+
+function UsageCreditsCard({ overage, onSaved }: { overage: UsageOverage; onSaved: () => void }) {
+  const colors = useThemeColors();
+  const [enabled, setEnabled] = useState(overage.enabled);
+  const [balance, setBalance] = useState(overage.availableCredits);
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async (next: boolean) => {
+    if (saving) return;
+    const previous = enabled;
+    setSaving(true);
+    setEnabled(next);
+    try {
+      const saved = await saveUsageOverage(next, captureCloudAccountEpoch());
+      setEnabled(saved.enabled);
+      setBalance(saved.availableCredits);
+      onSaved();
+    } catch (error) {
+      setEnabled(previous);
+      if (!isStaleCloudAccountOperation(error)) {
+        Alert.alert('Could not update usage credits', billingRequestMessage(error, 'Try again.'));
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SectionCard title="Usage credits">
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Text
+          style={{
+            flex: 1,
+            color: colors.textSecondary,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+          }}
+        >
+          {USAGE_CREDITS_DESCRIPTION}
+        </Text>
+        <Switch
+          testID="usage-credits-switch"
+          value={enabled}
+          onValueChange={(next) => void toggle(next)}
+          disabled={saving}
+          accessibilityLabel="Usage credits"
+          accessibilityHint={USAGE_CREDITS_DESCRIPTION}
+        />
+      </View>
+      <DetailRow label="Current balance" value={formatCreditAmount(balance)} />
+    </SectionCard>
+  );
+}
+
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -701,6 +916,24 @@ export default function CloudUsageScreen() {
     'Could not load this month’s usage.',
   );
 
+  const overage = useUsageResource<UsageOverage>(
+    snapshot ? accountKey : null,
+    fetchUsageOverage,
+    'Could not load the usage credits setting.',
+  );
+  const [limitsSheetOpen, setLimitsSheetOpen] = useState(false);
+  const openLimitsSheet = useCallback(() => setLimitsSheetOpen(true), []);
+  const closeLimitsSheet = useCallback(() => setLimitsSheetOpen(false), []);
+  const refreshAfterCreditsSaved = useCallback(() => {
+    void load();
+    void useFastModeStore.getState().refresh();
+  }, [load]);
+  const showUsageCredits =
+    overage.data !== null &&
+    !overage.loading &&
+    overage.error === null &&
+    (overage.data.availableCredits > 0 || overage.data.enabled);
+
   const planLabel = snapshot ? getBillingPlanPricing(snapshot.planTier).label : '';
   const periodResetDate = snapshot ? formatResetDate(snapshot.usageResetAt) : null;
   const periodResetLabel = periodResetDate ? `Resets ${periodResetDate}` : null;
@@ -728,6 +961,7 @@ export default function CloudUsageScreen() {
           body="Usage resets every 5 hours, week and month, and varies by model and task."
           icon={BarChart3}
         />
+        <UsageLimitsExplainer body={LIMIT_REACHED_EXPLAINER} />
       </SettingsScreenShell>
     );
   }
@@ -797,7 +1031,7 @@ export default function CloudUsageScreen() {
     >
       <SettingsInfo
         title="Plan usage"
-        body="See how much of your plan's included usage you've used this period."
+        body="How much of your plan you’ve used this period."
         icon={BarChart3}
       />
 
@@ -826,6 +1060,7 @@ export default function CloudUsageScreen() {
                 {error}
               </Text>
               <Pressable
+                hitSlop={{ top: 6, bottom: 6 }}
                 onPress={() => void load()}
                 disabled={loading}
                 accessibilityLabel="Retry loading usage"
@@ -887,6 +1122,7 @@ export default function CloudUsageScreen() {
                     percentage={snapshot.sessionUsagePercentage}
                     resetLabel={formatUsageResetIn(snapshot.sessionResetAt)}
                     credits={snapshot.credits?.five_hour}
+                    onInfo={openLimitsSheet}
                   />
                 </View>
               )}
@@ -921,6 +1157,7 @@ export default function CloudUsageScreen() {
                         percentage={snapshot.weeklyUsagePercentage}
                         resetLabel={formatUsageResetIn(snapshot.weeklyResetAt)}
                         credits={snapshot.credits?.weekly}
+                        onInfo={openLimitsSheet}
                       />
                     </View>
                     {snapshot.flagshipWeeklyResetAt !== null && (
@@ -1000,6 +1237,7 @@ export default function CloudUsageScreen() {
                     percentage={snapshot.usagePercentage}
                     resetLabel={periodResetLabel}
                     credits={snapshot.credits?.monthly}
+                    onInfo={openLimitsSheet}
                   />
                 </View>
 
@@ -1077,8 +1315,19 @@ export default function CloudUsageScreen() {
                 </SettingsGroup>
               ) : null}
               <AllowancesCard resource={allowances} />
+              {showUsageCredits && overage.data ? (
+                <UsageCreditsCard
+                  key={accountKey}
+                  overage={overage.data}
+                  onSaved={refreshAfterCreditsSaved}
+                />
+              ) : null}
               <StorageCard resource={allowances} />
               {accountKey ? <UsageHistoryCard accountKey={accountKey} /> : null}
+              {NATIVE_PURCHASES_AVAILABLE ? null : (
+                <UsageLimitsExplainer body={`${METERS_EXPLAINER} ${LIMIT_REACHED_EXPLAINER}`} />
+              )}
+              <UsageLimitsSheet visible={limitsSheetOpen} onClose={closeLimitsSheet} />
             </>
           )}
         </>

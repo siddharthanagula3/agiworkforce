@@ -23,7 +23,12 @@ import { motion } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
-import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
+import { onDeviceRecognizerGuaranteed } from '@/src/features/voice/services/voiceInput';
+import {
+  classifyVoiceFailure,
+  voiceFailureMessage,
+} from '@/src/features/voice/services/voiceFailure';
+import { HOLD_TO_TALK_THRESHOLD_MS } from '@/src/features/voice/holdToTalk';
 import { VoiceOnboardingSheet } from './VoiceOnboardingSheet';
 
 import {
@@ -35,10 +40,13 @@ export type DictationIntent = 'insert' | 'send';
 export interface VoiceInputHandle {
   stop: (intent?: DictationIntent) => void;
   cancel: () => void;
+  hold: () => void;
 }
 
 interface VoiceInputButtonProps {
   onTranscription: (text: string, intent: DictationIntent) => void;
+  onPartialTranscript?: (text: string) => void;
+  onHoldAvailableChange?: (available: boolean) => void;
   onRecordingStart?: () => void;
   onRecordingStop?: () => void;
   onProcessingChange?: (processing: boolean) => void;
@@ -63,7 +71,6 @@ interface RecordingAttempt {
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const PTT_THRESHOLD_MS = 300;
 const LONG_PRESS_DELAY_MS = 600;
 
 export function VoiceInputButton(props: VoiceInputButtonProps) {
@@ -79,7 +86,8 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
   const [state, setState] = useState<VoiceState>('idle');
   const [introVisible, setIntroVisible] = useState(false);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled);
+  const voiceSettingEnabled = useSettingsStore((s) => s.voiceEnabled);
+  const voiceInputEnabled = voiceSettingEnabled && onDeviceRecognizerGuaranteed();
   const dictationOnboardingSeen = useSettingsStore((s) => s.dictationOnboardingSeen);
   const current = useRef({ props, scopeKey, disabled, voiceInputEnabled, hapticsEnabled });
   current.current = { props, scopeKey, disabled, voiceInputEnabled, hapticsEnabled };
@@ -92,6 +100,8 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
   const stateRef = useRef<VoiceState>('idle');
   const pressStartRef = useRef(0);
   const isLongPressRef = useRef(false);
+  const holdAttemptRef = useRef<RecordingAttempt | null>(null);
+  const holdFailedRef = useRef(false);
   const isPTTRef = useRef(false);
   const pttTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ringScale = useSharedValue(1);
@@ -135,18 +145,17 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
     }
   }, [changeState, clearPTTTimer]);
   const reportError = useCallback((error: unknown) => {
-    if (error instanceof VoiceCaptureError && error.code === 'aborted') return;
-    if (error instanceof VoiceCaptureError && error.code === 'mic-permission-denied') {
+    const kind = classifyVoiceFailure(error);
+    if (kind === 'aborted') return false;
+    if (kind === 'permission') {
       current.current.props.onError?.(
         'Voice input needs microphone and speech access. You can keep typing instead.',
         true,
       );
-    } else if (
-      error instanceof VoiceCaptureError &&
-      error.code === 'on-device-recognition-unavailable'
-    ) {
-      current.current.props.onError?.(error.message);
+    } else if (kind === 'unavailable' || kind === 'busy' || kind === 'disabled') {
+      current.current.props.onError?.(voiceFailureMessage(error));
     } else current.current.props.onFailure?.();
+    return true;
   }, []);
   const fail = useCallback(
     (attempt: RecordingAttempt, error: unknown) => {
@@ -156,7 +165,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
       changeState('idle');
       current.current.props.onRecordingStop?.();
       current.current.props.onProcessingChange?.(false);
-      reportError(error);
+      if (reportError(error) && attempt === holdAttemptRef.current) holdFailedRef.current = true;
     },
     [changeState, owns, reportError],
   );
@@ -199,16 +208,22 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
         !current.current.voiceInputEnabled ||
         !useSettingsStore.getState().voiceEnabled
       )
-        return;
+        return null;
       const controller = new AbortController();
       const attempt: RecordingAttempt = {
         controller,
         scope: scope.current.token,
         account: captureCloudAccountEpoch(),
         finishing: false,
-        ready: VoiceService.startRecording((event) => {
-          if (owns(attempt)) current.current.props.onMetering?.(event);
-        }, controller.signal),
+        ready: VoiceService.startRecording(
+          (event) => {
+            if (owns(attempt)) current.current.props.onMetering?.(event);
+          },
+          controller.signal,
+          (partial) => {
+            if (owns(attempt)) current.current.props.onPartialTranscript?.(partial.text);
+          },
+        ),
       };
       active.current = attempt;
       isPTTRef.current = ptt;
@@ -227,6 +242,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
           current.current.props.onRecordingStart?.();
         })
         .catch((error) => fail(attempt, error));
+      return attempt;
     },
     [changeState, fail, owns],
   );
@@ -238,9 +254,24 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
         void finish(intent);
       },
       cancel: cancelActiveRecording,
+      hold: () => {
+        if (
+          stateRef.current !== 'idle' ||
+          current.current.disabled ||
+          !current.current.voiceInputEnabled
+        )
+          return;
+        if (dictationOnboardingSeen) startRecording(true);
+        else setIntroVisible(true);
+      },
     }),
-    [finish, cancelActiveRecording],
+    [finish, cancelActiveRecording, dictationOnboardingSeen, startRecording],
   );
+  const onHoldAvailableChange = props.onHoldAvailableChange;
+  useEffect(() => {
+    onHoldAvailableChange?.(voiceInputEnabled && !disabled);
+  }, [onHoldAvailableChange, voiceInputEnabled, disabled]);
+  useEffect(() => () => onHoldAvailableChange?.(false), [onHoldAvailableChange]);
   useLayoutEffect(() => {
     cancelActiveRecording();
   }, [scopeKey, resetSignal, cancelActiveRecording]);
@@ -263,6 +294,8 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
   }, [startSignal, startRecording]);
 
   const handlePressIn = useCallback(() => {
+    holdAttemptRef.current = null;
+    holdFailedRef.current = false;
     if (current.current.disabled || stateRef.current === 'processing') return;
     clearPTTTimer();
     pressStartRef.current = Date.now();
@@ -270,8 +303,9 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
     if (stateRef.current !== 'idle' || !dictationOnboardingSeen) return;
     pttTimerRef.current = setTimeout(() => {
       pttTimerRef.current = null;
-      if (!isLongPressRef.current && pressStartRef.current > 0) startRecording(true);
-    }, PTT_THRESHOLD_MS);
+      if (!isLongPressRef.current && pressStartRef.current > 0)
+        holdAttemptRef.current = startRecording(true);
+    }, HOLD_TO_TALK_THRESHOLD_MS);
   }, [clearPTTTimer, dictationOnboardingSeen, startRecording]);
   const handlePressOut = useCallback(() => {
     clearPTTTimer();
@@ -283,12 +317,13 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
       return;
     }
     if (!dictationOnboardingSeen) setIntroVisible(true);
-    else if (holdMs < PTT_THRESHOLD_MS) startRecording(false);
+    else if (holdMs < HOLD_TO_TALK_THRESHOLD_MS) startRecording(false);
   }, [clearPTTTimer, dictationOnboardingSeen, finish, startRecording]);
   const handleLongPress = useCallback(() => {
     if (!current.current.props.onLongPress) return;
     isLongPressRef.current = true;
     cancelActiveRecording();
+    if (holdFailedRef.current) return;
     if (current.current.hapticsEnabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     current.current.props.onLongPress();
   }, [cancelActiveRecording]);
@@ -389,10 +424,10 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
       >
         {isProcessing ? (
           <Animated.View style={spinAnimatedStyle}>
-            <Loader size={20} color={iconColor} />
+            <Loader size={24} color={iconColor} />
           </Animated.View>
         ) : (
-          <Mic size={20} color={iconColor} />
+          <Mic size={24} color={iconColor} />
         )}
       </AnimatedPressable>
 

@@ -58,18 +58,80 @@ const mixedStrictnessRequest: ChatRequest = {
   ],
 };
 
+const optionalFieldsSchema = {
+  type: 'object',
+  properties: {
+    format: { type: 'string' },
+    title: { type: 'string' },
+    sheets: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['format'],
+};
+
+const strictRequestWithUnqualifiedSchema: ChatRequest = {
+  ...request,
+  tools: [
+    {
+      name: 'create_file_default',
+      description: 'Creates a file.',
+      inputSchema: optionalFieldsSchema,
+    },
+    {
+      name: 'create_file_strict_unqualified',
+      description: 'Creates a file.',
+      strict: true,
+      inputSchema: optionalFieldsSchema,
+    },
+    {
+      name: 'create_file_strict_nested',
+      description: 'Creates a file.',
+      strict: true,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          options: { type: 'object', properties: { title: { type: 'string' } } },
+        },
+        required: ['options'],
+        additionalProperties: false,
+      },
+    },
+  ],
+};
+
 describe('translateChatRequestToResponses', () => {
-  it('derives strictness per tool and keeps an explicit false', () => {
+  it('derives strictness per tool and sends an explicit false for a tool that does not ask for strict mode', () => {
     const params = translateChatRequestToResponses(mixedStrictnessRequest, { compat });
 
     expect(params.tools).toEqual([
       expect.objectContaining({ name: 'lookup_exact', strict: true }),
       expect.objectContaining({ name: 'lookup_optional', strict: false }),
-      expect.not.objectContaining({ strict: expect.anything() }),
+      expect.objectContaining({ name: 'lookup_default', strict: false }),
     ]);
     expect(params.tools?.[1]).toMatchObject({
       parameters: mixedStrictnessRequest.tools?.[1]?.inputSchema,
     });
+  });
+
+  it('keeps optional fields optional: a tool without strict, or whose schema cannot be strict, goes out as strict false', () => {
+    const params = translateChatRequestToResponses(strictRequestWithUnqualifiedSchema, { compat });
+
+    expect(params.tools).toEqual([
+      expect.objectContaining({ name: 'create_file_default', strict: false }),
+      expect.objectContaining({ name: 'create_file_strict_unqualified', strict: false }),
+      expect.objectContaining({ name: 'create_file_strict_nested', strict: false }),
+    ]);
+    expect(params.tools?.[0]).toMatchObject({ parameters: { required: ['format'] } });
+    expect(params.tools?.[1]).toMatchObject({ parameters: { required: ['format'] } });
+  });
+
+  it('leaves the strict field out on a route whose compat rejects it, for tools with optional fields too', () => {
+    const params = translateChatRequestToResponses(strictRequestWithUnqualifiedSchema, {
+      compat: { ...compat, supportsStrictMode: false },
+    });
+
+    for (const tool of params.tools ?? []) {
+      expect(tool).not.toHaveProperty('strict');
+    }
   });
 
   it('omits strictness for every tool when the endpoint does not support strict mode', () => {
@@ -303,13 +365,13 @@ describe('translateChatRequestToResponses', () => {
 });
 
 describe('translateChatRequest', () => {
-  it('derives strictness per tool and keeps an explicit false', () => {
+  it('derives strictness per tool and sends an explicit false for a tool that does not ask for strict mode', () => {
     const params = translateChatRequest(mixedStrictnessRequest, { compat, provider: 'openai' });
 
     expect(params.tools?.map((tool) => (tool.type === 'function' ? tool.function : null))).toEqual([
       expect.objectContaining({ name: 'lookup_exact', strict: true }),
       expect.objectContaining({ name: 'lookup_optional', strict: false }),
-      expect.not.objectContaining({ strict: expect.anything() }),
+      expect.objectContaining({ name: 'lookup_default', strict: false }),
     ]);
     const optional = params.tools?.[1];
     expect(optional?.type === 'function' ? optional.function.parameters : null).toEqual(
@@ -326,6 +388,19 @@ describe('translateChatRequest', () => {
     for (const tool of params.tools ?? []) {
       expect(tool.type === 'function' ? tool.function : {}).not.toHaveProperty('strict');
     }
+  });
+
+  it('sends strict false for a strict request whose schema has optional fields', () => {
+    const params = translateChatRequest(strictRequestWithUnqualifiedSchema, {
+      compat,
+      provider: 'openai',
+    });
+
+    expect(params.tools?.map((tool) => (tool.type === 'function' ? tool.function : null))).toEqual([
+      expect.objectContaining({ name: 'create_file_default', strict: false }),
+      expect.objectContaining({ name: 'create_file_strict_unqualified', strict: false }),
+      expect.objectContaining({ name: 'create_file_strict_nested', strict: false }),
+    ]);
   });
 
   it('rejects a binary file on Chat Completions instead of silently dropping it', () => {

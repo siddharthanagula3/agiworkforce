@@ -44,6 +44,100 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 use tokio_tungstenite::tungstenite::Message;
 
+#[tokio::test]
+async fn native_client_negotiates_and_reads_sessions_over_the_real_stdio_transport() {
+    use agiworkforce_app_server::{DeveloperSessionClient, DeveloperSessionClientLimits};
+    use std::{num::NonZeroUsize, time::Duration};
+
+    let host = Arc::new(FakeHost::new());
+    let (client_io, server_io) = tokio::io::duplex(8192);
+    let (server_reader, server_writer) = tokio::io::split(server_io);
+    let server_host = Arc::clone(&host);
+    let server = tokio::spawn(async move {
+        agiworkforce_app_server::serve_developer_session_io(
+            server_reader,
+            server_writer,
+            server_host,
+            capabilities(),
+        )
+        .await
+        .unwrap();
+    });
+    let (reader, writer) = tokio::io::split(client_io);
+    let mut client = DeveloperSessionClient::new(
+        reader,
+        writer,
+        DeveloperSessionClientLimits {
+            max_frame_bytes: NonZeroUsize::new(8192).unwrap(),
+            max_queued_notifications: NonZeroUsize::new(16).unwrap(),
+            request_timeout: Duration::from_secs(2),
+        },
+    );
+    let handshake = client
+        .initialize(AppServerClientInfo {
+            name: "native-client-test".to_owned(),
+            title: "Native client test".to_owned(),
+            version: "0.0.1".to_owned(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        handshake.protocol_version,
+        DEVELOPER_SESSION_PROTOCOL_VERSION
+    );
+    let (client, mut events) = client
+        .into_background(NonZeroUsize::new(16).unwrap())
+        .unwrap();
+    host.notifications
+        .send(
+            AppServerNotification::new(
+                method::TURN_STARTED,
+                agiworkforce_protocol::developer_session::TurnStartedNotification {
+                    thread_id: "thread-1".to_owned(),
+                    turn_id: "turn-1".to_owned(),
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    match events.recv().await.unwrap() {
+        agiworkforce_app_server::DeveloperSessionClientEvent::Notification(event) => {
+            assert_eq!(event.method, method::TURN_STARTED);
+            assert_eq!(event.params["turnId"], "turn-1");
+        }
+        _ => panic!("the real stdio transport disconnected before forwarding the notification"),
+    }
+    let listed: ThreadListResponse = client
+        .request(method::THREAD_LIST, ThreadListParams::default())
+        .await
+        .unwrap();
+    let read: ThreadReadResponse = client
+        .request(
+            method::THREAD_READ,
+            ThreadIdParams {
+                thread_id: listed.threads[0].id.clone(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(read.thread.id, listed.threads[0].id);
+    let _: Value = client
+        .request(method::SHUTDOWN, serde_json::json!({}))
+        .await
+        .unwrap();
+    server.await.unwrap();
+    assert_eq!(
+        host.calls.lock().await.as_slice(),
+        &[
+            Call::List(ThreadListParams::default()),
+            Call::Read(ThreadIdParams {
+                thread_id: "thread-1".to_owned()
+            }),
+            Call::Shutdown,
+        ]
+    );
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum Call {
     Start(ThreadStartParams, AppServerClientInfo),
@@ -60,6 +154,7 @@ enum Call {
     SteerTurn(TurnSteerParams),
     Interrupt(TurnInterruptParams),
     Approval(ApprovalResponseParams),
+    CancelLogin(AccountLoginWaitParams),
     Shutdown,
 }
 
@@ -69,6 +164,7 @@ struct FakeHost {
     notifications: broadcast::Sender<AppServerNotification>,
     shutdown_gate: Mutex<Option<oneshot::Receiver<()>>>,
     worktree_gate: Mutex<Option<oneshot::Receiver<()>>>,
+    side_question_gate: Mutex<Option<oneshot::Receiver<()>>>,
     worktree_panics: std::sync::atomic::AtomicBool,
     managed_worktree_calls: std::sync::atomic::AtomicUsize,
 }
@@ -82,6 +178,7 @@ impl FakeHost {
             notifications,
             shutdown_gate: Mutex::new(None),
             worktree_gate: Mutex::new(None),
+            side_question_gate: Mutex::new(None),
             worktree_panics: std::sync::atomic::AtomicBool::new(false),
             managed_worktree_calls: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -115,6 +212,32 @@ fn turn() -> TurnSummary {
         thread_id: "thread-1".to_string(),
         status: TurnStatus::Running,
     }
+}
+
+#[tokio::test]
+async fn account_login_cancellation_dispatches_only_the_named_login_for_an_owner() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new_with_trust(
+        host.clone(),
+        capabilities(),
+        DeveloperConnectionTrust::LoopbackOwner,
+    );
+    processor.process(initialize()).await;
+    let result = processor
+        .process(request(
+            2,
+            method::ACCOUNT_LOGIN_CANCEL,
+            serde_json::json!({ "loginId": "login-to-cancel" }),
+        ))
+        .await;
+    assert!(result.error.is_none());
+    assert_eq!(result.result.unwrap()["acknowledged"], true);
+    assert_eq!(
+        host.calls.lock().await.as_slice(),
+        &[Call::CancelLogin(AccountLoginWaitParams {
+            login_id: "login-to-cancel".into()
+        })]
+    );
 }
 
 #[async_trait]
@@ -239,6 +362,18 @@ impl DeveloperSessionHost for FakeHost {
         })
     }
 
+    async fn side_question(
+        &self,
+        params: ThreadSideQuestionParams,
+    ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
+        if let Some(gate) = self.side_question_gate.lock().await.take() {
+            let _ = gate.await;
+        }
+        Ok(ThreadSideQuestionResponse {
+            answer: params.question,
+        })
+    }
+
     async fn create_managed_worktree(
         &self,
         _params: ManagedWorktreeCreateParams,
@@ -344,6 +479,14 @@ impl DeveloperSessionHost for FakeHost {
         Ok(())
     }
 
+    async fn account_login_cancel(
+        &self,
+        params: AccountLoginWaitParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        self.calls.lock().await.push(Call::CancelLogin(params));
+        Ok(())
+    }
+
     async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::Shutdown);
         if let Some(gate) = self.shutdown_gate.lock().await.take() {
@@ -391,14 +534,38 @@ fn capabilities() -> AppServerCapabilities {
         tools: true,
         mcp: true,
         checkpoints: false,
+        workspace_files: false,
+        workspace_file_recovery: false,
+        workspace_file_recovery_browser: false,
+        workspace_terminal: false,
         worktrees: false,
         models: true,
         account: false,
+        account_login_cancel: false,
+        cloud_conversation_update: false,
+        cloud_drafts: false,
+        cloud_projects: false,
+        cloud_project_files: false,
+        cloud_project_uploads: false,
+        cloud_uploads: false,
+        cloud_attachment_recovery: false,
+        cloud_project_downloads: false,
+        cloud_project_file_reindex: false,
+        cloud_workspaces: false,
+        cloud_models: false,
+        cloud_history: false,
+        cloud_history_tail: false,
+        cloud_turns: false,
+        cloud_turn_resume: false,
+        cloud_work: false,
+        cloud_work_start: false,
         instructions: false,
         skills: false,
         plugins: false,
         hooks: false,
         settings: false,
+        settings_instructions: false,
+        worktree_apply_review: false,
         commands: false,
         thread_delete: false,
         reconnect: false,
@@ -2101,9 +2268,35 @@ async fn a_query_token_connection_reads_and_does_nothing_else() {
         );
     }
     for name in [
+        method::WORKSPACE_FILES_LIST,
+        method::TERMINAL_PLAN,
+        method::TERMINAL_START,
+        method::TERMINAL_LIST,
+        method::TERMINAL_READ,
+        method::TERMINAL_WRITE,
+        method::TERMINAL_RESIZE,
+        method::TERMINAL_CLOSE,
+        method::WORKSPACE_FILE_READ,
+        method::WORKSPACE_FILE_WRITE,
+        method::WORKSPACE_FILE_RECOVERY_READ,
+        method::WORKSPACE_FILE_RECOVERY_WRITE,
+        method::WORKSPACE_FILE_RECOVERY_LIST,
+        method::WORKSPACE_FILE_RECOVERY_RESTORE,
+        method::CLOUD_CONVERSATION_UPDATE,
+        method::CLOUD_DRAFT_SAVE,
+        method::CLOUD_WORKSPACES_LIST,
+        method::CLOUD_WORKSPACE_SELECT,
+        method::CLOUD_MODEL_LIST,
+        method::CLOUD_RUN_LIST,
+        method::CLOUD_WORK_PLAN_UPDATE,
+        method::CLOUD_RUN_ATTACH,
+        method::CLOUD_TURN_DETACH,
+        method::CLOUD_TURN_RESUME,
         method::MCP_APPROVAL_READ,
         method::MCP_APPROVAL_GRANT,
         method::SETTINGS_WRITE,
+        method::SETTINGS_INSTRUCTIONS_READ,
+        method::SETTINGS_INSTRUCTIONS_WRITE,
         method::SKILLS_CONSENT,
         method::PLUGINS_SET_ENABLED,
         method::WORKTREE_APPLY_TO_LOCAL,
@@ -2327,6 +2520,97 @@ async fn a_long_worktree_request_does_not_hold_up_an_approval_on_the_same_connec
         "the approval is answered while the worktree request still runs"
     );
     release_worktree.send(()).unwrap();
+    assert_eq!(next_response_id(&mut responses).await, serde_json::json!(2));
+
+    drop(request_writer);
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn a_side_question_waiting_on_a_turn_does_not_hold_up_an_interrupt_or_an_approval() {
+    let host = Arc::new(FakeHost::new());
+    let (release_side_question, side_question_gate) = oneshot::channel();
+    *host.side_question_gate.lock().await = Some(side_question_gate);
+    let (mut request_writer, request_reader) = tokio::io::duplex(64 * 1024);
+    let (response_reader, response_writer) = tokio::io::duplex(64 * 1024);
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_io(
+        request_reader,
+        response_writer,
+        host.clone(),
+        capabilities(),
+    ));
+    let mut responses = BufReader::new(response_reader).lines();
+    let send = |request: AppServerRequest| {
+        format!(
+            "{}\n",
+            serde_json::to_string(&request).expect("serialize request")
+        )
+    };
+
+    request_writer
+        .write_all(send(initialize()).as_bytes())
+        .await
+        .unwrap();
+    assert_eq!(next_response_id(&mut responses).await, serde_json::json!(1));
+    request_writer
+        .write_all(
+            send(request(
+                2,
+                method::THREAD_SIDE_QUESTION,
+                ThreadSideQuestionParams {
+                    thread_id: "thread-1".to_string(),
+                    question: "what file is open?".to_string(),
+                    request_id: None,
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    request_writer
+        .write_all(
+            send(request(
+                3,
+                method::TURN_INTERRUPT,
+                TurnInterruptParams {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    request_writer
+        .write_all(
+            send(request(
+                4,
+                method::APPROVAL_RESPOND,
+                ApprovalResponseParams {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    request_id: "approval-1".to_string(),
+                    decision: agiworkforce_protocol::protocol::ReviewDecision::Approved,
+                    note: None,
+                    edited_content: None,
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        next_response_id(&mut responses).await,
+        serde_json::json!(3),
+        "the interrupt is answered while the side question waits"
+    );
+    assert_eq!(
+        next_response_id(&mut responses).await,
+        serde_json::json!(4),
+        "the approval is answered while the side question waits"
+    );
+    release_side_question.send(()).unwrap();
     assert_eq!(next_response_id(&mut responses).await, serde_json::json!(2));
 
     drop(request_writer);

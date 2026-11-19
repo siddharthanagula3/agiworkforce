@@ -374,7 +374,7 @@ describe('background dispatch is wired to the sink', () => {
     expect(background).toContain('await abandonScheduledTaskRun(journal, credential)');
     expect(background).toContain('active.requestId !== journal.requestId');
     expect(background).toMatch(
-      /let systemPrompt: string \| undefined;\s*if \(!delivery\) \{\s*try \{/,
+      /let systemPrompt: string \| undefined;\s*const turnCarriesPage =[\s\S]*?if \(!delivery && turnCarriesPage\) \{\s*try \{/,
     );
   });
 

@@ -36,6 +36,7 @@ jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
   deleteAsync: jest.fn().mockResolvedValue(undefined),
   getFreeDiskStorageAsync: jest.fn().mockResolvedValue(12 * 1024 * 1024 * 1024),
+  getTotalDiskCapacityAsync: jest.fn().mockResolvedValue(128 * 1024 * 1024 * 1024),
 }));
 
 jest.mock('@/storage/installedModels', () => ({
@@ -46,9 +47,12 @@ jest.mock('@/storage/installedModels', () => ({
 jest.mock('@/services/modelDownload', () => ({
   modelRemovalUnsupportedReason: jest.requireActual('@/services/modelDownload')
     .modelRemovalUnsupportedReason,
+  MODEL_BUSY_REMOVAL_MESSAGE: jest.requireActual('@/services/modelDownload')
+    .MODEL_BUSY_REMOVAL_MESSAGE,
   deleteDownloadedModel: jest.fn().mockResolvedValue(undefined),
   getModelStorageBytes: jest.fn().mockResolvedValue(2_000_000_000),
   downloadModel: jest.fn(),
+  excludeModelFilesFromBackup: jest.fn().mockResolvedValue(undefined),
   cancelDownload: jest.fn(),
   assertDownloadAllowed: jest.fn().mockResolvedValue(undefined),
 }));
@@ -200,7 +204,7 @@ describe('a failed storage read is never shown as an empty device', () => {
 
     await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
     expect(getByTestId('storage-model-bytes')).toHaveTextContent('Unavailable');
-    expect(getByTestId('storage-cache-bytes')).toHaveTextContent('3.0 MB');
+    expect(getByTestId('storage-cache-bytes')).toHaveTextContent('3 MB');
     expect(queryByText(/No models downloaded/)).toBeNull();
     expect(getByLabelText('Try reading storage again')).toBeTruthy();
   });
@@ -212,7 +216,7 @@ describe('a failed storage read is never shown as an empty device', () => {
     await waitFor(() =>
       expect(getByTestId('storage-cache-bytes')).toHaveTextContent('Unavailable'),
     );
-    expect(getByTestId('storage-model-bytes')).toHaveTextContent('1.86 GB');
+    expect(getByTestId('storage-model-bytes')).toHaveTextContent('1.9 GB');
     expect(getByLabelText(`Delete ${INSTALLED.display_name}`)).toBeTruthy();
   });
 

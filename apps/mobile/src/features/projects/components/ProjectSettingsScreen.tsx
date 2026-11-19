@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { Brain, Palette, Trash2, UserRound, Users } from 'lucide-react-native';
+import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import {
@@ -26,14 +27,34 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
 
-const MEMORY_MAX_CHARS = 500;
-
 export const PROJECT_MEMORY_SCOPE_COPY = {
-  global:
-    'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.',
-  projectOnly:
-    'Chats here use only this project’s memories. Nothing from your other chats is included.',
+  global: 'Uses your account memories. What’s learned here stays in this project.',
+  projectOnly: 'Uses only this project’s memories, nothing from your other chats.',
 } as const;
+
+export function confirmDelete(
+  id: string,
+  content: string,
+  onError: (message: string | null) => void,
+): void {
+  Alert.alert(
+    'Delete this project memory?',
+    `Chats in this project stop using “${content}”. It cannot be restored and would have to be added again.`,
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete memory',
+        style: 'destructive',
+        onPress: () => {
+          onError(null);
+          void deleteProjectMemory(id).catch((cause: unknown) => {
+            onError(toUserMessage(cause, 'Could not delete this memory. Try again.'));
+          });
+        },
+      },
+    ],
+  );
+}
 
 function SectionLabel({ children }: { children: string }) {
   const colors = useThemeColors();
@@ -126,26 +147,6 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
       })
       .finally(() => setSaving(false));
   }, [draft, projectId, projectName, saving]);
-
-  const confirmDelete = useCallback((id: string, content: string) => {
-    Alert.alert(
-      'Delete this project memory?',
-      `Chats in this project stop using “${content}”. It cannot be restored and would have to be added again.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete memory',
-          style: 'destructive',
-          onPress: () => {
-            setError(null);
-            void deleteProjectMemory(id).catch((cause: unknown) => {
-              setError(toUserMessage(cause, 'Could not delete this memory. Try again.'));
-            });
-          },
-        },
-      ],
-    );
-  }, []);
 
   if (!project) {
     return (
@@ -271,7 +272,7 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
                   {memory.content}
                 </Text>
                 <Pressable
-                  onPress={() => confirmDelete(memory.id, memory.content)}
+                  onPress={() => confirmDelete(memory.id, memory.content, setError)}
                   accessibilityRole="button"
                   accessibilityLabel={`Delete project memory: ${memory.content}`}
                   style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -298,7 +299,7 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
           placeholderTextColor={colors.textMuted}
           accessibilityLabel="Add a memory only this project uses"
           editable={!saving}
-          maxLength={MEMORY_MAX_CHARS}
+          maxLength={MANAGED_MEMORY_MAX_CONTENT_CHARS}
           returnKeyType="done"
           style={{
             flex: 1,

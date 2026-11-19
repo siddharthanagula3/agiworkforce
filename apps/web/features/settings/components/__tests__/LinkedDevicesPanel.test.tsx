@@ -174,7 +174,7 @@ describe('LinkedDevicesPanel', () => {
     render(<LinkedDevicesPanel />);
 
     const heading = await screen.findByText('Linked devices');
-    const description = screen.getByText(/Unlinking revokes the device's stored credential/);
+    const description = screen.getByText(/Unlinking revokes the device's credential/);
     expect(heading.compareDocumentPosition(description)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 

@@ -30,12 +30,15 @@ import {
   useDispatchSetupStore,
 } from '@/src/features/companion/components/DesktopSetupChecklistView';
 import { ApprovalModal, useApprovalModal } from '@/src/shared/components/ApprovalModal';
+import { canUseBillingPlanCapability } from '@agiworkforce/types';
+import { useTierStore } from '@/src/features/billing/store';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useAgentStore } from '@/stores/agentStore';
 import {
   startHealthChecks,
   stopHealthChecks,
   stopReconnectRecovery,
+  resumeReconnectCountdown,
   requestAgentRefresh,
   manualReconnect,
 } from '@/services/companion';
@@ -91,12 +94,22 @@ export default function CompanionScreen() {
     clearError,
   } = useConnectionStore();
 
+  const tier = useTierStore((s) => s.tier);
+  const tierKnown = useTierStore((s) => s.lastRefreshedAt !== null);
+  const planLacksRemoteControl =
+    tierKnown &&
+    pairingCode === null &&
+    status !== 'connected' &&
+    status !== 'stale' &&
+    status !== 'reconnecting' &&
+    !canUseBillingPlanCapability(tier, 'remote_control');
+
   useEffect(() => {
-    if (!FEATURES.companion || !FEATURES.dispatch) return;
+    if (!FEATURES.companion || !FEATURES.dispatch || planLacksRemoteControl) return;
     if (deepLinkCode && status === 'disconnected') {
       connect(deepLinkCode);
     }
-  }, [deepLinkCode, status, connect]);
+  }, [deepLinkCode, status, connect, planLacksRemoteControl]);
 
   useEffect(() => {
     if (!FEATURES.companion || !FEATURES.dispatch) return;
@@ -123,6 +136,11 @@ export default function CompanionScreen() {
       stopHealthChecks();
     };
   }, [status, hasSeenDemo]);
+
+  useEffect(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
+    if (status === 'reconnecting') resumeReconnectCountdown();
+  }, [status]);
 
   useEffect(() => stopReconnectRecovery, []);
 
@@ -163,6 +181,8 @@ export default function CompanionScreen() {
   }, [router, showSetupAgain]);
 
   if (!FEATURES.companion) return <FeatureUnavailable feature="Remote" />;
+
+  if (planLacksRemoteControl) return <FeatureUnavailable feature="Remote" reason="entitlement" />;
 
   if (showScanner) {
     return <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />;
@@ -239,7 +259,11 @@ export default function CompanionScreen() {
 
       {status === 'reconnecting' && (
         <View className="mx-4 mb-3">
-          <ReconnectingBanner countdown={reconnectCountdown} onReconnect={manualReconnect} />
+          <ReconnectingBanner
+            countdown={reconnectCountdown}
+            reason={error}
+            onReconnect={manualReconnect}
+          />
         </View>
       )}
 

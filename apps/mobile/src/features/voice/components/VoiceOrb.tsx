@@ -10,12 +10,25 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { motion } from '@/src/ui/theme/tokens';
 
 export type VoiceOrbPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 const AMPLITUDE_DURATION_MS = 110;
+
+export interface VoiceOrbPalette {
+  start: string;
+  mid: string;
+  end: string;
+}
+
+export function voiceOrbPalette(phase: VoiceOrbPhase, colors: ColorScheme): VoiceOrbPalette {
+  if (phase === 'speaking') {
+    return { start: colors.brandAmber, mid: colors.brandAmber, end: colors.voiceOrbEnd };
+  }
+  return { start: colors.voiceOrbStart, mid: colors.voiceOrbMid, end: colors.voiceOrbEnd };
+}
 
 const LEVEL_HISTORY_WEIGHT = 0.75;
 
@@ -35,6 +48,7 @@ export interface VoiceOrbProps {
 }
 
 export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: VoiceOrbProps) {
+  const colors = useThemeColors();
   const reducedMotion = useReducedMotion();
   const scale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.2);
@@ -98,6 +112,7 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
     transform: [{ scale: scale.value * 1.45 }],
   }));
 
+  const palette = voiceOrbPalette(phase, colors);
   const radius = size / 2;
   const box = glow ? Math.round(size * 1.7) : size;
 
@@ -115,7 +130,7 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
               width: size,
               height: size,
               borderRadius: radius,
-              backgroundColor: colors.voiceOrbMid,
+              backgroundColor: palette.mid,
             },
             haloStyle,
           ]}
@@ -125,9 +140,9 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
         <Svg width={size} height={size} accessibilityRole="image" accessibilityLabel="">
           <Defs>
             <LinearGradient id="voiceOrbFill" x1="0%" y1="0%" x2="0%" y2="100%">
-              <Stop offset="0%" stopColor={colors.voiceOrbStart} stopOpacity="1" />
-              <Stop offset="55%" stopColor={colors.voiceOrbMid} stopOpacity="1" />
-              <Stop offset="100%" stopColor={colors.voiceOrbEnd} stopOpacity="1" />
+              <Stop offset="0%" stopColor={palette.start} stopOpacity="1" />
+              <Stop offset="55%" stopColor={palette.mid} stopOpacity="1" />
+              <Stop offset="100%" stopColor={palette.end} stopOpacity="1" />
             </LinearGradient>
           </Defs>
           <Circle cx={radius} cy={radius} r={radius} fill="url(#voiceOrbFill)" />

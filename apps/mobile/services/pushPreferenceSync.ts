@@ -8,6 +8,7 @@ import Constants from 'expo-constants';
 
 import { getDeviceId } from '@/lib/deviceId';
 import {
+  DEFAULT_CATEGORY_ENABLED,
   deviceTimezone,
   getCategoryForType,
   useNotificationPrefsStore,
@@ -17,6 +18,7 @@ import { MOBILE_PUSH_TOKEN_PATH } from '@agiworkforce/cloud-contracts';
 import type { TimeFocusWeekday } from '@agiworkforce/types';
 
 import { api } from './api';
+import { trackPushRegistrationPost } from './pushRegistrationPosts';
 import {
   NOTIFICATION_EVENT_TYPES,
   QUIET_HOURS_EXEMPT_EVENT_TYPES,
@@ -80,7 +82,10 @@ export function buildPushDeliveryPreferences(): PushDeliveryPreferences {
   const { categoryEnabled, quietHours } = useNotificationPrefsStore.getState();
   const eventTypes = {} as Record<NotificationEventType, boolean>;
   for (const type of NOTIFICATION_EVENT_TYPES) {
-    eventTypes[type] = categoryEnabled[getCategoryForType(type)] !== false;
+    const group = getCategoryForType(type);
+    eventTypes[type] = DEFAULT_CATEGORY_ENABLED[group]
+      ? categoryEnabled[group] !== false
+      : categoryEnabled[group] === true;
   }
 
   return {
@@ -143,20 +148,22 @@ export async function postPushRegistration(handle: PushRegistrationHandle): Prom
 
     const preferences = buildPushDeliveryPreferences();
     const signature = JSON.stringify(preferences);
-    await api.post(
-      PUSH_TOKEN_REGISTRATION_PATH,
-      {
-        deviceId,
-        pushToken: token,
-        ...(Platform.OS === 'ios' || Platform.OS === 'android' ? { platform: Platform.OS } : {}),
-        ...(Constants.deviceName ? { name: Constants.deviceName.slice(0, 120) } : {}),
-        preferences: { ...preferences, updatedAt: new Date().toISOString() },
-      },
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-        auth401Recovery: 'caller-owned',
-        signal: accountContext.signal,
-      },
+    await trackPushRegistrationPost(
+      api.post(
+        PUSH_TOKEN_REGISTRATION_PATH,
+        {
+          deviceId,
+          pushToken: token,
+          ...(Platform.OS === 'ios' || Platform.OS === 'android' ? { platform: Platform.OS } : {}),
+          ...(Constants.deviceName ? { name: Constants.deviceName.slice(0, 120) } : {}),
+          preferences: { ...preferences, updatedAt: new Date().toISOString() },
+        },
+        {
+          headers: { Authorization: `Bearer ${authToken}` },
+          auth401Recovery: 'caller-owned',
+          signal: accountContext.signal,
+        },
+      ),
     );
     if (!registration.isCurrent()) return false;
     // A newer failed request in this same lifetime must not discard this receipt.

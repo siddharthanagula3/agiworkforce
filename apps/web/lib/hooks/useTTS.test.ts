@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTTS } from './useTTS';
 
+const toastMock = vi.hoisted(() => ({ error: vi.fn() }));
+vi.mock('sonner', () => ({ toast: toastMock }));
+
 const identity = vi.hoisted(() => ({
   generation: 0,
   session: null as null | {
@@ -84,6 +87,7 @@ function emitVoicesChanged(next: SpeechSynthesisVoice[]) {
 }
 
 beforeEach(() => {
+  toastMock.error.mockClear();
   identity.generation = 0;
   identity.session = null;
   installSpeechSynthesis();
@@ -407,6 +411,37 @@ describe('useTTS, owner lifetime fixtures', () => {
     expect(init?.signal?.aborted).toBe(true);
     expect(fetcher).toHaveBeenCalledTimes(1);
     audio.close();
+  });
+
+  it('tells the user when a later chunk of managed speech fails after the first one played', async () => {
+    signedIn();
+    const audio = installAudio();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })
+      .mockResolvedValueOnce({ ok: false, arrayBuffer: async () => new ArrayBuffer(0) });
+    vi.stubGlobal('fetch', fetcher);
+    const hook = renderHook(() => useTTS());
+    act(() => hook.result.current.speak('x'.repeat(4000)));
+    await flush();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    act(() => audio.sources[0]!.onended?.());
+    await flush();
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(toastMock.error).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.isSpeaking).toBe(false);
+    audio.close();
+  });
+
+  it('tells the user when device speech errors out, but not when it is cancelled', () => {
+    const hook = renderHook(() => useTTS());
+    act(() => hook.result.current.speak('Hello', { deviceVoice: true }));
+    const utterance = spoken[0]!;
+    act(() => utterance.onerror?.({ error: 'canceled' } as SpeechSynthesisErrorEvent));
+    expect(toastMock.error).not.toHaveBeenCalled();
+    act(() => hook.result.current.speak('Again', { deviceVoice: true }));
+    act(() => spoken[1]!.onerror?.({ error: 'audio-hardware' } as SpeechSynthesisErrorEvent));
+    expect(toastMock.error).toHaveBeenCalledTimes(1);
   });
 
   it('does not dispatch or fallback after an owner change during token acquisition', async () => {

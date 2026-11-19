@@ -10,6 +10,7 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
+import { PROJECT_ORIGIN } from './ProjectChatBackButton';
 
 interface ProjectChatsTabProps {
   projectId: string;
@@ -78,12 +79,18 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
   const handleNewChat = useCallback(() => {
     if (isCloud) setCloudActive(projectId);
     else setLocalActive(projectId);
-    router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
+    router.push({
+      pathname: '/(app)/(tabs)/chat',
+      params: { from: PROJECT_ORIGIN },
+    } as Parameters<typeof router.push>[0]);
   }, [router, projectId, isCloud, setCloudActive, setLocalActive]);
 
   const handleOpenChat = useCallback(
     (id: string) => {
-      router.push({ pathname: '/(app)/chat/[id]' as const, params: { id } });
+      router.push({
+        pathname: '/(app)/chat/[id]' as const,
+        params: { id, from: PROJECT_ORIGIN },
+      });
     },
     [router],
   );

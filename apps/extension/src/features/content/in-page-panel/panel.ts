@@ -28,6 +28,8 @@ import {
   truncatePageText,
 } from './pageActions';
 import type { PageAction } from './pageActions';
+import { renderAnswerInto } from './answerMarkdown';
+import { IN_PAGE_PROMPT_PORT_PREFIX } from './promptPort';
 import { readYouTubeTranscript } from './youtubeTranscript';
 import { setImportantStyles } from './launcher';
 import { buildPanelStyles, PANEL_SLIDE_MS } from './panelStyles';
@@ -179,6 +181,16 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   };
 }
 
+let activePromptPort: chrome.runtime.Port | null = null;
+
+function openPromptPort(requestId: string): chrome.runtime.Port | null {
+  try {
+    return chrome.runtime.connect({ name: `${IN_PAGE_PROMPT_PORT_PREFIX}${requestId}` });
+  } catch {
+    return null;
+  }
+}
+
 async function streamPrompt(
   prompt: string,
   pageContext: string,
@@ -194,10 +206,14 @@ async function streamPrompt(
   cursor.className = 'agi-thinking';
   responseArea.appendChild(cursor);
 
+  const requestId = crypto.randomUUID();
+  const port = openPromptPort(requestId);
+  activePromptPort = port;
+
   try {
     const response = await new Promise<InPagePromptResponse>((resolve, reject) => {
       chrome.runtime.sendMessage(
-        { type: 'IN_PAGE_PROMPT', prompt, pageContext },
+        { type: 'IN_PAGE_PROMPT', prompt, pageContext, requestId },
         (result: unknown) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
@@ -215,7 +231,7 @@ async function streamPrompt(
       return;
     }
 
-    responseArea.textContent = response.text ?? '';
+    renderAnswerInto(responseArea, response.text ?? '');
   } catch (err) {
     cursor.remove();
     showPromptOutcome(
@@ -230,6 +246,8 @@ async function streamPrompt(
       openSidePanel,
     );
   } finally {
+    if (activePromptPort === port) activePromptPort = null;
+    port?.disconnect();
     setBusy(false);
   }
 }
@@ -410,11 +428,15 @@ function updateDisclosure(
     'open the side panel for a saved conversation.';
 }
 
+const SIDE_PANEL_OPEN_FAILED =
+  'The side panel could not be opened. Use the AGI icon in the Chrome toolbar.';
+
 export function createPanel(): {
   host: HTMLElement;
   open: () => void;
   close: () => void;
   toggle: () => void;
+  destroy: () => void;
   setReturnFocus: (element: HTMLElement | null) => void;
 } {
   const host = document.createElement('div');
@@ -592,6 +614,9 @@ export function createPanel(): {
   function closePanel(restoreFocus = true): void {
     if (!isOpen) return;
     isOpen = false;
+    if (requestInFlight) {
+      chrome.runtime.sendMessage({ type: 'CANCEL_IN_PAGE_PROMPT' }).catch(() => {});
+    }
     els.panel.classList.remove('open');
     withdrawFromPage(true);
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
@@ -619,8 +644,16 @@ export function createPanel(): {
   });
 
   function openSidePanel(): void {
-    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).catch(() => {});
-    closePanel(false);
+    const failed = (reason?: string): void => {
+      els.responseArea.textContent = reason || SIDE_PANEL_OPEN_FAILED;
+    };
+    void chrome.runtime
+      .sendMessage({ type: 'OPEN_SIDE_PANEL' })
+      .then((response: { success?: boolean; error?: string } | undefined) => {
+        if (response?.success === true) closePanel(false);
+        else failed(response?.error);
+      })
+      .catch(() => failed());
   }
 
   els.openSidePanelBtn.addEventListener('click', openSidePanel);
@@ -646,11 +679,23 @@ export function createPanel(): {
     if ((e as KeyboardEvent).key === 'Escape') close();
   });
 
+  function destroy(): void {
+    window.removeEventListener('popstate', rebuildChips);
+    (window as Window & { navigation?: EventTarget }).navigation?.removeEventListener(
+      'currententrychange',
+      rebuildChips,
+    );
+    if (hideTimer !== null) clearTimeout(hideTimer);
+    activePromptPort?.disconnect();
+    host.remove();
+  }
+
   return {
     host,
     open,
     close,
     toggle,
+    destroy,
     setReturnFocus: (element: HTMLElement | null) => {
       returnFocus = element;
     },

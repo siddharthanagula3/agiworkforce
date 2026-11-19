@@ -7,7 +7,7 @@ vi.mock('@/lib/services/provider-availability-service', () => ({
 }));
 
 import { modelRegistry } from '@agiworkforce/model-registry';
-import { getProviderDisplayLabel } from '@agiworkforce/types';
+import { getProviderDisplayLabel, getRoutingSlotModel } from '@agiworkforce/types';
 import { degradationFor } from '@/lib/server/slo/degradation';
 import {
   STREAM_INTERRUPTED_CODE,
@@ -210,6 +210,16 @@ describe('a request on the free plan model', () => {
     expect(copy.message).toMatch(/Try again/);
   });
 
+  it('offers Auto after a failure on the free plan other model, since Auto reaches the default', () => {
+    const otherFreeModel = getRoutingSlotModel('fast_anthropic');
+    expect(otherFreeModel).not.toBe(FREE_PLAN_MODEL);
+    const overloaded = Object.assign(new Error('{"type":"overloaded_error"}'), { status: 529 });
+
+    const copy = upstreamFailureCopy(overloaded, PROVIDER, { requestedModel: otherFreeModel });
+
+    expect(copy.message).toMatch(/choose Auto to use another available model/);
+  });
+
   it('keeps the code a client branches on', () => {
     const limited = Object.assign(new Error('rate limit exceeded'), { status: 429 });
     const free = upstreamFailureCopy(limited, PROVIDER, { requestedModel: FREE_PLAN_MODEL });
@@ -319,7 +329,7 @@ function windowSpent(retryAfterSeconds?: number): Error {
 const FREE_PLAN_MODEL = modelRegistry.policies.auto.slots.free_workhorse.modelKey;
 const FREE_PLAN = { requestedModel: FREE_PLAN_MODEL };
 
-describe('the one model the free plan has', () => {
+describe('the free plan default model', () => {
   it('does not describe a momentary limit and a spent provider quota the same way', () => {
     const momentary = upstreamFailureCopy(rateLimited(), PROVIDER, FREE_PLAN);
     const spent = upstreamFailureCopy(windowSpent(), PROVIDER, FREE_PLAN);

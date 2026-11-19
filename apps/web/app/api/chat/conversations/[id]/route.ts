@@ -7,6 +7,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
+import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
+import { withoutStoredCitationMarkup } from '@/lib/server/stored-assistant-text';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
 import { killE2BSession } from '@/lib/e2b/runtime';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
@@ -146,9 +148,13 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
     const response = NextResponse.json({
       conversation,
-      messages: withIsoTimestamps(messages).map((message) =>
-        ManagedCloudMessageWireSchema.parse(message),
-      ),
+      messages: withIsoTimestamps(
+        withoutStoredCitationMarkup(
+          messages.map((message) =>
+            withObjectMessageMetadata(message, { userId, conversationId: id }),
+          ),
+        ),
+      ).map((message) => ManagedCloudMessageWireSchema.parse(message)),
       total,
       hasMore,
     });
@@ -311,9 +317,9 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       [ownedProject] = await db.query<{ id: string }>(
         `select id
            from user_projects
-          where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+          where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid and is_archived = false and deleted_at is null
           limit 1`,
-        [targetProjectId, userId],
+        [targetProjectId, userId, organizationId],
       );
     } catch (error) {
       logger.error({ error, userId }, 'Failed to validate conversation project');

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRoutingSlotModel,
   NOTEBOOK_TEMPLATE_ID,
@@ -96,8 +96,12 @@ vi.mock('@/features/notebook/NotebookPanel', () => ({
 }));
 
 vi.mock('./components/CodeUsageDashboard', () => ({
-  CodeUsageDashboard: ({ planTier }: { planTier: string | null }) => (
-    <div data-testid="code-usage-dashboard" data-plan-tier={planTier ?? ''} />
+  CodeUsageDashboard: ({ planTier, linkOnly }: { planTier: string | null; linkOnly?: boolean }) => (
+    <div
+      data-testid="code-usage-dashboard"
+      data-plan-tier={planTier ?? ''}
+      data-link-only={String(Boolean(linkOnly))}
+    />
   ),
 }));
 
@@ -245,6 +249,11 @@ beforeEach(() => {
   startDeveloperTurn.mockClear();
   pickWorkspaceRoot.mockClear();
 });
+
+const openSettings = vi.fn();
+vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+  useSettingsModal: () => ({ isOpen: false, openSettings, closeSettings: vi.fn() }),
+}));
 
 vi.mock('@shared/stores/web-auth-store', () => {
   const state = {
@@ -428,6 +437,12 @@ function codeDeferred<T>() {
   return { promise, resolve, reject };
 }
 
+async function enabledComposer(): Promise<HTMLElement> {
+  const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+  await waitFor(() => expect(field).toBeEnabled());
+  return field;
+}
+
 function changeCodeIdentity(userId: string, sessionId: string) {
   codeIdentity.auth = { ...codeIdentity.auth, userId, sessionId };
   codeIdentity.sdk.user = { id: userId };
@@ -510,10 +525,7 @@ describe('CloudCodePage', () => {
     });
     const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
     await screen.findByRole('heading', { name: session.title });
-    await user.type(
-      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'Old session task',
-    );
+    await user.type(await enabledComposer(), 'Old session task');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
     await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
     rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
@@ -566,17 +578,14 @@ describe('CloudCodePage', () => {
       });
       const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
       await screen.findByRole('heading', { name: session.title });
-      await user.type(
-        await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder }),
-        'Original task',
-      );
+      await user.type(await enabledComposer(), 'Original task');
       await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
       await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalledTimes(1));
       rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
       await screen.findByRole('heading', { name: nextSession.title });
       rerender(<CloudCodePage api={api} sessionId={session.id} />);
       await screen.findByRole('heading', { name: session.title });
-      const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+      const field = await enabledComposer();
       await user.clear(field);
       await user.type(field, 'Replacement task');
       await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
@@ -629,7 +638,7 @@ describe('CloudCodePage', () => {
         get: vi.fn(() => readiness.promise),
       });
       render(<CloudCodePage api={api} />);
-      const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+      const field = await enabledComposer();
       await user.type(field, 'Original task');
       await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
       await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
@@ -676,7 +685,7 @@ describe('CloudCodePage', () => {
       })),
     });
     const { rerender } = render(<CloudCodePage api={api} />);
-    const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+    const field = await enabledComposer();
     await user.type(field, 'Original task');
     await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
     await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
@@ -813,6 +822,15 @@ describe('CloudCodePage', () => {
     expect(screen.queryByText(/Managed Code/i)).not.toBeInTheDocument();
   });
 
+  it('opens the MCP servers page from the composer menu when this computer serves them', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add to this session' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'MCP servers' }));
+    expect(openSettings).toHaveBeenCalledWith('local-mcp');
+  });
+
   it('places the usage card under the home greeting with the account plan', async () => {
     render(<CloudCodePage api={createApi()} />);
 
@@ -820,6 +838,70 @@ describe('CloudCodePage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute('data-plan-tier', 'pro'),
     );
+  });
+
+  it('keeps the full usage card on a wide screen', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute('data-link-only', 'false'),
+    );
+  });
+
+  describe('on a phone', () => {
+    const wideWidth = window.innerWidth;
+    const originalMatchMedia = window.matchMedia;
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+      window.matchMedia = ((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      })) as typeof window.matchMedia;
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: wideWidth });
+      window.matchMedia = originalMatchMedia;
+    });
+
+    it('puts the button that opens the Code drawer before the title in the app header', async () => {
+      render(<CloudCodePage api={createApi()} />);
+
+      const slot = await screen.findByTestId('code-app-bar');
+      const drawerButton = within(slot).getByRole('button', { name: 'Cloud sessions' });
+      expect(slot.firstElementChild).toBe(drawerButton);
+      expect(drawerButton).toHaveAttribute('aria-expanded', 'false');
+      expect(drawerButton).toHaveAttribute('aria-controls', 'code-rail-drawer');
+      expect(slot).toHaveTextContent('Code');
+    });
+
+    it('swaps the usage card for a link to the usage page', async () => {
+      render(<CloudCodePage api={createApi()} />);
+
+      await screen.findByRole('heading', { name: "What's up next, Ada?" });
+      await waitFor(() =>
+        expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute(
+          'data-link-only',
+          'true',
+        ),
+      );
+    });
+
+    it('does not put the composer in focus when the home opens', async () => {
+      render(<CloudCodePage api={createApi()} />);
+
+      const composer = await screen.findByRole('textbox', {
+        name: 'Describe a task or ask a question',
+      });
+      expect(composer).not.toHaveFocus();
+    });
   });
 
   it('opens the microphone on the first press with no notice in between', async () => {
@@ -1056,7 +1138,7 @@ describe('CloudCodePage', () => {
     const api = createApi();
     render(<CloudCodePage api={api} />);
 
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'Install dependencies and run the test suite');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
@@ -1088,7 +1170,7 @@ describe('CloudCodePage', () => {
     const api = createApi();
     render(<CloudCodePage api={api} />);
 
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'first line{Shift>}{Enter}{/Shift}second line');
     expect(api.create).not.toHaveBeenCalled();
 
@@ -1101,7 +1183,7 @@ describe('CloudCodePage', () => {
     const api = createApi();
     render(<CloudCodePage api={api} />);
 
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'テストを実行して');
     fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
     fireEvent.keyDown(field, { key: 'Enter', keyCode: IME_PROCESSING_KEY_CODE });
@@ -1125,7 +1207,7 @@ describe('CloudCodePage', () => {
     const user = userEvent.setup();
     render(<CloudCodePage api={createApi()} />);
 
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, '/');
     const menu = await screen.findByRole('listbox', { name: 'Slash command suggestions' });
     expect(within(menu).getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'true');
@@ -1280,7 +1362,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'print the node version');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
@@ -1305,7 +1387,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'run the tests');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
     await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
@@ -1328,7 +1410,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'run the tests');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
@@ -1400,7 +1482,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'install deps');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
@@ -1690,7 +1772,7 @@ describe('CloudCodePage', () => {
     expect(await screen.findByRole('button', { name: /owner\/repository/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Trusted hosts/ })).toBeInTheDocument();
 
-    const field = screen.getByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'run the tests{Enter}');
 
     await waitFor(() =>
@@ -1741,7 +1823,7 @@ describe('CloudCodePage', () => {
     const picker = await screen.findByLabelText('Coding harness');
     expect(picker).toBeEnabled();
     expect(
-      screen.getByRole('option', { name: 'codex, A coding agent CLI. · 4 vCPU, 8 GB RAM' }),
+      screen.getByRole('option', { name: 'codex, A coding agent CLI · 4 vCPU, 8 GB RAM' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Coding agents' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Environments' })).toBeInTheDocument();
@@ -2257,10 +2339,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     await openSession(user, session.title);
-    await user.type(
-      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests{Enter}',
-    );
+    await user.type(await enabledComposer(), 'run the tests{Enter}');
 
     const stop = await screen.findByRole('button', { name: 'Stop the task' });
     expect(screen.queryByRole('button', { name: 'Start the task' })).not.toBeInTheDocument();
@@ -2380,6 +2459,32 @@ describe('CloudCodePage', () => {
     await waitFor(() =>
       expect(rename).toHaveBeenCalledWith(session.id, 'Committed by clicking away'),
     );
+  });
+
+  it('keeps what was typed when the rename field selects its title late', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    const frames: FrameRequestCallback[] = [];
+    const frameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Session title' });
+    await user.clear(field);
+    await user.type(field, 'A');
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+    frameSpy.mockRestore();
+
+    expect(field).toHaveValue('A');
+    expect(field).toHaveProperty('selectionStart', 1);
+    expect(field).toHaveProperty('selectionEnd', 1);
   });
 
   it('leaves Enter and Escape to an input method while the session title composes', async () => {
@@ -2624,10 +2729,7 @@ describe('CloudCodePage', () => {
     const api = createApi();
     render(<CloudCodePage api={api} />);
 
-    await user.type(
-      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests{Enter}',
-    );
+    await user.type(await enabledComposer(), 'run the tests{Enter}');
 
     await waitFor(() => expect(push).toHaveBeenCalledWith(`/code/${session.id}`));
   });
@@ -2833,10 +2935,7 @@ describe('CloudCodePage', () => {
       'https://github.com/owner/repository.git/',
     );
     await user.type(await screen.findByLabelText('Branch'), 'release');
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests',
-    );
+    await user.type(await enabledComposer(), 'run the tests');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     await waitFor(() =>
@@ -2868,10 +2967,7 @@ describe('CloudCodePage', () => {
       await screen.findByLabelText('Repository URL'),
       'https://example.com/owner/repo',
     );
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests',
-    );
+    await user.type(await enabledComposer(), 'run the tests');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -2896,10 +2992,7 @@ describe('CloudCodePage', () => {
       await screen.findByLabelText('Repository URL'),
       'https://github.com/other/private',
     );
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests{Enter}',
-    );
+    await user.type(await enabledComposer(), 'run the tests{Enter}');
 
     await waitFor(() =>
       expect(api.create).toHaveBeenCalledWith(
@@ -2928,10 +3021,7 @@ describe('CloudCodePage', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    await user.type(
-      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests{Enter}',
-    );
+    await user.type(await enabledComposer(), 'run the tests{Enter}');
 
     await waitFor(() => expect(api.get).toHaveBeenCalledWith(session.id));
     await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
@@ -2950,7 +3040,7 @@ describe('CloudCodePage', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    const field = await enabledComposer();
     await user.type(field, 'run the tests');
     const send = screen.getByRole('button', { name: 'Start the task' });
     await user.click(send);
@@ -3058,10 +3148,7 @@ describe('CloudCodePage', () => {
     expect(screen.getByRole('button', { name: 'Change the branch' })).toHaveTextContent('main');
     expect(screen.getByRole('button', { name: /Trusted hosts/ })).toBeInTheDocument();
 
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests{Enter}',
-    );
+    await user.type(await enabledComposer(), 'run the tests{Enter}');
 
     await waitFor(() =>
       expect(api.create).toHaveBeenCalledWith(
@@ -3327,7 +3414,7 @@ describe('the environment the composer starts a session in', () => {
     const permissions = await screen.findByText('Permissions: Auto');
     expect(permissions).toHaveAttribute(
       'title',
-      'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+      'Edits files without asking. Asks before commands and git hook or MCP changes.',
     );
     expect(screen.queryByRole('button', { name: 'Approval mode' })).not.toBeInTheDocument();
     expect(screen.queryByText('Ask before every action')).not.toBeInTheDocument();
@@ -3456,7 +3543,7 @@ describe('the environment the composer starts a session in', () => {
       expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
       expect(replace).not.toHaveBeenCalledWith('/code');
 
-      await user.click(screen.getByRole('button', { name: 'Retry' }));
+      await user.click(await screen.findByRole('button', { name: 'Retry' }));
 
       expect(
         await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
@@ -3486,7 +3573,7 @@ describe('the environment the composer starts a session in', () => {
       expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
       expect(replace).not.toHaveBeenCalledWith('/code');
 
-      await user.click(screen.getByRole('button', { name: 'Retry' }));
+      await user.click(await screen.findByRole('button', { name: 'Retry' }));
 
       expect(
         await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
@@ -3547,11 +3634,11 @@ describe('the environment the composer starts a session in', () => {
         within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
       await user.type(box(), 'half a thought');
 
-      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await user.click(screen.getByRole('button', { name: /^Fix the build/u }));
       await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
       expect(box()).toHaveValue('');
 
-      await user.click(screen.getByRole('button', { name: /Quote the readme/u }));
+      await user.click(screen.getByRole('button', { name: /^Quote the readme/u }));
       await screen.findByRole('heading', { level: 1, name: 'Quote the readme' });
       expect(box()).toHaveValue('half a thought');
     } finally {
@@ -3628,7 +3715,7 @@ describe('the environment the composer starts a session in', () => {
         within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
       await user.type(box(), 'only for the first session');
 
-      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await user.click(screen.getByRole('button', { name: /^Fix the build/u }));
 
       await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
       expect(box()).toHaveValue('');
@@ -3809,7 +3896,7 @@ describe('the environment the composer starts a session in', () => {
 
       const notice = await screen.findByTestId('local-session-archived');
       expect(notice).toHaveTextContent('Session archived.');
-      expect(notice).toHaveTextContent('agi session unarchive thread-1');
+      expect(notice).toHaveTextContent('choose Show archived in the sidebar, then Restore');
       expect(archiveDeveloperThread).toHaveBeenCalledWith('root-recent', 'thread-1');
 
       await user.click(within(notice).getByRole('button', { name: 'Dismiss' }));
@@ -3920,10 +4007,7 @@ describe('the environment the composer starts a session in', () => {
     render(<CloudCodePage api={api} />);
 
     await screen.findByRole('button', { name: 'Change the folder: qa-project' });
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'quote the readme',
-    );
+    await user.type(await enabledComposer(), 'quote the readme');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     await waitFor(() =>
@@ -3983,10 +4067,7 @@ describe('the model a local session starts on', () => {
     await user.click(await screen.findByRole('button', { name: /qa-provider\/first/ }));
     await user.click(await screen.findByRole('menuitemradio', { name: 'qa-provider/second' }));
 
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'quote the readme',
-    );
+    await user.type(await enabledComposer(), 'quote the readme');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     await waitFor(() =>
@@ -4016,10 +4097,7 @@ describe('a cloud session open while the draft is local', () => {
     await openSession(user, session.title);
     await screen.findByRole('button', { name: 'Changes' });
 
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'run the tests',
-    );
+    await user.type(await enabledComposer(), 'run the tests');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
@@ -4034,10 +4112,7 @@ describe('a cloud session open while the draft is local', () => {
     render(<CloudCodePage api={createApi()} />);
 
     await screen.findByRole('button', { name: 'Change the folder: qa-project' });
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'quote the readme',
-    );
+    await user.type(await enabledComposer(), 'quote the readme');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     const notices = await screen.findByTestId('code-notices');
@@ -4124,7 +4199,9 @@ describe('leaving unsaved local edits', () => {
       })),
     });
     render(<CloudCodePage api={api} />);
-    await user.click(await screen.findByRole('button', { name: new RegExp(localSession.title) }));
+    await user.click(
+      await screen.findByRole('button', { name: new RegExp(`^${localSession.title}`) }),
+    );
     await user.click(await screen.findByRole('button', { name: 'Changes' }));
     await user.click(await screen.findByRole('button', { name: 'Edit src/edit.ts' }));
     const field = await screen.findByLabelText('src/edit.ts');
@@ -4201,10 +4278,7 @@ describe('CloudCodePage, a coding agent that runs on the person’s own key', ()
     await user.type(screen.getByLabelText(CODE_COPY.harnessCredentialLabel), 'fd-own-key');
     await user.keyboard('{Escape}');
 
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'Run the test suite',
-    );
+    await user.type(await enabledComposer(), 'Run the test suite');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     await waitFor(() =>
@@ -4268,10 +4342,7 @@ describe('CloudCodePage, the model a coding agent runs', () => {
     )!.id;
     await user.selectOptions(model, picked);
     await user.keyboard('{Escape}');
-    await user.type(
-      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
-      'Run the test suite',
-    );
+    await user.type(await enabledComposer(), 'Run the test suite');
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
 
     await waitFor(() =>

@@ -5,7 +5,6 @@ import { useFocusEffect } from 'expo-router';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  ArrowLeft,
   Cpu,
   Zap,
   Thermometer,
@@ -21,6 +20,7 @@ import { Separator } from '@/components/ui/Separator';
 import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
@@ -47,6 +47,8 @@ import {
   type BenchmarkResult,
 } from '@/services/performanceMonitor';
 import { readMemoryFootprintMB } from '@/services/processFootprint';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
@@ -64,7 +66,7 @@ type TierNum = 1 | 2 | 3;
 
 function tier1FetchingNote(caps: DeviceCapabilities): string | null {
   if (caps.tier1Status === 'downloadable' || caps.tier1Status === 'downloading') {
-    return 'AICore is fetching its on-device model in the background, this device will move to Tier 1 automatically once it finishes.';
+    return 'AICore is downloading its model. This device moves to Tier 1 when done.';
   }
   return null;
 }
@@ -551,36 +553,10 @@ export default function PerformanceScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 12,
-          height: 48,
-          borderBottomWidth: 1,
-          borderBottomColor: c.border,
-        }}
-      >
-        <Pressable
-          onPress={handleBack}
-          style={{ padding: 8, borderRadius: 8 }}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={20} color={c.textSecondary} />
-        </Pressable>
-        <Text
-          style={{
-            fontSize: typeScale.callout,
-            fontWeight: '600',
-            color: c.textPrimary,
-            marginLeft: 8,
-          }}
-        >
-          Performance
-        </Text>
-
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+      <ScreenHeader
+        title="Performance"
+        onBack={handleBack}
+        trailing={
           <View
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
             accessible
@@ -598,12 +574,17 @@ export default function PerformanceScreen() {
               {tIndicator.label}
             </Text>
           </View>
-        </View>
-      </View>
+        }
+      />
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          padding: 16,
+          gap: 16,
+          paddingBottom: 48,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <Card>
@@ -734,7 +715,7 @@ export default function PerformanceScreen() {
                 <Text style={{ fontSize: typeScale.caption, color: c.textMuted }}>
                   {activeLocalModel.fileSizeBytes === 0
                     ? 'System managed'
-                    : `${(activeLocalModel.fileSizeBytes / 1_073_741_824).toFixed(1)} GB`}
+                    : formatAttachmentSize(activeLocalModel.fileSizeBytes)}
                 </Text>
               </View>
               <Text style={{ fontSize: typeScale.caption, color: c.textMuted, marginBottom: 12 }}>
@@ -852,7 +833,7 @@ export default function PerformanceScreen() {
             </>
           ) : (
             <Text style={{ fontSize: typeScale.subhead, color: c.textMuted }}>
-              No local model selected. Download a model to see performance stats.
+              No local model selected. Download one to see stats.
             </Text>
           )}
 
@@ -960,8 +941,7 @@ export default function PerformanceScreen() {
             </Text>
           </View>
           <Text style={{ fontSize: typeScale.footnote, color: c.textMuted, marginBottom: 12 }}>
-            Runs a standard prompt against the selected on-device model, loading it if installed.
-            Successful results are stored for comparison across sessions.
+            Times a standard prompt on the selected on-device model and saves the result.
           </Text>
           <Pressable
             onPress={handleBenchmark}
@@ -1095,7 +1075,7 @@ export default function PerformanceScreen() {
           <ToggleRow
             icon={BarChart2}
             label="Show performance chip in chat"
-            sublabel="Shows tok/s under on-device replies with a measured speed"
+            sublabel="Shows tok/s under on-device replies"
             value={showPerfChip}
             onChange={handleChipToggle}
           />

@@ -9,10 +9,6 @@ import {
   _resetStateForTesting,
 } from '../src/features/native-bridge/pairing';
 
-type StorageCallback = (items: Record<string, unknown>) => void;
-type RemoveCallback = () => void;
-type SetCallback = () => void;
-
 const sessionStore: Record<string, unknown> = {};
 const localStore: Record<string, unknown> = {};
 
@@ -20,22 +16,20 @@ const BRIDGE_SECRET = `ipc${'0123456789abcdef'.repeat(4)}`.slice(0, 64);
 
 function makeStorageArea(store: Record<string, unknown>) {
   return {
-    get(keys: string | string[], callback: StorageCallback) {
+    async get(keys: string | string[]) {
       const result: Record<string, unknown> = {};
       const keyList = typeof keys === 'string' ? [keys] : keys;
       for (const k of keyList) {
         if (k in store) result[k] = store[k];
       }
-      callback(result);
+      return result;
     },
-    set(items: Record<string, unknown>, callback?: SetCallback) {
+    async set(items: Record<string, unknown>) {
       Object.assign(store, items);
-      callback?.();
     },
-    remove(keys: string | string[], callback?: RemoveCallback) {
+    async remove(keys: string | string[]) {
       const keyList = typeof keys === 'string' ? [keys] : keys;
       for (const k of keyList) delete store[k];
-      callback?.();
     },
   };
 }
@@ -50,6 +44,10 @@ const chromeMock = {
     local: makeStorageArea(localStore),
   },
 };
+
+function storedPairing(): { fingerprint?: string; token?: string } {
+  return (localStore['agi_paired_desktop'] ?? {}) as { fingerprint?: string; token?: string };
+}
 
 function seedBridgeSecret(token: string = BRIDGE_SECRET): void {
   sessionStore['agi_bridge_secret'] = token;
@@ -201,7 +199,7 @@ describe('e2e pairing, SEC-11: only the desktop bridge secret authorizes a manif
     expect(desktop.authorizedInstalls).toHaveLength(0);
     expect(desktop.rejectedInstalls).toHaveLength(1);
     expect(sessionStore['agi_bridge_secret']).toBe(selfIssued);
-    expect(sessionStore['agi_pairing_fingerprint']).toBeUndefined();
+    expect(storedPairing().fingerprint).toBeUndefined();
   });
 
   it('refuses to contact the desktop at all when no bridge secret is stored', async () => {
@@ -245,7 +243,7 @@ describe('e2e pairing flow, IDLE → REQUESTING → PAIRED', () => {
     expect(finalState.error).toBeNull();
   });
 
-  it('stores the desktop-issued token in chrome.storage.session', async () => {
+  it('stores the desktop-issued token in this profile pairing record', async () => {
     const desktop = makeDesktopPairResponder();
     seedBridgeSecret();
     vi.stubGlobal('fetch', desktop.fetchMock);
@@ -254,8 +252,8 @@ describe('e2e pairing flow, IDLE → REQUESTING → PAIRED', () => {
 
     expect(state.phase).toBe('paired');
     expect(desktop.lastIssuedToken).not.toBeNull();
-    expect(sessionStore['agi_pair_token']).toBe(desktop.lastIssuedToken);
-    expect(sessionStore['agi_pair_token']).not.toBe(BRIDGE_SECRET);
+    expect(storedPairing().token).toBe(desktop.lastIssuedToken);
+    expect(storedPairing().token).not.toBe(BRIDGE_SECRET);
   });
 });
 
@@ -269,7 +267,7 @@ describe('e2e pairing flow, fingerprint match across the joint', () => {
 
     expect(state.phase).toBe('paired');
     expect(state.fingerprint).toBe(desktop.lastIssuedFingerprint);
-    expect(sessionStore['agi_pairing_fingerprint']).toBe(desktop.lastIssuedFingerprint);
+    expect(storedPairing().fingerprint).toBe(desktop.lastIssuedFingerprint);
     expect(state.fingerprint).toHaveLength(8);
   });
 
@@ -334,17 +332,17 @@ describe('e2e pairing flow, idempotent re-requests', () => {
     vi.stubGlobal('fetch', desktop.fetchMock);
 
     await requestPairing();
-    const firstToken = sessionStore['agi_pair_token'] as string;
+    const firstToken = storedPairing().token as string;
     expect(firstToken).toBe(desktop.lastIssuedToken);
     expect(desktop.callCount).toBe(1);
 
     await unpair();
     expect(getPairingState().phase).toBe('idle');
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(storedPairing().token).toBeUndefined();
 
     seedBridgeSecret();
     await requestPairing();
-    const secondToken = sessionStore['agi_pair_token'] as string;
+    const secondToken = storedPairing().token as string;
 
     expect(desktop.callCount).toBe(2);
     expect(desktop.installAttempts.every((a) => a.presentedToken === BRIDGE_SECRET)).toBe(true);
@@ -436,7 +434,7 @@ describe('e2e handshake, the code travels Desktop → human → extension', () =
 
     expect(paired.phase).toBe('paired');
     expect(desktop.installs).toEqual(['test-ext-id']);
-    expect(sessionStore['agi_pair_token']).toBe(desktop.mintedTokens[0]);
+    expect(storedPairing().token).toBe(desktop.mintedTokens[0]);
     expect(sessionStore['agi_pair_request']).toBeUndefined();
   });
 
@@ -481,7 +479,7 @@ describe('e2e handshake, the code travels Desktop → human → extension', () =
 
     expect(desktop.installs).toHaveLength(0);
     expect(desktop.mintedTokens).toHaveLength(0);
-    expect(sessionStore['agi_pair_token']).toBeUndefined();
+    expect(storedPairing().token).toBeUndefined();
 
     const paired = await submitPairingCode(displayed.code);
     expect(paired.phase).toBe('paired');
@@ -514,6 +512,6 @@ describe('e2e handshake, the code travels Desktop → human → extension', () =
     expect(state.phase).toBe('paired');
     expect(legacy.authorizedInstalls).toHaveLength(1);
     expect(sessionStore['agi_bridge_secret']).toBe(BRIDGE_SECRET);
-    expect(sessionStore['agi_pair_token']).toBe(legacy.lastIssuedToken);
+    expect(storedPairing().token).toBe(legacy.lastIssuedToken);
   });
 });

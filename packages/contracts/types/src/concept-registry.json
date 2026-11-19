@@ -1563,6 +1563,16 @@
       "table": "device_refresh_token_families",
       "exempt": ["updatedAt", "createdBy", "version"],
       "why": "the end state of one device refresh credential family, written by the server when a rotation locks it or a sign-out, unlink, compromise or deprovision ends it; revoked_at is its only field that ever changes and a trigger refuses clearing it, so revoked_at is the last write, there is no creator distinct from the account, and no client edits it under an If-Match precondition"
+    },
+    {
+      "table": "chat_file_intakes",
+      "exempt": ["createdBy", "version"],
+      "why": "written only by the server for the uploading account, so its creator is always its owner, and no client edits it under an If-Match precondition; every change is a server compare-and-set on its state"
+    },
+    {
+      "table": "chat_file_preparations",
+      "exempt": ["createdBy", "version"],
+      "why": "written only by the preparation steps for the file's owner; no client edits it"
     }
   ],
   "tableDispositions": [
@@ -1638,6 +1648,16 @@
       "table": "slack_assistant_runs",
       "disposition": "operational",
       "why": "the system record of one execution or one transfer, derived from a canonical object and rebuildable from it"
+    },
+    {
+      "table": "chat_file_intakes",
+      "disposition": "operational",
+      "why": "the system record of one chat file's upload, scan and seal; the file itself is the media asset it produces"
+    },
+    {
+      "table": "chat_file_preparations",
+      "disposition": "operational",
+      "why": "derived text and progress for a sealed chat file, rebuildable from the file"
     },
     {
       "table": "cloud_code_agent_turns",

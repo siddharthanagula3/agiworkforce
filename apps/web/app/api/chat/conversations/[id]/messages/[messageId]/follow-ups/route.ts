@@ -5,12 +5,13 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { collectMessageResearchSources } from '@/features/chat/utils/research-sources';
+import { collectMessageResearchSources } from '@agiworkforce/unified-chat/message-sources';
 import {
   FOLLOW_UP_SUGGESTIONS_METADATA_KEY,
   generateFollowUpSuggestions,
 } from '../../lib/generate-follow-ups';
 import { logger } from '@/lib/logger';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -96,7 +97,7 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
   try {
     await db.execute(
       `update web_messages
-          set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
+          set metadata = ${mergeJsonbObjectSql('metadata', '$1::jsonb')}
         where id = $2 and conversation_id = $3
           and coalesce(jsonb_array_length(
                 case when jsonb_typeof(metadata -> '${FOLLOW_UP_SUGGESTIONS_METADATA_KEY}') = 'array'

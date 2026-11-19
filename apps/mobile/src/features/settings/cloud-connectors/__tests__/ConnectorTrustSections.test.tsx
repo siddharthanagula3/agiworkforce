@@ -51,9 +51,7 @@ describe('connector trust sections', () => {
   it('says when there is nothing to measure', async () => {
     mockGet.mockResolvedValue({ connectors: [] });
     const { findByText } = render(<ConnectorHealthCard connectorIds={['gmail']} />);
-    expect(
-      await findByText('Not called in the last hour, so there is nothing to measure yet.'),
-    ).toBeTruthy();
+    expect(await findByText('Not called in the last hour.')).toBeTruthy();
   });
 
   it('explains how long what a connector fetches is kept', () => {

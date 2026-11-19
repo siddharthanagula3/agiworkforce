@@ -137,11 +137,30 @@ describe('Clerk native pending-session policy', () => {
       path.join(__dirname, '..', 'src', 'features', 'auth', 'store.ts'),
       'utf8',
     );
-    const signOut = store.slice(store.indexOf('signOut: async () => {'));
-    expect(signOut.indexOf('invalidateCloudAccount();')).toBeGreaterThan(-1);
-    expect(signOut.indexOf('invalidateCloudAccount();')).toBeLessThan(
+    const retire = store.slice(
+      store.indexOf('function retireActiveCloudAccount('),
+      store.indexOf('async function endEveryDeviceSession('),
+    );
+    expect(retire.indexOf('invalidateCloudAccount();')).toBeGreaterThan(-1);
+
+    const endEverySession = store.slice(store.indexOf('async function endEveryDeviceSession('));
+    expect(endEverySession.indexOf('retireActiveCloudAccount(set);')).toBeGreaterThan(-1);
+    expect(endEverySession.indexOf('retireActiveCloudAccount(set);')).toBeLessThan(
+      endEverySession.indexOf('await clearAuthSession();'),
+    );
+
+    const signOut = store.slice(
+      store.indexOf('signOut: async () => {'),
+      store.indexOf('signOutAllAccounts: async () => {'),
+    );
+    expect(signOut.indexOf('await endEveryDeviceSession(set,')).toBeGreaterThan(-1);
+    expect(signOut.indexOf('retireActiveCloudAccount(set);')).toBeGreaterThan(-1);
+    expect(signOut.indexOf('retireActiveCloudAccount(set);')).toBeLessThan(
       signOut.indexOf('await clearAuthSession();'),
     );
+
+    const signOutAllAccounts = store.slice(store.indexOf('signOutAllAccounts: async () => {'));
+    expect(signOutAllAccounts.indexOf('await endEveryDeviceSession(set,')).toBeGreaterThan(-1);
   });
 
   it('binds caches to Clerk userId and clears on a direct account A-to-B switch', () => {
@@ -154,7 +173,7 @@ describe('Clerk native pending-session policy', () => {
     const signedInIndex = bridge.indexOf('setClerkSignedIn(true);');
 
     expect(source).toContain(
-      "import {\n  activateCloudAccount,\n  hasCloudAccountOwner,\n  invalidateCloudAccount,\n} from '@/src/features/auth/services/cloudAccountSession';",
+      "import {\n  activateCloudAccount,\n  hasCloudAccountOwner,\n  invalidateCloudAccount,\n  recordedCloudAccountOwnerId,\n} from '@/src/features/auth/services/cloudAccountSession';",
     );
     expect(activateIndex).toBeGreaterThan(bridge.indexOf('if (isSignedIn)'));
     expect(activateIndex).toBeLessThan(signedInIndex);
@@ -170,14 +189,37 @@ describe('Clerk native pending-session policy', () => {
     );
     expect(source).toMatch(/const previousIsCloudRef = useRef\(isCloud\)/);
     expect(source).toMatch(/const enteredCloud = isCloud && !previousIsCloudRef\.current/);
-    expect(source).toMatch(/if \(enteredCloud && isMmkvReady\) void syncNow\(\)/);
+    expect(source).toMatch(
+      /if \(!enteredCloud\) return;[\s\S]{0,200}if \(isMmkvReady\) void syncNow\(\)/,
+    );
+    expect(source.match(/syncNow\(\)/g)).toHaveLength(1);
   });
 
   it('restarts every account-scoped root lifecycle on a direct Clerk account switch', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
 
     expect(source).toContain('const clerkUserId = useAuthStore((state) => state.clerkUserId);');
-    expect(source).toContain('beginPushTokenAccountSession(clerkUserId, getAuthToken)');
+    expect(source).toContain(
+      'usePushTokenAccountRegistration({ isClerkSignedIn, clerkUserId, isCloud, isInitialized });',
+    );
+    const pushRegistration = fs.readFileSync(
+      path.join(
+        __dirname,
+        '..',
+        'src',
+        'features',
+        'auth',
+        'hooks',
+        'usePushTokenAccountRegistration.ts',
+      ),
+      'utf8',
+    );
+    expect(pushRegistration).toContain('beginPushTokenAccountSession(clerkUserId, getAuthToken)');
+    const pushDependencies = [...pushRegistration.matchAll(/\}, \[([^\]]*)\]\);/g)].map((match) =>
+      (match[1] ?? '').split(',').map((name) => name.trim()),
+    );
+    expect(pushDependencies).toHaveLength(1);
+    expect(pushDependencies[0]).toEqual(expect.arrayContaining(['isClerkSignedIn', 'clerkUserId']));
 
     // Read as normalized dependency sets rather than source substrings: the
     // previous form pinned six exact one-line arrays, so adding a dependency to
@@ -191,12 +233,23 @@ describe('Clerk native pending-session policy', () => {
     );
     const accountScoped = dependencySets.filter((deps) => deps.includes('isClerkSignedIn'));
 
-    // Two effects are deliberately not account-scoped: one mirrors the signed-in
-    // boolean onto the notification service, the other reacts to a pairing URL.
+    // Three effects are deliberately not account-scoped: one mirrors the signed-in
+    // boolean onto the notification service, and two handle a link arrival once,
+    // a pairing link and a chat link that asks a signed-out person to sign in.
     const notAccountScoped = accountScoped.filter((deps) => !deps.includes('clerkUserId'));
     expect(notAccountScoped).toEqual([
       ['isClerkSignedIn'],
-      ['url', 'isClerkSignedIn', 'isInitialized', 'router'],
+      ['linkArrival', 'isClerkSignedIn', 'isInitialized', 'router'],
+      [
+        'linkArrival',
+        'authEnabled',
+        'isInitialized',
+        'isMmkvReady',
+        'isClerkLoaded',
+        'isClerkSignedIn',
+        'segments',
+        'router',
+      ],
     ]);
 
     // Everything else that reads the session must re-run when the person behind
@@ -205,6 +258,6 @@ describe('Clerk native pending-session policy', () => {
     const routing = accountScoped.find((deps) => deps.includes('segments'));
     expect(routing).toBeDefined();
     expect(routing).toContain('clerkUserId');
-    expect(accountScoped.filter((deps) => deps.includes('clerkUserId'))).toHaveLength(7);
+    expect(accountScoped.filter((deps) => deps.includes('clerkUserId'))).toHaveLength(6);
   });
 });

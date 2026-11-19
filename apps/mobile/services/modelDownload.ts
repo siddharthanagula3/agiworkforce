@@ -1,3 +1,4 @@
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import {
   documentDirectory,
   getInfoAsync,
@@ -13,7 +14,9 @@ import {
   type FileSystemDownloadResult,
   type DownloadProgressData,
 } from 'expo-file-system/legacy';
+import { EXECUTORCH_MODELS_DIR, MODELS_DIR } from './modelStoragePaths';
 import NetInfo from '@react-native-community/netinfo';
+import { excludeFromBackup } from '@/src/platform/backupExclusion';
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import {
   ensureMultimodalArtifacts,
@@ -22,10 +25,17 @@ import {
   type FileSystemDeps,
 } from '@agiworkforce/local-llm';
 import {
+  deleteInstalledModel,
   insertInstalledModel,
   getInstalledModel,
   removeInstalledModel,
 } from '@/storage/installedModels';
+import {
+  deleteExecutorchPresetFiles,
+  executorchPresetForModel,
+  isExecutorchRecord,
+  releaseExecutorchPreset,
+} from '@/services/executorchModels';
 import type { InstalledModel, ModelRuntime, ModelFormat } from '@/storage/types';
 
 export type ModelDownloadErrorKind =
@@ -46,6 +56,24 @@ export class ModelDownloadError extends Error {
   }
 }
 
+/**
+ * Every kind but `network_error` carries a message this module wrote; a network
+ * failure wraps transport text, so callers show their own copy for it.
+ */
+export function appAuthoredDownloadMessage(error: unknown): string | null {
+  if (!(error instanceof ModelDownloadError) || error.kind === 'network_error') return null;
+  return error.message;
+}
+
+export const MODEL_BUSY_REMOVAL_MESSAGE = 'This model is replying now. Try again when it finishes.';
+
+export class ModelRemovalError extends Error {
+  constructor() {
+    super(MODEL_BUSY_REMOVAL_MESSAGE);
+    this.name = 'ModelRemovalError';
+  }
+}
+
 export interface ModelDownloadOpts {
   modelId: string;
   displayName: string;
@@ -62,8 +90,20 @@ export interface ModelDownloadOpts {
   mmprojSizeBytes?: number;
 }
 
-const MODELS_DIR = `${documentDirectory}models/`;
 const MAX_MODEL_ID_CHARS = 96;
+
+/**
+ * Model files can be downloaded again, so they stay out of iCloud and computer
+ * backups. They stay in Documents rather than Caches so the system never
+ * purges a multi-gigabyte download under storage pressure.
+ */
+export async function excludeModelFilesFromBackup(): Promise<void> {
+  try {
+    await excludeFromBackup([MODELS_DIR, EXECUTORCH_MODELS_DIR]);
+  } catch (error) {
+    console.warn('[modelDownload] Could not exclude model files from backup:', error);
+  }
+}
 const SHA256_HEX = /^[0-9a-f]{64}$/i;
 
 function modelDir(modelId: string): string {
@@ -166,10 +206,6 @@ async function assertNetworkAllowed(wifiOnly: boolean): Promise<void> {
   );
 }
 
-function formatGigabytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
 /**
  * Free space is checked before the first byte is written, so an oversized model
  * fails with the real number instead of a mid-download write error.
@@ -186,7 +222,7 @@ export async function assertFreeSpaceFor(requiredBytes: number): Promise<void> {
   if (freeBytes >= needed) return;
   throw new ModelDownloadError(
     'storage_full',
-    `This model needs ${formatGigabytes(needed)} free and this device has ${formatGigabytes(freeBytes)}. Free up space and try again.`,
+    `This model needs ${formatAttachmentSize(needed)} free and this device has ${formatAttachmentSize(freeBytes)}. Free up space and try again.`,
   );
 }
 
@@ -437,6 +473,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   assertNotCancelled();
 
   await ensureDir(modelDir(modelId));
+  await excludeModelFilesFromBackup();
   assertNotCancelled();
 
   const destPath = modelFilePath(modelId, format);
@@ -509,6 +546,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     }
   }
 
+  await excludeModelFilesFromBackup();
   assertNotCancelled();
 
   const record: InstalledModel = {
@@ -533,9 +571,25 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   return record;
 }
 
+const REMOVAL_UNSUPPORTED =
+  'This model does not have a supported file-removal method here yet. The model will remain installed.';
+
+function executorchRemovalUnsupportedReason(model: InstalledModel): string | null {
+  if (
+    model.id.length === 0 ||
+    model.id.length > MAX_MODEL_ID_CHARS ||
+    !/^[a-zA-Z0-9._-]+$/.test(model.id) ||
+    model.local_path !== null ||
+    !executorchPresetForModel(model.id)
+  ) {
+    return REMOVAL_UNSUPPORTED;
+  }
+  return null;
+}
+
 export function modelRemovalUnsupportedReason(model: InstalledModel): string | null {
-  const unsupported =
-    'This model does not have a supported file-removal method here yet. The model will remain installed.';
+  if (isExecutorchRecord(model)) return executorchRemovalUnsupportedReason(model);
+  const unsupported = REMOVAL_UNSUPPORTED;
   if (
     !documentDirectory ||
     model.runtime !== 'local' ||
@@ -565,6 +619,17 @@ export function modelRemovalUnsupportedReason(model: InstalledModel): string | n
   return null;
 }
 
+async function deleteExecutorchModel(current: InstalledModel): Promise<void> {
+  const preset = executorchPresetForModel(current.id)!;
+  try {
+    releaseExecutorchPreset(preset);
+  } catch {
+    throw new ModelRemovalError();
+  }
+  await deleteExecutorchPresetFiles(preset);
+  await deleteInstalledModel(current.id);
+}
+
 export async function deleteDownloadedModel(expected: InstalledModel): Promise<void> {
   const unsupported = modelRemovalUnsupportedReason(expected);
   if (unsupported) throw new Error(unsupported);
@@ -586,6 +651,10 @@ export async function deleteDownloadedModel(expected: InstalledModel): Promise<v
     identityFields.some((field) => current[field] !== expected[field])
   ) {
     throw new Error('The installed model changed. Refresh Storage before trying again.');
+  }
+  if (isExecutorchRecord(current)) {
+    await deleteExecutorchModel(current);
+    return;
   }
   await deleteAsync(modelDir(current.id), { idempotent: true });
 }

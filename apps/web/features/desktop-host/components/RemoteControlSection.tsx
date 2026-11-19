@@ -23,6 +23,8 @@ import {
 import {
   billingPlanCapabilityWireTiers,
   canUseBillingPlanCapability,
+  MOBILE_ADD_DEVICE_LABEL,
+  MOBILE_CODE_SCREEN_LABEL,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { browserPairingLink } from '@/features/remote-dispatch/lib/browser-pairing';
@@ -35,7 +37,7 @@ import { readRemoteControl, stopRemoteControl } from '../lib/runtime-client';
 const HEADING = 'Remote Control';
 const INTRO =
   'Pair your phone to follow Code sessions running on this computer: approve steps, read diffs, test results and new files, and steer the next turn.';
-const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.`;
+const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, go to ${MOBILE_CODE_SCREEN_LABEL}, choose ${MOBILE_ADD_DEVICE_LABEL}, and scan this code. The code works once and expires in a few minutes.`;
 const PAIRING_WINDOW =
   'Scan the code in the pairing window with Mobile on your phone. Before the phone connects, this computer asks you to allow it.';
 const PHONE_CAN_RECONNECT =

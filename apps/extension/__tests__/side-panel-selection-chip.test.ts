@@ -202,10 +202,12 @@ const TAB = {
   status: 'complete',
 };
 
-function offerSelection(text: string | null): void {
+function offerSelection(text: string | null, inFormField = false): void {
   chromeMock.tabs.query.mockImplementation(async () => [TAB] as never[]);
   chromeMock.scripting.executeScript.mockImplementation(async () => [
-    { result: text === null ? null : { text, truncated: false } },
+    {
+      result: inFormField ? 'form-field' : text === null ? null : { text, truncated: false },
+    },
   ]);
 }
 
@@ -218,13 +220,32 @@ function chatMessages(): Array<Record<string, unknown>> {
     .filter((message) => message['type'] === 'CHAT_MESSAGE');
 }
 
+const selectionItem = (): HTMLButtonElement =>
+  document.getElementById('sp-attach-selection-item') as HTMLButtonElement;
+
+async function approveSite(origins: string[]): Promise<void> {
+  await chromeMock.storage.local.set({ agi_site_allowlist: origins });
+}
+
 describe('a highlighted passage on the active tab', () => {
-  it('appears as a chip, and only that passage is sent with the message', async () => {
+  it('is never read or attached just because the panel gains focus', async () => {
     await import('../src/side_panel');
     await vi.waitFor(() => expect((byId('sp-input') as HTMLTextAreaElement).disabled).toBe(false));
+    await approveSite(['https://example.com']);
     offerSelection('Revenue grew 12% in the third quarter.');
+    chromeMock.scripting.executeScript.mockClear();
 
     window.dispatchEvent(new Event('focus'));
+    byId('sp-input').dispatchEvent(new Event('focus'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(chromeMock.scripting.executeScript).not.toHaveBeenCalled();
+    expect(selectionChip()).toBeNull();
+  });
+
+  it('is attached from the plus menu, and only that passage is sent with the message', async () => {
+    offerSelection('Revenue grew 12% in the third quarter.');
+    selectionItem().click();
     await vi.waitFor(() => expect(selectionChip()).not.toBeNull());
     expect(selectionChip()!.textContent).toContain('Selected text · example.com');
     expect(selectionChip()!.textContent).toContain('Revenue grew 12% in the third quarter.');
@@ -243,37 +264,56 @@ describe('a highlighted passage on the active tab', () => {
     await vi.waitFor(() =>
       expect(byId('sp-messages').textContent).toContain('Selected text · example.com'),
     );
-
-    window.dispatchEvent(new Event('focus'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(selectionChip()).toBeNull();
   });
 
-  it('can be dismissed, and is not offered again for the same passage', async () => {
+  it('can be dismissed', async () => {
     document.getElementById('sp-new-chat-btn')!.click();
     offerSelection('A different passage.');
-    window.dispatchEvent(new Event('focus'));
+    selectionItem().click();
     await vi.waitFor(() => expect(selectionChip()).not.toBeNull());
 
     selectionChip()!.querySelector<HTMLButtonElement>('.sp-attachment-remove')!.click();
     expect(selectionChip()).toBeNull();
+  });
 
-    window.dispatchEvent(new Event('focus'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  it('is never read from a site the user has not approved', async () => {
+    await approveSite([]);
+    chromeMock.scripting.executeScript.mockClear();
+    offerSelection('Account number 12345678.');
+    selectionItem().click();
+    await vi.waitFor(() =>
+      expect(byId('sp-attachment-bar').textContent).toContain(
+        'Approve example.com in Extension settings to add text selected there.',
+      ),
+    );
+    expect(chromeMock.scripting.executeScript).not.toHaveBeenCalled();
+    expect(selectionChip()).toBeNull();
+    await approveSite(['https://example.com']);
+  });
+
+  it('says so when the page has no readable selection', async () => {
+    offerSelection(null);
+    selectionItem().click();
+    await vi.waitFor(() =>
+      expect(byId('sp-attachment-bar').textContent).toContain(
+        'Select some text on the page first.',
+      ),
+    );
     expect(selectionChip()).toBeNull();
   });
 
-  it('shows nothing when the page has no readable selection', async () => {
-    offerSelection(null);
-    window.dispatchEvent(new Event('focus'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(selectionChip()).toBeNull();
-
-    chromeMock.scripting.executeScript.mockImplementation(async () => {
-      throw new Error('Cannot access contents of the page.');
-    });
-    window.dispatchEvent(new Event('focus'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+  it('says text in a form field cannot be added, instead of asking the user to select some', async () => {
+    document.getElementById('sp-new-chat-btn')!.click();
+    offerSelection(null, true);
+    selectionItem().click();
+    await vi.waitFor(() =>
+      expect(byId('sp-attachment-bar').textContent).toContain(
+        "Text in a form field can't be added. Select text on the page itself.",
+      ),
+    );
+    expect(byId('sp-attachment-bar').textContent).not.toContain(
+      'Select some text on the page first.',
+    );
     expect(selectionChip()).toBeNull();
   });
 });

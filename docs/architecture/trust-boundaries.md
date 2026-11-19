@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-11-10
+Last updated: 2026-11-17
 
 The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines the Local / BYOK / Managed Cloud boundaries in `AGENTS.md` section 6 into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
@@ -15,7 +15,7 @@ Vocabulary:
   that crosses into AGI Cloud. Managed Free is public alpha and enabled after
   sign-in (2026-06-27, CLOUD-01). Paid-only routes require an existing paid
   entitlement; new paid acquisition on Web remains waitlist/access-code gated
-  (2026-09-21), while Mobile store in-app purchase has neither (2026-10-19). Metering and abuse controls keep pace with Free usage, and
+  (2026-09-21), while Mobile store in-app purchase has neither (2026-10-19) once it is enabled; the current Mobile build sells nothing (`nativePurchases: false` in `apps/mobile/src/features/billing/storePurchases.json`). Metering and abuse controls keep pace with Free usage, and
   commercial controls gate paid launch. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an
   incident-response kill-switch only.
 
@@ -43,6 +43,8 @@ unpublished extension available to users.
 ## Per-surface rules (exact)
 
 - **Mobile**: two modes only: **Local** (on-device) and **Cloud** (subscription). **BYOK is NOT offered on mobile** (no direct provider-key entry). Cloud chats sync with web + desktop.
+  - **Cloud requires the account's current permission to share with AI providers.** The permission is recorded on the device for the signed-in account that gave it, covers the providers it named, and is never current for another account or while a withdrawal is in progress (`apps/mobile/services/providerConsent.ts`). Every write of the app mode passes one admission, so the mode cannot be Cloud without it; the person is asked when entering Cloud, and declining keeps Local (`apps/mobile/src/features/chat/store/cloudModeDoor.ts`). Withdrawing it returns the app to Local, stops live voice and streaming answers, pauses the account's active schedules and running tasks, and turns off Ask from Siri on iOS (`apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx`).
+  - **In Local, `guardedFetch` lets no request reach a managed-cloud host except three, and only the third carries anything from a chat.** `guardedFetch` in `apps/mobile/lib/egressGuard.ts` treats the managed cloud as open only when the mode is Cloud and the permission is current; otherwise it throws `EgressBlockedError` before any network I/O except for: (1) the signed-in account controls (Terms acceptance, account deletion status, scheduling and cancellation, the identity check for account deletion only, and the data export), because deletion and export are data rights that must not depend on sharing with AI providers; (2) the withdrawal controls (list the account's schedules and set one inactive, list unfinished runs and pause one, revoke the Ask from Siri token), because a withdrawal must be able to stop standing work from either mode; (3) a content report the person chooses to send with its own Send tap, which carries the excerpt being reported, except while a withdrawal is in progress. Each of (1) and (2) needs the exact API origin, a Bearer token and an allowed method on an allowed path; the account controls take no query; the identity check and the export also fix their body, and the withdrawal controls fix their body and allow only paging, run state and token-revocation query keys. Sign-in and session refresh do not pass through `guardedFetch`: they run through the auth provider's SDK and reach its hosts, which `OUR_CLOUD_HOSTS` lists, in either mode. `apps/mobile/__tests__/trust-boundary.test.ts` holds this rule.
 - **Web**: **Cloud only.** No local, no BYOK. Cloud chats sync with desktop + mobile.
 - **Desktop**: **Chat is Cloud only.** The public Electron application loads the
   managed account surface for chat and rejects local-inference commands there. It

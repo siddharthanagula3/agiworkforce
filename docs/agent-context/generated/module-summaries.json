@@ -288,7 +288,7 @@
       "name": "@agiworkforce/local-runtime-contract",
       "path": "packages/contracts/local-runtime",
       "kind": "package",
-      "purpose": "Typed contract for the privileged Electron local runtime. Pure types and validation; performs no I/O."
+      "purpose": "Typed contract for privileged desktop runtimes. Pure types and validation; performs no I/O."
     },
     {
       "name": "@agiworkforce/trust-boundaries",

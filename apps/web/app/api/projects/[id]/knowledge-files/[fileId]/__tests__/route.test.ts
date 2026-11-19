@@ -1,3 +1,6 @@
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
+type OriginalProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
@@ -53,7 +56,14 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
+const recordAudit = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  recordAuditEvent: recordAudit,
+}));
 vi.mock('@/lib/server/object-storage', () => ({
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   copyPrivateObjectIfUnchanged: vi.fn(),
@@ -77,7 +87,8 @@ vi.mock('@/lib/server/object-storage', () => ({
   putPrivateObject: vi.fn(),
   objectKeyFromStorageUri: mocks.objectKeyFromStorageUri,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   assertUploadMatchesAuthorization: vi.fn(),
   createLocalProjectKnowledgeUploadUrl: vi.fn(),
   createProjectKnowledgeUploadAuthorization: vi.fn(),
@@ -90,7 +101,8 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   getProjectKnowledgeObject: mocks.getProjectKnowledgeObject,
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeFilesModule>()),
   checkProjectKnowledgeCapacity: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
@@ -240,7 +252,13 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
       const response = await del();
 
       expect(response.status).toBe(404);
-      expect(db.query).toHaveBeenCalledWith(expect.any(String), ['f-1', 'p-1', 'user-1', 'org-1']);
+      expect(db.query).toHaveBeenCalledWith(expect.any(String), [
+        'p-1',
+        'user-1',
+        'org-1',
+        'f-1',
+        'project_file',
+      ]);
       expect(db.execute).not.toHaveBeenCalled();
     });
 
@@ -253,74 +271,75 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
       expect(db.execute).not.toHaveBeenCalled();
     });
 
-    it('soft deletes the row and removes the stored object', async () => {
-      db.query
-        .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
-        .mockResolvedValue([]);
-      db.execute.mockResolvedValue(undefined);
+    it('commits removal intent without calling object storage', async () => {
+      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'f-1' }]);
       mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 
       const response = await del();
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ success: true });
-      expect(db.execute).toHaveBeenCalledTimes(1);
-      expect(db.execute.mock.calls[0]?.[0]).toContain('set deleted_at = now()');
-      expect(mocks.deleteProjectKnowledgeObject).toHaveBeenCalledWith('k/report.pdf');
-    });
-
-    it('keeps the stored object while a duplicated project still points at it', async () => {
-      db.query.mockImplementation(async (sql: string) => {
-        if (sql.includes('select f.storage_uri')) return [{ storage_uri: 's3://b/k/report.pdf' }];
-        if (sql.includes('select id from project_knowledge_files')) return [{ id: 'f-copy' }];
-        return [];
-      });
-      db.execute.mockResolvedValue(undefined);
-
-      const response = await del();
-
-      expect(response.status).toBe(200);
-      expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
-    });
-
-    it('keeps the stored object while an active legal hold preserves it', async () => {
-      db.query.mockImplementation(async (sql: string) => {
-        if (sql.includes('select f.storage_uri')) return [{ storage_uri: 's3://b/k/report.pdf' }];
-        if (sql.includes('public.legal_hold_preserves(')) {
-          return [{ storage_uri: 's3://b/k/report.pdf' }];
-        }
-        return [];
-      });
-      db.execute.mockResolvedValue(undefined);
-
-      const response = await del();
-
-      expect(response.status).toBe(200);
-      expect(db.execute.mock.calls[0]?.[0]).toContain('set deleted_at = now()');
+      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.query.mock.calls[1]?.[0]).toContain('set deleted_at=now()');
+      expect(db.execute).not.toHaveBeenCalled();
       expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
     });
 
     it('takes the legal-hold placement lock before it decides', async () => {
-      db.query.mockResolvedValue([]);
-      db.query.mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }]);
-      db.execute.mockResolvedValue(undefined);
+      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'f-1' }]);
 
       await del();
 
-      expect(db.query.mock.calls[1]?.[0]).toContain('pg_advisory_xact_lock_shared');
+      expect(db.query.mock.calls[0]?.[0]).toContain('pg_advisory_xact_lock_shared');
+      expect(db.query.mock.calls[1]?.[0]).toContain('set deleted_at=now()');
     });
 
-    it('rolls the tombstone back with its transaction when the stored object cannot be removed', async () => {
+    it('acknowledges an already removed row without reacquiring its object', async () => {
       db.query
-        .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
-        .mockResolvedValue([]);
-      db.execute.mockResolvedValue(undefined);
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ deleted_at: '2026-11-10T00:00:00Z', held: false }]);
+
+      const response = await del();
+
+      expect(response.status).toBe(200);
+      expect(db.query.mock.calls[2]?.[1]).toEqual([
+        'p-1',
+        'user-1',
+        'org-1',
+        'f-1',
+        'project_file',
+      ]);
+      expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+    });
+
+    it('does not restore metadata or depend on storage availability', async () => {
+      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'f-1' }]);
       mocks.deleteProjectKnowledgeObject.mockRejectedValue(new Error('s3 down'));
 
       const response = await del();
 
-      expect(response.status).toBe(500);
-      expect(db.execute).toHaveBeenCalledTimes(1);
+      expect(response.status).toBe(200);
+      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.execute).not.toHaveBeenCalled();
+      expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+    });
+
+    it('refuses and audits a held source without promising an unqueued deletion', async () => {
+      db.query
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ deleted_at: null, held: true }]);
+      const response = await del();
+      expect(response.status).toBe(403);
+      expect(JSON.stringify(await response.json())).not.toContain('will be deleted');
+      expect(recordAudit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'deletion_blocked_by_legal_hold',
+          detail: expect.objectContaining({ resourceId: 'f-1' }),
+        }),
+      );
+      expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
     });
   });
 });

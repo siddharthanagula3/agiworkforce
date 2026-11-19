@@ -85,6 +85,7 @@ export function projectKnowledgeResponse(
     ...file,
     storageUri: `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}`,
     textPreview: previewKind === 'table' || previewKind === 'office',
+    textPreviewKind: previewKind,
     indexing,
   };
 }
@@ -364,13 +365,13 @@ export async function registerProjectKnowledgeFile(
   // The presigned PUT for the uploaded key stays writable for the rest of its
   // ttl, so the inspected bytes are promoted to a key no upload route can name
   // before any reader is pointed at them.
-  const sealedKey = await sealProjectKnowledgeObject({
+  const sealed = await sealProjectKnowledgeObject({
     key: extraction.objectKey,
     etag: extraction.etag,
     bytes: extraction.bytes,
     contentType: extraction.contentType,
   });
-  if (!sealedKey) {
+  if (!sealed) {
     await purgeUploadedKnowledgeObject(db, userId, projectId, extraction.objectKey);
     logger.warn(
       { userId, projectId, objectKey: extraction.objectKey, hadEtag: Boolean(extraction.etag) },
@@ -390,7 +391,7 @@ export async function registerProjectKnowledgeFile(
       ]);
       const [row] = await tx.query<Record<string, unknown>>(
         `insert into project_knowledge_files
-           (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at, version, supersedes_id)
+           (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at, version, supersedes_id, storage_targets)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $10::text is null then null else now() end,
            (select coalesce(max(version), 0) + 1
               from project_knowledge_files
@@ -399,7 +400,8 @@ export async function registerProjectKnowledgeFile(
               from project_knowledge_files
              where project_id = $1 and file_name = $2 and deleted_at is null and superseded_at is null
              order by version desc
-             limit 1))
+             limit 1),
+           $11::jsonb)
          returning *`,
         [
           projectId,
@@ -412,8 +414,9 @@ export async function registerProjectKnowledgeFile(
             : unreadableUploadSummary(body.mimeType, extraction.extractedText),
           body.sourceSurface,
           userId,
-          sealedKey,
+          sealed.key,
           extraction.extractedText,
+          JSON.stringify(sealed.targets),
         ],
       );
       if (!row) throw new Error('No row returned');

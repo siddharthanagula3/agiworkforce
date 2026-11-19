@@ -193,7 +193,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<FolderGit2 size={14} aria-hidden />}
       title="Shared projects"
-      description="Share a project with the people you invite, or with everyone in the workspace. Members with access read its instructions and knowledge files; give someone Can edit and they can also change its name, instructions, appearance and sources. Archiving and deleting stay with the owner, and conversations stay private to each member."
+      description="Members with access read its instructions and files; Can edit lets them change it. Chats stay private."
     >
       {canShareProjects && ownProjects.isError ? (
         <LoadError
@@ -337,7 +337,7 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<FileCode2 size={14} aria-hidden />}
       title="Shared artifacts"
-      description="An artifact shared here opens for every member without a public link. Members can read and download it; only the publisher or a workspace sharing manager can withdraw it."
+      description="Every member can open it without a public link. Only the publisher or a sharing manager can withdraw it."
     >
       {artifacts.length === 0 ? (
         <Empty>
@@ -438,7 +438,7 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<MessagesSquare size={14} aria-hidden />}
       title="Shared conversations"
-      description="A conversation shared here opens for every member without a public link. It is a read-only snapshot that still expires on its own clock, and only the person who shared it or a workspace sharing manager can withdraw it."
+      description="A read-only snapshot every member can open. It still expires; only the sharer or a sharing manager can withdraw it."
     >
       {conversations.length === 0 ? (
         <Empty>
@@ -553,7 +553,7 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<Plug size={14} aria-hidden />}
       title="Shared connectors"
-      description="Connect a remote MCP server once and every member can use it in chat. Members can invoke it but never see its stored credential, and they cannot change or remove it."
+      description="Every member can use it in chat but cannot see its credential, change or remove it."
     >
       {overview.canManageSharing && ownConnectors.isError ? (
         <LoadError
@@ -702,8 +702,7 @@ export function OrganizationSharingSection() {
               marginTop: 'var(--space-1)',
             }}
           >
-            You are not in an organization yet. Create one from the Team section to share projects,
-            conversations, artifacts and connectors with your members.
+            Create an organization in Team to share projects, chats, artifacts and connectors.
           </div>
         </div>
       </section>
@@ -719,7 +718,7 @@ export function OrganizationSharingSection() {
           overview.canManageSharing
             ? 'You can change what the organization shares.'
             : overview.canShareOwnProjects
-              ? 'You can share your own projects and choose who can open them. An owner or admin manages everything else that is shared.'
+              ? 'You can share your own projects. An owner or admin manages the rest.'
               : 'Only an owner or admin can change what is shared.'
         }
       >

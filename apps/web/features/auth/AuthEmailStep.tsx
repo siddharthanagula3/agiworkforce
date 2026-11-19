@@ -9,6 +9,7 @@ import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
 
 import type { SignupAttemptChoices } from '@/app/signup/signupAttemptMarkers';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
+import { useEmbeddedAccountPage } from '@shared/components/layout/EmbeddedPage';
 
 import { AuthAgeField } from './AuthAgeField';
 import { useAuthCopy } from './authCopy';
@@ -109,6 +110,7 @@ export function AuthEmailStep({
 }) {
   const copy = useAuthCopy();
   const scene = useAuthSceneBridge();
+  const embeddedAccountPage = useEmbeddedAccountPage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordMode, setPasswordMode] = useState(mode);
@@ -145,7 +147,7 @@ export function AuthEmailStep({
   const passkeyLastUsed = lastUsed?.kind === 'method' && lastUsed.method === 'passkey';
   const lastUsedLabel = copy.text('flow.lastUsed', 'Last used');
   const fieldMessage =
-    fieldError && switchOffered ? (
+    fieldError && switchOffered && !embeddedAccountPage ? (
       <>
         {fieldError}{' '}
         <Link href={switchUrl} className={AUTH_LINK_CLASS}>

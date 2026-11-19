@@ -139,7 +139,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     }
 
     const memberRows = await principal.db.query<{ organization_id: string }>(
-      "select organization_id from organization_members where user_id = $1 and role in ('owner', 'admin')",
+      "select organization_id from organization_members where user_id = $1 and role in ('owner', 'admin') and status = 'active'",
       [principal.userId],
     );
 

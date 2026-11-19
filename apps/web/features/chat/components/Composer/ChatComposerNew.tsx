@@ -43,6 +43,7 @@ import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
 import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
+import { PHONE_TOUCH_HIT_AREA_CLASS, WORK_MODE_SEGMENT_HIT_AREA_CLASS } from './touchHitArea';
 import { WorkUsageCard } from '../WorkUsageCard';
 import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
 import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
@@ -165,7 +166,6 @@ import {
   getBillingPlanPricing,
   getModels,
   getPlanMaxAttachmentBytes,
-  getPlanMaxAttachmentsPerMessage,
   isExecutableVideoModel,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -222,12 +222,12 @@ import { useClipboardDraftLifetime } from './use-clipboard-draft-lifetime';
 import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
+import { composerAttachmentLimits } from '@features/chat/lib/composer-attachment-limits';
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
   MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
-  MAX_CHAT_ATTACHMENT_BYTES,
   chatAttachmentSizeLabel,
   cloudAgentRunSteerProgressId,
   isCloudAgentRunSteerProgressId,
@@ -909,9 +909,11 @@ const ChatComposerNewComponent = ({
   const editingQueuedIdRef = useRef<string | null>(null);
   const wasLoadingRef = useRef(false);
   const attachmentPlanTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
-  const attachmentsPerMessage = getPlanMaxAttachmentsPerMessage(attachmentPlanTier);
+  const publishedAttachmentLimits = useBillingStore((s) => s.attachmentLimits);
+  const attachmentLimits = composerAttachmentLimits(publishedAttachmentLimits, attachmentPlanTier);
+  const attachmentsPerMessage = attachmentLimits.maxFilesPerMessage;
   const attachLimitNote = `Up to ${attachmentsPerMessage} files, ${chatAttachmentSizeLabel(
-    Math.min(MAX_CHAT_ATTACHMENT_BYTES, getPlanMaxAttachmentBytes(attachmentPlanTier)),
+    attachmentLimits.maxFileBytes,
   )} each`;
   const deferredSendRef = useRef(false);
   const {
@@ -938,6 +940,9 @@ const ChatComposerNewComponent = ({
     clearAll: clearAttachmentDraft,
   } = useAttachments({
     maxFiles: attachmentsPerMessage,
+    maxFileSize: attachmentLimits.maxFileBytes,
+    maxImageSize: attachmentLimits.maxImageBytes,
+    maxTotalBytes: attachmentLimits.maxMessageBytes,
     planFileLimitBytes: getPlanMaxAttachmentBytes(attachmentPlanTier),
     planLabel: getBillingPlanPricing(attachmentPlanTier).label,
     onError: (message) => setLocalNotice(message),
@@ -4868,6 +4873,7 @@ const ChatComposerNewComponent = ({
   // keyboard on a browser that does not resize the layout viewport for it.
   return (
     <div
+      data-testid="chat-composer"
       className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-[var(--z-content-sticky)] bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none"
       style={
         softKeyboardInset > 0 ? { transform: `translateY(-${softKeyboardInset}px)` } : undefined
@@ -5950,6 +5956,7 @@ const ChatComposerNewComponent = ({
                     disabled={composerDisabled}
                     className={cn(
                       'relative flex h-8 min-h-0 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9',
+                      PHONE_TOUCH_HIT_AREA_CLASS,
                       hasOverflowActive
                         ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -6180,7 +6187,8 @@ const ChatComposerNewComponent = ({
                             defaultValue: WORK_MODE_TITLES[mode],
                           })}
                           className={cn(
-                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors @[44rem]:h-7 @[44rem]:w-auto @[44rem]:px-2.5',
+                            'relative flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors @[44rem]:h-7 @[44rem]:w-auto @[44rem]:px-2.5',
+                            WORK_MODE_SEGMENT_HIT_AREA_CLASS,
                             workMode === mode
                               ? 'bg-background text-foreground shadow-e1'
                               : 'text-muted-foreground hover:text-foreground',

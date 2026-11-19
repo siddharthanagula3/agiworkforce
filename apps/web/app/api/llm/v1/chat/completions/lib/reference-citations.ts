@@ -1,7 +1,6 @@
 import { normalizeStructuredPromptSection } from '@agiworkforce/provider-protocol';
-import type { ManagedMemoryCitation } from '@agiworkforce/types';
+import type { ManagedMemoryCitation, PastChatCitation } from '@agiworkforce/types';
 
-import type { PastChatCitation } from '@/lib/past-chat-citation';
 import { firstManagedMemoryContentOffset } from '@/lib/services/managed-memory-context-service';
 import { pastChatExcerptOffsets } from '@/lib/services/past-chat-context-service';
 

@@ -1,7 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert, ScrollView, StyleSheet } from 'react-native';
-import { act, fireEvent, render, within } from '@testing-library/react-native';
+import { ScrollView, StyleSheet } from 'react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
+import {
+  actionMenuLabels,
+  actionMenuMessage,
+  actionMenuTitle,
+  chooseActionMenuItem,
+  selectedActionMenuLabels,
+} from '@/test-utils/actionMenu';
 
 let mockIsDark = false;
 
@@ -10,8 +17,7 @@ jest.mock('expo-router', () => ({
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    React.useEffect(() => cb(), []);
+    React.useEffect(() => cb(), [cb]);
   },
   useRouter: () => ({ push: jest.fn() }),
 }));
@@ -97,7 +103,7 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
 }));
 
 import { LibraryScreen } from '../src/features/library';
-import { lightColors } from '../src/ui/theme/tokens';
+import { lightColors, spacing } from '../src/ui/theme/tokens';
 
 function pageBackground(screen: ReturnType<typeof render>) {
   const tree = screen.toJSON();
@@ -125,9 +131,20 @@ describe('Library filter chips', () => {
     expect(row.props.contentContainerStyle).toMatchObject({ paddingHorizontal: 16, gap: 8 });
 
     const chips = within(screen.getByTestId('library-filter-row'));
-    for (const label of ['All', 'Images', 'Documents', 'Artifacts']) {
+    for (const label of ['All', 'Images', 'Documents', 'Artifacts', 'Code', 'Charts', 'Research']) {
       expect(chips.getByLabelText(`${label} filter`)).toBeTruthy();
     }
+  });
+
+  it('keeps the chip row at full height with theme spacing above and below', () => {
+    const screen = render(<LibraryScreen />);
+
+    const row = screen.UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
+    expect(row?.props.style).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+    expect(row?.props.contentContainerStyle).toMatchObject({
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.lg,
+    });
   });
 
   it('keeps the last chip selectable', () => {
@@ -139,40 +156,60 @@ describe('Library filter chips', () => {
     expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(false);
   });
 
+  it.each([
+    ['images', 'Images filter'],
+    ['documents', 'Documents filter'],
+    ['artifacts', 'Artifacts filter'],
+    ['code', 'Code filter'],
+  ])('opens on the %s chip when the route asks for it', (initialFilter, label) => {
+    const screen = render(<LibraryScreen initialFilter={initialFilter} />);
+
+    expect(screen.getByLabelText(label).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(false);
+  });
+
+  it('applies a changed route filter while the screen stays mounted', () => {
+    const screen = render(<LibraryScreen />);
+    expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(true);
+
+    screen.rerender(<LibraryScreen initialFilter="images" />);
+
+    expect(screen.getByLabelText('Images filter').props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(false);
+  });
+
+  it('returns to All when the route filter is removed while mounted', () => {
+    const screen = render(<LibraryScreen initialFilter="images" />);
+
+    screen.rerender(<LibraryScreen />);
+
+    expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(true);
+  });
+
+  it.each([undefined, '', 'everything', 'IMAGES'])(
+    'opens on All when the route filter is %p',
+    (initialFilter) => {
+      const screen = render(<LibraryScreen initialFilter={initialFilter} />);
+
+      expect(screen.getByLabelText('All filter').props.accessibilityState.selected).toBe(true);
+    },
+  );
+
   it('opens the saved-files sort options from the Library header', () => {
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<LibraryScreen />);
 
     fireEvent.press(screen.getByLabelText('Library options'));
-    let options = alert.mock.calls.at(-1)?.[2] as Array<{
-      text: string;
-      onPress?: () => void;
-    }>;
-    act(() => options.find((option) => option.text === 'Sort saved files')?.onPress?.());
-    expect(alert).toHaveBeenCalledWith(
-      'Sort saved files',
-      'Artifacts keep their own order.',
-      expect.arrayContaining([
-        expect.objectContaining({ text: '✓ Recently added' }),
-        expect.objectContaining({ text: 'Oldest first' }),
-        expect.objectContaining({ text: 'Type' }),
-      ]),
-    );
-    options = alert.mock.calls.at(-1)?.[2] as Array<{
-      text: string;
-      onPress?: () => void;
-    }>;
-    act(() => options.find((option) => option.text === 'Name')?.onPress?.());
+    expect(actionMenuTitle()).toBe('Library');
+    expect(actionMenuMessage()).toBeNull();
+    chooseActionMenuItem('Sort saved files');
+    expect(actionMenuTitle()).toBe('Sort saved files');
+    expect(actionMenuMessage()).toBe('Artifacts keep their own order.');
+    expect(actionMenuLabels()).toEqual(['Recently added', 'Oldest first', 'Type', 'Name', 'Size']);
+    expect(selectedActionMenuLabels()).toEqual(['Recently added']);
+    chooseActionMenuItem('Name');
     fireEvent.press(screen.getByLabelText('Library options'));
-    options = alert.mock.calls.at(-1)?.[2] as Array<{
-      text: string;
-      onPress?: () => void;
-    }>;
-    act(() => options.find((option) => option.text === 'Sort saved files')?.onPress?.());
-    expect(alert.mock.calls.at(-1)?.[2]).toEqual(
-      expect.arrayContaining([expect.objectContaining({ text: '✓ Name' })]),
-    );
-    alert.mockRestore();
+    chooseActionMenuItem('Sort saved files');
+    expect(selectedActionMenuLabels()).toEqual(['Name']);
   });
 
   it.each([

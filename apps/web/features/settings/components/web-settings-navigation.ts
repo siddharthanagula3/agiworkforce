@@ -108,6 +108,19 @@ export const HOSTED_SETTINGS_NAV_FIELDS: Partial<Record<SettingsNavKey, Settings
     { label: 'Allowed apps', keywords: ['app permissions'] },
     { label: 'Refused apps', keywords: ['denied apps', 'block app', 'add app'] },
   ],
+  'browser-pane': [
+    { label: 'Allowed sites', keywords: ['site permissions'] },
+    { label: 'Blocked sites', keywords: ['block site'] },
+    { label: 'Clear browsing data', keywords: ['cookies', 'sign out of sites'] },
+  ],
+  'local-mcp': [
+    { label: 'Local MCP servers', keywords: ['add mcp server', 'mcp config', 'server logs'] },
+  ],
+  storage: [
+    { label: 'Web cache', keywords: ['clear cache'] },
+    { label: 'Old logs', keywords: ['delete logs'] },
+    { label: 'Temporary command files', keywords: ['scratch', 'temp files'] },
+  ],
 };
 
 function withFields(

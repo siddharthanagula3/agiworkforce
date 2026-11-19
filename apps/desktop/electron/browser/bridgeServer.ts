@@ -60,6 +60,7 @@ const CONNECTION_IDLE_MS = 40_000;
 
 const NATIVE_CONNECT_MESSAGE = 'connect';
 const NATIVE_PING_MESSAGE = 'ping';
+const NATIVE_PAIRING_REJECTED_CODE = 'pairing-rejected';
 const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
@@ -107,7 +108,8 @@ export interface BridgeDependencies {
 let server: Server | null = null;
 let listeningPort = 0;
 let deps: BridgeDependencies | null = null;
-let lastSeenMs = 0;
+let lastPollMs = 0;
+let idlePublishTimer: NodeJS.Timeout | null = null;
 
 const pendingPairRequests = new Map<string, PendingPairRequest>();
 const queuedCommands: BrowserCommandRequest[] = [];
@@ -194,7 +196,7 @@ export function pairingState(): BrowserPairingState {
     extensionId: pairing?.extensionId ?? null,
     fingerprint: pairing?.fingerprint ?? null,
     pairedAtMs: pairing?.pairedAtMs ?? null,
-    connected: pairing !== null && Date.now() - lastSeenMs < CONNECTION_IDLE_MS,
+    connected: pairing !== null && browserIsPolling(),
     hostInstalled: manifests.length > 0,
     installedManifestPaths: manifests,
     pendingRequest: currentPrompt(),
@@ -204,6 +206,33 @@ export function pairingState(): BrowserPairingState {
 
 function publishState(): void {
   deps?.onStateChanged(pairingState());
+}
+
+/**
+ * Connected means the paired browser is asking for work, not merely that its
+ * native host answered: a ping from a browser whose command pickup has stopped
+ * would otherwise show a browser that never runs what is queued for it.
+ */
+function browserIsPolling(): boolean {
+  return pollWaiters.length > 0 || Date.now() - lastPollMs < CONNECTION_IDLE_MS;
+}
+
+function forgetPolling(): void {
+  lastPollMs = 0;
+  if (idlePublishTimer) clearTimeout(idlePublishTimer);
+  idlePublishTimer = null;
+}
+
+function notePoll(): void {
+  const wasConnected = browserIsPolling();
+  lastPollMs = Date.now();
+  if (!wasConnected) publishState();
+  if (idlePublishTimer) clearTimeout(idlePublishTimer);
+  idlePublishTimer = setTimeout(() => {
+    idlePublishTimer = null;
+    publishState();
+  }, CONNECTION_IDLE_MS + BROWSER_COMMAND_POLL_WINDOW_MS);
+  idlePublishTimer.unref?.();
 }
 
 const EXTENSION_ORIGIN = /^chrome-extension:\/\/([a-p]{32})$/u;
@@ -622,7 +651,18 @@ async function handleNativeMessageRoute(
   if (!pairing || !extensionId || extensionId !== pairing.extensionId) {
     sendJson(response, 200, {
       success: false,
+      code: NATIVE_PAIRING_REJECTED_CODE,
       error: `This browser is not paired with ${PRODUCT_NAMES.desktop}. Pair it from Settings, Capabilities.`,
+    });
+    return;
+  }
+  // Every Chrome profile with the extension installed shares its ID and can
+  // launch the host, so the ID alone does not say which profile was paired.
+  if (!tokenMatches(body['pairToken'], pairing.pairToken)) {
+    sendJson(response, 200, {
+      success: false,
+      code: NATIVE_PAIRING_REJECTED_CODE,
+      error: `This browser profile is not the one paired with ${PRODUCT_NAMES.desktop}. Update the extension, then pair this profile again from the extension's settings.`,
     });
     return;
   }
@@ -633,15 +673,13 @@ async function handleNativeMessageRoute(
     return;
   }
 
-  const wasConnected = Date.now() - lastSeenMs < CONNECTION_IDLE_MS;
-  lastSeenMs = Date.now();
-  if (!wasConnected) publishState();
-
   const type = (message as Record<string, unknown>)['type'];
+  const commandTraffic =
+    type === NATIVE_BROWSER_POLL_MESSAGE ||
+    type === NATIVE_BROWSER_RESULT_MESSAGE ||
+    type === NATIVE_BROWSER_COMMAND_WATCH_MESSAGE;
   if (
-    (type === NATIVE_BROWSER_POLL_MESSAGE ||
-      type === NATIVE_BROWSER_RESULT_MESSAGE ||
-      type === NATIVE_BROWSER_COMMAND_WATCH_MESSAGE) &&
+    commandTraffic &&
     (message as Record<string, unknown>)['version'] !== BROWSER_COMMAND_PROTOCOL_VERSION
   ) {
     sendJson(response, 200, {
@@ -651,6 +689,7 @@ async function handleNativeMessageRoute(
     });
     return;
   }
+  if (commandTraffic) notePoll();
   if (type === NATIVE_BROWSER_COMMAND_WATCH_MESSAGE) {
     handleCommandWatch(
       response,
@@ -998,6 +1037,7 @@ export async function stopBrowserBridge(): Promise<void> {
   }
   pendingResults.clear();
   queuedCommands.length = 0;
+  forgetPolling();
   const instance = server;
   server = null;
   if (!instance) return;
@@ -1094,7 +1134,7 @@ export function removeHostAndPairing(): void {
   queuedCommands.length = 0;
   uninstallNativeHost(extraDirectories(), deps?.home);
   clearPairing();
-  lastSeenMs = 0;
+  forgetPolling();
   publishState();
 }
 
@@ -1143,7 +1183,7 @@ export function resetBridgeForTests(): void {
   queuedCommands.length = 0;
   pollWaiters.length = 0;
   pendingResults.clear();
-  lastSeenMs = 0;
+  forgetPolling();
   listeningPort = 0;
   deps = null;
   server = null;

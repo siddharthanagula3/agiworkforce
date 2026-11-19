@@ -39,6 +39,8 @@ jest.mock('lucide-react-native', () => {
     AlertTriangle: icon,
     ArrowLeft: icon,
     Bell: icon,
+    CalendarClock: icon,
+    Sparkles: icon,
     BellOff: icon,
     Bot: icon,
     CheckSquare: icon,
@@ -46,9 +48,11 @@ jest.mock('lucide-react-native', () => {
     ChevronRight: icon,
     Clock: icon,
     CloudOff: icon,
+    Gauge: icon,
     Info: icon,
     Mail: icon,
     Moon: icon,
+    Sunrise: icon,
     Vibrate: icon,
     X: icon,
   };
@@ -68,8 +72,7 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 
 const AGENT_PUSH_SWITCH_LABEL = 'Agent Run Push';
-const AGENT_PUSH_SYNCED_COPY =
-  'Applied by the server before it sends, on every device on this account.';
+const AGENT_PUSH_SYNCED_COPY = 'Applies on every device on this account.';
 
 describe('agent activity push preference', () => {
   beforeEach(() => {

@@ -10,7 +10,12 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { releaseTombstonedProject } from '@/lib/server/project-deletion';
+import {
+  releaseDeletedProjectContents,
+  ProjectContentHeldError,
+  assertProjectContentUnheld,
+} from '@/lib/server/project-deletion';
+import { refuseHeldDeletion, projectContentHoldPredicate } from '@/lib/services/legal-hold-gate';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
@@ -103,14 +108,20 @@ async function handlePost(request: NextRequest) {
 
   const applied: Array<{ id: string; server_version: string }> = [];
   const conflicts: Array<{ id: string; current: ProjectDelta | null }> = [];
+  const projectHeld = projectContentHoldPredicate('project', {
+    project: 'existing.id',
+    nextParamIndex: 5,
+  });
+  const projectUnheld = { ...projectHeld, sql: `not ${projectHeld.sql}` };
   try {
-    const rows = await db.query<{
-      kind: 'applied' | 'conflict';
-      id: string;
-      server_version: string | null;
-      current: ProjectDelta | null;
-    }>(
-      `
+    const rows = await db.transaction(async (tx) => {
+      const rows = await tx.query<{
+        kind: 'applied' | 'conflict';
+        id: string;
+        server_version: string | null;
+        current: ProjectDelta | null;
+      }>(
+        `
         with input as materialized (
           select (item ->> 'id')::uuid as id,
                  item ->> 'name' as name,
@@ -120,6 +131,7 @@ async function handlePost(request: NextRequest) {
                  coalesce((item ->> 'isArchived')::boolean, false) as is_archived,
                  case when item ? 'metadata' then item -> 'metadata' else 'null'::jsonb end
                    as metadata,
+                 coalesce((item ->> 'usesGlobalMemory')::boolean, true) as uses_global_memory,
                  (item ->> 'baseVersion')::bigint as base_version,
                  nullif(item ->> 'deletedAt', '') is not null as should_delete
             from jsonb_array_elements($2::jsonb) as source(item)
@@ -145,14 +157,16 @@ async function handlePost(request: NextRequest) {
              and existing.user_id = $1
              and existing.organization_id is not distinct from $4::uuid
              and existing.server_version = incoming.base_version
+             and (not incoming.should_delete or ${projectUnheld.sql})
           returning existing.id, existing.server_version,
                     incoming.should_delete as tombstoned
         ), inserted as (
           insert into user_projects
             (id, user_id, organization_id, name, description, instructions, color, is_archived, metadata,
-             created_at, updated_at, deleted_at)
+             uses_global_memory, created_at, updated_at, deleted_at)
           select incoming.id, $1, $4, incoming.name, incoming.description, incoming.instructions,
-                 incoming.color, incoming.is_archived, incoming.metadata, now(), now(),
+                 incoming.color, incoming.is_archived, incoming.metadata,
+                 incoming.uses_global_memory, now(), now(),
                  case when incoming.should_delete then now() else null end
             from input as incoming
            where incoming.base_version = 0
@@ -166,7 +180,7 @@ async function handlePost(request: NextRequest) {
           select public.assert_user_resource_limit(
                  'projects',
                  $1,
-                   case when dependency.admitted_count > 0 then $3 else null end
+                   case when dependency.admitted_count > 0 then $3::integer else null end
                  )
             from (
               select (select count(*) from inserted)
@@ -213,8 +227,23 @@ async function handlePost(request: NextRequest) {
           from conflict_rows
           cross join quota_guard
       `,
-      [userId, JSON.stringify(projects), projectLimit, organizationId],
-    );
+        [userId, JSON.stringify(projects), projectLimit, organizationId, ...projectUnheld.params],
+      );
+      const tombstonedIds = new Set(
+        projects.filter((project) => Boolean(project.deletedAt)).map((project) => project.id),
+      );
+      for (const id of tombstonedIds)
+        await assertProjectContentUnheld(tx, { projectId: id, userId, organizationId });
+      for (const row of rows) {
+        if (row.kind === 'applied' && row.server_version !== null) {
+          if (tombstonedIds.has(row.id))
+            await releaseDeletedProjectContents(tx, { projectId: row.id, userId, organizationId });
+        } else if (row.kind !== 'conflict') {
+          throw new Error('Projects sync database returned an invalid batch result');
+        }
+      }
+      return rows;
+    });
 
     for (const row of rows) {
       if (row.kind === 'applied' && row.server_version !== null) {
@@ -226,27 +255,20 @@ async function handlePost(request: NextRequest) {
       }
     }
 
-    const tombstonedIds = new Set(
-      projects.filter((project) => Boolean(project.deletedAt)).map((project) => project.id),
-    );
-    for (const { id } of applied) {
-      if (!tombstonedIds.has(id)) continue;
-      try {
-        await releaseTombstonedProject(db, { projectId: id, userId, organizationId });
-      } catch (error) {
-        logger.error(
-          { error, projectId: id, userId },
-          'Project deleted through sync, but its chats and sources were not released',
-        );
-      }
-    }
-
     const conflictRows = conflicts.flatMap((conflict) =>
       conflict.current ? [conflict.current] : [],
     );
     const cursor = maxServerVersion('0', applied, conflictRows);
     return NextResponse.json({ applied, conflicts, cursor });
   } catch (error) {
+    if (error instanceof ProjectContentHeldError) {
+      return refuseHeldDeletion({
+        resourceType: error.resourceType,
+        resourceId: error.resourceId,
+        userId,
+        organizationId,
+      });
+    }
     if (isUserResourceLimitError(error)) {
       throw createError.validation(getProjectLimitErrorMessage(planTier));
     }

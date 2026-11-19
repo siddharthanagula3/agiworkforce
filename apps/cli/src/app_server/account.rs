@@ -6,6 +6,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -106,6 +107,13 @@ fn forget_account_caches() {
     tier_cache::invalidate_tier_cache();
     clear_account_cache();
     crate::claude_parity::connectors::forget_local_tool_policy();
+}
+
+fn forget_account_on_this_device() {
+    forget_account_caches();
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        crate::cloud::forget_account_data(&config_dir);
+    }
 }
 
 /// The managed credential this machine holds, with its expiry in epoch
@@ -290,12 +298,13 @@ fn install_device_grant(store: &mut AuthStore, entry: AuthEntry) {
 }
 
 pub fn save_device_grant(entry: AuthEntry) -> Result<()> {
-    AuthStore::transaction_with_commit(
-        |store| {
+    AuthStore::transaction_replacing_unreadable(
+        |store, unreadable| {
+            forget_unreadable_managed(unreadable);
             install_device_grant(store, entry);
             Ok(())
         },
-        |_| forget_account_caches(),
+        |_| forget_account_on_this_device(),
     )
 }
 
@@ -303,6 +312,14 @@ fn forget_managed(store: &mut AuthStore) {
     for key in MANAGED_AUTH_KEYS {
         store.entries.remove(key);
     }
+}
+
+fn forget_unreadable_managed(unreadable: &mut BTreeSet<String>) -> bool {
+    let mut forgot = false;
+    for key in MANAGED_AUTH_KEYS {
+        forgot |= unreadable.remove(key);
+    }
+    forgot
 }
 
 const RENEW_WITHIN_MS: i64 = 24 * 60 * 60 * 1000;
@@ -590,7 +607,7 @@ pub fn forget_refused_session(rejected_access: &str) -> Result<()> {
         |store| Ok(forget_access(store, rejected_access)),
         |changed| {
             if *changed {
-                forget_account_caches();
+                forget_account_on_this_device();
             }
         },
     )
@@ -632,19 +649,20 @@ fn holds_managed_grant(store: &AuthStore) -> bool {
 }
 
 pub async fn sign_out_of_account() -> Result<CliSignOut> {
-    let (base, entries, held) = AuthStore::transaction_with_commit(
-        |store| {
+    let (base, entries, held, unread) = AuthStore::transaction_replacing_unreadable(
+        |store, unreadable| {
             let base = device_auth_base();
             let entries = store.entries.clone();
             let held = holds_managed_grant(store);
+            let unread = forget_unreadable_managed(unreadable);
             forget_managed(store);
-            Ok((base, entries, held))
+            Ok((base, entries, held, unread))
         },
-        |_| forget_account_caches(),
+        |_| forget_account_on_this_device(),
     )?;
-    let revoked = revoke_snapshot(&base, &entries).await;
+    let revoked = revoke_snapshot(&base, &entries).await && !unread;
     Ok(CliSignOut {
-        providers: usize::from(held),
+        providers: usize::from(held || unread),
         revoked,
     })
 }
@@ -674,21 +692,23 @@ fn forget_every_provider(store: &mut AuthStore) -> usize {
 // Remove locally before awaiting revocation, so a concurrent renewal cannot
 // restore the removed grant and a subsequent login is not removed afterward.
 pub async fn sign_out_of_every_provider() -> Result<CliSignOut> {
-    let (base, entries, providers) = AuthStore::transaction_with_commit(
-        |store| {
+    let (base, entries, providers, unread) = AuthStore::transaction_replacing_unreadable(
+        |store, unreadable| {
             let base = device_auth_base();
             let entries = store.entries.clone();
-            let providers = forget_every_provider(store);
-            Ok((base, entries, providers))
+            let unread = forget_unreadable_managed(unreadable);
+            let providers = forget_every_provider(store) + unreadable.len() + usize::from(unread);
+            unreadable.clear();
+            Ok((base, entries, providers, unread))
         },
-        |(_, _, providers)| {
+        |(_, _, providers, _)| {
             if *providers > 0 {
                 crate::onboarding::forget_setup();
             }
-            forget_account_caches();
+            forget_account_on_this_device();
         },
     )?;
-    let revoked = revoke_snapshot(&base, &entries).await;
+    let revoked = revoke_snapshot(&base, &entries).await && !unread;
     Ok(CliSignOut { providers, revoked })
 }
 
@@ -1040,5 +1060,24 @@ mod tests {
         forget_managed(&mut store);
         assert!(!holds_managed_grant(&store));
         assert!(store.entries.contains_key("anthropic"));
+    }
+
+    #[test]
+    fn signing_in_or_out_forgets_a_managed_grant_the_store_would_not_return() {
+        let mut unreadable = BTreeSet::from([
+            "agiworkforce".to_string(),
+            "managed_cloud".to_string(),
+            "openai".to_string(),
+        ]);
+        assert!(forget_unreadable_managed(&mut unreadable));
+        assert_eq!(
+            unreadable.into_iter().collect::<Vec<_>>(),
+            vec!["openai".to_string()],
+            "a provider key the store would not return stays for its own sign-in"
+        );
+
+        let mut none = BTreeSet::from(["openai".to_string()]);
+        assert!(!forget_unreadable_managed(&mut none));
+        assert_eq!(none.len(), 1);
     }
 }

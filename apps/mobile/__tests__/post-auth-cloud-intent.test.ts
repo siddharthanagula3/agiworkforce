@@ -8,6 +8,8 @@ import {
 } from '../src/features/model-picker/service';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { isAutoModeModelId } from '@agiworkforce/types';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import {
   applyPostAuthIntentAfterSignIn,
   completePendingPostAuthIntentForLoadedSession,
@@ -15,10 +17,12 @@ import {
 } from '../src/features/auth/actions/postAuthIntent';
 import {
   beginCloudPostAuthIntent,
+  beginCloudPostAuthIntentForChat,
   beginCloudPostAuthIntentForDestination,
   clearPostAuthIntent,
   CLOUD_CHAT_POST_AUTH_INTENT,
   consumePostAuthIntent,
+  consumePendingCloudChat,
   consumePostAuthDestination,
   parsePostAuthIntent,
   peekPostAuthIntent,
@@ -144,6 +148,31 @@ describe('post-auth Cloud intent', () => {
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
   });
 
+  it('returns to Cloud with the model the person last chose there, not the plan default', () => {
+    useWaitlistStore.getState().setCloudAccess(true);
+    useTierStore.getState().setTier('max');
+    const planDefault = getDefaultCloudModelIdForTier('max');
+    const remembered = requireMobileCloudModel(
+      (model) => !isAutoModeModelId(model.id) && model.id !== planDefault,
+      'non-default Mobile Cloud model',
+    ).id;
+    useModelStore.getState().setModel(remembered);
+    resetPostAuthDestinationToLocal();
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+
+    expect(applyPostAuthIntentAfterSignIn(CLOUD_CHAT_POST_AUTH_INTENT, 'max')).toBe(true);
+
+    expect(useModelStore.getState().selectedModel).toBe(remembered);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+  });
+
+  it('stays Local when Cloud is not unlocked for the account', () => {
+    expect(applyPostAuthIntentAfterSignIn(CLOUD_CHAT_POST_AUTH_INTENT, 'free')).toBe(false);
+
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+  });
+
   it('leaves a signed-out intent staged for the Clerk bridge', () => {
     beginCloudPostAuthIntent();
 
@@ -206,9 +235,14 @@ describe('NEW-mqa-05, every Cloud entry point stages the intent', () => {
     'src/features/support/SupportTicketsScreen.tsx',
     'src/features/support/SupportTicketScreen.tsx',
     'src/features/cloud-code/useCloudCodeAccess.ts',
-    'services/api.ts',
     'app/_layout.tsx',
   ];
+
+  it('leaves sign-in to the root layout instead of routing from the API client', () => {
+    const api = readFileSync(join(__dirname, '..', 'services', 'api.ts'), 'utf8');
+
+    expect(api).not.toMatch(/expo-router|\/\(auth\)\//);
+  });
 
   it.each(entryPoints)(
     'routes %s through beginCloudPostAuthIntent, not a bare login push',
@@ -222,4 +256,29 @@ describe('NEW-mqa-05, every Cloud entry point stages the intent', () => {
       expect(source).not.toMatch(/replace\(\s*'\/\(auth\)\/login'/);
     },
   );
+});
+
+describe('a Cloud chat link that needs sign-in', () => {
+  beforeEach(() => {
+    clearPostAuthIntent();
+  });
+
+  it('asks for Cloud chat sign-in and keeps the chat for exactly one return', () => {
+    expect(beginCloudPostAuthIntentForChat('chat-1')).toEqual(beginCloudPostAuthIntent());
+    beginCloudPostAuthIntentForChat('chat-1');
+
+    expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
+    expect(consumePendingCloudChat()).toBe('chat-1');
+    expect(consumePendingCloudChat()).toBeNull();
+  });
+
+  it('forgets the chat when sign-in is abandoned or another Cloud sign-in begins', () => {
+    beginCloudPostAuthIntentForChat('chat-1');
+    clearPostAuthIntent();
+    expect(consumePendingCloudChat()).toBeNull();
+
+    beginCloudPostAuthIntentForChat('chat-2');
+    beginCloudPostAuthIntent('cloud-schedules');
+    expect(consumePendingCloudChat()).toBeNull();
+  });
 });

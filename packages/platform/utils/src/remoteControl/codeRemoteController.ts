@@ -21,6 +21,7 @@ import {
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
   type RemoteCodeTestRun,
+  type RemoteCodeThinking,
   type RemoteCodeToolRecord,
   type DispatchTaskControlRequest,
   type DispatchTaskPendingStep,
@@ -29,10 +30,12 @@ import {
 import {
   isCredentialPath,
   type DeveloperApprovalAnswer,
+  type DeveloperApprovalQuestion,
   type DeveloperSessionEvent,
   type DeveloperSessionList,
   type DeveloperSessionTranscript,
   type DeveloperTurnRequest,
+  type DeveloperUserInputAnswer,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperSessionFileChange } from '@agiworkforce/types/protocol';
 import { logger, redactSecrets } from '../logger';
@@ -89,6 +92,8 @@ export interface CodeRemoteDependencies {
   startTurn: (request: DeveloperTurnRequest) => Promise<{ turnId: string }>;
   interruptTurn: (rootId: string, threadId: string, turnId: string) => Promise<boolean>;
   answerApproval: (answer: DeveloperApprovalAnswer) => Promise<RemoteApprovalOutcome>;
+  /** Absent on a host that cannot hand typed answers to the agent; the phone is then told to answer there. */
+  answerQuestion?: (answer: DeveloperUserInputAnswer) => Promise<void>;
   readDiff: (rootId: string, paths: readonly string[]) => Promise<string | null>;
   startSession: (rootId: string, title?: string) => Promise<{ threadId: string }>;
   defaultRoot: () => { id: string; name: string } | null;
@@ -113,7 +118,16 @@ interface DispatchTaskDetail {
 interface ToolInFlight {
   name: string;
   summary: string;
+  turnId: string;
 }
+
+/**
+ * The agent asks in two ways: a question it waits on for typed text, and an
+ * approval that carries choices. The phone sees one kind of question, and this
+ * records which way its answer has to travel back.
+ */
+type QuestionSource = 'input' | 'approval';
+const RUNNING_TASK_STATES: ReadonlySet<string> = new Set(['queued', 'running']);
 
 interface ThreadState {
   rootId: string;
@@ -123,6 +137,9 @@ interface ThreadState {
   partialResponse: string;
   pendingApprovals: Map<string, RemoteCodePendingApproval>;
   pendingQuestions: Map<string, RemoteCodePendingQuestion>;
+  questionSources: Map<string, QuestionSource>;
+  thinking: RemoteCodeThinking[];
+  runningTasks: number;
   tools: Map<string, ToolInFlight>;
   toolDiffs: Map<string, RemoteCodeDiff>;
   testRuns: RemoteCodeTestRun[];
@@ -135,8 +152,15 @@ function threadKey(rootId: string, threadId: string): string {
   return JSON.stringify([rootId, threadId]);
 }
 
+function awaitsChoice(state: ThreadState): boolean {
+  for (const source of state.questionSources.values()) {
+    if (source === 'approval') return true;
+  }
+  return false;
+}
+
 function statusFor(state: ThreadState | undefined, persisted: string): RemoteCodeSessionStatus {
-  if (state && state.pendingApprovals.size > 0) return 'awaiting_approval';
+  if (state && (state.pendingApprovals.size > 0 || awaitsChoice(state))) return 'awaiting_approval';
   if (state?.activeTurnId) return 'running';
   if (
     persisted === 'idle' ||
@@ -160,14 +184,57 @@ function pendingApprovalFrom(
   };
 }
 
-function pendingQuestionFrom(
-  event: Extract<DeveloperSessionEvent, { type: 'user-input-requested' }>,
+function typedQuestionFrom(
+  turnId: string,
+  asked: { requestId: string; question: string },
+  answerable: boolean,
 ): RemoteCodePendingQuestion {
   return {
-    turnId: event.turnId,
-    requestId: event.requestId,
-    question: clipRemoteText(event.question, REMOTE_CODE_LIMITS.messageLength).text,
+    turnId,
+    requestId: asked.requestId,
+    question: safeText(asked.question, REMOTE_CODE_LIMITS.messageLength),
+    ...(answerable ? { answerable: true } : {}),
   };
+}
+
+function choiceQuestionFrom(
+  turnId: string,
+  requestId: string,
+  asked: DeveloperApprovalQuestion,
+): RemoteCodePendingQuestion {
+  const options = asked.options
+    .slice(0, REMOTE_CODE_LIMITS.questionOptions)
+    .map((option) => safeText(option, REMOTE_CODE_LIMITS.questionOptionLength));
+  return {
+    turnId,
+    requestId,
+    question: safeText(asked.question, REMOTE_CODE_LIMITS.messageLength),
+    ...(options.length > 0 ? { options } : {}),
+    answerable: true,
+  };
+}
+
+function setQuestion(
+  state: ThreadState,
+  question: RemoteCodePendingQuestion,
+  source: QuestionSource,
+): void {
+  state.pendingQuestions.set(question.requestId, question);
+  state.questionSources.set(question.requestId, source);
+}
+
+function dropQuestion(state: ThreadState, requestId: string): boolean {
+  state.questionSources.delete(requestId);
+  return state.pendingQuestions.delete(requestId);
+}
+
+function clearQuestions(state: ThreadState): void {
+  state.pendingQuestions.clear();
+  state.questionSources.clear();
+}
+
+function validTurnId(value: string | undefined): string | undefined {
+  return value && value.length <= REMOTE_CODE_LIMITS.idLength ? value : undefined;
 }
 
 /**
@@ -176,7 +243,11 @@ function pendingQuestionFrom(
  * before or after any of them, so only effects that land the same either way
  * are reapplied: output is rebuilt only from a turn whose start is among them.
  */
-function reapplyEventsAfterSnapshot(state: ThreadState, events: DeveloperSessionEvent[]): void {
+function reapplyEventsAfterSnapshot(
+  state: ThreadState,
+  events: DeveloperSessionEvent[],
+  takesTypedAnswers: boolean,
+): void {
   let rebuiltTurn: string | null = null;
   for (const event of events) {
     switch (event.type) {
@@ -194,23 +265,32 @@ function reapplyEventsAfterSnapshot(state: ThreadState, events: DeveloperSession
         }
         break;
       case 'approval-requested':
-        state.pendingApprovals.set(event.requestId, pendingApprovalFrom(event));
+        if (event.question) {
+          setQuestion(
+            state,
+            choiceQuestionFrom(event.turnId, event.requestId, event.question),
+            'approval',
+          );
+        } else {
+          state.pendingApprovals.set(event.requestId, pendingApprovalFrom(event));
+        }
         break;
       case 'approval-answered':
         state.pendingApprovals.delete(event.requestId);
+        dropQuestion(state, event.requestId);
         break;
       case 'user-input-requested':
-        state.pendingQuestions.set(event.requestId, pendingQuestionFrom(event));
+        setQuestion(state, typedQuestionFrom(event.turnId, event, takesTypedAnswers), 'input');
         break;
       case 'user-input-answered':
-        state.pendingQuestions.delete(event.requestId);
+        dropQuestion(state, event.requestId);
         break;
       case 'turn-finished':
       case 'runtime-stopped':
         state.activeTurnId = null;
         state.partialResponse = '';
         state.pendingApprovals.clear();
-        state.pendingQuestions.clear();
+        clearQuestions(state);
         rebuiltTurn = null;
         break;
     }
@@ -328,6 +408,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   const dispatches = new Map<string, DispatchedTask>();
   const phoneStarts: number[] = [];
   const phoneThreads = new Set<string>();
+  const takesTypedAnswers = deps.answerQuestion !== undefined;
   let pairing = 0;
 
   function isCurrent(state: ThreadState): boolean {
@@ -350,6 +431,9 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         partialResponse: '',
         pendingApprovals: new Map(),
         pendingQuestions: new Map(),
+        questionSources: new Map(),
+        thinking: [],
+        runningTasks: 0,
         tools: new Map(),
         toolDiffs: new Map(),
         testRuns: [],
@@ -453,9 +537,16 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     const running = activity.activeTurn;
     state.activeTurnId = running?.turnId ?? null;
     state.partialResponse = running?.partialResponse ?? '';
+    const askedTurn = activity.transcript.activeTurn;
+    const choices = new Map(
+      (askedTurn?.approvals ?? []).flatMap((approval) =>
+        approval.question ? [[approval.requestId, approval.question] as const] : [],
+      ),
+    );
     state.pendingApprovals.clear();
     if (running) {
       for (const approval of running.pendingApprovals) {
+        if (choices.has(approval.requestId)) continue;
         state.pendingApprovals.set(approval.requestId, {
           turnId: running.turnId,
           requestId: approval.requestId,
@@ -467,18 +558,25 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       state.tools.clear();
       state.toolDiffs.clear();
     }
-    const askedTurn = activity.transcript.activeTurn;
-    state.pendingQuestions.clear();
+    clearQuestions(state);
     if (askedTurn) {
       for (const question of askedTurn.questions) {
-        state.pendingQuestions.set(question.requestId, {
-          turnId: askedTurn.turnId,
-          requestId: question.requestId,
-          question: clipRemoteText(question.question, REMOTE_CODE_LIMITS.messageLength).text,
-        });
+        setQuestion(
+          state,
+          typedQuestionFrom(askedTurn.turnId, question, takesTypedAnswers),
+          'input',
+        );
+      }
+      for (const [requestId, asked] of choices) {
+        setQuestion(state, choiceQuestionFrom(askedTurn.turnId, requestId, asked), 'approval');
       }
     }
-    reapplyEventsAfterSnapshot(state, arrived);
+    state.runningTasks = Math.min(
+      REMOTE_CODE_LIMITS.runningTasks,
+      (activity.transcript.childTasks ?? []).filter((task) => RUNNING_TASK_STATES.has(task.state))
+        .length,
+    );
+    reapplyEventsAfterSnapshot(state, arrived, takesTypedAnswers);
     const fileChanges: RemoteCodeFileChange[] = activity.fileChanges
       .flatMap((change) => (change.kind === 'deleted' ? [] : [{ ...change, kind: change.kind }]))
       .slice(-REMOTE_CODE_LIMITS.fileChanges)
@@ -500,10 +598,14 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       messages: activity.transcript.messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
         .slice(-REMOTE_CODE_LIMITS.transcriptMessages)
-        .map((message) => ({
-          role: message.role as 'user' | 'assistant',
-          text: safeText(message.text, REMOTE_CODE_LIMITS.messageLength),
-        })),
+        .map((message) => {
+          const turnId = validTurnId(message.turnId);
+          return {
+            role: message.role as 'user' | 'assistant',
+            text: safeText(message.text, REMOTE_CODE_LIMITS.messageLength),
+            ...(turnId ? { turnId } : {}),
+          };
+        }),
       pendingApprovals: [...state.pendingApprovals.values()].slice(
         -REMOTE_CODE_LIMITS.pendingApprovals,
       ),
@@ -513,6 +615,8 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       fileChanges,
       queuedGuidance: state.queuedGuidance,
       tools: state.toolHistory,
+      thinking: state.thinking,
+      runningTasks: state.runningTasks,
       syncedAt: iso(),
     };
     await deps.send(snapshot.action, { ...fitRemoteSnapshot(snapshot) });
@@ -582,11 +686,13 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       const index = message.index ?? position;
       if (message.role !== 'user' && message.role !== 'assistant') return [];
       if (request.before !== null && index >= request.before) return [];
+      const turnId = validTurnId(message.turnId);
       return [
         {
           role: message.role,
           text: safeText(message.text, REMOTE_CODE_LIMITS.historyMessageLength),
           index,
+          ...(turnId ? { turnId } : {}),
         } satisfies RemoteCodeIndexedMessage,
       ];
     });
@@ -645,7 +751,12 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       text,
     });
     state.activeTurnId ??= turnId;
-    await sendEvent(state, { type: 'guidance-delivered', turnId, queuedGuidance: [] });
+    await sendEvent(state, {
+      type: 'guidance-delivered',
+      turnId,
+      queuedGuidance: [],
+      text: safeText(text, REMOTE_CODE_LIMITS.historyMessageLength),
+    });
   }
 
   async function steer(
@@ -825,7 +936,14 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
    */
   async function answerApproval(
     state: ThreadState,
-    request: Extract<RemoteCodeRequest, { action: 'code.approval.respond' }>,
+    request: {
+      rootId: string;
+      threadId: string;
+      turnId: string;
+      approvalRequestId: string;
+      approved: boolean;
+      note?: string;
+    },
   ): Promise<void> {
     const requestId = request.approvalRequestId;
     const held = (status: 'waiting' | 'allowed' | 'refused', message: string) =>
@@ -843,6 +961,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         turnId: request.turnId,
         requestId,
         decision: request.approved ? 'approve_once' : 'deny',
+        ...(request.note ? { note: request.note } : {}),
       });
     } catch (error) {
       if (!(error instanceof RemoteCommandRefused)) throw error;
@@ -856,6 +975,39 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       .catch((error: unknown) => {
         logger.warn('[remote-control] the phone was not told how a held approval ended', error);
       });
+  }
+
+  /**
+   * A choice travels back as the approval it was asked through, so the
+   * computer's own rules on what a phone may allow still decide it. Typed text
+   * goes to the question the agent is waiting on.
+   */
+  async function answerQuestion(
+    state: ThreadState,
+    request: Extract<RemoteCodeRequest, { action: 'code.question.respond' }>,
+  ): Promise<void> {
+    const question = state.pendingQuestions.get(request.questionRequestId);
+    const source = state.questionSources.get(request.questionRequestId);
+    if (!question || !source) return;
+    if (source === 'approval') {
+      await answerApproval(state, {
+        rootId: request.rootId,
+        threadId: request.threadId,
+        turnId: question.turnId,
+        approvalRequestId: question.requestId,
+        approved: request.answer !== null,
+        ...(request.answer ? { note: request.answer } : {}),
+      });
+      return;
+    }
+    if (!deps.answerQuestion) return;
+    await deps.answerQuestion({
+      rootId: request.rootId,
+      threadId: request.threadId,
+      turnId: question.turnId,
+      requestId: question.requestId,
+      answer: request.answer,
+    });
   }
 
   async function handleRequest(request: RemoteCodeRequest): Promise<void> {
@@ -895,6 +1047,9 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         await answerApproval(state, request);
         return;
       }
+      case 'code.question.respond':
+        await answerQuestion(stateFor(request.rootId, request.threadId), request);
+        return;
     }
   }
 
@@ -918,6 +1073,15 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     return true;
   }
 
+  function recordThinking(state: ThreadState, turnId: string, delta: string): void {
+    const kept = state.thinking.find((entry) => entry.turnId === turnId);
+    const text = safeText((kept?.text ?? '') + delta, REMOTE_CODE_LIMITS.thinkingLength);
+    state.thinking = [
+      ...state.thinking.filter((entry) => entry.turnId !== turnId),
+      { turnId, text },
+    ].slice(-REMOTE_CODE_LIMITS.thinkingTurns);
+  }
+
   function recordToolFinished(
     state: ThreadState,
     event: Extract<DeveloperSessionEvent, { type: 'tool-finished' }>,
@@ -931,6 +1095,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       summary: safeText(started?.summary ?? event.name, REMOTE_CODE_LIMITS.messageLength),
       state: event.isError ? 'failed' : 'done',
       output,
+      turnId: event.turnId,
     };
     state.toolHistory = [
       ...state.toolHistory.filter((tool) => tool.toolCallId !== event.toolCallId),
@@ -970,7 +1135,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         for (const arrived of state.eventsDuringReads) arrived.push(event);
         state.activeTurnId = null;
         state.pendingApprovals.clear();
-        state.pendingQuestions.clear();
+        clearQuestions(state);
         state.toolHistory = settleTools(state.toolHistory);
         await sendEvent(state, { type: 'runtime-stopped', message: COPY.runtimeStopped });
       }
@@ -1005,8 +1170,20 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           delta: safeText(event.delta, REMOTE_CODE_LIMITS.deltaLength),
         });
         return;
+      case 'reasoning-delta':
+        recordThinking(state, event.turnId, event.delta);
+        await sendEvent(state, {
+          type: 'thinking-delta',
+          turnId: event.turnId,
+          delta: safeText(event.delta, REMOTE_CODE_LIMITS.deltaLength),
+        });
+        return;
       case 'tool-started':
-        state.tools.set(event.toolCallId, { name: event.name, summary: event.summary });
+        state.tools.set(event.toolCallId, {
+          name: event.name,
+          summary: event.summary,
+          turnId: event.turnId,
+        });
         state.toolHistory = [
           ...state.toolHistory.filter((tool) => tool.toolCallId !== event.toolCallId),
           {
@@ -1015,6 +1192,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
             summary: safeText(event.summary, REMOTE_CODE_LIMITS.messageLength),
             state: 'running' as const,
             output: '',
+            turnId: event.turnId,
           },
         ].slice(-REMOTE_CODE_LIMITS.tools);
         await sendEvent(state, {
@@ -1039,6 +1217,20 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         return;
       }
       case 'approval-requested': {
+        if (event.question) {
+          const question = choiceQuestionFrom(event.turnId, event.requestId, event.question);
+          setQuestion(state, question, 'approval');
+          await sendEvent(state, { type: 'user-input-requested', ...question });
+          const asked = dispatchFor(rootId, event.threadId);
+          if (asked) {
+            await sendTaskStatus(asked.requestId, 'awaiting_input', {
+              taskId: asked.threadId,
+              message: `Waiting for an answer: ${question.question}`,
+              pending: pendingSteps(state),
+            });
+          }
+          return;
+        }
         const approval = pendingApprovalFrom(event);
         state.pendingApprovals.set(event.requestId, approval);
         await sendEvent(state, { type: 'approval-requested', ...approval });
@@ -1053,13 +1245,13 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         return;
       }
       case 'user-input-requested': {
-        const question = pendingQuestionFrom(event);
-        state.pendingQuestions.set(event.requestId, question);
+        const question = typedQuestionFrom(event.turnId, event, takesTypedAnswers);
+        setQuestion(state, question, 'input');
         await sendEvent(state, { type: 'user-input-requested', ...question });
         return;
       }
       case 'user-input-answered':
-        state.pendingQuestions.delete(event.requestId);
+        dropQuestion(state, event.requestId);
         await sendEvent(state, { type: 'user-input-answered', requestId: event.requestId });
         return;
       case 'turn-diff': {
@@ -1072,14 +1264,18 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         return;
       }
       case 'approval-answered': {
-        state.pendingApprovals.delete(event.requestId);
-        await sendEvent(state, {
-          type: 'approval-answered',
-          requestId: event.requestId,
-          approved: event.approved,
-        });
+        if (dropQuestion(state, event.requestId)) {
+          await sendEvent(state, { type: 'user-input-answered', requestId: event.requestId });
+        } else {
+          state.pendingApprovals.delete(event.requestId);
+          await sendEvent(state, {
+            type: 'approval-answered',
+            requestId: event.requestId,
+            approved: event.approved,
+          });
+        }
         const task = dispatchFor(rootId, event.threadId);
-        if (task && state.pendingApprovals.size === 0) {
+        if (task && state.pendingApprovals.size === 0 && !awaitsChoice(state)) {
           await sendTaskStatus(task.requestId, 'running', { taskId: task.threadId });
         }
         return;
@@ -1088,7 +1284,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         state.activeTurnId = null;
         state.partialResponse = '';
         state.pendingApprovals.clear();
-        state.pendingQuestions.clear();
+        clearQuestions(state);
         state.tools.clear();
         state.toolHistory = settleTools(state.toolHistory);
         await sendEvent(state, {
@@ -1113,6 +1309,9 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     handleControl,
     handleSessionEvent,
     attachedThreadCount: () => [...threads.values()].filter((state) => state.attached).length,
+    /** Whether a phone has this session open, and so can answer what the agent asks in it. */
+    isAttached: (rootId: string, threadId: string) =>
+      threads.get(threadKey(rootId, threadId))?.attached === true,
     /**
      * The phone went away and may come back. Nothing is sent to it meanwhile,
      * and what it queued waits for it, since the one that returns is checked

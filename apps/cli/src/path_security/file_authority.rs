@@ -1,10 +1,18 @@
 use anyhow::{Context, Result};
 use cap_fs_ext::{MetadataExt, OpenOptionsFollowExt, OpenOptionsSyncExt};
 use cap_primitives::fs::{self as confined, DirOptions, FollowSymlinks, Metadata, OpenOptions};
+use sha2::{Digest, Sha256};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+mod download;
+mod editor;
+mod instructions;
+mod recovery;
+pub(crate) use download::DownloadDestination;
+#[cfg(unix)]
+pub(crate) use download::{ReviewedFile, ReviewedFileError};
 
 #[derive(Clone, Debug)]
 pub(crate) struct DirectoryAuthority {
@@ -22,6 +30,14 @@ pub(crate) struct WorkspaceFileAuthority {
 
 pub(crate) struct ReadFile {
     pub bytes: Vec<u8>,
+}
+impl ReadFile {
+    pub(crate) fn revision(&self) -> String {
+        revision_of(&self.bytes)
+    }
+}
+fn revision_of(bytes: &[u8]) -> String {
+    crate::hex::encode(&Sha256::digest(bytes))
 }
 
 pub(super) const STAGING_PREFIX: &str = ".checkpoint-";
@@ -127,7 +143,10 @@ impl DirectoryAuthority {
             nix::unistd::fsync(&directory)?;
         }
         #[cfg(not(unix))]
-        self.file.sync_all()?;
+        anyhow::ensure!(
+            Metadata::from_file(self.file.as_ref())?.is_dir(),
+            "the held directory handle is no longer a directory"
+        );
         Ok(())
     }
 
@@ -168,6 +187,22 @@ impl DirectoryAuthority {
     }
 
     pub(crate) fn read_file(&self, relative: &Path, limit: u64) -> Result<Option<ReadFile>> {
+        self.read_file_checked(relative, limit, None)
+    }
+    pub(crate) fn read_selected_file(
+        &self,
+        relative: &Path,
+        limit: u64,
+        selected_at_ms: i64,
+    ) -> Result<Option<ReadFile>> {
+        self.read_file_checked(relative, limit, Some(selected_at_ms))
+    }
+    fn read_file_checked(
+        &self,
+        relative: &Path,
+        limit: u64,
+        selected_at_ms: Option<i64>,
+    ) -> Result<Option<ReadFile>> {
         let (parent, leaf) = match self.parent(relative, false) {
             Ok(value) => value,
             Err(error) if is_not_found(&error) => return Ok(None),
@@ -185,15 +220,37 @@ impl DirectoryAuthority {
         if let Some(action) = self.hooks.before_leaf_open.lock().unwrap().take() {
             action();
         }
-        let file = confined::open(&parent, &leaf, &options)?;
+        let mut file = confined::open(&parent, &leaf, &options)?;
         let opened = Metadata::from_file(&file)?;
         validate_regular(&opened, limit)?;
         anyhow::ensure!(
             same_identity(&metadata, &opened),
             "the file changed while it was opened"
         );
+        if let Some(selected) = selected_at_ms {
+            let before_decision = opened
+                .modified()?
+                .into_std()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(true, |modified| modified.as_millis() <= selected as u128);
+            anyhow::ensure!(
+                selected >= 0 && before_decision,
+                "The selected file changed after the file picker closed. Select it again."
+            );
+        }
         let mut bytes = Vec::new();
-        file.take(limit.saturating_add(1)).read_to_end(&mut bytes)?;
+        Read::by_ref(&mut file)
+            .take(limit.saturating_add(1))
+            .read_to_end(&mut bytes)?;
+        {
+            let after = Metadata::from_file(&file)?;
+            validate_regular(&after, limit)?;
+            validate_named_file(&parent, &leaf, &opened)?;
+            anyhow::ensure!(
+                after.len() == opened.len() && after.modified()? == opened.modified()?,
+                "The file changed while its snapshot was read. Reload it before using it."
+            );
+        }
         anyhow::ensure!(
             bytes.len() as u64 <= limit,
             "the file exceeds the allowed copy size"
@@ -208,17 +265,51 @@ impl DirectoryAuthority {
         private: bool,
         limit: u64,
     ) -> Result<bool> {
+        self.replace_file_checked(relative, bytes, private, limit, None)
+    }
+
+    pub(crate) fn replace_file_if_revision(
+        &self,
+        relative: &Path,
+        bytes: &[u8],
+        limit: u64,
+        revision: &str,
+    ) -> Result<bool> {
+        self.replace_file_checked(relative, bytes, false, limit, Some(revision))
+    }
+    pub(crate) fn replace_private_file_if_revision(
+        &self,
+        relative: &Path,
+        bytes: &[u8],
+        limit: u64,
+        revision: &str,
+    ) -> Result<bool> {
+        self.replace_file_checked(relative, bytes, true, limit, Some(revision))
+    }
+
+    fn replace_file_checked(
+        &self,
+        relative: &Path,
+        bytes: &[u8],
+        private: bool,
+        limit: u64,
+        revision: Option<&str>,
+    ) -> Result<bool> {
         anyhow::ensure!(
             bytes.len() as u64 <= limit,
             "the file exceeds the allowed copy size"
         );
-        let (parent, leaf) = self.parent(relative, true)?;
+        let (parent, leaf) = self.parent(relative, revision.is_none())?;
         let existing = match confined::stat(&parent, &leaf, FollowSymlinks::No) {
             Ok(metadata) => Some(metadata),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
             Err(error) => return Err(error.into()),
         };
         let mut authorized_writer = None;
+        anyhow::ensure!(
+            revision.is_none() || existing.is_some(),
+            "The file was removed since it was opened"
+        );
         if let Some(metadata) = &existing {
             validate_regular(metadata, u64::MAX)?;
             if file_matches(&parent, &leaf, metadata, bytes, limit) {
@@ -231,13 +322,14 @@ impl DirectoryAuthority {
             let mut options = OpenOptions::new();
             options
                 .write(true)
+                .read(revision.is_some())
                 .follow(FollowSymlinks::No)
                 .nonblock(true);
             #[cfg(test)]
             if let Some(action) = self.hooks.before_write_open.lock().unwrap().take() {
                 action();
             }
-            let file = confined::open(&parent, &leaf, &options)?;
+            let mut file = confined::open(&parent, &leaf, &options)?;
             let opened = Metadata::from_file(&file)?;
             validate_regular(&opened, u64::MAX)?;
             anyhow::ensure!(
@@ -249,6 +341,15 @@ impl DirectoryAuthority {
                 action();
             }
             validate_named_file(&parent, &leaf, &opened)?;
+            if let Some(expected) = revision {
+                validate_regular(&opened, limit)?;
+                let mut current = Vec::new();
+                Read::by_ref(&mut file)
+                    .take(limit.saturating_add(1))
+                    .read_to_end(&mut current)?;
+                anyhow::ensure!(current.len() as u64 <= limit && revision_of(&current) == expected, "The file changed since it was opened. Reload it or keep your unsaved edits separately.");
+                file.seek(SeekFrom::Start(0))?;
+            }
             authorized_writer = Some(file);
         }
         if !private {
@@ -298,6 +399,7 @@ impl DirectoryAuthority {
         let mut staged = match confined::open(&stage_parent, stage_leaf, &options) {
             Ok(file) => file,
             Err(error) => {
+                drop(stage_parent);
                 let _ = confined::remove_dir(&parent, &temporary);
                 return Err(error.into());
             }
@@ -320,7 +422,18 @@ impl DirectoryAuthority {
             validate_regular(&staged_metadata, limit)?;
             validate_named_file(&stage_parent, stage_leaf, &staged_metadata)?;
             match &existing {
-                Some(metadata) => validate_named_file(&parent, &leaf, metadata)?,
+                Some(metadata) => {
+                    validate_named_file(&parent, &leaf, metadata)?;
+                    if let Some(expected) = revision {
+                        anyhow::ensure!(
+                            file_matches(&parent, &leaf, metadata, bytes, limit)
+                                || self
+                                    .read_file(relative, limit)?
+                                    .is_some_and(|current| current.revision() == expected),
+                            "The file changed while its replacement was prepared"
+                        );
+                    }
+                }
                 None => match confined::stat(&parent, &leaf, FollowSymlinks::No) {
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                     _ => anyhow::bail!("a new file appeared before publication"),
@@ -329,7 +442,9 @@ impl DirectoryAuthority {
             confined::rename(&stage_parent, stage_leaf, &parent, &leaf)?;
             Ok(true)
         })();
+        drop(staged);
         let _ = confined::remove_file(&stage_parent, stage_leaf);
+        drop(stage_parent);
         let _ = confined::remove_dir(&parent, &temporary);
         result
     }
@@ -378,15 +493,12 @@ impl WorkspaceFileAuthority {
     }
 
     pub(crate) fn identity(&self) -> Result<String> {
-        let held = Metadata::from_file(&self.root.file)?;
-        let named =
-            confined::open_ambient_dir(self.root.path(), cap_primitives::ambient_authority())?;
-        let current = Metadata::from_file(&named)?;
-        anyhow::ensure!(
-            same_identity(&held, &current),
-            "the granted workspace no longer owns its name"
-        );
-        Ok(format!("{}:{}", held.dev(), held.ino()))
+        self.root.identity()
+    }
+    #[cfg(unix)]
+    pub(crate) fn process_directory(&self) -> Result<File> {
+        self.identity()?;
+        Ok(self.root.file.try_clone()?)
     }
 
     pub(crate) fn additional(&self) -> Vec<PathBuf> {

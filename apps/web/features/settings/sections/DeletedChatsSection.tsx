@@ -56,9 +56,8 @@ export function DeletedChatsSection() {
         >
           Recently deleted
         </h1>
-        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Chats you deleted in the last 30 days, after which they are deleted for good. Restoring
-          one puts it back exactly where it was, including whether it was archived or pinned.
+        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
+          Deleted chats stay here for 30 days. Restoring puts one back where it was.
         </p>
       </div>
 

@@ -1,9 +1,9 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { useUser } from '@clerk/expo';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
@@ -11,13 +11,17 @@ import {
   Archive,
   Baby,
   Bell,
+  BookOpen,
   Brain,
+  Cake,
   CalendarDays,
   ChevronRight,
   CircleHelp,
+  Code2,
   CreditCard,
   Database,
   HardDrive,
+  Images,
   Info,
   Link2,
   LockKeyhole,
@@ -25,6 +29,7 @@ import {
   MessageCircleWarning,
   Mic,
   MonitorSmartphone,
+  MoonStar,
   Palette,
   Pencil,
   Shield,
@@ -42,22 +47,48 @@ import {
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
-import {
-  beginCloudPostAuthIntentForDestination,
-  type PostAuthDestination,
-} from '@/src/features/auth/services/postAuthIntent';
+import { readAgeGateRecord } from '@/src/features/auth/services/ageGate';
+import type { PostAuthDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
 import { planCheckOf } from '@/src/features/billing/planCheck';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
+import { FEEDBACK_SCREEN_TITLE } from '@/src/features/feedback/presentation';
+import {
+  EMAIL_SCREEN_TITLE,
+  MEDIA_SCREEN_TITLE,
+  NOTIFICATIONS_SCREEN_TITLE,
+  SECURITY_LOGIN_SCREEN_TITLE,
+  SHARED_LINKS_SCREEN_TITLE,
+  SUBSCRIPTION_SCREEN_TITLE,
+  TIME_AND_FOCUS_SCREEN_TITLE,
+} from '@/src/features/settings/screenTitles';
+import { DEVICE_INTEGRATIONS_SCREEN_TITLE } from '@/src/features/integrations/presentation';
+import { searchSettingsPages } from '@/src/features/search/mobileDestinations';
+import { destinationScope } from '@/src/features/shell/destinationScope';
+import { AGE_SETTING_LABEL, ageSettingValue } from '@/src/features/settings/ageSettingValue';
+import {
+  AGE_ENTRY_PARAMS,
+  PARENTAL_CONTROLS_ROUTE,
+} from '@/src/features/settings/parental-controls/entry';
+import { SettingsSearchField, SettingsSearchResults } from '@/src/features/settings/SettingsSearch';
+import { settingsSearchEntries } from '@/src/features/settings/settingsSearchEntries';
+import { useOpenCloudRoute } from '@/src/features/settings/useOpenCloudRoute';
+import { useImageModelChoosable } from '@/src/features/settings/media/useImageModelChoosable';
+import { openWebContentPage } from '@/src/platform/webContentPage';
+import { openOrAlert } from '@/src/features/settings/cloud-privacy/privacyCenterLinks';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
+import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import {
   confirmMobileDiagnosticsShare,
   shareMobileDiagnostics,
@@ -65,6 +96,16 @@ import {
 import { useCloudProfilePhoto } from '@/src/features/settings/cloud-account/useCloudProfilePhoto';
 import { useCloudProfileStore } from '@/src/features/settings/cloud-account/cloudProfileStore';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
+import {
+  activeDeviceAccount,
+  deviceAccountErrorMessage,
+  planSignOutHandover,
+} from '@/src/features/accounts/deviceAccounts';
+import { useDeviceAccounts } from '@/src/features/accounts/useDeviceAccounts';
+import {
+  AccountSwitchOverlay,
+  DeviceAccountsCard,
+} from '@/src/features/accounts/components/DeviceAccountsCard';
 
 function remoteConnectionLabel(status: ConnectionStatus): string {
   switch (status) {
@@ -96,11 +137,13 @@ interface SettingsRow {
   hint?: string;
   tag?: string;
   tone?: RowTone;
+  route?: string;
   onPress: () => void;
 }
 
 interface SettingsSection {
   title?: string;
+  scope?: 'cloud';
   rows: SettingsRow[];
 }
 
@@ -162,6 +205,47 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
         ? colors.agentWarning
         : colors.textSecondary;
   const badge = row.tag ? tagStyle(row.tag, colors) : null;
+  const stacked = useLargeTextRows();
+  const labelColor = row.tone === 'danger' ? colors.agentError : colors.textPrimary;
+
+  // A hard 130pt cut most real email addresses off mid-domain. Let the value
+  // take the space the label does not need, and cap font scaling so the row
+  // still fits at accessibility sizes.
+  const value = row.loading ? (
+    <LoadingIndicator testID={`settings-row-loading-${row.key}`} />
+  ) : row.value ? (
+    <Text
+      numberOfLines={1}
+      maxFontSizeMultiplier={2}
+      style={{
+        color: colors.textMuted,
+        fontSize: typeScale.footnote,
+        flexShrink: 1,
+        textAlign: stacked ? 'left' : 'right',
+      }}
+    >
+      {row.value}
+    </Text>
+  ) : null;
+  const tag = badge ? (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: badge.borderColor,
+        backgroundColor: badge.backgroundColor,
+        borderRadius: 999,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+      }}
+    >
+      <Text
+        {...(stacked ? { maxFontSizeMultiplier: ROW_LABEL_TEXT_SCALE_LIMIT } : {})}
+        style={{ color: badge.color, fontSize: typeScale.caption, fontWeight: '700' }}
+      >
+        {row.tag}
+      </Text>
+    </View>
+  ) : null;
 
   return (
     <Pressable
@@ -175,6 +259,7 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
       style={{
         minHeight: 50,
         paddingHorizontal: 14,
+        ...(stacked ? { paddingVertical: 8 } : {}),
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
@@ -183,51 +268,49 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
       }}
     >
       <Icon size={19} color={tint} strokeWidth={1.8} />
-      <Text
-        numberOfLines={1}
-        style={{
-          flex: 1,
-          color: row.tone === 'danger' ? colors.agentError : colors.textPrimary,
-          fontSize: typeScale.body,
-        }}
-      >
-        {row.label}
-      </Text>
-      {/* A hard 130pt cut most real email addresses off mid-domain. Let the value
-          take the space the label does not need, and cap font scaling so the row
-          still fits at accessibility sizes. */}
-      {row.loading ? (
-        <LoadingIndicator testID={`settings-row-loading-${row.key}`} />
-      ) : row.value ? (
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={2}
-          style={{
-            color: colors.textMuted,
-            fontSize: typeScale.footnote,
-            flexShrink: 1,
-            textAlign: 'right',
-          }}
-        >
-          {row.value}
-        </Text>
-      ) : null}
-      {badge ? (
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: badge.borderColor,
-            backgroundColor: badge.backgroundColor,
-            borderRadius: 999,
-            paddingHorizontal: 8,
-            paddingVertical: 2,
-          }}
-        >
-          <Text style={{ color: badge.color, fontSize: typeScale.caption, fontWeight: '700' }}>
-            {row.tag}
+      {stacked ? (
+        <View testID={`settings-row-text-${row.key}`} style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            testID={`settings-row-label-${row.key}`}
+            maxFontSizeMultiplier={ROW_LABEL_TEXT_SCALE_LIMIT}
+            style={{ color: labelColor, fontSize: typeScale.body }}
+          >
+            {row.label}
           </Text>
+          {value || tag ? (
+            <View
+              testID={`settings-row-detail-${row.key}`}
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 8,
+                marginTop: 2,
+              }}
+            >
+              {value}
+              {tag}
+            </View>
+          ) : null}
         </View>
-      ) : null}
+      ) : (
+        <>
+          <Text
+            testID={`settings-row-label-${row.key}`}
+            numberOfLines={1}
+            style={{
+              flexGrow: 1,
+              flexShrink: 0,
+              color: labelColor,
+              fontSize: typeScale.body,
+            }}
+          >
+            {row.label}
+          </Text>
+          {value}
+          {tag}
+        </>
+      )}
       {/* A danger row is terminal, Log Out raises a confirm Alert, it does not
           push a screen. A chevron there advertises navigation that never
           happens, so it is suppressed for the whole tone. */}
@@ -238,10 +321,39 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
   );
 }
 
-const HEADER_SLOT_SIZE = 40;
+const HEADER_SLOT_SIZE = 44;
 const PROFILE_AVATAR_SIZE = 88;
 const PROFILE_PHOTO_BADGE_SIZE = 30;
 const PROFILE_CARD_PADDING_TOP = 20;
+
+function HeaderCircleButton({
+  onPress,
+  accessibilityLabel,
+  icon: Icon,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+  icon: LucideIcon;
+}) {
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => ({
+        width: HEADER_SLOT_SIZE,
+        height: HEADER_SLOT_SIZE,
+        borderRadius: HEADER_SLOT_SIZE / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
+      })}
+    >
+      <Icon size={20} color={colors.textSecondary} />
+    </Pressable>
+  );
+}
 
 function ProfileHeader({ onPress }: { onPress: () => void }) {
   const colors = useThemeColors();
@@ -382,8 +494,16 @@ export default function SettingsTabScreen() {
   const { colors, isDark } = useTheme();
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const insets = useSafeAreaInsets();
-  const appMode = useChatAppModeStore((s) => s.appMode);
+  const { appMode, cloudUnlocked, switchToLocal, switchToCloud } = useAppModeSwitch();
   const isCloud = appMode === 'cloud';
+  const selectMode = useCallback(
+    (mode: 'local' | 'cloud') => () => {
+      if (mode === appMode) return;
+      if (mode === 'cloud') switchToCloud();
+      else switchToLocal();
+    },
+    [appMode, switchToCloud, switchToLocal],
+  );
   const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
   const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
   const themeMode = isCloud ? cloudThemeMode : localThemeMode;
@@ -392,6 +512,7 @@ export default function SettingsTabScreen() {
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const billingTier = useTierStore((s) => s.billingTier);
   const planCheck = useTierStore(planCheckOf);
+  const imageModelChoosable = useImageModelChoosable();
   const billingLoading = planCheck === 'checking';
   const planValue =
     planCheck === 'confirmed' ? getBillingPlanPricing(billingTier).label : 'Not confirmed';
@@ -401,12 +522,20 @@ export default function SettingsTabScreen() {
   const signOut = useAuthStore((s) => s.signOut);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const openCloudRoute = useOpenCloudRoute();
   const hasClerkSession = clerkUser != null;
+  const deviceAccounts = useDeviceAccounts();
+  const signedInAccount = deviceAccounts.multiSession ? activeDeviceAccount(deviceAccounts) : null;
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const push = useCallback(
     (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
     [router],
+  );
+  const pushTo = useCallback((path: string) => ({ route: path, onPress: push(path) }), [push]);
+  const cloudTo = useCallback(
+    (path: PostAuthDestination) => ({ route: path as string, onPress: openCloudRoute(path) }),
+    [openCloudRoute],
   );
   const closeSettings = useCallback(() => {
     if (router.canGoBack()) {
@@ -416,24 +545,46 @@ export default function SettingsTabScreen() {
     }
   }, [router]);
 
-  const openCloudRoute = useCallback(
-    (path: PostAuthDestination) => () => {
-      if (!isClerkLoaded) return;
-      if (!isClerkSignedIn) {
-        router.push(beginCloudPostAuthIntentForDestination(path));
+  const [ageRecord, setAgeRecord] = useState(readAgeGateRecord);
+  useFocusEffect(
+    useCallback(() => {
+      setAgeRecord(readAgeGateRecord());
+    }, []),
+  );
+  const ageValue = ageSettingValue(ageRecord);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const isSearching = searchQuery.trim().length > 0;
+  const openSearchResult = useCallback(
+    (route: string) => {
+      if (destinationScope(route) === 'cloud') {
+        openCloudRoute(route as PostAuthDestination)();
         return;
       }
-      router.push(path as Parameters<typeof router.push>[0]);
+      router.push(route as Parameters<typeof router.push>[0]);
     },
-    [isClerkLoaded, isClerkSignedIn, router],
+    [openCloudRoute, router],
   );
 
   const handleSignOut = useCallback(() => {
-    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+    const handover = planSignOutHandover(deviceAccounts);
+    const message = signedInAccount
+      ? handover
+        ? `Log out of ${signedInAccount.email} on this device? You will continue as ${handover.next.email}.`
+        : `Log out of ${signedInAccount.email} on this device?`
+      : 'Log out of AGI Cloud on this device?';
+    Alert.alert('Log Out', message, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => void signOut() },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: () =>
+          void signOut().catch((error: unknown) => {
+            Alert.alert('Log out failed', deviceAccountErrorMessage(error, 'sign-out'));
+          }),
+      },
     ]);
-  }, [signOut]);
+  }, [deviceAccounts, signOut, signedInAccount]);
 
   const handleExportDiagnostics = useCallback(() => {
     void confirmMobileDiagnosticsShare()
@@ -457,44 +608,57 @@ export default function SettingsTabScreen() {
     () => [
       {
         title: 'Account',
+        scope: 'cloud',
         rows: [
           {
             key: 'account-email',
-            label: 'Email',
+            label: EMAIL_SCREEN_TITLE,
             icon: UserRound,
             value:
               clerkUser?.primaryEmailAddress?.emailAddress ??
               (isClerkLoaded ? (isClerkSignedIn ? 'Signed in' : 'Sign in') : 'Checking…'),
-            onPress: openCloudRoute('/(app)/settings/cloud-account'),
+            ...cloudTo('/(app)/settings/cloud-account'),
           },
           {
             key: 'account-security',
-            label: 'Account Security',
+            label: SECURITY_LOGIN_SCREEN_TITLE,
             icon: Shield,
             value: accountValue,
-            onPress: openCloudRoute('/(app)/settings/account-security'),
+            ...cloudTo('/(app)/settings/account-security'),
           },
           {
             key: 'account-subscription',
-            label: 'Subscription',
+            label: SUBSCRIPTION_SCREEN_TITLE,
             icon: CreditCard,
             value: accountValue ?? planValue,
             loading: accountValue === undefined && billingLoading,
-            onPress: openCloudRoute('/(app)/settings/cloud-billing'),
+            ...cloudTo('/(app)/settings/cloud-billing'),
+          },
+          {
+            key: 'account-age',
+            label: AGE_SETTING_LABEL,
+            icon: Cake,
+            value: ageValue,
+            route: PARENTAL_CONTROLS_ROUTE,
+            onPress: () =>
+              router.push({
+                pathname: PARENTAL_CONTROLS_ROUTE,
+                params: AGE_ENTRY_PARAMS,
+              } as Parameters<typeof router.push>[0]),
           },
           {
             key: 'account-shared-links',
-            label: 'Shared Links',
+            label: SHARED_LINKS_SCREEN_TITLE,
             icon: Share2,
             value: accountValue,
-            onPress: openCloudRoute('/(app)/settings/shared-links'),
+            ...cloudTo('/(app)/settings/shared-links'),
           },
           {
             key: 'workspace',
             label: 'Workspace',
             icon: Users,
             value: accountValue,
-            onPress: openCloudRoute('/(app)/settings/workspace'),
+            ...cloudTo('/(app)/settings/workspace'),
           },
         ],
       },
@@ -506,34 +670,40 @@ export default function SettingsTabScreen() {
             label: 'Appearance',
             icon: SunMoon,
             value: formatTheme(themeMode),
-            onPress: push('/(app)/settings/appearance'),
+            ...pushTo('/(app)/settings/appearance'),
           },
           {
             key: 'accent-color',
             label: 'Accent Color',
             icon: Palette,
             value: formatAccent(accentColor),
-            onPress: push('/(app)/settings/accent-color'),
+            ...pushTo('/(app)/settings/accent-color'),
           },
           {
             key: 'general',
             label: 'General',
             icon: SlidersHorizontal,
-            onPress: push('/(app)/settings/general'),
+            ...pushTo('/(app)/settings/general'),
           },
           {
             key: 'notifications',
-            label: 'Notifications',
+            label: NOTIFICATIONS_SCREEN_TITLE,
             icon: Bell,
-            onPress: push('/(app)/settings/notifications'),
+            ...pushTo('/(app)/settings/notifications'),
+          },
+          {
+            key: 'time-and-focus',
+            label: TIME_AND_FOCUS_SCREEN_TITLE,
+            icon: MoonStar,
+            ...pushTo('/(app)/settings/time-and-focus'),
           },
           ...(FEATURES.connectors
             ? [
                 {
                   key: 'device-integrations',
-                  label: 'Device Integrations',
+                  label: DEVICE_INTEGRATIONS_SCREEN_TITLE,
                   icon: CalendarDays,
-                  onPress: push('/(app)/settings/integrations'),
+                  ...pushTo('/(app)/settings/integrations'),
                 },
               ]
             : []),
@@ -541,40 +711,42 @@ export default function SettingsTabScreen() {
             key: 'quick-access',
             label: 'Quick Access',
             icon: Zap,
-            onPress: push('/(app)/widget-setup'),
+            ...pushTo('/(app)/widget-setup'),
           },
           {
             key: 'voice',
             label: 'Voice',
             icon: Mic,
-            onPress: push('/(app)/settings/voice'),
+            ...pushTo('/(app)/settings/voice'),
           },
           {
             key: 'permissions',
             label: 'Permissions',
             icon: Smartphone,
-            onPress: push('/(app)/settings/permissions'),
+            ...pushTo('/(app)/settings/permissions'),
           },
           {
             key: 'safety-security',
             label: 'Safety & Security',
             icon: Shield,
-            onPress: push('/(app)/settings/safety-security'),
+            ...pushTo('/(app)/settings/safety-security'),
           },
           {
             key: 'parental-controls',
             label: 'Parental Controls',
             icon: Baby,
-            onPress: push('/(app)/settings/parental-controls'),
+            value: isCloud ? undefined : ageValue,
+            ...pushTo('/(app)/settings/parental-controls'),
           },
           {
             key: 'storage',
             label: 'Storage',
             icon: HardDrive,
+            route: '/(app)/settings/storage',
             onPress: () =>
               router.push({
                 pathname: '/(app)/settings/storage',
-                params: { returnTo: '/(app)/(tabs)/settings' },
+                params: { returnTo: '/(app)/settings' },
               } as Parameters<typeof router.push>[0]),
           },
         ],
@@ -583,6 +755,7 @@ export default function SettingsTabScreen() {
         ? [
             {
               title: 'Remote control',
+              scope: 'cloud' as const,
               rows: [
                 {
                   key: 'remote',
@@ -592,7 +765,7 @@ export default function SettingsTabScreen() {
                     remoteStatus === 'connected' && remoteDesktopName
                       ? remoteDesktopName
                       : remoteConnectionLabel(remoteStatus),
-                  onPress: push('/(app)/settings/remote-control'),
+                  ...pushTo('/(app)/settings/remote-control'),
                 },
               ],
             },
@@ -605,38 +778,73 @@ export default function SettingsTabScreen() {
             key: 'personalization',
             label: 'Personalization',
             icon: Sparkles,
-            onPress: push('/(app)/settings/personalization'),
+            ...pushTo('/(app)/settings/personalization'),
           },
           {
             key: 'memory',
             label: 'Memory',
             icon: Brain,
-            onPress: push('/(app)/settings/memory'),
+            ...pushTo('/(app)/settings/memory'),
           },
           {
             key: 'capabilities',
             label: 'Capabilities',
             icon: Zap,
-            onPress: push('/(app)/settings/capabilities'),
+            ...pushTo('/(app)/settings/capabilities'),
+          },
+          ...(FEATURES.imageGen && imageModelChoosable
+            ? [
+                {
+                  key: 'media',
+                  label: MEDIA_SCREEN_TITLE,
+                  icon: Images,
+                  ...pushTo('/(app)/settings/media'),
+                },
+              ]
+            : []),
+          {
+            key: 'code',
+            label: CLOUD_CODE_SCREEN_TITLE,
+            icon: Code2,
+            ...pushTo('/(app)/settings/code'),
           },
           {
             key: 'data-controls',
             label: 'Data Controls',
             icon: Database,
-            onPress: push('/(app)/settings/data-controls'),
+            ...pushTo('/(app)/settings/data-controls'),
+          },
+          {
+            key: 'privacy',
+            label: 'Privacy',
+            icon: LockKeyhole,
+            ...pushTo('/(app)/settings/cloud-privacy'),
           },
         ],
       },
       {
         title: 'Cloud',
+        scope: 'cloud',
         rows: [
+          ...(FEATURES.skills
+            ? [
+                {
+                  key: 'customize',
+                  label: 'Customize',
+                  icon: BookOpen,
+                  tag: cloudAccessTag,
+                  tone: 'cloud' as const,
+                  ...pushTo('/(app)/customize'),
+                },
+              ]
+            : []),
           {
             key: 'reflect',
             label: 'Reflect',
             icon: Sparkles,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/reflect'),
+            ...cloudTo('/(app)/settings/reflect'),
           },
           {
             key: 'archived-chats',
@@ -644,15 +852,7 @@ export default function SettingsTabScreen() {
             icon: Archive,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/archived-chats'),
-          },
-          {
-            key: 'privacy',
-            label: 'Privacy',
-            icon: LockKeyhole,
-            tag: cloudAccessTag,
-            tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/cloud-privacy'),
+            ...cloudTo('/(app)/settings/archived-chats'),
           },
           {
             key: 'usage',
@@ -660,7 +860,7 @@ export default function SettingsTabScreen() {
             icon: Database,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/cloud-usage'),
+            ...cloudTo('/(app)/settings/cloud-usage'),
           },
           {
             key: 'connectors',
@@ -668,7 +868,7 @@ export default function SettingsTabScreen() {
             icon: Link2,
             tag: cloudAccessTag,
             tone: 'cloud',
-            onPress: openCloudRoute('/(app)/settings/cloud-connectors'),
+            ...cloudTo('/(app)/settings/cloud-connectors'),
           },
         ],
       },
@@ -677,12 +877,13 @@ export default function SettingsTabScreen() {
         rows: [
           {
             key: 'report',
-            label: 'Report App Issue',
+            label: FEEDBACK_SCREEN_TITLE,
             icon: MessageCircleWarning,
+            route: '/(app)/feedback',
             onPress: () =>
               router.push({
                 pathname: '/(app)/feedback',
-                params: { returnTo: '/(app)/(tabs)/settings' },
+                params: { returnTo: '/(app)/settings' },
               } as Parameters<typeof router.push>[0]),
           },
           {
@@ -690,7 +891,7 @@ export default function SettingsTabScreen() {
             label: 'Help Center',
             icon: CircleHelp,
             onPress: () => {
-              void openInAppBrowser('https://agiworkforce.com/help');
+              void openOrAlert(() => openWebContentPage('/help'));
             },
           },
           {
@@ -705,7 +906,7 @@ export default function SettingsTabScreen() {
             label: 'About',
             icon: Info,
             value: `v${appVersion}`,
-            onPress: push('/(app)/about'),
+            ...pushTo('/(app)/about'),
           },
         ],
       },
@@ -718,7 +919,10 @@ export default function SettingsTabScreen() {
                   label: 'Log Out',
                   icon: LogOut,
                   tone: 'danger' as const,
-                  hint: 'Signs you out on this device',
+                  value: signedInAccount?.email,
+                  hint: signedInAccount
+                    ? `Signs ${signedInAccount.email} out on this device`
+                    : 'Signs you out on this device',
                   onPress: handleSignOut,
                 },
               ],
@@ -729,6 +933,7 @@ export default function SettingsTabScreen() {
     [
       accentColor,
       accountValue,
+      ageValue,
       appVersion,
       cloudAccessTag,
       handleExportDiagnostics,
@@ -736,8 +941,10 @@ export default function SettingsTabScreen() {
       hasClerkSession,
       isClerkLoaded,
       isClerkSignedIn,
-      openCloudRoute,
-      push,
+      isCloud,
+      imageModelChoosable,
+      cloudTo,
+      pushTo,
       router,
       remoteStatus,
       remoteDesktopName,
@@ -745,14 +952,30 @@ export default function SettingsTabScreen() {
       billingLoading,
       planValue,
       clerkUser,
+      signedInAccount,
     ],
+  );
+  const visibleSections = useMemo(
+    () => sections.filter((section) => isCloud || section.scope !== 'cloud'),
+    [isCloud, sections],
+  );
+  const searchResults = useMemo(
+    () =>
+      settingsSearchEntries({
+        query: searchQuery,
+        pages: searchSettingsPages(searchQuery, appMode),
+        sections: visibleSections,
+        openRoute: openSearchResult,
+        cloudValue: accountValue,
+      }),
+    [accountValue, appMode, openSearchResult, searchQuery, visibleSections],
   );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }}>
       {/* The header sits outside the ScrollView so the close control stays
-          pinned; inside it, X scrolled away for most of this ~30-row list and
-          the tab bar is hidden on this route, leaving no visible way out. */}
+          pinned; inside it, X scrolled away for most of this ~30-row list,
+          leaving no visible way out. */}
       <View
         style={{
           paddingHorizontal: 16,
@@ -769,7 +992,11 @@ export default function SettingsTabScreen() {
             gap: 12,
           }}
         >
-          <View style={{ width: HEADER_SLOT_SIZE }} />
+          <HeaderCircleButton
+            onPress={closeSettings}
+            accessibilityLabel="Close settings"
+            icon={X}
+          />
           <Text
             accessibilityRole="header"
             numberOfLines={1}
@@ -783,38 +1010,48 @@ export default function SettingsTabScreen() {
           >
             Settings
           </Text>
-          <Pressable
-            onPress={closeSettings}
-            accessibilityRole="button"
-            accessibilityLabel="Close settings"
-            hitSlop={10}
-            style={({ pressed }) => ({
-              width: HEADER_SLOT_SIZE,
-              height: HEADER_SLOT_SIZE,
-              borderRadius: HEADER_SLOT_SIZE / 2,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
-            })}
-          >
-            <X size={20} color={colors.textSecondary} />
-          </Pressable>
+          <HeaderCircleButton
+            onPress={push('/(app)/about')}
+            accessibilityLabel="About AGI"
+            icon={Info}
+          />
         </View>
       </View>
 
       <ScrollView
         className="flex-1"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
+          ...contentColumn('reading'),
           paddingHorizontal: 16,
           paddingBottom: 36,
         }}
       >
-        <ProfileHeader onPress={push('/(app)/profile')} />
+        <SettingsSearchField value={searchQuery} onChange={setSearchQuery} />
 
-        {sections.map((section, index) => (
-          <SectionCard key={section.title ?? `section-${index}`} section={section} />
-        ))}
+        {isSearching ? (
+          <SettingsSearchResults query={searchQuery} results={searchResults} />
+        ) : (
+          <>
+            <View style={{ marginBottom: 16 }}>
+              <ModeToggle
+                mode={appMode}
+                cloudUnlocked={cloudUnlocked}
+                onTapLocal={selectMode('local')}
+                onTapCloud={selectMode('cloud')}
+              />
+            </View>
+
+            <ProfileHeader onPress={push('/(app)/profile')} />
+            {isCloud ? <DeviceAccountsCard accounts={deviceAccounts} /> : null}
+
+            {visibleSections.map((section, index) => (
+              <SectionCard key={section.title ?? `section-${index}`} section={section} />
+            ))}
+          </>
+        )}
       </ScrollView>
+      <AccountSwitchOverlay />
     </SafeAreaView>
   );
 }

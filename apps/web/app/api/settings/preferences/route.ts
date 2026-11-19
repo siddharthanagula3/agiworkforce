@@ -2,6 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import {
+  TOOL_ACCESS_SETTING_KEY,
+  type CapabilityAvailableSwitches,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -14,6 +18,7 @@ import {
 } from '@/lib/services/active-workspace-service';
 import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
+import { hasInvalidModelImprovementConsent } from '@/lib/server/model-improvement-consent';
 import { SKILL_SETTINGS_NAMESPACE } from '@/lib/services/skill-install-service';
 import { serializeUserSettings } from '@/lib/services/user-settings-payload';
 import { autonomousToolApprovalsAvailable } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
@@ -53,6 +58,7 @@ function namespaceObject(settings: Record<string, unknown>, namespace: string) {
 }
 
 const CAPABILITIES_NAMESPACE = 'capabilities';
+const AVAILABLE_CAPABILITY_SWITCHES: CapabilityAvailableSwitches = [TOOL_ACCESS_SETTING_KEY];
 const SERVICE_OWNED_NAMESPACES: readonly string[] = [SKILL_SETTINGS_NAMESPACE];
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
@@ -81,6 +87,9 @@ function validatedSettingsDelta(current: Record<string, unknown>, parsed: Settin
           : (parsed.value ?? parsed.settings ?? {}),
       }
     : (parsed.settings ?? {});
+  if (hasInvalidModelImprovementConsent(delta)) {
+    throw createError.validation('Model improvement choices must be on or off');
+  }
   serializeUserSettings({ ...current, ...delta });
   return delta;
 }
@@ -131,10 +140,11 @@ async function handleGet(request: NextRequest) {
   const namespace = new URL(request.url).searchParams.get('namespace');
   const stored = await readSettings(db, userId);
 
-  const organizationMemoryAllowed =
-    !namespace || namespace === CAPABILITIES_NAMESPACE
-      ? await organizationMemoryGate(db, await resolveActiveOrganizationId(db, userId, request))
-      : undefined;
+  const readsCapabilities = !namespace || namespace === CAPABILITIES_NAMESPACE;
+  const organizationMemoryAllowed = readsCapabilities
+    ? await organizationMemoryGate(db, await resolveActiveOrganizationId(db, userId, request))
+    : undefined;
+  const availableSwitches = readsCapabilities ? AVAILABLE_CAPABILITY_SWITCHES : undefined;
 
   // Whether the account may choose "Skip approvals" is the workspace's answer,
   // not the client's: the settings pane has to render a control it is allowed
@@ -149,6 +159,7 @@ async function handleGet(request: NextRequest) {
       settings: stored.settings[namespace] ?? {},
       version: stored.version,
       ...(organizationMemoryAllowed === undefined ? {} : { organizationMemoryAllowed }),
+      ...(availableSwitches === undefined ? {} : { availableSwitches }),
       ...(autonomousToolApprovalsAllowed === undefined ? {} : { autonomousToolApprovalsAllowed }),
     });
   }
@@ -157,6 +168,7 @@ async function handleGet(request: NextRequest) {
     settings: stored.settings,
     version: stored.version,
     organizationMemoryAllowed,
+    availableSwitches,
     autonomousToolApprovalsAllowed,
   });
 }

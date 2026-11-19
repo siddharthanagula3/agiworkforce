@@ -1,10 +1,11 @@
 import path from 'node:path';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { LocalRuntimeClient } from './localRuntimeClient';
 
 export interface RestartableLocalRuntime {
   restart(): Promise<void>;
   requiresPermissionRestart(): boolean;
-  dispose(): Promise<void>;
+  dispose(reason?: string): Promise<void>;
 }
 
 export type LocalRuntimeFactory<T extends RestartableLocalRuntime = LocalRuntimeClient> = (
@@ -75,7 +76,15 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     const retained = new Set(cwds.map((cwd) => this.keyFor(cwd)));
     const dropped = [...this.clients.entries()].filter(([key]) => !retained.has(key));
     for (const [key] of dropped) this.clients.delete(key);
-    await Promise.all(dropped.map(([, target]) => target.client.dispose().catch(() => undefined)));
+    await Promise.all(
+      dropped.map(([, target]) =>
+        target.client
+          .dispose(
+            `The folder ${path.basename(target.cwd)} was closed, so its AGI local runtime stopped and its session ended.`,
+          )
+          .catch(() => undefined),
+      ),
+    );
   }
 
   dispose(): void {
@@ -89,7 +98,13 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
         await this.restartPromise.catch(() => undefined);
       }
       const targets = [...this.clients.entries()];
-      await Promise.all(targets.map(([, target]) => target.client.dispose()));
+      await Promise.all(
+        targets.map(([, target]) =>
+          target.client.dispose(
+            'The AGI local runtime stopped because the extension is shutting down.',
+          ),
+        ),
+      );
       for (const [key, target] of targets) {
         if (this.clients.get(key)?.client === target.client) this.clients.delete(key);
       }
@@ -107,14 +122,21 @@ export class LocalRuntimePool<T extends RestartableLocalRuntime = LocalRuntimeCl
     targets: Array<[string, { cwd: string; client: T }]>,
   ): Promise<LocalRuntimeRestartResult> {
     const results = await Promise.allSettled(targets.map(([, target]) => target.client.restart()));
+    const failed = targets.filter((_, index) => results[index]?.status === 'rejected');
     const failure = results.find(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );
     if (failure !== undefined) {
-      for (const [key, target] of targets) {
+      for (const [key, target] of failed) {
         if (this.clients.get(key)?.client === target.client) this.clients.delete(key);
       }
-      await Promise.allSettled(targets.map(([, target]) => target.client.dispose()));
+      await Promise.allSettled(
+        failed.map(([, target]) =>
+          target.client.dispose(
+            `The AGI local runtime could not restart. Check the AGI CLI, then run ${PRODUCT_NAMES.code}: Restart Local Runtime.`,
+          ),
+        ),
+      );
       throw failure.reason;
     }
     return { restartedWorkspaces: targets.length };

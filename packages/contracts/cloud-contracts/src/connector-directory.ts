@@ -31,6 +31,9 @@ export const CONNECTOR_DIRECTORY_CATEGORIES = [
 ] as const;
 export type ConnectorDirectoryCategory = (typeof CONNECTOR_DIRECTORY_CATEGORIES)[number];
 
+export const CONNECTOR_PERSONAL_SOURCES = ['email', 'calendar'] as const;
+export type ConnectorPersonalSource = (typeof CONNECTOR_PERSONAL_SOURCES)[number];
+
 export const CONNECTOR_DIRECTORY_TRANSPORTS = ['streamable-http', 'sse', 'stdio'] as const;
 export type ConnectorDirectoryTransport = (typeof CONNECTOR_DIRECTORY_TRANSPORTS)[number];
 
@@ -93,6 +96,7 @@ export const ConnectorDirectoryQuerySchema = z.object({
   connectable: z.enum(CONNECTOR_DIRECTORY_CONNECTABLE_MODES).optional(),
   connectableOnly: BooleanParamSchema.optional(),
   authMode: z.enum(CONNECTOR_DIRECTORY_AUTH_MODES).optional(),
+  personalSource: z.enum(CONNECTOR_PERSONAL_SOURCES).optional(),
   sort: z.enum(CONNECTOR_DIRECTORY_SORTS).default('popular'),
   limit: z.coerce
     .number()
@@ -116,6 +120,7 @@ export const ConnectorDirectoryEntrySchema = z.object({
   publisher: z.string(),
   description: z.string(),
   categories: z.array(z.string()),
+  personalSources: z.array(z.enum(CONNECTOR_PERSONAL_SOURCES)).optional(),
   remotes: z.array(ConnectorDirectoryRemoteSchema),
   authMode: z.enum(CONNECTOR_DIRECTORY_AUTH_MODES),
   connectable: z.enum(CONNECTOR_DIRECTORY_CONNECTABLE_MODES),

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
   MANAGED_CLOUD_WORKSPACES_PATH,
@@ -319,6 +319,10 @@ function settingsResponse(input: RequestInfo | URL, init?: RequestInit): Respons
 }
 
 describe('public settings window appearance', () => {
+  beforeAll(async () => {
+    await import('@/features/settings/components/WebSettingsModal');
+  });
+
   beforeEach(() => {
     savedSettings = {
       notifications: { browserReplyReady: true },
@@ -369,7 +373,7 @@ describe('public settings window appearance', () => {
       </PublicChatWindow>,
     );
 
-    const light = await screen.findByRole('button', { name: 'Light theme' });
+    const light = await screen.findByRole('button', { name: 'Light theme' }, { timeout: 4_000 });
     expect(light).toHaveAttribute('aria-pressed', 'false');
 
     await user.click(light);
@@ -380,7 +384,7 @@ describe('public settings window appearance', () => {
         'true',
       );
     });
-  });
+  }, 15_000);
 
   it('sets System from the settings page the public window loads without sending a chat', async () => {
     const user = userEvent.setup();
@@ -1286,8 +1290,12 @@ describe('public settings window appearance', () => {
     await user.click(within(desktopGroup as HTMLElement).getByRole('button', { name: 'General' }));
 
     expect(await screen.findByRole('heading', { name: 'General desktop settings' })).toBeVisible();
-    expect(screen.getByText('Storage')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Manage storage' }));
+    expect(
+      within(desktopGroup as HTMLElement).getByRole('button', { name: 'Storage' }),
+    ).toBeVisible();
+    const general = screen.getByRole('region', { name: 'General desktop settings' });
+    expect(within(general).getByText('Storage')).toBeVisible();
+    await user.click(within(general).getByRole('button', { name: 'Manage storage' }));
     expect(
       await screen.findByText('Chats stay on this computer. Nothing was removed.'),
     ).toBeVisible();

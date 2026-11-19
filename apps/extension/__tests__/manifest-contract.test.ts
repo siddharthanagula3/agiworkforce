@@ -257,3 +257,36 @@ describe('Chrome manifest trust contract', () => {
     expect(directive('frame-src')).toBe(`'self' ${ARTIFACT_SANDBOX_ORIGIN}`);
   });
 });
+
+describe('context menu entries and their store justification', () => {
+  const background = readFileSync(join(APP_ROOT, 'src/background.ts'), 'utf8');
+  const catalog = JSON.parse(
+    readFileSync(join(APP_ROOT, '_locales/en/messages.json'), 'utf8'),
+  ) as Record<string, { message: string }>;
+  const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+
+  function menuTitles(): string[] {
+    const start = background.indexOf('const CONTEXT_MENU_ITEMS');
+    expect(start, 'CONTEXT_MENU_ITEMS was not found in background.ts').toBeGreaterThan(-1);
+    const block = background.slice(start, background.indexOf('];', start));
+    const keys = [...block.matchAll(/title: t\('([A-Za-z0-9]+)'\)/g)].map((match) => match[1]!);
+    expect(keys.length).toBeGreaterThan(0);
+    return keys.map((key) => {
+      const entry = catalog[key];
+      expect(entry, `${key} has no English message`).toBeDefined();
+      return entry!.message.replace('%s', '…');
+    });
+  }
+
+  it('names every right-click entry in the contextMenus justification', () => {
+    const row = listing.split('\n').find((line) => line.startsWith('| `contextMenus`'));
+    expect(row, 'the listing has no contextMenus justification row').toBeDefined();
+    const missing = menuTitles().filter((title) => !row!.includes(title));
+    expect(missing).toEqual([]);
+  });
+
+  it('describes the rewrite and local-app entries in the detailed description', () => {
+    expect(listing).toContain('Rewrite selection');
+    expect(listing).toContain('Send selected text to a local app');
+  });
+});

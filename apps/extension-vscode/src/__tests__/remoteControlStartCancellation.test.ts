@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { IDLE_REMOTE_CONTROL_STATE } from '@agiworkforce/local-runtime-contract';
-import { VscodeRemoteControl } from '../features/remote-control/remoteControlService';
+import {
+  VscodeRemoteControl,
+  pairingRefusalMessage,
+} from '../features/remote-control/remoteControlService';
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 import * as api from '../utils/api';
+import { ACCOUNT_REFUSAL_TEXT_MAX_LENGTH } from '../utils/accountRefusal';
 
 const hostStart = vi.hoisted(() => vi.fn());
 const hostStop = vi.hoisted(() => vi.fn());
@@ -106,6 +110,29 @@ describe('Remote Control pairing start ownership', () => {
     expect(hostStart).not.toHaveBeenCalled();
   });
 
+  it('reports a workspace policy refusal in the server wording and keeps the session', async () => {
+    const secretsRead = vi.spyOn(api, 'getAccountToken');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'organization_policy',
+            code: 'feature_disabled',
+            message: 'Your workspace turned off remote control.',
+          },
+        }),
+        { status: 403 },
+      ),
+    );
+
+    await expect(createService().start()).rejects.toThrow(
+      'Your workspace turned off remote control.',
+    );
+
+    expect(secretsRead).toHaveBeenCalledTimes(1);
+    expect(hostStart).not.toHaveBeenCalled();
+  });
+
   it('lets the newest of two pending starts win', async () => {
     const first = deferredResponse();
     const second = deferredResponse();
@@ -140,5 +167,40 @@ describe('Remote Control pairing start ownership', () => {
       pairToken: PAIRING.pairTokens.desktop,
       expiresAt: PAIRING.expiresAt,
     });
+  });
+});
+
+describe('Remote Control pairing refusal wording', () => {
+  it('reads a plain refusal and a refusal in the error model', () => {
+    expect(pairingRefusalMessage({ error: 'Authentication required' })).toBe(
+      'Authentication required',
+    );
+    expect(
+      pairingRefusalMessage({
+        error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' },
+      }),
+    ).toBe('Service temporarily unavailable');
+    expect(
+      pairingRefusalMessage({
+        error: { type: 'organization_policy', code: 'feature_disabled', message: 'Blocked here.' },
+      }),
+    ).toBe('Blocked here.');
+  });
+
+  it('bounds any refusal wording to one short line without links', () => {
+    const long = `Blocked [open](https://example.com/x).\n${'x'.repeat(5_000)}`;
+
+    for (const body of [{ error: long }, { error: { code: 'FORBIDDEN', message: long } }]) {
+      const shown = pairingRefusalMessage(body) ?? '';
+      expect(shown.startsWith('Blocked [open] (https://example.com/x). x')).toBe(true);
+      expect(shown).not.toContain('\n');
+      expect(Array.from(shown)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+    }
+  });
+
+  it('has no wording for a body that is not a refusal', () => {
+    expect(pairingRefusalMessage(null)).toBeUndefined();
+    expect(pairingRefusalMessage({ error: { code: 'X' } })).toBeUndefined();
+    expect(pairingRefusalMessage({ code: 'ABC123' })).toBeUndefined();
   });
 });

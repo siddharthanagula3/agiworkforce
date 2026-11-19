@@ -421,7 +421,7 @@ impl RealtimeServer {
                 )
             })
             .collect();
-        prompts.sort_by(|a, b| b.0.cmp(&a.0));
+        prompts.sort_by_key(|a| std::cmp::Reverse(a.0));
         prompts.into_iter().map(|(_, prompt)| prompt).collect()
     }
 

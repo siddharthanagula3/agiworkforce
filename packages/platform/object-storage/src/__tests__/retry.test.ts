@@ -5,6 +5,7 @@ import { createMemoryObjectStore } from '../adapters/memory';
 import {
   createRetryingObjectStore,
   isRetryableObjectStorageError,
+  objectStorageBackoffMs,
   resolveObjectStorageRetryPolicy,
   OBJECT_STORAGE_RETRY_BASE_DELAY_MS_ENV,
   OBJECT_STORAGE_RETRY_MAX_ATTEMPTS_ENV,
@@ -133,6 +134,30 @@ describe('object storage retry policy', () => {
     expect(attempts()).toBe(1);
   });
 
+  it('retries a transient listing, and offers listing only when the wrapped store can list', async () => {
+    const inner = createMemoryObjectStore();
+    await inner.put({ bucket: BUCKET, key: KEY, body: BYTES, contentType: CONTENT_TYPE });
+    let failures = 1;
+    const listObjects = vi.fn(
+      async (bucket: string, prefix: string, limit?: number, startAfter?: string) => {
+        if (failures-- > 0) throw statusError(503);
+        return inner.listObjects(bucket, prefix, limit, startAfter);
+      },
+    );
+    const { wrapped, sleep } = retrying({
+      ...failingStore(0, statusError(503)).store,
+      listObjects,
+    });
+
+    await expect(wrapped.listObjects?.(BUCKET, 'attachments/', 5, 'attachments/')).resolves.toEqual(
+      [{ key: KEY, lastModifiedMs: expect.any(Number) }],
+    );
+    expect(listObjects).toHaveBeenCalledTimes(2);
+    expect(listObjects).toHaveBeenLastCalledWith(BUCKET, 'attachments/', 5, 'attachments/');
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(retrying(failingStore(0, statusError(503)).store).wrapped.listObjects).toBeUndefined();
+  });
+
   it('replays a buffered upload', async () => {
     const { store, attempts } = failingStore(1, statusError(503));
     const { wrapped } = retrying(store);
@@ -158,5 +183,30 @@ describe('object storage retry policy', () => {
     expect(
       resolveObjectStorageRetryPolicy({ [OBJECT_STORAGE_RETRY_MAX_ATTEMPTS_ENV]: 'nonsense' }),
     ).toEqual(resolveObjectStorageRetryPolicy({}));
+  });
+});
+
+describe('object storage backoff rule', () => {
+  const policy = { maxAttempts: 5, baseDelayMs: 100, maxDelayMs: 1_000 };
+
+  it('doubles per attempt, caps at the maximum and applies half to full jitter', () => {
+    expect(objectStorageBackoffMs(policy, 1, () => 0)).toBe(50);
+    expect(objectStorageBackoffMs(policy, 1, () => 1)).toBe(100);
+    expect(objectStorageBackoffMs(policy, 3, () => 0)).toBe(200);
+    expect(objectStorageBackoffMs(policy, 6, () => 0)).toBe(500);
+    expect(objectStorageBackoffMs(policy, 6, () => 1)).toBe(1_000);
+  });
+
+  it('is the delay the retrying store sleeps for', async () => {
+    const { store } = failingStore(2, statusError(503));
+    const sleep = vi.fn(async () => undefined);
+    const wrapped = createRetryingObjectStore(store, { policy, sleep, random: () => 0.5 });
+
+    await wrapped.get(BUCKET, KEY);
+
+    expect(sleep.mock.calls).toEqual([
+      [objectStorageBackoffMs(policy, 1, () => 0.5)],
+      [objectStorageBackoffMs(policy, 2, () => 0.5)],
+    ]);
   });
 });

@@ -67,6 +67,7 @@ const FileNameSchema = z
         const codePoint = character.codePointAt(0) ?? 0;
         return codePoint > 31 && codePoint !== 127;
       }),
+    { message: 'Use a file name only, with no folder or control characters.' },
   );
 
 const SlideSchema = z.object({
@@ -249,7 +250,7 @@ export function createManagedOfficeFileToolDefinition(
     function: {
       name: MANAGED_OFFICE_FILE_TOOL_NAME,
       description:
-        'Create and attach a real document file: Word (.docx), PowerPoint (.pptx), Excel (.xlsx), PDF (.pdf) or CSV (.csv). Use this whenever the user asks for a file of one of those kinds, instead of printing the content in the reply. DOCX and PDF take markdown-like content, including pipe tables; PPTX takes an ordered slide outline; XLSX takes named sheets of rows where a cell beginning with = is a real formula, and a sheet may carry a chart; CSV takes rows.',
+        'Create and attach a real document file: Word (.docx), PowerPoint (.pptx), Excel (.xlsx), PDF (.pdf) or CSV (.csv). Use this whenever the user asks for a file of one of those kinds, instead of printing the content in the reply. Send only the fields of the chosen format and leave every other field out, with no empty or placeholder values: docx takes content, or source to edit an attached document; pdf takes content; pptx takes slides; xlsx takes sheets, or source to edit an attached workbook; csv takes rows and never content. DOCX and PDF content is markdown-like, including pipe tables; PPTX slides are an ordered outline; XLSX sheets are named sheets of rows where a cell beginning with = is a real formula, and a sheet may carry a chart.',
       parameters: {
         type: 'object',
         properties: {
@@ -272,7 +273,7 @@ export function createManagedOfficeFileToolDefinition(
             type: 'string',
             maxLength: 100_000,
             description:
-              'DOCX and PDF only: document content with optional # headings, - bullet lines, and | pipe | tables |.',
+              'DOCX and PDF only. Leave it out for every other format. Document content with optional # headings, - bullet lines, and | pipe | tables |.',
           },
           verify_render: {
             type: 'boolean',
@@ -394,13 +395,16 @@ export function createManagedOfficeFileToolDefinition(
           rows: {
             type: 'array',
             minItems: 1,
-            description: 'CSV only: rows of cells, the first row being the header.',
+            description:
+              'CSV only, and required for csv: rows of cells, the first row being the header, such as [["Fruit", "Price"], ["Apple", 0.5]].',
             items: { type: 'array', items: { type: ['string', 'number'] } },
           },
         },
         required: ['format', 'filename', 'title'],
         additionalProperties: false,
       },
+      // Strict mode makes every property required, so the model would fill the other formats' fields with placeholders.
+      strict: false,
     },
   };
 }
@@ -838,6 +842,91 @@ function generatePdf(input: Extract<ManagedOfficeFileInput, { format: 'pdf' }>):
   return Buffer.from(document.output('arraybuffer'));
 }
 
+const OFFICE_FILE_FIELDS = new Map<string, readonly string[]>(
+  ManagedOfficeFileInputSchema.options.map((option) => [
+    option.shape.format.value,
+    Object.keys(option.shape),
+  ]),
+);
+const OFFICE_FILE_KNOWN_FIELDS = new Set([...OFFICE_FILE_FIELDS.values()].flat());
+const MAX_REPORTED_ISSUES = 3;
+const MAX_REPORTED_KEYS = 5;
+const MAX_REPORTED_KEY_LENGTH = 40;
+
+function officeFileFields(value: unknown): readonly string[] | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const format = (value as Record<string, unknown>)['format'];
+  return typeof format === 'string' ? OFFICE_FILE_FIELDS.get(format) : undefined;
+}
+
+function withoutOtherFormatFields(value: unknown): unknown {
+  const fields = officeFileFields(value);
+  if (!fields) return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(
+      ([key]) => fields.includes(key) || !OFFICE_FILE_KNOWN_FIELDS.has(key),
+    ),
+  );
+}
+
+function spokenList(items: readonly string[]): string {
+  return items.length < 2
+    ? items.join('')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+function reportedKeys(keys: readonly string[]): string {
+  const shown = keys
+    .slice(0, MAX_REPORTED_KEYS)
+    .map((key) =>
+      key.length > MAX_REPORTED_KEY_LENGTH ? `${key.slice(0, MAX_REPORTED_KEY_LENGTH)}...` : key,
+    );
+  const hidden = keys.length - shown.length;
+  return spokenList(hidden > 0 ? [...shown, `${hidden} more`] : shown);
+}
+
+function sentence(text: string): string {
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function describeInvalidRequest(value: unknown, error: z.ZodError): string {
+  const fields = officeFileFields(value);
+  if (!fields) {
+    return `format must be one of ${spokenList([...OFFICE_FILE_FIELDS.keys()])}.`;
+  }
+  const format = (value as Record<string, unknown>)['format'] as string;
+  const issues = [...error.issues].sort(
+    (first, second) =>
+      Number(second.code === 'unrecognized_keys') - Number(first.code === 'unrecognized_keys'),
+  );
+  const details = issues.map((issue) => {
+    const field = issue.path.map(String).join('.');
+    if (issue.code === 'unrecognized_keys') {
+      const verb = issue.keys.length === 1 ? 'does' : 'do';
+      const pronoun = issue.keys.length === 1 ? 'it' : 'them';
+      return field
+        ? `${field}: ${reportedKeys(issue.keys)} ${verb} not belong there: leave ${pronoun} out.`
+        : `${reportedKeys(issue.keys)} ${verb} not apply to a ${format} file: leave ${pronoun} out. A ${format} file takes ${spokenList(fields)}.`;
+    }
+    if (
+      issue.path.length === 1 &&
+      !Object.prototype.hasOwnProperty.call(value as Record<string, unknown>, field)
+    ) {
+      return `${field} is required for a ${format} file. A ${format} file takes ${spokenList(fields)}.`;
+    }
+    return sentence(field ? `${field}: ${issue.message}` : issue.message);
+  });
+  return [...new Set(details)].slice(0, MAX_REPORTED_ISSUES).join(' ');
+}
+
+function invalidOfficeFileRequest(detail: string): ManagedOfficeFileGenerationFailure {
+  return {
+    ok: false,
+    code: 'invalid_office_file_request',
+    message: `The Office file request is invalid. ${detail}`,
+  };
+}
+
 export async function generateManagedOfficeFile(
   value: unknown,
   options: {
@@ -846,22 +935,17 @@ export async function generateManagedOfficeFile(
     signal?: AbortSignal;
   } = {},
 ): Promise<ManagedOfficeFileGenerationResult> {
-  const parsed = ManagedOfficeFileInputSchema.safeParse(value);
+  const request = withoutOtherFormatFields(value);
+  const parsed = ManagedOfficeFileInputSchema.safeParse(request);
   if (!parsed.success) {
-    return {
-      ok: false,
-      code: 'invalid_office_file_request',
-      message: 'The Office file request is invalid.',
-    };
+    return invalidOfficeFileRequest(describeInvalidRequest(request, parsed.error));
   }
 
   const filename = normalizeFilename(parsed.data.filename, parsed.data.format);
   if (!filename) {
-    return {
-      ok: false,
-      code: 'invalid_office_file_request',
-      message: 'The Office file request is invalid.',
-    };
+    return invalidOfficeFileRequest(
+      `filename must be a file name ending in .${parsed.data.format}, or one with no extension.`,
+    );
   }
 
   try {

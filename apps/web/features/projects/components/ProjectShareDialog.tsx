@@ -76,8 +76,7 @@ export function ProjectShareDialog({
   } else if (!data) {
     body = (
       <p style={noteStyle}>
-        Only you can open this project. Switch to a team workspace to share projects with its
-        members.
+        Only you can open this project. Switch to a team workspace to share it.
       </p>
     );
   } else if (!canManage && shared) {
@@ -88,20 +87,14 @@ export function ProjectShareDialog({
       </div>
     );
   } else if (!canManage) {
-    body = (
-      <p style={noteStyle}>
-        This project is not shared. Only its owner can share it, when their workspace role lets them
-        share their work.
-      </p>
-    );
+    body = <p style={noteStyle}>This project is not shared. Only its owner can share it.</p>;
   } else if (!shared && !isOwner) {
     body = <p style={noteStyle}>This project is not shared. Only its owner can share it.</p>;
   } else if (!shared) {
     body = (
       <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
         <p style={noteStyle}>
-          Invite specific people or open it to everyone in the workspace. Its instructions and files
-          are shared; each person&rsquo;s chats stay private.
+          Instructions and files are shared. Each person&rsquo;s chats stay private.
         </p>
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <label htmlFor="project-share-audience" className="sr-only">

@@ -129,10 +129,11 @@ export interface ConversationCloudSyncState {
   totalMessageCount?: number;
   messagesOffset?: number;
   state: 'idle' | 'pending' | 'error' | 'blocked';
-  blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
+  blockedReason?: 'non-cloud-runtime' | 'auth' | 'policy' | 'not-found' | 'workspace';
   lastError?: string;
   lastAttemptAt?: number;
   retryAfter?: number;
+  retryAfterStatedByServer?: boolean;
 }
 
 export interface ConversationEntry {
@@ -675,6 +676,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
     raw['blockedReason'] === 'auth' ||
+    raw['blockedReason'] === 'policy' ||
     raw['blockedReason'] === 'not-found' ||
     raw['blockedReason'] === 'workspace'
   ) {
@@ -689,6 +691,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   }
   if (typeof raw['retryAfter'] === 'number' && Number.isFinite(raw['retryAfter'])) {
     normalized.retryAfter = raw['retryAfter'];
+    if (raw['retryAfterStatedByServer'] === true) normalized.retryAfterStatedByServer = true;
   }
   const isEmpty =
     normalized.state === 'idle' &&
@@ -1926,7 +1929,9 @@ export function isCloudMetadataPersistenceEligible(entry: ConversationEntry): bo
     UUID_PATTERN.test(sync.conversationId) &&
     sync.organizationId !== undefined &&
     sync.createAcknowledged === true &&
-    (sync.blockedReason === undefined || sync.blockedReason === 'auth')
+    (sync.blockedReason === undefined ||
+      sync.blockedReason === 'auth' ||
+      sync.blockedReason === 'policy')
   );
 }
 
@@ -1966,6 +1971,14 @@ export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[]
   );
 }
 
+export function conversationHasUnsavedCloudChanges(entry: ConversationEntry): boolean {
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    entry.cloudSync?.state === 'pending' ||
+    entry.cloudSync?.state === 'error'
+  );
+}
+
 export function conversationProjectNeedsSync(entry: ConversationEntry): boolean {
   if (entry.cloudSync?.conversationId === undefined) return false;
   const synced = entry.cloudSync.syncedProjectId;
@@ -2000,29 +2013,51 @@ export function conversationMetadataNeedsSync(entry: ConversationEntry): boolean
   );
 }
 
+function owesCloudSync(entry: ConversationEntry, owner: ManagedCloudOwner): boolean {
+  if (!sameManagedCloudOwner(entry.owner, owner)) return false;
+  if (!isCloudMetadataPersistenceEligible(entry)) return false;
+  if (
+    entry.cloudSync?.blockedReason === 'not-found' ||
+    entry.cloudSync?.blockedReason === 'workspace'
+  ) {
+    return false;
+  }
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    (entry.cloudSync?.conversationId !== undefined &&
+      (conversationMetadataNeedsSync(entry) ||
+        entry.cloudSync.organizationId === undefined ||
+        entry.cloudSync.createAcknowledged !== true))
+  );
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
   assertManagedCloudOwner(owner);
   const now = Date.now();
-  return (await readAfterMutations()).conversations.filter((entry) => {
-    if (!sameManagedCloudOwner(entry.owner, owner)) return false;
-    if (!isCloudMetadataPersistenceEligible(entry)) return false;
-    if (entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) return false;
-    if (
-      entry.cloudSync?.blockedReason === 'not-found' ||
-      entry.cloudSync?.blockedReason === 'workspace'
-    ) {
-      return false;
+  return (await readAfterMutations()).conversations.filter(
+    (entry) =>
+      !(entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) &&
+      owesCloudSync(entry, owner),
+  );
+}
+
+export async function earliestCloudSyncRetryAt(
+  owner: ManagedCloudOwner,
+): Promise<number | undefined> {
+  assertManagedCloudOwner(owner);
+  const now = Date.now();
+  let earliest: number | undefined;
+  for (const entry of (await readAfterMutations()).conversations) {
+    const retryAfter = entry.cloudSync?.retryAfter;
+    if (entry.cloudSync?.state === 'blocked' || retryAfter === undefined || retryAfter <= now) {
+      continue;
     }
-    return (
-      pendingCloudMessages(entry).length > 0 ||
-      (entry.cloudSync?.conversationId !== undefined &&
-        (conversationMetadataNeedsSync(entry) ||
-          entry.cloudSync.organizationId === undefined ||
-          entry.cloudSync.createAcknowledged !== true))
-    );
-  });
+    if (earliest !== undefined && retryAfter >= earliest) continue;
+    if (owesCloudSync(entry, owner)) earliest = retryAfter;
+  }
+  return earliest;
 }
 
 export async function claimCloudConversationBinding(
@@ -2110,7 +2145,10 @@ export async function recordCloudMessagesSynced(
     } else {
       delete cloudSync.lastError;
       delete cloudSync.retryAfter;
-      if (cloudSync.blockedReason === 'auth') delete cloudSync.blockedReason;
+      delete cloudSync.retryAfterStatedByServer;
+      if (cloudSync.blockedReason === 'auth' || cloudSync.blockedReason === 'policy') {
+        delete cloudSync.blockedReason;
+      }
     }
     store.conversations = store.conversations.map((candidate, candidateIndex) =>
       candidateIndex === index ? { ...existing, messages, cloudSync } : candidate,

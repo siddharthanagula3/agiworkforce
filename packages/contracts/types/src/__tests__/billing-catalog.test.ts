@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ATTACHMENT_BYTES } from '../chat';
+import { MAX_PROJECT_KNOWLEDGE_FILES } from '../suite-contracts';
 import {
   BILLING_PLAN_CAPABILITY_TIERS,
   billingPlanCapabilityUpgradeMessage,
@@ -26,11 +27,16 @@ import {
   isContractPricedPlan,
   BILLING_PLAN_PRODUCT_LIMITS,
   MAX_PLAN_ATTACHMENT_BYTES,
+  MAX_PLAN_CHAT_FILE_BYTES,
+  getPlanDailyChatFileUploadBytes,
+  getPlanMaxChatFileBytes,
+  getPlanMaxConcurrentChatFileIntakes,
   getBillingPlanProductLimits,
   getPlanMaxConcurrentTurns,
   getPlanMaxConnectorTools,
   getPlanMaxSandboxes,
   getPlanMaxScheduledTasks,
+  getPlanMaxAttachmentsPerMessage,
   getPlanCodeHarnessDailyCeilingCents,
   planIncludesAgiCode,
   agiCodeMinimumPlan,
@@ -288,20 +294,20 @@ describe('billing catalog', () => {
   describe('managed product limits', () => {
     it('uses the founder-set project and custom MCP limits', () => {
       expect(getBillingPlanProductLimits('free')).toMatchObject({
-        projects: 1,
+        projects: 5,
         customMcpServers: 0,
         maxConnectorTools: 0,
       });
       expect(getBillingPlanProductLimits('basic')).toMatchObject({
-        projects: 5,
+        projects: 'unlimited',
         customMcpServers: 5,
       });
       expect(getBillingPlanProductLimits('pro')).toMatchObject({
-        projects: 25,
+        projects: 'unlimited',
         customMcpServers: 25,
       });
       expect(getBillingPlanProductLimits('team')).toMatchObject({
-        projects: 25,
+        projects: 'unlimited',
         customMcpServers: 25,
       });
       expect(getBillingPlanProductLimits('max')).toMatchObject({
@@ -319,7 +325,36 @@ describe('billing catalog', () => {
       expect(getBillingPlanProductLimits(undefined)).toBeNull();
     });
 
-    // intentionally plateau at the absolute five-per-user safety ceiling.
+    it('gives every plan twenty files per message and an unknown plan none', () => {
+      for (const [tier, limits] of Object.entries(BILLING_PLAN_PRODUCT_LIMITS)) {
+        expect(limits.maxAttachmentsPerMessage, tier).toBe(20);
+        expect(getPlanMaxAttachmentsPerMessage(tier), tier).toBe(20);
+      }
+      expect(getPlanMaxAttachmentsPerMessage('hobby')).toBe(0);
+    });
+
+    it('sets how many scheduled tasks each plan may keep', () => {
+      expect(
+        Object.fromEntries(
+          (['free', 'basic', 'pro', 'max', 'max_15x', 'team', 'team_premium'] as const).map(
+            (tier) => [tier, getPlanMaxScheduledTasks(tier)],
+          ),
+        ),
+      ).toEqual({
+        free: 0,
+        basic: 3,
+        pro: 5,
+        max: 15,
+        max_15x: 25,
+        team: 10,
+        team_premium: 15,
+      });
+    });
+
+    it('lets one project hold forty knowledge files', () => {
+      expect(MAX_PROJECT_KNOWLEDGE_FILES).toBe(40);
+    });
+
     it('scales compute dimensions across paid tiers without exceeding the per-user sandbox ceiling', () => {
       const tiers = ['free', 'basic', 'pro', 'max', 'max_15x'] as const;
       const turns = tiers.map((tier) => getPlanMaxConcurrentTurns(tier) ?? Number.MAX_SAFE_INTEGER);
@@ -458,6 +493,112 @@ describe('billing catalog', () => {
         expect(limits.maxAttachmentBytes, tier).toBeLessThanOrEqual(MAX_ATTACHMENT_BYTES);
       }
       expect(MAX_PLAN_ATTACHMENT_BYTES).toBeLessThanOrEqual(MAX_ATTACHMENT_BYTES);
+    });
+  });
+
+  describe('large chat file limits', () => {
+    const MIB = 1024 ** 2;
+    const GIB = 1024 ** 3;
+    const tiers = Object.keys(BILLING_PLAN_PRODUCT_LIMITS) as BillingPlanTier[];
+    const INLINE_ONLY: readonly BillingPlanTier[] = ['local-only', 'byok', 'free'];
+
+    const expectedByTier: Record<
+      Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>,
+      { daily: number; intakes: number }
+    > = {
+      basic: { daily: 2 * GIB, intakes: 3 },
+      pro: { daily: 10 * GIB, intakes: 3 },
+      max: { daily: 25 * GIB, intakes: 5 },
+      max_15x: { daily: 50 * GIB, intakes: 5 },
+      team: { daily: 25 * GIB, intakes: 5 },
+      team_premium: { daily: 25 * GIB, intakes: 5 },
+      enterprise: { daily: 50 * GIB, intakes: 5 },
+    };
+
+    it('defines every field on every tier as a whole number of bytes or intakes', () => {
+      for (const tier of tiers) {
+        const limits = BILLING_PLAN_PRODUCT_LIMITS[tier];
+        for (const value of [
+          limits.maxChatFileBytes,
+          limits.dailyChatFileUploadBytes,
+          limits.maxConcurrentChatFileIntakes,
+        ]) {
+          expect(Number.isSafeInteger(value), tier).toBe(true);
+          expect(value, tier).toBeGreaterThanOrEqual(0);
+        }
+      }
+    });
+
+    it('keeps Free, BYOK and Local at the inline limit with no budget and no intakes', () => {
+      for (const tier of INLINE_ONLY) {
+        const limits = BILLING_PLAN_PRODUCT_LIMITS[tier];
+        expect(limits.maxChatFileBytes, tier).toBe(MAX_ATTACHMENT_BYTES);
+        expect(limits.dailyChatFileUploadBytes, tier).toBe(0);
+        expect(limits.maxConcurrentChatFileIntakes, tier).toBe(0);
+      }
+    });
+
+    it('gives every paid tier 500 MiB per file and its budget and intakes', () => {
+      for (const [tier, expected] of Object.entries(expectedByTier)) {
+        const limits = BILLING_PLAN_PRODUCT_LIMITS[tier as BillingPlanTier];
+        expect(limits.maxChatFileBytes, tier).toBe(500 * MIB);
+        expect(limits.dailyChatFileUploadBytes, tier).toBe(expected.daily);
+        expect(limits.maxConcurrentChatFileIntakes, tier).toBe(expected.intakes);
+      }
+    });
+
+    it('leaves no paid tier below Free on any of the three fields', () => {
+      const free = BILLING_PLAN_PRODUCT_LIMITS.free;
+      for (const tier of tiers) {
+        const limits = BILLING_PLAN_PRODUCT_LIMITS[tier];
+        expect(limits.maxChatFileBytes, tier).toBeGreaterThanOrEqual(free.maxChatFileBytes);
+        expect(limits.dailyChatFileUploadBytes, tier).toBeGreaterThanOrEqual(
+          free.dailyChatFileUploadBytes,
+        );
+        expect(limits.maxConcurrentChatFileIntakes, tier).toBeGreaterThanOrEqual(
+          free.maxConcurrentChatFileIntakes,
+        );
+      }
+    });
+
+    it('lets one day of uploads hold at least one file of the plan size', () => {
+      for (const tier of tiers) {
+        const limits = BILLING_PLAN_PRODUCT_LIMITS[tier];
+        if (limits.maxConcurrentChatFileIntakes === 0) continue;
+        expect(limits.dailyChatFileUploadBytes, tier).toBeGreaterThanOrEqual(
+          limits.maxChatFileBytes,
+        );
+      }
+    });
+
+    it('answers each getter from the tier and gives an unknown plan nothing', () => {
+      for (const tier of tiers) {
+        const limits = BILLING_PLAN_PRODUCT_LIMITS[tier];
+        expect(getPlanMaxChatFileBytes(tier), tier).toBe(limits.maxChatFileBytes);
+        expect(getPlanDailyChatFileUploadBytes(tier), tier).toBe(limits.dailyChatFileUploadBytes);
+        expect(getPlanMaxConcurrentChatFileIntakes(tier), tier).toBe(
+          limits.maxConcurrentChatFileIntakes,
+        );
+      }
+      for (const unknown of ['enterprise-plus', '', null, undefined]) {
+        expect(getPlanMaxChatFileBytes(unknown)).toBe(0);
+        expect(getPlanDailyChatFileUploadBytes(unknown)).toBe(0);
+        expect(getPlanMaxConcurrentChatFileIntakes(unknown)).toBe(0);
+      }
+    });
+
+    it('exports the largest plan file size and leaves the inline attachment size alone', () => {
+      expect(MAX_PLAN_CHAT_FILE_BYTES).toBe(500 * MIB);
+      expect(MAX_PLAN_CHAT_FILE_BYTES).toBe(
+        Math.max(...tiers.map((tier) => BILLING_PLAN_PRODUCT_LIMITS[tier].maxChatFileBytes)),
+      );
+      expect(MAX_ATTACHMENT_BYTES).toBe(25 * MIB);
+      for (const tier of tiers) {
+        expect(BILLING_PLAN_PRODUCT_LIMITS[tier].maxAttachmentBytes, tier).toBe(
+          MAX_ATTACHMENT_BYTES,
+        );
+      }
+      expect(MAX_PLAN_ATTACHMENT_BYTES).toBe(MAX_ATTACHMENT_BYTES);
     });
   });
 });

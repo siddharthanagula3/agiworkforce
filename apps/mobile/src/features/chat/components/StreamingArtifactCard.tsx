@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
-import { View, Platform } from 'react-native';
+import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Code2 } from 'lucide-react-native';
 import {
   computeDerivedArtifactId,
   extractCodeBlocks,
   extractTrailingUnclosedBlock,
+  withoutTitleDirectives,
 } from '@agiworkforce/artifacts';
 import { Text } from '@/components/ui/Text';
+import { withoutArtifactMarker } from '@/src/features/chat/utils/artifactMarker';
 import { useThemeColors } from '@/src/ui/theme';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
@@ -17,12 +20,19 @@ const STREAMING_ARTIFACT_MIN_LINES = 4;
 const STREAMING_ARTIFACT_TITLE = 'Generating artifact';
 const STOPPED_ARTIFACT_TITLE = 'Stopped artifact';
 const INTERRUPTED_ARTIFACT_NOTICE =
-  'This artifact stopped before it finished. What arrived is kept; regenerate for the whole document.';
+  'Stopped before it finished. Regenerate for the whole document.';
+
+export function streamingArtifactBlock(content: string) {
+  const block = extractTrailingUnclosedBlock(content);
+  if (!block || block.content.split('\n').length < STREAMING_ARTIFACT_MIN_LINES) return null;
+  return block;
+}
 
 interface StreamingArtifactCardProps {
   conversationId: string;
   messageId: string;
   content: string;
+  offered: boolean;
   isStreaming: boolean;
   failed: boolean;
   finalArtifacts: Artifact[];
@@ -32,6 +42,7 @@ export function StreamingArtifactCard({
   conversationId,
   messageId,
   content,
+  offered,
   isStreaming,
   failed,
   finalArtifacts,
@@ -40,9 +51,8 @@ export function StreamingArtifactCard({
   const [opened, setOpened] = useState<{ id: string; ordinal: number } | null>(null);
 
   const artifact = useMemo<(Artifact & { ordinal: number }) | null>(() => {
-    const block = extractTrailingUnclosedBlock(content);
+    const block = offered ? streamingArtifactBlock(content) : null;
     if (!block) return null;
-    if (block.content.split('\n').length < STREAMING_ARTIFACT_MIN_LINES) return null;
     return {
       ordinal: block.ordinal,
       id: computeDerivedArtifactId(conversationId, messageId, block.ordinal),
@@ -51,7 +61,7 @@ export function StreamingArtifactCard({
       content: block.content,
       ...(block.language ? { language: block.language } : {}),
     };
-  }, [content, conversationId, isStreaming, messageId]);
+  }, [content, conversationId, isStreaming, messageId, offered]);
   const stateLabel = isStreaming ? 'Writing…' : failed ? 'Failed' : 'Stopped';
 
   const viewed = useMemo<Artifact | null>(() => {
@@ -78,7 +88,7 @@ export function StreamingArtifactCard({
 
   if (!artifact) return viewer;
 
-  const tail = artifact.content
+  const tail = withoutTitleDirectives(withoutArtifactMarker(artifact.content))
     .split('\n')
     .filter((line) => line.trim())
     .slice(-2)
@@ -137,7 +147,7 @@ export function StreamingArtifactCard({
             fontSize: typeScale.caption,
             lineHeight: 18,
             color: colors.textMuted,
-            fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
+            fontFamily: codeFontFamily,
           }}
           numberOfLines={2}
         >

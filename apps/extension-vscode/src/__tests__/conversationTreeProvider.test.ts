@@ -49,6 +49,33 @@ describe('ConversationTreeProvider', () => {
     );
   });
 
+  it('tells open chats when a session is archived or permanently deleted', async () => {
+    const runtime = {
+      listThreads: vi.fn().mockResolvedValue({
+        threads: [
+          thread('kept', '2026-07-13T00:00:00Z', '/workspace/a'),
+          thread('gone', '2026-07-13T00:00:00Z', '/workspace/a'),
+        ],
+      }),
+      archiveThread: vi.fn().mockResolvedValue(undefined),
+      deleteThread: vi.fn().mockResolvedValue(undefined),
+    };
+    vscode.workspace.workspaceFolders = [
+      { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+    ];
+    const provider = new ConversationTreeProvider({
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool);
+    const removed: string[] = [];
+    provider.onDidRemoveThread((id) => removed.push(id));
+
+    await provider.archiveThread('kept');
+    await provider.deleteThread('gone');
+
+    expect(removed).toEqual(['kept', 'gone']);
+    provider.dispose();
+  });
+
   it('lists every workspace, sorts newest first, and routes reads to the owning runtime', async () => {
     const a = {
       listThreads: vi.fn().mockResolvedValue({

@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Refresh button) 1`] = `
+exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (Regenerate in the More menu) 1`] = `
 <Modal
   accessibilityViewIsModal={true}
   animationType="slide"
@@ -35,7 +35,6 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           {
             "alignItems": "center",
             "flexDirection": "row",
-            "gap": 8,
           }
         }
       >
@@ -48,6 +47,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
               "flex": 1,
               "fontSize": 15,
               "fontWeight": "600",
+              "paddingLeft": 4,
             }
           }
         >
@@ -87,16 +87,17 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
               "opacity": 1,
-              "padding": 8,
+              "width": 44,
             }
           }
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-globe"
           />
         </View>
@@ -134,63 +135,18 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
               "opacity": 1,
-              "padding": 8,
+              "width": 44,
             }
           }
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-download"
-          />
-        </View>
-        <View
-          accessibilityLabel="Regenerate artifact"
-          accessibilityRole="button"
-          accessibilityState={
-            {
-              "busy": undefined,
-              "checked": undefined,
-              "disabled": undefined,
-              "expanded": undefined,
-              "selected": undefined,
-            }
-          }
-          accessibilityValue={
-            {
-              "max": undefined,
-              "min": undefined,
-              "now": undefined,
-              "text": undefined,
-            }
-          }
-          accessible={true}
-          collapsable={false}
-          focusable={true}
-          onBlur={[Function]}
-          onClick={[Function]}
-          onFocus={[Function]}
-          onResponderGrant={[Function]}
-          onResponderMove={[Function]}
-          onResponderRelease={[Function]}
-          onResponderTerminate={[Function]}
-          onResponderTerminationRequest={[Function]}
-          onStartShouldSetResponder={[Function]}
-          style={
-            {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
-              "padding": 8,
-            }
-          }
-        >
-          <View
-            color="#aaa"
-            size={17}
-            testID="icon-refresh-cw"
           />
         </View>
         <View
@@ -227,16 +183,66 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
-              "padding": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
             }
           }
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-copy"
+          />
+        </View>
+        <View
+          accessibilityHint="Regenerate or report this artifact"
+          accessibilityLabel="More artifact actions"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
+            }
+          }
+          testID="artifact-fullscreen-more"
+        >
+          <View
+            color="#aaa"
+            size={20}
+            testID="icon-more-horizontal"
           />
         </View>
         <View
@@ -276,8 +282,6 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
               "justifyContent": "center",
               "minHeight": 44,
               "minWidth": 44,
@@ -287,7 +291,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-x"
           />
         </View>
@@ -296,26 +300,35 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
     <RCTScrollView
       contentContainerStyle={
         {
+          "alignSelf": "center",
+          "maxWidth": 720,
           "padding": 16,
           "paddingBottom": 58,
+          "width": "100%",
         }
       }
       horizontal={false}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
       style={
         {
           "flex": 1,
         }
       }
+      testID="artifact-fullscreen-document"
     >
       <View>
-        <View
+        <Text
           style={
             {
-              "marginBottom": 6,
+              "color": "#777",
+              "fontSize": 14,
+              "marginBottom": 4,
             }
           }
-        />
+        >
+          python
+        </Text>
         <RCTScrollView
           contentContainerStyle={
             {
@@ -323,6 +336,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
             }
           }
           horizontal={true}
+          scrollEventThrottle={16}
           showsHorizontalScrollIndicator={true}
           style={
             {
@@ -332,91 +346,112 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
               "borderWidth": 1,
             }
           }
+          testID="artifact-fullscreen-source"
         >
           <View>
-            <Text
-              selectable={true}
+            <View
               style={
                 {
-                  "color": "#fff",
-                  "fontFamily": "Menlo",
-                  "fontSize": 14,
-                  "lineHeight": 20,
+                  "flexDirection": "row",
                 }
               }
             >
               <Text
+                accessibilityElementsHidden={true}
+                importantForAccessibility="no-hide-descendants"
+                selectable={false}
                 style={
                   {
-                    "color": "#a78bfa",
+                    "color": "#777",
+                    "fontFamily": "Menlo",
+                    "fontSize": 14,
+                    "fontVariant": [
+                      "tabular-nums",
+                    ],
+                    "lineHeight": 20,
+                    "paddingRight": 8,
+                    "textAlign": "right",
                   }
                 }
-              >
-                def
-              </Text>
-               fib(n):
-    
-              <Text
-                style={
-                  {
-                    "color": "#a78bfa",
-                  }
-                }
-              >
-                return
-              </Text>
-               n 
-              <Text
-                style={
-                  {
-                    "color": "#a78bfa",
-                  }
-                }
-              >
-                if
-              </Text>
-               n &lt; 
-              <Text
-                style={
-                  {
-                    "color": "#fbbf24",
-                  }
-                }
-              >
-                2
-              </Text>
-               
-              <Text
-                style={
-                  {
-                    "color": "#a78bfa",
-                  }
-                }
-              >
-                else
-              </Text>
-               fib(n-
-              <Text
-                style={
-                  {
-                    "color": "#fbbf24",
-                  }
-                }
+                testID="artifact-source-line-numbers"
               >
                 1
+2
               </Text>
-              ) + fib(n-
               <Text
+                selectable={true}
                 style={
                   {
-                    "color": "#fbbf24",
+                    "color": "#fff",
+                    "fontFamily": "Menlo",
+                    "fontSize": 14,
+                    "lineHeight": 20,
                   }
                 }
               >
-                2
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  print
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  fib
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fbbf24",
+                    }
+                  }
+                >
+                  3
+                </Text>
+                ))
+
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  print
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  fib
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fbbf24",
+                    }
+                  }
+                >
+                  4
+                </Text>
+                ))
               </Text>
-              )
-            </Text>
+            </View>
           </View>
         </RCTScrollView>
       </View>
@@ -425,7 +460,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
 </Modal>
 `;
 
-exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Refresh button) 1`] = `
+exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Regenerate in the More menu) 1`] = `
 <Modal
   accessibilityViewIsModal={true}
   animationType="slide"
@@ -460,7 +495,6 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           {
             "alignItems": "center",
             "flexDirection": "row",
-            "gap": 8,
           }
         }
       >
@@ -473,6 +507,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
               "flex": 1,
               "fontSize": 15,
               "fontWeight": "600",
+              "paddingLeft": 4,
             }
           }
         >
@@ -512,16 +547,17 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
               "opacity": 1,
-              "padding": 8,
+              "width": 44,
             }
           }
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-globe"
           />
         </View>
@@ -559,16 +595,17 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
               "opacity": 1,
-              "padding": 8,
+              "width": 44,
             }
           }
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-download"
           />
         </View>
@@ -606,16 +643,66 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
-              "padding": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
             }
           }
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-copy"
+          />
+        </View>
+        <View
+          accessibilityHint="Report this artifact"
+          accessibilityLabel="More artifact actions"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
+            }
+          }
+          testID="artifact-fullscreen-more"
+        >
+          <View
+            color="#aaa"
+            size={20}
+            testID="icon-more-horizontal"
           />
         </View>
         <View
@@ -655,8 +742,6 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "#242424",
-              "borderRadius": 8,
               "justifyContent": "center",
               "minHeight": 44,
               "minWidth": 44,
@@ -666,7 +751,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         >
           <View
             color="#aaa"
-            size={17}
+            size={20}
             testID="icon-x"
           />
         </View>
@@ -675,26 +760,35 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
     <RCTScrollView
       contentContainerStyle={
         {
+          "alignSelf": "center",
+          "maxWidth": 720,
           "padding": 16,
           "paddingBottom": 58,
+          "width": "100%",
         }
       }
       horizontal={false}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
       style={
         {
           "flex": 1,
         }
       }
+      testID="artifact-fullscreen-document"
     >
       <View>
-        <View
+        <Text
           style={
             {
-              "marginBottom": 6,
+              "color": "#777",
+              "fontSize": 14,
+              "marginBottom": 4,
             }
           }
-        />
+        >
+          python
+        </Text>
         <RCTScrollView
           contentContainerStyle={
             {
@@ -702,6 +796,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
             }
           }
           horizontal={true}
+          scrollEventThrottle={16}
           showsHorizontalScrollIndicator={true}
           style={
             {
@@ -711,91 +806,112 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
               "borderWidth": 1,
             }
           }
+          testID="artifact-fullscreen-source"
         >
           <View>
-            <Text
-              selectable={true}
+            <View
               style={
                 {
-                  "color": "#fff",
-                  "fontFamily": "Menlo",
-                  "fontSize": 14,
-                  "lineHeight": 20,
+                  "flexDirection": "row",
                 }
               }
             >
               <Text
+                accessibilityElementsHidden={true}
+                importantForAccessibility="no-hide-descendants"
+                selectable={false}
                 style={
                   {
-                    "color": "#a78bfa",
+                    "color": "#777",
+                    "fontFamily": "Menlo",
+                    "fontSize": 14,
+                    "fontVariant": [
+                      "tabular-nums",
+                    ],
+                    "lineHeight": 20,
+                    "paddingRight": 8,
+                    "textAlign": "right",
                   }
                 }
-              >
-                def
-              </Text>
-               fib(n):
-    
-              <Text
-                style={
-                  {
-                    "color": "#a78bfa",
-                  }
-                }
-              >
-                return
-              </Text>
-               n 
-              <Text
-                style={
-                  {
-                    "color": "#a78bfa",
-                  }
-                }
-              >
-                if
-              </Text>
-               n &lt; 
-              <Text
-                style={
-                  {
-                    "color": "#fbbf24",
-                  }
-                }
-              >
-                2
-              </Text>
-               
-              <Text
-                style={
-                  {
-                    "color": "#a78bfa",
-                  }
-                }
-              >
-                else
-              </Text>
-               fib(n-
-              <Text
-                style={
-                  {
-                    "color": "#fbbf24",
-                  }
-                }
+                testID="artifact-source-line-numbers"
               >
                 1
+2
               </Text>
-              ) + fib(n-
               <Text
+                selectable={true}
                 style={
                   {
-                    "color": "#fbbf24",
+                    "color": "#fff",
+                    "fontFamily": "Menlo",
+                    "fontSize": 14,
+                    "lineHeight": 20,
                   }
                 }
               >
-                2
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  print
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  fib
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fbbf24",
+                    }
+                  }
+                >
+                  3
+                </Text>
+                ))
+
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  print
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fff",
+                    }
+                  }
+                >
+                  fib
+                </Text>
+                (
+                <Text
+                  style={
+                    {
+                      "color": "#fbbf24",
+                    }
+                  }
+                >
+                  4
+                </Text>
+                ))
               </Text>
-              )
-            </Text>
+            </View>
           </View>
         </RCTScrollView>
       </View>

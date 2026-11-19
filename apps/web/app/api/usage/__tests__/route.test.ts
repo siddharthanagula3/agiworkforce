@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MICROUSD_PER_CREDIT, getPlanCreditAllowance } from '@agiworkforce/types';
 
 const {
   mockGetUserScopedDb,
@@ -38,6 +39,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: mockGetRollingUsage,
+  getAccountOverageMicrousd: async () => 0,
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
@@ -59,6 +61,7 @@ vi.mock('@/lib/cors', () => ({
 
 import { GET } from '../route';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { createError } from '@/lib/errors';
 
 function makeRequest() {
   return new Request('http://localhost:3000/api/usage', { method: 'GET' }) as never;
@@ -198,10 +201,11 @@ describe('GET /api/usage', () => {
       weeklyUsagePercentage: 60,
       weeklyResetAt: '2026-07-22T00:00:00.000Z',
       hasUsageRemaining: true,
-      monthlyUsedMicrousd: 75_000,
-      weeklyUsedMicrousd: 45_000,
-      fiveHourUsedMicrousd: 5_000,
+      monthlyUsedMicrousd: 15 * MICROUSD_PER_CREDIT,
+      weeklyUsedMicrousd: 9 * MICROUSD_PER_CREDIT,
+      fiveHourUsedMicrousd: 1 * MICROUSD_PER_CREDIT,
     });
+    const free = getPlanCreditAllowance('free');
 
     const res = await GET(makeRequest());
     const json = await res.json();
@@ -214,9 +218,24 @@ describe('GET /api/usage', () => {
     expect(json.weekly_reset_at).toBe('2026-07-22T00:00:00.000Z');
     expect(json.flagship_weekly_usage_percentage).toBe(0);
     expect(json.credits).toMatchObject({
-      monthly: { allowance: 20, used: 15, remaining: 5, reset_at: '2026-07-19T12:00:00.000Z' },
-      weekly: { allowance: 15, used: 9, remaining: 6, reset_at: '2026-07-22T00:00:00.000Z' },
-      five_hour: { allowance: 2, used: 1, remaining: 1, reset_at: '2026-07-18T17:00:00.000Z' },
+      monthly: {
+        allowance: free.monthly,
+        used: 15,
+        remaining: free.monthly - 15,
+        reset_at: '2026-07-19T12:00:00.000Z',
+      },
+      weekly: {
+        allowance: free.weekly,
+        used: 9,
+        remaining: free.weekly - 9,
+        reset_at: '2026-07-22T00:00:00.000Z',
+      },
+      five_hour: {
+        allowance: free.fiveHour,
+        used: 1,
+        remaining: free.fiveHour - 1,
+        reset_at: '2026-07-18T17:00:00.000Z',
+      },
       flagship_weekly: null,
     });
     expect(json).not.toHaveProperty('usage_allocation');
@@ -317,6 +336,29 @@ describe('GET /api/usage', () => {
     mockGetUserScopedDb.mockRejectedValue(new Error('no session'));
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
+  });
+
+  it('answers a slow account check as 503 with a retry hint, never as signed out', async () => {
+    mockGetUserScopedDb.mockRejectedValue(
+      createError.serviceUnavailable('Unable to verify account status. Please try again shortly.'),
+    );
+
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(503);
+    expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect((await res.json()).error.code).toBe('SERVICE_UNAVAILABLE');
+  });
+
+  it('answers a locked-down workspace as 403 with the lockdown message, never as signed out', async () => {
+    const message =
+      'This workspace is locked down while an incident is investigated. Contact support.';
+    mockGetUserScopedDb.mockRejectedValue(createError.forbidden(message).asUserSafe());
+
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatchObject({ code: 'FORBIDDEN', message });
   });
 
   it('preserves a scoped-key denial as 403 and declares the usage-read requirement', async () => {

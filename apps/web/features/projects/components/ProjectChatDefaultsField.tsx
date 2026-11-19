@@ -23,8 +23,7 @@ export function ProjectChatDefaultsField({
         New chats start with
       </p>
       <p className="text-xs text-muted-foreground">
-        Tools switched on for every new chat in this project. You can still turn them off in any
-        chat, and a tool your model or plan cannot use stays off.
+        Tools on for every new chat here. You can turn them off in any chat.
       </p>
       <label className="flex items-start gap-3">
         <input

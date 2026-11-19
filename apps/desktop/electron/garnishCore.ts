@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {
   ALWAYS_ON_HOST_SHORTCUTS,
   DEFAULT_HOST_AGENT_NOTIFICATIONS,
@@ -16,6 +17,13 @@ import {
   type HostPreferences,
   type HostShortcutKey,
   type SessionCompletionAlerts,
+  type AutoArchiveIdleDays,
+  type HostTerminalPreferences,
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
+  isAutoArchiveIdleDays,
+  DEFAULT_TERMINAL_PREFERENCES,
+  normalizeTerminalPreferences,
+  isWorktreeBranchPrefix,
 } from '@agiworkforce/local-runtime-contract';
 
 /**
@@ -547,6 +555,10 @@ export interface GarnishPreferences {
   agentNotifications: HostAgentNotificationPreferences;
   dictateIntoFocusedApp: boolean;
   preventSleepWhileRunning: boolean;
+  worktreeBranchPrefix: string;
+  worktreeLocation: string;
+  autoArchiveIdleDays: AutoArchiveIdleDays;
+  terminal: HostTerminalPreferences;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
@@ -562,6 +574,10 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   agentNotifications: DEFAULT_HOST_AGENT_NOTIFICATIONS,
   dictateIntoFocusedApp: false,
   preventSleepWhileRunning: true,
+  worktreeBranchPrefix: DEFAULT_WORKTREE_BRANCH_PREFIX,
+  worktreeLocation: '',
+  autoArchiveIdleDays: 0,
+  terminal: DEFAULT_TERMINAL_PREFERENCES,
 };
 
 export const ZOOM_LEVEL_STEP = 1;
@@ -618,6 +634,19 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
       typeof source['preventSleepWhileRunning'] === 'boolean'
         ? source['preventSleepWhileRunning']
         : DEFAULT_PREFERENCES.preventSleepWhileRunning,
+    worktreeBranchPrefix:
+      typeof source['worktreeBranchPrefix'] === 'string' &&
+      isWorktreeBranchPrefix(source['worktreeBranchPrefix'])
+        ? source['worktreeBranchPrefix']
+        : DEFAULT_PREFERENCES.worktreeBranchPrefix,
+    worktreeLocation:
+      typeof source['worktreeLocation'] === 'string' && path.isAbsolute(source['worktreeLocation'])
+        ? source['worktreeLocation']
+        : DEFAULT_PREFERENCES.worktreeLocation,
+    autoArchiveIdleDays: isAutoArchiveIdleDays(source['autoArchiveIdleDays'])
+      ? source['autoArchiveIdleDays']
+      : DEFAULT_PREFERENCES.autoArchiveIdleDays,
+    terminal: normalizeTerminalPreferences(source['terminal']),
   };
 }
 

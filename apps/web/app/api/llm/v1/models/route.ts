@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { withErrorHandler } from '@/lib/error-handler';
+import { handleError, withErrorHandler } from '@/lib/error-handler';
 import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
@@ -26,6 +26,7 @@ import {
 import { readKillSwitchGate, type KillSwitchGate } from '@/lib/feature-flags/capability-gate';
 import { buildFlagSubject } from '@/lib/feature-flags/flag-evaluation-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { isAuthGateRefusal } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { isAccountUnavailableError } from '@/lib/api-auth';
@@ -248,19 +249,35 @@ async function handleListModels(request: NextRequest) {
         { status: 403, headers: getCorsHeaders(request) },
       );
     }
-    if (presentedAuthorization) {
-      const insufficientScope = isApiKeyScopeError(error);
+    if (presentedAuthorization && isApiKeyScopeError(error)) {
       return NextResponse.json(
         {
           error: {
-            message: insufficientScope
-              ? 'API key does not have the required scope'
-              : 'Invalid authentication token',
+            message: 'API key does not have the required scope',
             type: 'invalid_request_error',
-            code: insufficientScope ? 'insufficient_scope' : 'invalid_api_key',
+            code: 'insufficient_scope',
           },
         },
-        { status: insufficientScope ? 403 : 401, headers: getCorsHeaders(request) },
+        { status: 403, headers: getCorsHeaders(request) },
+      );
+    }
+    if (isAuthGateRefusal(error)) {
+      const refusal = handleError(error);
+      for (const [name, value] of Object.entries(getCorsHeaders(request))) {
+        refusal.headers.set(name, value);
+      }
+      return refusal;
+    }
+    if (presentedAuthorization) {
+      return NextResponse.json(
+        {
+          error: {
+            message: 'Invalid authentication token',
+            type: 'invalid_request_error',
+            code: 'invalid_api_key',
+          },
+        },
+        { status: 401, headers: getCorsHeaders(request) },
       );
     }
     return listModelsForRequest(request, ANONYMOUS_PLAN_TIER, ANONYMOUS_FLAG_SUBJECT_ID);

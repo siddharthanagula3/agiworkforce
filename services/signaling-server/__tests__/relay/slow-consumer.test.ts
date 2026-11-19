@@ -73,4 +73,24 @@ describe('a participant that stops reading', () => {
       mobile.close();
     }
   });
+
+  it('is dropped when its own replies back up, not only when forwarded traffic does', async () => {
+    const { desktop, mobile } = await pairedClients();
+    const backlog = vi.spyOn(WebSocket.prototype, 'bufferedAmount', 'get');
+    const desktopPort = (desktop.socket as unknown as { _socket: Socket })._socket.localPort;
+    backlog.mockImplementation(function (this: WebSocket) {
+      const socket = (this as unknown as { _socket: Socket | null })._socket;
+      return socket?.remotePort === desktopPort ? MAX_SOCKET_BUFFERED_BYTES + 1 : 0;
+    });
+    try {
+      desktop.send({ type: 'heartbeat' });
+      expect(await mobile.frame('peer_left')).toMatchObject({ type: 'peer_left', role: 'desktop' });
+      await desktop.closure();
+      expect(desktop.frames.some((frame) => frame['type'] === 'heartbeat_ack')).toBe(false);
+    } finally {
+      backlog.mockRestore();
+      desktop.close();
+      mobile.close();
+    }
+  });
 });

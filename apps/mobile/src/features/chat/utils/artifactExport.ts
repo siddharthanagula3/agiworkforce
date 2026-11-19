@@ -1,10 +1,19 @@
 import {
+  exportHtmlToPDF,
   exportSourceFile,
   exportToDocx,
   exportToMarkdown,
   exportToPDF,
   exportToText,
 } from '@/services/fileCreation';
+import { isDeckArtifact } from '@/src/features/chat/components/artifact-viewers/presentation/deckContent';
+import {
+  DECK_PDF_PAGE_HEIGHT,
+  DECK_PDF_PAGE_WIDTH,
+  deckPrintHtml,
+} from '@/src/features/chat/components/artifact-viewers/presentation/deckPrint';
+import { codeFileFor } from '@agiworkforce/unified-chat/code-file-name';
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat/tabular';
 import type { Artifact } from '@/types/chat';
 
 export type ArtifactExportFormat = 'markdown' | 'pdf' | 'docx' | 'text' | 'source';
@@ -14,52 +23,9 @@ export interface ArtifactExportOption {
   label: string;
   detail: string;
   extension: string;
+  fileName?: string;
+  slides?: boolean;
 }
-
-const SOURCE_EXTENSIONS: Readonly<Record<string, string>> = {
-  html: 'html',
-  htm: 'html',
-  svg: 'svg',
-  css: 'css',
-  javascript: 'js',
-  js: 'js',
-  jsx: 'jsx',
-  typescript: 'ts',
-  ts: 'ts',
-  tsx: 'tsx',
-  python: 'py',
-  py: 'py',
-  json: 'json',
-  csv: 'csv',
-  tsv: 'tsv',
-  yaml: 'yaml',
-  yml: 'yaml',
-  toml: 'toml',
-  ini: 'ini',
-  xml: 'xml',
-  sql: 'sql',
-  graphql: 'graphql',
-  bash: 'sh',
-  sh: 'sh',
-  shell: 'sh',
-  zsh: 'sh',
-  java: 'java',
-  kotlin: 'kt',
-  swift: 'swift',
-  go: 'go',
-  rust: 'rs',
-  ruby: 'rb',
-  php: 'php',
-  c: 'c',
-  cpp: 'cpp',
-  csharp: 'cs',
-  cs: 'cs',
-  scala: 'scala',
-  dart: 'dart',
-  lua: 'lua',
-  r: 'r',
-  mermaid: 'mmd',
-};
 
 const MARKDOWN_LANGUAGES = new Set(['markdown', 'md', 'mdx']);
 const PLAIN_TEXT_LANGUAGES = new Set(['text', 'txt', 'plaintext']);
@@ -68,12 +34,26 @@ function languageOf(artifact: Pick<Artifact, 'language'>): string {
   return artifact.language?.trim().toLowerCase() ?? '';
 }
 
-export function artifactSourceExtension(language: string | undefined): string {
-  return SOURCE_EXTENSIONS[language?.trim().toLowerCase() ?? ''] ?? 'txt';
+function sourceFileFor(language: string): { extension: string; fileName?: string } {
+  const file = codeFileFor(language);
+  if (file.extension === '') return { extension: '', fileName: file.fileName };
+  return { extension: file.extension };
 }
+
+export function artifactSourceExtension(language: string | undefined): string {
+  return sourceFileFor(language?.trim().toLowerCase() ?? '').extension;
+}
+
+export const DRAWN_DIAGRAM_EXPORT: ArtifactExportOption = {
+  format: 'source',
+  label: 'SVG image',
+  detail: 'The drawn diagram as an .svg file',
+  extension: 'svg',
+};
 
 export function artifactExportOptions(
   artifact: Pick<Artifact, 'type' | 'language'>,
+  content?: string,
 ): ArtifactExportOption[] {
   const language = languageOf(artifact);
   if (PLAIN_TEXT_LANGUAGES.has(language)) {
@@ -87,6 +67,24 @@ export function artifactExportOptions(
     artifact.type === 'research' ||
     MARKDOWN_LANGUAGES.has(language)
   ) {
+    if (content !== undefined && isDeckArtifact(artifact.language, content)) {
+      return [
+        {
+          format: 'pdf',
+          label: 'PDF',
+          detail: 'The slides, one per page',
+          extension: 'pdf',
+          slides: true,
+        },
+        {
+          format: 'markdown',
+          label: 'Markdown',
+          detail: 'A .md file that keeps the formatting',
+          extension: 'md',
+        },
+        { format: 'text', label: 'Plain text', detail: 'A .txt file', extension: 'txt' },
+      ];
+    }
     return [
       {
         format: 'markdown',
@@ -99,7 +97,18 @@ export function artifactExportOptions(
       { format: 'text', label: 'Plain text', detail: 'A .txt file', extension: 'txt' },
     ];
   }
-  const extension = artifactSourceExtension(language);
+  const { extension, fileName } = sourceFileFor(language);
+  if (fileName) {
+    return [
+      {
+        format: 'source',
+        label: fileName,
+        detail: `The source exactly as written, as ${fileName}`,
+        extension,
+        fileName,
+      },
+    ];
+  }
   return [
     {
       format: 'source',
@@ -108,6 +117,12 @@ export function artifactExportOptions(
       extension,
     },
   ];
+}
+
+function exportDeckToPDF(content: string, title: string) {
+  const html = deckPrintHtml(content);
+  if (!html) throw new Error('Cannot export empty content');
+  return exportHtmlToPDF(html, title, { width: DECK_PDF_PAGE_WIDTH, height: DECK_PDF_PAGE_HEIGHT });
 }
 
 export async function exportArtifact(
@@ -119,12 +134,20 @@ export async function exportArtifact(
     case 'markdown':
       return (await exportToMarkdown(content, title)).uri;
     case 'pdf':
-      return (await exportToPDF(content, title)).uri;
+      return option.slides
+        ? (await exportDeckToPDF(content, title)).uri
+        : (await exportToPDF(content, title)).uri;
     case 'docx':
       return (await exportToDocx(content, title)).uri;
     case 'text':
       return (await exportToText(content, title)).uri;
     case 'source':
-      return (await exportSourceFile(content, title, option.extension)).uri;
+      return (
+        await exportSourceFile(
+          spreadsheetSafeExport(content, option.extension).body,
+          option.fileName ?? title,
+          option.extension,
+        )
+      ).uri;
   }
 }

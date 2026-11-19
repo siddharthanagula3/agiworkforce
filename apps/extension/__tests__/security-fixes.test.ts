@@ -77,8 +77,8 @@ describe('H-1 DISCOVERY_MESSAGE_TYPES is empty', () => {
     expect(DISCOVERY_MESSAGE_TYPES.has('GET_AGI_BRIDGE_URL')).toBe(false);
   });
 
-  it('set is empty, no types bypass allowlist checks', () => {
-    expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
+  it('set holds only GET_PAGE_ACCESS, no other type bypasses allowlist checks', () => {
+    expect([...DISCOVERY_MESSAGE_TYPES]).toEqual(['GET_PAGE_ACCESS']);
   });
 });
 

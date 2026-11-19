@@ -21,8 +21,7 @@ export default function ChatNotFound() {
           Conversation not found
         </h2>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: '0 0 var(--space-5)' }}>
-          This conversation is no longer available. It may have been deleted, or you may not have
-          access to it.
+          It may have been deleted, or you no longer have access.
         </p>
         <a
           href="/chat"

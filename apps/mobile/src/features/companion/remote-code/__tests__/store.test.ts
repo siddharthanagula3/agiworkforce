@@ -128,7 +128,120 @@ describe('remote code store on the phone', () => {
       testRuns: [{ status: 'passed', passed: 5 }],
       fileChanges: [{ path: 'src/new.ts', kind: 'created' }],
     });
-    expect(thread?.messages.at(-1)).toEqual({ role: 'assistant', text: 'Done.' });
+    expect(thread?.messages.at(-1)).toEqual({
+      role: 'assistant',
+      text: 'Done.',
+      turnId: 'turn-1',
+    });
+  });
+
+  it('ties steps and thinking to their turn and keeps the thinking it gathered', () => {
+    ingestRemoteCodeControl('code.session.snapshot', snapshot());
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({
+        type: 'tool-started',
+        turnId: 'turn-1',
+        toolCallId: 'call-1',
+        name: 'shell',
+        summary: 'pnpm test',
+      }),
+    );
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'thinking-delta', turnId: 'turn-1', delta: 'Read the helper. ' }),
+    );
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'thinking-delta', turnId: 'turn-1', delta: 'Then test it.' }),
+    );
+
+    expect(useRemoteCodeStore.getState().threads[KEY]).toMatchObject({
+      tools: [{ toolCallId: 'call-1', state: 'running', turnId: 'turn-1' }],
+      thinking: [{ turnId: 'turn-1', text: 'Read the helper. Then test it.' }],
+    });
+
+    ingestRemoteCodeControl('code.session.snapshot', snapshot({ runningTasks: 2 }));
+    expect(useRemoteCodeStore.getState().threads[KEY]).toMatchObject({
+      thinking: [{ turnId: 'turn-1', text: 'Read the helper. Then test it.' }],
+      runningTasks: 2,
+    });
+
+    ingestRemoteCodeControl(
+      'code.session.snapshot',
+      snapshot({ thinking: [{ turnId: 'turn-1', text: 'From the computer.' }] }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]).toMatchObject({
+      thinking: [{ turnId: 'turn-1', text: 'From the computer.' }],
+      runningTasks: 0,
+    });
+  });
+
+  it('adds the message the computer took from the phone to the conversation', () => {
+    ingestRemoteCodeControl('code.session.snapshot', snapshot());
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'guidance-queued', queuedGuidance: ['add a test'] }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]?.queuedGuidance).toEqual(['add a test']);
+
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({
+        type: 'guidance-delivered',
+        turnId: 'turn-2',
+        queuedGuidance: [],
+        text: 'add a test',
+      }),
+    );
+    const thread = useRemoteCodeStore.getState().threads[KEY];
+    expect(thread?.queuedGuidance).toEqual([]);
+    expect(thread?.messages.at(-1)).toEqual({ role: 'user', text: 'add a test', turnId: 'turn-2' });
+
+    const before = thread?.messages.length;
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'guidance-delivered', turnId: 'turn-3', queuedGuidance: [] }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]?.messages).toHaveLength(before ?? -1);
+  });
+
+  it('keeps the choices of a question and whether the phone may answer it', () => {
+    ingestRemoteCodeControl('code.session.snapshot', snapshot());
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({
+        type: 'user-input-requested',
+        turnId: 'turn-1',
+        requestId: 'q-1',
+        question: 'Which branch?',
+        options: ['main', 'release'],
+        answerable: true,
+      }),
+    );
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({
+        type: 'approval-held',
+        requestId: 'q-1',
+        status: 'waiting',
+        message: 'Waiting at the computer.',
+      }),
+    );
+
+    expect(useRemoteCodeStore.getState().threads[KEY]).toMatchObject({
+      pendingQuestions: [{ requestId: 'q-1', options: ['main', 'release'], answerable: true }],
+      approvalHolds: { 'q-1': { status: 'waiting' } },
+    });
+
+    ingestRemoteCodeControl(
+      'code.session.event',
+      event({ type: 'user-input-answered', requestId: 'q-1' }),
+    );
+    expect(useRemoteCodeStore.getState().threads[KEY]).toMatchObject({
+      pendingQuestions: [],
+      approvalHolds: {},
+    });
   });
 
   it('shows a question pending when the phone joins, and one asked while it watches', () => {

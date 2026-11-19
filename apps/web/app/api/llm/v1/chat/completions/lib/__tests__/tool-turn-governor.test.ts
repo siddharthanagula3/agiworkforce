@@ -11,9 +11,6 @@ import {
 const SEARCH = 'web_search';
 const FETCH = 'url_fetch';
 
-const nameOf = (tool: { name: string }) => tool.name;
-const toolList = [{ name: SEARCH }, { name: FETCH }];
-
 describe('normaliseSearchQuery', () => {
   it('treats case, punctuation and word order as the same query', () => {
     expect(normaliseSearchQuery('Best CRM, 2026?')).toBe(normaliseSearchQuery('2026 best crm'));
@@ -38,14 +35,12 @@ describe('resolveTurnToolCallCap', () => {
 });
 
 describe('createToolTurnGovernor · withdrawal', () => {
-  it('removes a withdrawn tool from the offered set and leaves the rest', () => {
+  it('closes a withdrawn tool and leaves the rest open', () => {
     const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
-    expect(governor.offered(toolList, nameOf)).toHaveLength(2);
-
     governor.withdraw(SEARCH, 'unavailable');
 
-    expect(governor.offered(toolList, nameOf)).toEqual([{ name: FETCH }]);
     expect(governor.isWithdrawn(SEARCH)).toBe(true);
+    expect(governor.isWithdrawn(FETCH)).toBe(false);
     expect(governor.withdrawalReason(SEARCH)).toBe('unavailable');
   });
 
@@ -56,15 +51,10 @@ describe('createToolTurnGovernor · withdrawal', () => {
     expect(governor.withdrawalReason(SEARCH)).toBe('unavailable');
   });
 
-  it('ignores an empty tool name so provider-native tools stay on offer', () => {
+  it('ignores an empty tool name', () => {
     const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
     governor.withdraw('', 'unavailable');
-    expect(governor.offered([{ name: '' }], nameOf)).toHaveLength(1);
-  });
-
-  it('passes an undefined tool list straight through', () => {
-    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
-    expect(governor.offered(undefined, nameOf)).toBeUndefined();
+    expect(governor.isWithdrawn('')).toBe(false);
   });
 });
 
@@ -116,5 +106,33 @@ describe('createToolTurnGovernor · turn cap', () => {
 
   it('names the number of calls in the stopped row', () => {
     expect(turnToolCapRowSummary(16)).toBe('Stopped after 16 tool calls');
+  });
+});
+
+describe('noteFailedCall', () => {
+  it('reports a repeat for the same tool and arguments in any key order', () => {
+    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
+    expect(governor.noteFailedCall('create_office_file', { format: 'csv', title: 'A' })).toBe(
+      'first',
+    );
+    expect(governor.noteFailedCall('create_office_file', { title: 'A', format: 'csv' })).toBe(
+      'repeat',
+    );
+  });
+
+  it('keeps different arguments and different tools apart', () => {
+    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
+    governor.noteFailedCall('create_office_file', { format: 'csv', title: 'A' });
+    expect(governor.noteFailedCall('create_office_file', { format: 'csv', title: 'B' })).toBe(
+      'first',
+    );
+    expect(governor.noteFailedCall(FETCH, { format: 'csv', title: 'A' })).toBe('first');
+  });
+
+  it('treats the same failing call as new once a state-changing call has succeeded', () => {
+    const governor = createToolTurnGovernor(CHAT_TURN_TOOL_CALL_CAP);
+    governor.noteFailedCall('execute_code', { code: 'python main.py' });
+    governor.forgetFailedCalls();
+    expect(governor.noteFailedCall('execute_code', { code: 'python main.py' })).toBe('first');
   });
 });

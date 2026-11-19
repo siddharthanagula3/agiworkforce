@@ -23,7 +23,7 @@ function lineCountLabel(content: string): string {
 
 export function streamingArtifactFileName(language: string, content: string): string {
   const type = detectArtifactType(language, content) as ArtifactData['type'];
-  return artifactFileName({ title: extractArtifactTitle(content), type, language });
+  return artifactFileName({ title: extractArtifactTitle(content, language), type, language });
 }
 
 export function creatingArtifactLabel(language: string, content: string): string {

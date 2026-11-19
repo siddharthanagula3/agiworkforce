@@ -185,6 +185,9 @@ export type ChatTurnMemory = 'on' | 'off';
 /** The plan whose product capabilities the chat system prompt describes. */
 export type ChatTurnPlan = 'free' | 'pro';
 
+/** The project a chat sits in, as the chat system prompt's setup describes it. */
+export type ChatTurnProject = 'with_files';
+
 export interface EvalCase {
   readonly id: string;
   readonly family: string;
@@ -209,6 +212,8 @@ export interface EvalCase {
   readonly memory?: ChatTurnMemory;
   /** Read only when the run renders the product's chat system prompt; absent means free. */
   readonly plan?: ChatTurnPlan;
+  /** Read only when the run renders the product's chat system prompt, beside a declared memory. */
+  readonly project?: ChatTurnProject;
 }
 
 /**

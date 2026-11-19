@@ -244,19 +244,15 @@ function keepJpegSegment(marker: number, payload: Uint8Array): boolean {
 }
 
 function endOfScan(bytes: Uint8Array, from: number): number {
-  let cursor = from;
-  while (cursor + 1 < bytes.length) {
-    if (bytes[cursor] !== 0xff) {
-      cursor += 1;
-      continue;
-    }
+  let cursor = bytes.indexOf(0xff, from);
+  while (cursor !== -1 && cursor + 1 < bytes.length) {
     const next = bytes[cursor + 1] ?? 0;
     if (next === 0xff) {
       cursor += 1;
       continue;
     }
     if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
-      cursor += 2;
+      cursor = bytes.indexOf(0xff, cursor + 2);
       continue;
     }
     return cursor;

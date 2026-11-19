@@ -48,6 +48,7 @@ vi.mock('@/lib/services/deprovision-service', () => ({
 vi.mock('@/lib/server/identity', () => ({
   getRequestIdentity: vi.fn(async () => null),
   getIdentityProvider: vi.fn(() => ({})),
+  getIdentityAuthorizedParties: vi.fn(() => []),
 }));
 vi.mock('@/lib/server/request-context-cache', () => ({
   getCachedActiveOrganizationId: vi.fn(async () => null),
@@ -78,6 +79,7 @@ function member(userId: string, role: string) {
     organization_id: organizationId,
     user_id: userId,
     role,
+    status: 'active',
     provisioning_source: 'manual',
     provisioned_at: null,
     joined_at: '2026-07-23T00:00:00.000Z',

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { ManagedCloudProjectResponseSchema } from '@agiworkforce/cloud-contracts';
+import { getProjectLimit } from '@/lib/services/free-plan-entitlements';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 const {
   mockFrom,
@@ -133,6 +135,7 @@ vi.mock('@/lib/managed-compute-gate', async () => ({
   ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
 
   buildWorkspaceFeatureGateResponse: mockWorkspaceFeatureGate,
+  buildWorkspaceAccessGateResponse: vi.fn(async () => null),
 }));
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
@@ -273,9 +276,14 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
     expect(res.status).toBe(200);
     const sqlCalls = mockNeonQuery.mock.calls.map((c) => String(c[0]));
-    expect(
-      sqlCalls.some((sql) => /metadata = coalesce\(metadata/.test(sql) && /starred/.test(sql)),
-    ).toBe(true);
+    const starredMerge = `metadata = ${mergeJsonbObjectSql(
+      'metadata',
+      "jsonb_build_object('starred', $1::boolean)",
+    )}`;
+    expect(sqlCalls.some((sql) => sql.includes(starredMerge))).toBe(true);
+    expect(sqlCalls.some((sql) => /coalesce\(metadata, '\{\}'::jsonb\) \|\|/.test(sql))).toBe(
+      false,
+    );
     const json = (await res.json()) as { project: { metadata?: Record<string, unknown> } };
     expect(json.project.metadata?.['starred']).toBe(true);
   });
@@ -488,6 +496,7 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
 
   it('returns not found when delete matched no live project', async () => {
     mockNeonExecute.mockResolvedValue(0);
+    mockNeonQuery.mockResolvedValue([]);
 
     const res = await DELETE(makeProjectRequest('missing', 'DELETE'), {
       params: Promise.resolve({ id: 'missing' }),
@@ -500,22 +509,30 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     const organizationId = '11111111-1111-4111-8111-111111111111';
     mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
     mockNeonExecute.mockResolvedValue(1);
-    mockNeonQuery.mockResolvedValue([]);
+    mockNeonQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'proj-1' }])
+      .mockResolvedValue([]);
 
     const res = await DELETE(makeProjectRequest('proj-1', 'DELETE'), {
       params: Promise.resolve({ id: 'proj-1' }),
     });
 
     expect(res.status).toBe(200);
+    expect(mockNeonQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('pg_advisory_xact_lock_shared'),
+      [`agi:legal-hold-placement:${organizationId}`],
+    );
+    expect(mockNeonQuery).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('organization_id is not distinct from $3::uuid'),
+      ['proj-1', 'user-abc', organizationId, 'project'],
+    );
     expect(mockNeonExecute).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining('organization_id is not distinct from $3::uuid'),
-      ['proj-1', 'user-abc', organizationId],
-    );
-    expect(mockNeonExecute).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('organization_id is not distinct from $3::uuid'),
-      ['proj-1', 'user-abc', organizationId],
+      ['proj-1', 'user-abc', organizationId, 'project_file'],
     );
   });
 });
@@ -543,6 +560,31 @@ describe('POST /api/projects · round-10 fields', () => {
       expect.any(String),
     );
     expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('asks the workspace about the client the credential is bound to, not an unknown one', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+      userId: 'user-abc',
+      organizationId: null,
+      surface: 'vscode',
+    } as never);
+    mockWorkspaceFeatureGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'surface_not_allowed' } }), {
+        status: 403,
+      }) as unknown as null,
+    );
+
+    const res = await POST(makePostRequest({ name: 'Governed project' }));
+
+    expect(res.status).toBe(403);
+    expect(mockWorkspaceFeatureGate).toHaveBeenCalledWith(
+      'user-abc',
+      expect.anything(),
+      'projects',
+      'vscode',
+    );
   });
 
   it('POST accepts round-10 fields and maps them in the response', async () => {
@@ -582,7 +624,7 @@ describe('POST /api/projects · round-10 fields', () => {
 
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params).toContain(1);
+    expect(params.at(-1)).toBe(getProjectLimit('free'));
   });
 
   it.each([
@@ -626,7 +668,7 @@ describe('POST /api/projects · round-10 fields', () => {
     );
   });
 
-  it('uses the Pro project limit from the shared billing catalog', async () => {
+  it('gives Pro no plan project limit', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-paid' }, error: null });
 
@@ -635,7 +677,8 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(res.status).toBe(201);
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params).toContain(25);
+    expect(params.at(-1)).toBeNull();
+    expect(params).not.toContain(25);
   });
 
   it('keeps Max project creation unlimited', async () => {
@@ -657,7 +700,7 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(mockSeatCandidates).toHaveBeenCalled();
     const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("assert_user_resource_limit('projects'");
-    expect(params.at(-1)).toBe(1);
+    expect(params.at(-1)).toBe(getProjectLimit('free'));
   });
 
   it.each(['past_due', 'canceled', 'expired'])(
@@ -666,7 +709,7 @@ describe('POST /api/projects · round-10 fields', () => {
       mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status });
       setupInsertChain({ data: BASE_DB_ROW, error: null });
       expect((await POST(makePostRequest({ name: 'Baseline project' }))).status).toBe(201);
-      expect(mockNeonQuery.mock.calls[0]?.[1].at(-1)).toBe(1);
+      expect(mockNeonQuery.mock.calls[0]?.[1].at(-1)).toBe(getProjectLimit('free'));
     },
   );
 
@@ -697,7 +740,7 @@ describe('POST /api/projects · round-10 fields', () => {
     const insertion = mockNeonQuery.mock.calls.find(([sql]) =>
       String(sql).includes('insert into user_projects'),
     );
-    expect(insertion?.[1].at(-1)).toBe(25);
+    expect(insertion?.[1].at(-1)).toBeNull();
   });
 
   it('POST returns 400 for invalid importedFrom enum', async () => {

@@ -169,7 +169,7 @@ describe('a finished task can be shelved and brought back', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
 
     expect(await screen.findByText('No archived work sessions yet')).toBeTruthy();
-    expect(screen.getByText(/A finished task moves here when you archive it/)).toBeTruthy();
+    expect(screen.getByText(/Archived tasks stay here until you restore them/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: `Start ${PRODUCT_NAMES.work}` })).toBeNull();
   });
 

@@ -92,6 +92,68 @@ export function tier2IsVisionReady(): boolean {
   return _instance !== null && _loadedPresetVision;
 }
 
+interface ExecutorchFilesModule {
+  ResourceFetcher: { getAdapter: () => { listDownloadedFiles?: () => Promise<string[]> } };
+  ResourceFetcherUtils: { getFilenameFromUri: (uri: string) => string };
+}
+
+let _presetCheckOverride: ((preset: ExecutorchPreset) => Promise<boolean>) | null = null;
+
+export function _setPresetDownloadedCheckForTesting(
+  check: ((preset: ExecutorchPreset) => Promise<boolean>) | null,
+): void {
+  _presetCheckOverride = check;
+}
+
+/**
+ * True only when the model and both tokenizer files are on disk. A fetcher that
+ * cannot list its files reads as not downloaded, which is safe: fetching again
+ * skips every file already present.
+ */
+export async function tier2IsPresetDownloaded(preset: ExecutorchPreset): Promise<boolean> {
+  if (_presetCheckOverride) return _presetCheckOverride(preset);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const library = require('react-native-executorch/legacy') as ExecutorchFilesModule;
+    const listed = await library.ResourceFetcher.getAdapter().listDownloadedFiles?.();
+    if (!listed) return false;
+    const present = new Set(listed.map((uri) => uri.slice(uri.lastIndexOf('/') + 1)));
+    return [preset.modelSource, preset.tokenizerSource, preset.tokenizerConfigSource].every(
+      (source) => present.has(library.ResourceFetcherUtils.getFilenameFromUri(source)),
+    );
+  } catch {
+    return false;
+  }
+}
+
+export class Tier2ModelNotDownloadedError extends Error {
+  readonly modelName: string;
+  constructor(displayName: string, modelName: string) {
+    super(`${displayName} needs to be downloaded again. Open Models to download it.`);
+    this.name = 'Tier2ModelNotDownloadedError';
+    this.modelName = modelName;
+  }
+}
+
+function presetDisplayName(preset: ExecutorchPreset): string {
+  const entry = getLocalModelCatalog().find(
+    (model) => model.executorchPreset?.modelName === preset.modelName,
+  );
+  return entry?.displayName ?? preset.modelName;
+}
+
+/**
+ * Loading a preset whose files are gone makes ExecuTorch re-download several
+ * gigabytes with no network-consent or free-space check, so every load that is
+ * not a deliberate install must prove the files exist first.
+ */
+export async function tier2AssertPresetDownloaded(preset: ExecutorchPreset): Promise<void> {
+  if (_instance && _loadedPresetName === preset.modelName) return;
+  if (!(await tier2IsPresetDownloaded(preset))) {
+    throw new Tier2ModelNotDownloadedError(presetDisplayName(preset), preset.modelName);
+  }
+}
+
 export interface Tier2LoadOptions {
   /**
    * Runs before ExecuTorch fetches any artifact. The host app supplies the same
@@ -191,6 +253,7 @@ export async function tier2Generate(
       opts.onDone?.({ aborted: true, reason: 'cancel' });
       return { text: '', runtime: 'executorch', aborted: true };
     }
+    await tier2AssertPresetDownloaded(preset);
     await loadModel(preset, _loadGeneration);
     instance = _instance;
     if (!instance) throw new Error('ExecuTorch model is not loaded');

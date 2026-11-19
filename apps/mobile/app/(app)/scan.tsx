@@ -24,7 +24,7 @@ import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
+import { CapabilityUnavailable, useCapabilityDenialReason } from '@/src/lib/Capabilities';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
@@ -40,7 +40,8 @@ export default function ScanScreen() {
   const styles = useMemo(() => createStyles(c), [c]);
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
-  const cameraAllowed = useCapability('canUseCamera');
+  const cameraDenial = useCapabilityDenialReason('canUseCamera');
+  const cameraAllowed = cameraDenial === null;
 
   const params = useLocalSearchParams<{ imageUri?: string }>();
 
@@ -67,7 +68,6 @@ export default function ScanScreen() {
   const scanGenerationRef = useRef(0);
   const createConversation = useChatMessageStore((s) => s.createConversation);
   const sendMessage = useChatExecutionStore((s) => s.sendMessage);
-  const selectedModel = useModelStore((s) => s.selectedModel);
 
   useEffect(() => {
     if (!permission?.granted || phase !== 'camera' || cameraReady) {
@@ -193,6 +193,7 @@ export default function ScanScreen() {
 
     setIsSending(true);
     try {
+      useModelStore.getState().endConversationModel();
       const conversationId = await createConversation('Scan');
       if (!isCurrentScan()) return;
 
@@ -204,7 +205,12 @@ export default function ScanScreen() {
         fileName: `scan_${now}.jpg`,
       };
 
-      const accepted = await sendMessage(conversationId, content, selectedModel, [attachment]);
+      const accepted = await sendMessage(
+        conversationId,
+        content,
+        useModelStore.getState().selectedModel,
+        [attachment],
+      );
       if (!isCurrentScan()) return;
       if (!accepted) {
         Alert.alert('Send failed', 'The scan could not be sent. Check your model and try again.');
@@ -220,7 +226,7 @@ export default function ScanScreen() {
       );
       setIsSending(false);
     }
-  }, [capturedUri, isSending, createConversation, sendMessage, selectedModel, promptText, router]);
+  }, [capturedUri, isSending, createConversation, sendMessage, promptText, router]);
 
   const toggleFacing = useCallback(() => {
     setCameraReady(false);
@@ -239,7 +245,7 @@ export default function ScanScreen() {
   if (!cameraAllowed) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
-        <CapabilityUnavailable label="Scanning" onDismiss={handleClose} />
+        <CapabilityUnavailable label="Scanning" reason={cameraDenial} onDismiss={handleClose} />
       </SafeAreaView>
     );
   }
@@ -268,7 +274,7 @@ export default function ScanScreen() {
             className="text-center text-sm mt-2 leading-5"
             style={{ color: c.cameraOverlayTextMuted }}
           >
-            Allow camera access to scan and extract text from documents, signs, and screens.
+            Allow camera access to scan and extract text.
           </Text>
           <View style={styles.permissionButtons}>
             <PressableBox

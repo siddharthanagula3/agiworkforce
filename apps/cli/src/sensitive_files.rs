@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use regex::RegexSet;
 
 pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
-    r"(?i)(^|/)\.env(\..+)?$",
+    r"(?i)(^|/)\.env(\.[\s\S]+)?$",
     r"(?i)(^|/)\.envrc$",
     r"(?i)(^|/)secrets?\.(json|ya?ml|toml|env|txt)$",
     r"(?i)(^|/)[^/]*credentials?(\.(json|ya?ml|toml|txt|ini|db|csv|xml))?$",

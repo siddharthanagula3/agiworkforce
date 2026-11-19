@@ -88,6 +88,35 @@ function textPdf(body: string): Buffer {
   return Buffer.from(pdf, 'latin1');
 }
 
+/** One page per body; an empty body is a page with no text layer and no image. */
+function pagesPdf(bodies: readonly string[]): Buffer {
+  const pageIds = bodies.map((_, index) => 4 + index * 2);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${bodies.length} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  bodies.forEach((body, index) => {
+    const stream = body ? `BT /F1 14 Tf 72 700 Td (${body}) Tj ET` : '';
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageIds[index]! + 1} 0 R >>`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    );
+  });
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const startxref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${startxref}\n%%EOF`;
+  return Buffer.from(pdf, 'latin1');
+}
+
 describe('extractPdfAttachmentContent', () => {
   it('returns the text layer so every route can read the file', async () => {
     const content = await extractPdfAttachmentContent(textPdf('PLUM-VECTOR-9182'), 'report.pdf');
@@ -105,6 +134,29 @@ describe('extractPdfAttachmentContent', () => {
     expect(content.text).toBe('[Page 1]\nThe DOT project colour is teal.');
     expect(content.pageCount).toBe(1);
     expect(content.pageImages).toHaveLength(0);
+  });
+
+  it('reads only the pages a caller allows and says the rest were omitted', async () => {
+    const pdf = pagesPdf(['FIRST-PAGE-TEXT', 'SECOND-PAGE-TEXT', 'THIRD-PAGE-TEXT']);
+
+    const capped = await extractPdfAttachmentContent(pdf, 'report.pdf', { maxTextPages: 2 });
+    const whole = await extractPdfAttachmentContent(pdf, 'report.pdf');
+
+    expect(capped).toMatchObject({ pagesOmitted: true, pageCount: 3 });
+    expect(capped.pages).toEqual(['FIRST-PAGE-TEXT', 'SECOND-PAGE-TEXT']);
+    expect(capped.text).not.toContain('THIRD-PAGE-TEXT');
+    expect(whole).toMatchObject({ pagesOmitted: false, pageCount: 3 });
+    expect(whole.text).toContain('[Page 3]\nTHIRD-PAGE-TEXT');
+  });
+
+  it('lists a page without text as omitted when the caller allows no page images', async () => {
+    const pdf = pagesPdf(['Opening text that is long enough to count', '']);
+
+    const capped = await extractPdfAttachmentContent(pdf, 'report.pdf', { maxImagePages: 0 });
+    const uncapped = await extractPdfAttachmentContent(pdf, 'report.pdf');
+
+    expect(capped.scannedPagesOmitted).toEqual([2]);
+    expect(uncapped.scannedPagesOmitted).toEqual([]);
   });
 
   it('refuses bytes that are not a PDF', async () => {

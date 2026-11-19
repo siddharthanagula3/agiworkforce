@@ -25,7 +25,7 @@ beforeEach(() => {
 describe('useGoBack', () => {
   it('pops the screen the user came from rather than a named parent', () => {
     mockCanGoBack.mockReturnValue(true);
-    const { getByLabelText } = render(<Harness fallbackHref="/(app)/(tabs)/settings" />);
+    const { getByLabelText } = render(<Harness fallbackHref="/(app)/settings" />);
 
     fireEvent.press(getByLabelText('Go back'));
 

@@ -213,7 +213,7 @@ export function UsOnlyRoutingPanel() {
         <span style={{ fontSize: 14, color: 'var(--text-1)' }}>{LABEL}</span>
         <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
           {eligible
-            ? 'Auto and the models you pick are served only by providers based in the United States. Models without one are unavailable while this is on.'
+            ? 'Only US-based providers serve your chats. Models without one are unavailable.'
             : `Available on ${US_ONLY_PLAN_LABELS}.`}
         </span>
         {displayed?.busy ? (

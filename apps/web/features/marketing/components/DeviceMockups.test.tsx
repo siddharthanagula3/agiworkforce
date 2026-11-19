@@ -8,7 +8,7 @@ import {
   PRODUCT_NAMES,
   TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
-import { GREETING_TIME_BANDS } from '@agiworkforce/utils/greeting';
+import { GREETING_TIME_BANDS, resolveGreetingHeadline } from '@agiworkforce/utils/greeting';
 import { CLI_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import {
@@ -238,10 +238,7 @@ describe('cloud-only surfaces never show a Local or own-key route', () => {
       'if (!trimmed || !isAllowedApiBaseUrl(trimmed)) return null;',
     ],
     ['apps/desktop/electron/runtime/dispatcher.ts', 'localModels: false'],
-    [
-      'apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts',
-      'MANAGED_WEB_CLOUD_TRUST_MODE',
-    ],
+    ['apps/web/lib/server/managed-cloud-routing/routing-request.ts', 'MANAGED_CLOUD_TRUST_MODE'],
     ['apps/extension/src/background.ts', 'executeChromeManagedChat'],
   ])('%s still contains %s', (path, needle) => {
     expect(readSource(path)).toContain(needle);
@@ -349,7 +346,7 @@ describe('CLI terminal', () => {
     expect(box?.textContent).toContain('Allow write_file to modify:');
     expect(
       Array.from(box?.querySelectorAll('.agi-app-tui-choices span') ?? [], (i) => i.textContent),
-    ).toEqual(['[ Yes ]', '[ No ]', '[ Allow Session ]', '[ Always Allow ]']);
+    ).toEqual(['[ y Yes ]', '[ n No ]', '[ s Allow Session ]', '[ a Always allow ]']);
     expect(box?.querySelectorAll('.agi-app-tui-choices span[data-on]')).toHaveLength(1);
   });
 
@@ -359,7 +356,7 @@ describe('CLI terminal', () => {
       'Tool Approval',
       'Allow write_file to modify:',
       ' Allow Session ',
-      ' Always Allow ',
+      ' Always allow ',
     ])
       expect(overlay).toContain(text);
     expect(readSource('apps/cli/src/tui/tui_app.rs')).toContain('Message AGI...  / for commands');
@@ -439,10 +436,11 @@ describe('Mobile', () => {
       ['Cloud', false],
     ]);
     expect(container.querySelector('.agi-app-phone-heading')?.textContent).toBe(
-      'How can I help you tonight?',
+      GREETING_TIME_BANDS.afternoon.variants[0],
     );
+    expect(container.querySelector('.agi-app-phone-sub')).toBeNull();
     expect(container.querySelector('.agi-app-phone-placeholder')?.textContent).toBe(
-      "What's on your mind?",
+      'Type or hold to talk',
     );
     expect(container.querySelector('.agi-app-phone-model')?.textContent).toBe('Auto');
     expect(container.querySelector('.agi-app-drawer')).toBeNull();
@@ -465,11 +463,16 @@ describe('Mobile', () => {
   });
 
   it('the mobile app still ships the strings the preview shows', () => {
-    expect(readSource('apps/mobile/app/(app)/(tabs)/chat.tsx')).toContain(
-      'How can I help you tonight?',
+    const chat = readSource('apps/mobile/app/(app)/(tabs)/chat.tsx');
+    expect(chat).toContain(
+      "import { resolveGreetingHeadline } from '@agiworkforce/utils/greeting';",
+    );
+    expect(chat).toContain('resolveGreetingHeadline(greetingTime, greetingName)');
+    expect(resolveGreetingHeadline(new Date(2026, 0, 3, 14), '')).toBe(
+      GREETING_TIME_BANDS.afternoon.variants[0],
     );
     expect(readSource('apps/mobile/src/features/chat/components/ChatInput.tsx')).toContain(
-      "What's on your mind?",
+      "? 'Type or hold to talk'",
     );
   });
 });

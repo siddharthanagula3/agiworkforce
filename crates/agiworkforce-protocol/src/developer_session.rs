@@ -68,6 +68,20 @@ pub mod method {
     pub const THREAD_PLAN: &str = "thread/plan";
     pub const THREAD_DELETE: &str = "thread/delete";
     pub const WORKSPACE_IDENTITY: &str = "workspace/identity";
+    pub const WORKSPACE_FILES_LIST: &str = "workspace/files/list";
+    pub const WORKSPACE_FILE_READ: &str = "workspace/file/read";
+    pub const WORKSPACE_FILE_WRITE: &str = "workspace/file/write";
+    pub const WORKSPACE_FILE_RECOVERY_READ: &str = "workspace/file/recovery/read";
+    pub const WORKSPACE_FILE_RECOVERY_WRITE: &str = "workspace/file/recovery/write";
+    pub const WORKSPACE_FILE_RECOVERY_LIST: &str = "workspace/file/recovery/list";
+    pub const WORKSPACE_FILE_RECOVERY_RESTORE: &str = "workspace/file/recovery/restore";
+    pub const TERMINAL_PLAN: &str = "terminal/plan";
+    pub const TERMINAL_START: &str = "terminal/start";
+    pub const TERMINAL_LIST: &str = "terminal/list";
+    pub const TERMINAL_READ: &str = "terminal/read";
+    pub const TERMINAL_WRITE: &str = "terminal/write";
+    pub const TERMINAL_RESIZE: &str = "terminal/resize";
+    pub const TERMINAL_CLOSE: &str = "terminal/close";
     pub const THREAD_RECONNECT: &str = "thread/reconnect";
     pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
     pub const THREAD_WRITER_TAKEOVER: &str = "thread/writer/takeover";
@@ -75,15 +89,65 @@ pub mod method {
     pub const TURN_START: &str = "turn/start";
     pub const TURN_STEER: &str = "turn/steer";
     pub const TURN_INTERRUPT: &str = "turn/interrupt";
+    pub const TURN_STARTED: &str = "turn/started";
+    pub const TURN_OUTPUT_DELTA: &str = "turn/output_delta";
+    pub const TURN_MODEL: &str = "turn/model";
+    pub const TURN_COMPLETED: &str = "turn/completed";
+    pub const TURN_FAILED: &str = "turn/failed";
+    pub const TURN_INTERRUPTED: &str = "turn/interrupted";
     pub const TURN_AGENT_EVENT: &str = "turn/agent_event";
+    pub const APPROVAL_REQUESTED: &str = "approval/requested";
+    pub const SERVER_WARNING: &str = "server/warning";
     pub const APPROVAL_RESPOND: &str = "approval/respond";
     pub const USER_INPUT_REQUESTED: &str = "userInput/requested";
     pub const USER_INPUT_RESPOND: &str = "userInput/respond";
     pub const TASK_STATE_CHANGED: &str = "task/state_changed";
     pub const SHUTDOWN: &str = "shutdown";
     pub const ACCOUNT_STATUS: &str = "account/status";
+    pub const CLOUD_WORKSPACES_LIST: &str = "cloud/workspaces/list";
+    pub const CLOUD_WORKSPACE_SELECT: &str = "cloud/workspace/select";
+    pub const CLOUD_MODEL_LIST: &str = "cloud/models/list";
+    pub const CLOUD_HISTORY_LIST: &str = "cloud/history/list";
+    pub const CLOUD_HISTORY_READ: &str = "cloud/history/read";
+    pub const CLOUD_CONVERSATION_UPDATE: &str = "cloud/conversation/update";
+    pub const CLOUD_PROJECT_DOWNLOAD_PREPARE: &str = "cloud/project/download/prepare";
+    pub const CLOUD_PROJECT_DOWNLOAD_START: &str = "cloud/project/download/start";
+    pub const CLOUD_PROJECT_DOWNLOAD_READ: &str = "cloud/project/download/read";
+    pub const CLOUD_PROJECT_DOWNLOAD_CANCEL: &str = "cloud/project/download/cancel";
+    pub const CLOUD_PROJECT_DOWNLOAD_RELEASE: &str = "cloud/project/download/release";
+    pub const CLOUD_ATTACHMENT_RECOVERY_READ: &str = "cloud/attachment/recovery/read";
+    pub const CLOUD_ATTACHMENT_RECOVERY_LIST: &str = "cloud/attachment/recovery/list";
+    pub const CLOUD_ATTACHMENT_RECOVERY_CHANGE: &str = "cloud/attachment/recovery/change";
+    pub const CLOUD_UPLOAD_PREPARE: &str = "cloud/upload/prepare";
+    pub const CLOUD_UPLOAD_START: &str = "cloud/upload/start";
+    pub const CLOUD_UPLOAD_READ: &str = "cloud/upload/read";
+    pub const CLOUD_UPLOAD_CANCEL: &str = "cloud/upload/cancel";
+    pub const CLOUD_UPLOAD_RELEASE: &str = "cloud/upload/release";
+    pub const CLOUD_PROJECT_UPLOAD_PREPARE: &str = "cloud/project/upload/prepare";
+    pub const CLOUD_PROJECT_UPLOAD_START: &str = "cloud/project/upload/start";
+    pub const CLOUD_PROJECT_UPLOAD_READ: &str = "cloud/project/upload/read";
+    pub const CLOUD_PROJECT_UPLOAD_CANCEL: &str = "cloud/project/upload/cancel";
+    pub const CLOUD_PROJECT_UPLOAD_RELEASE: &str = "cloud/project/upload/release";
+    pub const CLOUD_PROJECT_FILE_REINDEX: &str = "cloud/project/file/reindex";
+    pub const CLOUD_PROJECT_FILES_LIST: &str = "cloud/project/files/list";
+    pub const CLOUD_PROJECT_FILE_PREVIEW: &str = "cloud/project/file/preview";
+    pub const CLOUD_PROJECT_LIST: &str = "cloud/projects/list";
+    pub const CLOUD_PROJECT_READ: &str = "cloud/project/read";
+    pub const CLOUD_PROJECT_CREATE: &str = "cloud/project/create";
+    pub const CLOUD_PROJECT_UPDATE: &str = "cloud/project/update";
+    pub const CLOUD_DRAFT_SAVE: &str = "cloud/conversation/draft/save";
+    pub const CLOUD_CONVERSATION_CREATE: &str = "cloud/conversation/create";
+    pub const CLOUD_TURN_START: &str = "cloud/turn/start";
+    pub const CLOUD_TURN_READ: &str = "cloud/turn/read";
+    pub const CLOUD_TURN_STOP: &str = "cloud/turn/stop";
+    pub const CLOUD_TURN_RESUME: &str = "cloud/turn/resume";
+    pub const CLOUD_RUN_LIST: &str = "cloud/run/list";
+    pub const CLOUD_RUN_ATTACH: &str = "cloud/run/attach";
+    pub const CLOUD_TURN_DETACH: &str = "cloud/turn/detach";
+    pub const CLOUD_WORK_PLAN_UPDATE: &str = "cloud/work/plan/update";
     pub const ACCOUNT_LOGIN: &str = "account/login";
     pub const ACCOUNT_LOGIN_WAIT: &str = "account/login/wait";
+    pub const ACCOUNT_LOGIN_CANCEL: &str = "account/login/cancel";
     pub const ACCOUNT_LOGOUT: &str = "account/logout";
     pub const ACCOUNT_TOKEN: &str = "account/token";
     pub const CONTEXT_INSTRUCTIONS: &str = "context/instructions";
@@ -113,6 +177,8 @@ pub mod method {
     pub const HOOKS_REMOVE: &str = "hooks/remove";
     pub const SETTINGS_READ: &str = "settings/read";
     pub const SETTINGS_WRITE: &str = "settings/write";
+    pub const SETTINGS_INSTRUCTIONS_READ: &str = "settings/instructions/read";
+    pub const SETTINGS_INSTRUCTIONS_WRITE: &str = "settings/instructions/write";
     pub const COMMANDS_LIST: &str = "commands/list";
     pub const COMMANDS_RUN: &str = "commands/run";
     pub const MEMORY_ADD: &str = "memory/add";
@@ -137,6 +203,9 @@ pub mod method {
     pub const WORKTREE_PIN: &str = "worktree/managed/pin";
     pub const WORKTREE_KEEP: &str = "worktree/managed/keep";
     pub const WORKTREE_APPLY_TO_LOCAL: &str = "worktree/managed/applyToLocal";
+    pub const WORKTREE_APPLY_PLAN: &str = "worktree/managed/apply/plan";
+    pub const WORKTREE_APPLY_COMMIT: &str = "worktree/managed/apply/commit";
+    pub const WORKTREE_APPLY_RESULT: &str = "worktree/managed/apply/result";
     pub const WORKTREE_SETUP_RUN: &str = "worktree/managed/setup/run";
     pub const WORKTREE_SETUP_LOG: &str = "worktree/managed/setup/log";
     pub const WORKTREE_SETUP_FINISHED: &str = "worktree/managed/setup/finished";
@@ -361,7 +430,7 @@ pub struct ProtocolVersionUnsupportedData {
     pub minimum_protocol_version: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct AppServerCapabilities {
@@ -372,6 +441,14 @@ pub struct AppServerCapabilities {
     pub tools: bool,
     pub mcp: bool,
     pub checkpoints: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub workspace_files: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub workspace_file_recovery: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub workspace_file_recovery_browser: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub workspace_terminal: bool,
     pub worktrees: bool,
     pub models: bool,
     /// v8 surfaces. Each is false on a host that does not implement that
@@ -379,6 +456,42 @@ pub struct AppServerCapabilities {
     /// answers "unavailable".
     #[serde(default, skip_serializing_if = "is_false")]
     pub account: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub account_login_cancel: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_conversation_update: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_drafts: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_projects: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_project_files: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_project_uploads: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_uploads: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_attachment_recovery: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_project_downloads: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_project_file_reindex: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_workspaces: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_models: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_history: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_history_tail: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_turns: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_turn_resume: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_work: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub cloud_work_start: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub instructions: bool,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -389,6 +502,10 @@ pub struct AppServerCapabilities {
     pub hooks: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub settings: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub settings_instructions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub worktree_apply_review: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub commands: bool,
     /// `thread/delete` removes a thread and everything persisted with it.
@@ -1103,6 +1220,69 @@ pub struct ThreadReconnectResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub active_turn: Option<ActiveTurnSnapshot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnStartedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TurnOutputDeltaNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub delta: String,
+    #[ts(type = "number")]
+    pub index: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ApprovalRequestedNotification {
+    pub thread_id: String,
+    pub turn_id: String,
+    pub request_id: String,
+    pub kind: String,
+    pub summary: String,
+    pub detail: String,
+    pub risk_level: Option<AgentEventApprovalRiskLevel>,
+    pub reversible: Option<bool>,
+    pub proposed_content: Option<String>,
+    pub always_allow_saved: bool,
+    pub proposed_execpolicy_amendment: Option<ExecPolicyAmendment>,
+    pub editable: bool,
+    pub question: Option<Value>,
+}
+
+impl ApprovalRequestedNotification {
+    pub fn new(
+        thread_id: String,
+        turn_id: String,
+        request: PendingApprovalSnapshot,
+        question: Option<Value>,
+    ) -> Self {
+        Self {
+            thread_id,
+            turn_id,
+            request_id: request.request_id,
+            kind: request.kind,
+            summary: request.summary,
+            detail: request.detail,
+            risk_level: request.risk_level,
+            reversible: request.reversible,
+            editable: request.proposed_content.is_some(),
+            proposed_content: request.proposed_content,
+            always_allow_saved: request.always_allow_saved,
+            proposed_execpolicy_amendment: request.proposed_execpolicy_amendment,
+            question,
+        }
+    }
 }
 
 /// Params of `turn/model`: the route a turn is running on, sent when the turn

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { ScrollView } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -91,6 +91,8 @@ jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
   browseConnectorListings: (...args: unknown[]) => mockBrowseListings(...args),
   addCustomConnector: jest.fn(),
+  startConnectorOAuth: jest.fn(),
+  authorizeConnectorInApp: jest.fn(),
 }));
 
 function connection(connectorId: string, name: string) {
@@ -123,6 +125,10 @@ function listingPage(entries: ReturnType<typeof listing>[]) {
 }
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
+import {
+  BOTTOM_SEARCH_BAR_HEIGHT,
+  BOTTOM_SEARCH_BAR_MARGIN,
+} from '../src/shared/components/BottomSearchBar';
 
 describe('Connectors directory bottom-anchored search', () => {
   beforeEach(() => {
@@ -158,6 +164,32 @@ describe('Connectors directory bottom-anchored search', () => {
     for (const scrollView of screen.UNSAFE_getAllByType(ScrollView)) {
       expect(within(scrollView).queryByTestId('connectors-search')).toBeNull();
     }
+  });
+
+  it('keeps the last thing in the list, the help link, above the space the field covers', async () => {
+    const screen = render(<CloudConnectorsScreen />);
+    await waitFor(() => expect(screen.getByTestId('connectors-bottom-space')).toBeTruthy());
+
+    const order: string[] = [];
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== 'object') return;
+      const { props, children } = node as {
+        props?: Record<string, unknown>;
+        children?: unknown[] | null;
+      };
+      if (typeof props?.['accessibilityLabel'] === 'string')
+        order.push(props['accessibilityLabel']);
+      if (typeof props?.['testID'] === 'string') order.push(props['testID']);
+      children?.forEach(walk);
+    };
+    walk(screen.toJSON());
+
+    expect(order.indexOf('How connectors work')).toBeGreaterThan(-1);
+    expect(order.indexOf('connectors-bottom-space')).toBeGreaterThan(
+      order.indexOf('How connectors work'),
+    );
+    const space = StyleSheet.flatten(screen.getByTestId('connectors-bottom-space').props.style);
+    expect(space.height).toBe(34 + BOTTOM_SEARCH_BAR_MARGIN + BOTTOM_SEARCH_BAR_HEIGHT);
   });
 
   it('filters connected rows at once and sends the trimmed search to the registry after the debounce', async () => {

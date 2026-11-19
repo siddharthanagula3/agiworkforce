@@ -16,6 +16,7 @@ jest.mock('@/services/modelDownload', () => {
   return {
     ModelDownloadError,
     downloadModel: jest.fn(),
+    excludeModelFilesFromBackup: jest.fn().mockResolvedValue(undefined),
     cancelDownload: jest.fn(),
     assertDownloadAllowed: jest.fn().mockResolvedValue(undefined),
   };

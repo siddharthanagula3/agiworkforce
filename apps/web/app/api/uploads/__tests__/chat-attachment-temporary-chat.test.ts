@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/server/file-storage');
@@ -26,7 +27,8 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(nu
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/logger', () => ({ logger: loggerMock }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   isPrivateObjectStorageConfigured: vi.fn(() => true),
   getBoundedPrivateObject: mockGetBoundedPrivateObject,
   copyPrivateObjectIfUnchanged: mockCopyPrivateObjectIfUnchanged,

@@ -51,10 +51,11 @@ export const secretPatternScanner: OutboundContentScanner = {
   },
 };
 
-// A published artifact sits behind a link anyone can open, so warning the
-// publisher and shipping the credential anyway is not an available answer.
+// A published artifact or a share sits behind a link anyone can open, so
+// warning the publisher and shipping the credential anyway is not an available answer.
 const CHANNEL_MINIMUM_MODE: Partial<Record<OutboundChannel, SecretHandlingMode>> = {
   artifact_publish: 'redact',
+  share: 'redact',
 };
 
 const scanners: OutboundContentScanner[] = [secretPatternScanner];

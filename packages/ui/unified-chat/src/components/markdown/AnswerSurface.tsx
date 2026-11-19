@@ -19,6 +19,7 @@ import {
   parseFollowups,
   parseGallery,
   parseMap,
+  MODES_NOTE,
   parseModes,
   parsePrompt,
   parseRadio,
@@ -328,10 +329,7 @@ export function AnswerSurface({
         </div>
         {language === 'modes' ? (
           <p className="border-t border-[var(--chat-border-subtle)] px-4 py-3 text-sm text-[var(--chat-text-secondary)]">
-            {t(
-              'answerSurface.modesNote',
-              'These cards describe display modes. They do not change this chat.',
-            )}
+            {t('answerSurface.modesNote', MODES_NOTE)}
           </p>
         ) : null}
       </section>

@@ -17,6 +17,7 @@ import type {
   WebSearchCitationDeltaWire,
 } from '@agiworkforce/types';
 import { toolStatusPhrase } from './tool-status-phrases';
+import { joinSystemTextsAtCacheBoundary } from './system-prompt-cache-boundary';
 
 /** Anthropic's own citation shape, carried on `citations_delta`. */
 const ANTHROPIC_CITATION_KIND = 'web_search_result_location';
@@ -183,13 +184,14 @@ function wireToolChoiceToCanonical(
 }
 
 export function openAIWireRequestToChatRequest(body: OpenAIWireChatRequest): ChatRequest {
-  const systemParts: string[] = [];
+  const openingSystemParts: string[] = [];
+  const laterSystemParts: string[] = [];
   const messages: ProviderMessage[] = [];
 
   for (const msg of body.messages) {
     if (msg.role === 'system') {
       const text = wireContentToText(msg.content);
-      if (text) systemParts.push(text);
+      if (text) (messages.length === 0 ? openingSystemParts : laterSystemParts).push(text);
       continue;
     }
 
@@ -264,7 +266,8 @@ export function openAIWireRequestToChatRequest(body: OpenAIWireChatRequest): Cha
   });
 
   const request: ChatRequest = { model: body.model, messages };
-  if (systemParts.length > 0) request.system = systemParts.join('\n\n');
+  const system = joinSystemTextsAtCacheBoundary(openingSystemParts, laterSystemParts);
+  if (system) request.system = system;
   if (tools && tools.length > 0) request.tools = tools;
   const toolChoice = wireToolChoiceToCanonical(body.tool_choice);
   if (toolChoice !== undefined) request.toolChoice = toolChoice;

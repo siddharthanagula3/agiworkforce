@@ -114,7 +114,7 @@ describe('CapabilitiesSection', () => {
       .closest('li');
     expect(row?.parentElement).toHaveClass('divide-y');
     expect(row).toHaveTextContent(
-      'Lets AGI run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
+      'Run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
     );
   });
 
@@ -221,6 +221,163 @@ describe('CapabilitiesSection', () => {
     expect(savePreferenceNamespace).toHaveBeenCalledTimes(1);
     expect(currentToggle).toBeChecked();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('CapabilitiesSection artifacts and inline visualizations', () => {
+  const reportSwitches = (availableSwitches: string[]) =>
+    transport.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ organizationMemoryAllowed: true, availableSwitches })),
+    );
+
+  it('shows neither switch while the server does not report them', async () => {
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('switch', { name: 'Cloud code execution and file creation' }),
+      ).toBeEnabled(),
+    );
+
+    expect(screen.queryByRole('heading', { name: 'Artifacts and visualizations' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Artifacts' })).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Inline visualizations' })).toBeNull();
+  });
+
+  it('holds Artifacts on while code execution is on and saves Inline visualizations', async () => {
+    reportSwitches(['artifacts', 'inlineVisualizations']);
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    const visuals = await screen.findByRole('switch', { name: 'Inline visualizations' });
+    const artifacts = screen.getByRole('switch', { name: 'Artifacts' });
+    await waitFor(() => expect(visuals).toBeEnabled());
+    expect(artifacts).toBeChecked();
+    expect(artifacts).toBeDisabled();
+    expect(artifacts).toHaveAccessibleDescription('Required by code execution');
+    expect(artifacts.closest('li')).toHaveTextContent(
+      'Create apps, documents and diagrams in a side preview.',
+    );
+    expect(visuals.closest('li')).toHaveTextContent('Show charts and diagrams right in the chat.');
+
+    fireEvent.click(visuals);
+
+    await waitFor(() =>
+      expect(savePreferenceNamespace).toHaveBeenCalledWith(
+        'capabilities',
+        { inlineVisualizations: false },
+        expect.objectContaining({ merge: true }),
+      ),
+    );
+    await waitFor(() => expect(visuals).not.toBeChecked());
+  });
+
+  it('lets Artifacts be turned off once code execution is off', async () => {
+    reportSwitches(['artifacts']);
+    fetchPreferenceNamespace.mockImplementation(async () => ({ cloudCodeExecution: false }));
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    const artifacts = await screen.findByRole('switch', { name: 'Artifacts' });
+    await waitFor(() => expect(artifacts).toBeEnabled());
+    expect(screen.queryByRole('switch', { name: 'Inline visualizations' })).toBeNull();
+    expect(screen.queryByText('Required by code execution')).toBeNull();
+
+    fireEvent.click(artifacts);
+
+    await waitFor(() =>
+      expect(savePreferenceNamespace).toHaveBeenCalledWith(
+        'capabilities',
+        { artifacts: false },
+        expect.objectContaining({ merge: true }),
+      ),
+    );
+    await waitFor(() => expect(artifacts).not.toBeChecked());
+  });
+});
+
+describe('CapabilitiesSection tool access', () => {
+  const reportSwitches = (availableSwitches: string[]) =>
+    transport.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ organizationMemoryAllowed: true, availableSwitches })),
+    );
+
+  it('stays hidden while the server does not report it', async () => {
+    reportSwitches(['artifacts']);
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+    await screen.findByRole('switch', { name: 'Artifacts' });
+
+    expect(screen.queryByRole('heading', { name: 'Tool access' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Tool access' })).toBeNull();
+  });
+
+  it('shows only Tool access, not an empty visuals section, when that is all the server reports', async () => {
+    reportSwitches(['toolAccess']);
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    await screen.findByRole('radiogroup', { name: 'Tool access' });
+    expect(screen.queryByRole('heading', { name: 'Artifacts and visualizations' })).toBeNull();
+  });
+
+  it('checks the saved choice and describes each option', async () => {
+    reportSwitches(['toolAccess']);
+    fetchPreferenceNamespace.mockImplementation(async () => ({ toolAccess: 'on_demand' }));
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    const onDemand = await screen.findByRole('radio', { name: /On demand/ });
+    await waitFor(() => expect(onDemand).toBeEnabled());
+    expect(onDemand).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Auto/ })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /Always available/ })).not.toBeChecked();
+    expect(onDemand.closest('label')).toHaveTextContent(
+      'Load tools when needed. More steps, lower accuracy',
+    );
+    expect(
+      screen.getByRole('radio', { name: /Always available/ }).closest('label'),
+    ).toHaveTextContent('Ready from the start. Fewer messages, better accuracy');
+  });
+
+  it('starts on Auto when nothing or an unknown value is stored', async () => {
+    reportSwitches(['toolAccess']);
+    fetchPreferenceNamespace.mockImplementation(async () => ({ toolAccess: 'everything' }));
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    const auto = await screen.findByRole('radio', { name: /Auto/ });
+    await waitFor(() => expect(auto).toBeEnabled());
+    expect(auto).toBeChecked();
+  });
+
+  it('saves a new choice to the account at once', async () => {
+    reportSwitches(['toolAccess']);
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    const always = await screen.findByRole('radio', { name: /Always available/ });
+    await waitFor(() => expect(always).toBeEnabled());
+    fireEvent.click(always);
+
+    await waitFor(() =>
+      expect(savePreferenceNamespace).toHaveBeenCalledWith(
+        'capabilities',
+        { toolAccess: 'always' },
+        expect.objectContaining({ merge: true }),
+      ),
+    );
+    await waitFor(() => expect(always).toBeChecked());
+  });
+
+  it('goes back to the saved choice when the write fails', async () => {
+    reportSwitches(['toolAccess']);
+    savePreferenceNamespace.mockRejectedValue(new Error('offline'));
+    render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
+
+    const auto = await screen.findByRole('radio', { name: /Auto/ });
+    const always = screen.getByRole('radio', { name: /Always available/ });
+    await waitFor(() => expect(always).toBeEnabled());
+    fireEvent.click(always);
+
+    await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(auto).toBeChecked());
+    expect(always).not.toBeChecked();
+    expect(await screen.findByText(/Save failed/)).toBeInTheDocument();
   });
 });
 

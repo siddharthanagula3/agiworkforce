@@ -3,22 +3,15 @@ import 'server-only';
 import { estimateTokens } from '@agiworkforce/routing';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { logger } from '@/lib/logger';
-import {
-  noTrainingProviderIds,
-  sideCallTrainingOptOut,
-} from '@/lib/server/side-call-training-policy';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 import {
   buildServerProviderAdapter,
-  listAvailableManagedProviderIds,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
-import { resolveWebCloudModelRoute } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   fingerprintManagedUsageRequest,
   finalizeManagedUsageRequest,
@@ -106,49 +99,26 @@ export async function transcribeScannedPages(
 ): Promise<string | null> {
   if (input.pageImages.length === 0) return null;
 
-  // Read server-side for every file, as a chat turn does; an unreadable
-  // setting counts as on.
-  const reason: ScanWithheldReason | null =
-    input.forceNoTraining === true
-      ? 'google_user_data'
-      : (await sideCallTrainingOptOut(input.db, input.userId))
-        ? 'training_opt_out'
-        : null;
-  const forceNoTraining = reason !== null;
-  const managedProviders = listAvailableManagedProviderIds();
-  const providers = forceNoTraining ? noTrainingProviderIds(managedProviders) : managedProviders;
-  if (reason !== null && providers.size === 0) {
-    throw new ScannedTextWithheldError(input.documentId, reason);
-  }
-  const route = resolveWebCloudModelRoute(
-    'auto',
-    input.planTier,
-    OCR_TASK_TYPE,
-    undefined,
-    undefined,
-    undefined,
-    providers,
-  );
-  if (
-    reason !== null &&
-    (route.status !== 'selected' ||
-      !providerKeepsInputsOutOfTraining(route.provider) ||
-      !providerKeepsInputsOutOfTraining(dispatchProviderForSelectedRoute(route)))
-  ) {
+  const admission = await admitManagedCloudRoute({
+    kind: 'background',
+    account: { db: input.db, userId: input.userId, organizationId: input.organizationId },
+    planTier: input.planTier,
+    need: { taskType: OCR_TASK_TYPE, keepOutOfTraining: input.forceNoTraining === true },
+  });
+  if (admission.status === 'refused') {
+    if (admission.reason === 'no_training_route') {
+      throw new ScannedTextWithheldError(
+        input.documentId,
+        input.forceNoTraining === true ? 'google_user_data' : 'training_opt_out',
+      );
+    }
     logger.warn(
-      { documentId: input.documentId, reason },
-      '[ocr] no vision route keeps inputs out of training; the scan is stored without text',
-    );
-    throw new ScannedTextWithheldError(input.documentId, reason);
-  }
-  if (route.status !== 'selected') {
-    logger.warn(
-      { documentId: input.documentId, routeCode: route.code },
-      '[ocr] no managed vision route is available; the scan is stored without text',
+      { documentId: input.documentId, reason: admission.reason, routeCode: admission.code },
+      '[ocr] no managed vision route is admitted; the scan is stored without text',
     );
     return null;
   }
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  const { route, dispatchProvider } = admission;
 
   const chatRequest = openAIWireRequestToChatRequest({
     model: route.providerModelId,

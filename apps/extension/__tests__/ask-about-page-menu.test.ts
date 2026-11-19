@@ -39,7 +39,8 @@ describe('right-click Ask AGI about this page', () => {
     const set = vi.fn(async () => undefined);
     const open = vi.fn(async () => undefined);
     const handle = run<(info: Record<string, unknown>, tab: Record<string, unknown>) => void>(
-      slice(backgroundSource, 'function handleContextMenuClick', 'chrome.contextMenus?.onClicked'),
+      `${slice(backgroundSource, 'const pendingChatWindowStamp', 'const pendingEditableCaptures')}
+       ${slice(backgroundSource, 'function handleContextMenuClick', 'chrome.contextMenus?.onClicked')}`,
       'handleContextMenuClick',
       {
         chrome: { storage: { session: { set } } },
@@ -57,6 +58,8 @@ describe('right-click Ask AGI about this page', () => {
         type: 'ask-page',
         text: '',
         url: 'https://example.com/a',
+        tabId: 4,
+        windowId: 2,
       }),
     });
     expect(open).toHaveBeenCalledWith({ tabId: 4, windowId: 2 });
@@ -89,11 +92,18 @@ describe('right-click Ask AGI about this page', () => {
       text: 'Article text',
       source: { tabId: 4, url: 'https://example.com/a', title: 'A' },
     };
-    let resolveCapture!: (value: typeof capture | { ok: false; reason: string }) => void;
+    type CaptureResult = typeof capture | { ok: false; reason: string };
+    let resolveCapture: ((value: CaptureResult) => void) | undefined;
+    let earlyAnswer: CaptureResult | undefined;
+    const answerCapture = (value: CaptureResult): void => {
+      if (resolveCapture) resolveCapture(value);
+      else earlyAnswer = value;
+    };
     const capturePageContext = vi.fn(
       () =>
-        new Promise<typeof capture | { ok: false; reason: string }>((resolve) => {
+        new Promise<CaptureResult>((resolve) => {
           resolveCapture = resolve;
+          if (earlyAnswer) resolve(earlyAnswer);
         }),
     );
     const sendMessage = vi.fn(() => true);
@@ -129,6 +139,7 @@ describe('right-click Ask AGI about this page', () => {
           },
         },
         PENDING_CHAT_TTL_MS: 60_000,
+        assistantHostWindowId: async () => 1,
         SLASH_COMMANDS: { '/summarize': { prompt: 'Summarize' } },
         sameManagedCloudOwner,
         pendingBrowserContextTabs: [],
@@ -160,8 +171,8 @@ describe('right-click Ask AGI about this page', () => {
       remove,
       canAdmitComposerMessage,
       images,
-      resolve: (value = capture) => resolveCapture(value),
-      fail: () => resolveCapture({ ok: false, reason: 'Page access refused.' }),
+      resolve: (value = capture) => answerCapture(value),
+      fail: () => answerCapture({ ok: false, reason: 'Page access refused.' }),
       flushStorage: () =>
         reads.splice(0).forEach((callback) => callback({ agi_pending_chat: stored })),
       stored: () => stored,
@@ -318,7 +329,8 @@ describe('selected-text Ask in the browser', () => {
     const handoff = vi.fn();
     const open = vi.fn(async () => undefined);
     const handle = run<(info: Record<string, unknown>, tab: Record<string, unknown>) => void>(
-      slice(backgroundSource, 'function handleContextMenuClick', 'chrome.contextMenus?.onClicked'),
+      `${slice(backgroundSource, 'const pendingChatWindowStamp', 'const pendingEditableCaptures')}
+       ${slice(backgroundSource, 'function handleContextMenuClick', 'chrome.contextMenus?.onClicked')}`,
       'handleContextMenuClick',
       {
         chrome: { storage: { session: { set } } },
@@ -343,6 +355,7 @@ describe('selected-text Ask in the browser', () => {
         type: 'ask-selection',
         text: 'Selected phrase',
         tabId: 4,
+        windowId: 2,
         url: 'https://example.com/a',
       }),
     });

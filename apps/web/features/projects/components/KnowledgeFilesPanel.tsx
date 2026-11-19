@@ -1,5 +1,6 @@
 'use client';
 
+import { managedCloudProjectKnowledgeReindexPath } from '@agiworkforce/cloud-contracts';
 import { useConfirmAction } from '@agiworkforce/ui';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -121,10 +122,11 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
     setRetryingFileId(file.id);
     try {
       const csrfToken = await getCsrfToken();
-      const res = await fetch(
-        `/api/projects/${encodeURIComponent(projectId)}/knowledge-files/${encodeURIComponent(file.id)}/reindex`,
-        { method: 'POST', headers: { 'x-csrf-token': csrfToken }, credentials: 'include' },
-      );
+      const res = await fetch(managedCloudProjectKnowledgeReindexPath(projectId, file.id), {
+        method: 'POST',
+        headers: { 'x-csrf-token': csrfToken },
+        credentials: 'include',
+      });
       if (!res.ok) throw new Error(`Reindex failed (${res.status})`);
       const body = (await res.json()) as { indexing?: ProjectKnowledgeIndexState | null };
       indexPollsRef.current = 0;
@@ -386,8 +388,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               lineHeight: 1.55,
             }}
           >
-            Drop a file here or click Upload to add context files. Images, PDFs, text, and JSON are
-            supported.
+            Drop a file or click Upload. Images, PDFs, text and JSON work.
           </p>
         </div>
       )}

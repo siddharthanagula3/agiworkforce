@@ -1020,7 +1020,7 @@ fn evaluate_eligibility<'a>(
             reasons,
         };
     }
-    trust_mode_routes.sort_by(|(left, _), (right, _)| left.cmp(right));
+    trust_mode_routes.sort_by_key(|(mode, _)| *mode);
 
     let mut route_reasons = Vec::new();
     let mut admissible = Vec::new();

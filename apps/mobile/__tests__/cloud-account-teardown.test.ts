@@ -26,10 +26,6 @@ jest.mock('../stores/connectionStore', () => ({
   useConnectionStore: { getState: jest.fn() },
 }));
 
-jest.mock('../src/features/library/libraryCacheStore', () => ({
-  useLibraryCacheStore: { getState: jest.fn() },
-}));
-
 jest.mock('../src/features/artifacts/store', () => ({
   clearAccountScopedArtifactState: jest.fn(),
 }));
@@ -84,6 +80,7 @@ jest.mock('../src/features/model-picker/store', () => ({
 
 jest.mock('../src/features/model-picker/service', () => ({
   DEFAULT_LOCAL_MODEL_ID: 'fixture-local-model',
+  isCloudManagedModelId: (id: string) => id === 'fixture-cloud-model',
 }));
 
 jest.mock('../src/features/schedules/store', () => ({
@@ -104,6 +101,7 @@ jest.mock('../src/features/chat/upload/uploadLifecycle', () => ({
 
 jest.mock('../services/notifications', () => ({
   notificationCenterStore: { clear: jest.fn() },
+  clearDeliveredNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../src/features/notifications/accountFeed', () => ({
@@ -134,6 +132,7 @@ jest.mock('../lib/mmkv', () => ({
     getString: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
     delete: jest.fn(),
+    getAllKeys: jest.fn().mockReturnValue([]),
   },
 }));
 
@@ -173,9 +172,6 @@ const { clearCloudVideoGenerationState } =
   };
 const { useConnectionStore } = require('../stores/connectionStore') as {
   useConnectionStore: { getState: jest.Mock };
-};
-const { useLibraryCacheStore } = require('../src/features/library/libraryCacheStore') as {
-  useLibraryCacheStore: { getState: jest.Mock };
 };
 const { clearAccountScopedArtifactState } = require('../src/features/artifacts/store') as {
   clearAccountScopedArtifactState: jest.Mock;
@@ -229,9 +225,11 @@ const { invalidateConnectorPolicy } = require('../services/connectors') as {
 const { useUploadLifecycleStore } = require('../src/features/chat/upload/uploadLifecycle') as {
   useUploadLifecycleStore: { getState: jest.Mock };
 };
-const { notificationCenterStore } = require('../services/notifications') as {
-  notificationCenterStore: { clear: jest.Mock };
-};
+const { notificationCenterStore, clearDeliveredNotifications } =
+  require('../services/notifications') as {
+    notificationCenterStore: { clear: jest.Mock };
+    clearDeliveredNotifications: jest.Mock;
+  };
 const { useAccountNotificationFeed } = require('../src/features/notifications/accountFeed') as {
   useAccountNotificationFeed: { getState: jest.Mock };
 };
@@ -258,7 +256,10 @@ const { useChatMessageStore } = require('../stores/chat/chatMessageStore') as {
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-import { mmkvStorage } from '../lib/mmkv';
+import { mmkvStorage, storage } from '../lib/mmkv';
+import { getProviderOfferings } from '@agiworkforce/types';
+import { useLibraryCacheStore } from '../src/features/library/libraryCacheStore';
+import { SET_ASIDE_MARKER } from '../storage/unreadableFiles';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { applyCloudSettings, toCloudSettings } from '../services/cloudSettingsMapping';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
@@ -284,11 +285,11 @@ describe('clearLocalCloudAccountState', () => {
   const clearPromotionalCatalogue = jest.fn();
   const clearSchedules = jest.fn();
   const clearCloudSearch = jest.fn();
+  const clearCloudConversationView = jest.fn();
   const clearManagedCloudAccess = jest.fn();
   const resetCloudUploads = jest.fn();
   const resetAccountNotificationFeed = jest.fn();
   const endDesktopPairing = jest.fn();
-  const clearLibraryCache = jest.fn();
   let mmkvReadyCallbacks: Array<() => void>;
 
   beforeEach(() => {
@@ -324,12 +325,14 @@ describe('clearLocalCloudAccountState', () => {
     useFreeQuotaCatalogueStore.getState.mockReturnValue({ clear: clearPromotionalCatalogue });
     useModelStore.getState.mockReturnValue({ selectedModel: 'fixture-local-model' });
     useScheduleStore.getState.mockReturnValue({ clearAccountSchedules: clearSchedules });
-    useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
+    useChatViewStore.getState.mockReturnValue({
+      clearCloudSearchState: clearCloudSearch,
+      clearCloudConversationState: clearCloudConversationView,
+    });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
     useUploadLifecycleStore.getState.mockReturnValue({ reset: resetCloudUploads });
     useAccountNotificationFeed.getState.mockReturnValue({ reset: resetAccountNotificationFeed });
     useConnectionStore.getState.mockReturnValue({ disconnect: endDesktopPairing });
-    useLibraryCacheStore.getState.mockReturnValue({ clearLibraryCache });
   });
 
   it('clears account A Cloud data before account B while preserving Local data', () => {
@@ -348,7 +351,6 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudConversationSelection).toHaveBeenCalledWith(['cloud-conversation-a']);
     expect(clearAccountScopedArtifactState).toHaveBeenCalledTimes(1);
     expect(endDesktopPairing).toHaveBeenCalledTimes(1);
-    expect(clearLibraryCache).toHaveBeenCalledTimes(1);
     expect(clearAccountScopedOfflineQueue).toHaveBeenCalledTimes(1);
     expect(clearAccountScopedDrafts).toHaveBeenCalledTimes(1);
     expect(clearCloudMemory).toHaveBeenCalledTimes(1);
@@ -367,15 +369,128 @@ describe('clearLocalCloudAccountState', () => {
     expect(invalidateConnectorPolicy).toHaveBeenCalledTimes(1);
     expect(resetCloudUploads).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
+    expect(clearDeliveredNotifications).toHaveBeenCalledTimes(1);
     expect(resetAccountNotificationFeed).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
+    expect(clearCloudConversationView).toHaveBeenCalledWith(['cloud-conversation-a']);
     expect(useCloudSettingsStore.getState()).toEqual(useCloudSettingsStore.getInitialState());
     expect(useChatAppModeStore.setState).toHaveBeenCalledWith({ appMode: 'local' });
     expect(clearManagedCloudAccess).toHaveBeenCalledTimes(1);
 
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
+  });
+
+  it('removes every account’s recent Cloud searches from the phone and keeps the Local ones', () => {
+    (storage.getAllKeys as jest.Mock).mockReturnValueOnce([
+      'recent-searches:v1:local',
+      'recent-searches:v1:cloud:account-a',
+      'recent-searches:v1:cloud:account-b',
+      'unrelated-key',
+    ]);
+
+    clearLocalCloudAccountState();
+
+    expect(storage.delete).toHaveBeenCalledWith('recent-searches:v1:cloud:account-a');
+    expect(storage.delete).toHaveBeenCalledWith('recent-searches:v1:cloud:account-b');
+    expect(storage.delete).not.toHaveBeenCalledWith('recent-searches:v1:local');
+    expect(storage.delete).not.toHaveBeenCalledWith('unrelated-key');
+  });
+
+  it('moves a Cloud model selection to the Local choice and keeps the Cloud choice for that account', () => {
+    const setModel = jest.fn();
+    const restoreNewChatModel = jest.fn();
+    useModelStore.getState.mockReturnValue({
+      selectedModel: 'fixture-cloud-model',
+      setModel,
+      restoreNewChatModel,
+    });
+
+    clearLocalCloudAccountState();
+
+    expect(restoreNewChatModel).toHaveBeenCalledTimes(1);
+    expect(setModel).not.toHaveBeenCalled();
+  });
+
+  const promotionalModelId = Object.keys(getProviderOfferings())[0]!;
+
+  it('keeps the Local model the person chose when a promotional Cloud model was selected', () => {
+    const setModel = jest.fn();
+    useModelStore.getState.mockReturnValue({
+      selectedModel: promotionalModelId,
+      newChatModels: { local: 'fixture-chosen-local-model', cloud: promotionalModelId },
+      setModel,
+      restoreNewChatModel: jest.fn(),
+    });
+
+    clearLocalCloudAccountState();
+
+    expect(setModel).toHaveBeenCalledTimes(1);
+    expect(setModel).toHaveBeenCalledWith('fixture-chosen-local-model');
+  });
+
+  it('falls back to the default Local model when none was chosen before the promotional one', () => {
+    const setModel = jest.fn();
+    useModelStore.getState.mockReturnValue({
+      selectedModel: promotionalModelId,
+      newChatModels: { local: null, cloud: promotionalModelId },
+      setModel,
+      restoreNewChatModel: jest.fn(),
+    });
+
+    clearLocalCloudAccountState();
+
+    expect(setModel).toHaveBeenCalledWith('fixture-local-model');
+  });
+
+  it('deletes the copies set aside from unreadable Cloud stores and keeps Local ones', () => {
+    const keys = [
+      `chat-message-store-cloud${SET_ASIDE_MARKER}1700000000000`,
+      `memory-store-cloud${SET_ASIDE_MARKER}1700000000001`,
+      `projects-store-cloud${SET_ASIDE_MARKER}1700000000002-1`,
+      `library-store-cloud${SET_ASIDE_MARKER}1700000000003`,
+      `settings-store-cloud${SET_ASIDE_MARKER}1700000000004`,
+      `schedule-store${SET_ASIDE_MARKER}1700000000005`,
+      `tier-store${SET_ASIDE_MARKER}1700000000007`,
+      `chat-message-store-local${SET_ASIDE_MARKER}1700000000006`,
+      'chat-message-store-cloud',
+      'unrelated-key',
+    ];
+    (storage.getAllKeys as jest.Mock).mockReturnValueOnce([]).mockReturnValueOnce(keys);
+
+    clearLocalCloudAccountState();
+
+    const deleted = (storage.delete as jest.Mock).mock.calls.map(([key]) => key);
+    expect(deleted).toEqual(expect.arrayContaining(keys.slice(0, 7)));
+    expect(deleted).not.toContain(keys[7]);
+    expect(deleted).not.toContain('chat-message-store-cloud');
+    expect(deleted).not.toContain('unrelated-key');
+  });
+
+  it('forgets the answers it was waiting for after the app closed and signs out even if that fails', () => {
+    const warning = jest.spyOn(console, 'warn');
+    (storage.delete as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'agi-in-flight-turn-runs-v1') throw new Error('storage unavailable');
+    });
+    (storage.getString as jest.Mock).mockImplementation((key: string) =>
+      key === 'agi-in-flight-turn-runs-v1'
+        ? JSON.stringify([{ conversationId: 'c1', questionId: 'q1', operationId: 'o1' }])
+        : undefined,
+    );
+
+    try {
+      clearLocalCloudAccountState();
+
+      expect(storage.delete).toHaveBeenCalledWith('agi-in-flight-turn-runs-v1');
+      expect(clearCloudSearch).toHaveBeenCalledTimes(1);
+      expect(clearManagedCloudAccess).toHaveBeenCalledTimes(1);
+      expect(warning).not.toHaveBeenCalled();
+    } finally {
+      warning.mockRestore();
+      (storage.delete as jest.Mock).mockReset();
+      (storage.getString as jest.Mock).mockReset().mockReturnValue(undefined);
+    }
   });
 
   it('drops shared text and files staged for account A before account B opens a composer', () => {
@@ -503,5 +618,102 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCapabilitySwitches).toHaveBeenCalledTimes(2);
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
+  });
+});
+
+describe('clearLocalCloudAccountState on persisted account stores', () => {
+  const persistedCopies = new Map<string, string>();
+  const chatViewModule = jest.requireActual('../stores/chat/chatViewStore') as {
+    useChatViewStore: typeof import('../stores/chat/chatViewStore').useChatViewStore;
+  };
+  const realChatView = chatViewModule.useChatViewStore;
+
+  const persistedState = (name: string) =>
+    (JSON.parse(persistedCopies.get(name) ?? 'null') as { state: Record<string, unknown> }).state;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    persistedCopies.clear();
+    (whenMmkvReady as jest.Mock).mockImplementation(() => undefined);
+    (mmkvStorage.getItem as jest.Mock).mockImplementation(
+      (name: string) => persistedCopies.get(name) ?? null,
+    );
+    (mmkvStorage.setItem as jest.Mock).mockImplementation((name: string, value: string) => {
+      persistedCopies.set(name, value);
+    });
+    (mmkvStorage.removeItem as jest.Mock).mockImplementation((name: string) => {
+      persistedCopies.delete(name);
+    });
+    useChatCloudMessageStore.getState.mockReturnValue({
+      conversations: [{ id: 'cloud-conversation-a' }],
+      clearCloudData: jest.fn(),
+    });
+    useCloudProjectStore.getState.mockReturnValue({
+      projects: [],
+      clearCloudProjectData: jest.fn(),
+    });
+    useChatViewStore.getState.mockImplementation(() => realChatView.getState());
+  });
+
+  afterEach(() => {
+    (mmkvStorage.getItem as jest.Mock).mockReset().mockReturnValue(null);
+    (mmkvStorage.setItem as jest.Mock).mockReset();
+    (mmkvStorage.removeItem as jest.Mock).mockReset();
+  });
+
+  it('clears the library cache of account A from memory and from the persisted copy', async () => {
+    persistedCopies.set(
+      'library-store-cloud',
+      JSON.stringify({
+        version: 0,
+        state: { ownerId: 'account-a', assets: [{ id: 'asset-a' }] },
+      }),
+    );
+    await useLibraryCacheStore.persist.rehydrate();
+    expect(useLibraryCacheStore.getState().readLibraryPage('account-a')).toHaveLength(1);
+
+    clearLocalCloudAccountState();
+
+    expect(useLibraryCacheStore.getState()).toMatchObject({ ownerId: null, assets: [] });
+    expect(persistedState('library-store-cloud')).toEqual({ ownerId: null, assets: [] });
+  });
+
+  it('clears the style and connector choices made in account A conversations and keeps device choices', async () => {
+    persistedCopies.set(
+      'chat-view-store',
+      JSON.stringify({
+        version: 2,
+        state: {
+          chatMode: 'research',
+          features: { webSearch: false },
+          chatStyleByConversation: {
+            'cloud-conversation-a': 'formal',
+            conv_local_1: 'learning',
+          },
+          disabledConnectorIdsByConversation: {
+            'cloud-conversation-a': ['connector-a'],
+            conv_local_1: ['connector-local'],
+          },
+        },
+      }),
+    );
+    await realChatView.persist.rehydrate();
+    expect(realChatView.getState().chatStyleByConversation['cloud-conversation-a']).toBe('formal');
+
+    clearLocalCloudAccountState();
+
+    const memory = realChatView.getState();
+    expect(memory.chatStyleByConversation).toEqual({ conv_local_1: 'learning' });
+    expect(memory.disabledConnectorIdsByConversation).toEqual({
+      conv_local_1: ['connector-local'],
+    });
+    const persisted = persistedState('chat-view-store');
+    expect(persisted.chatStyleByConversation).toEqual({ conv_local_1: 'learning' });
+    expect(persisted.disabledConnectorIdsByConversation).toEqual({
+      conv_local_1: ['connector-local'],
+    });
+    expect(memory.chatMode).toBe('research');
+    expect(persisted.chatMode).toBe('research');
+    expect(memory.features.webSearch).toBe(false);
   });
 });

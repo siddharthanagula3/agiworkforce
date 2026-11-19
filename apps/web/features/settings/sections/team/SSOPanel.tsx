@@ -327,9 +327,7 @@ export function SSOPanel({
               marginTop: 'var(--space-1)',
             }}
           >
-            Route sign-in for an email domain you control to Okta, Microsoft Entra ID, Google
-            Workspace, or any SAML 2.0 / OIDC provider. Domain ownership must be proven by DNS
-            before a connection can go live.
+            Send your domain&apos;s sign-in to a SAML or OIDC provider, after proving it by DNS.
           </div>
         </div>
 
@@ -751,8 +749,7 @@ export function SSOPanel({
                     ) : null}
                   </label>
                   <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
-                    The client secret is requested when you activate the connection. It is passed to
-                    the identity provider and never stored here.
+                    Asked for on activation, passed to the provider and never stored here.
                   </p>
                 </>
               )}

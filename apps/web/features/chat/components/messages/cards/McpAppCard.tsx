@@ -25,14 +25,16 @@ import { TriangleAlert } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 
 import type { McpAppCardBody } from '@agiworkforce/types';
+import {
+  MCP_APP_RESOURCE_MAX_BYTES,
+  MCP_APP_SANDBOX_UNAVAILABLE_MESSAGE,
+  MCP_APP_TOO_LARGE_MESSAGE,
+  mcpAppPlainResultText,
+  type McpAppToolResult,
+} from '@agiworkforce/unified-chat/mcp-app';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { logger } from '@shared/lib/logger';
-
-export const MCP_APP_RESOURCE_MAX_BYTES = 2 * 1024 * 1024;
-export const MCP_APP_TOO_LARGE_MESSAGE = "This app's content is too large to display.";
-export const MCP_APP_SANDBOX_UNAVAILABLE_MESSAGE =
-  "This app can't be displayed here, so the tool's result is shown instead.";
 
 interface AppPayload {
   id: string;
@@ -40,11 +42,7 @@ interface AppPayload {
   resourceUri: string;
   toolName: string;
   toolInput: Record<string, unknown>;
-  toolResult: {
-    isError?: boolean;
-    structuredContent?: unknown;
-    content: unknown[];
-  };
+  toolResult: McpAppToolResult;
 }
 
 interface AppResource {
@@ -117,24 +115,6 @@ function dedicatedSandboxUrl(): URL | null {
   // MCP Apps requires the sandbox proxy on an origin distinct from the host, so
   // a production build renders the plain result rather than degrade silently.
   return process.env.NODE_ENV === 'production' ? null : sandboxUrl;
-}
-
-function plainResultText(result: AppPayload['toolResult']): string {
-  const text = result.content
-    .map((block) =>
-      block !== null &&
-      typeof block === 'object' &&
-      (block as Record<string, unknown>)['type'] === 'text' &&
-      typeof (block as Record<string, unknown>)['text'] === 'string'
-        ? ((block as Record<string, unknown>)['text'] as string)
-        : null,
-    )
-    .filter((value): value is string => value !== null)
-    .join('\n\n');
-  if (text) return text;
-  return result.structuredContent === undefined
-    ? ''
-    : JSON.stringify(result.structuredContent, null, 2);
 }
 
 function base64Url(value: string): string {
@@ -401,7 +381,7 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
             connectorId: body.connectorId,
             toolName: body.toolName,
           });
-          setFallback({ notice: reason.notice, text: plainResultText(payload.toolResult) });
+          setFallback({ notice: reason.notice, text: mcpAppPlainResultText(payload.toolResult) });
           setStatus('fallback');
           return;
         }

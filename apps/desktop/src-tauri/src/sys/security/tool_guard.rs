@@ -4447,13 +4447,12 @@ impl ToolExecutionGuard {
                         return true;
                     }
                 }
-                "null" => {
+                "null"
                     if tokens[index - 1] == "is"
                         && index >= 2
-                        && Self::is_column_reference(tokens, index - 2)
-                    {
-                        return true;
-                    }
+                        && Self::is_column_reference(tokens, index - 2) =>
+                {
+                    return true;
                 }
                 _ => {}
             }
@@ -6076,10 +6075,7 @@ impl ToolExecutionGuard {
             rest = &rest[offset + BROWSER_SCRIPT_LITERAL_SENTINEL.len()..];
 
             let mut value = source.next().cloned().unwrap_or_default();
-            loop {
-                let Some(after_plus) = rest.trim_start().strip_prefix('+') else {
-                    break;
-                };
+            while let Some(after_plus) = rest.trim_start().strip_prefix('+') {
                 let Some(after_literal) = after_plus
                     .trim_start()
                     .strip_prefix(BROWSER_SCRIPT_LITERAL_SENTINEL)

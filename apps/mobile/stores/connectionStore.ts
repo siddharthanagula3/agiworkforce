@@ -117,6 +117,20 @@ let signalingClient: SignalingClient | null = null;
 
 let connectionAttemptId = 0;
 
+const RELAY_RETRY_LATER_ERROR = 'service_unavailable';
+const RELAY_RETRY_FIRST_DELAY_SECONDS = 5;
+const RELAY_RETRY_MAX_DELAY_SECONDS = 60;
+let relayRetryStreak = 0;
+
+function nextRelayRetryDelaySeconds(): number {
+  const delay = Math.min(
+    RELAY_RETRY_FIRST_DELAY_SECONDS * 3 ** relayRetryStreak,
+    RELAY_RETRY_MAX_DELAY_SECONDS,
+  );
+  relayRetryStreak += 1;
+  return delay;
+}
+
 function invalidateConnectionAttempt(): void {
   connectionAttemptId += 1;
 }
@@ -1093,6 +1107,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
                 case 'peer_ready': {
                   clearConnectWatchdog();
+                  relayRetryStreak = 0;
                   const metadata = (event.metadata ?? {}) as DesktopMetadata;
                   const wasReconnecting =
                     get().status === 'reconnecting' ||
@@ -1162,6 +1177,14 @@ export const useConnectionStore = create<ConnectionState>()(
 
                 case 'error':
                   clearConnectWatchdog();
+                  if (event.error === RELAY_RETRY_LATER_ERROR) {
+                    invalidateConnectionAttempt();
+                    detachSignalingClient();
+                    cleanupPeerConnection();
+                    get().beginReconnecting(nextRelayRetryDelaySeconds());
+                    set({ error: friendlyErrorMessage(event.error) });
+                    break;
+                  }
                   if (endsPairing(event.error)) {
                     invalidateConnectionAttempt();
                     forgetPairingSecret();
@@ -1308,6 +1331,7 @@ export const useConnectionStore = create<ConnectionState>()(
         invalidateConnectionAttempt();
         clearConnectWatchdog();
         forgetPairingSecret();
+        relayRetryStreak = 0;
         if (signalingClient) {
           signalingClient.close({ endPairing: true });
           signalingClient = null;
@@ -1442,6 +1466,8 @@ function friendlyErrorMessage(raw: string): string {
       return 'This pairing session already has two devices connected.';
     case 'rate_limited':
       return 'Too many attempts. Please wait a moment.';
+    case RELAY_RETRY_LATER_ERROR:
+      return 'Remote Control is briefly unavailable.';
     case 'device_revoked':
       return 'Remote Control was turned off for this phone in your account settings. Scan a new QR code to pair again.';
     case 'pairing_not_found':

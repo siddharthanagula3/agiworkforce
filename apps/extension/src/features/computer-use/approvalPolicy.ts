@@ -160,6 +160,12 @@ const PURCHASE_CONTROL_LABEL =
 export const PURCHASE_REFUSAL =
   'Not done: this completes a purchase or payment, which the browser agent never does itself. Call ask_user_to_take_over so the user can check the amount and finish it.';
 
+export const PROTECTED_FIELD_REFUSAL =
+  'This is a password, payment or one-time code field; the user has to fill it in themselves.';
+
+export const PAIRED_PURCHASE_REFUSAL =
+  'Not done: this completes a purchase or payment, which the extension never does for another app. The user has to check the amount and finish it in the browser.';
+
 export function readsWithoutActing(toolName: string, siteToolEffect?: 'read' | 'write'): boolean {
   return siteToolEffect === undefined
     ? PAGE_READING_TOOLS.has(toolName)
@@ -316,6 +322,32 @@ export function registeredSiteToolApprovalRequirement(input: {
   if (AUTHENTICATION_PATH.test(pageUrl.pathname))
     return { alwaysAsk: true, reason: 'authentication' };
   return ASK_NOT_REQUIRED;
+}
+
+/**
+ * The bar for a click or typing another app asks for. That app approved the
+ * action, possibly with no person watching the page, so what the side panel
+ * would ask the user about here is refused: typing into a protected field and
+ * a click that completes a purchase.
+ */
+export function pairedActionRefusal(input: {
+  readonly toolName: 'click' | 'type';
+  readonly selector: string;
+  readonly pageUrl: string | null;
+  readonly targetSignature: string;
+  readonly protectedField: boolean;
+}): string | null {
+  if (input.toolName === 'type' && input.protectedField) return PROTECTED_FIELD_REFUSAL;
+  const requirement = approvalRequirement({
+    toolName: input.toolName,
+    args: { selector: input.selector },
+    pageUrl: input.pageUrl,
+    targetSignature: input.targetSignature,
+  });
+  if (requirement.reason === 'purchase') return PAIRED_PURCHASE_REFUSAL;
+  if (input.toolName === 'type' && requirement.reason === 'sensitive_input')
+    return PROTECTED_FIELD_REFUSAL;
+  return null;
 }
 
 export function approvalRequirement(input: ActionApprovalInput): ActionApprovalRequirement {

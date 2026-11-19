@@ -12,9 +12,9 @@ use uuid::Uuid;
 use super::client::{CloudClient, CloudError};
 use super::state::{SyncSection, SyncState};
 
+pub mod api;
+
 pub const PROJECTS_SYNC_PATH: &str = "/api/projects/sync";
-const NAME_MAX_CHARS: usize = 200;
-const DESCRIPTION_MAX_CHARS: usize = 2_000;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -154,11 +154,11 @@ fn truncate(value: &str, max_chars: usize) -> String {
 pub fn new_project(name: &str, description: Option<&str>) -> ProjectPushItem {
     ProjectPushItem {
         id: Uuid::new_v4().to_string(),
-        name: truncate(name.trim(), NAME_MAX_CHARS),
+        name: truncate(name.trim(), api::contract().name_max_length),
         description: description
             .map(str::trim)
             .filter(|value| !value.is_empty())
-            .map(|value| truncate(value, DESCRIPTION_MAX_CHARS)),
+            .map(|value| truncate(value, api::contract().description_max_length)),
         base_version: super::state::INITIAL_CURSOR.to_string(),
     }
 }

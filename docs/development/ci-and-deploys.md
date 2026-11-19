@@ -2,7 +2,18 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-11-10
+Last updated: 2026-11-17
+
+## Current state
+
+The `Deploy Production Surfaces` and `Deploy Staging Web` workflows exist in
+`.github/workflows/` and are disabled in GitHub (`gh workflow list --all` shows
+`disabled_manually`), so neither runs on a merge. Production web is deployed
+manually with the pinned Vercel CLI from a clean worktree. `/api/version` on the
+production origin reports the commit and migration high-water mark it serves.
+`Deploy Signaling Server` is active. The sections below describe the contract the
+disabled workflows enforce, and what re-enabling them restores; they are not the
+path production takes today.
 
 ## Production invariant
 
@@ -249,7 +260,7 @@ runtime. Provisioning must independently establish that the staging Neon databas
 is separate from production; `--target staging` does not check database identity.
 
 Vercel's Preview environment is the staging runtime, and it shares no Stripe,
-Clerk, Redis or OpenRouter credential with Production. `validate-env.ts` fails
+Clerk, Redis or OpenRouter credential with Production. `apps/web/lib/validate-env.ts` fails
 the boot without Clerk keys, Stripe keys, the five required `STRIPE_PRICE_*` ids
 and `NEXT_PUBLIC_APP_URL`, and refuses live Stripe keys in Preview, so Preview
 carries its own:
@@ -285,18 +296,21 @@ candidate-local directories. External package files retain their installed
 bytes and executable modes; workspace aliases and generated binary paths
 resolve inside the candidate. Absolute or out-of-inventory dependency links
 fail closed. Each candidate owns its Cargo target directory. It runs the
-guard chain there, then removes the
-worktree on every exit path. A guard that reads `git ls-files -co
+guard chain there, then lint and the type check for the packages that differ
+from `origin/main` (every package when that ref is absent), then removes the
+worktree on every exit path. The task cache for that last step lives beside the
+candidates in `turbo-cache`, so a second push re-runs only what changed. A guard that reads `git ls-files -co
 --exclude-standard` (AGENTS.md §12) sees only what is in `HEAD`, so an
 uncommitted or untracked file elsewhere in the shared tree can no longer block
 someone else's push; CI enforces the same chain against the same commits.
 
 The chain and diff commands are overridable
-(`AGI_PREPUSH_CHAIN_CMD`, `AGI_PREPUSH_DIFF_CMD`, `AGI_PREPUSH_DIFF_CACHED_CMD`)
-for testing; the real hook runs the defaults:
+(`AGI_PREPUSH_CHAIN_CMD`, `AGI_PREPUSH_STATIC_CMD`, `AGI_PREPUSH_DIFF_CMD`,
+`AGI_PREPUSH_DIFF_CACHED_CMD`) for testing; the real hook runs the defaults:
 
 ```bash
 pnpm check:llm-operability
+pnpm exec turbo run lint typecheck --affected --concurrency=2
 git diff --check
 git diff --cached --check
 ```

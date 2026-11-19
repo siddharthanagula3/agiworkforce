@@ -11,6 +11,7 @@ describe('chat system output contracts', () => {
     expect(CHAT_SYSTEM_PROMPT_PINNED_VERSION).toBe(6);
     expect(promptReleaseChannel('chat.system', 6)).toBe('stable');
     expect(promptReleaseChannel('chat.system', 15)).toBe('internal');
+    expect(promptReleaseChannel('chat.system', 16)).toBe('internal');
   });
 
   it('assembles the current text, component and artifact syntax for supported surfaces', () => {

@@ -182,10 +182,12 @@ pub fn credential_paths(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+pub const CLOUD_ATTACHMENT_RECOVERY_DIRECTORY: &str = "chat-attachment-recovery";
+
 /// The entries of the AGI Workforce CLI folder that hold a key, a token or the
 /// user's conversations. The rest of that folder stays readable, so a hook
 /// script or a server kept there still runs.
-const AGIWORKFORCE_HOME_SECRET_ENTRIES: [&str; 13] = [
+const AGIWORKFORCE_HOME_SECRET_ENTRIES: [&str; 14] = [
     "auth.json",
     "auth.toml",
     "secrets",
@@ -199,6 +201,7 @@ const AGIWORKFORCE_HOME_SECRET_ENTRIES: [&str; 13] = [
     "conversations",
     "managed_sessions",
     "managed_session_metadata",
+    CLOUD_ATTACHMENT_RECOVERY_DIRECTORY,
 ];
 
 /// The secret entries of `folder`, the AGI Workforce CLI folder as the host

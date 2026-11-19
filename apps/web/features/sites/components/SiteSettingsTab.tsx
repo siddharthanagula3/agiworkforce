@@ -44,7 +44,7 @@ function SettingsSection({
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-medium text-[var(--chat-text-primary)]">{title}</h2>
         {description ? (
-          <p className="text-sm text-[var(--chat-text-secondary)]">{description}</p>
+          <p className="text-xs text-[var(--chat-text-secondary)]">{description}</p>
         ) : null}
       </div>
       {children}
@@ -317,7 +317,7 @@ function VersionsSession({ site, onRestored }: { site: PublishedSite; onRestored
   return (
     <SettingsSection
       title="Versions"
-      description="Each publish is kept. Restoring an older one publishes it again as the newest version."
+      description="Each publish is kept. Restoring one republishes it as the newest."
     >
       {consumed ? (
         <p role="status" className="text-sm text-[var(--chat-text-secondary)]">

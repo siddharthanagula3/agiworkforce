@@ -29,6 +29,7 @@ describe('ChatStreamRuntimeProvider', () => {
       resumeInteractiveCardTurn: vi.fn(),
       respondToInteractiveCard: vi.fn(),
       isInteractiveCardResponsePending: vi.fn().mockReturnValue(false),
+      requestAnswerUiMessage: vi.fn(),
       resolveToolApproval: vi.fn(),
       resolveToolInput: vi.fn(),
       steerActiveTurn: vi.fn(),

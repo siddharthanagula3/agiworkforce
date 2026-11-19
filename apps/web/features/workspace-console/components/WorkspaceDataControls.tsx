@@ -469,8 +469,7 @@ export function WorkspaceDataControls() {
             Retention sweeps
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            What each run deleted, what it withheld, and when it declined to run. This is the record
-            you show an auditor instead of asserting that deletion happens.
+            What each sweep deleted, withheld or declined, as a record for auditors.
           </p>
         </div>
 

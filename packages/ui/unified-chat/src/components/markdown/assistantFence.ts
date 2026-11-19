@@ -1,5 +1,6 @@
 import {
   checklistProgress,
+  MODES_NOTE,
   parseActions,
   parseCards,
   parseCardGrid,
@@ -27,6 +28,7 @@ import {
   statusStateLabel,
   toolStateLabel,
   type CheckItem,
+  type MapStop,
   type StatusRow,
   type ToolState,
   type RichCardSpec,
@@ -34,10 +36,16 @@ import {
   type FormSpec,
   type CarouselSpec,
 } from './answerSurfaces';
-import { emailPlainText, parseEmailBlock, WRITING_KIND_LANGUAGES } from './richBlocks';
-import { parseChartArtifact } from '@agiworkforce/types/chart-spec';
+import {
+  emailPlainText,
+  parseEmailBlock,
+  WRITING_KIND_LANGUAGES,
+  type EmailField,
+} from './richBlocks';
+import { parseChartArtifact, type ChartSpec } from '@agiworkforce/types/chart-spec';
 
-export { checklistProgress };
+export type { ChartSpec } from '@agiworkforce/types/chart-spec';
+export { checklistProgress, MODES_NOTE };
 export {
   formFieldErrors,
   formSubmissionText,
@@ -49,8 +57,12 @@ export type { FormField, FormSpec, RichCardSpec, StatsSpec, CarouselSpec } from 
 export type { AssistantFenceEdit } from './assistantFenceEdits';
 
 export const UNKNOWN_STRUCTURED_LANGUAGE = 'unknown';
+export const MAP_FENCE_LISTED_ONLY_NOTE =
+  'Place names are listed. A map image is not loaded in this view.';
 
 const SAFE_LINK = /^(?:https?:|mailto:)/i;
+
+export type ChartFenceKind = 'bar' | 'line' | 'pie' | 'donut';
 
 interface ChartSurfaceFields {
   title: string;
@@ -58,6 +70,14 @@ interface ChartSurfaceFields {
   yLabel: string;
   points: { label: string; value: number }[];
 }
+
+interface ChartFenceFields extends ChartSurfaceFields {
+  chartKind: ChartFenceKind;
+  spec: ChartSpec | null;
+}
+
+const JSON_CHART_TYPE =
+  /"(?:type|chartType|chart_type|kind)"\s*:\s*"(?:bar|line|pie|donut|doughnut)"/i;
 
 export type AssistantFence =
   | { kind: 'code'; language: string; text: string }
@@ -70,6 +90,7 @@ export type AssistantFence =
       bcc: string;
       subject: string;
       body: string;
+      headerFields: readonly EmailField[];
     }
   | { kind: 'writing'; language: string; label: string; copyText: string }
   | {
@@ -79,13 +100,19 @@ export type AssistantFence =
       copyText: string;
       notice: string;
     }
-  | { kind: 'cards'; cards: { title: string; body: string }[] }
+  | {
+      kind: 'cards';
+      title: string;
+      columns: 1 | 2 | 3;
+      note: string;
+      cards: { title: string; body: string }[];
+    }
   | { kind: 'card'; spec: RichCardSpec }
   | { kind: 'stats'; spec: StatsSpec }
   | { kind: 'form'; spec: FormSpec; source: string }
   | { kind: 'carousel'; spec: CarouselSpec }
   | { kind: 'checklist'; title: string; items: CheckItem[]; progress: string }
-  | ({ kind: 'chart' } & ChartSurfaceFields)
+  | ({ kind: 'chart' } & ChartFenceFields)
   | { kind: 'citation'; title: string; source: string; href: string; summary: string }
   | { kind: 'status'; rows: { label: string; state: StatusRow['state']; name: string }[] }
   | { kind: 'followups'; items: string[] }
@@ -93,13 +120,16 @@ export type AssistantFence =
   | { kind: 'slider'; label: string; min: number; max: number; value: number; prefix: string }
   | { kind: 'checks'; title: string; items: CheckItem[] }
   | { kind: 'dropdown'; label: string; options: string[]; selected: string }
-  | { kind: 'gallery'; items: { caption: string; src: string; color: string }[] }
+  | { kind: 'gallery'; items: { caption: string; src: string; color: string; detail?: string }[] }
   | { kind: 'details'; summary: string; detail: string }
-  | { kind: 'map'; stops: { name: string; note: string }[] }
+  | { kind: 'map'; stops: MapStop[] }
   | { kind: 'actions'; items: { label: string; text: string }[] }
   | { kind: 'files'; files: { name: string; kind: string; note: string }[] }
   | { kind: 'transcript'; lines: { time: string; speaker: string; text: string }[] }
-  | { kind: 'timeline'; steps: { title: string; detail: string; name: string }[] }
+  | {
+      kind: 'timeline';
+      steps: { title: string; detail: string; name: string; date?: string }[];
+    }
   | {
       kind: 'tool';
       name: string;
@@ -110,13 +140,25 @@ export type AssistantFence =
     };
 
 /**
- * A chart fence written as a full chart definition, with its own label and series keys, which
- * the web renderer plots with every series; surfaces that draw one series show the first.
+ * The chart definition a fence holds, read the way the web code block reads it: a chart fence,
+ * or a JSON fence that names a chart type. Surfaces that plot every series use this spec.
  */
-function chartFromSpec(source: string): ChartSurfaceFields | null {
+export function chartSpecFromFence(language: string, source: string): ChartSpec | null {
+  const normalized = language.trim().toLowerCase();
+  const candidate =
+    normalized === 'chart' || (normalized === 'json' && JSON_CHART_TYPE.test(source));
+  if (!candidate) return null;
   const parsed = parseChartArtifact(source);
-  if (!parsed.ok) return null;
-  const { spec } = parsed;
+  return parsed.ok ? parsed.spec : null;
+}
+
+function specChartKind(spec: ChartSpec): ChartFenceKind {
+  return spec.donut ? 'donut' : spec.kind;
+}
+
+/** Surfaces that draw one series show the first series of a full chart definition. */
+function chartFromSpec(spec: ChartSpec | null): ChartSurfaceFields | null {
+  if (!spec) return null;
   const series = spec.series[0];
   if (!series) return null;
   const points = spec.rows.flatMap((row) => {
@@ -161,13 +203,21 @@ function writingLabel(language: string): string {
   return 'Writing';
 }
 
-export function classifyAssistantFence(language: string, source: string): AssistantFence {
+export interface ClassifyAssistantFenceOptions {
+  streaming?: boolean;
+}
+
+export function classifyAssistantFence(
+  language: string,
+  source: string,
+  options: ClassifyAssistantFenceOptions = {},
+): AssistantFence {
   const normalized = language.trim().toLowerCase();
   if (normalized === UNKNOWN_STRUCTURED_LANGUAGE || normalized.startsWith('x-surface-')) {
     return fallback('unknown', normalized, source);
   }
   if (normalized === 'email') {
-    const parsed = parseEmailBlock(source);
+    const parsed = parseEmailBlock(source, options.streaming === true);
     if (!parsed) return fallback('invalid', normalized, source);
     return {
       kind: 'email',
@@ -177,6 +227,7 @@ export function classifyAssistantFence(language: string, source: string): Assist
       bcc: parsed.draft.bcc,
       subject: parsed.draft.subject,
       body: parsed.draft.body,
+      headerFields: parsed.headerFields,
     };
   }
   if (WRITING_KIND_LANGUAGES.has(normalized) && normalized !== 'email') {
@@ -206,9 +257,20 @@ export function classifyAssistantFence(language: string, source: string): Assist
     return spec ? { kind: 'carousel', spec } : fallback('invalid', normalized, source);
   }
   if (normalized === 'chart') {
-    const chart = parseChartSurface(source) ?? chartFromSpec(source);
+    const spec = chartSpecFromFence(normalized, source);
+    const surface = parseChartSurface(source);
+    const chart = surface ?? chartFromSpec(spec);
     if (!chart) return fallback('invalid', normalized, source);
-    return { ...chart, kind: 'chart' };
+    const chartKind = spec ? specChartKind(spec) : (surface?.kind ?? 'bar');
+    return {
+      kind: 'chart',
+      title: chart.title,
+      xLabel: chart.xLabel,
+      yLabel: chart.yLabel,
+      points: chart.points,
+      chartKind,
+      spec,
+    };
   }
   if (normalized === 'tool') {
     const tool = parseTool(source);
@@ -250,10 +312,16 @@ export function classifyAssistantFence(language: string, source: string): Assist
     };
   }
   if (normalized === 'cards' || normalized === 'modes') {
-    const cards =
-      normalized === 'cards' ? (parseCardGrid(source)?.cards ?? []) : parseCards(source);
+    const grid = normalized === 'cards' ? parseCardGrid(source) : null;
+    const cards = normalized === 'cards' ? (grid?.cards ?? []) : parseCards(source);
     if (cards.length === 0) return fallback('invalid', normalized, source);
-    return { kind: 'cards', cards };
+    return {
+      kind: 'cards',
+      title: grid?.title ?? '',
+      columns: grid?.columns ?? 2,
+      note: normalized === 'modes' ? MODES_NOTE : '',
+      cards,
+    };
   }
   if (normalized === 'checklist') {
     const spec = parseChecklist(source);
@@ -308,7 +376,14 @@ export function classifyAssistantFence(language: string, source: string): Assist
     const items = parseGallery(source).flatMap((item) => {
       const src = item.src && safeHref(item.src) ? item.src : '';
       if (!item.caption) return [];
-      return [{ caption: item.caption, src, color: item.color }];
+      return [
+        {
+          caption: item.caption,
+          src,
+          color: item.color,
+          ...(item.detail ? { detail: item.detail } : {}),
+        },
+      ];
     });
     if (items.length === 0) return fallback('invalid', normalized, source);
     return { kind: 'gallery', items };
@@ -321,10 +396,7 @@ export function classifyAssistantFence(language: string, source: string): Assist
   if (normalized === 'map') {
     const stops = parseMap(source);
     if (stops.length === 0) return fallback('invalid', normalized, source);
-    return {
-      kind: 'map',
-      stops: stops.map((stop) => ({ name: stop.name, note: stop.note })),
-    };
+    return { kind: 'map', stops };
   }
   if (normalized === 'actions') {
     const items = parseActions(source);
@@ -352,10 +424,39 @@ export function classifyAssistantFence(language: string, source: string): Assist
         title: step.title,
         detail: step.detail,
         name: name(step.state),
+        ...(step.date ? { date: step.date } : {}),
       })),
     };
   }
   return { kind: 'code', language: normalized, text: source };
+}
+
+export interface SettledStreamingFence {
+  fence: AssistantFence;
+  source: string;
+}
+
+export function settleStreamingFence(
+  language: string,
+  source: string,
+  closed: boolean,
+): SettledStreamingFence | null {
+  const options = { streaming: !closed };
+  const fence = classifyAssistantFence(language, source, options);
+  if (closed || fence.kind !== 'fallback' || fence.reason !== 'invalid') return { fence, source };
+  const lastBreak = source.lastIndexOf('\n');
+  if (lastBreak <= 0) return null;
+  const settledSource = source.slice(0, lastBreak);
+  const settled = classifyAssistantFence(language, settledSource, options);
+  return settled.kind === 'fallback' ? null : { fence: settled, source: settledSource };
+}
+
+export function classifyStreamingFence(
+  language: string,
+  source: string,
+  closed: boolean,
+): AssistantFence | null {
+  return settleStreamingFence(language, source, closed)?.fence ?? null;
 }
 
 function escapeHtml(value: string): string {
@@ -531,7 +632,7 @@ export function renderClassifiedFenceHtml(
           `<li>${escapeHtml(stop.name)}${stop.note ? `: ${escapeHtml(stop.note)}` : ''}</li>`,
       )
       .join('');
-    return `${sectionOpen(mode, 'map', 'Map')}<ul>${stops}</ul><p>Place names are listed. A map image is not loaded in this view.</p></section>`;
+    return `${sectionOpen(mode, 'map', 'Map')}<ul>${stops}</ul><p>${MAP_FENCE_LISTED_ONLY_NOTE}</p></section>`;
   }
   if (fence.kind === 'actions') {
     const items = fence.items

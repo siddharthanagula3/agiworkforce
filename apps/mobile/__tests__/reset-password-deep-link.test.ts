@@ -52,7 +52,7 @@ describe('drift sentinel, _layout.tsx still enforces the predicate', () => {
     const path = require('path');
     const src = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
     expect(src).toContain("scheme === 'https'");
-    expect(src.match(/isAgiWorkforceUniversalLinkHost\(hostname\)/gu)).toHaveLength(2);
+    expect(src.match(/isAgiWorkforceUniversalLinkHost\(hostname\)/gu)).toHaveLength(3);
     expect(src).toContain("segments[0] === 'auth'");
     expect(src).toContain("segments[1] === 'reset-password'");
     expect(src).toContain('segments.length === 2');

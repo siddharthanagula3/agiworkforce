@@ -85,7 +85,7 @@ export interface CustomConnectorPreset {
 export const CUSTOM_MCP_AUTH_TYPE = 'custom_mcp';
 
 export const CUSTOM_MCP_UNVERIFIED_NOTICE =
-  'Added by URL. AGI has not reviewed this server; it can read what you send it and may return instructions to the assistant.';
+  'Added by URL and not reviewed. It can read what you send and send instructions back.';
 
 export function isUnverifiedCustomConnector(
   connector: Pick<SettingsConnector, 'authType'>,

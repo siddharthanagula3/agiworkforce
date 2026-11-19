@@ -113,7 +113,7 @@ pub fn cron_schedule(expression: &str) -> Result<Schedule, String> {
     let with_seconds = match fields.as_slice() {
         [minute, hour, day, month, weekday] => format!(
             "0 {minute} {hour} {day} {month} {}",
-            standard_weekdays(weekday).map_err(&unreadable)?
+            standard_weekdays(weekday).map_err(unreadable)?
         ),
         _ => expression.to_string(),
     };

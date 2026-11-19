@@ -14,7 +14,7 @@ import {
   actionNeedsApproval,
   type BrowserPermissionMode,
 } from '../src/features/computer-use/askBeforeActing';
-import { isCrucialAction } from '../src/features/computer-use/crucialActions';
+import { asksInAutoMode } from '../src/features/computer-use/crucialActions';
 import { describeComputerUseAction } from '../src/features/computer-use/describeAction';
 import { APPROVAL_TIMEOUT_MS } from '../src/features/computer-use/agentLoop';
 import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
@@ -52,7 +52,10 @@ type OnBeforeAction = (
 ) => Promise<boolean>;
 
 function harness(permissionMode: BrowserPermissionMode, siteApproved = true) {
-  const listeners = new Set<(message: unknown, sender: unknown) => void>();
+  const pendingComputerUseApprovals = new Map<
+    string,
+    (message: unknown, sender: unknown) => void
+  >();
   const sent: Array<{ type: string; requestId: string; canAllowForTask: boolean }> = [];
   const lease = {
     runId: 'run-a',
@@ -67,18 +70,13 @@ function harness(permissionMode: BrowserPermissionMode, siteApproved = true) {
       runtime: {
         id: extensionId,
         getURL: (path: string) => `chrome-extension://${extensionId}${path}`,
-        onMessage: {
-          addListener: (listener: (message: unknown, sender: unknown) => void) =>
-            listeners.add(listener),
-          removeListener: (listener: (message: unknown, sender: unknown) => void) =>
-            listeners.delete(listener),
-        },
       },
       tabs: { get: async () => ({ url: PAGE }) },
     },
+    pendingComputerUseApprovals,
     APPROVAL_TIMEOUT_MS,
     permissionMode,
-    isCrucialAction,
+    asksInAutoMode,
     allowedForTask: new Set<string>(),
     readsWithoutActing,
     actionNeedsApproval,
@@ -118,13 +116,12 @@ function harness(permissionMode: BrowserPermissionMode, siteApproved = true) {
     );
   const answer = (allowed: boolean, forTask = false) => {
     const request = sent.at(-1)!;
-    for (const listener of listeners)
-      listener(
-        { type: 'AGI_CU_APPROVE_RESPONSE', requestId: request.requestId, allowed, forTask },
-        { id: extensionId, url: `chrome-extension://${extensionId}/src/side_panel.html` },
-      );
+    pendingComputerUseApprovals.get(request.requestId)?.(
+      { type: 'AGI_CU_APPROVE_RESPONSE', requestId: request.requestId, allowed, forTask },
+      { id: extensionId, url: `chrome-extension://${extensionId}/src/side_panel.html` },
+    );
   };
-  return { decide, answer, sent, listeners };
+  return { decide, answer, sent, pending: pendingComputerUseApprovals };
 }
 
 const SITE_TOOL = { name: 'save_draft', arguments: {} };
@@ -204,7 +201,7 @@ describe('production browser approval honors the per-call contract in every mode
     await vi.waitFor(() => expect(test.sent).toHaveLength(1));
     await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS);
     await expect(decision).resolves.toBe(false);
-    expect(test.listeners.size).toBe(0);
+    expect(test.pending.size).toBe(0);
   });
 
   it('never turns one site-tool approval into permission for the rest of the task', async () => {

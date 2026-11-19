@@ -1456,7 +1456,7 @@ mod tests {
         );
         assert_eq!(
             classify_command("git branch -D feature"),
-            CommandSafety::Unknown
+            CommandSafety::Dangerous
         );
         assert_eq!(
             classify_command("git branch -m old new"),

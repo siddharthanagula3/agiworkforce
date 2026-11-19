@@ -18,6 +18,7 @@ import {
   useRef,
   useEffect,
   useState,
+  useSyncExternalStore,
   type MutableRefObject,
 } from 'react';
 import {
@@ -28,8 +29,10 @@ import {
   inspectStreamSequence,
   isStreamEnvelope,
   messageKindForAgentEvent,
+  TERMINAL_AGENT_TASK_STATES,
   type InteractiveCard,
   type InteractiveCardClientCapability,
+  type AnswerUiValue,
   type InteractiveCardResponsePayload,
   type KnownInteractiveCardKind,
   type StreamSequenceState,
@@ -63,7 +66,7 @@ import {
   type MessageToolEntry,
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 import { useFastModeAllowanceStore } from '@shared/stores/fast-mode-allowance-store';
 import { readSelectedLocalModel } from '@features/desktop-host';
 import {
@@ -135,12 +138,13 @@ import {
   SSE_DONE_DATA,
 } from '@agiworkforce/client-runtime';
 import {
+  AnswerUiMessageResponseSchema,
   INTERACTIVE_CARD_RESPONSE_PATH,
   RESPONDABLE_INTERACTIVE_CARD_KIND,
   interactiveCardAcceptsResponse,
   interactiveCardNeedsResume,
   type InteractiveCardResponseRequest,
-} from '@/app/api/interactive-cards/response-contract';
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import {
   fallbackStepLabel,
@@ -162,7 +166,7 @@ import {
   withTurnStartSummary,
   type TurnStartTicker,
 } from './turnStartProgress';
-import { SECRET_REDACTION_COUNT_HEADER } from '@/lib/chat-secret-redaction-notice';
+import { SECRET_REDACTION_COUNT_HEADER } from '@agiworkforce/cloud-contracts';
 import {
   ATTACHMENTS_TRUNCATED_HEADER,
   readAttachmentTruncationHeader,
@@ -193,11 +197,13 @@ import type {
 } from '@agiworkforce/types';
 import {
   parseResearchPlanEvent,
-  parseResearchPlanQuestions,
-  parseResearchRunConfig,
   rendersResearchPlan,
   researchTurnHistoryContent,
 } from '@/features/chat/utils/research-plan';
+import {
+  parseResearchPlanQuestions,
+  parseResearchRunConfig,
+} from '@agiworkforce/unified-chat/research-plan';
 import { parseResearchGapsEvent } from '@/features/chat/components/research/ResearchPlan';
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import { surfaceUsageCreditsNotice } from '@/features/billing/lib/usage-credits-notice';
@@ -219,7 +225,7 @@ import {
 } from '@/features/chat/lib/quotaPaywallSlot';
 import { isAccountWideUsageBlock } from '@/features/chat/stores/account-usage-block';
 import { readRetryAt } from '@/features/chat/lib/freeCapacityRecovery';
-import { ROUTE_LANE_HEADER, readRouteLane } from '@/features/chat/lib/routeLane';
+import { ROUTE_LANE_HEADER, readRouteLane } from '@agiworkforce/cloud-contracts';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
@@ -250,6 +256,11 @@ import {
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
+import { cardOnlyAssistantTurnContent } from '@/features/chat/lib/assistant-history-turn';
+import {
+  citationSpansFromAnchors,
+  type CitationAnchor,
+} from '@/features/chat/lib/citation-anchors';
 import {
   freeModelAttachmentKind,
   freeQuotaChatOffering,
@@ -264,7 +275,7 @@ import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-
 import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
 import type { RoutingProfileChoice } from '@agiworkforce/types';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
-import { displaySourceSnippet } from '@/lib/sources/display-snippet';
+import { displaySourceSnippet } from '@agiworkforce/unified-chat/message-sources';
 
 interface SendMessageOptions {
   model?: string;
@@ -371,6 +382,11 @@ export interface UseChatStreamReturn {
     payload: InteractiveCardResponsePayload,
   ) => Promise<void>;
   isInteractiveCardResponsePending: (binding: InteractiveCardResponseBinding) => boolean;
+  requestAnswerUiMessage: (
+    binding: InteractiveCardResponseBinding,
+    actionId: string,
+    values: Record<string, AnswerUiValue>,
+  ) => Promise<string | null>;
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -978,16 +994,90 @@ function bindPendingTurnAuthority(
   return authority;
 }
 
+const expiredPausedTurnIds = new Set<string>();
+const expiredPausedTurnListeners = new Set<() => void>();
+let expiredPausedTurnsVersion = 0;
+
+function subscribeExpiredPausedTurns(listener: () => void): () => void {
+  expiredPausedTurnListeners.add(listener);
+  return () => {
+    expiredPausedTurnListeners.delete(listener);
+  };
+}
+
+function readExpiredPausedTurnsVersion(): number {
+  return expiredPausedTurnsVersion;
+}
+
+// MessageBubble's memo comparator cannot see this registry, so a bubble that
+// reads isApprovalTurnLive or isInputTurnLive re-renders through its resolver hook.
+function useExpiredPausedTurnsVersion(): number {
+  return useSyncExternalStore(
+    subscribeExpiredPausedTurns,
+    readExpiredPausedTurnsVersion,
+    readExpiredPausedTurnsVersion,
+  );
+}
+
+function markPausedTurnExpired(assistantMessageId: string): void {
+  expiredPausedTurnIds.add(assistantMessageId);
+  expiredPausedTurnsVersion += 1;
+  for (const listener of expiredPausedTurnListeners) listener();
+}
+
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
   pendingInputTurns.clear();
   remoteApprovalWatches.clear();
+  expiredPausedTurnIds.clear();
+}
+
+function isPausedTurnSuperseded(conversationId: string, assistantMessageId: string): boolean {
+  const thread = readConversationMessages(conversationId);
+  const index = thread.findIndex((message) => message.id === assistantMessageId);
+  return (
+    index >= 0 &&
+    thread
+      .slice(index + 1)
+      .some((message) => message.role === 'user' || message.role === 'assistant')
+  );
+}
+
+// A paused request belongs to the newest turn only. Resuming it after a newer
+// turn started would abort that reply and stream above it.
+function expireIfSuperseded(
+  turn: PendingTurn | PendingInputTurn,
+  assistantMessageId: string,
+  requests: ChatRequestSettlements,
+): boolean {
+  if (
+    !isPausedTurnSuperseded(turn.conversationId, assistantMessageId) &&
+    !requests.isBusyWithOtherMessage(turn.conversationId, assistantMessageId)
+  ) {
+    return false;
+  }
+  markPausedTurnExpired(assistantMessageId);
+  pendingTurns.delete(assistantMessageId);
+  pendingInputTurns.delete(assistantMessageId);
+  useChatStore.getState().updateMessage(assistantMessageId, {}, turn.conversationId);
+  return true;
+}
+
+function isPausedTurnLive(
+  assistantMessageId: string,
+  turn: PendingTurn | PendingInputTurn | null,
+): boolean {
+  return (
+    turn !== null &&
+    !expiredPausedTurnIds.has(assistantMessageId) &&
+    !isPausedTurnSuperseded(turn.conversationId, assistantMessageId)
+  );
 }
 
 export function isInputTurnLive(assistantMessageId: string): boolean {
-  return (
-    pendingInputTurns.has(assistantMessageId) ||
-    restorePendingInputTurn(assistantMessageId) !== null
+  return isPausedTurnLive(
+    assistantMessageId,
+    pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId),
   );
 }
 
@@ -1046,7 +1136,10 @@ function restorePendingInputTurn(assistantMessageId: string): PendingInputTurn |
 }
 
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
-  return pendingTurns.has(assistantMessageId) || restorePendingTurn(assistantMessageId) !== null;
+  return isPausedTurnLive(
+    assistantMessageId,
+    pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId),
+  );
 }
 
 function restorePendingTurn(assistantMessageId: string): PendingTurn | null {
@@ -1213,6 +1306,7 @@ type ResolveToolApprovalFn = UseChatStreamReturn['resolveToolApproval'];
 const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
 export const ToolApprovalProvider = ToolApprovalContext.Provider;
 export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
+  useExpiredPausedTurnsVersion();
   return useContext(ToolApprovalContext);
 }
 
@@ -1220,6 +1314,7 @@ type ResolveToolInputFn = UseChatStreamReturn['resolveToolInput'];
 const ToolInputContext = createContext<ResolveToolInputFn | null>(null);
 export const ToolInputProvider = ToolInputContext.Provider;
 export function useToolInputResolver(): ResolveToolInputFn | null {
+  useExpiredPausedTurnsVersion();
   return useContext(ToolInputContext);
 }
 
@@ -1237,6 +1332,7 @@ export interface InteractiveCardResponseBinding {
 }
 
 export const WEB_INTERACTIVE_CARD_KINDS = [
+  'answer-ui.v1',
   'clarify.v1',
   'image.v1',
   'itinerary.v1',
@@ -2022,6 +2118,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
       .map((card) => [card.cardId, card]),
   );
+  const interactiveCardTextOffsets: Record<string, number> = {
+    ...seedMetadata?.interactiveCardTextOffsets,
+  };
 
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
     if (!tokenOwnerCurrent(getAuthToken)) return;
@@ -2046,8 +2145,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   let providerCitationSpans: { spans: CitationSpan[]; urls: string[] } | null = null;
 
+  const citationAnchors: CitationAnchor[] = [];
   const withProviderCitationMarkers = (content: string): string => {
-    if (!providerCitationSpans || !content) return content;
+    if (!content) return content;
+    if (!providerCitationSpans) {
+      if (citationAnchors.length === 0) return content;
+      return insertCitationMarkers(
+        content,
+        citationSpansFromAnchors(content, citationAnchors),
+        citationsInModelMarkerOrder.length,
+      );
+    }
     const delivered = existingSearchResults();
     const indexOfUrl = new Map(
       delivered.map(
@@ -2306,16 +2414,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
   };
 
-  const CLOUD_RUN_TERMINAL_STATES: AgentTaskState[] = [
-    'ready_for_review',
-    'completed',
-    'failed',
-    'cancelled',
-    'archived',
-  ];
   const finalCloudRunState = (fallback: AgentTaskState): AgentTaskState => {
     const observed = currentAgentActivity?.taskState;
-    return observed && CLOUD_RUN_TERMINAL_STATES.includes(observed) ? observed : fallback;
+    return observed && TERMINAL_AGENT_TASK_STATES.has(observed) ? observed : fallback;
   };
 
   let thinkingContent = seedMetadata?.thinkingContent ?? '';
@@ -2331,10 +2432,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ thinkingSegments: thinkingSegments.map((s) => ({ ...s })) });
   };
 
+  const streamOpenedAt = new Date().toISOString();
   let thinkingActivityOpen = false;
   const openThinkingSegment = () => {
     coalescedAppends.flush();
-    const startedAt = new Date().toISOString();
+    const firstStepOfTurn =
+      thinkingSegments.length === 0 && !thinkingStartedAt && toolTimeline.length === 0;
+    const startedAt = firstStepOfTurn ? streamOpenedAt : new Date().toISOString();
     thinkingStartedAt = startedAt;
     thinkingSegments.push({
       id: `${assistantMessageId}-think-${thinkingSegments.length}`,
@@ -2636,6 +2740,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (interactiveCards.size > 0) {
       metadata.interactiveCards = [...interactiveCards.values()];
+      metadata.interactiveCardTextOffsets = { ...interactiveCardTextOffsets };
     }
     if (interactiveCardsResumed) {
       metadata.interactiveCardsResumed = true;
@@ -2822,6 +2927,34 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     latencyTrace?.observeAssistantText(fullAssistantContent);
   };
 
+  // A direct stream carries the same reasoning twice, inline in tags and as
+  // reasoning events, while the durable route carries only the events: the
+  // first channel to deliver reasoning is the one shown for the whole turn.
+  let thinkingChannel: 'tagged' | 'event' | null = null;
+  const thinkingFrom = (channel: 'tagged' | 'event'): boolean => {
+    thinkingChannel ??= channel;
+    return thinkingChannel === channel;
+  };
+  let eventThinkingOpen = false;
+  const closeEventThinking = (): boolean => {
+    if (!eventThinkingOpen) return false;
+    eventThinkingOpen = false;
+    return true;
+  };
+  const consumeReasoningEvent = (event: AgentEvent): void => {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'reasoning' && event.type === 'reasoning-delta') {
+      if (!event.delta || !thinkingFrom('event')) return;
+      if (!eventThinkingOpen) {
+        openThinkingSegment();
+        eventThinkingOpen = true;
+      }
+      appendThinkingText(event.delta);
+      return;
+    }
+    if (kind !== null && kind !== 'status' && closeEventThinking()) closeThinkingSegment();
+  };
+
   const consumeThinkingParts = (parts: readonly ThinkingTagPart[], isFinal = false): void => {
     for (const part of parts) {
       switch (part.type) {
@@ -2829,13 +2962,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           emitPublicText(part.text, isFinal);
           break;
         case 'thinking':
-          appendThinkingText(part.text);
+          if (thinkingFrom('tagged')) appendThinkingText(part.text);
           break;
         case 'thinking-start':
-          openThinkingSegment();
+          if (thinkingFrom('tagged')) openThinkingSegment();
           break;
         case 'thinking-end':
-          closeThinkingSegment();
+          if (thinkingFrom('tagged')) closeThinkingSegment();
           break;
       }
     }
@@ -2918,7 +3051,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const settleStream = (): StreamOutcome => {
     assertTokenOwner(getAuthToken);
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
     finishRunningTools();
@@ -2962,7 +3095,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     beginStreamPhase(assistantMessageId, 'reconnecting');
 
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
 
@@ -2995,6 +3128,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           ctx.signal?.throwIfAborted();
           endStreamPhase(assistantMessageId, 'reconnecting');
           const kind = recordAgentEventOutcome(envelope.event);
+          consumeReasoningEvent(envelope.event);
           if (kind === 'text' && envelope.event.type === 'text-delta' && envelope.event.delta) {
             const reconciled = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
@@ -3108,7 +3242,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (sequenceGapSeen) continue;
           latencyTrace?.markDone();
           flushContentBuffer(true);
-          if (contentSplitter.closeThinking()) {
+          if (contentSplitter.closeThinking() || closeEventThinking()) {
             closeThinkingSegment();
           }
           finishRunningTools();
@@ -3163,6 +3297,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           );
           if (agentEnvelope && !duplicateAgentEnvelope) {
             const kind = recordAgentEventOutcome(agentEnvelope.event);
+            consumeReasoningEvent(agentEnvelope.event);
             if (kind === 'text' && agentEnvelope.event.type === 'text-delta') {
               unacknowledgedPublicText = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
@@ -3378,7 +3513,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const tcId = (approvalReq as Record<string, unknown>)['tool_call_id'];
             const name = (approvalReq as Record<string, unknown>)['name'];
             const rawArgs = (approvalReq as Record<string, unknown>)['args'];
-            if (typeof tcId === 'string' && tcId && typeof name === 'string' && name) {
+            if (
+              typeof tcId === 'string' &&
+              tcId &&
+              typeof name === 'string' &&
+              name &&
+              !pendingCalls.some((call) => call.toolCallId === tcId)
+            ) {
               const args =
                 rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs)
                   ? (rawArgs as Record<string, unknown>)
@@ -3434,7 +3575,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 interactiveCards.size < INTERACTIVE_CARDS_MAX_PER_MESSAGE)
             ) {
               interactiveCards.set(card.cardId, card);
-              patchMessageMeta({ interactiveCards: [...interactiveCards.values()] });
+              if (interactiveCardTextOffsets[card.cardId] === undefined) {
+                interactiveCardTextOffsets[card.cardId] = hasVisibleText(fullAssistantContent)
+                  ? fullAssistantContent.length
+                  : 0;
+              }
+              patchMessageMeta({
+                interactiveCards: [...interactiveCards.values()],
+                interactiveCardTextOffsets: { ...interactiveCardTextOffsets },
+              });
             }
           }
 
@@ -3465,6 +3614,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             Partial<WebSearchCitationDeltaWire> | undefined;
           if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
             appendMarkerOrderedCitation(citationBlock.url, citationBlock.title);
+            const citedKey = normalizeCitationUrl(citationBlock.url) ?? citationBlock.url;
+            const marker =
+              citationsInModelMarkerOrder.findIndex(
+                (citation) =>
+                  citation.url !== undefined &&
+                  (normalizeCitationUrl(citation.url) ?? citation.url) === citedKey,
+              ) + 1;
+            if (marker > 0 && !seamPending) {
+              citationAnchors.push({ offset: fullAssistantContent.length, marker });
+            }
           }
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
@@ -3694,7 +3853,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     }
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
     throw terminalError;
@@ -4359,7 +4518,10 @@ export function useChatStream(
             .flatMap((m): ApiMessage[] => [
               {
                 role: m.role,
-                content: researchTurnHistoryContent(m) ?? buildApiMessageContent(m),
+                content:
+                  researchTurnHistoryContent(m) ??
+                  cardOnlyAssistantTurnContent(m) ??
+                  buildApiMessageContent(m),
               },
               ...turnsAfterReply(m),
             ]);
@@ -4820,7 +4982,10 @@ export function useChatStream(
         const apiMessages: ApiMessage[] = conversationMessages
           .slice(0, messageIndex + 1)
           .flatMap((m): ApiMessage[] => [
-            { role: m.role, content: m.content as MessageContent },
+            {
+              role: m.role,
+              content: cardOnlyAssistantTurnContent(m) ?? (m.content as MessageContent),
+            },
             ...turnsAfterReply(m),
           ]);
         if (!resumingCard) {
@@ -5106,11 +5271,55 @@ export function useChatStream(
     [captureSessionSnapshot],
   );
 
+  const requestAnswerUiMessage = useCallback(
+    async (
+      binding: InteractiveCardResponseBinding,
+      actionId: string,
+      values: Record<string, AnswerUiValue>,
+    ): Promise<string | null> => {
+      if (!cardResponseRuntimeActiveRef.current) return null;
+      const snapshot = captureSessionSnapshot();
+      if (!snapshot) return null;
+      const authority = createRequestAuthority(
+        snapshot,
+        () => cardResponseRuntimeActiveRef.current,
+      );
+      ownedAuthoritiesRef.current.add(authority);
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        const response = await authority.fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            conversation_id: binding.conversationId,
+            message_id: binding.messageId,
+            card_id: binding.cardId,
+            response: { kind: 'message', action_id: actionId, values },
+          } satisfies InteractiveCardResponseRequest),
+        });
+        if (!response.ok) {
+          throw new Error(`Answer UI message rejected with ${response.status}`);
+        }
+        const decoded: unknown = await response.json();
+        authority.assertCurrent();
+        return AnswerUiMessageResponseSchema.parse(decoded).message;
+      } catch (error) {
+        if (!authority.isCurrent()) return null;
+        throw error;
+      } finally {
+        ownedAuthoritiesRef.current.delete(authority);
+        authority.retire();
+      }
+    },
+    [captureSessionSnapshot],
+  );
+
   const resumeInteractiveCardTurn = useCallback(
     async (assistantMessageId: string, options: { force?: boolean } = {}): Promise<void> => {
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       if (!conversationId) return;
+      if (requestSettlements.isBusyWithOtherMessage(conversationId, assistantMessageId)) return;
       const existingAuthority =
         turnAuthoritiesRef.current.get(assistantMessageId) ??
         requestAuthoritiesRef.current.get(conversationId);
@@ -5274,6 +5483,7 @@ export function useChatStream(
     resumeInteractiveCardTurn,
     respondToInteractiveCard,
     isInteractiveCardResponsePending,
+    requestAnswerUiMessage,
     resolveToolApproval,
     resolveToolInput,
     steerActiveTurn,
@@ -5316,9 +5526,11 @@ export function useResolveToolApproval(
         updateToolEntry,
       } = store;
 
+      if (expiredPausedTurnIds.has(assistantMessageId)) return;
       const turn = pendingTurns.get(assistantMessageId) ?? restorePendingTurn(assistantMessageId);
       if (!turn || turn.resolving) return;
       if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
+      if (expireIfSuperseded(turn, assistantMessageId, requests)) return;
       const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
       if (!authority) return;
 
@@ -5653,10 +5865,12 @@ function useResolveToolInput(
         updateToolEntry,
       } = store;
 
+      if (expiredPausedTurnIds.has(assistantMessageId)) return false;
       const turn =
         pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId);
       if (!turn || turn.resolving) return false;
       if (!turn.calls.some((call) => call.toolCallId === toolCallId)) return false;
+      if (expireIfSuperseded(turn, assistantMessageId, requests)) return false;
       const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
       if (!authority) return false;
 

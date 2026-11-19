@@ -2,6 +2,8 @@ import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import {
+  MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE,
+  MANAGED_CLOUD_SCHEDULES_PATH,
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleRecurrenceSchema,
   ManagedCloudScheduleResponseSchema,
@@ -152,6 +154,31 @@ export async function fetchSchedules(): Promise<Schedule[]> {
   return data.schedules.map(mapSchedule);
 }
 
+export interface ScheduleWithdrawalOptions {
+  withdrawalControl?: boolean;
+}
+
+export async function fetchSchedulePage(
+  offset: number,
+  options: ScheduleWithdrawalOptions = {},
+): Promise<Schedule[]> {
+  assertSchedulesAvailable();
+  const query = new URLSearchParams({
+    limit: String(MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE),
+    offset: String(offset),
+  });
+  const path = `${MANAGED_CLOUD_SCHEDULES_PATH}?${query.toString()}`;
+  const value = options.withdrawalControl
+    ? await api.get<unknown>(path, { withdrawalControl: true })
+    : await api.get<unknown>(path);
+  const data = parseResponse(
+    ManagedCloudScheduleListResponseSchema,
+    value,
+    'Schedules returned an invalid response.',
+  );
+  return data.schedules.map(mapSchedule);
+}
+
 export async function createSchedule(input: CreateScheduleInput): Promise<Schedule> {
   assertSchedulesAvailable();
   assertMobileScheduleRecurrenceSupported(input.recurrence);
@@ -191,11 +218,21 @@ export async function deleteSchedule(id: string): Promise<void> {
   );
 }
 
-export async function toggleSchedule(id: string, isActive: boolean): Promise<Schedule> {
+export async function toggleSchedule(
+  id: string,
+  isActive: boolean,
+  options: ScheduleWithdrawalOptions = {},
+): Promise<Schedule> {
   assertSchedulesAvailable();
-  const value = await api.patch<unknown>(managedCloudSchedulePath(id), {
-    isActive,
-  });
+  const value = options.withdrawalControl
+    ? await api.patch<unknown>(
+        managedCloudSchedulePath(id),
+        { isActive },
+        { withdrawalControl: true },
+      )
+    : await api.patch<unknown>(managedCloudSchedulePath(id), {
+        isActive,
+      });
   const data = parseResponse(
     ManagedCloudScheduleResponseSchema,
     value,

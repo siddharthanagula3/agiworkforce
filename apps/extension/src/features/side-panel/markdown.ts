@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import markdownit from 'markdown-it';
 import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
+import type KatexModule from 'katex';
 import {
   markdownItFenceSource,
   normalizeMarkdownSource,
@@ -10,9 +11,9 @@ import {
   classifyAssistantFence,
   renderClassifiedFenceHtml,
 } from '@agiworkforce/unified-chat/assistant-fence';
+import { resolveHighlightLanguage } from '@agiworkforce/unified-chat/highlight-languages';
 import {
   highlightToLines,
-  resolveHighlightLanguage,
   type HighlightedLine,
 } from '@agiworkforce/unified-chat/shiki-highlighter';
 import { Copy, ImageIcon, ImageOff, renderIcon } from '../../assets/icons';
@@ -334,7 +335,7 @@ export function renderMarkdown(text: string): string {
   return md.render(normalizeMarkdownSource(text), { docId: `m${renderSequence}` });
 }
 
-type Katex = typeof import('katex').default;
+type Katex = typeof KatexModule;
 
 let katexLoad: Promise<Katex> | undefined;
 

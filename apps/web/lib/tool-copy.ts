@@ -1,3 +1,5 @@
+import { getToolDisplayLabel } from '@agiworkforce/types';
+
 import { TOOL_DIRECTORY_TOOL_NAME } from '@/app/api/llm/v1/chat/completions/lib/tool-schema-state';
 
 export const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>> = {
@@ -36,13 +38,18 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     description:
       'Renders the products a search found as a comparison card with prices, stores, buy links and specs. It keeps only links this turn retrieved, makes no request of its own and buys nothing.',
   },
+  render_answer_ui: {
+    label: 'Show an interactive answer',
+    description:
+      'Shows part of an answer as an interactive card in the conversation, such as a table, chart, checklist, sliders or a map. It makes no request of its own and changes nothing; a button in the card sends a message only when you press it.',
+  },
   url_fetch: {
     label: 'Fetch a page',
     description:
       'Fetches a single URL through an SSRF-guarded path. Same classification as search, for the same reasons.',
   },
   execute_code: {
-    label: 'Run code',
+    label: getToolDisplayLabel('execute_code').displayName,
     description:
       'Executes model-authored code in an isolated cloud sandbox belonging to that conversation, not on your device. Classified as an irreversible execute action that creates an egress path.',
   },

@@ -11,7 +11,7 @@ import {
   isFreeRouteLane,
   readPersistedRouteLane,
   readRouteLane,
-} from './routeLane';
+} from '@agiworkforce/cloud-contracts';
 
 describe('route lane wire vocabulary', () => {
   it('names the same header the response builders set', () => {

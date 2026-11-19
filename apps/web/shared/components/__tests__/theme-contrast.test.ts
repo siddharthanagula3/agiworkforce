@@ -6,6 +6,8 @@ import { describe, it, expect } from 'vitest';
 
 import {
   agiPalette,
+  agiTerminalPalette,
+  agiTerminalIndexedColors,
   agiCoolPalette,
   agiBrandScale,
   agiSymbolPalette,
@@ -13,6 +15,7 @@ import {
   agiSymbolShineBand,
   agiChatCssVars,
   agiChatTypographyCssVars,
+  agiModelPickerGeometry,
   agiExtensionCssVars,
   agiElevation,
   agiMobileAccentSwatches,
@@ -137,6 +140,46 @@ const foundationBlock = (selector: string): string => braceBody(foundationCss, `
 
 const foundationLight = foundationBlock(':root');
 const foundationDark = foundationBlock('.dark');
+
+describe('native model picker geometry and guidance', () => {
+  it('fits both text lines inside the model row', () => {
+    expect(
+      agiModelPickerGeometry.labelLineHeight +
+        agiModelPickerGeometry.guidanceLineHeight +
+        2 * agiModelPickerGeometry.rowPaddingBlock,
+    ).toBeLessThanOrEqual(agiModelPickerGeometry.rowHeight);
+  });
+  for (const mode of ['light', 'dark'] as const) {
+    it(`keeps ${mode} guidance legible on the popup and selected row`, () => {
+      expect(
+        contrastRatio(agiPalette[mode].text.secondary, agiPalette[mode].surface.base),
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(agiPalette[mode].text.secondary, agiPalette[mode].surface.hover),
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+describe('terminal output palette mirrors', () => {
+  for (const mode of ['light', 'dark'] as const) {
+    it(`${mode} shares its existing ANSI colors with native and web terminals`, () => {
+      const block = mode === 'light' ? foundationLight : foundationDark;
+      for (const [name, color] of Object.entries(agiTerminalPalette[mode])) {
+        const role = name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+        expect(block).toContain(`--terminal-ansi-${role}: var(--hue-terminal-${mode}-${role});`);
+        expect(foundationLight).toContain(`--hue-terminal-${mode}-${role}: ${color};`);
+      }
+      const indexed = agiTerminalIndexedColors(mode);
+      expect(indexed).toHaveLength(256);
+      expect(indexed.slice(0, 16)).toEqual(Object.values(agiTerminalPalette[mode]));
+      expect(indexed[16]).toBe('#000000');
+      expect(indexed[231]).toBe('#ffffff');
+      expect(indexed[232]).toBe('#080808');
+      expect(indexed[255]).toBe('#eeeeee');
+    });
+  }
+});
 
 describe('symbol ribbon palette', () => {
   it('keeps the web and native shine on the same ribbon path', () => {
@@ -1245,11 +1288,22 @@ describe('the brand ramps have one owner', () => {
     ]),
   );
 
-  const mirrored = Object.entries(agiBrandScale).flatMap(([family, ramp]) =>
-    Object.entries(ramp).map(
-      ([step, value]) => [brandScaleVar(family as AgiBrandFamily, step), value] as const,
+  const mirrored = [
+    ...Object.entries(agiBrandScale).flatMap(([family, ramp]) =>
+      Object.entries(ramp).map(
+        ([step, value]) => [brandScaleVar(family as AgiBrandFamily, step), value] as const,
+      ),
     ),
-  );
+    ...Object.entries(agiTerminalPalette).flatMap(([mode, palette]) =>
+      Object.entries(palette).map(
+        ([name, value]) =>
+          [
+            `--hue-terminal-${mode}-${name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`,
+            value,
+          ] as const,
+      ),
+    ),
+  ];
 
   for (const [name, value] of mirrored) {
     it(`${name} is identical in foundation.css and design-tokens/src/index.ts`, () => {

@@ -22,6 +22,7 @@ interface SubmitProfile {
 }
 
 interface EasConfig {
+  cli: { appVersionSource?: string };
   build: Record<string, BuildProfile>;
   submit: Record<string, SubmitProfile>;
 }
@@ -83,6 +84,93 @@ describe('the identifiers a store binds a listing to', () => {
 
     expect(groups).toEqual([`group.${getStoreDistribution('apple').productionId}.share`]);
   });
+});
+
+describe('the app extensions EAS signs and numbers', () => {
+  const NATIVE_IOS = join(MOBILE_ROOT, 'native', 'ios');
+  const EXTENSION_PLUGINS = ['withAGIShareExtension.cjs', 'withAGIWidgets.cjs'];
+  const plist = require('plist') as { parse: (value: string) => Record<string, unknown> };
+  const unquote = (value: string) => value.replace(/^"|"$/g, '');
+
+  interface AppExtension {
+    targetName: string;
+    bundleIdentifier: string;
+    entitlements: Record<string, unknown>;
+  }
+
+  const declared = (): AppExtension[] =>
+    (
+      APP_CONFIG.extra as {
+        eas: { build?: { experimental?: { ios?: { appExtensions?: AppExtension[] } } } };
+      }
+    ).eas.build?.experimental?.ios?.appExtensions ?? [];
+
+  it('declares every app extension target a registered plugin adds, and nothing else', () => {
+    const extensionPlugins = (APP_CONFIG.plugins as unknown[])
+      .filter((plugin): plugin is string => typeof plugin === 'string')
+      .filter((plugin) => plugin.startsWith('./native/ios/'))
+      .filter((plugin) =>
+        readFileSync(join(MOBILE_ROOT, plugin), 'utf8').includes("'app_extension'"),
+      )
+      .map((plugin) => plugin.slice('./native/ios/'.length));
+
+    expect(extensionPlugins.sort()).toEqual([...EXTENSION_PLUGINS].sort());
+    expect(declared()).toHaveLength(EXTENSION_PLUGINS.length);
+  });
+
+  it.each(EXTENSION_PLUGINS)(
+    'gives EAS the target, bundle identifier and entitlements that %s generates',
+    (file) => {
+      const plugin = require(join(NATIVE_IOS, file)) as {
+        getExtensionBuildSettings: (options: Record<string, string>) => Record<string, string>;
+      };
+      const ios = APP_CONFIG.ios as { bundleIdentifier: string; buildNumber: string };
+      const settings = plugin.getExtensionBuildSettings({
+        bundleIdentifier: ios.bundleIdentifier,
+        version: APP_CONFIG.version as string,
+        buildNumber: ios.buildNumber,
+        developmentTeam: resolveSubmit('production').ios?.appleTeamId as string,
+      });
+      const targetName = unquote(settings.PRODUCT_NAME);
+      const entitlementsFile = unquote(settings.CODE_SIGN_ENTITLEMENTS);
+      const entitlements = plist.parse(readFileSync(join(NATIVE_IOS, entitlementsFile), 'utf8'));
+
+      expect(declared().find((extension) => extension.targetName === targetName)).toEqual({
+        targetName,
+        bundleIdentifier: unquote(settings.PRODUCT_BUNDLE_IDENTIFIER),
+        entitlements,
+      });
+      expect(entitlementsFile.startsWith(`${targetName}/`)).toBe(true);
+    },
+  );
+
+  // With a remote app version, EAS writes the build number into the Info.plist
+  // of each target it holds credentials for, so an undeclared extension would
+  // keep the local number while the app gets the remote one.
+  it.each(EXTENSION_PLUGINS)(
+    'lets EAS give the %s target the app build number through its Info.plist',
+    (file) => {
+      const plugin = require(join(NATIVE_IOS, file)) as {
+        getExtensionBuildSettings: (options: Record<string, string>) => Record<string, string>;
+      };
+      const settings = plugin.getExtensionBuildSettings({
+        bundleIdentifier: (APP_CONFIG.ios as { bundleIdentifier: string }).bundleIdentifier,
+        version: '1.0.0',
+        buildNumber: '1',
+        developmentTeam: resolveSubmit('production').ios?.appleTeamId as string,
+      });
+      const infoPlist = plist.parse(
+        readFileSync(join(NATIVE_IOS, unquote(settings.INFOPLIST_FILE)), 'utf8'),
+      );
+
+      expect(EAS.cli.appVersionSource).toBe('remote');
+      expect(declared().map((extension) => extension.targetName)).toContain(
+        unquote(settings.PRODUCT_NAME),
+      );
+      expect(infoPlist.CFBundleVersion).toBe('$(CURRENT_PROJECT_VERSION)');
+      expect(infoPlist.CFBundleShortVersionString).toBe('$(MARKETING_VERSION)');
+    },
+  );
 });
 
 describe('store credentials', () => {

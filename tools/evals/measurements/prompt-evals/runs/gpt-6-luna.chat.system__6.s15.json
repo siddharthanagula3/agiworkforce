@@ -1,0 +1,327 @@
+{
+  "schemaVersion": 2,
+  "source": "live",
+  "recordingSource": "live",
+  "runId": "c07c6133-c31d-4c2a-a1dc-2b20e97e4360",
+  "modelKey": "gpt-6-luna",
+  "routeId": "openai/gpt-6-luna",
+  "recordedOn": "2026-10-16",
+  "promptStamp": "chat.system@6",
+  "measuredAt": "2026-10-16T03:55:22.769Z",
+  "suites": {
+    "golden": {
+      "version": 1,
+      "priority": "P0",
+      "provenance": {
+        "kind": "authored",
+        "source": "hand-written in this repository as the cross-capability smoke corpus every model must hold",
+        "authoredOn": "2026-08-09"
+      },
+      "threshold": 0.9,
+      "total": 12,
+      "passed": 12,
+      "score": 1,
+      "completeness": 1,
+      "met": true,
+      "measuredAt": "2026-10-16T03:54:04.508Z",
+      "cost": {
+        "meteredCases": 12,
+        "totalUsd": 0.00028742,
+        "meanUsd": 0.000023951666666666666,
+        "inputTokens": 14968,
+        "outputTokens": 269
+      },
+      "latency": {
+        "timedCases": 12,
+        "p50Ms": 1045,
+        "p95Ms": 2710,
+        "ttfbP50Ms": 744
+      },
+      "retries": {
+        "attempts": 12,
+        "retried": 0,
+        "retryCostUsd": null
+      },
+      "slices": {
+        "family": {
+          "agentic": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "classification": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "coding": {
+            "total": 2,
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
+          },
+          "extraction": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "instruction_following": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "reasoning": {
+            "total": 3,
+            "passed": 3,
+            "score": 1,
+            "completeness": 1
+          },
+          "research": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "summarisation": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "translation": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          }
+        },
+        "risk": {
+          "high": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "low": {
+            "total": 11,
+            "passed": 11,
+            "score": 1,
+            "completeness": 1
+          }
+        }
+      },
+      "skipped": [],
+      "failed": []
+    },
+    "chat": {
+      "version": 2,
+      "priority": "P1",
+      "provenance": {
+        "kind": "authored",
+        "source": "hand-written in this repository from the conversational behaviours the chat surface promises, plus factual and citation rows over synthetic sources supplied with the row",
+        "authoredOn": "2026-09-18"
+      },
+      "threshold": 1,
+      "total": 9,
+      "passed": 9,
+      "score": 1,
+      "completeness": 1,
+      "met": true,
+      "measuredAt": "2026-10-16T03:54:20.288Z",
+      "cost": {
+        "meteredCases": 9,
+        "totalUsd": 0.00033312,
+        "meanUsd": 0.000037013333333333334,
+        "inputTokens": 11369,
+        "outputTokens": 434
+      },
+      "latency": {
+        "timedCases": 9,
+        "p50Ms": 1998,
+        "p95Ms": 2587,
+        "ttfbP50Ms": 1186
+      },
+      "retries": {
+        "attempts": 9,
+        "retried": 0,
+        "retryCostUsd": null
+      },
+      "slices": {
+        "family": {
+          "citations": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "clarification": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "factual": {
+            "total": 2,
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
+          },
+          "instruction-following": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "memory": {
+            "total": 3,
+            "passed": 3,
+            "score": 1,
+            "completeness": 1
+          },
+          "system-adherence": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          }
+        },
+        "risk": {
+          "low": {
+            "total": 9,
+            "passed": 9,
+            "score": 1,
+            "completeness": 1
+          }
+        }
+      },
+      "skipped": [],
+      "failed": []
+    },
+    "chat-prompt": {
+      "version": 4,
+      "priority": "P1",
+      "provenance": {
+        "kind": "authored",
+        "source": "hand-written in this repository from a reported Free-plan turn (a model asked to search the web about the user's own resume, with tools but no search attached, refused with an invented privacy reason) and from the eval cases proposed in the 2026-10-10 chat system prompt research summary",
+        "authoredOn": "2026-10-10",
+        "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-15 cover an artifact revision kept under its title, an exact format asked for over the email card, a memory deletion the app reports, a project file the web chat links under the answer, and a tool claim held to the code run the turn holds. A row added on 2026-10-16 covers saved memories named as the source of an answer on a turn without web search."
+      },
+      "threshold": 1,
+      "total": 19,
+      "passed": 12,
+      "score": 0.631578947368421,
+      "completeness": 0.825438596491228,
+      "met": false,
+      "measuredAt": "2026-10-16T03:55:22.769Z",
+      "cost": {
+        "meteredCases": 19,
+        "totalUsd": 0.00289597,
+        "meanUsd": 0.00015241947368421053,
+        "inputTokens": 29784,
+        "outputTokens": 5186
+      },
+      "latency": {
+        "timedCases": 19,
+        "p50Ms": 2419,
+        "p95Ms": 10951,
+        "ttfbP50Ms": 1352
+      },
+      "retries": {
+        "attempts": 19,
+        "retried": 0,
+        "retryCostUsd": null
+      },
+      "slices": {
+        "family": {
+          "action-receipts": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          },
+          "artifacts": {
+            "total": 3,
+            "passed": 1,
+            "score": 0.3333333333333333,
+            "completeness": 0.6666666666666666
+          },
+          "capability-honesty": {
+            "total": 3,
+            "passed": 3,
+            "score": 1,
+            "completeness": 1
+          },
+          "memory-honesty": {
+            "total": 2,
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
+          },
+          "privacy": {
+            "total": 2,
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
+          },
+          "product-capabilities": {
+            "total": 2,
+            "passed": 0,
+            "score": 0,
+            "completeness": 0.425
+          },
+          "rich-blocks": {
+            "total": 3,
+            "passed": 1,
+            "score": 0.3333333333333333,
+            "completeness": 0.7222222222222222
+          },
+          "sources": {
+            "total": 2,
+            "passed": 1,
+            "score": 0.5,
+            "completeness": 0.8333333333333333
+          },
+          "untrusted-content": {
+            "total": 1,
+            "passed": 1,
+            "score": 1,
+            "completeness": 1
+          }
+        },
+        "risk": {
+          "high": {
+            "total": 2,
+            "passed": 2,
+            "score": 1,
+            "completeness": 1
+          },
+          "low": {
+            "total": 17,
+            "passed": 10,
+            "score": 0.5882352941176471,
+            "completeness": 0.8049019607843136
+          }
+        }
+      },
+      "skipped": [],
+      "failed": [
+        "chat-prompt/make-a-calculator",
+        "chat-prompt/show-it-in-an-artifact",
+        "chat-prompt/what-can-you-do-free",
+        "chat-prompt/what-can-you-do-pro",
+        "chat-prompt/recruiter-follow-up-email",
+        "chat-prompt/linkedin-bio-writing-block",
+        "chat-prompt/memory-source-named"
+      ]
+    }
+  },
+  "unsupportedSuites": {},
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "279fc9567247c40354c4ae2864afd343a7869cb43224a607bd1510e3d9bb0614"
+  }
+}

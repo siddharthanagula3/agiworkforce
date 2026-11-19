@@ -13,6 +13,10 @@ import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { z } from 'zod';
 import { AccountDeletionScheduleCancellationRequestSchema } from '@agiworkforce/cloud-contracts';
+import {
+  restorePlanRenewalAfterDeletionUndo,
+  type AccountDeletionPlanRenewal,
+} from '@/lib/server/account-deletion-plan-renewal';
 
 type CancellationMode = { kind: 'legacy' } | { kind: 'required-pair' };
 
@@ -23,6 +27,7 @@ const ScheduleStateSchema = z
       has_schedule: z.boolean(),
       pair_matches: z.boolean(),
       eligible: z.boolean(),
+      scheduled_for: z.string().nullable(),
     }),
   )
   .length(1);
@@ -31,6 +36,17 @@ const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'",
   'X-Content-Type-Options': 'nosniff',
 };
+
+function cancellationMessage(planRenewal: AccountDeletionPlanRenewal | null): string {
+  switch (planRenewal) {
+    case 'restored':
+      return 'Account deletion cancelled. Your plan renews again.';
+    case 'not_restored':
+      return "Account deletion cancelled. If deleting turned off your plan's renewal, turn it back on in Settings > Billing.";
+    case null:
+      return 'Account deletion cancelled.';
+  }
+}
 
 export async function handleAccountDeletionCancellation(
   request: NextRequest,
@@ -89,7 +105,12 @@ export async function handleAccountDeletionCancellation(
           await tx.query(
             `select deletion_scheduled_for is not null as has_schedule,
                   coalesce((${pairPredicate}), false) as pair_matches,
-                  coalesce(deletion_scheduled_for > clock_timestamp(), false) as eligible
+                  coalesce(deletion_scheduled_for > clock_timestamp(), false) as eligible,
+                  case when deletion_scheduled_for is null then null
+                       when deletion_scheduled_for >= '0001-01-01T00:00:00Z'::timestamptz
+                        and deletion_scheduled_for < '10000-01-01T00:00:00Z'::timestamptz
+                       then to_char(deletion_scheduled_for at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+                       else 'unsupported' end as scheduled_for
              from profiles where id = $1`,
             params,
           ),
@@ -112,7 +133,7 @@ export async function handleAccountDeletionCancellation(
       );
       if (cancelled.length === 1) {
         if (cancelled[0]?.id !== userId) throw new Error('Unexpected cancelled profile');
-        return 'cancelled';
+        return { cancelledSchedule: state.scheduled_for };
       }
       const current = await readState();
       if (!current.has_schedule) return 'none';
@@ -121,7 +142,7 @@ export async function handleAccountDeletionCancellation(
       throw new Error('Cancellation result could not be verified');
     });
 
-    if (outcome === 'cancelled') {
+    if (typeof outcome === 'object') {
       logger.info({ userId }, 'Account deletion cancelled inside the grace window');
 
       await recordAuditEvent({
@@ -132,8 +153,15 @@ export async function handleAccountDeletionCancellation(
         detail: { resourceType: 'account', subjectRef, status: 'cancelled' },
       });
 
+      const planRenewal = outcome.cancelledSchedule
+        ? await restorePlanRenewalAfterDeletionUndo(db, userId, outcome.cancelledSchedule)
+        : null;
       return NextResponse.json(
-        { message: 'Account deletion cancelled.', cancelled: true },
+        {
+          message: cancellationMessage(planRenewal),
+          cancelled: true,
+          ...(planRenewal ? { planRenewal } : {}),
+        },
         { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
       );
     }

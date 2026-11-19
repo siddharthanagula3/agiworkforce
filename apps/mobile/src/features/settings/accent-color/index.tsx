@@ -6,17 +6,21 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { AccentColor } from '@/stores/settingsStore';
-import { getAccentSwatch, useTheme } from '@/src/ui/theme';
+import { accentTokenFrom, getAccentSwatch, useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 
 const ACCENTS: Array<{ value: AccentColor; label: string }> = [
   { value: 'neutral', label: 'Neutral' },
-  { value: 'green', label: 'Green' },
   { value: 'blue', label: 'Blue' },
-  { value: 'violet', label: 'Violet' },
+  { value: 'cyan', label: 'Cyan' },
+  { value: 'green', label: 'Green' },
+  { value: 'lime', label: 'Lime' },
+  { value: 'yellow', label: 'Yellow' },
+  { value: 'orange', label: 'Orange' },
   { value: 'rose', label: 'Rose' },
-  { value: 'amber', label: 'Amber' },
+  { value: 'magenta', label: 'Magenta' },
+  { value: 'violet', label: 'Violet' },
 ];
 
 export default function AccentColorScreen() {
@@ -28,14 +32,14 @@ export default function AccentColorScreen() {
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const cloudSetAccentColor = useCloudSettingsStore((s) => s.setAccentColor);
 
-  const accentColor = isCloud ? cloudAccentColor : localAccentColor;
+  const accentColor = accentTokenFrom(isCloud ? cloudAccentColor : localAccentColor);
   const setAccentColor = isCloud ? cloudSetAccentColor : localSetAccentColor;
 
   return (
     <SettingsScreenShell title="Accent Color">
       <SettingsInfo
         title="Accent"
-        body="Accent color affects selected controls and highlights. Neutral keeps the AGI default."
+        body="Colors selected controls and highlights. Neutral is the default."
         icon={Palette}
       />
       <SettingsGroup>

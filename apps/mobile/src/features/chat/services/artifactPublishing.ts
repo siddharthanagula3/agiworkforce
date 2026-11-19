@@ -4,7 +4,9 @@ import {
   assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
+  isStaleCloudAccountOperation,
   subscribeCloudAccountEpochChange,
+  type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
   MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
@@ -14,14 +16,37 @@ import {
   ManagedCloudPublishedArtifactLookupResponseSchema,
   ManagedCloudPublishedArtifactPublishResponseSchema,
   ManagedCloudPublishedArtifactUpdateReceiptSchema,
+  ManagedCloudPublishedArtifactViewerEmailSchema,
+  ManagedCloudPublishedArtifactViewersResponseSchema,
   type ManagedCloudPublishedArtifactPublishResponse,
+  type ManagedCloudPublishedArtifactViewer,
   managedCloudPublishedArtifactLookupPath,
+  managedCloudPublishedArtifactViewersPath,
 } from '@agiworkforce/cloud-contracts';
-import { ApiHttpError } from '@/services/apiErrors';
+import { EgressBlockedError } from '@/lib/egressGuard';
+import { apiFetch } from '@/services/api';
+import { ApiHttpError, httpErrorFrom } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 const SERVER_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const failuresBeforeSend = new WeakSet<object>();
+
+function assertSignedInBeforeSend(
+  account: CloudAccountEpoch | null,
+): asserts account is CloudAccountEpoch {
+  try {
+    assertCloudAccountEpochCurrent(account);
+  } catch (error) {
+    if (error !== null && typeof error === 'object') failuresBeforeSend.add(error);
+    throw error;
+  }
+}
+
+function isFailureBeforeSend(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && failuresBeforeSend.has(error);
+}
 
 export interface PublishArtifactInput {
   artifactId: string;
@@ -37,7 +62,7 @@ export async function publishArtifact(
 ): Promise<ManagedCloudPublishedArtifactPublishResponse> {
   const { artifactId } = ManagedCloudPublishedArtifactLookupQuerySchema.parse(input);
   const account = captureCloudAccountEpoch();
-  assertCloudAccountEpochCurrent(account);
+  assertSignedInBeforeSend(account);
   const response = await api.post<unknown>(
     '/api/artifacts/publish',
     {
@@ -250,7 +275,7 @@ export async function setPublishedArtifactAudience(
 ): Promise<ArtifactPublication> {
   const token = requirePublishedToken(shareUrl);
   const account = captureCloudAccountEpoch();
-  assertCloudAccountEpochCurrent(account);
+  assertSignedInBeforeSend(account);
   const response = await api.patch<unknown>(
     `/api/artifacts/publish/${token}`,
     { visibility },
@@ -267,7 +292,7 @@ export async function setPublishedArtifactAudience(
 export async function unpublishArtifact(shareUrl: string): Promise<void> {
   const token = requirePublishedToken(shareUrl);
   const account = captureCloudAccountEpoch();
-  assertCloudAccountEpochCurrent(account);
+  assertSignedInBeforeSend(account);
   const response = await api.delete<unknown>(`/api/artifacts/publish/${token}`, {
     accountEpoch: account,
     auth401Recovery: 'caller-owned',
@@ -279,10 +304,76 @@ export async function unpublishArtifact(shareUrl: string): Promise<void> {
   }
 }
 
+export type PublishedArtifactViewer = ManagedCloudPublishedArtifactViewer;
+
+export function normalizePublishedArtifactViewerEmail(value: string): string | null {
+  const parsed = ManagedCloudPublishedArtifactViewerEmailSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+async function requestPublishedArtifactViewers(
+  shareUrl: string,
+  method: 'GET' | 'POST' | 'DELETE',
+  email?: string,
+): Promise<PublishedArtifactViewer[]> {
+  const token = requirePublishedToken(shareUrl);
+  const account = captureCloudAccountEpoch();
+  assertCloudAccountEpochCurrent(account);
+  const response = await apiFetch(
+    managedCloudPublishedArtifactViewersPath(token),
+    {
+      method,
+      ...(email === undefined ? {} : { body: JSON.stringify({ email }) }),
+    },
+    { accountEpoch: account, auth401Recovery: 'caller-owned' },
+  );
+  assertCloudAccountEpochCurrent(account);
+  const text = await response.text();
+  if (!response.ok) throw httpErrorFrom(response.status, text);
+  return ManagedCloudPublishedArtifactViewersResponseSchema.parse(JSON.parse(text)).viewers;
+}
+
+export function listPublishedArtifactViewers(shareUrl: string): Promise<PublishedArtifactViewer[]> {
+  return requestPublishedArtifactViewers(shareUrl, 'GET');
+}
+
+export function addPublishedArtifactViewer(
+  shareUrl: string,
+  email: string,
+): Promise<PublishedArtifactViewer[]> {
+  return requestPublishedArtifactViewers(shareUrl, 'POST', email);
+}
+
+export function removePublishedArtifactViewer(
+  shareUrl: string,
+  email: string,
+): Promise<PublishedArtifactViewer[]> {
+  return requestPublishedArtifactViewers(shareUrl, 'DELETE', email);
+}
+
+export const SIGNED_OUT_PUBLISH_MESSAGE =
+  'You are signed out of AGI Cloud, so nothing was published.';
+
+export const LOCAL_MODE_PUBLISH_PROMPT =
+  'This device is in Local mode. Publishing puts a copy of this artifact on AGI Cloud, so switch to AGI Cloud mode first. Nothing has been uploaded.';
+
+export const LOCAL_MODE_PUBLISH_MESSAGE =
+  'This device is in Local mode, so nothing was published. Switch to AGI Cloud mode and try again.';
+
+export const VIEWERS_FAILED_MESSAGE = 'Could not update who this is shared with. Try again.';
+
+export function viewersFailureMessage(error: unknown): string {
+  if (isStaleCloudAccountOperation(error)) return 'You are signed out of AGI Cloud.';
+  return error instanceof ApiHttpError
+    ? withFailureReference(error.message, error.requestId)
+    : VIEWERS_FAILED_MESSAGE;
+}
+
 export const PUBLISH_FAILED_MESSAGE =
   'The sharing change could not be confirmed. It may have completed. Check the current publication before trying again.';
 
 export function isPublicationOutcomeUncertain(error: unknown): boolean {
+  if (isFailureBeforeSend(error) || error instanceof EgressBlockedError) return false;
   return !(
     error instanceof ApiHttpError &&
     (error.status === 400 ||
@@ -298,6 +389,8 @@ export function isPublicationOutcomeUncertain(error: unknown): boolean {
  * else (a dropped connection, a malformed reply) is this app's own wording.
  */
 export function publishFailureMessage(error: unknown): string {
+  if (isFailureBeforeSend(error)) return SIGNED_OUT_PUBLISH_MESSAGE;
+  if (error instanceof EgressBlockedError) return LOCAL_MODE_PUBLISH_MESSAGE;
   if (error instanceof ApiHttpError) {
     return withFailureReference(
       isPublicationOutcomeUncertain(error)

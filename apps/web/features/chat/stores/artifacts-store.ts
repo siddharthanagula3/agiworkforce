@@ -5,10 +5,14 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { create } from 'zustand';
 import {
   applyArtifactDeltas as applySharedArtifactDeltas,
+  artifactInclusionForPolicy,
   createArtifactStore,
+  deriveArtifacts,
+  legacyArtifactIdAdoptions,
   mergeCloudArtifacts,
   wireToCloudArtifact,
   type CloudArtifact,
+  type LegacyArtifactIdAdoption,
 } from '@agiworkforce/artifacts';
 import {
   ArtifactSyncPushItemSchema,
@@ -17,6 +21,7 @@ import {
   type ChatSyncPushResponse,
 } from '@agiworkforce/cloud-contracts';
 import type { SharedArtifact } from '@agiworkforce/types';
+import { normalizeArtifactTitle } from '@agiworkforce/unified-chat/answer-document';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 import { logger } from '@shared/lib/logger';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -92,6 +97,11 @@ let _cloudSyncError: string | null = null;
 let _inFlightPushById = new Map<string, CloudArtifact>();
 let _rejectedPushContentById: Record<string, string> = {};
 let _renamedHereIds = new Set<string>();
+let _legacyAdopterById = new Map<string, string>();
+let _legacyAdoptionsByMessage = new Map<
+  string,
+  { content: string; adoptions: LegacyArtifactIdAdoption[] }
+>();
 
 function getSideEntry(id: string): WebSideEntry {
   return _sideMap[id] ?? {};
@@ -109,9 +119,25 @@ function clearSideMap(): void {
   _sideMap = {};
 }
 
+function supersededByAdopter(cloud: CloudArtifact, localIds: ReadonlySet<string>): boolean {
+  const adopter = _legacyAdopterById.get(cloud.id);
+  if (!adopter || localIds.has(cloud.id)) return false;
+  const adopterCloud = cloudCopyOf(adopter);
+  if (adopterCloud && !adopterCloud.deletedAt && adopterCloud.content === cloud.content) {
+    return true;
+  }
+  const versions = _sharedArtifactStore.getState().versionsById[adopter] ?? [];
+  return versions.some((version) => version.content === cloud.content);
+}
+
 function mergedArtifacts(): SharedArtifact[] {
   const shared = _sharedArtifactStore.getState();
-  const merged = mergeCloudArtifacts(shared.artifacts, _cloudArtifacts);
+  let cloudArtifacts = _cloudArtifacts;
+  if (_legacyAdopterById.size > 0) {
+    const localIds = new Set(shared.artifacts.map((artifact) => artifact.id));
+    cloudArtifacts = _cloudArtifacts.filter((artifact) => !supersededByAdopter(artifact, localIds));
+  }
+  const merged = mergeCloudArtifacts(shared.artifacts, cloudArtifacts);
   return merged.map((visible) => {
     const local = shared.artifacts.find((artifact) => artifact.id === visible.id);
     const cloud = cloudCopyOf(visible.id);
@@ -170,12 +196,6 @@ function normalizeInput(
     language: artifact.language || artifact.type,
     createdAt: artifact.createdAt ?? new Date(),
   };
-}
-
-export const ARTIFACT_TITLE_MAX_CHARS = 200;
-
-export function normalizeArtifactTitle(title: string): string {
-  return title.replace(/\s+/g, ' ').trim().slice(0, ARTIFACT_TITLE_MAX_CHARS);
 }
 
 const FORK_TITLE_SUFFIX = ' (copy)';
@@ -294,6 +314,170 @@ function appendLosingVersion(id: string, losing: SharedArtifact): void {
       },
     };
   });
+}
+
+function loadedMessage(conversationId: string, messageId: string) {
+  const message = useChatStore
+    .getState()
+    .messagesByConversation[conversationId]?.find((candidate) => candidate.id === messageId);
+  return typeof message?.content === 'string' ? { ...message, content: message.content } : null;
+}
+
+function loadedMessageContent(conversationId: string, messageId: string): string | null {
+  return loadedMessage(conversationId, messageId)?.content ?? null;
+}
+
+function legacyAdoptionsFor(
+  conversationId: string,
+  messageId: string,
+  content: string,
+): LegacyArtifactIdAdoption[] {
+  const key = `${conversationId}:${messageId}`;
+  const cached = _legacyAdoptionsByMessage.get(key);
+  if (cached?.content === content) return cached.adoptions;
+  const adoptions = legacyArtifactIdAdoptions(content, { conversationId, messageId });
+  _legacyAdoptionsByMessage.set(key, { content, adoptions });
+  return adoptions;
+}
+
+function liveCloudCopyOf(id: string): CloudArtifact | undefined {
+  const cloud = cloudCopyOf(id);
+  return cloud && !cloud.deletedAt ? cloud : undefined;
+}
+
+function holdsArtifactState(id: string): boolean {
+  const engine = _sharedArtifactStore.getState();
+  return (
+    engine.artifacts.some((artifact) => artifact.id === id) ||
+    (engine.versionsById[id]?.length ?? 0) > 0
+  );
+}
+
+function moveLocalArtifact(from: string, to: string): void {
+  _sharedArtifactStore.setState((state) => {
+    const { [from]: versions = [], ...versionsById } = state.versionsById;
+    return {
+      artifacts: state.artifacts.map((artifact) =>
+        artifact.id === from ? { ...artifact, id: to } : artifact,
+      ),
+      versionsById: { ...versionsById, [to]: versions.map((version) => ({ ...version, id: to })) },
+      selectedArtifactId: state.selectedArtifactId === from ? to : state.selectedArtifactId,
+      editRequestedArtifactId:
+        state.editRequestedArtifactId === from ? to : state.editRequestedArtifactId,
+    };
+  });
+  if (from in _sideMap) {
+    setSideEntry(to, getSideEntry(from));
+    deleteSideEntry(from);
+  }
+  if (_renamedHereIds.delete(from)) _renamedHereIds.add(to);
+  const conflict = _conflictsById[from];
+  if (conflict) {
+    clearConflict(from);
+    recordConflict({ ...conflict, id: to });
+  }
+  delete _rejectedPushContentById[from];
+}
+
+/**
+ * The fence parser now splits some stored messages into other blocks, so a
+ * block's derived id can differ from the one its saved edits, versions and
+ * selection sit under. Before a derived artifact is added fresh, what was saved
+ * under the id the previous parser gave the same block moves to the new id.
+ */
+function adoptLegacyArtifact(conversationId: string, messageId: string, id: string): void {
+  if (holdsArtifactState(id)) return;
+  const content = loadedMessageContent(conversationId, messageId);
+  if (content === null) return;
+  const adoption = legacyAdoptionsFor(conversationId, messageId, content).find(
+    (candidate) => candidate.id === id,
+  );
+  if (!adoption) return;
+  const { legacyId } = adoption;
+  const visible = mergedArtifacts().find((artifact) => artifact.id === legacyId);
+  if (!visible) return;
+  const { metadata: _cloudMetadata, ...seen } = visible;
+  const local = _sharedArtifactStore.getState().artifacts.find((a) => a.id === legacyId);
+  if (local) {
+    moveLocalArtifact(legacyId, id);
+    _sharedArtifactStore.getState().upsertArtifact({ ...seen, id, version: local.version });
+  } else {
+    _sharedArtifactStore.getState().upsertArtifact({ ...seen, id });
+  }
+  _legacyAdopterById.set(legacyId, id);
+}
+
+function staysDerivedOnMessage(
+  message: { content: string; metadata?: { artifactDerivation?: unknown } },
+  conversationId: string,
+  messageId: string,
+  id: string,
+): boolean {
+  return deriveArtifacts(message.content, {
+    conversationId,
+    messageId,
+    include: artifactInclusionForPolicy(message.metadata?.artifactDerivation),
+  }).some((artifact) => artifact.id === id);
+}
+
+/**
+ * Another device already pushed the block under its new id, so the add path
+ * never runs here: what this device saved under the previous id moves onto the
+ * synced copy. An edit that would have been pushed and is older than the synced
+ * copy is named as a conflict instead of being hidden behind it.
+ */
+function moveLegacyRecordOntoSyncedCopy(legacyId: string, id: string): void {
+  const local = _sharedArtifactStore.getState().artifacts.find((a) => a.id === legacyId);
+  if (!local) return;
+  const legacyCloud = liveCloudCopyOf(legacyId);
+  const editedHere =
+    _sharedArtifactStore.getState().getArtifactVersions(legacyId).length > 1 ||
+    _renamedHereIds.has(legacyId);
+  const unpushed = editedHere && (!legacyCloud || supersedesCloudCopy(local, legacyCloud));
+  moveLocalArtifact(legacyId, id);
+  const adopterCloud = liveCloudCopyOf(id);
+  if (!unpushed || !adopterCloud || adopterCloud.content === local.content) return;
+  if (supersedesCloudCopy(local, adopterCloud)) return;
+  recordConflict({
+    id,
+    localContent: local.content,
+    serverContent: adopterCloud.content,
+    detectedAt: new Date().toISOString(),
+  });
+}
+
+function recordLegacyAdopters(): boolean {
+  const localIds = new Set(_sharedArtifactStore.getState().artifacts.map((a) => a.id));
+  const scanned = new Set<string>();
+  let recorded = false;
+  for (const cloud of _cloudArtifacts) {
+    const { conversationId, messageId } = cloud;
+    if (cloud.deletedAt || !conversationId || !messageId) continue;
+    if (localIds.has(cloud.id) || _legacyAdopterById.has(cloud.id)) continue;
+    const scope = `${conversationId}:${messageId}`;
+    if (scanned.has(scope)) continue;
+    scanned.add(scope);
+    const message = loadedMessage(conversationId, messageId);
+    if (message === null) continue;
+    for (const { id, legacyId } of legacyAdoptionsFor(conversationId, messageId, message.content)) {
+      const adopterSynced = !localIds.has(id) && liveCloudCopyOf(id) !== undefined;
+      if (!localIds.has(id) && !adopterSynced) continue;
+      if (
+        adopterSynced &&
+        localIds.has(legacyId) &&
+        staysDerivedOnMessage(message, conversationId, messageId, id)
+      ) {
+        moveLegacyRecordOntoSyncedCopy(legacyId, id);
+        localIds.delete(legacyId);
+        localIds.add(id);
+        recorded = true;
+      }
+      if (_legacyAdopterById.get(legacyId) === id) continue;
+      _legacyAdopterById.set(legacyId, id);
+      recorded = true;
+    }
+  }
+  return recorded;
 }
 
 interface PersistedShape {
@@ -650,10 +834,13 @@ const actions = {
     _inFlightPushById = new Map();
     _rejectedPushContentById = {};
     _renamedHereIds = new Set();
+    _legacyAdopterById = new Map();
+    _legacyAdoptionsByMessage = new Map();
     _conflictsById = {};
   },
 
   addArtifactForMessage(messageId: string, artifact: ArtifactData, conversationId?: string): void {
+    if (conversationId) adoptLegacyArtifact(conversationId, messageId, artifact.id);
     const existing = _sharedArtifactStore.getState().artifacts;
     if (existing.some((a) => a.id === artifact.id)) return;
 
@@ -849,6 +1036,7 @@ const actions = {
 
   applyCloudArtifactDeltas(deltas: ReadonlyArray<ArtifactWireDelta>): void {
     _cloudArtifacts = applySharedArtifactDeltas(_cloudArtifacts, deltas);
+    recordLegacyAdopters();
 
     const visibleArtifacts = mergedArtifacts();
     const selectedArtifactId = _sharedArtifactStore.getState().selectedArtifactId;
@@ -966,6 +1154,8 @@ const actions = {
     _inFlightPushById = new Map();
     _rejectedPushContentById = {};
     _renamedHereIds = new Set();
+    _legacyAdopterById = new Map();
+    _legacyAdoptionsByMessage = new Map();
     _conflictsById = {};
   },
 };
@@ -1047,6 +1237,7 @@ if (typeof window !== 'undefined') {
     if (signature === lastSignature) return;
     lastSignature = signature;
     clearArtifactsForVanishedMessages();
+    if (recordLegacyAdopters()) notifyArtifactSubscribers();
   });
 }
 

@@ -11,14 +11,35 @@
 //!    connecting client is responsible for confirming each call.
 
 pub(crate) mod account;
+mod account_cloud;
+mod cloud_workspaces;
+pub(super) const TRANSCRIPT_JSON_BUDGET: usize = 3 * 1024 * 1024;
+mod account_file_tasks;
+mod account_host;
+mod account_service;
+mod account_uploads;
 pub mod acp;
+mod attachment_recovery;
+mod cloud_projects;
 mod cloud_threads;
+mod cloud_turns;
 mod developer_host;
+mod instruction_settings;
+mod project_downloads;
+mod project_uploads;
 mod pull_request;
 mod review;
 pub(crate) mod surfaces;
 mod threads;
+mod upload_destination;
+mod workspace_files;
+mod workspace_recovery;
+#[cfg(unix)]
+mod workspace_terminal;
+#[cfg(unix)]
+mod worktree_apply;
 
+pub use account_host::CliAccountHost;
 pub use developer_host::CliDeveloperSessionHost;
 
 pub use agiworkforce_app_server::{run_developer_session_websocket, WebSocketSecurity};
@@ -28,7 +49,7 @@ use agiworkforce_mcp::protocol::{
     Implementation, RpcError, INVALID_PARAMS, METHOD_NOT_FOUND, PARSE_ERROR,
 };
 use agiworkforce_mcp::server::{self, CacheScope, RequestEra};
-use agiworkforce_protocol::developer_session::AppServerCapabilities;
+use agiworkforce_protocol::developer_session::{AppServerCapabilities, AppServerClientInfo};
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -47,7 +68,27 @@ pub async fn run_developer_session_stdio(
     capabilities: AppServerCapabilities,
 ) -> Result<()> {
     crate::output::claim_stdout_for_protocol();
-    agiworkforce_app_server::run_developer_session_stdio(host, capabilities).await
+    let terminated_host = Arc::clone(&host);
+    tokio::select! {
+        served = agiworkforce_app_server::run_developer_session_stdio(host, capabilities) => served,
+        Ok(()) = termination_requested() => {
+            terminated_host.shutdown().await.map_err(anyhow::Error::new)
+        }
+    }
+}
+
+/// SIGTERM ends the server the way stdin closing does, through the host's
+/// shutdown, so the commands its turns started do not outlive it.
+#[cfg(unix)]
+async fn termination_requested() -> std::io::Result<()> {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    terminate.recv().await;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn termination_requested() -> std::io::Result<()> {
+    std::future::pending().await
 }
 
 /// Serve the Agent Client Protocol on stdio until the editor closes stdin.
@@ -254,6 +295,20 @@ async fn mcp_server_replies(frame: &str) -> Vec<Value> {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+pub(super) fn client_source(
+    client: &AppServerClientInfo,
+) -> agiworkforce_protocol::developer_session::DeveloperSessionSource {
+    use agiworkforce_protocol::developer_session::DeveloperSessionSource;
+    let name = client.name.to_ascii_lowercase();
+    if name.contains("vscode") {
+        DeveloperSessionSource::Vscode
+    } else if name.contains("desktop") {
+        DeveloperSessionSource::Desktop
+    } else {
+        DeveloperSessionSource::Cli
+    }
+}
 
 #[cfg(test)]
 mod tests {

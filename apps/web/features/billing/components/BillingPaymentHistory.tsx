@@ -81,7 +81,7 @@ export function BillingPaymentHistory({ refreshKey }: { refreshKey: number }) {
       <section aria-labelledby="credit-purchases-title" className="flex flex-col gap-2">
         <h2
           id="credit-purchases-title"
-          className="text-[13px] font-semibold text-[color:var(--text-2)]"
+          className="text-[13px] font-semibold text-[color:var(--text-2)] max-md:text-sm"
         >
           Credit purchases
         </h2>
@@ -106,8 +106,8 @@ export function BillingPaymentHistory({ refreshKey }: { refreshKey: number }) {
             No credit purchases yet. Each one you make gets a receipt here.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+          <div className="overflow-x-auto overscroll-x-contain max-md:rounded-lg max-md:border max-md:border-border">
+            <table className="w-full border-collapse text-[13px] max-md:text-sm">
               <caption className="sr-only">Credit purchases, newest first</caption>
               <thead>
                 <tr className="border-b border-border">
@@ -168,11 +168,14 @@ export function BillingPaymentHistory({ refreshKey }: { refreshKey: number }) {
 
       {state.status === 'ready' && state.refunds.length > 0 ? (
         <section aria-labelledby="refunds-title" className="flex flex-col gap-2">
-          <h2 id="refunds-title" className="text-[13px] font-semibold text-[color:var(--text-2)]">
+          <h2
+            id="refunds-title"
+            className="text-[13px] font-semibold text-[color:var(--text-2)] max-md:text-sm"
+          >
             Refunds
           </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+          <div className="overflow-x-auto overscroll-x-contain max-md:rounded-lg max-md:border max-md:border-border">
+            <table className="w-full border-collapse text-[13px] max-md:text-sm">
               <caption className="sr-only">Refunds, newest first</caption>
               <thead>
                 <tr className="border-b border-border">

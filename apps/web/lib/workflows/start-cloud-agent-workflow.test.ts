@@ -91,6 +91,7 @@ vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   }),
   calculateObservedProviderUsageCostDollars: vi.fn(() => 0),
   finalizeObservedManagedUsage: vi.fn(),
+  hasObservedProviderUsage: vi.fn(() => false),
   mergeObservedProviderUsage: vi.fn(),
   addToolSpend: vi.fn(),
   observedTurnCost: vi.fn(() => ({ tokenMicrousd: 0, toolMicrousd: 0 })),

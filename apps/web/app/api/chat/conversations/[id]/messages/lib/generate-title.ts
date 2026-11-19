@@ -19,7 +19,6 @@ import 'server-only';
 import { after } from 'next/server';
 import { clientProvisionalTitle } from '@/lib/chat-title';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { resolveAutoRoute } from '@agiworkforce/routing';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -39,13 +38,11 @@ import {
 } from '@/lib/services/background-usage-lease';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { getModelEffortOptions, normalizeBillingPlanTier } from '@agiworkforce/types';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { estimateTokens } from '@agiworkforce/routing';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
-import { conversationKeepsOutOfTraining } from '@/lib/services/health-space-service';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 
 /** ~6 words at temperature 0; generous headroom over the sanitizer's own cap. */
 const MAX_OUTPUT_TOKENS = 24;
@@ -135,39 +132,17 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     return;
   }
 
-  // Cheapest capable route for a one-line utility completion. 'free' tier +
-  // 'simple_chat' always resolves to the workhorse economy slot regardless of
-  // the requester's actual plan, this is an internal utility call, not a
-  // user-facing chat turn, so it must not ride the user's paid model access.
-  // Same selection primitive lib/support/agent/answer/model-route.ts uses for
-  // its own bounded utility call; no model id is hardcoded here.
-  const routing = await sideCallRoutingRequest(
-    input.db,
-    input.userId,
-    {
-      selection: 'auto',
-      taskType: 'simple_chat',
-      subscriptionTier: 'free',
-      trustMode: 'managed_cloud',
-      runtimeProfileId: 'web/cloud-chat',
+  const admission = await admitManagedCloudRoute({
+    kind: 'utility',
+    account: {
+      db: input.db,
+      userId: input.userId,
+      organizationId: input.organizationId,
+      conversationId: input.conversationId,
     },
-    {
-      forceNoTraining: await conversationKeepsOutOfTraining(
-        input.db,
-        input.userId,
-        input.conversationId,
-      ),
-    },
-  );
-  if (!routing) return;
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn(
-      { code: route.code, conversationId: input.conversationId },
-      '[conversation-title] no managed route available; keeping the truncated title',
-    );
-    return;
-  }
+  });
+  if (admission.status === 'refused') return;
+  const { route, dispatchProvider } = admission;
 
   const chatRequest = openAIWireRequestToChatRequest({
     model: route.providerModelId,
@@ -180,7 +155,6 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     stream: false,
   });
   if (getModelEffortOptions(route.modelKey).includes('none')) chatRequest.effort = 'none';
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const wireMode = resolveWireMode(dispatchProvider);
 
   const cacheFields: ExactResponseCacheKeyFields = {
@@ -353,7 +327,7 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     // title a human actually chose -- a real rename, or a duplicate
     // scheduling that already won.
     const clientCandidate = clientTruncatedTitleCandidate(input.content);
-    await input.db.execute(
+    const updated = await input.db.execute(
       `update web_conversations
           set title = $1, updated_at = now()
         where id = $2
@@ -370,6 +344,12 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         clientCandidate,
       ],
     );
+    if (updated === 0) {
+      logger.info(
+        { conversationId: input.conversationId },
+        '[conversation-title] the title changed before the generated one arrived; left as it is',
+      );
+    }
   } catch (error) {
     logger.warn(
       { error, conversationId: input.conversationId },

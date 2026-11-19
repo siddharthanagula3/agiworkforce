@@ -1,10 +1,4 @@
 {
   "schemaVersion": 1,
-  "entries": [
-    {
-      "table": "device_refresh_token_families",
-      "migration": "0412_device_refresh_token_families.sql",
-      "reason": "Like device_refresh_tokens (0080), whose families it ends, it carries no row-level security: an account's own sign-out, unlink and password paths and an admin's directory-sync deprovision end families through app_rls, and the deprovision ends another member's families, which an owner-only policy would refuse. app_rls holds select, insert and update and no delete, a trigger refuses clearing revoked_at or moving a family to another account, and every owner-connection statement over it is policed by check-db-isolation through USER_OWNED_TABLES. Delete this entry once a row-level-security policy exists for the table."
-    }
-  ]
+  "entries": []
 }

@@ -38,11 +38,11 @@ describe.each(THEMES)('%s composer send control', (_name, palette) => {
     render(<SendButton state={state} onPress={onPress} />);
     const control = screen.getByRole('button', { name: label });
 
-    expect(control).toHaveStyle({
-      width: 44,
-      height: 44,
+    expect(control).toHaveStyle({ width: 44, height: 44, flexShrink: 0 });
+    expect(screen.getByTestId('send-button-circle')).toHaveStyle({
+      width: 36,
+      height: 36,
       backgroundColor: palette.textPrimary,
-      flexShrink: 0,
     });
     await user.press(control);
     expect(onPress).toHaveBeenCalledTimes(1);
@@ -54,14 +54,18 @@ describe.each(THEMES)('%s composer send control', (_name, palette) => {
     const view = render(<SendButton state="idle" disabled onPress={onPress} />);
     const send = screen.getByRole('button', { name: 'Send message' });
     expect(send).toBeDisabled();
-    expect(send).toHaveStyle({ backgroundColor: palette.neutralSurface });
+    expect(screen.getByTestId('send-button-circle')).toHaveStyle({
+      backgroundColor: palette.neutralSurface,
+    });
     await user.press(send);
     expect(onPress).not.toHaveBeenCalled();
 
     view.rerender(<SendButton state="streaming" disabled onPress={onPress} />);
     const stop = screen.getByRole('button', { name: 'Stop generating' });
     expect(stop).toBeEnabled();
-    expect(stop).toHaveStyle({ backgroundColor: palette.textPrimary });
+    expect(screen.getByTestId('send-button-circle')).toHaveStyle({
+      backgroundColor: palette.textPrimary,
+    });
     await user.press(stop);
     expect(onPress).toHaveBeenCalledTimes(1);
   });

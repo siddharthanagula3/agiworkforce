@@ -109,7 +109,7 @@ export function DirectoryDetailHeader({
           <h3 className="break-words text-h2 text-foreground">{title}</h3>
           {badge}
         </div>
-        {subtitle ? <div className="mt-0.5 text-sm text-muted-foreground">{subtitle}</div> : null}
+        {subtitle ? <div className="mt-0.5 text-xs text-muted-foreground">{subtitle}</div> : null}
       </div>
       <div className="flex w-full shrink-0 items-center gap-1 sm:w-auto">
         {onCopyLink ? (

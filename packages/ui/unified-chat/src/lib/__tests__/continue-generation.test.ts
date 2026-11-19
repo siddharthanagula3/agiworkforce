@@ -7,6 +7,7 @@ import {
   getStreamErrorNotice,
   getStreamErrorReference,
   CONTINUE_GENERATION_INSTRUCTION,
+  looksTruncated,
 } from '../continue-generation';
 
 function assistantMessage(overrides: Record<string, unknown> = {}) {
@@ -73,11 +74,19 @@ describe('isMessageContinuable', () => {
     );
   });
 
-  it('offers Continue when a stop-finished answer still reads as cut off', () => {
-    // A provider can end a turn mid-sentence and report finish_reason stop.
+  it('trusts a finished turn over the truncation heuristic', () => {
+    expect(
+      isMessageContinuable(
+        assistantMessage({ content: '17 \u00d7 23 = 391', metadata: { finishReason: 'stop' } }),
+      ),
+    ).toBe(false);
     expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
-      true,
+      false,
     );
+  });
+
+  it('falls back to the truncation heuristic only when no finish reason was recorded', () => {
+    expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(true);
   });
 
   it('does NOT offer Continue when the partial content is empty', () => {
@@ -215,5 +224,15 @@ describe('CONTINUE_GENERATION_INSTRUCTION', () => {
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/continue/i);
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/do not repeat/i);
     expect(CONTINUE_GENERATION_INSTRUCTION).toMatch(/rather than commenting on it/i);
+  });
+});
+
+describe('looksTruncated', () => {
+  it('treats a short clause after a finished sentence as complete', () => {
+    expect(looksTruncated('The capital of France is Paris. BANANA')).toBe(false);
+  });
+
+  it('still reads a long unfinished clause after a finished sentence as cut off', () => {
+    expect(looksTruncated('The capital of France is Paris. And then the model was cut')).toBe(true);
   });
 });

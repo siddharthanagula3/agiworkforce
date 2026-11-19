@@ -78,6 +78,7 @@ describe('voice.ts owned recording lifecycle', () => {
   it('invalidates pending permission without disturbing a newer capture', async () => {
     const native = jest.requireMock('expo-speech-recognition').ExpoSpeechRecognitionModule;
     let grant!: (value: { granted: boolean }) => void;
+    native.getPermissionsAsync.mockResolvedValueOnce({ granted: false });
     native.requestPermissionsAsync.mockImplementationOnce(
       () =>
         new Promise((resolve) => {

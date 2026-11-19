@@ -20,7 +20,7 @@ jest.mock('@/services/fileCreation', () => ({
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Text as SvgText } from 'react-native-svg';
-import { ReportChart } from '@/src/features/chat/components/ReportChart';
+import { ReportChart, chartSeriesColor } from '@/src/features/chat/components/ReportChart';
 import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as darkColors, lightColors } from '@/src/ui/theme';
 
@@ -99,5 +99,22 @@ describe('saving a chart as an image', () => {
     expect(wrapper.props.accessibilityElementsHidden).toBe(true);
     expect(wrapper.props.importantForAccessibility).toBe('no-hide-descendants');
     expect(screen.getByText('Rent 75%')).toBeTruthy();
+  });
+});
+
+describe('chartSeriesColor', () => {
+  it('walks the chart palette in order and wraps after the sixth series', () => {
+    const colors = lightColors;
+    const palette = [
+      colors.agentActive,
+      colors.agentSuccess,
+      colors.agentWarning,
+      colors.agentThinking,
+      colors.agentError,
+      colors.textSecondary,
+    ];
+    palette.forEach((color, index) => expect(chartSeriesColor(colors, index)).toBe(color));
+    expect(chartSeriesColor(colors, 6)).toBe(palette[0]);
+    expect(chartSeriesColor(colors, 13)).toBe(palette[1]);
   });
 });

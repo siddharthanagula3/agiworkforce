@@ -19,6 +19,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 
 import { Button } from '@/components/ui/Button';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import {
@@ -56,12 +57,6 @@ const VISIBILITY_LABELS: Record<AgentVisibility, string> = {
   people: 'Specific people',
   workspace: 'Workspace',
 };
-
-export function agentFileSizeLabel(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function agentShareUserIds(share: AgentShareResponse): string[] {
   return share.members.filter((member) => member.hasAccess).map((member) => member.userId);
@@ -103,7 +98,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
       'upload',
       async () => {
         if ((asset.size ?? 0) > AGENT_FILE_MAX_BYTES) {
-          throw new Error(`Files can be up to ${agentFileSizeLabel(AGENT_FILE_MAX_BYTES)}.`);
+          throw new Error(`Files can be up to ${formatAttachmentSize(AGENT_FILE_MAX_BYTES)}.`);
         }
         return uploadAgentFile(agent.id, {
           uri: asset.uri,
@@ -138,10 +133,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
   );
 
   return (
-    <SectionCard
-      title="Knowledge"
-      description="Files the agent can read in every chat. Text is extracted when you add a file."
-    >
+    <SectionCard title="Knowledge" description="Files the agent can read in every chat.">
       {files === null && !failed ? <MetaText>Loading files…</MetaText> : null}
       {failed ? <ErrorBanner message="Could not load the files." onRetry={retry} /> : null}
       {files?.length === 0 ? <MetaText>No files yet.</MetaText> : null}
@@ -155,7 +147,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
             >
               {file.name}
             </Text>
-            <MetaText>{agentFileSizeLabel(file.byteSize)}</MetaText>
+            <MetaText>{formatAttachmentSize(file.byteSize)}</MetaText>
           </View>
           <PressableBox
             onPress={() => void removeFile(file)}
@@ -236,7 +228,7 @@ function AgentPublishSection({
   return (
     <SectionCard
       title="Publish"
-      description="People you share with use the published version. Saving keeps a draft until you publish."
+      description="Others use the published version. Saving keeps a draft until you publish."
     >
       <MetaText>{agentStateLabel(agent)}</MetaText>
       <TextField

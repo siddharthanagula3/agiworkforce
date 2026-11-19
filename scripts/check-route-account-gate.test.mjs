@@ -106,11 +106,14 @@ function fixture(files) {
   return root;
 }
 
-function run(root) {
+function run(root, options = {}) {
   try {
     return {
       code: 0,
-      out: execFileSync(process.execPath, [script, '--root', root], { encoding: 'utf8' }),
+      out: execFileSync(process.execPath, [script, '--root', root], {
+        encoding: 'utf8',
+        ...options,
+      }),
     };
   } catch (error) {
     return { code: error.status, out: `${error.stdout ?? ''}${error.stderr ?? ''}` };
@@ -298,4 +301,73 @@ test('the vocabulary fails when a module it names is gone', () => {
   const result = run(fixture(files));
   assert.equal(result.code, 1);
   assert.match(result.out, /vocabulary names apps\/web\/lib\/server\/cron-auth\.ts/u);
+});
+
+test('a known gate settles before a dense cyclic branch', (t) => {
+  const count = 30;
+  const branches = Array.from(
+    { length: count },
+    (_, index) =>
+      `export function branch${index}() { return branch${(index + 1) % count}() + branch${(index + 2) % count}(); }`,
+  ).join('\n');
+  const root = fixture({
+    ...BASE,
+    [CONTRACT]: contract(),
+    'apps/web/lib/cyclic-branch.ts': branches,
+    'apps/web/app/api/cyclic/route.ts': `
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { branch0 } from '@/lib/cyclic-branch';
+export async function POST(request) {
+  const { userId } = await getClerkAuthUser(request);
+  return json({ userId, value: branch0() });
+}
+`,
+  });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const result = run(root, { timeout: 5_000 });
+  assert.equal(result.code, 0, result.out);
+  assert.match(result.out, /2 gated, 1 public, 1 machine/u);
+});
+
+test('gate evidence crosses a cycle without hiding a second ungated cycle', (t) => {
+  const cyclic = `
+import { getRequestIdentity } from '@/lib/server/identity';
+import { assertAccountActive } from '@/lib/api-auth';
+export async function first() { return second(); }
+export async function second() {
+  await first();
+  const { subject } = await getRequestIdentity();
+  await assertAccountActive(subject);
+  return subject;
+}
+`;
+  const files = {
+    ...BASE,
+    [CONTRACT]: contract(),
+    'apps/web/lib/cyclic-auth.ts': cyclic,
+    'apps/web/app/api/cycle-first/route.ts': `
+import { first } from '@/lib/cyclic-auth';
+export function GET() { return first(); }
+`,
+    'apps/web/app/api/cycle-second/route.ts': `
+import { second } from '@/lib/cyclic-auth';
+export function GET() { return second(); }
+`,
+  };
+  const gatedRoot = fixture(files);
+  const ungatedRoot = fixture({
+    ...files,
+    'apps/web/lib/cyclic-auth.ts': cyclic.replace('  await assertAccountActive(subject);\n', ''),
+  });
+  t.after(() => {
+    fs.rmSync(gatedRoot, { recursive: true, force: true });
+    fs.rmSync(ungatedRoot, { recursive: true, force: true });
+  });
+  const gated = run(gatedRoot);
+  assert.equal(gated.code, 0, gated.out);
+  assert.match(gated.out, /3 gated, 1 public, 1 machine/u);
+  const ungated = run(ungatedRoot);
+  assert.equal(ungated.code, 1, ungated.out);
+  assert.match(ungated.out, /api\/cycle-first\/route.ts authenticates a user and never reaches/u);
+  assert.match(ungated.out, /api\/cycle-second\/route.ts authenticates a user and never reaches/u);
 });

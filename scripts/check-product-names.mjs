@@ -25,7 +25,12 @@ export const MANIFEST_FIELDS = [
     json: ['name'],
     copyrightPrefix: true,
   },
-  { product: 'code', file: 'apps/extension-vscode/package.json', json: ['displayName'] },
+  {
+    product: 'code',
+    file: 'apps/extension-vscode/package.json',
+    json: ['displayName'],
+    copyrightPrefix: true,
+  },
 ];
 
 export const RETIRED_SPELLINGS = [

@@ -5,6 +5,8 @@ import { Check, Lock, X } from 'lucide-react-native';
 import type { CloudCodeBranch, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 import {
   CLOUD_CODE_LIMITS,
+  REMOTE_CODE_LIMITS,
+  describeCloudCodeRuntime,
   type CloudCodeAvailability,
   type CloudCodeNetworkAccess,
   type CloudCodeRuntime,
@@ -18,33 +20,24 @@ import { cloudCodeApi, describeCloudCodeError, newCloudCodeIdempotencyKey } from
 import { useRouter } from 'expo-router';
 import { startGitHubInstallInApp } from '../githubInstall';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { useCodeSessionStart } from '@/src/features/companion/remote-code/useCodeSessionStart';
+import { computerLocationLabel, CLOUD_LOCATION_LABEL } from './CodeSessionListRow';
+import { useComputerCodeSessions } from './useComputerCodeSessions';
+import { NETWORK_ACCESS_OPTIONS } from '../networkAccessOptions';
+import { useCodePreferences } from '@/src/features/settings/code/store';
 
 export const NEW_CLOUD_CODE_SESSION_ERROR = 'The session could not be started';
 const GITHUB_CONNECT_FAILED = 'GitHub could not be connected';
 const TITLE_WORDS = 6;
 const SEARCH_DEBOUNCE_MS = 300;
-const GIGABYTE_MB = 1024;
-
-const NETWORK_OPTIONS: ReadonlyArray<{
-  id: CloudCodeNetworkAccess;
-  label: string;
-  description: string;
-}> = [
-  { id: 'none', label: 'Isolated', description: 'Commands cannot reach the internet.' },
-  {
-    id: 'trusted',
-    label: 'Trusted hosts',
-    description: 'Package registries and code hosts only. Required to clone a repository.',
-  },
-  {
-    id: 'full',
-    label: 'Full internet',
-    description: 'Unrestricted outbound access from this isolated environment.',
-  },
-];
 
 const COPY = Object.freeze({
+  title: 'New cloud session',
+  titleWithComputer: 'New session',
+  placeHeading: 'Where it runs',
+  folderHeading: 'Folder',
   fullNetworkAcknowledgement:
     'I understand commands in this session can contact any internet host. The environment stays isolated and receives no AGI credentials.',
   extraHostsLabel: 'Extra allowed hosts',
@@ -53,7 +46,6 @@ const COPY = Object.freeze({
   runtimeHeading: 'Coding harness',
   defaultRuntime: 'No agent, Python 3, Node.js, git, curl, build-essential, GitHub CLI',
   runtimeFixed: 'This cannot be changed after the session is created.',
-  needsKey: 'needs your own API key',
   firstRunHeading: 'Two steps to work in your repository',
   firstRunConnect: 'Connect your GitHub account and install the GitHub app',
   firstRunCopy: 'Choose which repositories the environment may clone and push.',
@@ -101,17 +93,6 @@ export function unavailableReason(availability: CloudCodeAvailability | null): s
   if (!availability.deploymentEnabled) return COPY.deploymentDisabled;
   if (!availability.planEntitled) return COPY.planNotEntitled;
   return null;
-}
-
-function describeRuntime(runtime: CloudCodeRuntime): string {
-  const cores = runtime.cpuCount > 0 ? `${runtime.cpuCount} vCPU` : null;
-  const memory =
-    runtime.memoryMB > 0 ? `${Math.round(runtime.memoryMB / GIGABYTE_MB)} GB RAM` : null;
-  const detail = [runtime.summary, [cores, memory].filter(Boolean).join(', ')]
-    .filter(Boolean)
-    .join(' · ');
-  const label = detail ? `${runtime.name}, ${detail}` : runtime.name;
-  return runtime.needsUserCredential ? `${label}, ${COPY.needsKey}` : label;
 }
 
 function parseExtraHosts(value: string): string[] {
@@ -206,6 +187,7 @@ interface NewCloudCodeSessionSheetProps {
   onClose: () => void;
   onCreated: (session: CloudCodeSession, goal: string) => void;
   onCreatedInBackground?: (session: CloudCodeSession) => void;
+  onStartedOnComputer?: (rootId: string, threadId: string) => void;
 }
 
 export function NewCloudCodeSessionSheet({
@@ -215,8 +197,12 @@ export function NewCloudCodeSessionSheet({
   onClose,
   onCreated,
   onCreatedInBackground,
+  onStartedOnComputer,
 }: NewCloudCodeSessionSheetProps) {
   const colors = useThemeColors();
+  const computer = useComputerCodeSessions();
+  const [place, setPlace] = useState<'cloud' | 'computer'>('cloud');
+  const [folderId, setFolderId] = useState<string | null>(null);
   const [task, setTask] = useState('');
   const [search, setSearch] = useState('');
   const [repositoryState, setRepositoryState] = useState<RepositoryState>({ status: 'loading' });
@@ -228,7 +214,9 @@ export function NewCloudCodeSessionSheet({
   const [branchSearch, setBranchSearch] = useState('');
   const [branchState, setBranchState] = useState<BranchState>({ status: 'idle' });
   const [branchAttempt, setBranchAttempt] = useState(0);
-  const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>('trusted');
+  const defaultNetworkAccess = useCodePreferences((state) => state.defaultNetworkAccess);
+  const [networkAccess, setNetworkAccess] = useState<CloudCodeNetworkAccess>(defaultNetworkAccess);
+  const networkChosen = useRef(false);
   const [fullAccepted, setFullAccepted] = useState(false);
   const [extraHosts, setExtraHosts] = useState('');
   const [runtimeId, setRuntimeId] = useState('');
@@ -312,6 +300,13 @@ export function NewCloudCodeSessionSheet({
     };
   }, [branchAttempt, repository, visible]);
 
+  useEffect(() => {
+    if (!networkChosen.current) {
+      setNetworkAccess(defaultNetworkAccess);
+      setFullAccepted(false);
+    }
+  }, [defaultNetworkAccess]);
+
   const chooseRepository = useCallback((next: CloudCodeRepository | null) => {
     setRepository(next);
     setBranch('');
@@ -327,16 +322,33 @@ export function NewCloudCodeSessionSheet({
     setRepositoryUrl('');
     setBranch('');
     setBranchSearch('');
-    setNetworkAccess('trusted');
+    networkChosen.current = false;
+    setNetworkAccess(defaultNetworkAccess);
     setFullAccepted(false);
     setExtraHosts('');
     setRuntimeId('');
     setError(null);
-  }, []);
+  }, [defaultNetworkAccess]);
 
   const goal = task.trim();
+  const folders = onStartedOnComputer ? computer.folders : [];
+  const onComputer = place === 'computer' && folders.length > 0;
+  const folder = folders.find((root) => root.rootId === folderId) ?? folders[0] ?? null;
+  const computerStart = useCodeSessionStart((rootId, threadId) => {
+    reset();
+    onStartedOnComputer?.(rootId, threadId);
+  });
+  const canStartOnComputer =
+    folder !== null &&
+    !computerStart.starting &&
+    goal.length > 0 &&
+    goal.length <= REMOTE_CODE_LIMITS.taskLength;
   const blocked = unavailableReason(availability);
   const clonesRepository = repository !== null || (urlMode && repositoryUrl.trim().length > 0);
+
+  useEffect(() => {
+    if (clonesRepository && networkAccess === 'none') setNetworkAccess('trusted');
+  }, [clonesRepository, networkAccess]);
   const canCreate =
     goal.length > 0 &&
     !creating &&
@@ -444,334 +456,404 @@ export function NewCloudCodeSessionSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
-        <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <Text
-              accessibilityRole="header"
-              style={{
-                flex: 1,
-                color: colors.textPrimary,
-                fontSize: typeScale.headline,
-                fontWeight: '600',
-              }}
+      <PageSheetSafeArea style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
+          <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text
+                accessibilityRole="header"
+                style={{
+                  flex: 1,
+                  color: colors.textPrimary,
+                  fontSize: typeScale.headline,
+                  fontWeight: '600',
+                }}
+              >
+                {folders.length > 0 ? COPY.titleWithComputer : COPY.title}
+              </Text>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Close new session"
+                style={{
+                  minWidth: 44,
+                  minHeight: 44,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: 18, paddingBottom: 32 }}
             >
-              New cloud session
-            </Text>
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel="Close new session"
-              style={{
-                minWidth: 44,
-                minHeight: 44,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <X size={18} color={colors.textMuted} />
-            </Pressable>
-          </View>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ gap: 18, paddingBottom: 32 }}
-          >
-            {blocked ? <Note tone="error">{blocked}</Note> : null}
+              {blocked && !onComputer ? <Note tone="error">{blocked}</Note> : null}
 
-            <Section title="Task">
-              <TextInput
-                value={task}
-                onChangeText={setTask}
-                placeholder="Describe what to build or fix"
-                placeholderTextColor={colors.textMuted}
-                multiline
-                maxLength={CLOUD_CODE_LIMITS.task}
-                accessibilityLabel="Task"
-                testID="new-cloud-code-task"
-                style={{ ...inputStyle, minHeight: 96, paddingTop: 10, textAlignVertical: 'top' }}
-              />
-            </Section>
-
-            <Section title="Repository">
-              {urlMode ? (
-                <TextInput
-                  value={repositoryUrl}
-                  onChangeText={setRepositoryUrl}
-                  placeholder="https://github.com/owner/repository"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  accessibilityLabel={COPY.repositoryUrlLabel}
-                  style={inputStyle}
-                />
-              ) : repositoryState.status === 'no-installation' ? (
-                <View style={{ gap: 6 }}>
-                  <Text
-                    style={{
-                      color: colors.textPrimary,
-                      fontSize: typeScale.body,
-                      fontWeight: '600',
-                    }}
-                  >
-                    {COPY.firstRunHeading}
-                  </Text>
-                  <Note>{`${COPY.firstRunConnect}. ${COPY.firstRunCopy}`}</Note>
-                  <Button
-                    title={COPY.firstRunAction}
-                    variant="outline"
-                    loading={connectingGitHub}
-                    disabled={connectingGitHub}
-                    onPress={() => void handleConnectGitHub()}
-                  />
-                  {gitHubNotice ? <Note tone="error">{gitHubNotice}</Note> : null}
-                </View>
-              ) : repositoryState.status === 'error' ? (
-                <View style={{ gap: 6 }}>
-                  <Note tone="error">{repositoryState.message}</Note>
-                  <Button
-                    title={COPY.retry}
-                    variant="outline"
-                    onPress={() => setRepositoryAttempt((value) => value + 1)}
-                  />
-                </View>
-              ) : (
-                <>
-                  <TextInput
-                    value={search}
-                    onChangeText={setSearch}
-                    placeholder="Search repositories"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    accessibilityLabel="Search repositories"
-                    style={inputStyle}
-                  />
+              {folders.length > 0 ? (
+                <Section title={COPY.placeHeading}>
                   <View accessibilityRole="radiogroup">
-                    {[
-                      null,
-                      ...(repositoryState.status === 'ready' ? repositoryState.repositories : []),
-                    ].map((entry) => (
+                    <Choice
+                      label={CLOUD_LOCATION_LABEL}
+                      selected={!onComputer}
+                      onPress={() => setPlace('cloud')}
+                    />
+                    <Choice
+                      label={computerLocationLabel(computer.computerName)}
+                      selected={onComputer}
+                      testID="new-code-session-on-computer"
+                      onPress={() => setPlace('computer')}
+                    />
+                  </View>
+                </Section>
+              ) : null}
+
+              <Section title="Task">
+                <TextInput
+                  value={task}
+                  onChangeText={setTask}
+                  placeholder="Describe what to build or fix"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  maxLength={CLOUD_CODE_LIMITS.task}
+                  accessibilityLabel="Task"
+                  testID="new-cloud-code-task"
+                  style={{ ...inputStyle, minHeight: 96, paddingTop: 10, textAlignVertical: 'top' }}
+                />
+              </Section>
+
+              {onComputer ? (
+                <Section title={COPY.folderHeading}>
+                  <View accessibilityRole="radiogroup">
+                    {folders.map((root) => (
                       <Choice
-                        key={entry ? `${entry.installationId}:${entry.fullName}` : 'none'}
-                        label={entry ? entry.fullName : 'No repository'}
-                        selected={(entry?.fullName ?? null) === (repository?.fullName ?? null)}
-                        trailing={
-                          entry?.isPrivate ? (
-                            <Lock size={14} color={colors.textMuted} accessibilityLabel="Private" />
-                          ) : null
-                        }
-                        testID={
-                          entry
-                            ? `new-cloud-code-repo-${entry.fullName}`
-                            : 'new-cloud-code-repo-none'
-                        }
-                        onPress={() => chooseRepository(entry)}
+                        key={root.rootId}
+                        label={root.name}
+                        {...(root.branch ? { description: root.branch } : {})}
+                        selected={root.rootId === folder?.rootId}
+                        onPress={() => setFolderId(root.rootId)}
                       />
                     ))}
                   </View>
-                  {repositoryState.status === 'loading' ? <LoadingIndicator /> : null}
-                  {repositoryState.status === 'ready' && repositoryState.truncated ? (
-                    <Note>{COPY.repositoryTruncated}</Note>
-                  ) : null}
-                  {repositoryState.status === 'ready' && repositoryState.unreachable.length > 0 ? (
-                    <Note>{`${COPY.repositoryUnreachable} ${repositoryState.unreachable.join(', ')}`}</Note>
-                  ) : null}
-                </>
-              )}
-              <Pressable
-                onPress={() => {
-                  chooseRepository(null);
-                  setUrlMode((current) => !current);
-                }}
-                accessibilityRole="button"
-                style={{ minHeight: 44, justifyContent: 'center' }}
-              >
-                <Text
-                  style={{
-                    color: colors.textPrimary,
-                    fontSize: typeScale.subhead,
-                    fontWeight: '600',
-                  }}
-                >
-                  {urlMode ? COPY.repositoryUrlHide : COPY.repositoryUrlToggle}
-                </Text>
-              </Pressable>
-            </Section>
-
-            {repository || (urlMode && repositoryUrl.trim()) ? (
-              <Section title={COPY.branchHeading}>
-                {urlMode ? (
-                  <TextInput
-                    value={branch}
-                    onChangeText={setBranch}
-                    placeholder="Leave empty for the default branch"
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    accessibilityLabel={COPY.branchHeading}
-                    style={inputStyle}
-                  />
-                ) : (
-                  <>
-                    <TextInput
-                      value={branchSearch}
-                      onChangeText={setBranchSearch}
-                      placeholder={COPY.branchSearchPlaceholder}
-                      placeholderTextColor={colors.textMuted}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      accessibilityLabel={COPY.branchSearchPlaceholder}
-                      style={inputStyle}
-                    />
-                    {branchState.status === 'loading' ? (
-                      <LoadingIndicator accessibilityLabel={COPY.branchLoading} />
-                    ) : null}
-                    {branchState.status === 'error' ? (
+                </Section>
+              ) : (
+                <>
+                  <Section title="Repository">
+                    {urlMode ? (
+                      <TextInput
+                        value={repositoryUrl}
+                        onChangeText={setRepositoryUrl}
+                        placeholder="https://github.com/owner/repository"
+                        placeholderTextColor={colors.textMuted}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        keyboardType="url"
+                        accessibilityLabel={COPY.repositoryUrlLabel}
+                        style={inputStyle}
+                      />
+                    ) : repositoryState.status === 'no-installation' ? (
                       <View style={{ gap: 6 }}>
-                        <Note tone="error">{COPY.branchLoadFailed}</Note>
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontSize: typeScale.body,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {COPY.firstRunHeading}
+                        </Text>
+                        <Note>{`${COPY.firstRunConnect}. ${COPY.firstRunCopy}`}</Note>
+                        <Button
+                          title={COPY.firstRunAction}
+                          variant="outline"
+                          loading={connectingGitHub}
+                          disabled={connectingGitHub}
+                          onPress={() => void handleConnectGitHub()}
+                        />
+                        {gitHubNotice ? <Note tone="error">{gitHubNotice}</Note> : null}
+                      </View>
+                    ) : repositoryState.status === 'error' ? (
+                      <View style={{ gap: 6 }}>
+                        <Note tone="error">{repositoryState.message}</Note>
                         <Button
                           title={COPY.retry}
                           variant="outline"
-                          onPress={() => setBranchAttempt((value) => value + 1)}
+                          onPress={() => setRepositoryAttempt((value) => value + 1)}
                         />
                       </View>
-                    ) : null}
+                    ) : (
+                      <>
+                        <TextInput
+                          value={search}
+                          onChangeText={setSearch}
+                          placeholder="Search repositories"
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          accessibilityLabel="Search repositories"
+                          style={inputStyle}
+                        />
+                        <View accessibilityRole="radiogroup">
+                          {[
+                            null,
+                            ...(repositoryState.status === 'ready'
+                              ? repositoryState.repositories
+                              : []),
+                          ].map((entry) => (
+                            <Choice
+                              key={entry ? `${entry.installationId}:${entry.fullName}` : 'none'}
+                              label={entry ? entry.fullName : 'No repository'}
+                              selected={
+                                (entry?.fullName ?? null) === (repository?.fullName ?? null)
+                              }
+                              trailing={
+                                entry?.isPrivate ? (
+                                  <Lock
+                                    size={14}
+                                    color={colors.textMuted}
+                                    accessibilityLabel="Private"
+                                  />
+                                ) : null
+                              }
+                              testID={
+                                entry
+                                  ? `new-cloud-code-repo-${entry.fullName}`
+                                  : 'new-cloud-code-repo-none'
+                              }
+                              onPress={() => chooseRepository(entry)}
+                            />
+                          ))}
+                        </View>
+                        {repositoryState.status === 'loading' ? <LoadingIndicator /> : null}
+                        {repositoryState.status === 'ready' && repositoryState.truncated ? (
+                          <Note>{COPY.repositoryTruncated}</Note>
+                        ) : null}
+                        {repositoryState.status === 'ready' &&
+                        repositoryState.unreachable.length > 0 ? (
+                          <Note>{`${COPY.repositoryUnreachable} ${repositoryState.unreachable.join(', ')}`}</Note>
+                        ) : null}
+                      </>
+                    )}
+                    <Pressable
+                      onPress={() => {
+                        chooseRepository(null);
+                        setUrlMode((current) => !current);
+                      }}
+                      accessibilityRole="button"
+                      style={{ minHeight: 44, justifyContent: 'center' }}
+                    >
+                      <Text
+                        style={{
+                          color: colors.textPrimary,
+                          fontSize: typeScale.subhead,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {urlMode ? COPY.repositoryUrlHide : COPY.repositoryUrlToggle}
+                      </Text>
+                    </Pressable>
+                  </Section>
+
+                  {repository || (urlMode && repositoryUrl.trim()) ? (
+                    <Section title={COPY.branchHeading}>
+                      {urlMode ? (
+                        <TextInput
+                          value={branch}
+                          onChangeText={setBranch}
+                          placeholder="Leave empty for the default branch"
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          accessibilityLabel={COPY.branchHeading}
+                          style={inputStyle}
+                        />
+                      ) : (
+                        <>
+                          <TextInput
+                            value={branchSearch}
+                            onChangeText={setBranchSearch}
+                            placeholder={COPY.branchSearchPlaceholder}
+                            placeholderTextColor={colors.textMuted}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            accessibilityLabel={COPY.branchSearchPlaceholder}
+                            style={inputStyle}
+                          />
+                          {branchState.status === 'loading' ? (
+                            <LoadingIndicator accessibilityLabel={COPY.branchLoading} />
+                          ) : null}
+                          {branchState.status === 'error' ? (
+                            <View style={{ gap: 6 }}>
+                              <Note tone="error">{COPY.branchLoadFailed}</Note>
+                              <Button
+                                title={COPY.retry}
+                                variant="outline"
+                                onPress={() => setBranchAttempt((value) => value + 1)}
+                              />
+                            </View>
+                          ) : null}
+                          <View accessibilityRole="radiogroup">
+                            <Choice
+                              label={
+                                repository?.defaultBranch
+                                  ? `Default (${repository.defaultBranch})`
+                                  : 'Default branch'
+                              }
+                              selected={branch === ''}
+                              onPress={() => setBranch('')}
+                            />
+                            {branchMatches.map((candidate) => (
+                              <Choice
+                                key={candidate.name}
+                                label={candidate.name}
+                                selected={branch === candidate.name}
+                                trailing={
+                                  candidate.isProtected ? (
+                                    <Text
+                                      style={{
+                                        color: colors.textMuted,
+                                        fontSize: typeScale.caption,
+                                      }}
+                                    >
+                                      {COPY.branchProtected}
+                                    </Text>
+                                  ) : null
+                                }
+                                onPress={() => setBranch(candidate.name)}
+                              />
+                            ))}
+                            {branchNeedle && !typedIsListed ? (
+                              <Choice
+                                label={`${COPY.branchUseTyped} ${branchNeedle}`}
+                                selected={branch === branchNeedle}
+                                onPress={() => setBranch(branchNeedle)}
+                              />
+                            ) : null}
+                          </View>
+                          {branchState.status === 'ready' && branchState.truncated ? (
+                            <Note>{COPY.branchTruncated}</Note>
+                          ) : null}
+                        </>
+                      )}
+                    </Section>
+                  ) : null}
+
+                  <Section title="Network access">
                     <View accessibilityRole="radiogroup">
-                      <Choice
-                        label={
-                          repository?.defaultBranch
-                            ? `Default (${repository.defaultBranch})`
-                            : 'Default branch'
-                        }
-                        selected={branch === ''}
-                        onPress={() => setBranch('')}
-                      />
-                      {branchMatches.map((candidate) => (
+                      {NETWORK_ACCESS_OPTIONS.map((option) => (
                         <Choice
-                          key={candidate.name}
-                          label={candidate.name}
-                          selected={branch === candidate.name}
-                          trailing={
-                            candidate.isProtected ? (
-                              <Text
-                                style={{ color: colors.textMuted, fontSize: typeScale.caption }}
-                              >
-                                {COPY.branchProtected}
-                              </Text>
-                            ) : null
-                          }
-                          onPress={() => setBranch(candidate.name)}
+                          key={option.id}
+                          label={option.label}
+                          description={option.description}
+                          selected={networkAccess === option.id}
+                          disabled={clonesRepository && option.id === 'none'}
+                          onPress={() => {
+                            networkChosen.current = true;
+                            setNetworkAccess(option.id);
+                            if (option.id !== 'full') setFullAccepted(false);
+                          }}
                         />
                       ))}
-                      {branchNeedle && !typedIsListed ? (
-                        <Choice
-                          label={`${COPY.branchUseTyped} ${branchNeedle}`}
-                          selected={branch === branchNeedle}
-                          onPress={() => setBranch(branchNeedle)}
-                        />
-                      ) : null}
                     </View>
-                    {branchState.status === 'ready' && branchState.truncated ? (
-                      <Note>{COPY.branchTruncated}</Note>
-                    ) : null}
-                  </>
-                )}
-              </Section>
-            ) : null}
+                    {networkAccess === 'full' ? (
+                      <Pressable
+                        onPress={() => setFullAccepted((current) => !current)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: fullAccepted }}
+                        accessibilityLabel={COPY.fullNetworkAcknowledgement}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          minHeight: 44,
+                        }}
+                      >
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 5,
+                            borderWidth: 1,
+                            borderColor: fullAccepted ? colors.textPrimary : colors.border,
+                            backgroundColor: fullAccepted ? colors.textPrimary : undefined,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {fullAccepted ? <Check size={14} color={colors.accentText} /> : null}
+                        </View>
+                        <Text
+                          style={{
+                            flex: 1,
+                            color: colors.textSecondary,
+                            fontSize: typeScale.footnote,
+                          }}
+                        >
+                          {COPY.fullNetworkAcknowledgement}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <View style={{ gap: 4 }}>
+                        <TextInput
+                          value={extraHosts}
+                          onChangeText={setExtraHosts}
+                          placeholder={COPY.extraHostsPlaceholder}
+                          placeholderTextColor={colors.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          accessibilityLabel={COPY.extraHostsLabel}
+                          style={inputStyle}
+                        />
+                        <Note>{`${COPY.extraHostsLabel}. ${COPY.extraHostsHelp}`}</Note>
+                      </View>
+                    )}
+                  </Section>
 
-            <Section title="Network access">
-              <View accessibilityRole="radiogroup">
-                {NETWORK_OPTIONS.map((option) => (
-                  <Choice
-                    key={option.id}
-                    label={option.label}
-                    description={option.description}
-                    selected={networkAccess === option.id}
-                    disabled={clonesRepository && option.id === 'none'}
-                    onPress={() => {
-                      setNetworkAccess(option.id);
-                      if (option.id !== 'full') setFullAccepted(false);
-                    }}
-                  />
-                ))}
-              </View>
-              {networkAccess === 'full' ? (
-                <Pressable
-                  onPress={() => setFullAccepted((current) => !current)}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: fullAccepted }}
-                  accessibilityLabel={COPY.fullNetworkAcknowledgement}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}
-                >
-                  <View
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 5,
-                      borderWidth: 1,
-                      borderColor: fullAccepted ? colors.textPrimary : colors.border,
-                      backgroundColor: fullAccepted ? colors.textPrimary : undefined,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {fullAccepted ? <Check size={14} color={colors.accentText} /> : null}
-                  </View>
-                  <Text
-                    style={{ flex: 1, color: colors.textSecondary, fontSize: typeScale.footnote }}
-                  >
-                    {COPY.fullNetworkAcknowledgement}
-                  </Text>
-                </Pressable>
-              ) : (
-                <View style={{ gap: 4 }}>
-                  <TextInput
-                    value={extraHosts}
-                    onChangeText={setExtraHosts}
-                    placeholder={COPY.extraHostsPlaceholder}
-                    placeholderTextColor={colors.textMuted}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    accessibilityLabel={COPY.extraHostsLabel}
-                    style={inputStyle}
-                  />
-                  <Note>{`${COPY.extraHostsLabel}. ${COPY.extraHostsHelp}`}</Note>
-                </View>
+                  {runtimes.length > 0 ? (
+                    <Section title={COPY.runtimeHeading}>
+                      <View accessibilityRole="radiogroup">
+                        <Choice
+                          label={COPY.defaultRuntime}
+                          selected={runtimeId === ''}
+                          onPress={() => setRuntimeId('')}
+                        />
+                        {[...harnesses, ...images].map((runtime) => (
+                          <Choice
+                            key={runtime.id}
+                            label={describeCloudCodeRuntime(runtime)}
+                            selected={runtimeId === runtime.id}
+                            onPress={() => setRuntimeId(runtime.id)}
+                          />
+                        ))}
+                      </View>
+                      <Note>{COPY.runtimeFixed}</Note>
+                    </Section>
+                  ) : null}
+                </>
               )}
-            </Section>
 
-            {runtimes.length > 0 ? (
-              <Section title={COPY.runtimeHeading}>
-                <View accessibilityRole="radiogroup">
-                  <Choice
-                    label={COPY.defaultRuntime}
-                    selected={runtimeId === ''}
-                    onPress={() => setRuntimeId('')}
-                  />
-                  {[...harnesses, ...images].map((runtime) => (
-                    <Choice
-                      key={runtime.id}
-                      label={describeRuntime(runtime)}
-                      selected={runtimeId === runtime.id}
-                      onPress={() => setRuntimeId(runtime.id)}
-                    />
-                  ))}
-                </View>
-                <Note>{COPY.runtimeFixed}</Note>
-              </Section>
-            ) : null}
-
-            {error ? <Note tone="error">{error}</Note> : null}
-            <Button
-              title={creating ? 'Starting…' : 'Start session'}
-              onPress={() => void handleCreate()}
-              disabled={!canCreate}
-              testID="new-cloud-code-start"
-            />
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+              {onComputer ? (
+                computerStart.error ? (
+                  <Note tone="error">{computerStart.error}</Note>
+                ) : null
+              ) : error ? (
+                <Note tone="error">{error}</Note>
+              ) : null}
+              <Button
+                title={creating || computerStart.starting ? 'Starting…' : 'Start session'}
+                onPress={() => {
+                  if (!onComputer) void handleCreate();
+                  else if (folder && canStartOnComputer)
+                    void computerStart.start(folder.rootId, goal);
+                }}
+                disabled={onComputer ? !canStartOnComputer : !canCreate}
+                testID="new-cloud-code-start"
+              />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </PageSheetSafeArea>
     </Modal>
   );
 }

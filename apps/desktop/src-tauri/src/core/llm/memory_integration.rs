@@ -140,7 +140,7 @@ impl MemoryInjector {
                 )
             });
         }
-        global_memories.sort_by(|a, b| b.importance.cmp(&a.importance));
+        global_memories.sort_by_key(|a| std::cmp::Reverse(a.importance));
         global_memories.truncate(
             self.config
                 .max_memories

@@ -103,6 +103,109 @@ describe('Library recovery copy', () => {
     );
   });
 
+  it('never reports a finished empty list while a new scope has not loaded yet', async () => {
+    let finishNamePage: ((page: unknown) => void) | undefined;
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({ assets: [{ id: 'asset-a' }], hasMore: false, nextOffset: null })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishNamePage = resolve;
+          }),
+      );
+    const renders: { loading: boolean; count: number }[] = [];
+
+    const { result, rerender } = renderHook(
+      ({ sort }: { sort: 'modified' | 'name' }) => {
+        const state = useLibraryAssets('', sort);
+        renders.push({ loading: state.loading, count: state.assets.length });
+        return state;
+      },
+      { initialProps: { sort: 'modified' as 'modified' | 'name' } },
+    );
+    await waitFor(() => expect(result.current.assets).toHaveLength(1));
+    renders.length = 0;
+
+    rerender({ sort: 'name' });
+
+    expect(renders.length).toBeGreaterThan(0);
+    expect(renders.filter((render) => !render.loading && render.count === 0)).toEqual([]);
+    await act(async () => {
+      finishNamePage?.({ assets: [{ id: 'asset-b' }], hasMore: false, nextOffset: null });
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.assets).toEqual([{ id: 'asset-b' }]);
+  });
+
+  it('refreshes quietly, keeping the list on screen and on failure', async () => {
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({ assets: [{ id: 'asset-a' }], hasMore: false, nextOffset: null })
+      .mockResolvedValueOnce({
+        assets: [{ id: 'asset-b' }, { id: 'asset-a' }],
+        hasMore: false,
+        nextOffset: null,
+      })
+      .mockRejectedValueOnce(new Error('offline'));
+    const { result } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.assets).toHaveLength(1));
+
+    act(() => result.current.revalidate());
+    expect(result.current.loading).toBe(false);
+    expect(result.current.refreshing).toBe(false);
+    await waitFor(() => expect(result.current.assets).toHaveLength(2));
+
+    await act(async () => result.current.revalidate());
+    expect(mockFetchLibraryPage).toHaveBeenCalledTimes(3);
+    expect(result.current.assets).toHaveLength(2);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('does not supersede a first load that is still in flight, so its failure still shows the notice', async () => {
+    let failFirstPage: ((error: Error) => void) | undefined;
+    mockFetchLibraryPage.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          failFirstPage = reject;
+        }),
+    );
+    const { result } = renderHook(() => useLibraryAssets(''));
+    expect(result.current.loading).toBe(true);
+
+    act(() => result.current.revalidate());
+    expect(mockFetchLibraryPage).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      failFirstPage?.(new Error('offline'));
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe('The Library could not be reached. Pull to try again.');
+  });
+
+  it('does not start a quiet refresh over a pull-to-refresh that is in flight', async () => {
+    let finishRefresh: ((page: unknown) => void) | undefined;
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({ assets: [{ id: 'asset-a' }], hasMore: false, nextOffset: null })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishRefresh = resolve;
+          }),
+      );
+    const { result } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.assets).toHaveLength(1));
+
+    act(() => result.current.refresh());
+    expect(result.current.refreshing).toBe(true);
+    act(() => result.current.revalidate());
+    expect(mockFetchLibraryPage).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      finishRefresh?.({ assets: [{ id: 'asset-b' }], hasMore: false, nextOffset: null });
+    });
+    expect(result.current.assets).toEqual([{ id: 'asset-b' }]);
+    expect(result.current.refreshing).toBe(false);
+  });
+
   it('hides an old account page immediately and ignores its late response', async () => {
     let finishFirstPage: ((page: unknown) => void) | undefined;
     mockFetchLibraryPage

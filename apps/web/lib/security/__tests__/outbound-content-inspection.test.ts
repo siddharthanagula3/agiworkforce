@@ -181,6 +181,21 @@ describe('outbound content inspection', () => {
     );
   });
 
+  it('will not merely warn on a share link, whatever the workspace asked for', async () => {
+    const verdict = await inspectOutboundContent({
+      channel: 'share',
+      value: { prompt: `deploy with ${SECRET}` },
+      userId: 'user-1',
+      organizationId: null,
+      resourceId: 'task-1',
+      resolveMode: async () => ({ mode: 'warn', organizationId: null }),
+    });
+
+    expect(verdict.action).toBe('redacted');
+    if (verdict.action !== 'redacted') return;
+    expect(JSON.stringify(verdict.value)).not.toContain(SECRET);
+  });
+
   it('keeps the warn mode the workspace chose on the channels without a floor', async () => {
     const verdict = await inspect({ text: `key ${SECRET}` }, 'warn');
     expect(verdict.action).toBe('allowed');

@@ -14,18 +14,16 @@ use std::path::{Path, PathBuf};
 /// Default: network is denied. Callers that legitimately need outbound access
 /// (npm install, git clone, curl APIs) must pass an allowing policy explicitly.
 ///
-/// `AllowExternal` is the policy a general network approval grants. It keeps
-/// the loopback interface and local Unix-domain sockets blocked, so an approved
-/// `curl` cannot turn into a request against a service bound to the developer's
-/// own machine. Seatbelt enforces that in the profile for `localhost` only: a
-/// host in an SBPL network filter is `*` or `localhost`, so `0.0.0.0` and the
-/// machine's other interface addresses cannot be named there. Bubblewrap has
-/// no address filter at all. For a command, the caller-side destination check
-/// covers both gaps: it refuses an internal target, `0.0.0.0` and the
-/// machine's own LAN addresses included, before any approval is offered. A
-/// long-lived program such as an MCP server never passes that check, so under
-/// this policy it reaches those addresses on macOS, and loopback and
-/// Unix-domain sockets as well on Linux.
+/// `AllowExternal` is the policy a general network approval grants. Seatbelt
+/// denies `localhost` and local Unix-domain sockets under it and nothing else:
+/// a host in an SBPL network filter is `*` or `localhost` (`sandbox-exec`
+/// rejects any other), so a link-local cloud metadata address, `0.0.0.0` and
+/// the machine's other interface addresses cannot be named there. Bubblewrap
+/// shares the host network namespace under it, so loopback and Unix-domain
+/// sockets stay reachable as well. The caller-side destination check refuses
+/// a command that names an internal target, but it reads only the written
+/// text: a name that resolves to an internal address, a redirect, or a
+/// program the command starts reaches whatever the backend leaves open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NetworkPolicy {
     #[default]
@@ -3118,6 +3116,26 @@ mod tests {
             let denied_at_the_top = entry_rule(&rules, &at_the_top("file-write*"), name)
                 .unwrap_or_else(|| panic!("missing {name} at the top\n{rules}"));
             assert!(denied < allowed && allowed < denied_at_the_top);
+        }
+    }
+
+    #[test]
+    fn every_network_address_filter_names_a_host_seatbelt_accepts() {
+        for policy in [
+            NetworkPolicy::Deny,
+            NetworkPolicy::AllowExternal,
+            NetworkPolicy::Allow,
+        ] {
+            let rules = seatbelt_network_rules(policy);
+            for marker in ["ip \"", "tcp \"", "udp \""] {
+                for filter in rules.split(marker).skip(1) {
+                    let host = filter.split(':').next().unwrap_or_default();
+                    assert!(
+                        matches!(host, "*" | "localhost"),
+                        "sandbox-exec refuses the whole profile over host {host:?}:\n{rules}"
+                    );
+                }
+            }
         }
     }
 

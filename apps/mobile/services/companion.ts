@@ -305,6 +305,11 @@ export function stopHealthChecks(): void {
   }
 }
 
+export function resumeReconnectCountdown(): void {
+  if (countdownInterval !== undefined || reconnectDebounceTimer !== undefined) return;
+  startReconnectCountdown();
+}
+
 export function stopReconnectRecovery(): void {
   if (countdownInterval !== undefined) {
     clearInterval(countdownInterval);

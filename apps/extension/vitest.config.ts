@@ -19,6 +19,7 @@ export default defineConfig({
       },
     },
     include: ['__tests__/**/*.test.ts'],
+    setupFiles: ['./__tests__/setup.ts'],
     restoreMocks: true,
   },
 });

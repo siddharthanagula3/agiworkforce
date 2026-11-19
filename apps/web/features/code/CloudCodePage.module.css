@@ -315,6 +315,50 @@ svg + .menuRowLabel {
   padding-bottom: 5px;
 }
 
+.railLocalItem {
+  position: relative;
+}
+
+.railLocalItem > .railLocalRow {
+  padding-right: 36px;
+}
+
+.railRowMenu {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  opacity: 0;
+}
+
+.railLocalItem:hover .railRowMenu,
+.railLocalItem:focus-within .railRowMenu,
+.railRowMenu[data-state='open'] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .railRowMenu {
+    opacity: 1;
+  }
+}
+
+.railSectionAction {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--chat-radius-sm);
+  background: transparent;
+  color: var(--chat-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.railSectionAction:hover {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
 .railLocalText {
   display: flex;
   overflow: hidden;
@@ -475,16 +519,47 @@ svg + .menuRowLabel {
 }
 
 .appBarSlot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
+  display: contents;
+}
+
+.appBarButton {
+  display: grid;
+  order: -1;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--chat-radius-md);
+  background: transparent;
+  color: var(--chat-text-primary);
+  cursor: pointer;
+}
+
+.appBarButton:hover {
+  background: var(--chat-surface-hover);
+}
+
+.appBarButton:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 2px;
 }
 
 .appBarTitle {
+  overflow: hidden;
+  min-width: 0;
   color: var(--chat-text-primary);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (pointer: coarse) {
+  .appBarButton {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .body {
@@ -500,6 +575,14 @@ svg + .menuRowLabel {
   flex-direction: column;
   min-width: 380px;
   min-height: 0;
+}
+
+.columnHidden {
+  display: none;
+}
+
+.bodyFloatHost {
+  position: relative;
 }
 
 .scroll {
@@ -520,6 +603,8 @@ svg + .menuRowLabel {
   justify-content: center;
   min-height: 0;
   padding-top: 12vh;
+  /* On a short screen the home content is taller than this area; without its own scroll it spills under the composer. */
+  overflow-y: auto;
 }
 
 .greeting {
@@ -2568,6 +2653,10 @@ svg + .menuRowLabel {
   font-size: 14px;
 }
 
+.setupChips {
+  display: contents;
+}
+
 .setupChip {
   display: inline-flex;
   align-items: center;
@@ -2807,6 +2896,176 @@ svg + .menuRowLabel {
 .wizardOptionCopy {
   margin: 0;
   color: var(--chat-text-secondary);
-  font-size: 14px;
+  font-size: 12px;
   line-height: 21px;
+}
+
+.ptyScreen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--chat-bg);
+  color: var(--chat-text-primary);
+  font-family: var(--chat-font-mono);
+  /* xterm draws its selection on canvas; it reads this as a resolved colour. */
+  caret-color: var(--chat-border-strong);
+}
+
+.ptyViewport {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 4px 16px;
+}
+
+.ptyStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+}
+
+@media (max-width: 767px) {
+  .center {
+    width: calc(100% - 32px);
+  }
+
+  .greetingArea {
+    padding: 16px 0;
+  }
+
+  .greetingArea > * {
+    margin-top: auto;
+    margin-bottom: auto;
+  }
+
+  .greeting {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .setupLinks {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .setupChips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .setupChip {
+    flex: 0 0 auto;
+    padding: 0 12px;
+    white-space: nowrap;
+  }
+
+  .chipRow {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .chipRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chipRow > * {
+    flex: 0 0 auto;
+  }
+
+  .chip {
+    white-space: nowrap;
+  }
+
+  .composerArea {
+    padding: 8px 0 max(12px, env(safe-area-inset-bottom));
+  }
+
+  .fieldRow {
+    padding: 10px 8px 6px 14px;
+  }
+
+  .controlRow {
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 0 8px 8px;
+  }
+
+  .controlRow > * {
+    flex-shrink: 0;
+  }
+
+  .controlRow > .controlSpacer {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .controlRow > :nth-last-child(2),
+  .controlRow > :only-child {
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .controlButton,
+  .localPermissionHint {
+    white-space: nowrap;
+  }
+
+  .controlButtonMode {
+    min-width: 0;
+  }
+}
+
+/* On the narrowest phones the placeholder is one size down so its whole
+   sentence fits beside the send button; the typed text keeps the field size. */
+@media (max-width: 339px) {
+  .input::placeholder {
+    font-size: 14px;
+  }
+}
+
+/* A short phone has room for the greeting, the usage row and the composer, not
+   for the links to the other Code surfaces as well. */
+@media (max-width: 767px) and (max-height: 620px) {
+  .setupLinks {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .headerButton,
+  .controlIconButton,
+  .sendButton,
+  .usageTrigger {
+    position: relative;
+    min-height: 0;
+  }
+
+  .appBarButton {
+    min-height: 0;
+  }
+
+  .headerButton::after,
+  .controlIconButton::after,
+  .sendButton::after {
+    position: absolute;
+    inset: -6px;
+    content: '';
+  }
+
+  .usageTrigger::after {
+    position: absolute;
+    inset: -8px;
+    content: '';
+  }
+
+  .header .headerButton {
+    width: 44px;
+    height: 44px;
+  }
 }

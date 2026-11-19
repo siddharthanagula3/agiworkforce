@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Switch, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { LifeBuoy, Plus } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
@@ -81,6 +81,18 @@ function SupportTicketList() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const generation = useRef(0);
+
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setComposing(false);
+        setSubject('');
+        setMessage('');
+        setIncludeDiagnostics(true);
+      },
+      [],
+    ),
+  );
 
   const load = useCallback(async (signal?: AbortSignal) => {
     generation.current += 1;
@@ -169,7 +181,7 @@ function SupportTicketList() {
     <SettingsScreenShell title="Support" backHref="/(app)/about">
       <SettingsInfo
         title="Raise a ticket"
-        body="Describe what went wrong. The support team replies here, and also by email to your account address."
+        body="Describe the problem. Support replies here and by email."
         icon={LifeBuoy}
       />
       {composing ? (

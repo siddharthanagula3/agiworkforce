@@ -252,7 +252,7 @@ describe('LiveVoiceSession', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('closes a known created session with its original bearer when answer setup fails', async () => {
+  it('closes a known created session with a bearer when answer setup fails', async () => {
     vi.spyOn(peer, 'setRemoteDescription').mockRejectedValueOnce(new Error('answer failed'));
     await expect(startSession()).rejects.toMatchObject({ code: 'connection_failed' });
     const [path, init] = fetchMock.mock.calls[1] as [string, RequestInit];
@@ -260,6 +260,34 @@ describe('LiveVoiceSession', () => {
     expect(init.credentials).toBe('omit');
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer voice-token');
     expect(tracks[0]!.stop).toHaveBeenCalled();
+  });
+
+  it('settles with a current token after the token used at start has expired', async () => {
+    let issued = 0;
+    const authority = createRequestAuthority({
+      userId: 'voice-user',
+      sessionId: 'voice-login',
+      isCurrent: () => true,
+      getToken: async () => `token-${++issued}`,
+    });
+    const session = await LiveVoiceSession.start({
+      authority,
+      voice: 'marin',
+      conversationId: null,
+      callbacks: callbacks(),
+    });
+    const startBearer = new Headers(
+      (fetchMock.mock.calls[0] as [string, RequestInit])[1].headers,
+    ).get('Authorization');
+    authority.retire();
+
+    await session.settle({ reason: 'close_requested', seconds: 30 });
+
+    const [path, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(path).toBe('/api/voice/live/sessions/live_1/close');
+    const closeBearer = new Headers(init.headers).get('Authorization');
+    expect(closeBearer).not.toBe(startBearer);
+    expect(closeBearer).toBe(`Bearer token-${issued}`);
   });
 
   it('asks the server for the reasoning level the user chose', async () => {

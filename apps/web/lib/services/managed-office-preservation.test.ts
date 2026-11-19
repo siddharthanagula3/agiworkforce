@@ -251,3 +251,71 @@ describe('editing document text that holds XML entities', () => {
     expect(xml).toContain('new value');
   });
 });
+
+describe('editing workbook cells with numeric strings', () => {
+  const ROWS =
+    '<row r="1"><c r="A1"><v>2</v></c>' +
+    '<c r="B1" t="inlineStr"><is><t>007</t></is></c>' +
+    '<c r="C1" t="inlineStr"><is><t>5</t></is></c></row>';
+
+  async function edit(cell: string, expected: string | number, value: string | number) {
+    const data = await workbookPackage(ROWS);
+    return editManagedWorkbook(
+      {
+        filename: 'codes.xlsx',
+        sha256: sha256(data),
+        edits: [{ sheet: 'Data', cell, expected, value }],
+      },
+      [attachment(data, XLSX_MIME, 'codes.xlsx')],
+    );
+  }
+
+  it('matches a numeric cell when the expected value is a numeric string', async () => {
+    const edited = await sheetXml((await edit('A1', '2', '15')).data);
+
+    expect(edited).toContain('<c r="A1"><v>15</v></c>');
+  });
+
+  it('matches a number stored as text when the expected value is that number', async () => {
+    const edited = await sheetXml((await edit('C1', 5, 6)).data);
+
+    expect(edited).toContain('<c r="C1"><v>6</v></c>');
+  });
+
+  it('keeps a code with leading zeros as text and does not equate it with its number', async () => {
+    const edited = await sheetXml((await edit('B1', '007', '008')).data);
+
+    expect(edited).toContain(
+      '<c r="B1" t="inlineStr"><is><t xml:space="preserve">008</t></is></c>',
+    );
+    await expect(edit('B1', 7, '008')).rejects.toThrow(/differs from the expected value/);
+  });
+
+  it('keeps a text cell as text when the new value is a numeric string', async () => {
+    const edited = await sheetXml((await edit('C1', '5', '6')).data);
+
+    expect(edited).toContain('<c r="C1" t="inlineStr"><is><t xml:space="preserve">6</t></is></c>');
+  });
+
+  it('writes a thirteen digit code and a decimal with trailing zeros as text', async () => {
+    const barcode = await sheetXml((await edit('A1', 2, '4006381333931')).data);
+    const section = await sheetXml((await edit('A1', 2, '3.10')).data);
+
+    expect(barcode).toContain(
+      '<c r="A1" t="inlineStr"><is><t xml:space="preserve">4006381333931</t></is></c>',
+    );
+    expect(section).toContain(
+      '<c r="A1" t="inlineStr"><is><t xml:space="preserve">3.10</t></is></c>',
+    );
+  });
+
+  it('writes a date and a long digit string as text', async () => {
+    const date = await sheetXml((await edit('A1', 2, '2026-11-15')).data);
+    const digits = await sheetXml((await edit('A1', 2, '12345678901234567890')).data);
+
+    expect(date).toContain('<c r="A1" t="inlineStr">');
+    expect(digits).toContain(
+      '<c r="A1" t="inlineStr"><is><t xml:space="preserve">12345678901234567890</t></is></c>',
+    );
+  });
+});

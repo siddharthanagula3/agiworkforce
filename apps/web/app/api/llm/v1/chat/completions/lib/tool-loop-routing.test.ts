@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { classifyToolLoopInputs } from './tool-loop-routing';
+import { classifyToolLoopInputs, withoutAnswerUiTool } from './tool-loop-routing';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 import { createMapSearchToolDefinition } from '@/lib/services/map-search-tool-service';
+import { answerUiToolDefinition } from '@/lib/services/answer-ui-tool-service';
+import { fileSearchToolDefinitions } from '@/lib/server/tools/file-search-tool';
+import { memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
+import { pluginDraftToolDefinition } from '@/lib/server/tools/plugin-draft-tool';
+import { scheduleToolDefinition } from '@/lib/server/tools/schedule-tool';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 
 const ASK_EVERY_TIME: ToolApprovalPolicy = 'ask_every_time';
@@ -43,7 +48,12 @@ describe('classifyToolLoopInputs', () => {
       hasMapSearchTools: false,
       hasPlaceTools: false,
       hasProductComparisonTools: false,
+      hasAnswerUiTools: false,
       hasDeviceStepTools: false,
+      hasFileSearchTools: false,
+      hasScheduleTools: false,
+      hasPluginDraftTools: false,
+      hasMemoryTools: false,
       shouldRun: true,
       approvalMode: 'manual',
     });
@@ -65,6 +75,29 @@ describe('classifyToolLoopInputs', () => {
     expect(required.approvalMode).toBe('auto');
   });
 
+  it('does not start the loop for the answer UI tool alone, and lets it run unasked on a loop turn', () => {
+    const result = classifyToolLoopInputs([], [answerUiToolDefinition()], 'autonomous');
+    expect(result.hasAnswerUiTools).toBe(true);
+    expect(result.shouldRun).toBe(false);
+    expect(result.approvalMode).toBe('auto');
+    expect(
+      classifyToolLoopInputs([], [answerUiToolDefinition(), webSearchToolDef()], 'autonomous')
+        .shouldRun,
+    ).toBe(true);
+    expect(
+      classifyToolLoopInputs([], [answerUiToolDefinition()], AUTO_APPROVE_READ_ONLY).approvalMode,
+    ).toBe('auto');
+  });
+
+  it('drops the answer UI tool from a turn that stays off the loop and keeps every other tool', () => {
+    const search = webSearchToolDef();
+    expect(withoutAnswerUiTool([answerUiToolDefinition()])).toBeUndefined();
+    expect(withoutAnswerUiTool([answerUiToolDefinition(), search])).toEqual([search]);
+    const untouched = [search];
+    expect(withoutAnswerUiTool(untouched)).toBe(untouched);
+    expect(withoutAnswerUiTool(undefined)).toBeUndefined();
+  });
+
   it('runs the loop for a device step, which only a suspended loop can carry out', () => {
     const result = classifyToolLoopInputs(
       [],
@@ -73,6 +106,22 @@ describe('classifyToolLoopInputs', () => {
     );
     expect(result.hasDeviceStepTools).toBe(true);
     expect(result.shouldRun).toBe(true);
+  });
+
+  it('runs the loop for a schedule, skill draft, project file or memory tool, which only the loop executes', () => {
+    const offers = [
+      memoryToolDefinitions(),
+      [scheduleToolDefinition()],
+      [pluginDraftToolDefinition()],
+      fileSearchToolDefinitions(),
+    ];
+    for (const tools of offers) {
+      expect(classifyToolLoopInputs([], tools, AUTO_APPROVE_READ_ONLY).shouldRun).toBe(true);
+      expect(
+        classifyToolLoopInputs([], [...tools, answerUiToolDefinition()], AUTO_APPROVE_READ_ONLY)
+          .shouldRun,
+      ).toBe(true);
+    }
   });
 
   it('runs web search without asking when the account auto-approves read-only work', () => {

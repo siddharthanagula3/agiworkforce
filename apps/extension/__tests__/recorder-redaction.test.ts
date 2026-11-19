@@ -92,12 +92,14 @@ function dispatch(message: Record<string, unknown>): Promise<{ actions?: Recorde
 async function recordInput(attributes: {
   type?: string;
   autocomplete?: string;
+  name?: string;
   value: string;
 }): Promise<RecordedAction | undefined> {
   document.body.innerHTML = '<input id="field">';
   const input = document.getElementById('field') as HTMLInputElement;
   if (attributes.type) input.type = attributes.type;
   if (attributes.autocomplete) input.setAttribute('autocomplete', attributes.autocomplete);
+  if (attributes.name) input.setAttribute('name', attributes.name);
   await dispatch({ type: 'START_RECORDING' });
   input.value = attributes.value;
   input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -132,7 +134,7 @@ describe('C-05 recorder value sanitization (content-script recorder)', () => {
     });
   });
 
-  describe('autocomplete-tagged sensitive fields are redacted to a placeholder', () => {
+  describe('autocomplete-tagged protected fields record no value', () => {
     it.each([
       ['cc-number', '4111111111111111'],
       ['cc-csc', '123'],
@@ -141,8 +143,25 @@ describe('C-05 recorder value sanitization (content-script recorder)', () => {
       ['new-password', 'secret'],
       ['one-time-code', '482931'],
       ['CURRENT-PASSWORD', 'x'],
-    ])('redacts %s', async (autocomplete, value) => {
-      expect((await recordInput({ autocomplete, value }))?.value).toBe('[REDACTED]');
+    ])('drops %s', async (autocomplete, value) => {
+      const action = await recordInput({ autocomplete, value });
+      expect(action).toBeDefined();
+      expect(action).not.toHaveProperty('value');
+    });
+  });
+
+  describe('fields the rest of the extension protects by name record no value', () => {
+    it.each([
+      ['otp', '123456'],
+      ['cvv', '737'],
+      ['ssn', '078-05-1120'],
+      ['pin', '4821'],
+      ['cardNumber', '4111111111111111'],
+    ])('drops a field named %s', async (name, value) => {
+      const action = await recordInput({ name, value });
+      expect(action).toBeDefined();
+      expect(action).not.toHaveProperty('value');
+      expect(JSON.stringify(action)).not.toContain(value);
     });
   });
 
@@ -176,5 +195,43 @@ describe('C-05 recorder value sanitization (content-script recorder)', () => {
     const action = await recordInput({ value: 'Hello, world!' });
     expect(action).toBeDefined();
     expect(action).not.toHaveProperty('value');
+  });
+});
+
+describe('recorded clicks name exactly one element', () => {
+  it('records a selector that matches only the clicked row, not the first look-alike', async () => {
+    document.body.innerHTML =
+      '<ul><li><button class="btn">Delete</button></li><li><button class="btn">Delete</button></li><li><button class="btn">Delete</button></li></ul>';
+    const third = document.querySelectorAll('button.btn')[2] as HTMLButtonElement;
+    const reported = vi.spyOn(chrome.runtime, 'sendMessage');
+    await dispatch({ type: 'START_RECORDING' });
+    third.click();
+    const { actions } = await dispatch({ type: 'STOP_RECORDING' });
+
+    const click = actions?.find((action) => action.type === 'click');
+    expect(click).toBeDefined();
+    expect(Array.from(document.querySelectorAll(click!.selector))).toEqual([third]);
+    expect(reported).toHaveBeenCalledWith({
+      type: 'RECORDING_ACTION',
+      action: expect.objectContaining({ type: 'click', selector: click!.selector }),
+    });
+    reported.mockRestore();
+  });
+
+  it('refuses to replay a click whose selector now matches several elements', async () => {
+    document.body.innerHTML =
+      '<button class="btn">Delete</button><button class="btn">Delete</button><button class="btn">Delete</button>';
+    const { domUtils } = await import('../src/utils');
+    vi.mocked(domUtils.safeClick).mockClear();
+
+    const response = (await dispatch({
+      type: 'RUN_PAGE_ACTIONS',
+      taskId: 'replay',
+      actions: [{ id: 'a1', type: 'click', selector: 'button.btn' }],
+    })) as { success?: boolean; error?: string };
+
+    expect(response.success).toBe(false);
+    expect(response.error).toMatch(/matches 3 elements/);
+    expect(domUtils.safeClick).not.toHaveBeenCalled();
   });
 });

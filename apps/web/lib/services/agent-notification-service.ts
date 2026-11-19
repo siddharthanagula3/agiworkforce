@@ -121,6 +121,22 @@ function describeAgentRunEvent(notice: AgentRunNotice): { title: string; body: s
   }
 }
 
+function isTerminalRunEvent(event: AgentRunNotice['event']): boolean {
+  return event === 'completed' || event === 'failed';
+}
+
+export function trackAgentRunOutcome(notice: Pick<AgentRunNotice, 'userId' | 'event'>): void {
+  if (!isTerminalRunEvent(notice.event)) return;
+  trackProductAnalyticsEvent(
+    { userId: notice.userId },
+    {
+      name: 'work_run_finished',
+      surface: 'web',
+      outcome: notice.event === 'completed' ? 'succeeded' : 'failed',
+    },
+  );
+}
+
 export async function notifyAgentRunEvent(
   db: DatabaseAdapter,
   notice: AgentRunNotice,
@@ -132,17 +148,8 @@ export async function notifyAgentRunEvent(
     // toggle and turned off from the same place, so it carries its own consent
     // and is not silenced by a preference set on a phone.
     const { title, body } = describeAgentRunEvent(notice);
-    const terminal = notice.event === 'completed' || notice.event === 'failed';
-    if (terminal) {
-      trackProductAnalyticsEvent(
-        { userId: notice.userId },
-        {
-          name: 'work_run_finished',
-          surface: 'web',
-          outcome: notice.event === 'completed' ? 'succeeded' : 'failed',
-        },
-      );
-    }
+    const terminal = isTerminalRunEvent(notice.event);
+    trackAgentRunOutcome(notice);
     await recordNotification(db, {
       userId: notice.userId,
       category: 'agent_run',
@@ -183,6 +190,20 @@ export interface ResearchReportNotice {
   title: string;
   status: string;
   sourcesConsulted: number;
+  conversationId?: string | null;
+  runId?: string | null;
+}
+
+function researchReadyPushData(notice: ResearchReportNotice): Record<string, string> {
+  return {
+    type: 'research_completed',
+    priority: 'normal',
+    route: RESEARCH_MOBILE_ROUTE,
+    target: 'research',
+    targetId: notice.reportId,
+    ...(notice.conversationId ? { conversationId: notice.conversationId } : {}),
+    ...(notice.runId ? { runId: notice.runId } : {}),
+  };
 }
 
 export async function notifyResearchReportSettled(
@@ -224,13 +245,15 @@ export async function notifyResearchReportSettled(
       {
         title,
         body,
-        data: {
-          type: completed ? 'task_completed' : 'agent_failed',
-          priority: completed ? 'normal' : 'critical',
-          route: RESEARCH_MOBILE_ROUTE,
-          target: 'research',
-          targetId: notice.reportId,
-        },
+        data: completed
+          ? researchReadyPushData(notice)
+          : {
+              type: 'agent_failed',
+              priority: 'critical',
+              route: RESEARCH_MOBILE_ROUTE,
+              target: 'research',
+              targetId: notice.reportId,
+            },
       },
       { expo: toExpo, web: true },
     ).catch(() => null);
@@ -264,6 +287,12 @@ export function cloudCodeTurnNotificationEvent(
       return null;
   }
 }
+
+const CODE_SESSION_PUSH_TYPE: Record<CloudCodeTurnNotificationEvent, string> = {
+  approval_required: 'code_session_needs_input',
+  completed: 'code_session_completed',
+  failed: 'code_session_failed',
+};
 
 export interface CloudCodeTurnNotice {
   userId: string;
@@ -309,7 +338,7 @@ export async function notifyCloudCodeTurnEvent(
         title,
         body,
         data: {
-          type: MOBILE_NOTIFICATION_TYPE[notice.event],
+          type: CODE_SESSION_PUSH_TYPE[notice.event],
           priority: MOBILE_PRIORITY[notice.event],
           codeSessionId: notice.sessionId,
         },
@@ -347,9 +376,19 @@ export async function notifyLocalCodeSessionEvent(
   notice: LocalCodeSessionNotice,
 ): Promise<{ pushed: boolean }> {
   try {
-    if (!(await loadAgentPushPreference(db, notice.userId))) return { pushed: false };
     const { title, body } = describeLocalCodeSessionEvent(notice);
-    const { event, rootId, threadId, approvalId } = notice.activity;
+    const { event, rootId, threadId, turnId, approvalId } = notice.activity;
+    const occurrence = event === 'approval_required' ? `${event}:${approvalId ?? ''}` : event;
+    await recordNotification(db, {
+      userId: notice.userId,
+      category: 'agent_run',
+      severity: FEED_SEVERITY[event],
+      title,
+      message: body,
+      dedupeKey: `local-code-turn:${turnId}:${occurrence}`,
+    });
+
+    if (!(await loadAgentPushPreference(db, notice.userId))) return { pushed: false };
     const result = await sendPushToUser(
       notice.userId,
       {

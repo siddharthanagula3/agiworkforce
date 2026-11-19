@@ -123,68 +123,73 @@ try {
   );
 
   const expectedFiles = new Set([...modules.map((module) => `${module}.ts`), 'index.ts']);
-  const existingFiles = new Set(collectRelativeFiles(outDir));
+  for (const targetDir of [
+    outDir,
+    path.join(repoRoot, 'crates', 'agiworkforce-protocol', 'bindings'),
+  ]) {
+    const existingFiles = new Set(collectRelativeFiles(targetDir));
 
-  if (mode === '--check') {
-    const missingFiles = [...expectedFiles].filter((file) => !existingFiles.has(file));
-    const staleFiles = [...existingFiles].filter((file) => !expectedFiles.has(file));
-    const changedFiles = [...expectedFiles].filter(
-      (file) =>
-        existingFiles.has(file) &&
-        !fs
-          .readFileSync(path.join(stagingDir, file))
-          .equals(fs.readFileSync(path.join(outDir, file))),
-    );
-    const drift = [
-      ...missingFiles.map((file) => `missing ${file}`),
-      ...staleFiles.map((file) => `stale ${file}`),
-      ...changedFiles.map((file) => `changed ${file}`),
-    ];
-    if (drift.length > 0) {
-      throw new Error(
-        `Protocol bindings are stale:\n${drift.map((item) => `- ${item}`).join('\n')}\n` +
-          'Run pnpm generate:protocol-types and include the generated tree.',
+    if (mode === '--check') {
+      const missingFiles = [...expectedFiles].filter((file) => !existingFiles.has(file));
+      const staleFiles = [...existingFiles].filter((file) => !expectedFiles.has(file));
+      const changedFiles = [...expectedFiles].filter(
+        (file) =>
+          existingFiles.has(file) &&
+          !fs
+            .readFileSync(path.join(stagingDir, file))
+            .equals(fs.readFileSync(path.join(targetDir, file))),
       );
-    }
-    console.log(
-      `Verified ${modules.length} protocol type modules in ${path.relative(repoRoot, outDir)}`,
-    );
-  } else {
-    fs.mkdirSync(outDir, { recursive: true });
-    const publishOrder = [...expectedFiles].sort((left, right) => {
-      if (left === 'index.ts') return 1;
-      if (right === 'index.ts') return -1;
-      return left.localeCompare(right);
-    });
-
-    for (const relativeFile of publishOrder) {
-      const destination = path.join(outDir, relativeFile);
-      fs.mkdirSync(path.dirname(destination), { recursive: true });
-      fs.copyFileSync(path.join(stagingDir, relativeFile), destination);
-    }
-
-    for (const relativeFile of existingFiles) {
-      if (!expectedFiles.has(relativeFile)) {
-        fs.rmSync(path.join(outDir, relativeFile), { force: true });
+      const drift = [
+        ...missingFiles.map((file) => `missing ${file}`),
+        ...staleFiles.map((file) => `stale ${file}`),
+        ...changedFiles.map((file) => `changed ${file}`),
+      ];
+      if (drift.length > 0) {
+        throw new Error(
+          `Protocol bindings are stale:\n${drift.map((item) => `- ${item}`).join('\n')}\n` +
+            'Run pnpm generate:protocol-types and include the generated tree.',
+        );
       }
-    }
+      console.log(
+        `Verified ${modules.length} protocol type modules in ${path.relative(repoRoot, targetDir)}`,
+      );
+    } else {
+      fs.mkdirSync(targetDir, { recursive: true });
+      const publishOrder = [...expectedFiles].sort((left, right) => {
+        if (left === 'index.ts') return 1;
+        if (right === 'index.ts') return -1;
+        return left.localeCompare(right);
+      });
 
-    function removeEmptyDirectories(dir) {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (entry.isDirectory()) {
-          const child = path.join(dir, entry.name);
-          removeEmptyDirectories(child);
-          if (fs.readdirSync(child).length === 0) {
-            fs.rmdirSync(child);
+      for (const relativeFile of publishOrder) {
+        const destination = path.join(targetDir, relativeFile);
+        fs.mkdirSync(path.dirname(destination), { recursive: true });
+        fs.copyFileSync(path.join(stagingDir, relativeFile), destination);
+      }
+
+      for (const relativeFile of existingFiles) {
+        if (!expectedFiles.has(relativeFile)) {
+          fs.rmSync(path.join(targetDir, relativeFile), { force: true });
+        }
+      }
+
+      function removeEmptyDirectories(dir) {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (entry.isDirectory()) {
+            const child = path.join(dir, entry.name);
+            removeEmptyDirectories(child);
+            if (fs.readdirSync(child).length === 0) {
+              fs.rmdirSync(child);
+            }
           }
         }
       }
-    }
-    removeEmptyDirectories(outDir);
+      removeEmptyDirectories(targetDir);
 
-    console.log(
-      `Generated ${modules.length} protocol type modules into ${path.relative(repoRoot, outDir)}`,
-    );
+      console.log(
+        `Generated ${modules.length} protocol type modules into ${path.relative(repoRoot, targetDir)}`,
+      );
+    }
   }
 } finally {
   fs.rmSync(stagingRoot, { recursive: true, force: true });

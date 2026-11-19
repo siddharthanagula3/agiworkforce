@@ -4,6 +4,8 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
 }));
 
 import React from 'react';
+import { Alert } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
@@ -22,6 +24,7 @@ jest.mock('../lib/mmkv', () => ({
     getString: jest.fn().mockReturnValue(undefined),
     getNumber: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -65,6 +68,8 @@ jest.mock('lucide-react-native', () => ({
   Search: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
   Check: jest.fn().mockReturnValue(null),
+  ChevronDown: jest.fn().mockReturnValue(null),
+  ChevronUp: jest.fn().mockReturnValue(null),
   Star: jest.fn().mockReturnValue(null),
   Brain: jest.fn().mockReturnValue(null),
   Cpu: jest.fn().mockReturnValue(null),
@@ -73,6 +78,10 @@ jest.mock('lucide-react-native', () => ({
   Cloud: jest.fn().mockReturnValue(null),
   ArrowUpCircle: jest.fn().mockReturnValue(null),
   Shuffle: jest.fn().mockReturnValue(null),
+  Zap: jest.fn().mockReturnValue(null),
+  DollarSign: jest.fn().mockReturnValue(null),
+  Eye: jest.fn().mockReturnValue(null),
+  FileText: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('react-native-reanimated', () => ({
@@ -92,6 +101,17 @@ jest.mock('react-native-reanimated', () => ({
   withRepeat: <T,>(value: T) => value,
   withTiming: <T,>(value: T) => value,
 }));
+
+jest.mock('react-native-gesture-handler', () => {
+  const pan: Record<string, () => unknown> = {};
+  for (const method of ['withTestId', 'runOnJS', 'activeOffsetX', 'failOffsetY', 'onUpdate']) {
+    pan[method] = () => pan;
+  }
+  return {
+    Gesture: { Pan: () => pan },
+    GestureDetector: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -131,12 +151,16 @@ import {
 import {
   EFFORT_DESCRIPTION,
   EFFORT_LABEL,
+  ROUTING_PROFILE_CHOICE_OPTIONS,
   getMinimumRequiredTier,
+  getModelMetadataById,
   getModelReasoning,
   getProviderOfferings,
   type ModelReasoning,
-  getAutoRoutingProfileTiers,
 } from '@agiworkforce/types';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
+import { isChineseHqProvider } from '@agiworkforce/compliance';
+import { CELLULAR_CONSENT_SETTING_PATH } from '../services/modelDownload';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 const LITE_MODEL_ID = requireLocalModel(
@@ -263,6 +287,37 @@ function renderPicker(overrides?: {
   );
 }
 
+type AlertButton = { text?: string; onPress?: () => void };
+
+async function answerDownloadPrompt(buttonText: 'Download' | 'Cancel') {
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  const buttons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as AlertButton[];
+  await act(async () => {
+    buttons.find((button) => button.text === buttonText)?.onPress?.();
+  });
+}
+
+function lastPrompt(): { title: string; message: string } {
+  const [title, message] = jest.mocked(Alert.alert).mock.calls.at(-1) as [string, string];
+  return { title, message };
+}
+
+function cloudAutoLabel(mode: (typeof AUTO_MODES)[number]): string {
+  const description =
+    mode.id === DEFAULT_AUTO_MODE_ID
+      ? ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === 'auto')!.description
+      : mode.description;
+  return `${mode.name}: ${description}`;
+}
+
+function revealRow(
+  screen: ReturnType<typeof renderPicker>,
+  model: { id: string; provider: string },
+) {
+  if (screen.queryByTestId(`model-row-${model.id}`)) return;
+  fireEvent.press(screen.getByTestId(`model-line-${model.provider}`));
+}
+
 describe('ModelPickerSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -271,9 +326,10 @@ describe('ModelPickerSheet', () => {
     resetModelStore();
     useTierStore.setState({ tier: 'free' });
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
-  it('explains an empty provider-funded catalogue and a retryable check failure', () => {
+  it('lists the Free models with no note when the promotional catalogue is empty, and keeps the retry for a failed check', () => {
     activateCloudAccount('account-a');
     useWaitlistStore.setState({ cloudUnlocked: true });
     useFreeQuotaCatalogueStore.setState({
@@ -282,22 +338,45 @@ describe('ModelPickerSheet', () => {
       loading: false,
       error: null,
     });
+    const freeModel = getModelListForCloudAccess(true, 'free', null).find(
+      (model) => model.surface === 'cloud_managed' && model.availability === 'ready',
+    );
+    if (!freeModel) throw new Error('The Free plan has no selectable Cloud model');
     const screen = renderPicker({ modelScope: 'cloud' });
 
-    expect(
-      screen.getByText('No provider-funded Free chat models are available right now.'),
-    ).toBeTruthy();
+    expect(screen.getByTestId(`model-line-${freeModel.provider}`)).toBeTruthy();
+    expect(screen.queryByText(/provider-funded Free chat models/)).toBeNull();
+    expect(screen.queryByText('No models are available right now.')).toBeNull();
     act(() => {
       useFreeQuotaCatalogueStore.setState({
-        error: 'Sign in again to check provider-funded Free models.',
+        error: 'Sign in again to check Free models.',
       });
     });
 
-    expect(screen.getByText('Sign in again to check provider-funded Free models.')).toBeTruthy();
-    expect(screen.getByLabelText('Retry loading provider-funded Free models')).toBeTruthy();
-    expect(
-      screen.queryByText('No provider-funded Free chat models are available right now.'),
-    ).toBeNull();
+    expect(screen.getByText('Sign in again to check Free models.')).toBeTruthy();
+    expect(screen.getByLabelText('Retry loading Free models')).toBeTruthy();
+  });
+
+  it('says plainly that no model is available when the account can choose none', () => {
+    activateCloudAccount('account-a');
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'no-such-plan' } as never);
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: null,
+      loading: false,
+      error: null,
+    });
+
+    try {
+      const screen = renderPicker({ modelScope: 'cloud' });
+
+      expect(screen.getByText('No models are available right now.')).toBeTruthy();
+      expect(screen.queryByText(/provider-funded Free chat models/)).toBeNull();
+      expect(screen.queryByText(/No models matching/)).toBeNull();
+    } finally {
+      useTierStore.setState({ tier: 'free' } as never);
+    }
   });
 
   it('keeps the Free catalogue notices away from a paid plan', () => {
@@ -308,19 +387,19 @@ describe('ModelPickerSheet', () => {
       account: captureCloudAccountEpoch(),
       catalogue: null,
       loading: false,
-      error: 'Sign in again to check provider-funded Free models.',
+      error: 'Sign in again to check Free models.',
     });
 
     try {
       const screen = renderPicker({ modelScope: 'cloud' });
       expect(screen.queryByText(/provider-funded Free/)).toBeNull();
-      expect(screen.queryByLabelText('Retry loading provider-funded Free models')).toBeNull();
+      expect(screen.queryByLabelText('Retry loading Free models')).toBeNull();
     } finally {
       useTierStore.setState({ tier: 'free' } as never);
     }
   });
 
-  it('explains a checked catalogue whose chat offers are all unavailable', () => {
+  it('adds no note above the Free models when every promotional chat offer is unavailable', () => {
     const chatOffering = Object.entries(getProviderOfferings()).find(
       ([, offering]) => offering.category === 'chat' && offering.quotaProbeProtocol === 'chat',
     );
@@ -355,9 +434,7 @@ describe('ModelPickerSheet', () => {
 
     const screen = renderPicker({ modelScope: 'cloud' });
 
-    expect(
-      screen.getByText('No provider-funded Free chat models are available right now.'),
-    ).toBeTruthy();
+    expect(screen.queryByText(/provider-funded Free chat models/)).toBeNull();
     expect(screen.queryByText(chatOffering[1].displayName)).toBeNull();
   });
 
@@ -383,7 +460,7 @@ describe('ModelPickerSheet', () => {
     const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     for (const mode of AUTO_MODES) {
-      expect(getByLabelText(`${mode.name}: ${mode.description}`)).toBeTruthy();
+      expect(getByLabelText(cloudAutoLabel(mode))).toBeTruthy();
     }
   });
 
@@ -391,6 +468,7 @@ describe('ModelPickerSheet', () => {
     const { queryByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     for (const mode of AUTO_MODES) {
+      expect(queryByLabelText(cloudAutoLabel(mode))).toBeNull();
       expect(queryByLabelText(`${mode.name}: ${mode.description}`)).toBeNull();
     }
   });
@@ -403,6 +481,22 @@ describe('ModelPickerSheet', () => {
       'Auto: Automatically routes each message to the best model for the task, your plan, and cost',
     );
     expect(autoCard.props.accessibilityState.selected).toBe(true);
+  });
+
+  it('checks again what is on the device each time the sheet opens', () => {
+    const BottomSheet = jest.requireMock('@gorhom/bottom-sheet').default as jest.Mock;
+    renderPicker();
+    const { hydrateInstalledModels } = useModelInstallStore.getState();
+    jest.mocked(hydrateInstalledModels).mockClear();
+    const sheetProps = BottomSheet.mock.calls.at(-1)?.[0] as {
+      onAnimate: (fromIndex: number, toIndex: number) => void;
+    };
+
+    act(() => sheetProps.onAnimate(-1, 0));
+    expect(hydrateInstalledModels).toHaveBeenCalledTimes(1);
+
+    act(() => sheetProps.onAnimate(0, -1));
+    expect(hydrateInstalledModels).toHaveBeenCalledTimes(1);
   });
 
   it('renders on-device model names from the local catalog', () => {
@@ -421,19 +515,226 @@ describe('ModelPickerSheet', () => {
     expect(queryByLabelText(/sign in required/i)).toBeNull();
   });
 
-  it('sections cloud models by capability tier, not by raw provider', () => {
-    const { getByText, queryByText, getAllByText } = renderPicker({ modelScope: 'all' });
-
-    const firstLocked = LOCKED_CLOUD_MODELS[0]!;
-    const tierLabel = getAutoRoutingProfileTiers().find(
-      (tier) => tier.profile === firstLocked.tier,
-    )?.label;
+  it('keeps on-device models in their own group beside the cloud models', () => {
+    const { getByText, getAllByText } = renderPicker({ modelScope: 'all' });
 
     expect(getByText('On device')).toBeTruthy();
-    expect(tierLabel).toBeTruthy();
-    expect(getByText(tierLabel!)).toBeTruthy();
-    expect(queryByText(firstLocked.providerLabel)).toBeNull();
     expect(getAllByText('Sign in').length).toBeGreaterThan(0);
+  });
+
+  it('shows one cloud model per provider and opens the rest from its dropdown', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+    const provider = cloudModels.find(
+      (model) => cloudModels.filter((other) => other.provider === model.provider).length > 1,
+    )!.provider;
+    const line = cloudModels.filter((model) => model.provider === provider);
+    const screen = renderPicker({ modelScope: 'cloud' });
+    const shown = () => line.filter((model) => screen.queryByTestId(`model-row-${model.id}`));
+
+    expect(shown()).toHaveLength(1);
+    expect(screen.getByTestId(`model-line-${provider}`).props.accessibilityState.expanded).toBe(
+      false,
+    );
+
+    fireEvent.press(screen.getByTestId(`model-line-${provider}`));
+
+    expect(shown()).toHaveLength(line.length);
+    expect(screen.getByTestId(`model-line-${provider}`).props.accessibilityState.expanded).toBe(
+      true,
+    );
+
+    fireEvent.press(screen.getByTestId(`model-line-${provider}`));
+
+    expect(shown()).toHaveLength(1);
+  });
+
+  it('offers no dropdown for a provider with a single model', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+    const single = cloudModels.find(
+      (model) => cloudModels.filter((other) => other.provider === model.provider).length === 1,
+    );
+    if (!single) throw new Error('The mobile catalogue has no single-model provider');
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    expect(screen.getByTestId(`model-row-${single.id}`)).toBeTruthy();
+    expect(screen.queryByTestId(`model-line-${single.provider}`)).toBeNull();
+  });
+
+  it('shows the selected model as its provider row, then the one used last', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed' && model.availability !== 'locked',
+    );
+    const provider = cloudModels.find(
+      (model) => cloudModels.filter((other) => other.provider === model.provider).length > 1,
+    )!.provider;
+    const line = cloudModels.filter((model) => model.provider === provider);
+    const elsewhere = cloudModels.find((model) => model.provider !== provider)!;
+    const lastInLine = line[line.length - 1]!;
+
+    useModelStore.getState().setModel(lastInLine.id);
+    const selected = renderPicker({ modelScope: 'cloud' });
+    expect(
+      selected.getByTestId(`model-row-${lastInLine.id}`).props.accessibilityState.selected,
+    ).toBe(true);
+    selected.unmount();
+
+    useModelStore.getState().setModel(elsewhere.id);
+    const remembered = renderPicker({ modelScope: 'cloud' });
+    expect(remembered.getByTestId(`model-row-${lastInLine.id}`)).toBeTruthy();
+    expect(
+      remembered.getByTestId(`model-row-${lastInLine.id}`).props.accessibilityState.selected,
+    ).toBe(false);
+    expect(remembered.queryByText('Recent')).toBeNull();
+  });
+
+  it('starts a provider nobody has used on the tier Auto defaults to', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const everydayTier = AUTO_MODES.find((mode) => mode.id === DEFAULT_AUTO_MODE_ID)!.tier;
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed' && model.availability !== 'locked',
+    );
+    const mixed = cloudModels.find(
+      (model) =>
+        model.tier !== everydayTier &&
+        cloudModels.some(
+          (other) => other.provider === model.provider && other.tier === everydayTier,
+        ),
+    );
+    if (!mixed) throw new Error('No provider mixes the everyday tier with another');
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    const shown = cloudModels.filter(
+      (model) => model.provider === mixed.provider && screen.queryByTestId(`model-row-${model.id}`),
+    );
+    expect(shown).toHaveLength(1);
+    expect(shown[0]!.tier).toBe(everydayTier);
+  });
+
+  it('offers Auto alone above the models, with no routing choices under it', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    useModelStore.setState({ selectedModel: DEFAULT_AUTO_MODE_ID });
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    for (const option of ROUTING_PROFILE_CHOICE_OPTIONS) {
+      expect(screen.queryByLabelText(`Auto, ${option.label}: ${option.description}`)).toBeNull();
+    }
+    expect(screen.queryByTestId('model-routing-profiles')).toBeNull();
+    expect(
+      screen.getByText(
+        ROUTING_PROFILE_CHOICE_OPTIONS.find((option) => option.choice === 'auto')!.description,
+      ),
+    ).toBeTruthy();
+  });
+
+  it('narrows the list to the models a filter describes, and back when it is turned off', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+    const economy = cloudModels.filter((model) => model.tier === 'economy');
+    const pricier = cloudModels.filter((model) => model.tier !== 'economy');
+    expect(economy.length).toBeGreaterThan(0);
+    expect(pricier.length).toBeGreaterThan(0);
+    const screen = renderPicker({ modelScope: 'cloud' });
+    const filter = screen.getByTestId('model-filter-economy');
+    expect(filter.props.accessibilityState.selected).toBe(false);
+
+    fireEvent.press(filter);
+
+    expect(screen.getByTestId('model-filter-economy').props.accessibilityState.selected).toBe(true);
+    for (const model of economy) expect(screen.getByTestId(`model-row-${model.id}`)).toBeTruthy();
+    for (const model of pricier) expect(screen.queryByTestId(`model-row-${model.id}`)).toBeNull();
+    expect(screen.queryByTestId(`model-line-${economy[0]!.provider}`)).toBeNull();
+
+    fireEvent.press(screen.getByTestId('model-filter-economy'));
+
+    expect(screen.getByTestId(`model-line-${economy[0]!.provider}`)).toBeTruthy();
+  });
+
+  it('keeps only the models that match every filter that is on', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+    const both = cloudModels.filter((model) => model.tier === 'economy' && model.supportsVision);
+    const onlyOne = cloudModels.filter(
+      (model) => (model.tier === 'economy') !== model.supportsVision,
+    );
+    expect(onlyOne.length).toBeGreaterThan(0);
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    fireEvent.press(screen.getByTestId('model-filter-economy'));
+    fireEvent.press(screen.getByTestId('model-filter-images'));
+
+    for (const model of both) expect(screen.getByTestId(`model-row-${model.id}`)).toBeTruthy();
+    for (const model of onlyOne) expect(screen.queryByTestId(`model-row-${model.id}`)).toBeNull();
+    if (both.length === 0) expect(screen.getByTestId('model-filters-empty')).toBeTruthy();
+  });
+
+  it('lists the fastest models at their lowest effort under Instant and picks one that way', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const cloudModels = getModelListForCloudAccess(true, 'max').filter(
+      (model) => model.surface === 'cloud_managed',
+    );
+    const fastest = cloudModels.filter(
+      (model) => getModelMetadataById(model.id)?.speed === 'very-fast',
+    );
+    const slower = cloudModels.filter(
+      (model) => getModelMetadataById(model.id)?.speed !== 'very-fast',
+    );
+    const pick = fastest.find(
+      (model) =>
+        model.availability !== 'locked' && sortedEfforts(getModelReasoning(model.id)).length > 1,
+    );
+    expect(pick).toBeDefined();
+    const lowest = sortedEfforts(getModelReasoning(pick!.id))[0]!;
+    const screen = renderPicker({ modelScope: 'cloud', conversationId: 'conv-1' });
+
+    fireEvent.press(screen.getByTestId('model-filter-instant'));
+
+    for (const model of fastest) expect(screen.getByTestId(`model-row-${model.id}`)).toBeTruthy();
+    for (const model of slower) expect(screen.queryByTestId(`model-row-${model.id}`)).toBeNull();
+    expect(
+      within(screen.getByTestId(`model-row-${pick!.id}`)).getByText(effortLabel(lowest)),
+    ).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId(`model-row-${pick!.id}`));
+
+    expect(useModelStore.getState().selectedModel).toBe(pick!.id);
+    expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe(lowest);
+  });
+
+  it('offers no filters for on-device models', () => {
+    const screen = renderPicker();
+
+    expect(screen.queryByTestId('model-filters')).toBeNull();
+  });
+
+  it('carries no explanatory line under the title and no description on a model row', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+    const screen = renderPicker({ modelScope: 'cloud' });
+
+    expect(screen.queryByText(/managed separately/)).toBeNull();
+    expect(screen.queryByText(/^Best for /)).toBeNull();
+    expect(screen.queryByText(/ context · /)).toBeNull();
+    expect(screen.queryByText(/ provider$/)).toBeNull();
+    expect(screen.queryByLabelText(/^Accepts /)).toBeNull();
   });
 
   it('marks the selected local model row as selected via accessibilityState', () => {
@@ -493,6 +794,7 @@ describe('ModelPickerSheet', () => {
     expect(queryByTestId('model-picker-loading')).toBeNull();
 
     fireEvent.press(getByLabelText(/AGI Lite/));
+    await answerDownloadPrompt('Download');
 
     expect(prepareModel).toHaveBeenCalledTimes(1);
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
@@ -522,6 +824,7 @@ describe('ModelPickerSheet', () => {
     });
 
     fireEvent.press(getByLabelText(/AGI Lite/));
+    await answerDownloadPrompt('Download');
     expect(prepareModel).toHaveBeenCalledTimes(1);
     useModelStore.setState({ selectedModel: 'newer-selection' });
     await act(async () => {
@@ -555,6 +858,7 @@ describe('ModelPickerSheet', () => {
     });
 
     fireEvent.press(getByLabelText(/AGI Lite/));
+    await answerDownloadPrompt('Download');
     fireEvent.press(getByLabelText(/AGI Standard/));
     await act(async () => {
       completions[0]?.();
@@ -562,6 +866,95 @@ describe('ModelPickerSheet', () => {
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(DEFAULT_LOCAL_MODEL_ID);
+  });
+
+  describe('downloading an on-device model', () => {
+    const prepareModel = jest.fn(() => Promise.resolve());
+
+    beforeEach(() => {
+      prepareModel.mockClear();
+      useModelInstallStore.setState({
+        installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+        readySystemModelIds: [],
+        jobs: {},
+        allowCellularDownloads: false,
+        prepareModel,
+      });
+    });
+
+    it('asks first, naming the model and its size, and downloads only after Download', async () => {
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+
+      const { title, message } = lastPrompt();
+      expect(title).toBe(`Download ${LITE_MODEL!.name}?`);
+      expect(message).toContain(formatAttachmentSize(LITE_MODEL!.fileSizeBytes!));
+      expect(message).toContain('starts downloading now');
+      expect(message).toContain('storage');
+      expect(message).not.toContain('mobile data');
+      expect(prepareModel).not.toHaveBeenCalled();
+
+      await answerDownloadPrompt('Download');
+      expect(prepareModel).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts nothing when the person cancels', async () => {
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await answerDownloadPrompt('Cancel');
+
+      expect(prepareModel).not.toHaveBeenCalled();
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    });
+
+    it('says the download will use mobile data when the phone is on mobile data and allows it', async () => {
+      useModelInstallStore.setState({ allowCellularDownloads: true });
+      jest.mocked(NetInfo.fetch).mockResolvedValueOnce({
+        type: 'cellular',
+        isConnected: true,
+        isInternetReachable: true,
+        details: { isConnectionExpensive: true, cellularGeneration: '5g', carrier: null },
+      } as never);
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+
+      expect(lastPrompt().message).toContain('mobile data');
+      expect(prepareModel).not.toHaveBeenCalled();
+    });
+
+    it('starts nothing and points at Wi-Fi when mobile data is not allowed for downloads', async () => {
+      jest.mocked(NetInfo.fetch).mockResolvedValueOnce({
+        type: 'cellular',
+        isConnected: true,
+        isInternetReachable: true,
+        details: { isConnectionExpensive: true, cellularGeneration: '5g', carrier: null },
+      } as never);
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+
+      expect(lastPrompt().title).toBe('Wi-Fi needed');
+      expect(lastPrompt().message).toContain(CELLULAR_CONSENT_SETTING_PATH);
+      expect(prepareModel).not.toHaveBeenCalled();
+    });
   });
 
   it('calls onSelect callback instead of store when provided', () => {
@@ -677,11 +1070,10 @@ describe('ModelPickerSheet', () => {
     useTierStore.setState({ tier: 'max' });
     const cloudModel = LOCKED_CLOUD_MODELS[0]!;
     const renderedName = getModelByIdForCloudAccess(cloudModel.id, true, 'max')!.name;
-    const { getAllByLabelText, getByText } = renderPicker({ modelScope: 'cloud' });
+    const screen = renderPicker({ modelScope: 'cloud' });
+    revealRow(screen, cloudModel);
 
-    expect(getByText('AGI Cloud models are managed separately from Local Mode.')).toBeTruthy();
-
-    fireEvent.press(getAllByLabelText(renderedName)[0]!);
+    fireEvent.press(screen.getAllByLabelText(renderedName)[0]!);
 
     expect(useModelStore.getState().selectedModel).toBe(cloudModel.id);
     expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
@@ -701,8 +1093,9 @@ describe('ModelPickerSheet', () => {
     expect(maxOnlyForPro?.detailLabel).toBe('Upgrade required');
     expect(maxOnlyForMax?.availability).toBe('ready');
 
-    const { getByText } = renderPicker({ modelScope: 'cloud' });
-    fireEvent.press(getByText(maxOnlyForPro!.name));
+    const screen = renderPicker({ modelScope: 'cloud' });
+    revealRow(screen, MAX_ONLY_MODEL);
+    fireEvent.press(screen.getByText(maxOnlyForPro!.name));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
@@ -732,14 +1125,16 @@ describe('ModelPickerSheet', () => {
     useTierStore.setState({ tier: 'pro' });
 
     const maxOnlyModel = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'pro')!;
-    const { getAllByText, getByLabelText, queryByText } = renderPicker({ modelScope: 'cloud' });
+    const screen = renderPicker({ modelScope: 'cloud' });
+    revealRow(screen, MAX_ONLY_MODEL);
 
-    const row = getByLabelText(
+    const row = screen.getByLabelText(
       `${maxOnlyModel.name}, upgrade required, ${maxOnlyModel.lockReason}`,
     );
     expect(row.props.accessibilityHint).toBe('Opens plan upgrade options');
-    expect(getAllByText('Upgrade').length).toBeGreaterThan(0);
-    expect(queryByText('Sign in')).toBeNull();
+    expect(screen.getAllByText('Upgrade').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Sign in')).toBeNull();
+    expect(screen.queryByText(maxOnlyModel.lockReason!)).toBeNull();
   });
 
   it('suppresses the selected checkmark when the selected cloud model is tier-locked', () => {
@@ -751,9 +1146,10 @@ describe('ModelPickerSheet', () => {
     });
 
     const maxOnlyModel = getModelByIdForCloudAccess(MAX_ONLY_MODEL.id, true, 'pro')!;
-    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
+    const screen = renderPicker({ modelScope: 'cloud' });
+    revealRow(screen, MAX_ONLY_MODEL);
 
-    const row = getByLabelText(
+    const row = screen.getByLabelText(
       `${maxOnlyModel.name}, upgrade required, ${maxOnlyModel.lockReason}`,
     );
     expect(row.props.accessibilityState.selected).toBe(false);
@@ -855,7 +1251,7 @@ describe('ModelPickerSheet', () => {
     }
   });
 
-  it('renders a four-step model as a segmented slider: labelled pill, dots, and the trade-off', () => {
+  it('renders a four-step model as a slider: the level named above the track, a dot for every other step, the trade-off read out not printed', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel(EXACT_EFFORT_MODEL.id);
@@ -875,28 +1271,32 @@ describe('ModelPickerSheet', () => {
       const label = effortLabel(effort);
       const tier = getByLabelText(`Reasoning effort ${label}`);
       expect(tier.props.accessibilityHint).toBe(effortDescription(effort));
+      expect(tier.props.accessibilityState.selected).toBe(effort === selected);
       if (effort === selected) {
-        expect(within(tier).getByText(label)).toBeTruthy();
         expect(queryByTestId(`model-picker-effort-${effort}-dot`)).toBeNull();
       } else {
-        expect(within(tier).queryByText(label)).toBeNull();
         expect(getByTestId(`model-picker-effort-${effort}-dot`)).toBeTruthy();
       }
     }
-    expect(getByTestId('model-picker-effort-description').props.children).toBe(
-      EFFORT_DESCRIPTION[selected],
-    );
+    expect(getByTestId('model-picker-effort-level').props.children).toBe(effortLabel(selected));
+    expect(queryByTestId('model-picker-effort-description')).toBeNull();
+    const ends = getByTestId('model-picker-effort-ends', { includeHiddenElements: true });
+    expect(
+      within(ends).getByText(effortLabel(efforts[0]!), { includeHiddenElements: true }),
+    ).toBeTruthy();
+    expect(
+      within(ends).getByText(effortLabel(efforts[efforts.length - 1]!), {
+        includeHiddenElements: true,
+      }),
+    ).toBeTruthy();
 
     const next = efforts.find((effort) => effort !== selected)!;
     fireEvent.press(getByTestId(`model-picker-effort-${next}`));
 
-    expect(
-      within(getByTestId(`model-picker-effort-${next}`)).getByText(effortLabel(next)),
-    ).toBeTruthy();
+    expect(getByTestId('model-picker-effort-level').props.children).toBe(effortLabel(next));
+    expect(queryByTestId(`model-picker-effort-${next}-dot`)).toBeNull();
     expect(getByTestId(`model-picker-effort-${selected}-dot`)).toBeTruthy();
-    expect(getByTestId('model-picker-effort-description').props.children).toBe(
-      effortDescription(next),
-    );
+    expect(queryByTestId('model-picker-effort-description')).toBeNull();
   });
 
   it('shows a thinking toggle and no effort selector for a thinking_toggle model', () => {
@@ -906,7 +1306,12 @@ describe('ModelPickerSheet', () => {
     const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(queryByTestId('model-picker-effort-selector')).toBeNull();
-    fireEvent.press(getByLabelText(`${THINKING_TOGGLE_MODEL.name}, selected`));
+    const turnedOff = isChineseHqProvider(
+      getModelMetadataById(THINKING_TOGGLE_MODEL.id)?.provider ?? '',
+    )
+      ? ', turned off for your account'
+      : '';
+    fireEvent.press(getByLabelText(`${THINKING_TOGGLE_MODEL.name}, selected${turnedOff}`));
     expect(getByLabelText(`Thinking mode for ${THINKING_TOGGLE_MODEL.name}`)).toBeTruthy();
   });
 
@@ -914,14 +1319,16 @@ describe('ModelPickerSheet', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel(EFFORT_MODEL.id);
-    const { getByLabelText, getByTestId } = renderPicker({
+    const screen = renderPicker({
       modelScope: 'cloud',
       conversationId: 'conv-1',
     });
+    const { getByLabelText, getByTestId } = screen;
 
     fireEvent.press(getByLabelText(`Reasoning effort ${effortLabel('max')}`));
     expect(useAgentControlStore.getState().resolve('conv-1', null).effort).toBe('max');
 
+    revealRow(screen, CLAMP_TARGET_MODEL);
     fireEvent.press(getByTestId(`model-row-${CLAMP_TARGET_MODEL.id}`));
 
     const targetDefault = getModelReasoning(CLAMP_TARGET_MODEL.id).defaultEffort!;
@@ -977,8 +1384,11 @@ describe('ModelPickerSheet', () => {
         (model.provider === 'openai' || model.provider === 'anthropic'),
     );
     expect(providerModels.length).toBeGreaterThan(0);
-    for (const model of providerModels) {
-      expect(getByTestId(`model-row-${model.id}`)).toBeTruthy();
+    for (const provider of new Set(providerModels.map((model) => model.provider))) {
+      fireEvent.press(getByTestId(`model-line-${provider}`));
+      for (const model of providerModels.filter((entry) => entry.provider === provider)) {
+        expect(getByTestId(`model-row-${model.id}`)).toBeTruthy();
+      }
     }
     expect(queryByText('Coming soon')).toBeNull();
   });

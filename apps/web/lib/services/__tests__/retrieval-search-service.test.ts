@@ -32,7 +32,8 @@ vi.mock('@/lib/services/retrieval-embedding-service', async (importOriginal) => 
   };
 });
 
-const { buildTsQuery, createPostgresSearchProvider } = await import('../retrieval-search-service');
+const { buildTsQuery, createPostgresSearchProvider, searchAttachedFiles } =
+  await import('../retrieval-search-service');
 const { RetrievalEmbeddingError } = await import('@/lib/services/retrieval-embedding-service');
 const { toSearchDocumentResults } = await import('../retrieval-search-results');
 const { passagesFromIndexedHits } = await import('../project-knowledge-retrieval');
@@ -436,5 +437,41 @@ describe('documents holding Google user data', () => {
     const [sql] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
     expect(sql).not.toContain('and not (exists (');
     expect(sql).toContain('as google_user_data');
+  });
+});
+
+describe('searchAttachedFiles', () => {
+  const ATTACHED = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+
+  it("ranks the conversation's attached files by keyword alone, without a query embedding", async () => {
+    const { query, adapter } = scopedDb({ embeddingsPresent: true });
+
+    await searchAttachedFiles(
+      { db: adapter, userId: 'user-1', organizationId: null },
+      { text: 'quarterly ledger', assetIds: ATTACHED, limit: 8, maxPerSource: 2 },
+    );
+
+    expect(mocks.embed).not.toHaveBeenCalled();
+    expect(query.mock.calls.some(([sql]) => String(sql).includes('as present'))).toBe(false);
+    const [sql, params] = query.mock.calls.at(-1) as unknown as [string, unknown[]];
+    expect(sql).toContain('lexical as (');
+    expect(sql).not.toContain('semantic as (');
+    expect(sql).toContain('c.source_id = any($4::uuid[])');
+    expect(params[2]).toEqual(['library_file']);
+    expect(params[3]).toEqual(ATTACHED);
+    expect(params[5]).toBe('quarterly | ledger');
+  });
+
+  it('runs nothing when the conversation has no attached file', async () => {
+    const { query, adapter } = scopedDb({ embeddingsPresent: true });
+
+    expect(
+      await searchAttachedFiles(
+        { db: adapter, userId: 'user-1', organizationId: null },
+        { text: 'ledger', assetIds: [], limit: 8 },
+      ),
+    ).toEqual([]);
+    expect(query).not.toHaveBeenCalled();
+    expect(mocks.readRegion).not.toHaveBeenCalled();
   });
 });

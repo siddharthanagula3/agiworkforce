@@ -75,13 +75,15 @@ describe('the entry point', () => {
     expect(screen.getByRole('button', { name: 'Start studying' })).toBeDisabled();
   });
 
-  it('shows what the model will be told before the session starts', async () => {
+  it('keeps the tutoring instruction off the screen while a topic is typed', async () => {
     const user = userEvent.setup();
     render(<StudyPage api={api()} createConversation={vi.fn()} />);
 
     await user.type(screen.getByPlaceholderText(/eigenvalues/i), 'The Krebs cycle');
 
-    expect(screen.getByText(/The user is studying The Krebs cycle/)).toBeVisible();
+    expect(screen.queryByText(/The user is studying/)).toBeNull();
+    expect(screen.queryByText(/quiz/i)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start studying' })).toBeEnabled();
   });
 });
 

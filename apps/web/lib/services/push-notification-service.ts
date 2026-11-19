@@ -8,7 +8,12 @@ import { recordNotificationDelivery, type NotificationChannel } from '@/lib/obse
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendWebPushToUser } from './web-push-service';
 import { QuietHoursUnreadableError, heldByQuietHours } from './quiet-hours-service';
-import { MobilePushPreferencesSchema, mobilePushWantsEvent } from '@agiworkforce/cloud-contracts';
+import {
+  MobilePushPreferencesSchema,
+  isOptInPushEvent,
+  mobilePushWantsEvent,
+  type MobilePushPreferences,
+} from '@agiworkforce/cloud-contracts';
 import {
   isDateWithinQuietHours,
   isQuietHoursExemptNotification,
@@ -31,6 +36,7 @@ export interface PushDeliveryResult {
   invalidated: number;
   error?: string;
   deferred?: boolean;
+  transportFailures?: number;
 }
 
 interface ExpoTicket {
@@ -51,16 +57,49 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return chunks;
 }
 
+// An app version that predates one of these types files it under its
+// predecessor, so a device that never named the type is asked about that one,
+// and quiet hours treat it the way they treat the predecessor.
+const PUSH_TYPE_PREDECESSORS: Readonly<Record<string, string>> = {
+  research_completed: 'task_completed',
+  code_session_completed: 'task_completed',
+  code_session_failed: 'agent_failed',
+  code_session_needs_input: 'agent_approval_needed',
+};
+
+function predecessorOf(notificationType: string | undefined): string | undefined {
+  return notificationType !== undefined && Object.hasOwn(PUSH_TYPE_PREDECESSORS, notificationType)
+    ? PUSH_TYPE_PREDECESSORS[notificationType]
+    : undefined;
+}
+
+function quietHoursTypeOf(notificationType: string | undefined): string | undefined {
+  return predecessorOf(notificationType) ?? notificationType;
+}
+
+function preferenceTypeOf(
+  preferences: MobilePushPreferences,
+  notificationType: string | undefined,
+): string | undefined {
+  if (notificationType === undefined || Object.hasOwn(preferences.eventTypes, notificationType)) {
+    return notificationType;
+  }
+  return predecessorOf(notificationType) ?? notificationType;
+}
+
 export function deviceAcceptsNotice(
   preferences: unknown,
   notificationType: string | undefined,
   now: Date,
-  quietHoursType: string | undefined = notificationType,
+  quietHoursType: string | undefined = quietHoursTypeOf(notificationType),
 ): boolean {
-  if (preferences === null || preferences === undefined) return true;
+  const optIn = isOptInPushEvent(notificationType);
+  if (preferences === null || preferences === undefined) return !optIn;
   const parsed = MobilePushPreferencesSchema.safeParse(preferences);
-  if (!parsed.success) return true;
-  if (!mobilePushWantsEvent(parsed.data, notificationType)) return false;
+  if (!parsed.success) return !optIn;
+  if (!mobilePushWantsEvent(parsed.data, preferenceTypeOf(parsed.data, notificationType))) {
+    return false;
+  }
   if (isQuietHoursExemptNotification(quietHoursType)) return true;
   const { quietHours } = normalizeTimeFocusPreferences(
     { quietHours: parsed.data.quietHours },
@@ -73,7 +112,7 @@ export async function getPushTokensForUser(
   userId: string,
   notificationType?: string,
   now: Date = new Date(),
-  quietHoursType: string | undefined = notificationType,
+  quietHoursType: string | undefined = quietHoursTypeOf(notificationType),
 ): Promise<string[]> {
   const rows = await getNeonDb().query<{ push_token: string; push_preferences: unknown }>(
     `select push_token, push_preferences
@@ -125,6 +164,7 @@ async function sendExpoPushToUser(
   if (tokens.length === 0) return { sent: 0, invalidated: 0 };
 
   let sent = 0;
+  let transportFailures = 0;
   const invalid: string[] = [];
 
   for (const batch of chunk(tokens, MAX_TOKENS_PER_REQUEST)) {
@@ -148,6 +188,7 @@ async function sendExpoPushToUser(
 
       if (!response.ok) {
         logger.warn({ status: response.status, userId }, '[push] Expo rejected the batch');
+        transportFailures += 1;
         continue;
       }
 
@@ -165,16 +206,22 @@ async function sendExpoPushToUser(
       });
     } catch (error) {
       logger.warn({ error, userId }, '[push] send failed');
+      transportFailures += 1;
     } finally {
       clearTimeout(timeout);
     }
   }
 
   await invalidateTokens(invalid);
-  return { sent, invalidated: invalid.length };
+  return {
+    sent,
+    invalidated: invalid.length,
+    ...(transportFailures > 0 ? { transportFailures } : {}),
+  };
 }
 
 const NO_DELIVERY: PushDeliveryResult = { sent: 0, invalidated: 0 };
+const TRANSPORT_THREW: PushDeliveryResult = { sent: 0, invalidated: 0, transportFailures: 1 };
 
 function recordPushDelivery(
   channel: NotificationChannel,
@@ -199,7 +246,7 @@ async function settle(
     return await delivery;
   } catch (error) {
     logger.warn({ error, transport }, '[push] transport threw instead of reporting');
-    return NO_DELIVERY;
+    return TRANSPORT_THREW;
   }
 }
 
@@ -245,7 +292,7 @@ export async function sendPushToUser(
 }
 
 function pushQuietHoursType(message: PushMessage): string | undefined {
-  return message.quietHoursType ?? message.data?.['type'];
+  return message.quietHoursType ?? quietHoursTypeOf(message.data?.['type']);
 }
 
 async function deferUntilQuietHoursReadable(
@@ -320,9 +367,11 @@ async function fanOutPush(
   recordPushDelivery('push_web', toWeb, web);
 
   const error = expo.error ?? web.error;
+  const transportFailures = (expo.transportFailures ?? 0) + (web.transportFailures ?? 0);
   return {
     sent: expo.sent + web.sent,
     invalidated: expo.invalidated + web.invalidated,
     ...(error ? { error } : {}),
+    ...(transportFailures > 0 ? { transportFailures } : {}),
   };
 }

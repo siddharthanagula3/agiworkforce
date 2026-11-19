@@ -47,14 +47,16 @@ describe('autofill profile storage, H-04', () => {
     const { local } = installChromeStub();
     const profile: JobApplicationProfile = { firstName: 'Ada', lastName: 'Lovelace' };
     await local.set({ agi_autofill_profile: profile });
-    const { loadAutofillProfile } = await import('../src/features/content/autofill/filler');
+    const { loadAutofillProfile } =
+      await import('../src/features/content/autofill/profile-storage');
     expect(await loadAutofillProfile()).toEqual(profile);
   });
 
   it('saveAutofillProfile writes to chrome.storage.local, not sync', async () => {
     const { local, sync } = installChromeStub();
     const profile: JobApplicationProfile = { email: 'a@b.com' };
-    const { saveAutofillProfile } = await import('../src/features/content/autofill/filler');
+    const { saveAutofillProfile } =
+      await import('../src/features/content/autofill/profile-storage');
     await saveAutofillProfile(profile);
     expect(local.store['agi_autofill_profile']).toEqual(profile);
     expect(sync.store['agi_autofill_profile']).toBeUndefined();
@@ -62,7 +64,8 @@ describe('autofill profile storage, H-04', () => {
 
   it('returns empty object when no profile is set anywhere', async () => {
     installChromeStub();
-    const { loadAutofillProfile } = await import('../src/features/content/autofill/filler');
+    const { loadAutofillProfile } =
+      await import('../src/features/content/autofill/profile-storage');
     expect(await loadAutofillProfile()).toEqual({});
   });
 });
@@ -76,7 +79,8 @@ describe('clearAutofillProfile, SEC-49 erasure path', () => {
       currentCompany: 'Analytical Engines',
     };
     await local.set({ agi_autofill_profile: profile });
-    const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
+    const { clearAutofillProfile } =
+      await import('../src/features/content/autofill/profile-storage');
     await clearAutofillProfile();
     expect(local.store['agi_autofill_profile']).toBeUndefined();
   });
@@ -86,14 +90,15 @@ describe('clearAutofillProfile, SEC-49 erasure path', () => {
     await local.set({ agi_autofill_profile: { email: 'ada@example.test' } });
     vi.spyOn(local, 'remove').mockRejectedValue(new Error('Storage unavailable'));
     const { clearAutofillProfile, loadAutofillProfile } =
-      await import('../src/features/content/autofill/filler');
+      await import('../src/features/content/autofill/profile-storage');
     await expect(clearAutofillProfile()).rejects.toThrow('Storage unavailable');
     expect(await loadAutofillProfile()).toEqual({ email: 'ada@example.test' });
   });
 
   it('rejects when storage is unavailable', async () => {
     (globalThis as { chrome?: unknown }).chrome = undefined;
-    const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
+    const { clearAutofillProfile } =
+      await import('../src/features/content/autofill/profile-storage');
     await expect(clearAutofillProfile()).rejects.toThrow();
   });
 });

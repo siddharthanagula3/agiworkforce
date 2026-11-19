@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 
 import { useState } from 'react';
 
@@ -102,9 +102,13 @@ export function AuthPasswordStep({
         >
           {copy.text('flow.password.forgot', 'Forgot password?')}
         </button>
-        <Link href={`${ACCOUNT_RECOVERY_PATH}?lost=email`} className={AUTH_STANDALONE_LINK_CLASS}>
+        <PageLink
+          href={`${ACCOUNT_RECOVERY_PATH}?lost=email`}
+          omitWhenEmbedded
+          className={AUTH_STANDALONE_LINK_CLASS}
+        >
           {copy.text('flow.password.lostEmail', 'Can’t reach this email?')}
-        </Link>
+        </PageLink>
       </div>
 
       <AuthMethodPicker methods={methods} disabled={busy} onChooseMethod={onChooseMethod} />

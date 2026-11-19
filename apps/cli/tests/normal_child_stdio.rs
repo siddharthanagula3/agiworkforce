@@ -92,9 +92,16 @@ struct Wire {
     lines: Lines<BufReader<ChildStdout>>,
     events: VecDeque<Value>,
     id: u64,
+    stderr: PathBuf,
 }
 impl Wire {
     async fn start(project: &std::path::Path, home: &std::path::Path) -> Self {
+        let stderr = home.with_file_name("app-server.stderr");
+        let stderr_file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&stderr)
+            .unwrap();
         let mut child = Command::new(env!("CARGO_BIN_EXE_agi"))
             .arg("app-server")
             .current_dir(project)
@@ -102,7 +109,7 @@ impl Wire {
             .env("AGIWORKFORCE_HOME", home)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::from(stderr_file))
             .kill_on_drop(true)
             .spawn()
             .unwrap();
@@ -114,6 +121,7 @@ impl Wire {
             lines,
             events: VecDeque::new(),
             id: 0,
+            stderr,
         };
         wire.rpc("initialize",json!({"clientInfo":{"name":"owned-child-integration","title":"Owned child integration","version":"0.0.1"},"protocolVersion":agiworkforce_protocol::developer_session::DEVELOPER_SESSION_PROTOCOL_VERSION,"userInput":true})).await;
         wire
@@ -122,8 +130,20 @@ impl Wire {
         let line = tokio::time::timeout(Duration::from_secs(30), self.lines.next_line())
             .await
             .expect("bounded protocol response")
-            .unwrap()
-            .expect("app-server remains alive");
+            .unwrap();
+        let Some(line) = line else {
+            let status = tokio::time::timeout(Duration::from_secs(5), self.child.wait()).await;
+            let written = std::fs::read_to_string(&self.stderr).unwrap_or_default();
+            let tail = written
+                .chars()
+                .rev()
+                .take(6000)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect::<String>();
+            panic!("app-server remains alive; it ended with {status:?} after writing:\n{tail}");
+        };
         serde_json::from_str(&line).expect("JSON protocol frame")
     }
     async fn rpc(&mut self, method: &str, params: Value) -> Value {

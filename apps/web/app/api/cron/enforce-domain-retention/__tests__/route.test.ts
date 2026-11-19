@@ -1,3 +1,5 @@
+type OriginalDomainRetentionServiceModule =
+  typeof import('@/lib/services/domain-retention-service');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -15,7 +17,8 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mockVerifyCron }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: vi.fn() }) }));
 vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mockRecordAuditEvent }));
-vi.mock('@/lib/services/domain-retention-service', () => ({
+vi.mock('@/lib/services/domain-retention-service', async (importOriginal) => ({
+  ...(await importOriginal<OriginalDomainRetentionServiceModule>()),
   listEnforcedDomainPolicies: mockList,
   sweepOrganizationDomain: mockSweep,
 }));
@@ -65,16 +68,14 @@ describe('GET /api/cron/enforce-domain-retention', () => {
       { organizationId: ORG, domain: 'files', retentionDays: 30 },
       { organizationId: ORG, domain: 'notifications', retentionDays: 7 },
     ]);
-    mockSweep
-      .mockResolvedValueOnce(sweep())
-      .mockResolvedValueOnce(
-        sweep({
-          domain: 'notifications',
-          outcome: 'nothing_due',
-          recordsDeleted: 0,
-          objectsDeleted: 0,
-        }),
-      );
+    mockSweep.mockResolvedValueOnce(sweep()).mockResolvedValueOnce(
+      sweep({
+        domain: 'notifications',
+        outcome: 'nothing_due',
+        recordsDeleted: 0,
+        objectsDeleted: 0,
+      }),
+    );
 
     const res = await GET(req() as never);
     const body = await res.json();

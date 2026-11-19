@@ -1,7 +1,11 @@
 import React from 'react';
 import { AppState, Text } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
-import { useLiveVoiceSession } from '@/src/features/voice/hooks/useLiveVoiceSession';
+import {
+  endLiveVoiceSessions,
+  useLiveVoiceSession,
+} from '@/src/features/voice/hooks/useLiveVoiceSession';
+import { trackMicPermissionRequest } from '@/src/features/voice/services/micPermissionRequest';
 
 const mockIdentity = { current: true };
 const mockSessionIdentity = { id: 'login-1' };
@@ -67,8 +71,10 @@ jest.mock('@/src/features/voice/services/liveVoiceAvailability', () => ({
   liveVoiceUnavailableReason: () => null,
 }));
 
+const mockMicrophoneRequest = jest.fn<Promise<boolean>, []>();
 jest.mock('@/src/features/voice/services/voiceInput', () => ({
   requestMicPermission: async () => true,
+  requestMicrophoneOnlyPermission: () => mockMicrophoneRequest(),
 }));
 
 jest.mock('@/stores/chatStore', () => ({
@@ -125,6 +131,8 @@ describe('live voice session backgrounded mid-connect', () => {
     mockSettle.mockReset();
     mockClose.mockReset();
     mockClose.mockResolvedValue({ reason: 'close_requested', seconds: 0 });
+    mockMicrophoneRequest.mockReset();
+    mockMicrophoneRequest.mockResolvedValue(true);
     jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() } as never);
   });
 
@@ -215,6 +223,143 @@ describe('live voice session backgrounded mid-connect', () => {
     expect(getByTestId('status').props.children).toBe('connecting');
   });
 
+  describe('while this app asks for the microphone', () => {
+    let settleRequest: () => void = () => undefined;
+    let request: Promise<void> = Promise.resolve();
+
+    function askForMicrophone() {
+      request = trackMicPermissionRequest(
+        () =>
+          new Promise<void>((resolve) => {
+            settleRequest = resolve;
+          }),
+      );
+    }
+
+    const originalState = Object.getOwnPropertyDescriptor(AppState, 'currentState');
+
+    afterEach(async () => {
+      if (originalState) Object.defineProperty(AppState, 'currentState', originalState);
+      settleRequest();
+      await request;
+    });
+
+    it('keeps connecting when the prompt sends the app to the background', async () => {
+      mockStart.mockImplementation(() => new Promise(() => undefined));
+      askForMicrophone();
+      const onEnded = jest.fn();
+      const { getByTestId } = render(<Harness onEnded={onEnded} />);
+      await waitFor(() => expect(mockStart).toHaveBeenCalled());
+
+      await act(async () => {
+        backgroundApp();
+      });
+
+      expect(onEnded).not.toHaveBeenCalled();
+      expect(mockClose).not.toHaveBeenCalled();
+      expect(getByTestId('status').props.children).toBe('connecting');
+    });
+
+    it('ends the call on a background event once the request has settled', async () => {
+      mockStart.mockImplementation(() => new Promise(() => undefined));
+      askForMicrophone();
+      const onEnded = jest.fn();
+      const { getByTestId } = render(<Harness onEnded={onEnded} />);
+      await waitFor(() => expect(mockStart).toHaveBeenCalled());
+      await act(async () => {
+        settleRequest();
+        await request;
+      });
+
+      await act(async () => {
+        backgroundApp();
+      });
+
+      expect(onEnded).toHaveBeenCalledWith('ended');
+      expect(getByTestId('status').props.children).toBe('idle');
+    });
+
+    it('does not start a call whose microphone request is granted while the app is in the background', async () => {
+      let grant: (granted: boolean) => void = () => undefined;
+      mockMicrophoneRequest.mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            grant = resolve;
+          }),
+      );
+      askForMicrophone();
+      const onEnded = jest.fn();
+      const { getByTestId } = render(<Harness onEnded={onEnded} />);
+      await waitFor(() => expect(mockMicrophoneRequest).toHaveBeenCalled());
+      await act(async () => {
+        backgroundApp();
+      });
+      expect(getByTestId('status').props.children).toBe('connecting');
+      Object.defineProperty(AppState, 'currentState', {
+        configurable: true,
+        writable: true,
+        value: 'background',
+      });
+
+      await act(async () => {
+        grant(true);
+      });
+
+      expect(mockStart).not.toHaveBeenCalled();
+      expect(onEnded).toHaveBeenCalledWith('ended');
+      expect(getByTestId('status').props.children).toBe('idle');
+    });
+
+    it('starts a call whose microphone request is granted after the app returned to the foreground', async () => {
+      let grant: (granted: boolean) => void = () => undefined;
+      mockMicrophoneRequest.mockImplementation(
+        () =>
+          new Promise<boolean>((resolve) => {
+            grant = resolve;
+          }),
+      );
+      mockStart.mockImplementation(() => new Promise(() => undefined));
+      askForMicrophone();
+      const onEnded = jest.fn();
+      render(<Harness onEnded={onEnded} />);
+      await waitFor(() => expect(mockMicrophoneRequest).toHaveBeenCalled());
+      await act(async () => {
+        backgroundApp();
+      });
+      await act(async () => {
+        changeAppState('active');
+        grant(true);
+      });
+
+      await waitFor(() => expect(mockStart).toHaveBeenCalledTimes(1));
+      expect(onEnded).not.toHaveBeenCalled();
+    });
+
+    it('ends a call whose audio is running even while a request is pending', async () => {
+      let callbacks: Record<string, (value?: unknown) => void> = {};
+      mockStart.mockImplementation(async (options: { callbacks: typeof callbacks }) => {
+        callbacks = options.callbacks;
+        return fakeSession('s-audio');
+      });
+      const onEnded = jest.fn();
+      const { getByTestId } = render(<Harness onEnded={onEnded} />);
+      await waitFor(() => expect(mockStart).toHaveBeenCalled());
+      await act(async () => {
+        callbacks['onStarted']?.();
+      });
+      expect(getByTestId('status').props.children).toBe('live');
+      askForMicrophone();
+
+      await act(async () => {
+        backgroundApp();
+      });
+
+      expect(onEnded).toHaveBeenCalledWith('ended');
+      expect(mockClose).toHaveBeenCalledTimes(1);
+      expect(getByTestId('status').props.children).toBe('idle');
+    });
+  });
+
   it('ignores session callbacks delivered after backgrounding', async () => {
     let capturedCallbacks: Record<string, (value?: unknown) => void> = {};
     mockStart.mockImplementation(async (options: { callbacks: Record<string, () => void> }) => {
@@ -286,5 +431,58 @@ describe('live voice session backgrounded mid-connect', () => {
       resolveStart(fakeSession('s-mute'));
     });
     expect(startOptions.isMuted()).toBe(true);
+  });
+});
+
+describe('ending live voice from outside the call', () => {
+  beforeEach(() => {
+    mockIdentity.current = true;
+    mockStart.mockReset();
+    mockSettle.mockReset();
+    mockClose.mockReset();
+    mockClose.mockResolvedValue({ reason: 'close_requested', seconds: 0 });
+    mockMicrophoneRequest.mockReset();
+    mockMicrophoneRequest.mockResolvedValue(true);
+    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() } as never);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('closes a live call and leaves it idle', async () => {
+    let callbacks: Record<string, (value?: unknown) => void> = {};
+    mockStart.mockImplementation(async (options: { callbacks: typeof callbacks }) => {
+      callbacks = options.callbacks;
+      return fakeSession('s-withdrawn');
+    });
+    const onEnded = jest.fn();
+    const { getByTestId } = render(<Harness onEnded={onEnded} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+    await act(async () => {
+      callbacks['onStarted']?.();
+    });
+    expect(getByTestId('status').props.children).toBe('live');
+
+    await act(async () => {
+      endLiveVoiceSessions();
+    });
+
+    expect(getByTestId('status').props.children).toBe('idle');
+    expect(onEnded).toHaveBeenCalledWith('ended');
+    expect(mockClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing once the call screen is gone', async () => {
+    mockStart.mockImplementation(async () => fakeSession('s-gone'));
+    const onEnded = jest.fn();
+    const view = render(<Harness onEnded={onEnded} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+    view.unmount();
+    onEnded.mockClear();
+
+    endLiveVoiceSessions();
+
+    expect(onEnded).not.toHaveBeenCalled();
   });
 });

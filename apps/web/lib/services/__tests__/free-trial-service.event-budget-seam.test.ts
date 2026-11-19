@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { chargeMicrousdForProviderCost } from '@agiworkforce/types';
+import {
+  MICROUSD_PER_CREDIT,
+  chargeMicrousdForProviderCost,
+  getPlanCreditAllowance,
+} from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -134,12 +138,15 @@ describe('the global event ceiling beside the metered Free windows', () => {
   });
 
   it('never asks the event ceiling for a turn the Free windows refused', async () => {
+    const fiveHourBudget = getPlanCreditAllowance('free').fiveHour * MICROUSD_PER_CREDIT;
+    const shortOfTheTurn =
+      fiveHourBudget - chargeMicrousdForProviderCost(BEGIN.estimatedMicrousd) + 1;
     tx.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from public.website_auto_economy_trial_usage')) {
         return [{ user_id: 'user-1' }];
       }
       if (sql.includes('with account_anchor')) {
-        return [{ ...EMPTY_WINDOWS, five_hour_used_microusd: '10000' }];
+        return [{ ...EMPTY_WINDOWS, five_hour_used_microusd: String(shortOfTheTurn) }];
       }
       return [];
     });
@@ -151,6 +158,7 @@ describe('the global event ceiling beside the metered Free windows', () => {
     });
 
     expect(result.ok).toBe(false);
+    expect(result).toMatchObject({ code: 'budget_reached' });
     expect(budget.reserveEventSpend).not.toHaveBeenCalled();
     expect(reservationInserts()).toHaveLength(0);
   });

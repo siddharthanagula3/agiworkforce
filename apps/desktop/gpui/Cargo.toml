@@ -1,0 +1,74 @@
+[package]
+name = "agiworkforce-desktop-gpui"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.99"
+publish = false
+license = "Proprietary"
+build = "build.rs"
+
+[features]
+default = ["native-ui"]
+native-ui = ["dep:gpui", "dep:gpui_platform", "dep:gpui-component", "dep:gpui-kit-assets", "dep:two-face"]
+native-test = ["native-ui", "gpui/test-support", "gpui_platform/test-support"]
+cloud-fixture-test = []
+
+[lints]
+workspace = true
+
+[dependencies]
+agiworkforce-app-server = { path = "../../../crates/agiworkforce-app-server" }
+agiworkforce-protocol = { path = "../../../crates/agiworkforce-protocol" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+gpui = { package = "gpui-pre", version = "=0.3.11", optional = true }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.11", features = ["font-kit", "wayland", "x11"], optional = true }
+gpui-component = { version = "=0.9.0", features = ["syntect"], optional = true }
+gpui-kit-assets = { version = "=0.9.0", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "process", "time", "sync", "fs"] }
+two-face = { version = "=0.4.5", default-features = false, features = ["syntect-fancy"], optional = true }
+uuid = { version = "1", features = ["v4", "v5"] }
+url = "2"
+
+[dev-dependencies]
+agiworkforce-worktree = { path = "../../../crates/agiworkforce-worktree" }
+tempfile = "3"
+image = { version = "0.25", default-features = false }
+
+[[bin]]
+name = "agiworkforce-desktop-gpui"
+path = "src/main.rs"
+required-features = ["native-ui"]
+
+[[test]]
+name = "rendering"
+path = "tests/rendering.rs"
+harness = false
+required-features = ["native-test"]
+
+[[example]]
+name = "native_redraw"
+required-features = ["native-test"]
+
+[[test]]
+name = "native_capture"
+required-features = ["native-test"]
+
+[[test]]
+name = "native_cloud_runtime"
+required-features = ["cloud-fixture-test"]
+
+[[test]]
+name = "projects_runtime"
+required-features = ["cloud-fixture-test"]
+
+[[test]]
+name = "uploads_runtime"
+required-features = ["cloud-fixture-test"]
+
+[[test]]
+name = "downloads_runtime"
+required-features = ["cloud-fixture-test"]

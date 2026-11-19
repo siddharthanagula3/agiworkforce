@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { CopyObjectCommand, type S3Client } from '@aws-sdk/client-s3';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createS3Client, createS3ObjectStore } from '../adapters/s3';
 import type { ObjectStorageConfig } from '../config';
 import { ObjectStorageConfigError, ObjectStorageTimeoutError } from '../types';
@@ -29,6 +32,211 @@ const PRESIGN_INPUT = {
   contentLength: 4096,
   expiresInSeconds: 300,
 };
+
+const COPY_DEADLINE_MS = REQUEST_TIMEOUT_MS * 16;
+const SLOW_COPY_MS = REQUEST_TIMEOUT_MS * 3;
+
+const COPY_INPUT = {
+  bucket: 'contract-bucket',
+  sourceKey: 'staging.pdf',
+  destinationKey: 'staging.pdf.scanned',
+  etag: '"etag"',
+};
+
+const LOCAL_REQUEST_TIMEOUT_MS = 200;
+const LOCAL_ANSWER_DELAY_MS = 800;
+
+const SERVER_ERROR_STATUS = 500;
+const SERVER_ERROR_BODY =
+  '<?xml version="1.0" encoding="UTF-8"?><Error><Code>InternalError</Code><Message>We encountered an internal error. Please try again.</Message></Error>';
+
+interface DelayingEndpoint {
+  url: string;
+  requestCount(): number;
+  close(): Promise<void>;
+}
+
+const openEndpoints: DelayingEndpoint[] = [];
+
+async function startDelayingEndpoint(
+  delayMs: number,
+  status: number = 200,
+): Promise<DelayingEndpoint> {
+  let requests = 0;
+  const server: Server = createServer((request, response) => {
+    requests += 1;
+    request.resume();
+    const timer = setTimeout(() => {
+      if (response.destroyed) return;
+      if (status === SERVER_ERROR_STATUS) {
+        response.writeHead(status, { 'Content-Type': 'application/xml' });
+        response.end(SERVER_ERROR_BODY);
+        return;
+      }
+      response.writeHead(status, { ETag: '"etag"', 'Content-Length': '0' });
+      response.end();
+    }, delayMs);
+    response.on('close', () => clearTimeout(timer));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  const endpoint = {
+    url: `http://127.0.0.1:${port}`,
+    requestCount: () => requests,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+  openEndpoints.push(endpoint);
+  return endpoint;
+}
+
+afterEach(async () => {
+  await Promise.all(openEndpoints.splice(0).map((endpoint) => endpoint.close()));
+});
+
+describe('s3 client request deadline', () => {
+  it('cuts a request that outlives the deadline when the client enforces it', async () => {
+    const endpoint = await startDelayingEndpoint(LOCAL_ANSWER_DELAY_MS);
+    const client = createS3Client(
+      { ...CONFIG, endpoint: endpoint.url, forcePathStyle: true },
+      {
+        connectionTimeoutMs: CONNECTION_TIMEOUT_MS,
+        requestTimeoutMs: LOCAL_REQUEST_TIMEOUT_MS,
+        enforceRequestTimeout: true,
+      },
+    );
+    try {
+      const store = createS3ObjectStore({ client, requestTimeoutMs: REQUEST_TIMEOUT_MS });
+
+      await expect(store.head('contract-bucket', 'object.pdf')).rejects.toMatchObject({
+        name: 'TimeoutError',
+      });
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it('only warns past the deadline when the client does not enforce it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const endpoint = await startDelayingEndpoint(LOCAL_ANSWER_DELAY_MS);
+    const client = createS3Client(
+      { ...CONFIG, endpoint: endpoint.url, forcePathStyle: true },
+      { connectionTimeoutMs: CONNECTION_TIMEOUT_MS, requestTimeoutMs: LOCAL_REQUEST_TIMEOUT_MS },
+    );
+    try {
+      const store = createS3ObjectStore({ client, requestTimeoutMs: REQUEST_TIMEOUT_MS });
+
+      await expect(store.head('contract-bucket', 'object.pdf')).resolves.toMatchObject({
+        etag: '"etag"',
+      });
+    } finally {
+      client.destroy();
+      warn.mockRestore();
+    }
+  });
+});
+
+const SDK_RETRY_WINDOW_MS = LOCAL_ANSWER_DELAY_MS * 2;
+const SINGLE_ATTEMPT = 1;
+
+function waitFor(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function deadlineClient(endpoint: DelayingEndpoint, maxAttempts?: number): S3Client {
+  return createS3Client(
+    { ...CONFIG, endpoint: endpoint.url, forcePathStyle: true },
+    {
+      connectionTimeoutMs: CONNECTION_TIMEOUT_MS,
+      requestTimeoutMs: LOCAL_REQUEST_TIMEOUT_MS,
+      enforceRequestTimeout: true,
+      ...(maxAttempts === undefined ? {} : { maxAttempts }),
+    },
+  );
+}
+
+async function sendCopy(client: S3Client): Promise<unknown> {
+  try {
+    await client.send(
+      new CopyObjectCommand({
+        Bucket: COPY_INPUT.bucket,
+        Key: COPY_INPUT.destinationKey,
+        CopySource: `${COPY_INPUT.bucket}/${COPY_INPUT.sourceKey}`,
+        CopySourceIfMatch: COPY_INPUT.etag,
+      }),
+    );
+    return undefined;
+  } catch (error) {
+    return error;
+  } finally {
+    client.destroy();
+  }
+}
+
+describe('s3 client attempts', () => {
+  it('retries a timed-out request on its own when the client keeps the default attempts', async () => {
+    const endpoint = await startDelayingEndpoint(LOCAL_ANSWER_DELAY_MS);
+
+    expect(await sendCopy(deadlineClient(endpoint))).toMatchObject({ name: 'TimeoutError' });
+    await waitFor(SDK_RETRY_WINDOW_MS);
+
+    expect(endpoint.requestCount()).toBeGreaterThan(SINGLE_ATTEMPT);
+  });
+
+  it('sends one request in total when a single-attempt client is cut at its deadline', async () => {
+    const endpoint = await startDelayingEndpoint(LOCAL_ANSWER_DELAY_MS);
+
+    expect(await sendCopy(deadlineClient(endpoint, SINGLE_ATTEMPT))).toMatchObject({
+      name: 'TimeoutError',
+    });
+    await waitFor(SDK_RETRY_WINDOW_MS);
+
+    expect(endpoint.requestCount()).toBe(SINGLE_ATTEMPT);
+  });
+
+  it('retries a server error on its own when the client keeps the default attempts', async () => {
+    const endpoint = await startDelayingEndpoint(0, SERVER_ERROR_STATUS);
+
+    expect(await sendCopy(deadlineClient(endpoint))).toMatchObject({
+      $metadata: { httpStatusCode: SERVER_ERROR_STATUS },
+    });
+
+    expect(endpoint.requestCount()).toBeGreaterThan(SINGLE_ATTEMPT);
+  });
+
+  it('sends one request in total when a single-attempt client gets a server error', async () => {
+    const endpoint = await startDelayingEndpoint(0, SERVER_ERROR_STATUS);
+
+    expect(await sendCopy(deadlineClient(endpoint, SINGLE_ATTEMPT))).toMatchObject({
+      $metadata: { httpStatusCode: SERVER_ERROR_STATUS },
+    });
+    await waitFor(SDK_RETRY_WINDOW_MS);
+
+    expect(endpoint.requestCount()).toBe(SINGLE_ATTEMPT);
+  });
+
+  it('stops the client retrying a copy once the copy deadline has passed', async () => {
+    const endpoint = await startDelayingEndpoint(LOCAL_ANSWER_DELAY_MS);
+    const client = deadlineClient(endpoint);
+    try {
+      const store = createS3ObjectStore({
+        client,
+        requestTimeoutMs: LOCAL_REQUEST_TIMEOUT_MS,
+        copyTimeoutMs: LOCAL_REQUEST_TIMEOUT_MS,
+      });
+
+      await expect(store.copyIfMatch(COPY_INPUT)).rejects.toBeInstanceOf(ObjectStorageTimeoutError);
+      await waitFor(SDK_RETRY_WINDOW_MS);
+
+      expect(endpoint.requestCount()).toBe(SINGLE_ATTEMPT);
+    } finally {
+      client.destroy();
+    }
+  });
+});
 
 runObjectStoreContract('s3', () =>
   createS3ObjectStore({
@@ -223,6 +431,88 @@ describe('s3 object store', () => {
       ServerSideEncryption: 'aws:kms',
       SSEKMSKeyId: 'key-id',
     });
+  });
+
+  it('leaves a copy unbounded by the adapter when no copy deadline is given', async () => {
+    vi.useFakeTimers();
+    try {
+      const { client } = createFakeS3Endpoint(CONFIG);
+      Object.defineProperty(client, 'send', {
+        value: () => new Promise(() => {}),
+        writable: true,
+      });
+      const store = createS3ObjectStore({ client, requestTimeoutMs: REQUEST_TIMEOUT_MS });
+
+      let settled = false;
+      void store
+        .copyIfMatch(COPY_INPUT)
+        .catch(() => undefined)
+        .finally(() => {
+          settled = true;
+        });
+      await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS * 4);
+
+      expect(settled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects a copy at its own deadline when the host never answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const { client } = createFakeS3Endpoint(CONFIG);
+      Object.defineProperty(client, 'send', {
+        value: () => new Promise(() => {}),
+        writable: true,
+      });
+      const store = createS3ObjectStore({
+        client,
+        requestTimeoutMs: COPY_DEADLINE_MS,
+        copyTimeoutMs: COPY_DEADLINE_MS,
+      });
+
+      const pending = store.copyIfMatch(COPY_INPUT);
+      const assertion = expect(pending).rejects.toBeInstanceOf(ObjectStorageTimeoutError);
+      await vi.advanceTimersByTimeAsync(COPY_DEADLINE_MS);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets a copy outlive the ordinary request deadline when its own deadline is longer', async () => {
+    vi.useFakeTimers();
+    try {
+      const endpoint = createFakeS3Endpoint(CONFIG);
+      const answer = endpoint.client.send.bind(endpoint.client) as (
+        command: unknown,
+      ) => Promise<unknown>;
+      const store = createS3ObjectStore({
+        client: endpoint.client,
+        requestTimeoutMs: COPY_DEADLINE_MS,
+        copyTimeoutMs: COPY_DEADLINE_MS,
+      });
+      await store.put({
+        bucket: COPY_INPUT.bucket,
+        key: COPY_INPUT.sourceKey,
+        body: new Uint8Array([1, 2, 3]),
+        contentType: 'application/pdf',
+      });
+      const etag = (await store.head(COPY_INPUT.bucket, COPY_INPUT.sourceKey))?.etag ?? '';
+      Object.defineProperty(endpoint.client, 'send', {
+        value: (command: unknown) =>
+          new Promise((resolve) => setTimeout(resolve, SLOW_COPY_MS)).then(() => answer(command)),
+        writable: true,
+      });
+
+      const pending = store.copyIfMatch({ ...COPY_INPUT, etag });
+      await vi.advanceTimersByTimeAsync(SLOW_COPY_MS);
+
+      await expect(pending).resolves.toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('refuses an encryption algorithm the host does not offer', async () => {

@@ -4,8 +4,7 @@
  * Covers:
  *   - getPageActions(url), YouTube, GitHub PR, generic
  *   - truncatePageText(), truncation + whitespace collapsing
- *   - launcher position persist (savePosition / loadPosition)
- *   - isPanelEnabled(), default true, toggled false
+ *   - setupInPagePanel(), driven only by the service worker's answer
  *
  * @vitest-environment jsdom
  */
@@ -48,13 +47,8 @@ import {
   truncatePageText,
   redactSensitiveText,
 } from '../src/features/content/in-page-panel/pageActions';
-import {
-  loadPosition,
-  savePosition,
-  applyPosition,
-  createLauncher,
-} from '../src/features/content/in-page-panel/launcher';
-import { isPanelEnabled, IN_PAGE_PANEL_ENABLED_KEY } from '../src/inPagePanel/setup';
+import { createLauncher } from '../src/features/content/in-page-panel/launcher';
+import { setupInPagePanel } from '../src/inPagePanel/setup';
 
 describe('getPageActions', () => {
   it('returns YouTube actions for youtube.com/watch?v=xxx', () => {
@@ -164,48 +158,6 @@ describe('boundPageText', () => {
   });
 });
 
-describe('launcher position persist', () => {
-  beforeEach(() => {
-    const data = chromeMock.data;
-    for (const key of Object.keys(data)) {
-      delete data[key];
-    }
-    chromeMock.mock.storage.local.get.mockImplementation(async (key: string) => {
-      return { [key]: data[key] };
-    });
-    chromeMock.mock.storage.local.set.mockImplementation(async (obj: Record<string, unknown>) => {
-      Object.assign(data, obj);
-    });
-  });
-
-  it('loadPosition returns DEFAULT_POS when storage is empty', async () => {
-    const pos = await loadPosition();
-    expect(pos.bottom).toBe(24);
-    expect(pos.right).toBe(24);
-  });
-
-  it('savePosition then loadPosition round-trips correctly', async () => {
-    await savePosition({ bottom: 48, right: 16 });
-    const pos = await loadPosition();
-    expect(pos.bottom).toBe(48);
-    expect(pos.right).toBe(16);
-  });
-
-  it('loadPosition rejects invalid stored values and falls back to default', async () => {
-    chromeMock.data['agi_panel_launcher_pos'] = { bottom: -1, right: 'bad' };
-    const pos = await loadPosition();
-    expect(pos.bottom).toBe(24);
-    expect(pos.right).toBe(24);
-  });
-
-  it('applyPosition sets bottom/right style on host element', () => {
-    const el = document.createElement('div');
-    applyPosition(el, { bottom: 32, right: 40 });
-    expect(el.style.bottom).toBe('32px');
-    expect(el.style.right).toBe('40px');
-  });
-});
-
 describe('createLauncher', () => {
   it('pins its host geometry with important so page stylesheets cannot move it', () => {
     const { host } = createLauncher(vi.fn(), vi.fn());
@@ -213,8 +165,7 @@ describe('createLauncher', () => {
       (property) => host.style.getPropertyPriority(property) !== 'important',
     );
     expect(unpinned).toEqual([]);
-    applyPosition(host, { bottom: 32, right: 40 });
-    expect(host.style.getPropertyPriority('bottom')).toBe('important');
+    expect(host.style.getPropertyValue('bottom')).toBe('24px');
   });
 
   it('closes the panel when Escape is pressed with focus on the launcher', () => {
@@ -233,32 +184,26 @@ describe('createLauncher', () => {
   });
 });
 
-describe('isPanelEnabled', () => {
+describe('setupInPagePanel', () => {
   beforeEach(() => {
-    const data = chromeMock.data;
-    for (const key of Object.keys(data)) {
-      delete data[key];
-    }
-    chromeMock.mock.storage.local.get.mockImplementation(async (key: string) => {
-      return { [key]: data[key] };
-    });
+    document.body.innerHTML = '';
+    chromeMock.mock.storage.local.get.mockClear();
   });
 
-  it('returns true by default when key is not set', async () => {
-    const enabled = await isPanelEnabled();
-    expect(enabled).toBe(true);
+  const launcher = (): Element | null => document.querySelector('[data-agi-launcher]');
+
+  it('adds the launcher only when the worker says the site is approved and the panel is on', async () => {
+    await setupInPagePanel({ approved: false, inPagePanel: true });
+    expect(launcher()).toBeNull();
+    await setupInPagePanel(Promise.resolve({ approved: true, inPagePanel: false }));
+    expect(launcher()).toBeNull();
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    expect(launcher()).not.toBeNull();
   });
 
-  it('returns false when set to false', async () => {
-    chromeMock.data[IN_PAGE_PANEL_ENABLED_KEY] = false;
-    const enabled = await isPanelEnabled();
-    expect(enabled).toBe(false);
-  });
-
-  it('returns true when set to true', async () => {
-    chromeMock.data[IN_PAGE_PANEL_ENABLED_KEY] = true;
-    const enabled = await isPanelEnabled();
-    expect(enabled).toBe(true);
+  it('never reads extension storage from the page', async () => {
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    expect(chromeMock.mock.storage.local.get).not.toHaveBeenCalled();
   });
 });
 

@@ -17,6 +17,7 @@ import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useLocalDataExport } from './useLocalDataExport';
+import { countLocalChats, deleteAllLocalChats } from './deleteLocalChats';
 import { prepareLocalCloudSync, syncLocalConversationsToCloud } from './localCloudSyncService';
 import {
   SettingsGroup,
@@ -30,6 +31,7 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { archiveAllConversations, deleteAllConversations } from '@/src/features/archived-chats';
+import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   subscribeCloudAccountEpochChange,
@@ -55,6 +57,16 @@ export default function DataControlsScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const loadConversations = useChatMessageStore((s) => s.loadConversations);
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const openCloudAccount = useCallback(() => {
+    if (!isClerkLoaded) return;
+    if (!isClerkSignedIn) {
+      router.push(beginCloudPostAuthIntentForDestination('/(app)/settings/cloud-account'));
+      return;
+    }
+    router.push('/(app)/settings/cloud-account');
+  }, [isClerkLoaded, isClerkSignedIn, router]);
 
   const [bulkScope, setBulkScope] = useState<BulkChatScope | null>(null);
   const bulkScopeRef = useRef<BulkChatScope | null>(null);
@@ -348,6 +360,42 @@ export default function DataControlsScreen() {
 
   const bulkBusy = bulkAction !== null;
 
+  const handleDeleteLocalChats = useCallback(() => {
+    if (useChatAppModeStore.getState().appMode !== 'local') return;
+    const count = countLocalChats();
+    if (count === 0) {
+      Alert.alert('No local chats', 'There are no chats stored on this device.');
+      return;
+    }
+    Alert.alert(
+      'Delete all local chats?',
+      'Deletes every chat and its messages stored on this device. Memory, settings, projects and downloaded models stay. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete all',
+          style: 'destructive',
+          onPress: () => {
+            if (useChatAppModeStore.getState().appMode !== 'local') return;
+            deleteAllLocalChats()
+              .then((deleted) =>
+                Alert.alert(
+                  'Chats deleted',
+                  `${deleted} ${deleted === 1 ? 'chat' : 'chats'} deleted from this device.`,
+                ),
+              )
+              .catch(() =>
+                Alert.alert(
+                  'Could not delete chats',
+                  'Some chats may still be on this device. Try again.',
+                ),
+              );
+          },
+        },
+      ],
+    );
+  }, []);
+
   return (
     <SettingsScreenShell
       title="Data Controls"
@@ -360,7 +408,7 @@ export default function DataControlsScreen() {
       />
       <SettingsInfo
         title="Local data"
-        body="Export runs on this device and includes chats, memory, settings, and installed model details."
+        body="Chats, memory, settings and model details, exported on this device."
         icon={Database}
       />
       <SettingsGroup>
@@ -398,6 +446,35 @@ export default function DataControlsScreen() {
         />
       </SettingsGroup>
 
+      {appMode === 'local' ? (
+        <>
+          <SettingsInfo
+            title="Local chats"
+            body="Deletes chats on this device only. AGI Cloud is untouched."
+            icon={History}
+          />
+          <SettingsGroup>
+            <PressableBox
+              onPress={handleDeleteLocalChats}
+              accessibilityRole="button"
+              accessibilityLabel="Delete all local chats"
+              testID="delete-all-local-chats-button"
+              style={{
+                minHeight: 52,
+                paddingHorizontal: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <Trash2 size={19} color={colors.agentError} />
+              <Text style={{ flex: 1, color: colors.agentError, fontSize: typeScale.body }}>
+                Delete all chats
+              </Text>
+            </PressableBox>
+          </SettingsGroup>
+        </>
+      ) : null}
       <SettingsInfo
         title="Chat history"
         body="These act only on chats stored in AGI Cloud."
@@ -481,7 +558,7 @@ export default function DataControlsScreen() {
       */}
       <SettingsInfo
         title="Sync to AGI Cloud"
-        body="Copy selected local chat text while in AGI Cloud mode. Temporary chats are excluded. Local originals, files and memory stay on this device. If interrupted, check Cloud before another copy to avoid duplicates."
+        body="Copies chat text you select, not temporary chats. Files and memory stay on this device."
         icon={Cloud}
       />
       <SettingsGroup>
@@ -524,10 +601,10 @@ export default function DataControlsScreen() {
           label="Export Cloud data"
           icon={Download}
           value={cloudUnlocked ? undefined : 'Sign in required'}
-          onPress={() => router.push('/(app)/settings/cloud-account')}
+          onPress={openCloudAccount}
         />
         <PressableBox
-          onPress={() => router.push('/(app)/settings/cloud-account')}
+          onPress={openCloudAccount}
           accessibilityRole="button"
           accessibilityLabel={cloudUnlocked ? 'Delete account' : 'Delete account. Sign in required'}
           accessibilityHint="Opens account deletion, which asks you to confirm first"

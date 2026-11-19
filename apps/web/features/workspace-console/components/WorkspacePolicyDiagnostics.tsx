@@ -115,8 +115,8 @@ export function WorkspacePolicyDiagnostics({ organizationId }: { organizationId:
           Explain a member&rsquo;s policy
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          See what one person may use after every workspace default and exception applies, which
-          rule turned each thing off, and whether a request would be allowed.
+          See what one person may use, which rule turned each thing off, and whether a request
+          passes.
         </p>
       </div>
 

@@ -8,6 +8,7 @@
  * @vitest-environment jsdom
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const SITE = 'https://allowed.example';
 const OTHER = 'https://other.example';
@@ -40,7 +41,7 @@ function areaFor(backing: Record<string, unknown>) {
 }
 
 vi.stubGlobal('chrome', {
-  runtime: { id: 'browser-tools-test', lastError: undefined },
+  runtime: { id: 'browser-tools-test', lastError: undefined, getManifest: packagedManifest },
   storage: { local: areaFor(store), session: areaFor(sessionStore) },
   permissions: {
     contains: vi.fn((permissions: { origins?: string[] }) =>

@@ -4,6 +4,9 @@ import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contrac
 
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { resolveReviewEffort, reviewDepthInstruction } from '../providers/reviewEffort';
+import { LocalModelSelectedError } from '../core/cloudModelBoundary';
+import { Config } from '../platform/config';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 const chatCompletion = vi.hoisted(() => vi.fn());
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
@@ -91,6 +94,26 @@ describe('reviewing code at an effort', () => {
     expect(medium.endsWith('```')).toBe(true);
     expect(xhigh).toContain('second pass');
     expect(xhigh).toContain('const a = 1;');
+  });
+
+  it('refuses Code Review on a Local default model and reads or sends nothing', async () => {
+    const model = vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+    const editor = editorWith('const a = 1;');
+    const read = vi.spyOn(editor.document, 'getText');
+    try {
+      await expect(
+        new AgiDiagnosticsProvider().reviewCode(
+          editor,
+          {} as vscode.SecretStorage,
+          new vscode.CancellationTokenSource().token,
+          'medium',
+        ),
+      ).rejects.toBeInstanceOf(LocalModelSelectedError);
+    } finally {
+      model.mockRestore();
+    }
+    expect(read).not.toHaveBeenCalled();
+    expect(chatCompletion).not.toHaveBeenCalled();
   });
 
   it.each(['untrusted-workspace', 'credential-target', 'unresolved'] as const)(

@@ -20,11 +20,14 @@ dead_code = "deny"
 agiworkforce-protocol = { path = "../agiworkforce-protocol" }
 anyhow = "1"
 async-trait = "0.1.89"
+bytes = "1"
 axum = { version = "0.8", features = ["tokio", "ws"] }
 futures-util = { version = "0.3", features = ["sink"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+thiserror = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util", "macros"] }

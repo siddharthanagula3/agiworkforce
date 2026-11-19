@@ -4,7 +4,7 @@ import AppIntents
 struct AnalyzeImageIntent: AppIntent {
     static var title: LocalizedStringResource = "Analyze Image with AGI"
     static var description = IntentDescription(
-        "Analyze an image using AGI's on-device AI.",
+        "Analyze an image with AGI Mobile.",
         categoryName: "Images"
     )
     static var openAppWhenRun: Bool = true
@@ -28,9 +28,7 @@ struct AnalyzeImageIntent: AppIntent {
         if let q = question, !q.isEmpty {
             params["question"] = q
         }
-        if let url = image.fileURL {
-            params["imageUri"] = url.absoluteString
-        }
+        params["imageUri"] = try AGIIntentFileStaging.stageImage(image).absoluteString
         AGIIntentDispatch.open(verb: "analyze_image", params: params)
         return .result()
     }

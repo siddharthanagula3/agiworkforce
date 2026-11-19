@@ -15,7 +15,7 @@ vi.mock('@/features/connectors/hooks/use-connectors', () => ({
     retry: vi.fn(),
   }),
 }));
-import type { ScheduleApi } from '../services/schedule-api';
+import { ScheduleApiError, type ScheduleApi } from '../services/schedule-api';
 import type { ScheduleRun, ScheduleTask } from '../types';
 import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 
@@ -763,6 +763,65 @@ describe('SchedulesPage', () => {
     );
   });
 
+  it('removes a schedule the server no longer has when it answers the delete with 404', async () => {
+    const api = createApi({
+      listSchedules: vi.fn(async () => page([schedule])),
+      deleteSchedule: vi.fn(async () => {
+        throw new ScheduleApiError('Schedule not found', 404, 'NOT_FOUND');
+      }),
+    });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+    await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    const confirmation = screen.getByRole('alertdialog', { name: 'Delete Schedule?' });
+    await user.click(within(confirmation).getByRole('button', { name: 'Delete Schedule' }));
+
+    expect(await screen.findByText('No schedules yet')).toBeInTheDocument();
+    expect(screen.queryByText('Schedule not found')).not.toBeInTheDocument();
+    expect(screen.queryByText(/connection/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Schedule action result' })).toHaveTextContent(
+      'Schedule deleted.',
+    );
+  });
+
+  it('keeps a deleted schedule gone when a list read that started before the delete returns it', async () => {
+    const evening = { ...schedule, id: 'schedule-2', name: 'Evening brief' };
+    const nextPage = deferred<Awaited<ReturnType<ScheduleApi['listSchedules']>>>();
+    const listSchedules = vi
+      .fn<ScheduleApi['listSchedules']>()
+      .mockResolvedValueOnce({
+        schedules: [schedule],
+        pagination: { limit: 50, offset: 0 },
+        hasMore: true,
+      })
+      .mockImplementationOnce(() => nextPage.promise);
+    const api = createApi({ listSchedules });
+    const user = userEvent.setup();
+
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+    await screen.findByRole('heading', { name: 'Morning brief' });
+    await user.click(screen.getByRole('button', { name: 'Load More Schedules' }));
+    await user.click(screen.getByRole('button', { name: 'More actions for Morning brief' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    const confirmation = screen.getByRole('alertdialog', { name: 'Delete Schedule?' });
+    await user.click(within(confirmation).getByRole('button', { name: 'Delete Schedule' }));
+    expect(await screen.findByText('No schedules yet')).toBeInTheDocument();
+
+    await act(async () =>
+      nextPage.resolve({
+        schedules: [schedule, evening],
+        pagination: { limit: 50, offset: 50 },
+        hasMore: false,
+      }),
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Evening brief' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Morning brief' })).not.toBeInTheDocument();
+  });
+
   it('filters the schedule list by status without dropping the other rows from state', async () => {
     const active = { ...schedule, id: 'schedule-active', name: 'Active brief' };
     const completed = {
@@ -1105,6 +1164,15 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
       expect(
         await screen.findByRole('searchbox', { name: 'Search scheduled tasks' }),
       ).not.toHaveFocus();
+    });
+
+    it('keeps the create split button at a 44px touch height on both halves', async () => {
+      const api = createApi();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      const create = await screen.findByRole('button', { name: 'New task' });
+      const more = screen.getByRole('button', { name: 'More ways to create a task' });
+      expect(create.className).toContain('pointer-coarse:min-h-11');
+      expect(more.className).toContain('pointer-coarse:min-h-11');
     });
 
     it('lays the templates out in two columns in reading order', async () => {

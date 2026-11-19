@@ -16,6 +16,25 @@ const mockArtifact = {
   provenance: { scope: 'local' },
 };
 
+const mockCodeArtifact = {
+  ...mockArtifact,
+  id: 'artifact-2',
+  title: 'Parser script',
+  kind: 'code',
+  language: 'typescript',
+  content: 'export const parse = () => 1;',
+  previewLines: ['export const parse'],
+};
+
+const mockChartArtifact = {
+  ...mockArtifact,
+  id: 'artifact-3',
+  title: 'Revenue chart',
+  kind: 'chart',
+  content: '{}',
+  previewLines: ['Revenue'],
+};
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
@@ -85,7 +104,7 @@ jest.mock('../src/features/artifacts/store', () => ({
       cloudArtifactsOwnerId: null;
     }) => unknown,
   ) => selector({ artifacts: [], cloudArtifacts: [], cloudArtifactsOwnerId: null }),
-  mergeMobileArtifactsForGallery: () => [mockArtifact],
+  mergeMobileArtifactsForGallery: () => [mockArtifact, mockCodeArtifact, mockChartArtifact],
   accentColorForKind: () => '#fff',
 }));
 
@@ -134,5 +153,21 @@ describe('Library artifact rows', () => {
     fireEvent.press(screen.getByLabelText('Open artifact Quarterly plan, 2h ago'));
 
     expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('narrows artifacts to the kind picked in the filter row', () => {
+    const screen = render(<LibraryScreen />);
+
+    fireEvent.press(screen.getByLabelText('Code filter'));
+    expect(screen.getByLabelText(/Open artifact Parser script/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Open artifact Quarterly plan/)).toBeNull();
+    expect(screen.queryByLabelText(/Open artifact Revenue chart/)).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Charts filter'));
+    expect(screen.getByLabelText(/Open artifact Revenue chart/)).toBeTruthy();
+    expect(screen.queryByLabelText(/Open artifact Parser script/)).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Research filter'));
+    expect(screen.queryByLabelText(/Open artifact/)).toBeNull();
   });
 });

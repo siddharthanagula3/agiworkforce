@@ -40,7 +40,11 @@ import {
 } from '@/lib/server/media-assets';
 import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
 import { assertFileStorageAvailable } from '@/lib/server/file-storage';
-import { isChatImageMimeType, isSupportedChatAttachment } from '@/lib/chat-attachment-policy';
+import {
+  chatAttachmentSizeRefusal,
+  isChatImageMimeType,
+  isSupportedChatAttachment,
+} from '@/lib/chat-attachment-policy';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 import { readSignedUploadClaims, signUploadClaims } from '@/lib/server/upload-signing';
 
@@ -77,7 +81,7 @@ export function resolveUploadSourceSurface(request: NextRequest): SyncedAppSurfa
     : 'web';
 }
 
-interface UploadConversation {
+export interface UploadConversation {
   temporary: boolean;
   conversationId: string | null;
 }
@@ -288,12 +292,11 @@ export async function resolveTemporaryChatUpload(
     ChatAttachmentCompletionInput,
     'db' | 'userId' | 'organizationId' | 'conversationId' | 'temporary'
   >,
-): Promise<boolean> {
-  const conversation = await resolveUploadConversation(input.db, input, {
+): Promise<UploadConversation> {
+  return resolveUploadConversation(input.db, input, {
     conversationId: input.conversationId,
     temporary: input.temporary,
   });
-  return conversation.temporary;
 }
 
 export async function completeChatAttachmentUpload(
@@ -310,6 +313,11 @@ export async function completeChatAttachmentUpload(
   }
   if (!isSupportedChatAttachment(fileName, mimeType)) {
     throw createError.validation(UNSUPPORTED_CHAT_ATTACHMENT_MESSAGE);
+  }
+  const sizeRefusal = chatAttachmentSizeRefusal(fileName, mimeType, byteCount);
+  if (sizeRefusal) {
+    await purgeChatAttachmentUpload(userId, storageKey);
+    throw createError.validation(sizeRefusal);
   }
 
   const completed = await findCompletedChatAttachment({ ...input, temporaryChat });

@@ -7,6 +7,7 @@ Use a specific template when it fits better:
 - [Security or privacy](?template=security-privacy.md)
 - [Docs or research](?template=docs-research.md)
 - [Release or infrastructure](?template=release-infra.md)
+- [Parallel agent change](?template=parallel-agent-change.md)
 
 ## Summary
 

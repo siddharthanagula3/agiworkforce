@@ -180,6 +180,24 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
     },
   );
 
+  it('lets the buttons of a row wrap under its title and details on a narrow screen', async () => {
+    await show();
+
+    const summary = screen.getByText('Owner A planning').parentElement!;
+    const row = summary.parentElement!;
+    expect(row.style.flexWrap).toBe('wrap');
+    expect(summary.style.flex).toBe('1 1 12rem');
+    expect(within(row).getAllByRole('button')).toHaveLength(3);
+  });
+
+  it('puts the buttons under the title on a phone so the title keeps the full width', async () => {
+    await show();
+
+    const summary = screen.getByText('Owner A planning').parentElement!;
+    expect(summary.className.split(/\s+/)).toContain('max-md:basis-full!');
+    expect(summary.nextElementSibling?.querySelectorAll('button')).toHaveLength(3);
+  });
+
   it('does not dispatch for an unavailable initial session', async () => {
     boundary.session = null;
     render(<SharedLinksSection />);
@@ -522,9 +540,7 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
       expect(screen.getByText('Other link')).toBeInTheDocument();
       await confirmRevoke();
       await screen.findByText(complete ? 'No shared links' : 'No shared links shown');
-      expect(Boolean(screen.queryByText(/This list may not show every shared link/))).toBe(
-        !complete,
-      );
+      expect(Boolean(screen.queryByText(/This list may be incomplete/))).toBe(!complete);
       expect(boundary.fetch).toHaveBeenCalledTimes(3);
     },
   );

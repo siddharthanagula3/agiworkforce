@@ -13,6 +13,7 @@ import { focusPageComposer } from './composerFocus';
 import { showsTrustedPage } from './permissionPolicy';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { pickSourceForDisplay } from './garnishCore';
+import { readImagePng } from './runtime/clipboardService';
 import { physicalCaptureSize } from './runtime/computerUseProtocol';
 import { hideQuickAsk, isQuickAskVisible } from './quickAsk';
 
@@ -70,26 +71,16 @@ function isPasteDestination(win: BrowserWindow, destination: PasteDestination): 
   );
 }
 
-const CAPTURE_TYPE = 'image/png';
-
 async function clipboardImageFingerprint(): Promise<string | null> {
-  const items = await clipboard.read();
-  const item = items.find((entry) => entry.types.includes(CAPTURE_TYPE));
-  if (!item) return null;
-  const blob = (await item.getType(CAPTURE_TYPE)) as Blob;
-  return createHash('sha256')
-    .update(Buffer.from(await blob.arrayBuffer()))
-    .digest('hex');
-}
-
-function warnCaptureKept(error: unknown): void {
-  console.warn('[screenshot] the capture could not be taken back off the clipboard:', error);
+  const png = await readImagePng();
+  if (!png || png.length === 0) return null;
+  return createHash('sha256').update(png).digest('hex');
 }
 
 export async function putCaptureOnClipboard(png: Buffer): Promise<string | null> {
   await clipboard.write([
     new ClipboardItem({
-      [CAPTURE_TYPE]: new Blob([new Uint8Array(png)], { type: CAPTURE_TYPE }),
+      'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }),
     }),
   ]);
   return clipboardImageFingerprint();
@@ -102,14 +93,17 @@ export async function takeCaptureBackFromClipboard(
   priorText: string,
   captureFingerprint: string | null,
 ): Promise<void> {
-  if (captureFingerprint === null || (await clipboardImageFingerprint()) !== captureFingerprint) {
-    return;
+  if (captureFingerprint === null) return;
+  try {
+    if ((await clipboardImageFingerprint()) !== captureFingerprint) return;
+    if (priorText !== '') {
+      await clipboard.writeText(priorText);
+      return;
+    }
+    clipboard.clear();
+  } catch (error) {
+    console.warn('[screenshot] the capture could not be taken back off the clipboard:', error);
   }
-  if (priorText !== '') {
-    await clipboard.writeText(priorText);
-    return;
-  }
-  clipboard.clear();
 }
 
 async function pasteIntoChat(
@@ -187,7 +181,7 @@ export async function captureWindowToChat(
   } finally {
     if (captureOnClipboard && !leftForTheUserToPaste) {
       await delay(CLIPBOARD_RESTORE_MS);
-      await takeCaptureBackFromClipboard(priorText, captureFingerprint).catch(warnCaptureKept);
+      await takeCaptureBackFromClipboard(priorText, captureFingerprint);
     }
     capturing = false;
   }
@@ -240,7 +234,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     // one path that leaves the screen on the clipboard.
     if (captureOnClipboard && !leftForTheUserToPaste) {
       await delay(CLIPBOARD_RESTORE_MS);
-      await takeCaptureBackFromClipboard(priorText, captureFingerprint).catch(warnCaptureKept);
+      await takeCaptureBackFromClipboard(priorText, captureFingerprint);
     }
     if (mainWasVisible && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show();

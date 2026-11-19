@@ -85,8 +85,8 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
     };
 
     let total = cells.len();
-    let serialized = serde_json::to_string_pretty(&nb)?;
-    write_atomic(path, serialized.as_bytes())
+    let serialized = nbformat_json(&nb)?;
+    write_atomic(path, &serialized)
         .with_context(|| format!("write notebook {}", path.display()))?;
 
     Ok(NotebookEditResult {
@@ -95,6 +95,22 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
         affected_index: result.1,
         total_cells: total,
     })
+}
+
+/// The notebook laid out as nbformat writes it: one-space indent, keys in
+/// sorted order, and a final newline. A notebook Jupyter saved then changes
+/// only in the cells that were edited.
+fn nbformat_json(nb: &serde_json::Value) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    {
+        let mut serializer = serde_json::Serializer::with_formatter(
+            &mut buf,
+            serde_json::ser::PrettyFormatter::with_indent(b" "),
+        );
+        nb.serialize(&mut serializer)?;
+    }
+    buf.push(b'\n');
+    Ok(buf)
 }
 
 /// Write `bytes` to `path` atomically: write to a temp file in the same
@@ -396,6 +412,69 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(tmp.path()).unwrap()).unwrap();
         let source = updated["cells"][0]["source"].as_array().unwrap();
         assert!(source[0].as_str().unwrap().contains("new"));
+    }
+
+    const JUPYTER_SAVED: &str = r##"{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "a",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "1\n"
+     ]
+    }
+   ],
+   "source": [
+    "x = 1\n",
+    "print(x)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b",
+   "metadata": {},
+   "source": [
+    "# Résumé\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+"##;
+
+    #[test]
+    fn a_one_cell_edit_of_a_notebook_jupyter_saved_changes_only_that_cell() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(JUPYTER_SAVED.as_bytes()).unwrap();
+        let req = NotebookEditRequest {
+            path: tmp.path().to_string_lossy().into(),
+            mode: NotebookEditMode::Replace,
+            cell_id: Some("b".into()),
+            index: None,
+            kind: None,
+            content: Some("# Summary".into()),
+        };
+
+        apply(&req).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(tmp.path()).unwrap(),
+            JUPYTER_SAVED.replace("# Résumé", "# Summary")
+        );
     }
 
     fn edited_cells(tmp: &NamedTempFile, req: &NotebookEditRequest) -> serde_json::Value {

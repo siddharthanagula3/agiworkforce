@@ -7,6 +7,7 @@ import {
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { applyAssistantFenceEdit } from '@agiworkforce/unified-chat/assistant-fence-edits';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -17,6 +18,11 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
 import { SAVE_ASSISTANT_CONTENT_EDIT_SQL } from '@/lib/server/assistant-content-edits';
 import {
+  WorkPlanReviewPatchSchema,
+  sameWorkPlanContent,
+  UPDATE_WORK_PLAN_REVIEW_SQL,
+} from '../lib/work-plan-review';
+import {
   collectSubtree,
   deleteMessages,
   lockConversationThread,
@@ -25,10 +31,12 @@ import {
   spliceMessageChildren,
   wantsSubtreeDelete,
 } from '../lib/message-thread';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
 const PatchMessageSchema = z.union([
+  WorkPlanReviewPatchSchema,
   z
     .object({
       fenceEdit: z
@@ -88,6 +96,35 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     throw createError.notFound('Conversation not found');
   }
 
+  if ('workPlanReview' in patch) {
+    const review = patch.workPlanReview;
+    const expected = patch.expectedWorkPlanReview;
+    if (
+      review.conversationId !== conversationId ||
+      review.planningMessageId !== messageId ||
+      (review.declined && review.awaitingApproval) ||
+      (expected !== null &&
+        (!sameWorkPlanContent(expected, review) ||
+          (expected.declined && !review.declined) ||
+          (!expected.awaitingApproval && review.awaitingApproval)))
+    ) {
+      throw createError.conflict('The Work plan changed. Reopen it before deciding.');
+    }
+    const [saved] = await db.query<{ id: string; review: unknown }>(UPDATE_WORK_PLAN_REVIEW_SQL, [
+      JSON.stringify({
+        agiWorkPlan: review.steps,
+        agiWorkPlanReview: review,
+        agiWorkPlanDeclined: review.declined,
+      }),
+      messageId,
+      conversationId,
+      JSON.stringify(expected),
+    ]);
+    if (!saved)
+      throw createError.conflict('The saved Work plan changed. Reopen it before deciding.');
+    return NextResponse.json({ id: saved.id, review: saved.review });
+  }
+
   if ('fenceEdit' in patch) {
     const [message] = await db.query<{
       role: string;
@@ -111,7 +148,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     }
     if (message.busy)
       throw createError.conflict('Wait for this response to finish before editing.');
-    const content = applyAssistantFenceEdit(message.content, patch.fenceEdit);
+    const content = applyAssistantFenceEdit(stripCitationMarkup(message.content), patch.fenceEdit);
     if (content === null) {
       throw createError.conflict('This block changed. Reopen the chat before saving your edit.');
     }
@@ -137,7 +174,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({
       ok: true,
-      content: saved.content,
+      content: stripCitationMarkup(saved.content),
       editRevision: saved.edit_revision,
     });
   }
@@ -171,7 +208,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 
   const count = await db.execute(
     `update web_messages
-        set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
+        set metadata = ${mergeJsonbObjectSql('metadata', '$1::jsonb')}
       where id = $2 and conversation_id = $3 and deleted_at is null`,
     [JSON.stringify(patch), messageId, conversationId],
   );

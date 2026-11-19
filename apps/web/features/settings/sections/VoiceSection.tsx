@@ -71,7 +71,7 @@ export function VoiceSection() {
         >
           Voice
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Choose your voice and dictate with the microphone button.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
@@ -112,8 +112,7 @@ export function VoiceSection() {
           <div>
             <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Dictation</div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Turn speech into composer text with the microphone button. Review the transcript
-              before sending.
+              Speak into the composer with the microphone button.
             </div>
           </div>
           <Switch

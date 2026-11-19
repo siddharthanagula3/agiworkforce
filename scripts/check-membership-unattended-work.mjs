@@ -20,6 +20,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 import { stripComments } from './lib/module-graph.mjs';
 
@@ -189,6 +190,10 @@ export function checkMembershipUnattendedWork(repoRoot = REPO_ROOT, options = {}
     (baseline.ungated ?? []).map((entry) => [`${entry.file}#${entry.table}`, entry]),
   );
   const seen = new Set();
+  const lifecycleSource = read(repoRoot, 'packages/contracts/types/src/lifecycle-semantics.json');
+  const lifecycle = lifecycleSource ? JSON.parse(lifecycleSource) : {};
+  const dispatchers = lifecycle.deletionDispatchers ?? [];
+  const seenDispatchers = new Set();
 
   for (const relativePath of sourceFiles(repoRoot, options.roots ?? SCAN_DIRS)) {
     const source = stripComments(read(repoRoot, relativePath) ?? '');
@@ -201,6 +206,53 @@ export function checkMembershipUnattendedWork(repoRoot = REPO_ROOT, options = {}
       if (!PICKS_WORK_UP.test(statement)) continue;
       if (ALREADY_RUNNING.test(statement)) continue;
       if (NAMES_ONE_ROW.test(statement) && !SWEEPS_MANY.test(statement)) continue;
+      const purpose = lifecycle.readExemptions?.find(
+        (entry) =>
+          entry.file === relativePath &&
+          entry.table === named[1] &&
+          ['erasure', 'purge', 'retention-sweep'].includes(entry.class),
+      );
+      const automation =
+        /\bis_enabled\b|\bnext_execution_at\b|\bscheduled_for\b|\bstatus\s*=\s*'(?:queued|ready)'/i.test(
+          statement,
+        );
+      const expiresData = /\b(?:updated_at|deleted_at|expires_at)\s*<\s*\$\d/i.test(statement);
+      if (purpose && !automation && expiresData) continue;
+      const dispatcher = dispatchers.find(
+        (entry) => entry.file === relativePath && entry.table === named[1],
+      );
+      if (
+        dispatcher &&
+        !automation &&
+        /\bcleanup_job_id\s+is\s+null/i.test(statement) &&
+        /\bstate\s+in\s*\(\s*'queued'\s*,\s*'deleting'\s*\)/i.test(statement) &&
+        /\blease_expires_at\s*<=\s*clock_timestamp\s*\(/i.test(statement)
+      ) {
+        const parsed = ts.createSourceFile(relativePath, source, ts.ScriptTarget.Latest, true);
+        const position = source.indexOf(raw);
+        let owner;
+        const walk = (node) => {
+          if (
+            ts.isFunctionDeclaration(node) &&
+            node.name?.text === dispatcher.function &&
+            node.getStart(parsed) <= position &&
+            node.end >= position
+          )
+            owner = node;
+          ts.forEachChild(node, walk);
+        };
+        walk(parsed);
+        const body = owner?.getText(parsed) ?? '';
+        if (
+          dispatcher.jobKind?.startsWith('data-deletion.') &&
+          body.includes('enqueueJob(') &&
+          body.includes(`kind: '${dispatcher.jobKind}'`) &&
+          (dispatcher.why ?? '').length >= 80
+        ) {
+          seenDispatchers.add(dispatcher);
+          continue;
+        }
+      }
       report.pickups += 1;
 
       const membership = CONSULTS_MEMBERSHIP.test(statement);
@@ -235,6 +287,12 @@ export function checkMembershipUnattendedWork(repoRoot = REPO_ROOT, options = {}
   for (const [key, entry] of recorded) {
     if (seen.has(key)) continue;
     failures.push(`${BASELINE_PATH}: ${key} matches no statement any more; delete the entry.`);
+  }
+  for (const dispatcher of dispatchers) {
+    if (!seenDispatchers.has(dispatcher))
+      failures.push(
+        `The declared deletion dispatcher ${dispatcher.file}#${dispatcher.function} has no matching fenced cleanup pickup; remove or repair its declaration.`,
+      );
   }
   for (const entry of baseline.ungated ?? []) {
     if (!entry.sql || !entry.owner || (entry.reason ?? '').length < 40) {

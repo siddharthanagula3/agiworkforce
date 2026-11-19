@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto';
 import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
-import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
+import { cloudUtilityModel, LocalModelSelectedError } from '../core/cloudModelBoundary';
 import {
   TierInfoSchema,
   TurnSettlementSchema,
@@ -32,6 +32,7 @@ import {
   type ManagedUsageBucketReading,
   type ManagedUsageCreditWindow,
   type ManagedUsageCredits,
+  ErrorCode,
   PRODUCT_BRAND,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
@@ -42,6 +43,8 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Config, __CONFIG_DEFAULTS, type ExtensionAgentEffort } from '../platform/config';
 import { platformRequestHeaders } from '../platform/platformHeaders';
+import { t } from '../l10n';
+import { accountRefusalKind, boundedRefusalText, parseRetryAfterMs } from './accountRefusal';
 
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -76,6 +79,7 @@ export class AgiWorkforceApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly code?: string,
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'AgiWorkforceApiError';
@@ -156,9 +160,38 @@ export class AgiWorkforceUsageLimitError extends AgiWorkforceApiError {
   }
 }
 
+const MAX_RETRY_AFTER_MS = 30_000;
+
+function cancelledRequestError(): AgiWorkforceApiError {
+  return new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+}
+
+function waitUnlessCancelled(
+  waitMs: number,
+  cancellation: vscode.CancellationToken,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (cancellation.isCancellationRequested) {
+      reject(cancelledRequestError());
+      return;
+    }
+    const boundedWaitMs = waitMs < MAX_RETRY_AFTER_MS ? waitMs : MAX_RETRY_AFTER_MS;
+    const timer = setTimeout(() => {
+      listener.dispose();
+      resolve();
+    }, boundedWaitMs);
+    const listener = cancellation.onCancellationRequested(() => {
+      clearTimeout(timer);
+      listener.dispose();
+      reject(cancelledRequestError());
+    });
+  });
+}
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   canRetry: () => boolean,
+  cancellation: vscode.CancellationToken,
   retries = 2,
   delayMs = 1000,
 ): Promise<T> {
@@ -175,8 +208,11 @@ async function withRetry<T>(
     ) {
       throw err;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-    return withRetry(fn, canRetry, retries - 1, delayMs * 2);
+    const stated = err instanceof AgiWorkforceApiError ? err.retryAfterMs : undefined;
+    const waitMs = Math.max(delayMs, Math.min(stated ?? 0, MAX_RETRY_AFTER_MS));
+    await waitUnlessCancelled(waitMs, cancellation);
+    if (cancellation.isCancellationRequested) throw cancelledRequestError();
+    return withRetry(fn, canRetry, cancellation, retries - 1, delayMs * 2);
   }
 }
 
@@ -383,17 +419,22 @@ let heldAccountUnavailable: string | undefined;
  * the device-code flow. deviceAuth is loaded here rather than imported at the
  * top because it owns the device endpoints and already imports this module.
  */
-export function renewAccountSession(secrets: vscode.SecretStorage): Promise<AccountSessionRenewal> {
+export function renewAccountSession(
+  secrets: vscode.SecretStorage,
+  rejectedToken?: string,
+): Promise<AccountSessionRenewal> {
   const custody = custodyOf(secrets);
   const pending = custody.renewal;
   if (pending !== undefined && pending.generation === custody.generation) return pending.promise;
 
   const generation = custody.generation;
-  const promise: Promise<AccountSessionRenewal> = rotateAccountSession(secrets, generation).finally(
-    () => {
-      if (custody.renewal?.promise === promise) custody.renewal = undefined;
-    },
-  );
+  const promise: Promise<AccountSessionRenewal> = rotateAccountSession(
+    secrets,
+    generation,
+    rejectedToken,
+  ).finally(() => {
+    if (custody.renewal?.promise === promise) custody.renewal = undefined;
+  });
   custody.renewal = { generation, promise };
   return promise;
 }
@@ -401,16 +442,27 @@ export function renewAccountSession(secrets: vscode.SecretStorage): Promise<Acco
 async function rotateAccountSession(
   secrets: vscode.SecretStorage,
   generation: number,
+  rejectedToken?: string,
 ): Promise<AccountSessionRenewal> {
   if (heldAccountUnavailable !== undefined) return 'account-unavailable';
   const owns = (): boolean => custodyOf(secrets).generation === generation;
 
-  if ((await getAccountAuthState(secrets)).status !== 'expired') return 'superseded';
+  const state = await getAccountAuthState(secrets);
+  const observedToken = await secrets.get(ACCOUNT_TOKEN_KEY);
+  const stillRejected =
+    rejectedToken !== undefined && state.status === 'signed-in' && observedToken === rejectedToken;
+  if (state.status !== 'expired' && !stillRejected) return 'superseded';
   const refreshToken = await getAccountRefreshToken(secrets);
   if (refreshToken === undefined) return 'unavailable';
 
   const { refreshDeviceSession } = await import('../features/account-auth/deviceAuth');
   if (!owns()) return 'superseded';
+  if (
+    (await secrets.get(ACCOUNT_TOKEN_KEY)) !== observedToken ||
+    (await getAccountRefreshToken(secrets)) !== refreshToken
+  ) {
+    return 'superseded';
+  }
   const result = await refreshDeviceSession(getCloudWebOrigin(), refreshToken);
 
   if (result.kind === 'renewed') {
@@ -424,7 +476,7 @@ async function rotateAccountSession(
   }
   if (result.kind === 'revoked') {
     const applied = await runExclusive(secrets, async () => {
-      if (!owns()) return false;
+      if (!owns() || (await getAccountRefreshToken(secrets)) !== refreshToken) return false;
       await wipeAccountSession(secrets);
       await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
       return true;
@@ -445,6 +497,56 @@ async function rotateAccountSession(
   }
   if (!owns()) return 'superseded';
   return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';
+}
+
+export type RejectedAccountTokenReview =
+  | { kind: 'retry'; token: string }
+  | { kind: 'rejected' }
+  | { kind: 'unconfirmed' }
+  | { kind: 'account-refused'; message: string };
+
+const TERMS_ACCEPTANCE_REQUIRED_MESSAGE =
+  'Accept the updated Terms of Service to keep using AGI Cloud. Sign in again to review them.';
+const ACCOUNT_UNAVAILABLE_MESSAGE =
+  'Your AGI Cloud account cannot be used right now. Sign in again to see why.';
+
+/**
+ * A single 401 from a data route does not prove the credential is gone. The
+ * session is only dropped after the credential was renewed and the renewed one
+ * was refused too, or when the renewal itself says the grant is revoked.
+ */
+export async function reviewRejectedAccountToken(
+  secrets: vscode.SecretStorage,
+  rejectedToken: string,
+): Promise<RejectedAccountTokenReview> {
+  if ((await getAccountRefreshToken(secrets)) === undefined) {
+    return { kind: 'retry', token: rejectedToken };
+  }
+  const renewal = await renewAccountSession(secrets, rejectedToken);
+  if (renewal === 'revoked') return { kind: 'rejected' };
+  if (renewal === 'account-unavailable') {
+    return {
+      kind: 'account-refused',
+      message: heldAccountUnavailable ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+    };
+  }
+  if (renewal === 'terms-required') {
+    return { kind: 'account-refused', message: TERMS_ACCEPTANCE_REQUIRED_MESSAGE };
+  }
+  if (renewal === 'renewed' || renewal === 'superseded') {
+    const current = await secrets.get(ACCOUNT_TOKEN_KEY);
+    if (current === undefined || current === '') return { kind: 'rejected' };
+    return current === rejectedToken ? { kind: 'unconfirmed' } : { kind: 'retry', token: current };
+  }
+  return { kind: 'unconfirmed' };
+}
+
+export async function confirmAccountTokenRejected(
+  secrets: vscode.SecretStorage,
+  token: string,
+): Promise<void> {
+  notifyAccountTierMayHaveChanged();
+  await invalidateAccountToken(secrets, token);
 }
 
 export async function getAccountAuthState(
@@ -541,7 +643,9 @@ export function getCloudWebOrigin(): string {
 }
 
 function getModel(): string {
-  return normalizeConfiguredModelId(Config.model());
+  const selected = cloudUtilityModel();
+  if (selected.route === 'local') throw new LocalModelSelectedError(selected.model);
+  return selected.model;
 }
 
 export function buildCloudUtilityChatCompletionRequest(
@@ -608,11 +712,8 @@ export function parseCloudCompletionError(
       : undefined;
   const code = typeof nested?.['code'] === 'string' ? nested['code'] : undefined;
   const message =
-    typeof nested?.['message'] === 'string' && nested['message'].trim() !== ''
-      ? nested['message'].trim()
-      : typeof parsed?.['message'] === 'string' && parsed['message'].trim() !== ''
-        ? parsed['message'].trim()
-        : undefined;
+    (typeof nested?.['message'] === 'string' ? boundedRefusalText(nested['message']) : undefined) ??
+    (typeof parsed?.['message'] === 'string' ? boundedRefusalText(parsed['message']) : undefined);
   const requiredTier =
     typeof nested?.['requiredTier'] === 'string'
       ? nested['requiredTier']
@@ -629,16 +730,17 @@ export function parseCloudCompletionError(
     );
   }
 
-  if (statusCode === 403 && code !== undefined && PLAN_GATE_CODES.has(code)) {
+  const planGateCode = code?.toLowerCase();
+  if (statusCode === 403 && planGateCode !== undefined && PLAN_GATE_CODES.has(planGateCode)) {
     notifyAccountTierMayHaveChanged();
     return new AgiWorkforcePaywallError(
-      code.replace(/_(?:plan_)?required$/u, '') || 'managed_cloud',
+      planGateCode.replace(/_(?:plan_)?required$/u, '') || 'managed_cloud',
       requiredTier ?? 'pro',
       message ??
-        (code === 'subscription_inactive'
+        (planGateCode === 'subscription_inactive'
           ? 'Your AGI Cloud subscription needs billing attention.'
           : 'This AGI Cloud capability is unavailable on your current plan.'),
-      code,
+      planGateCode,
     );
   }
 
@@ -655,6 +757,9 @@ export function parseCloudCompletionError(
     );
   }
 
+  const retryAfter = responseHeaders['retry-after'];
+  const retryAfterMs = parseRetryAfterMs(Array.isArray(retryAfter) ? retryAfter[0] : retryAfter);
+
   return new AgiWorkforceApiError(
     message ??
       (statusCode === 429
@@ -662,7 +767,39 @@ export function parseCloudCompletionError(
         : `AGI Cloud request failed (HTTP ${statusCode}).`),
     statusCode,
     code ?? (statusCode === 429 ? 'RATE_LIMITED' : 'HTTP_ERROR'),
+    retryAfterMs,
   );
+}
+
+function readStreamErrorFields(value: unknown): AgiWorkforceApiError | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as { message?: unknown; code?: unknown };
+  const message =
+    (typeof record.message === 'string' ? boundedRefusalText(record.message) : undefined) ??
+    'AGI Cloud could not finish this response.';
+  const code = typeof record.code === 'string' && record.code !== '' ? record.code : 'STREAM_ERROR';
+  return new AgiWorkforceApiError(message, undefined, code);
+}
+
+function streamFailure(frame: unknown): AgiWorkforceApiError | undefined {
+  if (typeof frame !== 'object' || frame === null) return undefined;
+  const record = frame as {
+    type?: unknown;
+    error?: unknown;
+    choices?: Array<{ delta?: { x_stream_error?: unknown }; finish_reason?: unknown }>;
+  };
+  const topLevel = readStreamErrorFields(record.type === 'error' ? record : record.error);
+  if (topLevel !== undefined) return topLevel;
+  const choice = Array.isArray(record.choices) ? record.choices[0] : undefined;
+  const inBand = readStreamErrorFields(choice?.delta?.x_stream_error);
+  if (inBand !== undefined) return inBand;
+  return choice?.finish_reason === 'error'
+    ? new AgiWorkforceApiError(
+        'AGI Cloud could not finish this response.',
+        undefined,
+        'STREAM_ERROR',
+      )
+    : undefined;
 }
 
 function httpsPostStream(
@@ -673,6 +810,10 @@ function httpsPostStream(
   token: vscode.CancellationToken,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (token.isCancellationRequested) {
+      reject(cancelledRequestError());
+      return;
+    }
     const parsed = new URL(urlString);
     const isHttps = parsed.protocol === 'https:';
     const lib = isHttps ? https : http;
@@ -704,15 +845,32 @@ function httpsPostStream(
 
       const text = new TextDecoder();
       const frames = new ServerSentEventDecoder();
+      let finished = false;
+      let failure: AgiWorkforceApiError | undefined;
       const deliver = (events: readonly ServerSentEvent[]) => {
         for (const event of events) {
           for (const data of splitJoinedServerSentEventData(event.data)) {
-            if (data === SSE_DONE_DATA) continue;
+            if (failure !== undefined) return;
+            if (data === SSE_DONE_DATA) {
+              finished = true;
+              continue;
+            }
+            let frame: unknown;
             try {
-              onChunk(JSON.parse(data) as ChatCompletionChunk);
+              frame = JSON.parse(data);
             } catch {
               continue;
             }
+            failure = streamFailure(frame);
+            if (failure !== undefined) {
+              cancelListener.dispose();
+              req.destroy();
+              reject(failure);
+              return;
+            }
+            const chunk = frame as ChatCompletionChunk;
+            if (typeof chunk.choices?.[0]?.finish_reason === 'string') finished = true;
+            onChunk(chunk);
           }
         }
       };
@@ -734,6 +892,17 @@ function httpsPostStream(
         cancelListener.dispose();
         deliver(frames.push(text.decode()));
         deliver(frames.finish({ acceptUnterminatedFrame: true }).events);
+        if (failure !== undefined) return;
+        if (!finished) {
+          reject(
+            new AgiWorkforceApiError(
+              'The AGI Cloud response stopped before it finished, so this result is incomplete and was not used. Try again.',
+              undefined,
+              'STREAM_INCOMPLETE',
+            ),
+          );
+          return;
+        }
         resolve();
       });
       res.on('error', (err) => {
@@ -750,7 +919,7 @@ function httpsPostStream(
     const cancelListener = token.onCancellationRequested(() => {
       cancelListener.dispose();
       req.destroy(new Error('Request cancelled'));
-      reject(new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED'));
+      reject(cancelledRequestError());
     });
 
     req.write(body);
@@ -764,6 +933,7 @@ interface StreamCallbacks {
 }
 
 export type ManagedRequestBilling = 'settle-now' | 'deferred';
+export type CloudRequestAttempts = 'retry-server-failures' | 'single';
 
 export interface ManagedRequestCompletion {
   requestId: string;
@@ -781,7 +951,9 @@ export async function streamChatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
   billing: ManagedRequestBilling = 'settle-now',
+  attempts: CloudRequestAttempts = 'retry-server-failures',
 ): Promise<void> {
+  const requestBody = buildCloudUtilityChatCompletionRequest(messages, overrideModel);
   const credential = await getCloudCredential(secrets);
   if (credential.kind === 'none') {
     throw new AgiWorkforceApiError(
@@ -794,31 +966,28 @@ export async function streamChatCompletion(
   }
 
   const endpoint = getCloudApiEndpoint();
-  const requestBody = buildCloudUtilityChatCompletionRequest(messages, overrideModel);
   const model = requestBody.model;
 
   const bodyStr = JSON.stringify(requestBody);
 
   const idempotencyKey = `agi.vscode.chat.${randomUUID()}`;
 
-  const authHeaders: Record<string, string> = {
-    Authorization: `Bearer ${credential.token}`,
+  const headersFor = (bearer: string): Record<string, string> => ({
+    Authorization: `Bearer ${bearer}`,
     ...platformRequestHeaders(),
     'Idempotency-Key': idempotencyKey,
-  };
+  });
 
   const requestStartTime = Date.now();
 
-  if (cancellationToken.isCancellationRequested) {
-    throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-  }
+  if (cancellationToken.isCancellationRequested) throw cancelledRequestError();
   let tokenDelivered = false;
-  try {
-    await withRetry(
+  const send = (bearer: string): Promise<void> =>
+    withRetry(
       () =>
         httpsPostStream(
           `${endpoint}/chat/completions`,
-          authHeaders,
+          headersFor(bearer),
           bodyStr,
           (chunk) => {
             const content = chunk.choices[0]?.delta?.content;
@@ -830,12 +999,40 @@ export async function streamChatCompletion(
           cancellationToken,
         ),
       () => !tokenDelivered && !cancellationToken.isCancellationRequested,
+      cancellationToken,
+      attempts === 'single' ? 0 : undefined,
     );
+  const isUnauthorized = (error: unknown): boolean =>
+    error instanceof AgiWorkforceApiError && error.statusCode === 401;
+  try {
+    try {
+      await send(credential.token);
+    } catch (error) {
+      if (!isUnauthorized(error) || credential.kind !== 'account') throw error;
+      notifyAccountTierMayHaveChanged();
+      const review = await reviewRejectedAccountToken(secrets, credential.token);
+      if (review.kind === 'account-refused') {
+        throw new AgiWorkforceApiError(review.message, 403, 'ACCOUNT_AUTH_REQUIRED');
+      }
+      if (review.kind === 'unconfirmed') {
+        throw new AgiWorkforceApiError(
+          t('chatError.couldNotReach', { provider: PRODUCT_BRAND }),
+          503,
+          'SESSION_CHECK_UNAVAILABLE',
+        );
+      }
+      if (review.kind === 'rejected') throw error;
+      try {
+        await send(review.token);
+      } catch (retryError) {
+        if (isUnauthorized(retryError)) await confirmAccountTokenRejected(secrets, review.token);
+        throw retryError;
+      }
+    }
   } catch (error) {
-    if (error instanceof AgiWorkforceApiError && error.statusCode === 401) {
+    if (isUnauthorized(error)) {
       notifyAccountTierMayHaveChanged();
       if (credential.kind === 'account') {
-        await invalidateAccountToken(secrets, credential.token);
         throw new AgiWorkforceApiError(
           'Your AGI Cloud session expired or was revoked. Sign in again to continue.',
           401,
@@ -883,6 +1080,7 @@ export async function chatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
   billing: ManagedRequestBilling = 'settle-now',
+  attempts: CloudRequestAttempts = 'retry-server-failures',
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -910,6 +1108,7 @@ export async function chatCompletion(
       cancellationToken,
       overrideModel,
       billing,
+      attempts,
     ).catch(safeReject);
   });
 }
@@ -1081,25 +1280,79 @@ export async function fetchAccountIdentity(
   const accountToken = await getAccountToken(secrets);
   if (accountToken === undefined || accountToken === '') return undefined;
 
-  const response = await getCloudJson(
-    new URL('/api/me?surface=vscode', getCloudWebOrigin()).toString(),
-    accountToken,
+  const url = new URL('/api/me?surface=vscode', getCloudWebOrigin()).toString();
+  const response = await sendAccountRequest(
+    secrets,
+    { kind: 'account', token: accountToken },
+    (bearer) => getCloudJson(url, bearer),
   );
-  if (response.kind === 'http-error') {
-    if (response.status === 401) {
-      notifyAccountTierMayHaveChanged();
-      void invalidateAccountToken(secrets, accountToken);
-    }
-    return undefined;
-  }
   return response.kind === 'ok' ? parseAccountIdentityResponse(response.body) : undefined;
 }
 
 type CloudJsonResponse =
   | { kind: 'ok'; body: unknown }
-  | { kind: 'http-error'; status: number }
+  | { kind: 'http-error'; status: number; message?: string; code?: string; retryAfterMs?: number }
   | { kind: 'unreadable' }
   | { kind: 'unreachable' };
+
+function readHttpErrorBody(
+  status: number,
+  headers: http.IncomingHttpHeaders,
+  raw: string,
+): CloudJsonResponse {
+  let error: { code?: unknown; message?: unknown } | undefined;
+  try {
+    const parsed = JSON.parse(raw) as { error?: unknown } | null;
+    if (parsed?.error !== null && typeof parsed?.error === 'object') {
+      error = parsed.error as { code?: unknown; message?: unknown };
+    }
+  } catch {
+    error = undefined;
+  }
+  const message =
+    typeof error?.message === 'string' ? boundedRefusalText(error.message) : undefined;
+  const code = typeof error?.code === 'string' ? error.code : undefined;
+  const retryAfter = headers['retry-after'];
+  const retryAfterMs = parseRetryAfterMs(Array.isArray(retryAfter) ? retryAfter[0] : retryAfter);
+  return {
+    kind: 'http-error',
+    status,
+    ...(message === undefined ? {} : { message }),
+    ...(code === undefined ? {} : { code }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+  };
+}
+
+function isUnauthorizedResponse(response: CloudJsonResponse): boolean {
+  return response.kind === 'http-error' && response.status === 401;
+}
+
+async function sendAccountRequest(
+  secrets: vscode.SecretStorage,
+  credential: { kind: 'account' | 'api-key'; token: string },
+  send: (token: string) => Promise<CloudJsonResponse>,
+): Promise<CloudJsonResponse> {
+  const first = await send(credential.token);
+  if (!isUnauthorizedResponse(first)) return first;
+  notifyAccountTierMayHaveChanged();
+  if (credential.kind !== 'account') return first;
+
+  const review = await reviewRejectedAccountToken(secrets, credential.token);
+  if (review.kind === 'unconfirmed') return { kind: 'unreachable' };
+  if (review.kind === 'account-refused') {
+    return {
+      kind: 'http-error',
+      status: 403,
+      code: ErrorCode.ACCOUNT_UNAVAILABLE,
+      message: review.message,
+    };
+  }
+  if (review.kind === 'rejected') return first;
+
+  const second = await send(review.token);
+  if (isUnauthorizedResponse(second)) await confirmAccountTokenRejected(secrets, review.token);
+  return second;
+}
 
 function getCloudJson(url: string, token: string): Promise<CloudJsonResponse> {
   return new Promise((resolve) => {
@@ -1124,7 +1377,7 @@ function getCloudJson(url: string, token: string): Promise<CloudJsonResponse> {
       res.on('end', () => {
         const status = res.statusCode ?? 0;
         if (status >= 400) {
-          resolve({ kind: 'http-error', status });
+          resolve(readHttpErrorBody(status, res.headers, Buffer.concat(chunks).toString('utf8')));
           return;
         }
         try {
@@ -1158,14 +1411,8 @@ async function getAccountJson(
 ): Promise<CloudJsonResponse | undefined> {
   const credential = await getCloudCredential(secrets);
   if (credential.kind === 'none') return undefined;
-  const response = await getCloudJson(cloudAccountApiUrl(path), credential.token);
-  if (response.kind === 'http-error' && response.status === 401) {
-    notifyAccountTierMayHaveChanged();
-    if (credential.kind === 'account') {
-      void invalidateAccountToken(secrets, credential.token);
-    }
-  }
-  return response;
+  const url = cloudAccountApiUrl(path);
+  return sendAccountRequest(secrets, credential, (bearer) => getCloudJson(url, bearer));
 }
 
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
@@ -1193,12 +1440,18 @@ export async function fetchUsageHistory(
         };
   }
   if (response.kind === 'http-error') {
+    const serverText =
+      response.message !== undefined &&
+      (response.status === 503 || accountRefusalKind(response.code) !== undefined)
+        ? response.message
+        : undefined;
     return {
       kind: 'unavailable',
       reason:
-        response.status === 401
+        serverText ??
+        (response.status === 401
           ? 'Your AGI Cloud session expired. Sign in again to see usage history.'
-          : `Usage history is unavailable right now (HTTP ${response.status}).`,
+          : `Usage history is unavailable right now (HTTP ${response.status}).`),
     };
   }
   return { kind: 'unavailable', reason: 'AGI Cloud could not be reached for usage history.' };

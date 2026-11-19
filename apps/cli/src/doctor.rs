@@ -58,6 +58,7 @@ pub fn run_doctor(config: &CliConfig, json: bool) -> Result<()> {
 
 pub fn collect_doctor_report(config: &CliConfig) -> DoctorReport {
     let mut checks = Vec::new();
+    checks.push(config_file_check());
     checks.extend(runtime_dependency_checks());
     checks.extend(auth_checks());
     checks.extend(sandbox_checks());
@@ -151,29 +152,80 @@ pub fn format_text_report(report: &DoctorReport) -> String {
     lines.join("\n")
 }
 
+fn config_file_check() -> DoctorCheck {
+    match CliConfig::config_path() {
+        Ok(path) => config_file_check_at(&path),
+        Err(err) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Fail,
+            format!("could not resolve the config file: {err:#}"),
+            vec![],
+        ),
+    }
+}
+
+fn config_file_check_at(path: &Path) -> DoctorCheck {
+    if !path.exists() {
+        return check(
+            "config.file",
+            "config file",
+            DoctorStatus::Pass,
+            format!(
+                "{} does not exist yet; built-in defaults apply",
+                path.display()
+            ),
+            vec![],
+        );
+    }
+    match CliConfig::load_from(path) {
+        Ok(_) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Pass,
+            format!("{} loads", path.display()),
+            vec![],
+        ),
+        Err(err) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Fail,
+            format!("{err:#}"),
+            vec![format!(
+                "agi runs on built-in defaults until {} is fixed or moved aside",
+                path.display()
+            )],
+        ),
+    }
+}
+
 fn runtime_dependency_checks() -> Vec<DoctorCheck> {
     let mut checks = Vec::new();
-    for (id, binary, required) in [
-        ("runtime.git", "git", true),
-        ("runtime.shell", "sh", true),
-        ("runtime.rg", "rg", false),
-        ("runtime.node", "node", false),
-        ("runtime.cargo", "cargo", false),
+    for (id, binary, required, absent_note) in [
+        ("runtime.git", "git", true, ""),
+        ("runtime.shell", "sh", true, ""),
+        ("runtime.rg", "rg", false, "file search falls back to grep"),
+        (
+            "runtime.node",
+            "node",
+            false,
+            "only needed by tools that run on Node",
+        ),
+        (
+            "runtime.cargo",
+            "cargo",
+            false,
+            "only needed for Rust projects",
+        ),
     ] {
         let available = command_available(binary);
-        let status = if available {
-            DoctorStatus::Pass
-        } else if required {
-            DoctorStatus::Fail
-        } else {
-            DoctorStatus::Warn
-        };
+        let status = runtime_dependency_status(available, required);
         let message = if available {
             format!("`{binary}` is available")
         } else if required {
             format!("required runtime `{binary}` is missing")
         } else {
-            format!("optional runtime `{binary}` is missing")
+            format!("optional runtime `{binary}` is not installed, {absent_note}")
         };
         checks.push(check(
             id,
@@ -184,6 +236,14 @@ fn runtime_dependency_checks() -> Vec<DoctorCheck> {
         ));
     }
     checks
+}
+
+fn runtime_dependency_status(available: bool, required: bool) -> DoctorStatus {
+    if available || !required {
+        DoctorStatus::Pass
+    } else {
+        DoctorStatus::Fail
+    }
 }
 
 fn command_available(binary: &str) -> bool {
@@ -797,6 +857,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_config_file_that_does_not_parse_fails_the_check_and_names_the_file() {
+        let home = tempfile::tempdir().expect("temp home");
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[default]\nprovider = \"oll").expect("write config");
+
+        let result = config_file_check_at(&path);
+
+        assert_eq!(result.status, DoctorStatus::Fail);
+        assert!(
+            result.message.contains(&path.display().to_string()),
+            "{}",
+            result.message
+        );
+
+        std::fs::write(&path, "[default]\nstream = true\n").expect("write config");
+        assert_eq!(config_file_check_at(&path).status, DoctorStatus::Pass);
+    }
+
+    #[test]
     fn summary_prefers_fail_over_warn() {
         let checks = vec![
             check("a", "A", DoctorStatus::Pass, "ok", vec![]),
@@ -924,6 +1003,32 @@ mod tests {
         assert!(is_http_url("http://localhost:11434"));
         assert!(!is_http_url("file:///tmp/model.sock"));
         assert!(!is_http_url("not a url"));
+    }
+
+    #[test]
+    fn an_absent_optional_runtime_does_not_degrade_the_verdict() {
+        assert_eq!(runtime_dependency_status(false, false), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(true, false), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(true, true), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(false, true), DoctorStatus::Fail);
+        let checks = vec![
+            check(
+                "runtime.rg",
+                "runtime dependency: rg",
+                runtime_dependency_status(false, false),
+                "optional runtime `rg` is not installed",
+                vec![],
+            ),
+            check(
+                "runtime.git",
+                "runtime dependency: git",
+                runtime_dependency_status(false, true),
+                "required runtime `git` is missing",
+                vec![],
+            ),
+        ];
+        assert_eq!(summarize_checks(&checks[..1]).overall, DoctorStatus::Pass);
+        assert_eq!(summarize_checks(&checks).overall, DoctorStatus::Fail);
     }
 
     #[test]

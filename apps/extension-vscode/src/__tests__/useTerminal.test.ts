@@ -11,6 +11,7 @@ type RemoteEnvironmentModule = typeof import('../platform/remoteEnvironment');
 vi.mock('../platform/remoteEnvironment', async (importOriginal) => ({
   ...(await importOriginal<RemoteEnvironmentModule>()),
   runCliVersion: vi.fn(),
+  resolveCliPath: vi.fn(() => ({ ok: true, path: '/home/dev/.agi/bin/agi' })),
 }));
 
 interface Terminal {

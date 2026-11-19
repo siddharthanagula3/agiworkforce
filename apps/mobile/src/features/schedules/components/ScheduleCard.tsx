@@ -1,13 +1,12 @@
 import { useCallback, useState } from 'react';
 import { getScheduleActionAvailability } from '@agiworkforce/cloud-contracts';
-import { View, type GestureResponderEvent } from 'react-native';
+import { View, type AccessibilityActionEvent, type GestureResponderEvent } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Clock, Trash2, ChevronDown, ChevronUp, Play } from 'lucide-react-native';
+import { Clock, ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Switch } from '@/components/ui/Switch';
 import { Separator } from '@/components/ui/Separator';
 import { ScheduleRunHistory } from './ScheduleRunHistory';
@@ -16,8 +15,10 @@ import { useThemeColors, motion } from '@/src/ui/theme';
 import { useScheduleStore, type Schedule } from '../store';
 import { triggerScheduleNow } from '../service';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
-import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { toUserMessage } from '@/services/userMessage';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { useActionMenu } from '@/src/shared/hooks/useActionMenu';
+import type { ConversationMenuAction } from '@/src/features/conversation-actions/useConversationActions';
 
 interface ScheduleCardProps {
   schedule: Schedule;
@@ -29,6 +30,11 @@ interface ScheduleCardProps {
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const RUN_NOW_FAILED = 'The run could not start. Try again.';
+const RESUME_TO_RUN = 'Resume this schedule to run it now.';
+const MORE_ACTIONS_ACCESSIBILITY_ACTION = 'more-actions';
+const CARD_ACCESSIBILITY_ACTIONS = [
+  { name: MORE_ACTIONS_ACCESSIBILITY_ACTION, label: 'More actions' },
+];
 
 function formatTime(timeOfDay: string): string {
   const [hoursStr, minutesStr] = timeOfDay.split(':');
@@ -144,31 +150,24 @@ function formatLastRun(isoDate: string | null): string | null {
   });
 }
 
-type StatusBadgeColor = 'green' | 'red' | 'yellow' | 'gray';
-function getStatusBadge(status: Schedule['lastRunStatus']): {
-  label: string;
-  color: StatusBadgeColor;
-} {
-  switch (status) {
-    case 'success':
-      return { label: 'Success', color: 'green' };
-    case 'failed':
-      return { label: 'Failed', color: 'red' };
-    case 'pending':
-      return { label: 'Pending', color: 'yellow' };
-    default:
-      return { label: 'Never', color: 'gray' };
-  }
+function describeLastRun(schedule: Schedule): { text: string; failed: boolean } {
+  const when = formatLastRun(schedule.lastRunAt);
+  if (!when) return { text: 'Not run yet', failed: false };
+  if (schedule.lastRunStatus === 'failed') return { text: `Last run failed ${when}`, failed: true };
+  return { text: `Last run ${when}`, failed: false };
 }
+
+const claimTouch = () => true;
 
 export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: ScheduleCardProps) {
   const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const statusBadge = getStatusBadge(schedule.lastRunStatus);
+  const lastRun = describeLastRun(schedule);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const hasLegacyCadence = !isMobileScheduleRecurrenceSupported(schedule.recurrence);
   const fetchRuns = useScheduleStore((s) => s.fetchRuns);
   const fetchSchedules = useScheduleStore((s) => s.fetchSchedules);
+  const moreMenu = useActionMenu();
   const [starting, setStarting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const availability =
@@ -180,48 +179,100 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         })
       : null;
 
-  const handleRunNow = useCallback(
-    async (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      if (starting || !availability?.canRun) return;
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      setStarting(true);
-      setRunError(null);
-      try {
-        await triggerScheduleNow(schedule.id);
-        setHistoryExpanded(true);
-        await Promise.all([fetchRuns(schedule.id), fetchSchedules()]);
-      } catch (error) {
-        setRunError(toUserMessage(error, RUN_NOW_FAILED));
-      } finally {
-        setStarting(false);
-      }
-    },
-    [starting, availability?.canRun, hapticsEnabled, schedule.id, fetchRuns, fetchSchedules],
-  );
+  const handleRunNow = useCallback(async () => {
+    if (starting || !availability?.canRun) return;
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setStarting(true);
+    setRunError(null);
+    try {
+      await triggerScheduleNow(schedule.id);
+      setHistoryExpanded(true);
+      await Promise.all([fetchRuns(schedule.id), fetchSchedules()]);
+    } catch (error) {
+      setRunError(toUserMessage(error, RUN_NOW_FAILED));
+    } finally {
+      setStarting(false);
+    }
+  }, [starting, availability?.canRun, hapticsEnabled, schedule.id, fetchRuns, fetchSchedules]);
 
-  const handleDelete = useCallback(
-    (event: GestureResponderEvent) => {
-      event.stopPropagation();
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      onDelete(schedule.id);
-    },
-    [hapticsEnabled, onDelete, schedule.id],
-  );
+  const handleDelete = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    onDelete(schedule.id);
+  }, [hapticsEnabled, onDelete, schedule.id]);
+
+  const toggleHistory = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setHistoryExpanded((v) => !v);
+  }, [hapticsEnabled]);
 
   const handleToggleHistory = useCallback(
     (event: GestureResponderEvent) => {
       event.stopPropagation();
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
-      setHistoryExpanded((v) => !v);
+      toggleHistory();
     },
-    [hapticsEnabled],
+    [toggleHistory],
+  );
+
+  const openMoreActions = useCallback(() => {
+    const actions: ConversationMenuAction[] = [];
+    if (availability?.canRun && !starting) {
+      actions.push({ key: 'run-now', label: 'Run now', run: () => void handleRunNow() });
+    }
+    if (availability?.canToggle && !starting) {
+      actions.push({
+        key: 'toggle-active',
+        label: schedule.isActive ? 'Pause' : 'Resume',
+        run: () => onToggle(schedule.id),
+      });
+    }
+    actions.push({
+      key: 'toggle-history',
+      label: historyExpanded ? 'Hide history' : 'Show history',
+      run: toggleHistory,
+    });
+    if (availability?.canEdit) {
+      actions.push({ key: 'edit', label: 'Edit', run: () => onPress(schedule.id) });
+    }
+    actions.push({ key: 'delete', label: 'Delete', destructive: true, run: handleDelete });
+    moreMenu.open(
+      schedule.name,
+      actions,
+      !availability?.canRun &&
+        availability?.canToggle &&
+        !schedule.isActive &&
+        schedule.pausedReason !== 'approval_required'
+        ? RESUME_TO_RUN
+        : undefined,
+    );
+  }, [
+    availability?.canEdit,
+    availability?.canRun,
+    availability?.canToggle,
+    handleDelete,
+    handleRunNow,
+    historyExpanded,
+    moreMenu,
+    onPress,
+    onToggle,
+    schedule.id,
+    schedule.isActive,
+    schedule.name,
+    schedule.pausedReason,
+    starting,
+    toggleHistory,
+  ]);
+
+  const handleAccessibilityAction = useCallback(
+    (event: AccessibilityActionEvent) => {
+      if (event.nativeEvent.actionName === MORE_ACTIONS_ACCESSIBILITY_ACTION) openMoreActions();
+    },
+    [openMoreActions],
   );
 
   return (
@@ -235,6 +286,8 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         className="mb-3 active:opacity-80"
         accessibilityLabel={`Schedule: ${schedule.name}, ${formatRecurrence(schedule)}`}
         accessibilityRole={availability?.canEdit ? 'button' : undefined}
+        accessibilityActions={CARD_ACCESSIBILITY_ACTIONS}
+        onAccessibilityAction={handleAccessibilityAction}
       >
         <Card variant="elevated">
           <View className="flex-row items-center justify-between mb-2">
@@ -246,6 +299,16 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               disabled={!availability?.canToggle || starting}
               onValueChange={() => onToggle(schedule.id)}
             />
+            <View onStartShouldSetResponder={claimTouch}>
+              <PressableBox
+                onPress={openMoreActions}
+                style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+                accessibilityLabel={`More actions for ${schedule.name}`}
+                accessibilityRole="button"
+              >
+                <MoreHorizontal size={20} color={colors.textSecondary} />
+              </PressableBox>
+            </View>
           </View>
 
           <Text className="text-sm text-white/50 mb-2.5 leading-[18px]" numberOfLines={2}>
@@ -258,8 +321,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
           </View>
           {hasLegacyCadence ? (
             <Text className="mb-2.5 text-sm leading-5 text-amber-400">
-              Cadence not editable on Mobile, use Once, Daily, Weekly, or Monthly, or edit this
-              schedule on Web.
+              Edit this cadence on Web, or switch to Once, Daily, Weekly or Monthly.
             </Text>
           ) : null}
           {schedule.pausedReason === 'approval_required' ? (
@@ -268,33 +330,23 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             </Text>
           ) : null}
 
-          <View className="flex-row items-center gap-2 mb-2">
-            <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
-            <Badge label={statusBadge.label} color={statusBadge.color} />
-            {formatLastRun(schedule.lastRunAt) ? (
-              <Text className="text-sm" style={{ color: colors.textMuted }}>
-                Last run {formatLastRun(schedule.lastRunAt)}
-              </Text>
-            ) : null}
-          </View>
+          <Text
+            className="text-sm mb-2"
+            style={{ color: lastRun.failed ? colors.agentError : colors.textMuted }}
+          >
+            {lastRun.text}
+          </Text>
 
           <View className="flex-row flex-wrap items-center justify-between mt-1">
             <Text className="text-sm text-white/30">
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
-            <View className="flex-row items-center gap-1">
-              <PressableBox
-                onPress={handleRunNow}
-                disabled={starting || !availability?.canRun}
-                hitSlop={8}
-                className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
-                accessibilityLabel={starting ? 'Starting a run' : 'Run now'}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: starting || !availability?.canRun, busy: starting }}
-              >
-                <Play size={11} color={colors.textMuted} />
-                <Text className="text-sm text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
-              </PressableBox>
+            <View className="flex-row items-center gap-1" onStartShouldSetResponder={claimTouch}>
+              {starting ? (
+                <Text accessibilityLiveRegion="polite" className="text-sm text-white/40">
+                  Starting…
+                </Text>
+              ) : null}
               <PressableBox
                 onPress={handleToggleHistory}
                 hitSlop={8}
@@ -309,15 +361,6 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                   <ChevronDown size={11} color={colors.textMuted} />
                 )}
               </PressableBox>
-              <PressableBox
-                onPress={handleDelete}
-                hitSlop={12}
-                className="p-1.5 rounded-md active:bg-red-500/10"
-                accessibilityLabel="Delete schedule"
-                accessibilityRole="button"
-              >
-                <Trash2 size={14} color={colors.agentError} />
-              </PressableBox>
             </View>
           </View>
 
@@ -327,11 +370,16 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             </Text>
           ) : null}
 
+          <ActionMenuSheet
+            menu={moreMenu.menu}
+            dismissLabel={`Dismiss actions for ${schedule.name}`}
+          />
+
           {historyExpanded && (
-            <>
+            <View onStartShouldSetResponder={claimTouch}>
               <Separator className="mt-3 mb-3" />
               <ScheduleRunHistory scheduleId={schedule.id} maxRuns={5} />
-            </>
+            </View>
           )}
         </Card>
       </PressableBox>

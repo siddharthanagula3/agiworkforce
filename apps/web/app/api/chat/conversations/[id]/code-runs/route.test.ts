@@ -9,7 +9,10 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   recordAuditEvent: auditSpy,
 }));
-import { ChatCodeRunResponseSchema } from '@agiworkforce/cloud-contracts';
+import {
+  CHAT_CODE_RUN_MAX_DURATION_SECONDS,
+  ChatCodeRunResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   e2bEnabled: vi.fn(() => true),
   assertCapability: vi.fn(async (..._args: unknown[]) => undefined),
   codePolicy: vi.fn(async () => ({ allowed: true }) as { allowed: boolean; reason?: string }),
+  approvalPolicy: vi.fn(async (..._args: unknown[]) => 'auto_approve_read_only'),
   computeAccess: vi.fn(async () => ({
     allowed: true,
     code: 'allowed',
@@ -119,6 +123,13 @@ vi.mock('@/lib/server/code-execution-policy', () => ({
   CODE_EXECUTION_SETTING_KEY: vi.fn(),
   resolveCloudCodeExecutionPolicy: () => mocks.codePolicy(),
 }));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', () => ({
+  autonomousToolApprovalsAvailable: vi.fn(),
+  hostedToolRunsUnasked: vi.fn(),
+  policyAutoApprovesTool: vi.fn(),
+  loadTurnToolPermissions: vi.fn(),
+  loadToolApprovalPolicy: (...args: unknown[]) => mocks.approvalPolicy(...args),
+}));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
   ensureSeatMemberCreditAccount: vi.fn(),
   isSeatBearingBillingPlan: vi.fn(),
@@ -139,7 +150,7 @@ vi.mock('@/lib/services/managed-compute-access', async () => {
   };
 });
 
-const { POST } = await import('./route');
+const { POST, maxDuration } = await import('./route');
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const context = { params: Promise.resolve({ id: CONVERSATION_ID }) };
@@ -173,6 +184,16 @@ describe('POST /api/chat/conversations/[id]/code-runs', () => {
       expect.objectContaining({ language: 'python', code: 'print(1)' }),
     );
     expect(mocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the conversation sandbox only until this function could still be running the cell', async () => {
+    const startedMs = Date.now();
+    await POST(request(), context);
+    const endedMs = Date.now();
+
+    const { releaseByMs } = mocks.getExecutor.mock.calls[0]![0] as { releaseByMs: number };
+    expect(releaseByMs).toBeGreaterThanOrEqual(startedMs + maxDuration * 1_000);
+    expect(releaseByMs).toBeLessThanOrEqual(endedMs + maxDuration * 1_000);
   });
 
   it('records the rerun as a tool execution by name, never the code or its output', async () => {
@@ -311,6 +332,63 @@ describe('POST /api/chat/conversations/[id]/code-runs', () => {
     expect(body.error.code).toBe('free_trial_token_budget_reached');
     expect(body.error.type).toBe('insufficient_quota');
     expect(body.error.recovery).toEqual({ action: 'upgrade', href: '/pricing' });
+    expect(mocks.runCode).not.toHaveBeenCalled();
+  });
+
+  it('keeps the function limit equal to the shared code run limit', () => {
+    expect(maxDuration).toBe(CHAT_CODE_RUN_MAX_DURATION_SECONDS);
+  });
+
+  it('runs nothing when the approvals ask before every action and the run was not approved', async () => {
+    mocks.approvalPolicy.mockResolvedValueOnce('ask_every_time');
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error).toEqual({
+      code: 'approval_required',
+      message: 'Your approvals are set to ask before every action. Approve this run to start it.',
+    });
+    expect(mocks.approvalPolicy).toHaveBeenCalledWith(expect.anything(), 'user-1');
+    expect(mocks.getExecutor).not.toHaveBeenCalled();
+    expect(mocks.runCode).not.toHaveBeenCalled();
+    expect(auditSpy).not.toHaveBeenCalled();
+  });
+
+  it('runs an approved rerun and lists it in approval history', async () => {
+    mocks.approvalPolicy.mockResolvedValueOnce('ask_every_time');
+
+    const response = await POST(
+      request({ language: 'python', code: 'print(1)', approved: true }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.runCode).toHaveBeenCalledWith(
+      expect.not.objectContaining({ approved: expect.anything() }),
+    );
+    expect(auditSpy.mock.calls.map(([event]) => event['eventType'])).toEqual([
+      'tool_approval_decided',
+      'tool_executed',
+    ]);
+    expect(auditSpy.mock.calls[0]![0]['detail']).toEqual({
+      resourceType: 'tool',
+      resourceId: 'execute_code',
+      resourceName: 'execute_code',
+      status: 'approved',
+      source: 'code-run-again',
+      conversationId: CONVERSATION_ID,
+    });
+  });
+
+  it('rejects an approval flag that is not true', async () => {
+    const response = await POST(
+      request({ language: 'python', code: 'print(1)', approved: 'yes' }),
+      context,
+    );
+
+    expect(response.status).toBe(400);
     expect(mocks.runCode).not.toHaveBeenCalled();
   });
 

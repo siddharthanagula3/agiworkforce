@@ -57,10 +57,7 @@ interface RegistrationRow {
 // The surface is optional because an install id identifies one install on its
 // own: a step may be handed to whichever surface registered it, not only the
 // desktop shell that happens to declare itself in a chat request header.
-const BY_INSTALL = `
-  select r.id::text as device_id, r.surface, r.name, r.last_seen_at, r.remote_enabled,
-         r.browser_available, r.computer_use_available, r.local_models_available,
-         r.local_mcp_available, r.credential_family_id, r.identity_session_id,
+const LIVE_CREDENTIAL = `
          case
            when r.credential_family_id is null then null
            else exists (
@@ -71,7 +68,12 @@ const BY_INSTALL = `
                 and t.used_at is null
                 and t.expires_at > now()
            )
-         end as live_credential
+         end as live_credential`;
+
+const BY_INSTALL = `
+  select r.id::text as device_id, r.surface, r.name, r.last_seen_at, r.remote_enabled,
+         r.browser_available, r.computer_use_available, r.local_models_available,
+         r.local_mcp_available, r.credential_family_id, r.identity_session_id,${LIVE_CREDENTIAL}
     from device_registrations r
    where r.user_id = $1
      and ($2::text is null or r.surface = $2)
@@ -81,7 +83,12 @@ const BY_INSTALL = `
 
 // A device with no recorded credential family and no identity session never
 // proved which sign-in it is holding, so it is not an authenticated device.
-function isAuthenticated(row: RegistrationRow): boolean {
+type CredentialEvidence = Pick<
+  RegistrationRow,
+  'credential_family_id' | 'identity_session_id' | 'live_credential'
+>;
+
+function isAuthenticated(row: CredentialEvidence): boolean {
   if (row.credential_family_id !== null) return row.live_credential === true;
   return row.identity_session_id !== null;
 }
@@ -113,6 +120,32 @@ export async function readRegisteredDevice(
     },
     authenticated: isAuthenticated(row),
   };
+}
+
+const PAIRED_DEVICES = `
+  select r.id::text as device_id, r.credential_family_id, r.identity_session_id,${LIVE_CREDENTIAL}
+    from device_registrations r
+   where r.user_id = $1
+     and r.id::text = any($2::text[])`;
+
+/**
+ * Whether every device a pairing names is still this account's and still
+ * signed in. Unlinking a device deletes its registration, and signing out
+ * everywhere ends every device credential, so either ends a pairing that names
+ * the device.
+ */
+export async function pairedDevicesSignedIn(
+  db: DatabaseAdapter,
+  userId: string,
+  deviceIds: readonly string[],
+): Promise<boolean> {
+  if (deviceIds.length === 0) return true;
+  const rows = await db.query<CredentialEvidence & { device_id: string }>(PAIRED_DEVICES, [
+    userId,
+    [...new Set(deviceIds)],
+  ]);
+  const signedIn = new Set(rows.filter(isAuthenticated).map((row) => row.device_id));
+  return deviceIds.every((deviceId) => signedIn.has(deviceId));
 }
 
 /**

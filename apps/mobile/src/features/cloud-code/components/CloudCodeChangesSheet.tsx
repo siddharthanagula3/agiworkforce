@@ -33,6 +33,7 @@ import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
 import {
   CLOUD_CODE_CHANGES_COPY as COPY,
   CLOUD_CODE_CHANGE_STATE_LABELS,
@@ -47,6 +48,12 @@ import {
 import { CloudCodeLineCountsText } from './CloudCodeChangesCard';
 import type { CloudCodeChangesView } from '../useCloudCodeChanges';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { CodeLinesScroller } from '@/src/features/settings/code/CodeLinesScroller';
+import {
+  diffLineAccessibilityLabel,
+  diffLineText,
+} from '@/src/features/settings/code/codeAppearance';
+import { useShowDiffSigns } from '@/src/features/settings/code/useCodeAppearance';
 
 const ICON_SIZE = 16;
 const EXIT_CODE_OK = 0;
@@ -100,6 +107,7 @@ function IconButton({
 
 function DiffBody({ body }: { body: string }) {
   const colors = useThemeColors();
+  const showSigns = useShowDiffSigns();
   const tone = {
     added: colors.agentSuccess,
     removed: colors.agentError,
@@ -108,29 +116,32 @@ function DiffBody({ body }: { body: string }) {
   } as const;
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
+    <CodeLinesScroller
+      testID="cloud-code-diff"
       style={{ borderRadius: radii.md, backgroundColor: colors.surfaceHover }}
       contentContainerStyle={{ padding: 10 }}
     >
       <View>
-        {body.split('\n').map((line, index) => (
-          <Text
-            key={`${index}:${line}`}
-            variant="mono"
-            selectable
-            style={{
-              color: tone[cloudCodeDiffLineKind(line)],
-              fontSize: typeScale.caption,
-              lineHeight: 17,
-            }}
-          >
-            {line || ' '}
-          </Text>
-        ))}
+        {body.split('\n').map((line, index) => {
+          const kind = cloudCodeDiffLineKind(line);
+          return (
+            <Text
+              key={`${index}:${line}`}
+              variant="mono"
+              selectable
+              accessibilityLabel={diffLineAccessibilityLabel(line, kind)}
+              style={{
+                color: tone[kind],
+                fontSize: typeScale.caption,
+                lineHeight: 17,
+              }}
+            >
+              {diffLineText(line, kind, showSigns)}
+            </Text>
+          );
+        })}
       </View>
-    </ScrollView>
+    </CodeLinesScroller>
   );
 }
 
@@ -395,303 +406,314 @@ export function CloudCodeChangesSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
-        <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
-            <GitBranch size={ICON_SIZE} color={colors.textSecondary} />
-            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              {hasRepository && workingBranch ? (
-                <>
+      <PageSheetSafeArea style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
+          <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+              <GitBranch size={ICON_SIZE} color={colors.textSecondary} />
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {hasRepository && workingBranch ? (
+                  <>
+                    <Text
+                      numberOfLines={1}
+                      style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+                    >
+                      {base ?? cloudCodeRepositoryLabel(session.repositoryUrl ?? '')}
+                    </Text>
+                    <ArrowRight size={14} color={colors.textMuted} />
+                    <Text
+                      variant="mono"
+                      numberOfLines={1}
+                      style={{
+                        flexShrink: 1,
+                        color: colors.textPrimary,
+                        fontSize: typeScale.footnote,
+                      }}
+                    >
+                      {workingBranch}
+                    </Text>
+                  </>
+                ) : (
                   <Text
-                    numberOfLines={1}
-                    style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
-                  >
-                    {base ?? cloudCodeRepositoryLabel(session.repositoryUrl ?? '')}
-                  </Text>
-                  <ArrowRight size={14} color={colors.textMuted} />
-                  <Text
-                    variant="mono"
-                    numberOfLines={1}
+                    accessibilityRole="header"
                     style={{
-                      flexShrink: 1,
                       color: colors.textPrimary,
-                      fontSize: typeScale.footnote,
+                      fontSize: typeScale.headline,
+                      fontWeight: '600',
                     }}
                   >
-                    {workingBranch}
+                    {COPY.heading}
                   </Text>
-                </>
-              ) : (
+                )}
+              </View>
+              <IconButton
+                label={COPY.refresh}
+                disabled={view.loading || !hasRepository}
+                onPress={view.refresh}
+              >
+                <RefreshCw size={ICON_SIZE} color={colors.textSecondary} />
+              </IconButton>
+              <IconButton label={COPY.close} onPress={onClose}>
+                <X size={18} color={colors.textMuted} />
+              </IconButton>
+            </View>
+
+            {changes && changes.files.length > 0 ? (
+              <View
+                testID="cloud-code-changes-totals"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  marginBottom: 8,
+                }}
+              >
                 <Text
                   accessibilityRole="header"
                   style={{
                     color: colors.textPrimary,
-                    fontSize: typeScale.headline,
+                    fontSize: typeScale.callout,
                     fontWeight: '600',
                   }}
                 >
-                  {COPY.heading}
+                  {cloudCodeFilesChangedLabel(totals.files)}
                 </Text>
-              )}
-            </View>
-            <IconButton
-              label={COPY.refresh}
-              disabled={view.loading || !hasRepository}
-              onPress={view.refresh}
-            >
-              <RefreshCw size={ICON_SIZE} color={colors.textSecondary} />
-            </IconButton>
-            <IconButton label={COPY.close} onPress={onClose}>
-              <X size={18} color={colors.textMuted} />
-            </IconButton>
-          </View>
+                <CloudCodeLineCountsText counts={totals} />
+              </View>
+            ) : null}
 
-          {changes && changes.files.length > 0 ? (
-            <View
-              testID="cloud-code-changes-totals"
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 10,
-                marginBottom: 8,
-              }}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ gap: 18, paddingBottom: 32 }}
             >
-              <Text
-                accessibilityRole="header"
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: typeScale.callout,
-                  fontWeight: '600',
-                }}
-              >
-                {cloudCodeFilesChangedLabel(totals.files)}
-              </Text>
-              <CloudCodeLineCountsText counts={totals} />
-            </View>
-          ) : null}
-
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ gap: 18, paddingBottom: 32 }}
-          >
-            {view.error ? (
-              <Pressable
-                onPress={view.dismissError}
-                accessibilityRole="alert"
-                accessibilityLabel={view.error}
-              >
-                <Text
-                  selectable
-                  style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
+              {view.error ? (
+                <Pressable
+                  onPress={view.dismissError}
+                  accessibilityRole="alert"
+                  accessibilityLabel={view.error}
                 >
-                  {view.error}
+                  <Text
+                    selectable
+                    style={{
+                      color: colors.agentError,
+                      fontSize: typeScale.footnote,
+                      lineHeight: 19,
+                    }}
+                  >
+                    {view.error}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {!hasRepository ? (
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+                  {COPY.noRepository}
                 </Text>
-              </Pressable>
-            ) : null}
-
-            {!hasRepository ? (
-              <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
-                {COPY.noRepository}
-              </Text>
-            ) : view.loading && !changes ? (
-              <View accessibilityLabel={COPY.loading} style={{ paddingVertical: 24 }}>
-                <LoadingIndicator />
-              </View>
-            ) : changes && changes.files.length === 0 ? (
-              <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
-                {COPY.none}
-              </Text>
-            ) : changes ? (
-              <View>
-                {changes.files.map((file) => (
-                  <ChangedFile
-                    key={file.path}
-                    path={file.path}
-                    state={CLOUD_CODE_CHANGE_STATE_LABELS[file.state]}
-                    body={diffs.get(file.path)}
-                    counts={lineCounts.get(file.path)}
-                    included={!excluded.has(file.path)}
-                    busy={busy || !committable}
-                    onIncludedChange={(included) => setIncluded(file.path, included)}
-                    onDiscard={() => requestDiscard(file.path)}
-                  />
-                ))}
-                {changes.diffTruncated ? (
-                  <Text
-                    style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}
-                  >
-                    {COPY.diffTruncated}
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-
-            {committable ? (
-              <View style={{ gap: 6 }}>
-                <SectionLabel>{COPY.commitLabel}</SectionLabel>
-                <TextInput
-                  value={commitMessage}
-                  onChangeText={setCommitMessage}
-                  maxLength={CLOUD_CODE_LIMITS.commitMessage}
-                  editable={!busy}
-                  accessibilityLabel={COPY.commitLabel}
-                  style={{ ...inputStyle, flex: undefined }}
-                />
-                {choosingFiles ? (
-                  <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
-                    {nothingChosen
-                      ? COPY.commitNoFilesChosen
-                      : cloudCodeCommitChosenLabel(includedPaths.length, changedPaths.length)}
-                  </Text>
-                ) : null}
-                {view.notice ? (
-                  <Text
-                    accessibilityLiveRegion="polite"
-                    style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
-                  >
-                    {view.notice}
-                  </Text>
-                ) : null}
-                <Button
-                  title={COPY.commitAction}
-                  variant="outline"
-                  loading={view.busy === 'commit'}
-                  disabled={busy || !commitMessage.trim() || nothingChosen}
-                  onPress={() => void submitCommit()}
-                />
-              </View>
-            ) : null}
-
-            {hasRepository ? (
-              <View style={{ gap: 8 }}>
-                {session.pullRequestUrl && pullRequestLabel ? (
-                  <>
-                    <Pressable
-                      onPress={() =>
-                        void openUntrustedUrlInAppBrowser(session.pullRequestUrl ?? '')
-                      }
-                      accessibilityRole="link"
-                      accessibilityLabel={pullRequestLabel}
-                      style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-                    >
-                      <ExternalLink size={14} color={colors.textSecondary} />
-                      <Text
-                        style={{
-                          color: colors.textPrimary,
-                          fontSize: typeScale.subhead,
-                          fontWeight: '600',
-                        }}
-                      >
-                        {pullRequestLabel}
-                      </Text>
-                    </Pressable>
-                    <PullRequestChecks load={view.loadPullRequestStatus} />
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      title={
-                        view.busy === 'pull-request'
-                          ? COPY.creatingPullRequest
-                          : COPY.createPullRequest
-                      }
-                      variant="outline"
-                      loading={view.busy === 'pull-request'}
-                      disabled={pullRequestBlocked !== null || busy}
-                      onPress={view.createPullRequest}
+              ) : view.loading && !changes ? (
+                <View accessibilityLabel={COPY.loading} style={{ paddingVertical: 24 }}>
+                  <LoadingIndicator />
+                </View>
+              ) : changes && changes.files.length === 0 ? (
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
+                  {COPY.none}
+                </Text>
+              ) : changes ? (
+                <View>
+                  {changes.files.map((file) => (
+                    <ChangedFile
+                      key={file.path}
+                      path={file.path}
+                      state={CLOUD_CODE_CHANGE_STATE_LABELS[file.state]}
+                      body={diffs.get(file.path)}
+                      counts={lineCounts.get(file.path)}
+                      included={!excluded.has(file.path)}
+                      busy={busy || !committable}
+                      onIncludedChange={(included) => setIncluded(file.path, included)}
+                      onDiscard={() => requestDiscard(file.path)}
                     />
-                    {pullRequestBlocked ? (
-                      <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
-                        {pullRequestBlocked}
-                      </Text>
-                    ) : null}
-                  </>
-                )}
-              </View>
-            ) : null}
-
-            <View style={{ gap: 8 }}>
-              <SectionLabel>{COPY.terminal}</SectionLabel>
-              {entries.length === 0 ? (
-                <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-                  {COPY.terminalEmpty}
-                </Text>
-              ) : (
-                entries.map((entry) => {
-                  const failed = entry.exitCode !== EXIT_CODE_OK;
-                  return (
-                    <View
-                      key={entry.id}
-                      style={{
-                        gap: 4,
-                        borderRadius: radii.md,
-                        padding: 10,
-                        backgroundColor: colors.surfaceHover,
-                      }}
+                  ))}
+                  {changes.diffTruncated ? (
+                    <Text
+                      style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}
                     >
-                      <Text
-                        variant="mono"
-                        selectable
-                        style={{ color: colors.textPrimary, fontSize: typeScale.caption }}
-                      >{`$ ${entry.command}`}</Text>
-                      {entry.stdout ? (
-                        <Text
-                          variant="mono"
-                          selectable
-                          style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
-                        >
-                          {entry.stdout}
-                        </Text>
-                      ) : null}
-                      {entry.stderr ? (
-                        <Text
-                          variant="mono"
-                          selectable
-                          style={{ color: colors.agentError, fontSize: typeScale.caption }}
-                        >
-                          {entry.stderr}
-                        </Text>
-                      ) : null}
-                      <Text
-                        variant="mono"
+                      {COPY.diffTruncated}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {committable ? (
+                <View style={{ gap: 6 }}>
+                  <SectionLabel>{COPY.commitLabel}</SectionLabel>
+                  <TextInput
+                    value={commitMessage}
+                    onChangeText={setCommitMessage}
+                    maxLength={CLOUD_CODE_LIMITS.commitMessage}
+                    editable={!busy}
+                    accessibilityLabel={COPY.commitLabel}
+                    style={{ ...inputStyle, flex: undefined }}
+                  />
+                  {choosingFiles ? (
+                    <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                      {nothingChosen
+                        ? COPY.commitNoFilesChosen
+                        : cloudCodeCommitChosenLabel(includedPaths.length, changedPaths.length)}
+                    </Text>
+                  ) : null}
+                  {view.notice ? (
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
+                    >
+                      {view.notice}
+                    </Text>
+                  ) : null}
+                  <Button
+                    title={COPY.commitAction}
+                    variant="outline"
+                    loading={view.busy === 'commit'}
+                    disabled={busy || !commitMessage.trim() || nothingChosen}
+                    onPress={() => void submitCommit()}
+                  />
+                </View>
+              ) : null}
+
+              {hasRepository ? (
+                <View style={{ gap: 8 }}>
+                  {session.pullRequestUrl && pullRequestLabel ? (
+                    <>
+                      <Pressable
+                        onPress={() =>
+                          void openUntrustedUrlInAppBrowser(session.pullRequestUrl ?? '')
+                        }
+                        accessibilityRole="link"
+                        accessibilityLabel={pullRequestLabel}
                         style={{
-                          color: failed ? colors.agentError : colors.textMuted,
-                          fontSize: typeScale.caption,
+                          minHeight: 44,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
                         }}
                       >
-                        {`exit ${entry.exitCode}`}
-                      </Text>
-                    </View>
-                  );
-                })
-              )}
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <TextInput
-                  value={command}
-                  onChangeText={setCommand}
-                  placeholder={COPY.commandPlaceholder}
-                  placeholderTextColor={colors.textMuted}
-                  maxLength={CLOUD_CODE_LIMITS.command}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={canRun && !busy}
-                  accessibilityLabel={COPY.commandLabel}
-                  onSubmitEditing={() => void submitCommand()}
-                  style={inputStyle}
-                />
-                <Button
-                  title={COPY.commandRun}
-                  variant="outline"
-                  loading={view.busy === 'command'}
-                  disabled={!canRun || busy || !command.trim()}
-                  onPress={() => void submitCommand()}
-                />
+                        <ExternalLink size={14} color={colors.textSecondary} />
+                        <Text
+                          style={{
+                            color: colors.textPrimary,
+                            fontSize: typeScale.subhead,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {pullRequestLabel}
+                        </Text>
+                      </Pressable>
+                      <PullRequestChecks load={view.loadPullRequestStatus} />
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        title={
+                          view.busy === 'pull-request'
+                            ? COPY.creatingPullRequest
+                            : COPY.createPullRequest
+                        }
+                        variant="outline"
+                        loading={view.busy === 'pull-request'}
+                        disabled={pullRequestBlocked !== null || busy}
+                        onPress={view.createPullRequest}
+                      />
+                      {pullRequestBlocked ? (
+                        <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+                          {pullRequestBlocked}
+                        </Text>
+                      ) : null}
+                    </>
+                  )}
+                </View>
+              ) : null}
+
+              <View style={{ gap: 8 }}>
+                <SectionLabel>{COPY.terminal}</SectionLabel>
+                {entries.length === 0 ? (
+                  <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+                    {COPY.terminalEmpty}
+                  </Text>
+                ) : (
+                  entries.map((entry) => {
+                    const failed = entry.exitCode !== EXIT_CODE_OK;
+                    return (
+                      <View
+                        key={entry.id}
+                        style={{
+                          gap: 4,
+                          borderRadius: radii.md,
+                          padding: 10,
+                          backgroundColor: colors.surfaceHover,
+                        }}
+                      >
+                        <Text
+                          variant="mono"
+                          selectable
+                          style={{ color: colors.textPrimary, fontSize: typeScale.caption }}
+                        >{`$ ${entry.command}`}</Text>
+                        {entry.stdout ? (
+                          <Text
+                            variant="mono"
+                            selectable
+                            style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
+                          >
+                            {entry.stdout}
+                          </Text>
+                        ) : null}
+                        {entry.stderr ? (
+                          <Text
+                            variant="mono"
+                            selectable
+                            style={{ color: colors.agentError, fontSize: typeScale.caption }}
+                          >
+                            {entry.stderr}
+                          </Text>
+                        ) : null}
+                        <Text
+                          variant="mono"
+                          style={{
+                            color: failed ? colors.agentError : colors.textMuted,
+                            fontSize: typeScale.caption,
+                          }}
+                        >
+                          {`exit ${entry.exitCode}`}
+                        </Text>
+                      </View>
+                    );
+                  })
+                )}
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <TextInput
+                    value={command}
+                    onChangeText={setCommand}
+                    placeholder={COPY.commandPlaceholder}
+                    placeholderTextColor={colors.textMuted}
+                    maxLength={CLOUD_CODE_LIMITS.command}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={canRun && !busy}
+                    accessibilityLabel={COPY.commandLabel}
+                    onSubmitEditing={() => void submitCommand()}
+                    style={inputStyle}
+                  />
+                  <Button
+                    title={COPY.commandRun}
+                    variant="outline"
+                    loading={view.busy === 'command'}
+                    disabled={!canRun || busy || !command.trim()}
+                    onPress={() => void submitCommand()}
+                  />
+                </View>
               </View>
-            </View>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </PageSheetSafeArea>
     </Modal>
   );
 }

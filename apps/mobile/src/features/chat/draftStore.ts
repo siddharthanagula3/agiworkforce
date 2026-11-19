@@ -1,15 +1,62 @@
 import { mmkvStorage, storage } from '@/lib/mmkv';
 import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+import type { Attachment } from './components/AttachmentPreview';
 
 const PREFIX = 'composer-draft:';
 const DRAFT_RECORD_VERSION = 1;
 
 export type DraftProvenance = { scope: 'local' } | { scope: 'cloud'; ownerId: string };
 
+export type DraftAttachment = Omit<Attachment, 'sendFailed' | 'unavailable'>;
+
 interface StoredDraftRecord {
   version: typeof DRAFT_RECORD_VERSION;
   text: string;
   provenance: DraftProvenance;
+  attachments?: DraftAttachment[];
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function storedAttachment(value: unknown, provenance: DraftProvenance): DraftAttachment | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Record<string, unknown>;
+  const { id, uri, mimeType, fileName } = item;
+  if (
+    typeof id !== 'string' ||
+    typeof uri !== 'string' ||
+    typeof mimeType !== 'string' ||
+    typeof fileName !== 'string'
+  ) {
+    return null;
+  }
+  const assetId = optionalString(item.assetId);
+  if (assetId !== undefined && provenance.scope !== 'cloud') return null;
+  const attachment: DraftAttachment = { id, uri, mimeType, fileName };
+  const width = optionalNumber(item.width);
+  const height = optionalNumber(item.height);
+  const fileSize = optionalNumber(item.fileSize);
+  const pastedText = optionalString(item.pastedText);
+  if (width !== undefined) attachment.width = width;
+  if (height !== undefined) attachment.height = height;
+  if (fileSize !== undefined) attachment.fileSize = fileSize;
+  if (assetId !== undefined) attachment.assetId = assetId;
+  if (pastedText !== undefined) attachment.pastedText = pastedText;
+  return attachment;
+}
+
+function storedAttachments(value: unknown, provenance: DraftProvenance): DraftAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const attachment = storedAttachment(item, provenance);
+    return attachment ? [attachment] : [];
+  });
 }
 
 function normalizedOwnerId(ownerId: unknown): string | null {
@@ -45,7 +92,13 @@ function parseStoredDraft(raw: string): StoredDraftRecord | null {
     if (record.version !== DRAFT_RECORD_VERSION || typeof record.text !== 'string' || !provenance) {
       return null;
     }
-    return { version: DRAFT_RECORD_VERSION, text: record.text, provenance };
+    const attachments = storedAttachments(record.attachments, provenance);
+    return {
+      version: DRAFT_RECORD_VERSION,
+      text: record.text,
+      provenance,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    };
   } catch {
     return null;
   }
@@ -56,32 +109,47 @@ function provenanceIsReadable(provenance: DraftProvenance): boolean {
   return captureCloudAccountEpoch()?.ownerId === provenance.ownerId;
 }
 
-export function getDraft(key: string | undefined, provenance?: DraftProvenance): string {
-  if (!key) return '';
+function readDraftRecord(
+  key: string | undefined,
+  provenance: DraftProvenance | undefined,
+): StoredDraftRecord | null {
+  if (!key) return null;
   try {
     const safeProvenance = normalizedProvenance(provenance);
     if (!safeProvenance || !provenanceIsReadable(safeProvenance)) {
       mmkvStorage.removeItem(PREFIX + key);
-      return '';
+      return null;
     }
     const storageKey = scopedStorageKey(key, safeProvenance);
     const raw = mmkvStorage.getItem(storageKey) as string | null;
-    if (!raw) return '';
+    if (!raw) return null;
     const record = parseStoredDraft(raw);
     if (!record || !hasSameProvenance(record.provenance, safeProvenance)) {
       mmkvStorage.removeItem(storageKey);
-      return '';
+      return null;
     }
-    return record.text;
+    return record;
   } catch {
-    return '';
+    return null;
   }
+}
+
+export function getDraft(key: string | undefined, provenance?: DraftProvenance): string {
+  return readDraftRecord(key, provenance)?.text ?? '';
+}
+
+export function getDraftAttachments(
+  key: string | undefined,
+  provenance?: DraftProvenance,
+): DraftAttachment[] {
+  return readDraftRecord(key, provenance)?.attachments ?? [];
 }
 
 export function setDraft(
   key: string | undefined,
   text: string,
   provenance?: DraftProvenance,
+  attachments: readonly Attachment[] = [],
 ): void {
   if (!key) return;
   try {
@@ -91,15 +159,19 @@ export function setDraft(
       return;
     }
     const storageKey = scopedStorageKey(key, safeProvenance);
-    if (text.trim().length === 0) {
-      mmkvStorage.removeItem(storageKey);
-      return;
+    if (safeProvenance.scope === 'cloud') {
+      const currentAccount = captureCloudAccountEpoch();
+      if (!currentAccount) return;
+      if (currentAccount.ownerId !== safeProvenance.ownerId) {
+        mmkvStorage.removeItem(storageKey);
+        return;
+      }
     }
-
-    if (
-      safeProvenance.scope === 'cloud' &&
-      captureCloudAccountEpoch()?.ownerId !== safeProvenance.ownerId
-    ) {
+    const keptAttachments = storedAttachments(
+      attachments.map(({ sendFailed: _sendFailed, unavailable: _unavailable, ...rest }) => rest),
+      safeProvenance,
+    );
+    if (text.trim().length === 0 && keptAttachments.length === 0) {
       mmkvStorage.removeItem(storageKey);
       return;
     }
@@ -109,6 +181,7 @@ export function setDraft(
       version: DRAFT_RECORD_VERSION,
       text,
       provenance: safeProvenance,
+      ...(keptAttachments.length > 0 ? { attachments: keptAttachments } : {}),
     };
     mmkvStorage.setItem(storageKey, JSON.stringify(record));
   } catch {

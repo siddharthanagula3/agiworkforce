@@ -9,6 +9,14 @@ const mockDeleteFile = jest.fn();
 const mockClearCloudState = jest.fn();
 const mockMarkers = new Map<string, string | boolean>();
 const mockClearMmkv = jest.fn();
+const mockDeleteSetAsideStores = jest.fn();
+const mockRemoveViewerFileCopies = jest.fn();
+const mockDeleteSetAsideDatabases = jest.fn();
+const mockClerkSetActive = jest.fn();
+const mockClerkSignOut = jest.fn();
+let mockClerkInstance: Record<string, unknown> | null = null;
+
+jest.mock('@clerk/expo', () => ({ getClerkInstance: () => mockClerkInstance }));
 
 jest.mock('../services/authSession', () => ({
   getAuthToken: () => mockAuthToken(),
@@ -34,6 +42,7 @@ jest.mock('../lib/mmkv', () => ({
     delete: (key: string) => mockMarkers.delete(key),
     clearAll: () => mockClearMmkv(),
   },
+  deleteSetAsideStores: () => mockDeleteSetAsideStores(),
 }));
 jest.mock('../services/api', () => ({ api: { post: jest.fn(), delete: jest.fn() } }));
 jest.mock('../src/features/billing/store', () => ({ useTierStore: { getState: jest.fn() } }));
@@ -53,6 +62,7 @@ jest.mock('../storage/db', () => ({
     execAsync: (...args: unknown[]) => mockExec(...args),
   }),
   closeDb: () => mockCloseDb(),
+  deleteSetAsideDatabases: () => mockDeleteSetAsideDatabases(),
 }));
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
@@ -62,6 +72,10 @@ jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { UTF8: 'utf8' },
 }));
 jest.mock('../services/dsarTemporaryFile', () => ({ withDsarTemporaryFile: jest.fn() }));
+const mockWithdrawSharing = jest.fn();
+jest.mock('../src/features/settings/cloud-privacy/CloudProviderSharingGroup', () => ({
+  withdrawSharingWithProviders: (...args: unknown[]) => mockWithdrawSharing(...args),
+}));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: {} }));
 jest.mock('../storage/conversations', () => ({ listConversations: jest.fn() }));
@@ -74,7 +88,10 @@ jest.mock('../services/complianceLedger', () => ({
   mmkvDisclosureLedger: { read: jest.fn() },
   mmkvConsentLedger: { getNamedProviderConsent: jest.fn() },
 }));
-jest.mock('../services/fileCreation', () => ({ EXPORTS_DIR: 'file:///documents/exports/' }));
+jest.mock('../services/fileCreation', () => ({
+  EXPORTS_DIR: 'file:///documents/exports/',
+  removeViewerFileCopies: () => mockRemoveViewerFileCopies(),
+}));
 
 import { wipeAllLocalData } from '../services/dsarExport';
 import { useAuthStore } from '../src/features/auth/store';
@@ -104,6 +121,36 @@ describe('local wipe cleanup ordering', () => {
     mockSecureFetch.mockResolvedValue({ ok: true });
     mockClearMmkv.mockImplementation(() => mockMarkers.clear());
     useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'account-a' });
+    mockClerkInstance = null;
+  });
+
+  it('ends every account on the phone instead of handing over to a second one', async () => {
+    const signedIn = (id: string, userId: string) => ({
+      id,
+      status: 'active',
+      user: { id: userId, primaryEmailAddress: { emailAddress: `${userId}@example.com` } },
+      publicUserData: { identifier: `${userId}@example.com`, userId },
+    });
+    const first = signedIn('sess_a', 'account-a');
+    mockClerkInstance = {
+      __internal_environment: { authConfig: { singleSessionMode: false } },
+      session: first,
+      client: { signedInSessions: [first, signedIn('sess_b', 'account-b')] },
+      setActive: (...args: unknown[]) => mockClerkSetActive(...args),
+      signOut: (...args: unknown[]) => mockClerkSignOut(...args),
+    };
+
+    await wipeAllLocalData();
+
+    expect(mockClerkSetActive).not.toHaveBeenCalled();
+    expect(mockClerkSignOut).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    const unregister = new URL(mockSecureFetch.mock.calls[0]![0] as string);
+    expect(unregister.pathname).toBe('/api/mobile/push-token');
+    expect(unregister.searchParams.get('release')).toBeNull();
+    expect(mockClearAuthSession.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearMmkv.mock.invocationCallOrder[0]!,
+    );
   });
 
   it.each(['enabled', 'pending'])(
@@ -161,6 +208,32 @@ describe('local wipe cleanup ordering', () => {
     },
   );
 
+  it('withdraws sharing with AI providers before it ends any account', async () => {
+    await wipeAllLocalData();
+
+    expect(mockWithdrawSharing).toHaveBeenCalledTimes(1);
+    expect(mockWithdrawSharing).toHaveBeenCalledWith('this-device');
+    expect(mockWithdrawSharing.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearCloudState.mock.invocationCallOrder[0]!,
+    );
+    expect(mockWithdrawSharing.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearAuthSession.mock.invocationCallOrder[0]!,
+    );
+    expect(mockWithdrawSharing.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSecureFetch.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('deletes nothing when the withdrawal cannot be recorded', async () => {
+    mockWithdrawSharing.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    await expect(wipeAllLocalData()).rejects.toThrow('storage unavailable');
+
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockClearMmkv).not.toHaveBeenCalled();
+  });
+
   it('waits for cleanup completion before deleting persistent data', async () => {
     const response = deferred<{ ok: boolean }>();
     const started = deferred<void>();
@@ -175,6 +248,53 @@ describe('local wipe cleanup ordering', () => {
     response.resolve({ ok: true });
     await wipe;
     expect(mockClearMmkv).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes every model folder and the copies of stores set aside after a restore', async () => {
+    await wipeAllLocalData();
+
+    expect(mockDeleteSetAsideDatabases).toHaveBeenCalledTimes(1);
+    expect(mockDeleteSetAsideStores).toHaveBeenCalledTimes(1);
+    const deleted = mockDeleteFile.mock.calls.map(([uri]) => uri);
+    expect(deleted).toEqual(
+      expect.arrayContaining([
+        'file:///documents/models/',
+        'file:///documents/react-native-executorch/',
+      ]),
+    );
+  });
+
+  it('removes the files kept for Local chats', async () => {
+    await wipeAllLocalData();
+
+    expect(mockDeleteFile.mock.calls.map(([uri]) => uri)).toContain(
+      'file:///documents/chat-attachments/',
+    );
+  });
+
+  it('waits for the viewing copies to be removed after the exports folder', async () => {
+    const removal = deferred<void>();
+    mockRemoveViewerFileCopies.mockImplementation(() => removal.promise);
+    let finished = false;
+    const wipe = wipeAllLocalData().then(() => {
+      finished = true;
+    });
+    for (let turn = 0; turn < 50 && mockRemoveViewerFileCopies.mock.calls.length === 0; turn += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(mockRemoveViewerFileCopies).toHaveBeenCalledTimes(1);
+    expect(finished).toBe(false);
+    const exportsDeletion = mockDeleteFile.mock.calls.findIndex(
+      ([uri]) => uri === 'file:///documents/exports/',
+    );
+    expect(mockDeleteFile.mock.invocationCallOrder[exportsDeletion]).toBeLessThan(
+      mockRemoveViewerFileCopies.mock.invocationCallOrder[0]!,
+    );
+
+    removal.resolve(undefined);
+    await wipe;
+    expect(finished).toBe(true);
   });
 
   it('keeps best-effort cleanup failures from blocking the local wipe', async () => {
@@ -215,17 +335,17 @@ describe('local wipe cleanup ordering', () => {
   });
 
   it('stops before deleting data if sign-out unexpectedly rejects', async () => {
-    const signOut = jest
-      .spyOn(useAuthStore.getState(), 'signOut')
+    const signOutAllAccounts = jest
+      .spyOn(useAuthStore.getState(), 'signOutAllAccounts')
       .mockRejectedValueOnce(new Error('teardown failure'));
     try {
       await expect(wipeAllLocalData()).rejects.toThrow('teardown failure');
-      expect(signOut).toHaveBeenCalledTimes(1);
+      expect(signOutAllAccounts).toHaveBeenCalledTimes(1);
       expect(mockExec).not.toHaveBeenCalled();
       expect(mockClearMmkv).not.toHaveBeenCalled();
       expect(mockDeleteFile).not.toHaveBeenCalled();
     } finally {
-      signOut.mockRestore();
+      signOutAllAccounts.mockRestore();
     }
   });
 

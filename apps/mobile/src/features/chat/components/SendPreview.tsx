@@ -7,6 +7,7 @@ import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { HEADER_TEXT_SCALE_LIMIT } from './WorkModeSwitch';
 
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
@@ -171,7 +172,10 @@ export function SendPreview({
           }}
         >
           <DestinationIcon presentation={presentation} colors={colors} />
-          <Text style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}>
+          <Text
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+          >
             {getCompactDestinationLabel(presentation)}
           </Text>
           {expanded ? (

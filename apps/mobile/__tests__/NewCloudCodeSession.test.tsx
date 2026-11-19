@@ -25,6 +25,15 @@ jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), back: jest.fn() }),
 }));
+jest.mock('react-native-webrtc', () => ({
+  RTCPeerConnection: jest.fn(),
+  RTCSessionDescription: jest.fn(),
+  RTCIceCandidate: jest.fn(),
+}));
+jest.mock('@/src/features/companion/remote-code/service', () => ({
+  listCodeSessions: jest.fn(),
+  startCodeSession: jest.fn(),
+}));
 
 import {
   NewCloudCodeSessionSheet,
@@ -189,5 +198,37 @@ describe('new cloud code session', () => {
     expect(getByText('GitHub could not be connected')).toBeTruthy();
     expect(getByText('Connect GitHub')).toBeTruthy();
     expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it('lists a harness with its summary and credential note without a stray full stop', async () => {
+    const { getByText } = render(
+      <NewCloudCodeSessionSheet
+        visible
+        onClose={jest.fn()}
+        onCreated={jest.fn()}
+        runtimes={[
+          {
+            id: 'droid',
+            name: 'Droid',
+            kind: 'harness',
+            summary: 'Factory’s software engineering agent.',
+            agentCommand: 'droid',
+            cpuCount: 0,
+            memoryMB: 0,
+            diskSizeMB: 0,
+            isPublic: true,
+            needsUserCredential: true,
+          },
+        ]}
+      />,
+    );
+
+    await act(async () => {
+      jest.advanceTimersByTime(400);
+    });
+
+    expect(
+      getByText('Droid, Factory’s software engineering agent, needs your own API key'),
+    ).toBeTruthy();
   });
 });

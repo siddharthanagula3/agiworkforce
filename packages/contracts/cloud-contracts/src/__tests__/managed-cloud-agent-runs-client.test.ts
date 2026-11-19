@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
+  MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER,
+  MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED,
+  MANAGED_CLOUD_AGENT_RUN_SEARCH_MAX_LENGTH,
   ManagedCloudAgentRunAbortError,
   ManagedCloudAgentRunContractError,
   ManagedCloudAgentRunReferenceSchema,
@@ -194,6 +197,48 @@ describe('managed Cloud agent-run client', () => {
         signal: undefined,
       }),
     );
+  });
+
+  it('sends the trimmed search text and reports whether the server searched', async () => {
+    const searching = vi.fn(async () =>
+      jsonResponse(
+        { runs: [run()], nextCursor: null },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            [MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER]: MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED,
+          },
+        },
+      ),
+    );
+    const searched = await createManagedCloudAgentRunClient({
+      baseUrl: 'https://agi.example',
+      fetchImpl: searching,
+    }).listRuns({ states: ['completed'], q: '  100% done_  ' });
+
+    expect(searching).toHaveBeenCalledWith(
+      'https://agi.example/api/llm/v1/chat/completions/runs?state=completed&limit=25&q=100%25+done_',
+      expect.anything(),
+    );
+    expect(searched.searchSupported).toBe(true);
+
+    const olderServer = vi.fn(async () => jsonResponse({ runs: [], nextCursor: null }));
+    const unsearched = await createManagedCloudAgentRunClient({
+      baseUrl: 'https://agi.example',
+      fetchImpl: olderServer,
+    }).listRuns({ q: 'invoice' });
+    expect(unsearched.searchSupported).toBeUndefined();
+  });
+
+  it('rejects empty or over-long search text before making a request', async () => {
+    const fetchImpl = vi.fn();
+    const client = createManagedCloudAgentRunClient({ fetchImpl });
+
+    await expect(client.listRuns({ q: '   ' })).rejects.toThrow();
+    await expect(
+      client.listRuns({ q: 'x'.repeat(MANAGED_CLOUD_AGENT_RUN_SEARCH_MAX_LENGTH + 1) }),
+    ).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('rejects invalid list filters before making a request', async () => {

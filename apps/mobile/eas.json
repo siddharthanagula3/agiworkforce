@@ -81,7 +81,8 @@
       "autoIncrement": true,
       "env": {
         "APP_ENV": "preview",
-        "EXPO_PUBLIC_APP_ENV": "preview"
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_AGI_AUTH_PROVIDERS": "google,github,apple"
       },
       "ios": {
         "simulator": false,
@@ -101,7 +102,8 @@
       "autoIncrement": true,
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_APP_ENV": "production"
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_AGI_AUTH_PROVIDERS": "google,github,apple"
       },
       "ios": {
         "buildConfiguration": "Release",

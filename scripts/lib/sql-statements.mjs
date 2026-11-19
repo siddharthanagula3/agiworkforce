@@ -18,7 +18,11 @@ export function skipDelimited(sql, start, quote) {
 
 export function topLevelStatements(
   sql,
-  { preserveQuotedIdentifiers = false, expandAnonymousBlocks = false } = {},
+  {
+    preserveQuotedIdentifiers = false,
+    expandAnonymousBlocks = false,
+    preserveLiterals = false,
+  } = {},
 ) {
   const statements = [];
   let current = '';
@@ -61,9 +65,11 @@ export function topLevelStatements(
           current += topLevelStatements(sql.slice(start, close), {
             preserveQuotedIdentifiers,
             expandAnonymousBlocks,
+            preserveLiterals,
           }).join('; ');
         } else {
-          current += ' $body$ ';
+          current +=
+            preserveLiterals && close !== -1 ? sql.slice(index, close + tag.length) : ' $body$ ';
         }
         index = close === -1 ? sql.length : close + tag.length;
         continue;
@@ -72,7 +78,7 @@ export function topLevelStatements(
     if (character === "'" || character === '"') {
       const close = skipDelimited(sql, index, character);
       current +=
-        character === '"' && preserveQuotedIdentifiers && close !== -1
+        ((character === '"' && preserveQuotedIdentifiers) || preserveLiterals) && close !== -1
           ? sql.slice(index, close)
           : ` ${character}${character} `;
       index = close === -1 ? sql.length : close;
@@ -89,6 +95,8 @@ export function topLevelStatements(
   }
   statements.push(current);
   return statements
-    .map((statement) => statement.replace(/\s+/g, ' ').trim().toLowerCase())
+    .map((statement) =>
+      preserveLiterals ? statement.trim() : statement.replace(/\s+/g, ' ').trim().toLowerCase(),
+    )
     .filter((statement) => statement.length > 0);
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Alert, Clipboard, Image, TextInput, View } from 'react-native';
+import { Alert, Clipboard, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import {
   Copy,
@@ -34,9 +34,13 @@ import {
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
+  CloudAccountRequired,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { EMAIL_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
+import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useAuthStore } from '@/src/features/auth/store';
+import { forgetRememberedAccount } from '@/src/features/auth/services/rememberedAccount';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
@@ -53,6 +57,8 @@ import {
   shareCloudDataExport,
 } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebAccountPage } from '@/src/platform/webContentPage';
+import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { syncNow } from '@/services/cloudSyncEngine';
@@ -67,6 +73,13 @@ import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
+import {
+  activeDeviceAccount,
+  deviceAccountErrorMessage,
+  getDeviceAccountsClerk,
+  planSignOutHandover,
+  readDeviceAccounts,
+} from '@/src/features/accounts/deviceAccounts';
 
 const ORGANIZATION_PATH = '/api/settings/organization';
 
@@ -89,11 +102,31 @@ function parseOrganizationId(body: unknown): string | null {
 }
 
 export default function CloudAccountScreen() {
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title={EMAIL_SCREEN_TITLE}>
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() =>
+            router.push(beginCloudPostAuthIntentForDestination('/(app)/settings/cloud-account'))
+          }
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SignedInCloudAccount />;
+}
+
+function SignedInCloudAccount() {
   const colors = useThemeColors();
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const syncStatus = useCloudSyncStateStore((s) => s.status);
   const lastSyncAt = useCloudSyncStateStore((s) => s.lastSyncAt);
   const { user: clerkUser } = useUser();
@@ -118,6 +151,7 @@ export default function CloudAccountScreen() {
   const displayName =
     storedProfileName || (rawDisplayName ? normalizeDisplayName(rawDisplayName) : null);
   const avatarUrl = storedProfileAvatar ?? null;
+  const shownName = displayName || 'AGI Cloud account';
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -149,6 +183,9 @@ export default function CloudAccountScreen() {
   useEffect(() => {
     if (userId) void loadProfileName(userId);
   }, [loadProfileName, userId]);
+
+  const nameChanged = nameDraft.trim() !== (displayName ?? '').trim();
+  const canSaveName = nameChanged && !!nameDraft.trim() && !savingName;
 
   const handleSaveName = useCallback(async () => {
     if (!userId) return;
@@ -221,7 +258,7 @@ export default function CloudAccountScreen() {
         setCancellingDeletion(false);
         setDeletionStatus(null);
         setDeletionStatusError(false);
-        void refreshDeletionStatus(owner, account);
+        if (appMode === 'cloud') void refreshDeletionStatus(owner, account);
       };
       renew();
       const unsubscribe = subscribeCloudAccountEpochChange(renew);
@@ -229,7 +266,7 @@ export default function CloudAccountScreen() {
         retire();
         unsubscribe();
       };
-    }, [refreshDeletionStatus]),
+    }, [appMode, refreshDeletionStatus]),
   );
 
   const finishDeletionIntent = useCallback((intent: DeletionIntent) => {
@@ -370,7 +407,7 @@ export default function CloudAccountScreen() {
               );
               return;
             }
-            void openExternalUrl('https://agiworkforce.com/settings/account');
+            void openWebAccountPage('https://agiworkforce.com/settings/account', 'system');
           },
         },
       ],
@@ -380,7 +417,17 @@ export default function CloudAccountScreen() {
   const handleSignOut = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+    const deviceAccounts = readDeviceAccounts(getDeviceAccountsClerk());
+    const signedInAccount = deviceAccounts.multiSession
+      ? activeDeviceAccount(deviceAccounts)
+      : null;
+    const handover = planSignOutHandover(deviceAccounts);
+    const message = signedInAccount
+      ? handover
+        ? `Log out of ${signedInAccount.email} on this device? You will continue as ${handover.next.email}.`
+        : `Log out of ${signedInAccount.email} on this device?`
+      : 'Log out of AGI Cloud on this device?';
+    Alert.alert('Log Out', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
@@ -395,8 +442,8 @@ export default function CloudAccountScreen() {
           }
           setLoggingOut(true);
           signOut()
-            .catch(() => {
-              Alert.alert('Sign out failed', 'Please try again.');
+            .catch((error: unknown) => {
+              Alert.alert('Sign out failed', deviceAccountErrorMessage(error, 'sign-out'));
             })
             .finally(() => setLoggingOut(false));
         },
@@ -407,30 +454,6 @@ export default function CloudAccountScreen() {
   const handleExportCloudData = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-
-    if (appMode !== 'cloud') {
-      Alert.alert(
-        'Switch to AGI Cloud',
-        'Cloud export needs AGI Cloud. Switching does not upload your Local Mode chats or files.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Switch to Cloud',
-            onPress: () => {
-              if (!isCloudAccountEpochCurrent(account)) {
-                Alert.alert(
-                  'Account changed',
-                  'This mode-change confirmation is no longer valid. Open it again for the current account.',
-                );
-                return;
-              }
-              setAppMode('cloud');
-            },
-          },
-        ],
-      );
-      return;
-    }
 
     const runExport = (work: Promise<void>) => {
       setExporting(true);
@@ -485,7 +508,7 @@ export default function CloudAccountScreen() {
         });
     };
     runExport(exportCloudUserData(account));
-  }, [appMode, captureVisibleAccount, router, setAppMode]);
+  }, [captureVisibleAccount, router]);
 
   const handleDeleteAccount = useCallback(() => {
     const intent = beginDeletionIntent('schedule');
@@ -515,8 +538,20 @@ export default function CloudAccountScreen() {
               .then(async (res) => {
                 if (!deletionIntentIsCurrent(intent)) return;
                 const receipt = parseAccountDeletionScheduleReceipt(res);
+                await forgetRememberedAccount();
                 await signOut().catch(() => {});
-                Alert.alert('Account deletion scheduled', receipt.message);
+                const storeBilling = receipt.storeBilling;
+                if (!storeBilling) {
+                  Alert.alert('Account deletion scheduled', receipt.message);
+                  return;
+                }
+                Alert.alert('Account deletion scheduled', receipt.message, [
+                  { text: 'OK', style: 'cancel' },
+                  {
+                    text: 'Open subscriptions',
+                    onPress: () => void openExternalUrl(storeBilling.manageUrl),
+                  },
+                ]);
               })
               .catch(async (err: unknown) => {
                 if (isStepUpCancelled(err)) return;
@@ -618,7 +653,9 @@ export default function CloudAccountScreen() {
                 Alert.alert(
                   receipt.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
                   receipt.cancelled
-                    ? 'Your account deletion was cancelled.'
+                    ? receipt.planRenewal
+                      ? receipt.message
+                      : 'Your account deletion was cancelled.'
                     : 'The server confirmed that no account deletion is pending.',
                 );
               })
@@ -664,7 +701,7 @@ export default function CloudAccountScreen() {
   ]);
 
   return (
-    <SettingsScreenShell title="Account">
+    <SettingsScreenShell title={EMAIL_SCREEN_TITLE}>
       {stepUpModal}
       <View
         style={{
@@ -688,26 +725,12 @@ export default function CloudAccountScreen() {
           onPress={() => void changePhoto()}
           style={{ width: 52, height: 52 }}
         >
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={{ width: 52, height: 52, borderRadius: 26 }}
-              accessibilityLabel="Profile picture"
-            />
-          ) : (
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 26,
-                backgroundColor: colors.surfaceHover,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <UserRound size={24} color={colors.textMuted} />
-            </View>
-          )}
+          <UserAvatar
+            size={52}
+            uri={avatarUrl}
+            initials={shownName}
+            testID="cloud-account-avatar"
+          />
           <View
             style={{
               position: 'absolute',
@@ -750,10 +773,14 @@ export default function CloudAccountScreen() {
                 <Pressable
                   testID="cloud-account-save-name"
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: savingName || !nameDraft.trim() }}
-                  disabled={savingName || !nameDraft.trim()}
+                  accessibilityState={{ disabled: !canSaveName }}
+                  disabled={!canSaveName}
                   onPress={() => void handleSaveName()}
-                  style={{ minHeight: 44, justifyContent: 'center' }}
+                  style={{
+                    minHeight: 44,
+                    justifyContent: 'center',
+                    opacity: canSaveName ? 1 : 0.5,
+                  }}
                 >
                   <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
                     {savingName ? 'Saving…' : 'Save'}
@@ -792,7 +819,7 @@ export default function CloudAccountScreen() {
                   flexShrink: 1,
                 }}
               >
-                {displayName || 'AGI Cloud account'}
+                {shownName}
               </Text>
               <Pencil size={13} color={colors.textMuted} />
             </Pressable>
@@ -888,7 +915,7 @@ export default function CloudAccountScreen() {
         <SettingsRow
           label={exporting ? 'Exporting…' : 'Export Cloud Data'}
           icon={Download}
-          value={appMode === 'cloud' ? 'JSON' : 'Cloud mode required'}
+          value="JSON"
           onPress={exporting || deleting ? undefined : handleExportCloudData}
           isLast
         />

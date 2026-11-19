@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { isImageGenerationStopped, rememberStoppedImageGeneration } from './imageGenerationStops';
@@ -23,6 +24,7 @@ export interface ImageGenResponse {
   latency_ms?: number;
   persisted?: boolean;
   error?: string;
+  retryable?: boolean;
 }
 
 export interface GeneratedImage {
@@ -61,6 +63,7 @@ export async function generateImage(
     throw new Error('Image generation requires a non-empty prompt');
   }
 
+  await ensureCloudSendConsent();
   const operationId = options.operationId ?? Crypto.randomUUID();
   if (isImageGenerationStopped(operationId)) throw new ImageGenerationStoppedError();
   const submitted = await api.post<ImageGenResponse>(
@@ -132,8 +135,15 @@ export function getDurableGeneratedImageAssetId(path: string): string | null {
   return candidate.slice(candidate.lastIndexOf('/') + 1).toLowerCase();
 }
 
+const DURABLE_IMAGE_THUMBNAIL_PATH =
+  /^\/api\/files\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/thumbnail$/i;
+
 export function resolveGeneratedImageUri(path: string): string | null {
   const candidate = path.trim();
-  if (!DURABLE_GENERATED_IMAGE_PATH.test(candidate)) return null;
+  if (
+    !DURABLE_GENERATED_IMAGE_PATH.test(candidate) &&
+    !DURABLE_IMAGE_THUMBNAIL_PATH.test(candidate)
+  )
+    return null;
   return `${API_URL.replace(/\/+$/, '')}${candidate}`;
 }

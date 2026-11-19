@@ -35,7 +35,6 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           {
             "alignItems": "center",
             "flexDirection": "row",
-            "gap": 8,
           }
         }
       >
@@ -50,6 +49,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                 "flex": 1,
                 "fontSize": 15,
                 "fontWeight": "600",
+                "paddingLeft": 4,
               },
               {
                 "lineHeight": 19,
@@ -93,10 +93,11 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "rgba(17, 17, 17, 0.08)",
-              "borderRadius": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
               "opacity": 1,
-              "padding": 8,
+              "width": 44,
             }
           }
         />
@@ -134,10 +135,11 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "rgba(17, 17, 17, 0.08)",
-              "borderRadius": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
               "opacity": 1,
-              "padding": 8,
+              "width": 44,
             }
           }
         />
@@ -175,11 +177,55 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "rgba(17, 17, 17, 0.08)",
-              "borderRadius": 8,
-              "padding": 8,
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
             }
           }
+        />
+        <View
+          accessibilityHint="Report this artifact"
+          accessibilityLabel="More artifact actions"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
+            }
+          }
+          testID="artifact-fullscreen-more"
         />
         <View
           accessibilityHint="Returns to the conversation"
@@ -218,8 +264,6 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(17, 17, 17, 0.08)",
-              "borderRadius": 8,
               "justifyContent": "center",
               "minHeight": 44,
               "minWidth": 44,
@@ -232,17 +276,22 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
     <RCTScrollView
       contentContainerStyle={
         {
+          "alignSelf": "center",
+          "maxWidth": 720,
           "padding": 16,
           "paddingBottom": 24,
+          "width": "100%",
         }
       }
       horizontal={false}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
       style={
         {
           "flex": 1,
         }
       }
+      testID="artifact-fullscreen-document"
     >
       <View>
         <View
@@ -255,9 +304,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             style={
               {
                 "color": "#111111",
-                "fontSize": 20,
+                "fontSize": 24,
                 "fontWeight": "600",
-                "lineHeight": 28,
+                "lineHeight": 32,
                 "marginBottom": 4,
                 "marginTop": 8,
               }
@@ -312,7 +361,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             style={
               {
                 "color": "#111111",
-                "fontSize": 18,
+                "fontSize": 20,
                 "fontWeight": "600",
                 "lineHeight": 28,
                 "marginBottom": 4,
@@ -355,7 +404,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                     "fontWeight": "400",
                     "lineHeight": 26,
                     "textAlign": "center",
-                    "width": 12,
+                    "width": 24,
                   }
                 }
               >
@@ -395,7 +444,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                     "fontWeight": "400",
                     "lineHeight": 26,
                     "textAlign": "center",
-                    "width": 12,
+                    "width": 24,
                   }
                 }
               >
@@ -440,14 +489,12 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                 {
                   "alignItems": "center",
                   "flexDirection": "row",
-                  "gap": 8,
                   "justifyContent": "space-between",
-                  "paddingBottom": 2,
+                  "minHeight": 44,
                   "paddingLeft": 12,
-                  "paddingRight": 8,
-                  "paddingTop": 8,
                 }
               }
+              testID="code-card-header"
             >
               <Text
                 className="text-sm text-white "
@@ -469,46 +516,98 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                 bash
               </Text>
               <View
-                accessibilityLabel="Copy code"
-                accessibilityRole="button"
-                accessibilityState={
-                  {
-                    "busy": undefined,
-                    "checked": undefined,
-                    "disabled": undefined,
-                    "expanded": undefined,
-                    "selected": undefined,
-                  }
-                }
-                accessibilityValue={
-                  {
-                    "max": undefined,
-                    "min": undefined,
-                    "now": undefined,
-                    "text": undefined,
-                  }
-                }
-                accessible={true}
-                collapsable={false}
-                focusable={true}
-                hitSlop={8}
-                onBlur={[Function]}
-                onClick={[Function]}
-                onFocus={[Function]}
-                onResponderGrant={[Function]}
-                onResponderMove={[Function]}
-                onResponderRelease={[Function]}
-                onResponderTerminate={[Function]}
-                onResponderTerminationRequest={[Function]}
-                onStartShouldSetResponder={[Function]}
                 style={
                   {
-                    "backgroundColor": "rgba(17, 17, 17, 0.08)",
-                    "borderRadius": 4,
-                    "padding": 4,
+                    "alignItems": "center",
+                    "flexDirection": "row",
                   }
                 }
-              />
+                testID="code-card-actions"
+              >
+                <View
+                  accessibilityLabel="Download code.sh"
+                  accessibilityRole="button"
+                  accessibilityState={
+                    {
+                      "busy": undefined,
+                      "checked": undefined,
+                      "disabled": undefined,
+                      "expanded": undefined,
+                      "selected": undefined,
+                    }
+                  }
+                  accessibilityValue={
+                    {
+                      "max": undefined,
+                      "min": undefined,
+                      "now": undefined,
+                      "text": undefined,
+                    }
+                  }
+                  accessible={true}
+                  collapsable={false}
+                  focusable={true}
+                  onBlur={[Function]}
+                  onClick={[Function]}
+                  onFocus={[Function]}
+                  onResponderGrant={[Function]}
+                  onResponderMove={[Function]}
+                  onResponderRelease={[Function]}
+                  onResponderTerminate={[Function]}
+                  onResponderTerminationRequest={[Function]}
+                  onStartShouldSetResponder={[Function]}
+                  style={
+                    {
+                      "alignItems": "center",
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "minWidth": 44,
+                    }
+                  }
+                />
+                <View
+                  accessibilityLabel="Copy code"
+                  accessibilityLiveRegion="polite"
+                  accessibilityRole="button"
+                  accessibilityState={
+                    {
+                      "busy": undefined,
+                      "checked": undefined,
+                      "disabled": undefined,
+                      "expanded": undefined,
+                      "selected": undefined,
+                    }
+                  }
+                  accessibilityValue={
+                    {
+                      "max": undefined,
+                      "min": undefined,
+                      "now": undefined,
+                      "text": undefined,
+                    }
+                  }
+                  accessible={true}
+                  collapsable={false}
+                  focusable={true}
+                  onBlur={[Function]}
+                  onClick={[Function]}
+                  onFocus={[Function]}
+                  onResponderGrant={[Function]}
+                  onResponderMove={[Function]}
+                  onResponderRelease={[Function]}
+                  onResponderTerminate={[Function]}
+                  onResponderTerminationRequest={[Function]}
+                  onStartShouldSetResponder={[Function]}
+                  style={
+                    {
+                      "alignItems": "center",
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "minWidth": 44,
+                    }
+                  }
+                />
+              </View>
             </View>
             <RCTScrollView
               horizontal={true}
@@ -524,6 +623,12 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             >
               <View>
                 <Text
+                  accessibilityLabel="bash code block"
+                  accessibilityValue={
+                    {
+                      "text": "pnpm test",
+                    }
+                  }
                   className="text-sm text-white "
                   selectable={true}
                   style={
@@ -539,6 +644,27 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                 </Text>
               </View>
             </RCTScrollView>
+            <Text
+              className="text-sm text-white "
+              style={
+                [
+                  {
+                    "borderTopColor": "rgba(17, 17, 17, 0.09)",
+                    "borderTopWidth": 0.5,
+                    "color": "rgba(17, 17, 17, 0.72)",
+                    "fontSize": 14,
+                    "paddingHorizontal": 12,
+                    "paddingVertical": 8,
+                  },
+                  {
+                    "lineHeight": 18,
+                  },
+                ]
+              }
+              testID="code-commands-not-run"
+            >
+              These commands are examples only; they have not been executed.
+            </Text>
           </View>
         </View>
       </View>

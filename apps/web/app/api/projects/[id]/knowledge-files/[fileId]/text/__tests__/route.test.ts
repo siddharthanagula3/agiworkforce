@@ -1,3 +1,6 @@
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
+type OriginalProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
@@ -43,6 +46,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   copyPrivateObjectIfUnchanged: vi.fn(),
@@ -66,7 +71,8 @@ vi.mock('@/lib/server/object-storage', () => ({
   putPrivateObject: vi.fn(),
   objectKeyFromStorageUri: mocks.objectKeyFromStorageUri,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   assertUploadMatchesAuthorization: vi.fn(),
   createLocalProjectKnowledgeUploadUrl: vi.fn(),
   createProjectKnowledgeUploadAuthorization: vi.fn(),
@@ -79,7 +85,8 @@ vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   verifyProjectKnowledgeUploadAuthorization: vi.fn(),
   getProjectKnowledgeObject: mocks.getProjectKnowledgeObject,
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeFilesModule>()),
   checkProjectKnowledgeCapacity: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
   projectKnowledgeResponse: vi.fn(),

@@ -142,7 +142,7 @@ function Divider() {
   return <div className="my-1 h-px bg-[var(--chat-border)]" />;
 }
 
-// A full-resolution PNG of a 4K webcam frame runs past the 12 MiB attachment
+// A full-resolution PNG of a 4K webcam frame can run past the image attachment
 // ceiling; JPEG is also what the mobile camera writes, so the two surfaces match.
 const CAPTURE_IMAGE_MIME_TYPE = 'image/jpeg';
 const CAPTURE_JPEG_QUALITY = 0.85;

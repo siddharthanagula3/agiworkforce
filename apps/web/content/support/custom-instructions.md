@@ -19,7 +19,8 @@ Before a session starts, `agi` reads your own instructions from
 the top of the disk and reads, in each folder, `AGENTS.md`, `CLAUDE.md` and
 `.agiworkforce/instructions.md`. Your own file comes first and the folder you
 are in comes last, so the closest file has the final word. Together they may
-use about 10,000 tokens; files past that are left out and the session says so.
+use about 10,000 tokens. If your own file is larger on its own, it is cut to
+fit; files past the limit are left out, and the session says so once.
 
 Rules in `.agiworkforce/rules/*.md` in the repository and in
 `~/.agiworkforce/rules/*.md` are added too, some only for matching files.

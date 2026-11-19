@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View, type ScrollView, type LayoutChangeEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
 import {
@@ -16,7 +16,7 @@ import {
 } from 'lucide-react-native';
 
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { openWebAccountPage } from '@/src/platform/webContentPage';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
@@ -38,6 +38,8 @@ import {
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { PasskeysSection } from './PasskeysSection';
+import { SecurityRecommendation, hasOtherSignedInDevice } from './SecurityRecommendation';
 import { TwoFactorSection } from './TwoFactorSection';
 import {
   useSecurityPreferences,
@@ -45,12 +47,14 @@ import {
   type SecuritySettingsOwner,
 } from './useSecurityPreferences';
 import { AskFromSiriSetting } from '@/src/features/siri';
+import { SECURITY_LOGIN_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import {
   WEB_SECURITY_URL,
   changeAccountPassword,
   fetchAccountSecurityStatus,
   fetchAccountSessions,
   fetchAuditLog,
+  fetchSignInKeys,
   fetchSignInMethods,
   groupAuditEntries,
   revokeAccountSession,
@@ -61,11 +65,18 @@ import {
   type AuditLogEntry,
   type PasswordChange,
   type SessionTimeoutMinutes,
+  type SignInKey,
   type SignInMethods,
 } from './service';
+import { appSessionLabel, isAppSession } from '@agiworkforce/types';
 import { toUserMessage } from '@/services/userMessage';
+import { appLockWording } from '@/src/features/auth/services/appLockWording';
+
+const AGI_ACCOUNT_SIGN_IN = 'AGI account';
 
 const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+  clerk: AGI_ACCOUNT_SIGN_IN,
+  workos: AGI_ACCOUNT_SIGN_IN,
   google: 'Google',
   github: 'GitHub',
   apple: 'Apple',
@@ -103,9 +114,11 @@ function formatLastActive(value: string | null): string {
 }
 
 function formatSessionLabel(row: AccountSessionRow): string {
-  const parts = [row.device, row.browser, row.location].filter((part): part is string =>
-    Boolean(part),
-  );
+  const parts = (
+    isAppSession(row)
+      ? [appSessionLabel(row), row.location]
+      : [row.device, row.browser, row.location]
+  ).filter((part): part is string => Boolean(part));
   return row.isCurrent ? `${parts.join(' · ')} (this device)` : parts.join(' · ');
 }
 
@@ -145,6 +158,9 @@ export default function AccountSecurityScreen() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordAccount, setPasswordAccount] = useState<CloudAccountEpoch | null>(null);
   const [accountRevision, setAccountRevision] = useState(0);
+  const [passkeysOpen, setPasskeysOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const devicesOffset = useRef(0);
   const passwordRequest = useRef(0);
   const revokeRequest = useRef(0);
   const passwordModalOpen =
@@ -159,6 +175,7 @@ export default function AccountSecurityScreen() {
   useEffect(() => {
     const invalidate = () => {
       closePassword();
+      setPasskeysOpen(false);
       revokeRequest.current += 1;
       setRevokingAll(false);
       setOwnedStatus(null);
@@ -341,7 +358,12 @@ export default function AccountSecurityScreen() {
                   return revokeAllAccountSessions(headers, account);
                 });
                 if (!current()) return;
-                await signOut();
+                await signOut().catch((signOutError: unknown) => {
+                  console.warn(
+                    '[AccountSecurity] local sign-out after revoking every session failed:',
+                    signOutError,
+                  );
+                });
               } catch (revokeError) {
                 if (!current() || isStepUpCancelled(revokeError)) return;
                 Alert.alert(
@@ -362,7 +384,7 @@ export default function AccountSecurityScreen() {
     (url: string) => {
       const account = captureCloudAccountEpoch();
       if (!account || account.ownerId !== clerkUserId) return;
-      void openInAppBrowser(url);
+      void openWebAccountPage(url);
     },
     [clerkUserId],
   );
@@ -421,6 +443,36 @@ export default function AccountSecurityScreen() {
 
   const [signInMethods, setSignInMethods] = useState<SignInMethods | null>(null);
   const [signInMethodsError, setSignInMethodsError] = useState(false);
+  const signInRequest = useRef(0);
+  const signInKeysRequest = useRef(0);
+
+  const loadSignInMethods = useCallback((signal?: AbortSignal) => {
+    const request = ++signInRequest.current;
+    const current = () => request === signInRequest.current && !signal?.aborted;
+    setSignInMethods(null);
+    setSignInMethodsError(false);
+    fetchSignInMethods(signal)
+      .then((methods) => {
+        if (current()) setSignInMethods(methods);
+      })
+      .catch(() => {
+        if (current()) setSignInMethodsError(true);
+      });
+  }, []);
+
+  const refreshSignInKeys = useCallback(async () => {
+    const account = captureCloudAccountEpoch();
+    if (!account || account.ownerId !== clerkUserId) return;
+    const request = ++signInKeysRequest.current;
+    const keys = await fetchSignInKeys();
+    if (request !== signInKeysRequest.current || !isCloudAccountEpochCurrent(account)) return;
+    setSignInMethods((methods) => (methods ? { ...methods, keys } : methods));
+  }, [clerkUserId]);
+
+  const retrySignInKeys = useCallback(() => {
+    if (signInMethodsError) loadSignInMethods();
+    else void refreshSignInKeys();
+  }, [loadSignInMethods, refreshSignInKeys, signInMethodsError]);
 
   useEffect(() => {
     if (!isClerkSignedIn || appMode !== 'cloud') return;
@@ -428,17 +480,40 @@ export default function AccountSecurityScreen() {
     void loadStatus(controller.signal);
     void loadAudit(controller.signal);
     void loadSessions(controller.signal);
-    setSignInMethods(null);
-    setSignInMethodsError(false);
-    fetchSignInMethods(controller.signal)
-      .then((methods) => {
-        if (!controller.signal.aborted) setSignInMethods(methods);
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setSignInMethodsError(true);
-      });
+    loadSignInMethods(controller.signal);
     return () => controller.abort();
-  }, [accountRevision, appMode, isClerkSignedIn, loadAudit, loadSessions, loadStatus]);
+  }, [
+    accountRevision,
+    appMode,
+    isClerkSignedIn,
+    loadAudit,
+    loadSessions,
+    loadSignInMethods,
+    loadStatus,
+  ]);
+
+  const passkeysPageOpen =
+    passkeysOpen && appMode === 'cloud' && signInMethods?.keys.state !== 'unavailable';
+  useEffect(() => {
+    if (passkeysOpen && !passkeysPageOpen) setPasskeysOpen(false);
+  }, [passkeysOpen, passkeysPageOpen]);
+
+  const webPasskeys = useMemo<SignInKey[]>(() => {
+    const passkeys = clerkUser?.id === clerkUserId ? clerkUser?.passkeys : undefined;
+    if (!Array.isArray(passkeys)) return [];
+    return passkeys.map((passkey): SignInKey => ({
+      id: passkey.id,
+      name: passkey.name?.trim() || 'Passkey',
+      kind: 'passkey',
+    }));
+  }, [clerkUser, clerkUserId]);
+
+  const scrollToDevices = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: Math.max(devicesOffset.current - 8, 0), animated: true });
+  }, []);
+  const trackDevicesOffset = useCallback((event: LayoutChangeEvent) => {
+    devicesOffset.current = event.nativeEvent.layout.y;
+  }, []);
 
   const groupedAuditEntries = useMemo(
     () => (auditEntries ? groupAuditEntries(auditEntries) : []),
@@ -459,7 +534,7 @@ export default function AccountSecurityScreen() {
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
       <SettingsScreenShell
-        title="Account Security"
+        title={SECURITY_LOGIN_SCREEN_TITLE}
         help={{ docId: 'account-security', label: 'How account security works' }}
       >
         <CloudAccountRequired
@@ -472,12 +547,17 @@ export default function AccountSecurityScreen() {
 
   return (
     <SettingsScreenShell
-      title="Account Security"
+      title={SECURITY_LOGIN_SCREEN_TITLE}
       help={{ docId: 'account-security', label: 'How account security works' }}
+      scrollRef={scrollRef}
     >
-      {passwordModalOpen ? null : stepUpModal}
+      {passwordModalOpen || passkeysPageOpen ? null : stepUpModal}
       <ChangePasswordModal
-        key={passwordAccount ? `${passwordAccount.ownerId}:${passwordAccount.epoch}` : 'closed'}
+        key={
+          passwordAccount
+            ? `password:${passwordAccount.ownerId}:${passwordAccount.epoch}`
+            : 'closed'
+        }
         visible={passwordModalOpen}
         hasPassword={hasPassword}
         saving={changingPassword}
@@ -492,11 +572,15 @@ export default function AccountSecurityScreen() {
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       ) : null}
 
-      {appMode === 'cloud' ? <AskFromSiriSetting /> : null}
+      {appMode === 'cloud' && hasOtherSignedInDevice(sessions) ? (
+        <SecurityRecommendation onPress={scrollToDevices} />
+      ) : null}
+
+      <AskFromSiriSetting />
       <TwoFactorSection
         key={
           ownedStatus
-            ? `${ownedStatus.account.ownerId}:${ownedStatus.account.epoch}`
+            ? `two-factor:${ownedStatus.account.ownerId}:${ownedStatus.account.epoch}`
             : 'unavailable'
         }
         account={appMode === 'cloud' && status ? ownedStatus!.account : null}
@@ -516,7 +600,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Sign-in methods"
-        body="Add or remove sign-in methods in Security settings on the web."
+        body="Add or remove sign-in methods on the web."
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -540,22 +624,6 @@ export default function AccountSecurityScreen() {
                 }
               />
             ))}
-            {signInMethods.keys === null ? (
-              <SettingsRow
-                label="Passkeys and security keys"
-                icon={Fingerprint}
-                value="Unavailable"
-              />
-            ) : (
-              signInMethods.keys.map((key) => (
-                <SettingsRow
-                  key={key.id}
-                  label={key.name}
-                  icon={Fingerprint}
-                  value={key.kind === 'passkey' ? 'Passkey' : 'Security key'}
-                />
-              ))
-            )}
           </>
         )}
         <SettingsRow
@@ -566,6 +634,20 @@ export default function AccountSecurityScreen() {
           isLast
         />
       </SettingsGroup>
+      {appMode === 'cloud' ? (
+        <PasskeysSection
+          keys={signInMethodsError ? { state: 'failed' } : (signInMethods?.keys ?? null)}
+          webKeys={webPasskeys}
+          open={passkeysPageOpen}
+          onOpenChange={setPasskeysOpen}
+          ownerId={clerkUserId}
+          withStepUp={withStepUp}
+          stepUpModal={passkeysPageOpen ? stepUpModal : null}
+          onRetry={retrySignInKeys}
+          onChanged={() => void refreshSignInKeys()}
+          onOpenWeb={() => openOwnedWebPage(WEB_SECURITY_URL)}
+        />
+      ) : null}
 
       <SettingsGroup>
         <SettingsRow
@@ -592,99 +674,103 @@ export default function AccountSecurityScreen() {
         />
       </SettingsGroup>
 
-      <SettingsInfo
-        title="Sessions"
-        body="Sign out any device you don’t recognize."
-        icon={Smartphone}
-      />
-      <SettingsGroup>
-        <SettingsRow
-          label="Session timeout"
-          icon={Timer}
-          value={
-            appMode !== 'cloud'
-              ? 'Cloud mode required'
-              : preferences.timeoutError && sessionTimeout === null
-                ? 'Unavailable'
-                : sessionTimeout === null
-                  ? 'Checking…'
-                  : savingTimeout
-                    ? 'Saving…'
-                    : formatTimeout(sessionTimeout)
-          }
-          onPress={
-            appMode === 'cloud' && sessionTimeout !== null && !savingTimeout
-              ? () => void preferences.cycleTimeout()
-              : undefined
-          }
+      <View testID="account-sessions-section" onLayout={trackDevicesOffset}>
+        <SettingsInfo
+          title="Sessions"
+          body="Sign out any device you don’t recognize."
+          icon={Smartphone}
         />
-        {preferences.timeoutError ? (
+        <SettingsGroup>
           <SettingsRow
-            label={preferences.timeoutError}
+            label="Session timeout"
             icon={Timer}
-            value="Retry"
-            onPress={savingTimeout ? undefined : preferences.retryTimeout}
+            value={
+              appMode !== 'cloud'
+                ? 'Cloud mode required'
+                : preferences.timeoutError && sessionTimeout === null
+                  ? 'Unavailable'
+                  : sessionTimeout === null
+                    ? 'Checking…'
+                    : savingTimeout
+                      ? 'Saving…'
+                      : formatTimeout(sessionTimeout)
+            }
+            onPress={
+              appMode === 'cloud' && sessionTimeout !== null && !savingTimeout
+                ? () => void preferences.cycleTimeout()
+                : undefined
+            }
           />
-        ) : null}
-        {appMode !== 'cloud' ? (
-          <SettingsRow label="Devices" icon={Laptop} value="Cloud mode required" />
-        ) : sessionsError ? (
+          {preferences.timeoutError ? (
+            <SettingsRow
+              label={preferences.timeoutError}
+              icon={Timer}
+              value="Retry"
+              onPress={savingTimeout ? undefined : preferences.retryTimeout}
+            />
+          ) : null}
+          {appMode !== 'cloud' ? (
+            <SettingsRow label="Devices" icon={Laptop} value="Cloud mode required" />
+          ) : sessionsError ? (
+            <SettingsRow
+              label="Devices"
+              icon={Laptop}
+              value="Unavailable · Retry"
+              onPress={() => void loadSessions()}
+            />
+          ) : sessions === null ? (
+            <SettingsRow label="Devices" icon={Laptop} value="Checking…" />
+          ) : sessions.sessions.length === 0 ? (
+            <SettingsRow label="No active devices" icon={Laptop} />
+          ) : (
+            <>
+              {sessions.sessions.map((row) => (
+                <SettingsRow
+                  key={row.id}
+                  label={formatSessionLabel(row)}
+                  icon={row.isCurrent || isAppSession(row) ? Smartphone : Laptop}
+                  value={
+                    revokingSessionId === row.id
+                      ? 'Signing out…'
+                      : formatLastActive(row.lastActiveAt)
+                  }
+                  onPress={
+                    row.isCurrent || revokingSessionId !== null
+                      ? undefined
+                      : () => confirmRevokeSession(row)
+                  }
+                />
+              ))}
+              {sessions.currentSessionKnown ? null : (
+                <SettingsRow
+                  label="This device could not be matched to a listed session"
+                  icon={Smartphone}
+                />
+              )}
+            </>
+          )}
+          {appMode === 'cloud' ? (
+            <SettingsRow
+              label="Log out of all devices"
+              icon={LogOut}
+              value={revokingAll ? 'Signing out…' : undefined}
+              onPress={revokingAll ? undefined : confirmRevokeAllSessions}
+              destructive
+            />
+          ) : null}
           <SettingsRow
-            label="Devices"
-            icon={Laptop}
-            value="Unavailable · Retry"
-            onPress={() => void loadSessions()}
+            label="Open Web account"
+            icon={ExternalLink}
+            value="Web"
+            onPress={() => openOwnedWebPage(WEB_ACCOUNT_URL)}
+            isLast
           />
-        ) : sessions === null ? (
-          <SettingsRow label="Devices" icon={Laptop} value="Checking…" />
-        ) : sessions.sessions.length === 0 ? (
-          <SettingsRow label="No active devices" icon={Laptop} />
-        ) : (
-          <>
-            {sessions.sessions.map((row) => (
-              <SettingsRow
-                key={row.id}
-                label={formatSessionLabel(row)}
-                icon={row.isCurrent ? Smartphone : Laptop}
-                value={
-                  revokingSessionId === row.id ? 'Signing out…' : formatLastActive(row.lastActiveAt)
-                }
-                onPress={
-                  row.isCurrent || revokingSessionId !== null
-                    ? undefined
-                    : () => confirmRevokeSession(row)
-                }
-              />
-            ))}
-            {sessions.currentSessionKnown ? null : (
-              <SettingsRow
-                label="This device could not be matched to a listed session"
-                icon={Smartphone}
-              />
-            )}
-          </>
-        )}
-        {appMode === 'cloud' ? (
-          <SettingsRow
-            label="Log out of all devices"
-            icon={LogOut}
-            value={revokingAll ? 'Signing out…' : undefined}
-            onPress={revokingAll ? undefined : confirmRevokeAllSessions}
-            destructive
-          />
-        ) : null}
-        <SettingsRow
-          label="Open Web account"
-          icon={ExternalLink}
-          value="Web"
-          onPress={() => openOwnedWebPage(WEB_ACCOUNT_URL)}
-          isLast
-        />
-      </SettingsGroup>
+        </SettingsGroup>
+      </View>
 
       <SettingsInfo
         title="Device protection"
-        body="AGI App Lock uses the Face ID, Touch ID, or passcode already enrolled on this device."
+        body={appLockWording().deviceProtection}
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -701,7 +787,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Recent security activity"
-        body="Sign-ins and account changes recorded for this account, newest first."
+        body="Sign-ins and account changes, newest first."
         icon={History}
       />
       <SettingsGroup>
@@ -740,7 +826,7 @@ export default function AccountSecurityScreen() {
         <SettingsGroup>
           <SettingsSwitchRow
             label="Lockdown mode"
-            description="Blocks connectors, web access, code execution and Deep Research in every chat."
+            description="Blocks connectors, web access, code execution and Deep Research."
             icon={Lock}
             value={lockdown}
             onValueChange={(next) => void preferences.changeLockdown(next)}
@@ -763,7 +849,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Managed on the web"
-        body="Manage passkeys and security keys in Security settings on the web."
+        body="Add passkeys and security keys on the web."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

@@ -51,9 +51,7 @@ export function ConnectorHealthCard({ connectorIds }: { connectorIds: readonly s
     <SectionCard title="Connection health" description={CONNECTOR_HEALTH_EXPLANATION}>
       {entry === undefined && !error ? <MetaText>Checking…</MetaText> : null}
       {error ? <MetaText>{error}</MetaText> : null}
-      {entry === null ? (
-        <MetaText>Not called in the last hour, so there is nothing to measure yet.</MetaText>
-      ) : null}
+      {entry === null ? <MetaText>Not called in the last hour.</MetaText> : null}
       {entry ? (
         <View style={{ gap: 4 }}>
           <Text

@@ -1,0 +1,12 @@
+{
+  "requestTimeoutMs": 30000,
+  "shutdownTimeoutMs": 3000,
+  "maxQueuedNotifications": 256,
+  "maxPendingRequests": 32,
+  "sessionPageSize": 50,
+  "cloudPollIntervalMs": 500,
+  "terminalPollIntervalMs": 50,
+  "editorRecoveryDebounceMs": 500,
+  "windowWidth": 1100,
+  "windowHeight": 760
+}

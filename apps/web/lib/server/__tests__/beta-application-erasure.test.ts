@@ -1,3 +1,6 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -26,9 +29,13 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
   extForMime: vi.fn(),
+  sealedChatAttachmentPathname: (key: string) => `${key}.scanned`,
   streamStoredMedia: vi.fn(),
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   copyPrivateObjectIfUnchanged: vi.fn(),
   deleteObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isObjectStorageConfigured: () => true,
@@ -45,7 +52,8 @@ vi.mock('@/lib/server/object-storage', () => ({
   isPrivateObjectStorageConfigured: vi.fn(() => true),
   putPrivateObject: vi.fn(),
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   deleteProjectKnowledgeObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isProjectKnowledgeObjectStorageConfigured: () => true,
   getProjectKnowledgeObject: vi.fn(),

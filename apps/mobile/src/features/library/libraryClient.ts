@@ -10,7 +10,9 @@ import {
   type LibrarySort,
   type MediaJobEntry,
 } from '@agiworkforce/cloud-contracts';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { api } from '@/services/api';
+import { getShortDisplayName, UNKNOWN_MODEL_LABEL } from '@/src/features/model-picker/service';
 
 export type LibraryAssetKind = 'image' | 'video' | 'document';
 
@@ -20,6 +22,7 @@ export interface LibraryAsset {
   fileName: string;
   mimeType: string;
   uri: string;
+  thumbnailUri?: string;
   byteCount: number | null;
   prompt: string | null;
   createdAt: string;
@@ -35,6 +38,10 @@ export interface LibraryPage {
   nextOffset: number | null;
   storageUsedBytes?: number;
   storageLimitBytes?: number;
+  storageDocumentsBytes?: number;
+  storageImagesBytes?: number;
+  downloadUsedBytes?: number;
+  downloadLimitBytes?: number;
 }
 
 export interface LibraryScope {
@@ -52,6 +59,16 @@ export function libraryAssetKind(item: LibraryItem): LibraryAssetKind {
   return 'document';
 }
 
+function librarySourceLabel(item: LibraryItem): string {
+  if (item.model) {
+    const pickerName = getShortDisplayName(item.model);
+    if (pickerName !== UNKNOWN_MODEL_LABEL) return pickerName;
+    const catalogName = getModelMetadataById(item.model)?.name;
+    if (catalogName) return catalogName;
+  }
+  return item.origin === 'uploaded' ? 'Upload' : 'Generated';
+}
+
 export function mapLibraryItem(item: LibraryItem): LibraryAsset {
   return {
     id: item.id,
@@ -59,11 +76,11 @@ export function mapLibraryItem(item: LibraryItem): LibraryAsset {
     fileName: item.file_name,
     mimeType: item.mime_type,
     uri: item.uri,
+    ...(item.thumbnail_uri ? { thumbnailUri: item.thumbnail_uri } : {}),
     byteCount: item.byte_count,
     prompt: item.prompt,
     createdAt: item.created_at,
-    sourceLabel:
-      item.model ?? item.source_surface ?? (item.origin === 'uploaded' ? 'Upload' : 'Generated'),
+    sourceLabel: librarySourceLabel(item),
     eraseAfter: item.erase_after ?? null,
     model: item.model ?? null,
     conversationId: item.conversation_id ?? null,
@@ -116,6 +133,19 @@ export async function fetchLibraryPage(
     ...(parsed.data.storage_limit_bytes === undefined
       ? {}
       : { storageLimitBytes: parsed.data.storage_limit_bytes }),
+    ...(parsed.data.storage_documents_bytes === undefined
+      ? {}
+      : { storageDocumentsBytes: parsed.data.storage_documents_bytes }),
+    ...(parsed.data.storage_images_bytes === undefined
+      ? {}
+      : { storageImagesBytes: parsed.data.storage_images_bytes }),
+    ...(parsed.data.download_used_bytes === undefined ||
+    parsed.data.download_limit_bytes === undefined
+      ? {}
+      : {
+          downloadUsedBytes: parsed.data.download_used_bytes,
+          downloadLimitBytes: parsed.data.download_limit_bytes,
+        }),
   };
 }
 

@@ -24,12 +24,14 @@ jest.mock('../services/managedCloudChat', () => ({
 }));
 
 import { managedCloudChat } from '../services/managedCloudChat';
+import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useModelStore } from '../src/features/model-picker/store';
 import { applyConversationDeltas } from '../services/cloudSyncEngine';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
@@ -170,6 +172,50 @@ describe('cloud conversation delete durability', () => {
   });
 });
 
+describe('a chat abandoned before its first message', () => {
+  const userTurn = (conversationId: string): ChatMessage => ({
+    id: `${conversationId}-u1`,
+    role: 'user',
+    content: 'hello',
+    createdAt: T,
+  });
+
+  it('removes an empty Cloud chat from the list and the server without an alert', async () => {
+    seedCloud('c1');
+    useChatMessageStore.setState({ currentConversationId: 'c1' });
+    mockDelete.mockResolvedValueOnce(undefined as never);
+
+    await useChatMessageStore.getState().discardUnsentConversation('c1');
+
+    expect(convExists('c1')).toBe(false);
+    expect(useChatMessageStore.getState().currentConversationId).toBeNull();
+    expect(mockDelete).toHaveBeenCalledWith('c1');
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('keeps a Cloud chat that already holds a message', async () => {
+    seedCloud('c1');
+    useChatCloudMessageStore.setState({ messages: { c1: [userTurn('c1')] } });
+
+    await useChatMessageStore.getState().discardUnsentConversation('c1');
+
+    expect(convExists('c1')).toBe(true);
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it('removes an empty Local chat and keeps one with a message', async () => {
+    seedLocal('l1');
+    await useChatMessageStore.getState().discardUnsentConversation('l1');
+    expect(useChatMessageStore.getState().conversations).toEqual([]);
+
+    seedLocal('l2');
+    useChatMessageStore.setState({ messages: { l2: [userTurn('l2')] } });
+    await useChatMessageStore.getState().discardUnsentConversation('l2');
+    expect(useChatMessageStore.getState().conversations.map((c) => c.id)).toEqual(['l2']);
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+});
+
 describe('cloud conversation rename durability', () => {
   it('marks the conversation dirty so the sync engine retries the rename', async () => {
     seedCloud('c1', 'Old');
@@ -260,7 +306,9 @@ describe('cloud conversation rename durability', () => {
   it('applyConversationDeltas preserves a dirty rename, but a remote DELETE still wins', () => {
     seedCloud('c1', 'Old');
     useCloudSyncStateStore.getState().markConversationDirty('c1');
-    useChatCloudMessageStore.getState().patchCloudConversation('c1', { title: 'New' });
+    useChatCloudMessageStore
+      .getState()
+      .patchCloudConversation('c1', { title: 'New', userTitlePending: true });
 
     applyConversationDeltas([convDelta('c1', 'Old', null)]);
     expect(convTitle('c1')).toBe('New');
@@ -302,6 +350,30 @@ describe('cloud conversation model durability', () => {
     expect(convModel('c1')).toBe(CLOUD_MODEL_ID);
     expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
     expect(mockPut).toHaveBeenCalledWith('c1', expect.objectContaining({ model: CLOUD_MODEL_ID }));
+  });
+
+  it('creates a Cloud chat with the model the person picked, not the server default', async () => {
+    useModelStore.getState().setModel(CLOUD_MODEL_ID);
+    const mockCreate = managedCloudChat.createConversation as jest.MockedFunction<
+      typeof managedCloudChat.createConversation
+    >;
+    mockCreate.mockImplementation(
+      async (request) =>
+        ({
+          id: request.id,
+          title: request.title,
+          model: request.model ?? 'auto',
+          createdAt: T,
+          updatedAt: T,
+          messageCount: 0,
+          pinned: false,
+        }) as never,
+    );
+
+    const id = await useChatMessageStore.getState().createConversation('Picked model');
+
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: CLOUD_MODEL_ID }));
+    expect(convModel(id)).toBe(CLOUD_MODEL_ID);
   });
 
   it('rejects a Local model before mutating or queueing a Cloud conversation', async () => {
@@ -735,18 +807,21 @@ describe('cloud history request and leaf ownership', () => {
     expect(admitted?.activeLeafMessageId).toBe('m');
     expect(useChatCloudMessageStore.getState().messages['unknown']).toEqual([message]);
     expect(useChatMessageStore.getState().messages['unknown']).toBeUndefined();
-    expect(derive).toHaveBeenCalledWith(
-      'Answer',
-      'unknown',
-      'm',
-      T,
-      'Chat unknown',
-      expect.anything(),
-      {
-        scope: 'cloud',
-        ownerId: 'history-test-owner',
-      },
-    );
+    expect(derive).toHaveBeenCalledWith('Answer', 'unknown', 'm', T, 'Chat unknown', {
+      scope: 'cloud',
+      ownerId: 'history-test-owner',
+    });
+  });
+
+  it('marks a chat the server does not have as missing rather than as a failed load', async () => {
+    mockGet.mockRejectedValueOnce(new ManagedCloudChatHttpError('HTTP 404: Not found', 404, {}));
+
+    await useChatMessageStore.getState().loadMessages('gone');
+
+    expect(useChatMessageStore.getState().missingConversationId).toBe('gone');
+    expect(useChatMessageStore.getState().messageLoadErrorConversationId).not.toBe('gone');
+    expect(convExists('gone')).toBe(false);
+    useChatMessageStore.setState({ missingConversationId: null });
   });
 
   it('does not admit denied or mismatched remote details', async () => {
@@ -837,21 +912,12 @@ describe('cloud history request and leaf ownership', () => {
     expect(useChatCloudMessageStore.getState().messages['c1']?.[0]?.content).toBe(
       'New local contents',
     );
-    expect(derive).toHaveBeenCalledWith(
-      'New local contents',
-      'c1',
-      'm',
-      T,
-      'Chat c1',
-      expect.anything(),
-      {
-        scope: 'cloud',
-        ownerId: 'history-test-owner',
-      },
-    );
+    expect(derive).toHaveBeenCalledWith('New local contents', 'c1', 'm', T, 'Chat c1', {
+      scope: 'cloud',
+      ownerId: 'history-test-owner',
+    });
     expect(derive).not.toHaveBeenCalledWith(
       'Server',
-      expect.anything(),
       expect.anything(),
       expect.anything(),
       expect.anything(),

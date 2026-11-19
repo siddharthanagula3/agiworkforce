@@ -106,10 +106,7 @@ function StateNotice({ overview }: { overview: Exclude<FinanceOverviewResponse, 
       );
     case 'preparing':
       return (
-        <Notice>
-          Your bank is still preparing transaction history for this connection. Check back in a few
-          minutes.
-        </Notice>
+        <Notice>Your bank is still preparing transactions. Check back in a few minutes.</Notice>
       );
     case 'reconnect':
       return (
@@ -319,8 +316,7 @@ function RecentTransactions({ overview }: { overview: ReadyOverview }) {
       )}
       {overview.truncated ? (
         <p className="text-xs text-muted-foreground">
-          This period has more transactions than the overview reads, so the totals cover the most
-          recent ones.
+          Totals cover only the most recent transactions in this period.
         </p>
       ) : null}
     </section>
@@ -359,8 +355,7 @@ export function FinanceDashboard() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold text-foreground">Finances</h1>
         <p className="text-sm text-muted-foreground">
-          A read-only view of the bank accounts you connected. Balances and transactions come from
-          your bank through Plaid; nothing here can move money.
+          A read-only view of your banks through Plaid. Nothing here can move money.
         </p>
       </header>
 

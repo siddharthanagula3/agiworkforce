@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import conversationContract from './conversation-contract.json' with { type: 'json' };
 import {
   getDefaultAutoRoutingProfile,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
@@ -6,23 +7,58 @@ import {
 } from '@agiworkforce/types';
 import { CloudAgentWorkModeSchema, type CloudAgentWorkMode } from './cloud-agent-runs';
 
-export const CONVERSATION_TITLE_MAX_LENGTH = 500;
+export const CONVERSATION_TITLE_MAX_LENGTH = conversationContract.titleMaxLength;
 
 export const CONVERSATION_INSTRUCTIONS_MAX_LENGTH = 4_000;
 
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
-export const MANAGED_CLOUD_ORGANIZATION_HEADER = 'x-agi-organization-id';
-export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = 'personal';
+export const MANAGED_CLOUD_ORGANIZATION_HEADER = conversationContract.organizationHeader;
+export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = conversationContract.personalWorkspace;
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
 export const MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH = 1_000_000;
+
+/**
+ * The newest user message of a managed completion turn. The selected model's
+ * context window bounds it first; earlier messages of a saved chat are fitted
+ * to that window, never refused for length. A server that predates this does
+ * not announce it, and a client must then keep MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH.
+ */
+export const MANAGED_CLOUD_CHAT_MAX_LATEST_MESSAGE_LENGTH =
+  MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH;
+
+/**
+ * Announced on `/api/me` for `/api/llm/v1/chat/completions` turns only. The
+ * free-quota completion route keeps MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH for
+ * its whole request.
+ */
+export const ManagedCloudChatMessageLimitsWireSchema = z.object({
+  latest_message_max_chars: z.number().int().positive(),
+});
+export type ManagedCloudChatMessageLimitsWire = z.infer<
+  typeof ManagedCloudChatMessageLimitsWireSchema
+>;
+
+export function managedCloudChatMessageLimitsWire(): ManagedCloudChatMessageLimitsWire {
+  return { latest_message_max_chars: MANAGED_CLOUD_CHAT_MAX_LATEST_MESSAGE_LENGTH };
+}
+
+export function managedCloudChatLatestMessageMaxChars(
+  announced: ManagedCloudChatMessageLimitsWire | null | undefined,
+): number {
+  return Math.min(
+    announced?.latest_message_max_chars ?? MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+    MANAGED_CLOUD_CHAT_MAX_LATEST_MESSAGE_LENGTH,
+  );
+}
 
 /**
  * A draft is unsent text, so it is capped well below a message: the composer
  * turns anything longer into an attachment before it could reach this.
  */
-export const MANAGED_CLOUD_MAX_DRAFT_LENGTH = 20_000;
+export const MANAGED_CLOUD_MAX_DRAFT_LENGTH = conversationContract.draftMaxLength;
+export const MANAGED_CLOUD_DRAFT_SAVE_DEBOUNCE_MS = conversationContract.draftSaveDebounceMs;
 export const MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH = 32_000;
 
 export function managedCloudMetadataLength(value: unknown): number {

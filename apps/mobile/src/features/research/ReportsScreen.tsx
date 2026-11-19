@@ -1,24 +1,56 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  RefreshControl,
+  ScrollView,
+  Share,
+  View,
+} from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AlertCircle, ArrowLeft, Telescope, TriangleAlert } from 'lucide-react-native';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowUp,
+  MoreHorizontal,
+  Telescope,
+  TriangleAlert,
+} from 'lucide-react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Text } from '@/components/ui/Text';
+import { Input } from '@/components/ui/Input';
+import {
+  researchReportFollowUpPrompt,
+  researchReportToMarkdown,
+} from '@agiworkforce/unified-chat/research-report';
+import { prefillComposer } from '@/src/features/chat/store/composerPrefillStore';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { ResearchSourcesAppendix } from '@/src/features/chat/components/research/ResearchSourcesAppendix';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
+import { renderInlineMarkdown } from '@/src/features/chat/components/MarkdownInline';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
+import { ArtifactExportSheet } from '@/src/features/chat/components/ArtifactExportSheet';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { useActionMenu } from '@/src/shared/hooks/useActionMenu';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+import { saveArtifactToLibrary } from '@/src/features/artifacts/libraryService';
+import { getShortDisplayName, UNKNOWN_MODEL_LABEL } from '@/src/features/model-picker/service';
 import { radii, useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { spacing, typeScale } from '@/src/ui/theme/tokens';
 import type { ToolSearchResult } from '@/types/chat';
 import { extractReportSections } from './reportSections';
 import { fetchResearchReports, researchReportLabel, type MobileResearchReport } from './service';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function formatCreatedAt(iso: string): string {
   const date = new Date(iso);
@@ -31,8 +63,42 @@ function formatCreatedAt(iso: string): string {
   });
 }
 
-function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) {
+function reportModelName(modelId: string | null | undefined): string | null {
+  if (!modelId) return null;
+  const name = getShortDisplayName(modelId);
+  return name === UNKNOWN_MODEL_LABEL ? null : name;
+}
+
+const REPORT_THIS_REPORT = 'Report this research report';
+
+function researchReportTarget(report: MobileResearchReport): ReportTarget {
+  const reference = `research-report:${report.id}`;
+  return {
+    messageId: reference,
+    conversationId: report.conversationId ?? reference,
+    subject: { kind: 'research-report', id: report.id },
+    contentExcerpt: [researchReportLabel(report), report.summary, report.content]
+      .filter((part) => part.trim().length > 0)
+      .join('\n\n'),
+  };
+}
+
+interface ScreenHeaderAction {
+  text: string;
+  onPress: () => void;
+}
+
+function ScreenHeader({
+  title,
+  onBack,
+  actions,
+}: {
+  title: string;
+  onBack: () => void;
+  actions?: ScreenHeaderAction[];
+}) {
   const colors = useThemeColors();
+  const moreMenu = useActionMenu();
   return (
     <View
       style={{
@@ -63,6 +129,27 @@ function ScreenHeader({ title, onBack }: { title: string; onBack: () => void }) 
       >
         {title}
       </Text>
+      {actions && actions.length > 0 ? (
+        <PressableBox
+          onPress={() =>
+            moreMenu.open(
+              title,
+              actions.map((action) => ({
+                key: action.text,
+                label: action.text,
+                run: action.onPress,
+              })),
+            )
+          }
+          accessibilityRole="button"
+          accessibilityLabel="More report actions"
+          hitSlop={8}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <MoreHorizontal size={20} color={colors.textSecondary} />
+        </PressableBox>
+      ) : null}
+      <ActionMenuSheet menu={moreMenu.menu} dismissLabel="Dismiss report actions" />
     </View>
   );
 }
@@ -73,7 +160,7 @@ function ReportRow({ report, onOpen }: { report: MobileResearchReport; onOpen: (
   const meta = [
     formatCreatedAt(report.createdAt),
     `${report.sourcesConsulted} ${report.sourcesConsulted === 1 ? 'source' : 'sources'}`,
-    ...(report.model ? [report.model] : []),
+    reportModelName(report.model),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -132,8 +219,75 @@ function ReportRow({ report, onOpen }: { report: MobileResearchReport; onOpen: (
   );
 }
 
+function ReportFollowUp({ onAsk }: { onAsk: (question: string) => void }) {
+  const colors = useThemeColors();
+  const [question, setQuestion] = useState('');
+  const canSend = question.trim().length > 0;
+  const send = () => {
+    if (!canSend) return;
+    onAsk(question.trim());
+    setQuestion('');
+  };
+  return (
+    <SafeAreaView edges={['bottom']} style={{ backgroundColor: colors.background }}>
+      <View
+        testID="research-report-follow-up"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing.xs,
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.sm,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Input
+            testID="research-report-follow-up-input"
+            accessibilityLabel="Ask a follow-up about this report"
+            placeholder="Ask a follow-up about this report"
+            value={question}
+            onChangeText={setQuestion}
+            returnKeyType="send"
+            onSubmitEditing={send}
+          />
+        </View>
+        <PressableBox
+          testID="research-report-follow-up-send"
+          accessibilityRole="button"
+          accessibilityLabel="Ask"
+          accessibilityHint="Opens the report's chat with your question and the report in the message box"
+          accessibilityState={{ disabled: !canSend }}
+          disabled={!canSend}
+          onPress={send}
+          style={{
+            width: FULL_SCREEN_TOUCH_TARGET,
+            height: FULL_SCREEN_TOUCH_TARGET,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <ArrowUp size={20} color={canSend ? colors.textPrimary : colors.textMuted} />
+        </PressableBox>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack: () => void }) {
   const colors = useThemeColors();
+  const router = useRouter();
+  const markdown = useMemo(() => researchReportToMarkdown(report), [report]);
+  const conversationId = report.conversationId;
+  const askFollowUp = useCallback(
+    (question: string) => {
+      if (!conversationId) return;
+      prefillComposer(conversationId, researchReportFollowUpPrompt(report, question));
+      router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversationId } });
+    },
+    [conversationId, report, router],
+  );
   const sections = useMemo(() => extractReportSections(report.content), [report.content]);
   const sources = useMemo<ToolSearchResult[]>(
     () =>
@@ -157,6 +311,47 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
         })
       : null;
   }, [report.citations]);
+  const [reporting, setReporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const title = researchReportLabel(report);
+  const libraryOwnerId = captureCloudAccountEpoch()?.ownerId ?? null;
+  const saveToLibrary = useCallback(
+    async (ownerId: string) => {
+      try {
+        await saveArtifactToLibrary({
+          id: `research-report:${report.id}`,
+          title,
+          kind: 'research',
+          content: markdown,
+          ageLabel: '',
+          sourceLabel: '',
+          accentColor: colors.teal,
+          previewLines: [],
+          provenance: { scope: 'cloud', ownerId },
+        });
+        Alert.alert('Saved to Library', `“${title}” is in your Library.`);
+      } catch {
+        Alert.alert('Could not save to Library', 'Try again.');
+      }
+    },
+    [colors.teal, markdown, report.id, title],
+  );
+  const hasContent = report.content.trim().length > 0;
+  const actions: ScreenHeaderAction[] = [
+    ...(hasContent
+      ? [
+          { text: 'Download', onPress: () => setExportOpen(true) },
+          {
+            text: 'Share',
+            onPress: () => void Share.share({ title, message: markdown }),
+          },
+        ]
+      : []),
+    ...(hasContent && libraryOwnerId
+      ? [{ text: 'Save to Library', onPress: () => void saveToLibrary(libraryOwnerId) }]
+      : []),
+    { text: REPORT_THIS_REPORT, onPress: () => setReporting(true) },
+  ];
   const scrollRef = useRef<ScrollView>(null);
   const contentTop = useRef(0);
   const headingTops = useRef(new Map<string, number>());
@@ -171,121 +366,150 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top']}>
-      <ScreenHeader title={researchReportLabel(report)} onBack={onBack} />
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}
-        testID="research-report-detail"
-      >
-        {report.summary ? (
-          <Text
-            style={{ fontSize: typeScale.subhead, lineHeight: 21, color: colors.textSecondary }}
-          >
-            {report.summary}
-          </Text>
-        ) : null}
-
-        {report.error ? (
-          <View
-            style={{
-              flexDirection: 'row',
-              gap: 8,
-              padding: 10,
-              borderRadius: radii.md,
-              borderWidth: 1,
-              borderColor: colors.dangerBorder,
-              backgroundColor: colors.dangerSurface,
-            }}
-          >
-            <AlertCircle size={14} color={colors.agentError} />
-            <Text style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}>
-              {report.error}
-            </Text>
-          </View>
-        ) : null}
-
-        {report.keyFindings.length > 0 ? (
-          <View style={{ gap: 4 }}>
+      <ScreenHeader title={title} onBack={onBack} actions={actions} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('screen')}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 32,
+            gap: 12,
+          }}
+          keyboardShouldPersistTaps="handled"
+          testID="research-report-detail"
+        >
+          {report.summary ? (
             <Text
-              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+              testID="research-report-summary"
+              style={{ fontSize: typeScale.subhead, lineHeight: 21, color: colors.textSecondary }}
             >
-              Key findings
+              {renderInlineMarkdown(report.summary, 'report-summary', colors, sources)}
             </Text>
-            {report.keyFindings.map((finding, index) => (
-              <Text
-                key={`${index}-${finding.slice(0, 16)}`}
-                style={{ fontSize: typeScale.footnote, lineHeight: 20, color: colors.textPrimary }}
-              >
-                {`• ${finding}`}
+          ) : null}
+
+          {report.error ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 8,
+                padding: 10,
+                borderRadius: radii.md,
+                borderWidth: 1,
+                borderColor: colors.dangerBorder,
+                backgroundColor: colors.dangerSurface,
+              }}
+            >
+              <AlertCircle size={14} color={colors.agentError} />
+              <Text style={{ flex: 1, fontSize: typeScale.caption, color: colors.textSecondary }}>
+                {report.error}
               </Text>
-            ))}
-          </View>
-        ) : null}
+            </View>
+          ) : null}
 
-        {sections.length >= 3 ? (
-          <View
-            style={{
-              gap: 2,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radii.md,
-              padding: 10,
-            }}
-            testID="research-report-detail-sections"
-          >
-            <Text
-              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
-            >
-              {`Sections · ${sections.length}`}
-            </Text>
-            {sections.map((section) => (
-              <PressableBox
-                key={section.id}
-                onPress={() => jumpToSection(section.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Go to ${section.text}`}
-                hitSlop={4}
-                style={{
-                  minHeight: 32,
-                  justifyContent: 'center',
-                  paddingLeft: Math.max(0, section.level - (sections[0]?.level ?? 1)) * 12,
-                }}
+          {report.keyFindings.length > 0 ? (
+            <View style={{ gap: 4 }}>
+              <Text
+                style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
               >
+                Key findings
+              </Text>
+              {report.keyFindings.map((finding, index) => (
                 <Text
+                  key={`${index}-${finding.slice(0, 16)}`}
                   style={{
-                    fontSize: typeScale.caption,
-                    lineHeight: 19,
-                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 20,
+                    color: colors.textPrimary,
                   }}
                 >
-                  {section.text}
+                  {'• '}
+                  {renderInlineMarkdown(finding, `report-finding-${index}`, colors, sources)}
                 </Text>
-              </PressableBox>
-            ))}
-          </View>
-        ) : null}
+              ))}
+            </View>
+          ) : null}
 
-        <View
-          onLayout={(event) => {
-            contentTop.current = event.nativeEvent.layout.y;
-          }}
-        >
-          {renderMarkdownContent(report.content, colors, {
-            citations: sources,
-            onHeadingLayout: handleHeadingLayout,
-          })}
-        </View>
+          {sections.length >= 3 ? (
+            <View
+              style={{
+                gap: 2,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radii.md,
+                padding: 10,
+              }}
+              testID="research-report-detail-sections"
+            >
+              <Text
+                style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textMuted }}
+              >
+                {`Sections · ${sections.length}`}
+              </Text>
+              {sections.map((section) => (
+                <PressableBox
+                  key={section.id}
+                  onPress={() => jumpToSection(section.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Go to ${section.text}`}
+                  hitSlop={4}
+                  style={{
+                    minHeight: 32,
+                    justifyContent: 'center',
+                    paddingLeft: Math.max(0, section.level - (sections[0]?.level ?? 1)) * 12,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      lineHeight: 19,
+                      color: colors.textSecondary,
+                    }}
+                  >
+                    {section.text}
+                  </Text>
+                </PressableBox>
+              ))}
+            </View>
+          ) : null}
 
-        <ResearchSourcesAppendix sources={sources} />
-        {retrievedOn ? (
-          <Text
-            style={{ fontSize: typeScale.caption, color: colors.textMuted }}
-            testID="research-report-sources-retrieved"
+          <View
+            onLayout={(event) => {
+              contentTop.current = event.nativeEvent.layout.y;
+            }}
           >
-            {`Sources retrieved ${retrievedOn}`}
-          </Text>
-        ) : null}
-      </ScrollView>
+            {renderMarkdownContent(report.content, colors, {
+              citations: sources,
+              onHeadingLayout: handleHeadingLayout,
+            })}
+          </View>
+
+          <ResearchSourcesAppendix sources={sources} />
+          {retrievedOn ? (
+            <Text
+              style={{ fontSize: typeScale.caption, color: colors.textMuted }}
+              testID="research-report-sources-retrieved"
+            >
+              {`Sources retrieved ${retrievedOn}`}
+            </Text>
+          ) : null}
+        </ScrollView>
+        {conversationId ? <ReportFollowUp onAsk={askFollowUp} /> : null}
+      </KeyboardAvoidingView>
+      <ArtifactExportSheet
+        artifact={{ type: 'research', title }}
+        content={markdown}
+        visible={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
+      {reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(false)}
+          title={REPORT_THIS_REPORT}
+          target={researchReportTarget(report)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -421,14 +645,19 @@ export function ReportsScreen() {
             No reports yet
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
-            Turn on Research in the composer and ask a question. Finished runs are saved here.
+            Turn on Research in the composer and ask. Reports appear here.
           </Text>
         </View>
       ) : (
         <FlatList
           data={reports}
           keyExtractor={(report) => report.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 8 }}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 24,
+            gap: 8,
+          }}
           renderItem={({ item }) => <ReportRow report={item} onOpen={() => setOpenReport(item)} />}
           onEndReached={() => {
             if (!moreFailed) void loadMore();

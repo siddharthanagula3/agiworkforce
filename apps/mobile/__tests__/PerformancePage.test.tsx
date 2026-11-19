@@ -479,7 +479,7 @@ describe('PerformanceScreen rendering', () => {
   it('offers only toggles that change runtime behaviour', async () => {
     const { getByText, queryByText } = await renderSettledPerformanceScreen();
     expect(getByText('Show performance chip in chat')).toBeTruthy();
-    expect(getByText('Shows tok/s under on-device replies with a measured speed')).toBeTruthy();
+    expect(getByText('Shows tok/s under on-device replies')).toBeTruthy();
     expect(queryByText('Shows tok/s and TTFT under each assistant response')).toBeNull();
     expect(queryByText('Pause at serious thermal')).toBeNull();
     expect(queryByText('Pause at 15% battery')).toBeNull();

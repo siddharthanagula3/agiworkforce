@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { WEB_RESPONSE_RATING_MESSAGE } from '@/app/api/feedback/response-rating-contract';
+import { WEB_RESPONSE_RATING_MESSAGE } from '@agiworkforce/cloud-contracts';
 
 const MIGRATION = '0353_feedback_ratings_drop_answer_text';
 const migration = fs.readFileSync(path.resolve(import.meta.dirname, `${MIGRATION}.sql`), 'utf8');

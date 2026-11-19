@@ -14,7 +14,9 @@ import {
 import {
   classifyCloudUtilityFailure,
   showCloudUtilityErrorActions,
+  showLocalModelRefusal,
 } from '../core/cloudUtilityErrorActions';
+import { cloudUtilityModel, LocalModelSelectedError } from '../core/cloudModelBoundary';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { buildExplainTerminalPrompt, runEditorUtility } from '../features/editor-utilities';
 import {
@@ -22,15 +24,17 @@ import {
   getWorkspaceDisplayName,
   shellExecutableForCurrentPlatform,
 } from '../platform/workspaceFolders';
-import { Config } from '../platform/config';
+import { resolveConfiguredCli } from '../platform/config';
+import {
+  cliProbeMessage,
+  describeRemoteEnvironment,
+  unresolvedCliProbe,
+} from '../platform/remoteEnvironment';
 import { setTerminalOutputSource, type TerminalOutput } from '../data/terminalOutput';
+import { isContainedIn } from '@agiworkforce/utils/path-containment';
 
 const TERMINAL_NAME = PRODUCT_NAMES.code;
 
-/**
- * A bare `agi` on PATH should read as `agi login openai` in the terminal, not
- * as `'agi' login openai`. Quoting is for paths that need it.
- */
 const CLI_PATH_NEEDS_NO_QUOTES = /^[A-Za-z0-9._\-/\\:]+$/u;
 
 function quoteCliPathIfNeeded(cliPath: string): string {
@@ -40,6 +44,12 @@ function quoteCliPathIfNeeded(cliPath: string): string {
 }
 
 export { validateSuggestedCommand };
+
+function terminalCreationCwd(terminal: vscode.Terminal): vscode.Uri | undefined {
+  const cwd = (terminal.creationOptions as vscode.TerminalOptions | undefined)?.cwd;
+  if (cwd === undefined) return undefined;
+  return typeof cwd === 'string' ? vscode.Uri.file(cwd) : cwd;
+}
 
 interface CapturedExecution {
   readonly execution: vscode.TerminalShellExecution;
@@ -56,6 +66,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
    * terminal closes, never sent anywhere until "Explain Terminal Output" is run.
    */
   private readonly _lastExecutions = new Map<vscode.Terminal, CapturedExecution>();
+  private readonly _runningExecutions = new Map<vscode.Terminal, vscode.TerminalShellExecution>();
 
   constructor(secrets: vscode.SecretStorage) {
     this._secrets = secrets;
@@ -66,6 +77,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
           this._terminal = undefined;
         }
         this._lastExecutions.delete(closed);
+        this._runningExecutions.delete(closed);
       }),
       vscode.window.onDidStartTerminalShellExecution((event) => {
         const captured: CapturedExecution = {
@@ -73,9 +85,13 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
           capture: emptyTerminalCapture(),
         };
         this._lastExecutions.set(event.terminal, captured);
+        this._runningExecutions.set(event.terminal, event.execution);
         void this._drainExecution(captured);
       }),
       vscode.window.onDidEndTerminalShellExecution((event) => {
+        if (this._runningExecutions.get(event.terminal) === event.execution) {
+          this._runningExecutions.delete(event.terminal);
+        }
         const captured = this._lastExecutions.get(event.terminal);
         if (captured?.execution !== event.execution) return;
         captured.capture.ended = true;
@@ -84,24 +100,29 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
     );
   }
 
+  private _canTakeCommand(terminal: vscode.Terminal, folder: vscode.Uri | undefined): boolean {
+    if (!vscode.window.terminals.includes(terminal)) return false;
+    if (this._runningExecutions.has(terminal)) return false;
+    if (folder === undefined) return true;
+    const cwd = terminal.shellIntegration?.cwd ?? terminalCreationCwd(terminal);
+    return cwd === undefined || isContainedIn(folder.fsPath, cwd.fsPath);
+  }
+
   getOrCreateTerminal(): vscode.Terminal {
-    if (this._terminal !== undefined) {
-      const stillAlive = vscode.window.terminals.find((t) => t === this._terminal);
-      if (stillAlive !== undefined) {
-        this._terminal.show(/* preserveFocus */ true);
-        return this._terminal;
-      }
-      this._terminal = undefined;
-    }
-
-    const existing = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME);
-    if (existing !== undefined) {
-      this._terminal = existing;
-      this._terminal.show(true);
-      return this._terminal;
-    }
-
     const workspaceUri = getActiveWorkspaceFolderSync()?.uri;
+    const reusable = [
+      this._terminal,
+      ...vscode.window.terminals.filter((t) => t.name === TERMINAL_NAME),
+    ].find(
+      (candidate): candidate is vscode.Terminal =>
+        candidate !== undefined && this._canTakeCommand(candidate, workspaceUri),
+    );
+    if (reusable !== undefined) {
+      this._terminal = reusable;
+      reusable.show(true);
+      return reusable;
+    }
+
     this._terminal = vscode.window.createTerminal(
       workspaceUri !== undefined
         ? { name: TERMINAL_NAME, cwd: workspaceUri }
@@ -170,6 +191,10 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
     context: string,
     cancellationToken: vscode.CancellationToken,
   ): Promise<string | undefined> {
+    const selected = cloudUtilityModel();
+    if (selected.route === 'local') {
+      throw new LocalModelSelectedError(selected.model, 'Suggest Terminal Command');
+    }
     const workspaceFolder = getWorkspaceDisplayName();
     const platform =
       process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
@@ -365,7 +390,17 @@ export function activateTerminal(
         );
         return;
       }
-      provider.runCommand(`${quoteCliPathIfNeeded(Config.cliPath())} login ${providerId}`);
+      const cli = resolveConfiguredCli();
+      if (!cli.ok) {
+        vscode.window.showWarningMessage(
+          cliProbeMessage(
+            unresolvedCliProbe(cli),
+            describeRemoteEnvironment(vscode.env.remoteName),
+          ),
+        );
+        return;
+      }
+      provider.runCommand(`${quoteCliPathIfNeeded(cli.path)} login ${providerId}`);
     }),
     vscode.commands.registerCommand('agi-workforce.explainTerminal', async () => {
       await runEditorUtility(buildExplainTerminalPrompt(await provider.captureOutput()));
@@ -374,6 +409,13 @@ export function activateTerminal(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.suggestCommand', async () => {
+      const selected = cloudUtilityModel();
+      if (selected.route === 'local') {
+        await showLocalModelRefusal(
+          new LocalModelSelectedError(selected.model, 'Suggest Terminal Command'),
+        );
+        return;
+      }
       const contextParts: string[] = [];
 
       const editor = vscode.window.activeTextEditor;

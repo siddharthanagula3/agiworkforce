@@ -147,6 +147,45 @@ describe('evaluateOrganizationPolicy, chat sync', () => {
   });
 });
 
+describe('evaluateOrganizationPolicy, which clients may reach the workspace', () => {
+  const webAndDesktopOnly = policy({
+    allowChromeCloudSync: true,
+    controls: {
+      ...DEFAULT_ENTERPRISE_ADMIN_POLICY.controls,
+      allowedSurfaces: ['web', 'desktop'],
+    },
+  });
+
+  it('refuses a client the administrator left out of the allowed surfaces', () => {
+    const decision = evaluateOrganizationPolicy(webAndDesktopOnly, {
+      resource: 'workspace_access',
+      surface: 'chrome',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('surface_not_allowed');
+  });
+
+  it('admits a client the administrator allowed', () => {
+    expect(
+      evaluateOrganizationPolicy(webAndDesktopOnly, {
+        resource: 'workspace_access',
+        surface: 'web',
+      }).allowed,
+    ).toBe(true);
+  });
+
+  it('refuses chat sync from a client left out of the allowed surfaces, whatever its sync switch says', () => {
+    const decision = evaluateOrganizationPolicy(webAndDesktopOnly, {
+      resource: 'chat_sync',
+      surface: 'chrome',
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('surface_not_allowed');
+  });
+});
+
 describe('evaluateOrganizationPolicy, privacy mode and audit export', () => {
   it('denies a privacy mode outside allowedPrivacyModes', () => {
     const decision = evaluateOrganizationPolicy(policy({ allowedPrivacyModes: ['local'] }), {

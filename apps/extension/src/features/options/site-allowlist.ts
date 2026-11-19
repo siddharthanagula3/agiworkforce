@@ -23,9 +23,11 @@ export function selectApprovedSiteOrigin(tabs: ReadonlyArray<SiteTabCandidate>):
       (candidate): candidate is { tab: SiteTabCandidate; origin: string } =>
         candidate.origin !== null,
     );
-  const selected =
-    candidates.find(({ tab }) => tab.active) ??
-    [...candidates].sort((a, b) => (b.tab.lastAccessed ?? 0) - (a.tab.lastAccessed ?? 0))[0];
+  const selected = [...candidates].sort(
+    (a, b) =>
+      (b.tab.lastAccessed ?? 0) - (a.tab.lastAccessed ?? 0) ||
+      Number(b.tab.active === true) - Number(a.tab.active === true),
+  )[0];
   return selected?.origin ?? null;
 }
 

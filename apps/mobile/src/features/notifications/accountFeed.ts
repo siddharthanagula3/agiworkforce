@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 import {
+  CLOUD_CODE_PAGE_ROUTE,
   isProductLinkId,
   parseProductLinkPath,
   type NotificationFeedItem,
@@ -12,8 +13,11 @@ import {
   type NotificationMarkReadRequest,
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
-import { API_URL } from '@/lib/constants';
-import { nativeRouteForProductLink } from './productLinks';
+import {
+  nativeRouteForCodeSession,
+  nativeRouteForProductLink,
+  nativeRouteForSettingsSection,
+} from './productLinks';
 
 export const ACCOUNT_NOTIFICATIONS_PATH = NOTIFICATIONS_PATH;
 const PAGE_SIZE = 30;
@@ -52,31 +56,49 @@ export async function markAccountNotificationsRead(
   await api.patch(ACCOUNT_NOTIFICATIONS_PATH, selection);
 }
 
-export type AccountNotificationDestination =
-  { kind: 'native'; route: string } | { kind: 'web'; url: string };
+export interface AccountNotificationDestination {
+  kind: 'native';
+  route: string;
+}
+
+const SETTINGS_HREF_PATH = '/chat';
+const SETTINGS_HREF_KEY = 'settings';
+
+function decodedSegment(segment: string): string | null {
+  try {
+    const value = decodeURIComponent(segment);
+    return isProductLinkId(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
 
 export function accountNotificationDestination(
   href: string | null,
 ): AccountNotificationDestination | null {
   if (!href || !href.startsWith('/') || href.startsWith('//')) return null;
+  const route = nativeRouteForAccountHref(href);
+  return route ? { kind: 'native', route } : null;
+}
+
+function nativeRouteForAccountHref(href: string): string | null {
   const productLink = parseProductLinkPath(href);
-  if (productLink) {
-    const route = nativeRouteForProductLink(productLink);
-    return route
-      ? { kind: 'native', route }
-      : { kind: 'web', url: new URL(href, API_URL).toString() };
+  if (productLink) return nativeRouteForProductLink(productLink);
+  const [path = '', query = ''] = href.split('#')[0]?.split('?') ?? [];
+  const segments = path.split('/').filter(Boolean);
+  if (segments.length === 2 && `/${segments[0]}` === CLOUD_CODE_PAGE_ROUTE) {
+    const sessionId = decodedSegment(segments[1] ?? '');
+    return sessionId ? nativeRouteForCodeSession(sessionId) : null;
   }
-  const chat = /^\/chat\/([^/?#]+)$/u.exec(href);
-  if (chat?.[1]) {
-    let id: string;
-    try {
-      id = decodeURIComponent(chat[1]);
-    } catch {
-      return null;
-    }
-    if (isProductLinkId(id)) return { kind: 'native', route: `/(app)/chat/${id}` };
+  if (segments.length === 2 && segments[0] === 'chat') {
+    const id = decodedSegment(segments[1] ?? '');
+    return id ? `/(app)/chat/${id}` : null;
   }
-  return { kind: 'web', url: new URL(href, API_URL).toString() };
+  if (path === SETTINGS_HREF_PATH) {
+    const section = new URLSearchParams(query).get(SETTINGS_HREF_KEY);
+    return section ? nativeRouteForSettingsSection(section) : null;
+  }
+  return null;
 }
 
 interface AccountFeedState {

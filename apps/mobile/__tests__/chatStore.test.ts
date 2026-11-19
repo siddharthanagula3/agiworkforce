@@ -1,6 +1,12 @@
 import { Alert } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 
+const mockAnnounceReplyReady = jest.fn(async (_conversationId: string) => false);
+jest.mock('../services/replyReadyNotice', () => ({
+  announceReplyReadyInBackground: (conversationId: string) =>
+    mockAnnounceReplyReady(conversationId),
+}));
+
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -148,7 +154,7 @@ import {
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
-import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '../stores/chat/chatViewStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
@@ -158,6 +164,7 @@ import {
   markInstalledModelUsed,
 } from '../storage/installedModels';
 import type { StreamCallbacks } from '../services/streaming';
+import type { SendMessageOptions } from '../stores/chat/chatExecutionStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
@@ -172,6 +179,7 @@ import {
 import { storage } from '../lib/mmkv';
 import { MINOR_SAFE_REFUSAL, REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
 import { streamFailureNoticeText } from '../src/features/chat/utils/messageStreamError';
+import { visibleThreadFor } from '../src/features/chat/utils/conversationThread';
 
 const AUTO_MODEL_ID = requireAutoMode().id;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
@@ -272,6 +280,10 @@ const RESEARCH_MODEL = requireMobileCloudModel((model) => {
   const capabilities = getModelMetadataById(model.id)?.capabilities;
   return capabilities?.research === true && capabilities.search === true;
 }, 'research-and-search-capable Mobile Cloud model').id;
+const CODE_MODEL = requireMobileCloudModel((model) => {
+  const capabilities = getModelMetadataById(model.id)?.capabilities;
+  return capabilities?.codeExecution === true && capabilities.tools === true;
+}, 'code-execution-capable Mobile Cloud model').id;
 
 function seedCloudConversation(model = CLOUD_MODEL) {
   const existing = getState().conversations.find((conversation) => conversation.id === CONV_ID);
@@ -429,7 +441,7 @@ describe('chatStore, streaming state', () => {
       expect(capturedBody?.tool_choice).toBeUndefined();
     });
 
-    it('omits web_search when the user turned the Capabilities preference off', async () => {
+    it('tells the server not to search when the user turned the Capabilities preference off', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
       useChatStore.setState({
@@ -452,7 +464,144 @@ describe('chatStore, streaming state', () => {
         await getState().sendMessage(CONV_ID, 'just chat normally', CLOUD_MODEL);
       });
 
-      expect(capturedBody?.web_search).toBeUndefined();
+      expect(capturedBody?.web_search).toBe(false);
+      expect(capturedBody).not.toHaveProperty('web_fetch');
+    });
+
+    it('notes on the answer that search was on and that the question asked for one', async () => {
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      seedCloudConversation(SEARCH_MODEL);
+      useChatStore.setState({
+        features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+      });
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onDelta({ content: 'Tulip bulbs go in the ground in autumn.' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Look this up: when to plant tulips', SEARCH_MODEL);
+      });
+
+      const answer = (getState().messages[CONV_ID] ?? []).find((m) => m.role === 'assistant');
+      expect(answer?.metadata?.webSearchRequested).toBe(true);
+      expect(answer?.metadata?.webSearchAskedInText).toBe(true);
+    });
+
+    it('notes neither when search was off and the question did not ask for one', async () => {
+      seedCloudConversation();
+      useChatStore.setState({
+        features: { webSearch: false, imageGen: true, health: false, codeExecution: false },
+      });
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onDelta({ content: 'Happy to chat.' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'just chat normally', CLOUD_MODEL);
+      });
+
+      const answer = (getState().messages[CONV_ID] ?? []).find((m) => m.role === 'assistant');
+      expect(answer?.metadata).not.toHaveProperty('webSearchRequested');
+      expect(answer?.metadata).not.toHaveProperty('webSearchAskedInText');
+    });
+
+    describe('code execution', () => {
+      async function sendCodeCapableTurn(text: string, options?: SendMessageOptions) {
+        let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+        useTierStore.setState({
+          tier: 'max',
+          billingTier: 'max',
+          codeExecutionAvailable: true,
+          grantedCapabilities: ['canUseWebSearch', 'canUseCloudExecution'],
+        } as never);
+        seedCloudConversation(CODE_MODEL);
+        mockStreamChat.mockImplementation(
+          (body, callbacks) =>
+            new Promise<void>((resolve) => {
+              capturedBody = body;
+              callbacks.onDone();
+              resolve();
+            }),
+        );
+        await act(async () => {
+          await getState().sendMessage(CONV_ID, text, CODE_MODEL, undefined, options);
+        });
+        return capturedBody as Parameters<typeof streamChat>[0] | null;
+      }
+
+      beforeEach(() => {
+        useChatViewStore.setState({ runCodeByConversation: {} });
+        useChatStore.setState({
+          features: {
+            webSearch: true,
+            imageGen: true,
+            health: false,
+            codeExecution: true,
+            research: false,
+          },
+        });
+      });
+
+      it('leaves a plain message on a code-capable model to the server instead of forcing a run', async () => {
+        const body = await sendCodeCapableTurn('Hi');
+
+        expect(body).not.toBeNull();
+        expect(body).not.toHaveProperty('code_execution');
+        expect(body).not.toHaveProperty('office_creation');
+      });
+
+      it('asks for a run on every turn only while Run code is on for that chat', async () => {
+        useChatViewStore.getState().setRunCode(CONV_ID, true);
+        expect((await sendCodeCapableTurn('Chart the first 20 primes'))?.code_execution).toBe(true);
+
+        useChatViewStore.getState().setRunCode(CONV_ID, false);
+        expect(await sendCodeCapableTurn('Hi again')).not.toHaveProperty('code_execution');
+      });
+
+      it('asks for the code run and file creation a chosen skill needs, without naming a file format', async () => {
+        const body = await sendCodeCapableTurn('Build the quarterly deck', {
+          skillName: 'deck-builder',
+          skillTools: { codeExecution: true, officeCreation: true },
+        });
+
+        expect(body?.code_execution).toBe(true);
+        expect(body?.office_creation).toBe(true);
+        expect(body).not.toHaveProperty('office_format');
+      });
+
+      it('keeps Run code from another chat out of this one', async () => {
+        useChatViewStore.getState().setRunCode('another-conversation', true);
+
+        expect(await sendCodeCapableTurn('Hi')).not.toHaveProperty('code_execution');
+      });
+
+      it('tells the server not to run code or create files when the permission is off', async () => {
+        useChatViewStore.getState().setRunCode(CONV_ID, true);
+        useChatStore.setState({
+          features: {
+            webSearch: true,
+            imageGen: true,
+            health: false,
+            codeExecution: false,
+            research: false,
+          },
+        });
+
+        const body = await sendCodeCapableTurn('Run this Python: print(1)');
+
+        expect(body?.code_execution).toBe(false);
+        expect(body?.office_creation).toBe(false);
+      });
+
+      it('carries the new-chat Run code choice to the conversation it creates', () => {
+        useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, true);
+
+        useChatViewStore.getState().adoptStyleSelection(NEW_CHAT_STYLE_KEY, CONV_ID);
+
+        expect(useChatViewStore.getState().runCodeByConversation).toEqual({ [CONV_ID]: true });
+      });
     });
 
     it('keeps the model capability clamp when the web-search preference is on', async () => {
@@ -857,6 +1006,133 @@ describe('chatStore, streaming state', () => {
       },
     );
 
+    describe('answers to the plan questions', () => {
+      const runSources = {
+        files: true,
+        allowDomains: ['example.org'],
+        denyDomains: [],
+        connectors: [],
+      };
+
+      function seedResearchRun(phase: 'awaiting_approval' | 'interrupted'): {
+        bodies: Array<Parameters<typeof streamChat>[0]>;
+      } {
+        const bodies: Array<Parameters<typeof streamChat>[0]> = [];
+        seedCloudConversation(RESEARCH_MODEL);
+        useTierStore.setState({
+          tier: 'max',
+          grantedCapabilities: ['canUseWebSearch', 'canUseDeepResearch'],
+          capabilityHandshakeReceived: true,
+        } as never);
+        const createdAt = new Date().toISOString();
+        useChatStore.setState({
+          messages: {
+            [CONV_ID]: [
+              {
+                id: 'research-user',
+                conversationId: CONV_ID,
+                role: 'user',
+                content: 'Compare the options',
+                model: RESEARCH_MODEL,
+                createdAt,
+              },
+              {
+                id: 'research-assistant',
+                conversationId: CONV_ID,
+                role: 'assistant',
+                content: '',
+                model: RESEARCH_MODEL,
+                createdAt,
+                isStreaming: false,
+                metadata: {
+                  research: {
+                    phase,
+                    steps: [{ id: 's1', type: 'search', description: 'Look', status: 'pending' }],
+                    questions: ['Which region?'],
+                    runConfig: {
+                      sources: runSources,
+                      deliverable: {
+                        depth: 'executive-summary',
+                        format: 'bullet-brief',
+                        minSources: 4,
+                        stopWhenNoNewSources: false,
+                        saveToLibrary: false,
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        });
+        mockStreamChat.mockImplementation(
+          (body, callbacks) =>
+            new Promise<void>((resolve) => {
+              bodies.push(body);
+              callbacks.onDone();
+              resolve();
+            }),
+        );
+        return { bodies };
+      }
+
+      const steps = [
+        { id: 's1', type: 'search' as const, description: 'Look', status: 'pending' as const },
+      ];
+
+      it('sends the answers as guidance when the plan starts', async () => {
+        const { bodies } = seedResearchRun('awaiting_approval');
+
+        await act(async () => {
+          await getState().resumeResearch(
+            CONV_ID,
+            'research-assistant',
+            'start',
+            steps,
+            undefined,
+            '  Q: Which region?\nA: Europe  ',
+          );
+        });
+
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]?.research_resume?.guidance).toBe('Q: Which region?\nA: Europe');
+      });
+
+      it('sends no guidance when the questions were left blank', async () => {
+        const { bodies } = seedResearchRun('awaiting_approval');
+
+        await act(async () => {
+          await getState().resumeResearch(
+            CONV_ID,
+            'research-assistant',
+            'start',
+            steps,
+            undefined,
+            '   ',
+          );
+        });
+
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]?.research_resume).toBeDefined();
+        expect(bodies[0]?.research_resume).not.toHaveProperty('guidance');
+      });
+
+      it('retries with the sources the run used', async () => {
+        const { bodies } = seedResearchRun('interrupted');
+
+        await act(async () => {
+          await getState().resumeResearch(CONV_ID, 'research-assistant', 'retry');
+        });
+
+        expect(bodies).toHaveLength(1);
+        expect(bodies[0]?.research_sources).toEqual({
+          files: true,
+          allow_domains: ['example.org'],
+        });
+        expect(bodies[0]?.research_resume).not.toHaveProperty('guidance');
+      });
+    });
+
     it('uses per-send task options over persisted chat mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
@@ -924,6 +1200,43 @@ describe('chatStore, streaming state', () => {
       expect(state.isStreaming).toBe(false);
       expect(state.streamingContent).toBe('');
       expect(state.streamingReasoning).toBe('');
+    });
+
+    it('offers a reply notice when a Cloud reply with no server run finishes', async () => {
+      seedCloudConversation();
+      mockAnnounceReplyReady.mockClear();
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onDelta({ content: 'Hello' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
+      });
+
+      expect(mockAnnounceReplyReady).toHaveBeenCalledTimes(1);
+      expect(mockAnnounceReplyReady).toHaveBeenCalledWith(CONV_ID);
+    });
+
+    it('leaves the reply notice to the server when the Cloud turn ran as a server run', async () => {
+      seedCloudConversation();
+      mockAnnounceReplyReady.mockClear();
+      const runId = '0190a000-0000-7000-8000-000000000098';
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onRunReference?.({
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: -1,
+        });
+        callbacks.onDelta({ content: 'Hello' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
+      });
+
+      expect(mockAnnounceReplyReady).not.toHaveBeenCalled();
     });
 
     it('accumulates streaming content via onDelta', async () => {
@@ -1294,11 +1607,11 @@ describe('chatStore, streaming state', () => {
   describe('local LLM path', () => {
     describe('deferred Local settlement', () => {
       const finalText = [
-        '```typescript',
-        'export function answer() {',
-        '  const value = 42;',
-        '  return value;',
-        '}',
+        '```html',
+        '<!-- @artifact -->',
+        '<!DOCTYPE html>',
+        '<html><head><title>Answer</title></head>',
+        '<body><p>42</p></body></html>',
         '```',
       ].join('\n');
 
@@ -1563,6 +1876,7 @@ describe('chatStore, streaming state', () => {
         conversationId: CONV_ID,
         includeSensitiveTopics: false,
       });
+      expect(mockAnnounceReplyReady).toHaveBeenCalledWith(CONV_ID);
     });
 
     it('does not capture durable facts when local generation fails', async () => {
@@ -2263,7 +2577,7 @@ describe('chatStore, streaming state', () => {
         expect(mockLocalGenerate).not.toHaveBeenCalled();
       });
 
-      it('replaces the edited question and the turns after it once the replacement is accepted', async () => {
+      it('shows the revision in place of the edited question and keeps the original as a version', async () => {
         act(() => {
           getState().editMessage(CONV_ID, 'edit-u2', 'revised second question');
         });
@@ -2272,9 +2586,17 @@ describe('chatStore, streaming state', () => {
           expect(contents()).toContain('edited answer');
         });
 
+        const conversation = getState().conversations.find((c) => c.id === CONV_ID);
+        expect(
+          visibleThreadFor(getState().messages[CONV_ID] ?? [], conversation).map(
+            (row) => row.content,
+          ),
+        ).toEqual(['first question', 'first answer', 'revised second question', 'edited answer']);
         expect(contents()).toEqual([
           'first question',
           'first answer',
+          'second question',
+          'second answer',
           'revised second question',
           'edited answer',
         ]);

@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('./object-storage');
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -5,13 +6,15 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createLocalProjectKnowledgeUploadUrl,
+  createProjectKnowledgeCleanupPlan,
   deleteProjectKnowledgeObject,
   getProjectKnowledgeObject,
   sealProjectKnowledgeObject,
   storeLocalProjectKnowledgeUpload,
 } from './project-knowledge-object-storage';
 
-vi.mock('./object-storage', () => ({
+vi.mock('./object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   isObjectStorageConfigured: () => false,
@@ -20,6 +23,8 @@ vi.mock('./object-storage', () => ({
   getBoundedPrivateObject: vi.fn(),
   deleteObject: vi.fn(),
   deletePrivateObject: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
+  createPrivateObjectWriter: vi.fn(),
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {
     constructor(_key: string, maxBytes: number) {
       super(`Stored object exceeds the permitted ${maxBytes} bytes`);
@@ -194,11 +199,40 @@ describe('local project knowledge storage', () => {
         bytes: inspected,
         contentType: 'text/plain',
       }),
-    ).resolves.toBe(sealedKey);
+    ).resolves.toMatchObject({
+      key: sealedKey,
+      targets: {
+        'local-bytes': path.join(scratch, '.agi-local-media/project-knowledge/objects'),
+        'local-metadata': path.join(scratch, '.agi-local-media/project-knowledge/metadata'),
+      },
+    });
     await expect(getProjectKnowledgeObject(sealedKey, bytes.byteLength)).resolves.toEqual({
       data: Buffer.from(bytes),
       contentType: 'text/plain',
       etag: sha256Hex(bytes),
     });
+  });
+
+  it('refuses forged local targets and traversal before touching storage', async () => {
+    const plan = createProjectKnowledgeCleanupPlan();
+    for (const objectKey of ['../outside', 'knowledge-files/projects/project-1/../outside']) {
+      await expect(
+        plan.remove({ name: 'local-bytes', location: plan.targets['local-bytes']!, objectKey }),
+      ).rejects.toThrow(/pinned local storage target/);
+    }
+    await expect(
+      plan.remove({
+        name: 'local-bytes',
+        location: path.join(scratch, 'outside'),
+        objectKey: 'knowledge-files/projects/project-1/source.txt',
+      }),
+    ).rejects.toThrow(/pinned local storage target/);
+    await expect(
+      plan.remove({
+        name: '__proto__',
+        location: plan.targets['local-bytes']!,
+        objectKey: 'knowledge-files/projects/project-1/source.txt',
+      }),
+    ).rejects.toThrow(/pinned local storage target/);
   });
 });

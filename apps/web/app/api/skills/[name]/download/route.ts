@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getBundledSkillDownloadForPlugins } from '@/lib/services/skill-catalog-service';
@@ -15,7 +16,7 @@ async function handleDownload(
   request: NextRequest,
   context: { params: Promise<{ name: string }> },
 ) {
-  const rateLimit = await withRateLimit(request, 'chat-conversation');
+  const rateLimit = await withRateLimit(request, 'skills-catalog-read');
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
@@ -39,7 +40,7 @@ async function handleDownload(
   });
 }
 
-export const GET = withCorsRoute(withErrorHandler(handleDownload));
+export const GET = withCorsRoute(withAdmittedRateLimitHeaders(withErrorHandler(handleDownload)));
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

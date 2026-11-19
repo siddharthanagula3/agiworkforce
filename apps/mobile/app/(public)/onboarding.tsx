@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Platform, StyleSheet, ScrollView } from 'react-native';
+import { Clock, Lightbulb, Settings, type LucideIcon } from 'lucide-react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,14 +16,17 @@ import { Input } from '@/components/ui/Input';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { spacing, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { appAuthoredDownloadMessage, ModelDownloadError } from '@/services/modelDownload';
+import { getInstalledModel } from '@/storage/installedModels';
 import {
-  assertDownloadAllowed,
-  cancelDownload,
-  ModelDownloadError,
-} from '@/services/modelDownload';
-import { getInstalledModel, recordInstalledModel } from '@/storage/installedModels';
-import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
+  FirstRunDisclosureModal,
+  PRIVACY_POLICY_URL,
+  TERMS_OF_USE_URL,
+} from '@/src/features/onboarding/components/FirstRunDisclosureModal';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
   composeShortFirstRunDisclosure,
@@ -39,17 +43,40 @@ import {
   getModelById,
   getShippableModels,
   getSystemModelForTier1Runtime,
-  tier2LoadModel,
   type DeviceCapabilities,
   type LocalRuntimeTier,
 } from '@agiworkforce/local-llm';
 import { PRODUCT_BRAND, getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { getSelectableModelById } from '@/src/features/model-picker/service';
+import {
+  PERSONALIZATION_NICKNAME_MAX_LENGTH,
+  PERSONALIZATION_OCCUPATION_MAX_LENGTH,
+} from '@/src/features/settings/personalization/personalizationFieldLimits';
 
 const HERO_SYMBOL_SIZE = 72;
+const HERO_NOTICE_ICON_SIZE = 22;
+const HERO_NOTICES: readonly { id: string; icon: LucideIcon; text: string }[] = [
+  {
+    id: 'settings',
+    icon: Settings,
+    text: "You're in control of your settings and can change them anytime.",
+  },
+  {
+    id: 'history',
+    icon: Clock,
+    text: 'Local chats stay on this device. AGI Cloud chats are saved to your account, and you can delete them.',
+  },
+  {
+    id: 'mistakes',
+    icon: Lightbulb,
+    text: 'AI can make mistakes, so check important information.',
+  },
+];
+const DOWNLOAD_FAILED_MESSAGE = 'Download failed. You can try again or continue without the model.';
 
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
@@ -108,18 +135,11 @@ function pickModelForPickerSelection(
   return { ...catalogModel, needsDownload: catalogModel.fileSizeBytes > 0 };
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb.toFixed(1)} GB`;
-  const mb = bytes / (1024 * 1024);
-  return `${Math.round(mb)} MB`;
-}
-
 type ScreenId = 'hero' | 'about-you' | 'device-tier' | 'download';
 
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
+  const { viewportWidth } = useResponsiveLayout();
   const router = useRouter();
   const primaryButtonTextColor = isDark ? colors.black : colors.white;
 
@@ -139,7 +159,6 @@ export default function OnboardingScreen() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [tier2Loading, setTier2Loading] = useState(false);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onboardingOpenRef = useRef(true);
   const modelPickerRef = useRef<BottomSheet>(null);
@@ -239,16 +258,21 @@ export default function OnboardingScreen() {
     [router],
   );
 
-  const handleContinueToCloud = useCallback(() => {
+  const leaveDownloadScreen = useCallback(() => {
+    onboardingOpenRef.current = false;
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
     }
-    cancelDownload(recommendedModel.id);
+  }, []);
+
+  const handleContinueToCloud = useCallback(() => {
+    leaveDownloadScreen();
+    useModelInstallStore.getState().cancelModelDownload(recommendedModel.id);
     storage.set('onboarding-done', 'true');
     storage.delete('onboarding-mode');
     router.replace(beginCloudPostAuthIntent());
-  }, [recommendedModel.id, router]);
+  }, [leaveDownloadScreen, recommendedModel.id, router]);
 
   const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
@@ -311,42 +335,27 @@ export default function OnboardingScreen() {
       setDownloadSpeedMBs(0);
       setDownloadError(null);
 
-      if (recommendedModel.executorchPreset) {
-        const preset = recommendedModel.executorchPreset;
-        setTier2Loading(true);
-        tier2LoadModel(
-          preset,
-          (fractional) => {
-            setDownloadProgress(fractional * 100);
-          },
-          {
-            ensureDownloadAllowed: () =>
-              assertDownloadAllowed({
-                wifiOnly: !cellularEnabled,
-                requiredBytes: recommendedModel.fileSizeBytes,
-              }),
-          },
-        )
-          .then(async () => {
-            await recordInstalledModel({
-              id: recommendedModel.id,
-              display_name: recommendedModel.displayName,
-              runtime: 'local',
-              format: 'pte',
-              size_bytes: recommendedModel.fileSizeBytes,
-              sha256: null,
-              local_path: null,
-              installed_at: Date.now(),
-              last_used_at: null,
-              capabilities: null,
-            });
-            setTier2Loading(false);
-            finishOnboarding(recommendedModel.id);
+      const presetModel = recommendedModel.executorchPreset
+        ? getSelectableModelById(recommendedModel.id)
+        : undefined;
+      if (presetModel) {
+        const modelId = presetModel.id;
+        const stopProgress = useModelInstallStore.subscribe((state) => {
+          const job = state.jobs[modelId];
+          if (job?.status === 'downloading') setDownloadProgress(job.progress * 100);
+        });
+        useModelInstallStore
+          .getState()
+          .prepareModel(presetModel)
+          .then(() => {
+            if (onboardingOpenRef.current) finishOnboarding(modelId);
           })
-          .catch(() => {
-            setTier2Loading(false);
-            setDownloadError('Download failed. You can try again or continue without the model.');
-          });
+          .catch((err: unknown) => {
+            if (!onboardingOpenRef.current) return;
+            if (err instanceof ModelDownloadError && err.kind === 'cancelled') return;
+            setDownloadError(appAuthoredDownloadMessage(err) ?? DOWNLOAD_FAILED_MESSAGE);
+          })
+          .finally(stopProgress);
         return;
       }
 
@@ -373,11 +382,7 @@ export default function OnboardingScreen() {
             if (kind === 'cancelled') {
               return;
             }
-            const msg =
-              err instanceof ModelDownloadError && kind !== 'network_error'
-                ? err.message
-                : 'Download failed. You can try again or continue without the model.';
-            setDownloadError(msg);
+            setDownloadError(appAuthoredDownloadMessage(err) ?? DOWNLOAD_FAILED_MESSAGE);
           });
         return;
       }
@@ -397,22 +402,18 @@ export default function OnboardingScreen() {
   }, [handleStartDownload]);
 
   const handleSkipToChat = useCallback(() => {
-    if (tier2Loading) return;
-    if (downloadTimerRef.current) {
-      clearInterval(downloadTimerRef.current);
-      downloadTimerRef.current = null;
-    }
-    onboardingOpenRef.current = false;
+    leaveDownloadScreen();
     finishOnboarding();
-  }, [tier2Loading, finishOnboarding]);
+  }, [leaveDownloadScreen, finishOnboarding]);
 
   return (
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
       <Reanimated.View
         key={screen}
+        testID="onboarding-column"
         entering={FadeIn.duration(motion.moved)}
         exiting={FadeOut.duration(motion.quick)}
-        style={{ flex: 1 }}
+        style={[{ flex: 1 }, contentColumn('form')]}
       >
         {screen === 'hero' && (
           <HeroScreen
@@ -449,7 +450,6 @@ export default function OnboardingScreen() {
             onSkip={handleSkipToChat}
             onRetry={canRetryDownload ? handleRetryDownload : undefined}
             error={downloadError}
-            skipDisabled={tier2Loading}
           />
         )}
       </Reanimated.View>
@@ -465,7 +465,12 @@ export default function OnboardingScreen() {
 
       {/* Model picker sheet, overlays the full screen, only shown when user
           taps "Pick a different model" on the device-tier screen. */}
-      <ModelPickerSheet sheetRef={modelPickerRef} modelScope="local" onSelect={handleSelectModel} />
+      <ModelPickerSheet
+        sheetRef={modelPickerRef}
+        modelScope="local"
+        paneWidth={viewportWidth}
+        onSelect={handleSelectModel}
+      />
     </SafeAreaView>
   );
 }
@@ -484,40 +489,90 @@ function HeroScreen({
       testID="onboarding-hero-screen"
       style={[styles.heroRoot, { backgroundColor: colors.background }]}
     >
-      <View
-        style={styles.heroSymbol}
-        accessible
-        accessibilityRole="image"
-        accessibilityLabel={PRODUCT_BRAND}
+      <ScrollView
+        contentContainerStyle={styles.heroScroll}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <AgiMark size={HERO_SYMBOL_SIZE} testID="hero-brand-mark" />
-      </View>
+        <View style={styles.heroBody}>
+          <View
+            style={styles.heroSymbol}
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={PRODUCT_BRAND}
+          >
+            <AgiMark size={HERO_SYMBOL_SIZE} testID="hero-brand-mark" />
+          </View>
 
-      <Text
-        testID="hero-tagline"
-        accessibilityRole="header"
-        style={[styles.tagline, { color: colors.textPrimary }]}
-      >
-        Your AI workspace for everyday work.
-      </Text>
+          <Text
+            testID="hero-tagline"
+            accessibilityRole="header"
+            style={[styles.tagline, { color: colors.textPrimary }]}
+          >
+            Your AI workspace for everyday work.
+          </Text>
 
-      <Text style={[styles.heroSubcopy, { color: colors.textMuted }]}>
-        Chat, write, code, research, and organize projects in one place.
-      </Text>
+          <Text style={[styles.heroSubcopy, { color: colors.textMuted }]}>
+            Chat, write, code, research, and organize projects in one place.
+          </Text>
 
-      <PressableBox
-        testID="hero-start-chatting-btn"
-        onPress={onStartChatting}
-        accessibilityRole="button"
-        accessibilityLabel="Start chatting"
-        style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
-      >
-        <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Start chatting</Text>
-      </PressableBox>
+          <View testID="hero-notices" style={styles.noticeList}>
+            {HERO_NOTICES.map(({ id, icon: Icon, text }) => (
+              <View key={id} testID={`hero-notice-${id}`} style={styles.noticeRow}>
+                <View
+                  style={styles.noticeIcon}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  <Icon size={HERO_NOTICE_ICON_SIZE} color={colors.textSecondary} />
+                </View>
+                <Text style={[styles.noticeText, { color: colors.textSecondary }]}>{text}</Text>
+              </View>
+            ))}
+          </View>
 
-      <Text testID="hero-footer" style={[styles.footer, { color: colors.textMuted }]}>
-        Made by AGI Automation LLC, USA
-      </Text>
+          <Text testID="hero-legal-line" style={[styles.legalLine, { color: colors.textMuted }]}>
+            By continuing you agree to the{' '}
+            <Text
+              testID="hero-terms-link"
+              variant="inline"
+              accessibilityRole="link"
+              accessibilityLabel="Read the terms of use"
+              onPress={() => void openWebContentPage(TERMS_OF_USE_URL)}
+              style={[styles.legalLink, { color: colors.textSecondary }]}
+            >
+              Terms
+            </Text>{' '}
+            and{' '}
+            <Text
+              testID="hero-privacy-link"
+              variant="inline"
+              accessibilityRole="link"
+              accessibilityLabel="Read the privacy policy"
+              onPress={() => void openWebContentPage(PRIVACY_POLICY_URL)}
+              style={[styles.legalLink, { color: colors.textSecondary }]}
+            >
+              Privacy Policy
+            </Text>
+          </Text>
+
+          <PressableBox
+            testID="hero-start-chatting-btn"
+            onPress={onStartChatting}
+            accessibilityRole="button"
+            accessibilityLabel="Start chatting"
+            style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
+          >
+            <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>
+              Start chatting
+            </Text>
+          </PressableBox>
+        </View>
+
+        <Text testID="hero-footer" style={[styles.footer, { color: colors.textMuted }]}>
+          Made by AGI Automation LLC, USA
+        </Text>
+      </ScrollView>
     </View>
   );
 }
@@ -558,7 +613,7 @@ function AboutYouScreen({
         onChangeText={setPreferredName}
         autoComplete="given-name"
         textContentType="givenName"
-        maxLength={60}
+        maxLength={PERSONALIZATION_NICKNAME_MAX_LENGTH}
         returnKeyType="next"
       />
       <Input
@@ -566,7 +621,7 @@ function AboutYouScreen({
         value={workDescription}
         onChangeText={setWorkDescription}
         placeholder="For example, product design"
-        maxLength={120}
+        maxLength={PERSONALIZATION_OCCUPATION_MAX_LENGTH}
         returnKeyType="done"
       />
       <PressableBox
@@ -657,7 +712,7 @@ function DeviceTierScreen({
         {model.needsDownload ? (
           <>
             <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
-              {formatBytes(model.fileSizeBytes)} download · Wi-Fi recommended
+              {formatAttachmentSize(model.fileSizeBytes)} download · Wi-Fi recommended
             </Text>
             <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
               Download time depends on your connection.
@@ -734,7 +789,6 @@ function DownloadScreen({
   onSkip,
   onRetry,
   error,
-  skipDisabled = false,
 }: {
   colors: ColorScheme;
   primaryButtonTextColor: string;
@@ -744,7 +798,6 @@ function DownloadScreen({
   onSkip: () => void;
   onRetry?: (() => void) | undefined;
   error?: string | null;
-  skipDisabled?: boolean;
 }) {
   const pct = Math.round(progress);
   const bytesDownloaded = (progress / 100) * model.fileSizeBytes;
@@ -781,7 +834,7 @@ function DownloadScreen({
       </Text>
 
       <Text style={[styles.downloadMeta, { color: colors.textMuted }]}>
-        {formatBytes(model.fileSizeBytes)}
+        {formatAttachmentSize(model.fileSizeBytes)}
         {speedMBs > 0 && progress < 100 ? ` · ${speedMBs} MB/s` : ''}
         {etaLabel ? ` · ${etaLabel}` : ''}
       </Text>
@@ -810,7 +863,7 @@ function DownloadScreen({
         </Text>
       )}
 
-      {error && onRetry && !skipDisabled && (
+      {error && onRetry && (
         <PressableBox
           testID="download-retry-btn"
           onPress={onRetry}
@@ -825,14 +878,9 @@ function DownloadScreen({
       <PressableBox
         testID="download-skip-btn"
         onPress={onSkip}
-        disabled={skipDisabled}
         accessibilityRole="button"
         accessibilityLabel="Continue to chat"
-        accessibilityState={{ disabled: skipDisabled }}
-        style={[
-          styles.skipBtn,
-          { backgroundColor: colors.neutralSurface, opacity: skipDisabled ? 0.4 : 1 },
-        ]}
+        style={[styles.skipBtn, { backgroundColor: colors.neutralSurface }]}
       >
         <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Continue to chat</Text>
       </PressableBox>
@@ -892,9 +940,17 @@ function RadialProgress({
 const styles = StyleSheet.create({
   heroRoot: {
     flex: 1,
+  },
+  heroScroll: {
+    flexGrow: 1,
+    paddingHorizontal: 32,
+    paddingBottom: Platform.OS === 'android' ? 24 : 16,
+  },
+  heroBody: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingVertical: spacing['2xl'],
   },
   heroSymbol: {
     marginBottom: 24,
@@ -911,8 +967,39 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: '400',
     textAlign: 'center',
-    marginBottom: 52,
+    marginBottom: 28,
     maxWidth: 320,
+  },
+  noticeList: {
+    alignSelf: 'stretch',
+    gap: spacing.lg,
+    marginBottom: spacing['2xl'],
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  noticeIcon: {
+    width: HERO_NOTICE_ICON_SIZE,
+    height: typeScale.headline * 1.4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeText: {
+    flex: 1,
+    fontSize: typeScale.headline,
+    lineHeight: Math.round(typeScale.headline * 1.4),
+    textAlign: 'left',
+  },
+  legalLine: {
+    fontSize: typeScale.callout,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+  },
+  legalLink: {
+    textDecorationLine: 'underline',
   },
   ctaBtn: {
     width: '100%',
@@ -928,8 +1015,6 @@ const styles = StyleSheet.create({
   footer: {
     fontSize: typeScale.caption,
     textAlign: 'center',
-    position: 'absolute',
-    bottom: Platform.OS === 'android' ? 24 : 16,
   },
 
   deviceTierRoot: {

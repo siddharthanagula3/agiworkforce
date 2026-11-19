@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), sendPush: vi.fn(), record: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  sendPush: vi.fn(),
+  record: vi.fn(),
+  track: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -12,11 +17,23 @@ vi.mock('../notification-service', () => ({
 vi.mock('../push-notification-service', () => ({
   sendPushToUser: (...args: unknown[]) => mocks.sendPush(...args),
 }));
+vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
+  ...(await importOriginal<ProductAnalyticsModule>()),
+  trackProductAnalyticsEvent: (...args: unknown[]) => mocks.track(...args),
+}));
+
+type ProductAnalyticsModule = typeof import('@/lib/server/product-analytics');
 
 import type { AgentRunNotificationEvent } from '../agent-notification-service';
 
-const { notifyAgentRunEvent, notifyResearchReportSettled, AGENT_PUSH_PREFERENCE_KEY } =
-  await import('../agent-notification-service');
+const {
+  notifyAgentRunEvent,
+  notifyCloudCodeTurnEvent,
+  notifyLocalCodeSessionEvent,
+  notifyResearchReportSettled,
+  trackAgentRunOutcome,
+  AGENT_PUSH_PREFERENCE_KEY,
+} = await import('../agent-notification-service');
 
 const callerDb = { query: mocks.query } as never;
 
@@ -36,6 +53,34 @@ beforeEach(() => {
   mocks.sendPush.mockResolvedValue({ sent: 1, invalidated: 0 });
   mocks.record.mockResolvedValue({ recorded: true });
   preferences({});
+});
+
+describe('trackAgentRunOutcome', () => {
+  it.each([
+    ['completed', 'succeeded'],
+    ['failed', 'failed'],
+  ] as const)('records a %s run as %s', (event, outcome) => {
+    trackAgentRunOutcome({ userId: 'user-1', event });
+
+    expect(mocks.track).toHaveBeenCalledTimes(1);
+    expect(mocks.track).toHaveBeenCalledWith(
+      { userId: 'user-1' },
+      { name: 'work_run_finished', surface: 'web', outcome },
+    );
+  });
+
+  it('records nothing while a run is only waiting on the user', () => {
+    trackAgentRunOutcome({ userId: 'user-1', event: 'approval_required' });
+    trackAgentRunOutcome({ userId: 'user-1', event: 'input_required' });
+
+    expect(mocks.track).not.toHaveBeenCalled();
+  });
+
+  it('is recorded once when a finished run is announced', async () => {
+    await notifyAgentRunEvent(callerDb, { ...notice, event: 'completed', toolName: null });
+
+    expect(mocks.track).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('notifyAgentRunEvent, in-app feed', () => {
@@ -204,6 +249,56 @@ describe('notifyResearchReportSettled', () => {
     );
   });
 
+  it('sends a finished report as research, which the phone can mute on its own', async () => {
+    await notifyResearchReportSettled(callerDb, {
+      ...report,
+      conversationId: '0190a000-0000-7000-8000-000000000456',
+      runId: 'run-1',
+    });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        data: {
+          type: 'research_completed',
+          priority: 'normal',
+          route: '/(app)/reports',
+          target: 'research',
+          targetId: 'report-1',
+          conversationId: '0190a000-0000-7000-8000-000000000456',
+          runId: 'run-1',
+        },
+      }),
+      { expo: true, web: true },
+    );
+  });
+
+  it('leaves out the conversation and run when the report names neither', async () => {
+    await notifyResearchReportSettled(callerDb, report);
+
+    const message = mocks.sendPush.mock.calls[0]?.[1] as { data: Record<string, string> };
+    expect(message.data).toEqual({
+      type: 'research_completed',
+      priority: 'normal',
+      route: '/(app)/reports',
+      target: 'research',
+      targetId: 'report-1',
+    });
+  });
+
+  it('keeps a report that did not finish under agent failures', async () => {
+    await notifyResearchReportSettled(callerDb, { ...report, status: 'failed' });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        title: 'Research did not finish',
+        data: expect.objectContaining({ type: 'agent_failed', priority: 'critical' }),
+      }),
+      { expo: true, web: true },
+    );
+  });
+
   it('says nothing while the report is still being written', async () => {
     await notifyResearchReportSettled(callerDb, { ...report, status: 'synthesizing' });
     expect(mocks.record).not.toHaveBeenCalled();
@@ -217,5 +312,118 @@ describe('notifyResearchReportSettled', () => {
       pushed: false,
     });
     expect(mocks.sendPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyCloudCodeTurnEvent', () => {
+  const turn = {
+    userId: 'user-1',
+    sessionId: 'session-1',
+    sessionTitle: 'Fix the login page',
+    turnId: 'turn-1',
+  };
+
+  it.each([
+    ['approval_required', 'code_session_needs_input', 'high'],
+    ['completed', 'code_session_completed', 'normal'],
+    ['failed', 'code_session_failed', 'critical'],
+  ] as const)('sends %s as %s with the session it is about', async (event, type, priority) => {
+    await notifyCloudCodeTurnEvent(callerDb, { ...turn, event });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        data: { type, priority, codeSessionId: 'session-1' },
+      }),
+      { expo: true, web: true },
+    );
+  });
+});
+
+describe('notifyLocalCodeSessionEvent', () => {
+  const activity = {
+    rootId: 'root-1',
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    sessionTitle: 'Fix the login page',
+  };
+
+  it.each([
+    ['approval_required', 'warning', 'local-code-turn:turn-1:approval_required:approval-1'],
+    ['completed', 'success', 'local-code-turn:turn-1:completed'],
+    ['failed', 'error', 'local-code-turn:turn-1:failed'],
+  ] as const)(
+    'records %s in the account feed, where the inbox expects it',
+    async (event, severity, dedupeKey) => {
+      await notifyLocalCodeSessionEvent(callerDb, {
+        userId: 'user-1',
+        deviceName: 'Work laptop',
+        activity: { ...activity, event, approvalId: 'approval-1' },
+      });
+
+      expect(mocks.record).toHaveBeenCalledTimes(1);
+      expect(mocks.record).toHaveBeenCalledWith(callerDb, {
+        userId: 'user-1',
+        category: 'agent_run',
+        severity,
+        title: expect.any(String),
+        message: expect.stringContaining('Work laptop'),
+        dedupeKey,
+      });
+      expect(mocks.sendPush).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('keeps each approval of one turn as its own notice', async () => {
+    for (const approvalId of ['approval-1', 'approval-2']) {
+      await notifyLocalCodeSessionEvent(callerDb, {
+        userId: 'user-1',
+        deviceName: null,
+        activity: { ...activity, event: 'approval_required', approvalId },
+      });
+    }
+
+    const keys = mocks.record.mock.calls.map(
+      (call) => (call[1] as { dedupeKey: string }).dedupeKey,
+    );
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('records the notice but sends no push when the phone switch is off', async () => {
+    preferences({ [AGENT_PUSH_PREFERENCE_KEY]: false });
+
+    const result = await notifyLocalCodeSessionEvent(callerDb, {
+      userId: 'user-1',
+      deviceName: null,
+      activity: { ...activity, event: 'completed' },
+    });
+
+    expect(mocks.record).toHaveBeenCalledTimes(1);
+    expect(mocks.sendPush).not.toHaveBeenCalled();
+    expect(result).toEqual({ pushed: false });
+  });
+
+  it('still pushes to the phone when the feed cannot be written', async () => {
+    mocks.record.mockResolvedValue({ recorded: false, failed: true });
+
+    const result = await notifyLocalCodeSessionEvent(callerDb, {
+      userId: 'user-1',
+      deviceName: null,
+      activity: { ...activity, event: 'failed' },
+    });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        data: {
+          type: 'agent_failed',
+          priority: 'critical',
+          rootId: 'root-1',
+          threadId: 'thread-1',
+        },
+      }),
+      { expo: true, web: false },
+    );
+    expect(result).toEqual({ pushed: true });
   });
 });

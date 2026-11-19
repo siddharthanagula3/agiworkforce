@@ -1,7 +1,6 @@
 import { Alert, AppState } from 'react-native';
 import { create } from 'zustand';
 import { TIMEOUTS } from '@/lib/constants';
-import { agiNativeColors } from '@agiworkforce/design-tokens';
 import {
   QueueFullError,
   applyAgentActivityEvent,
@@ -9,6 +8,12 @@ import {
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
+import { announceReplyReadyInBackground } from '@/services/replyReadyNotice';
+import {
+  keepLocalChatAttachments,
+  resolveLocalChatAttachment,
+  resolveLocalChatAttachmentUrl,
+} from '@/services/localChatAttachments';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import {
@@ -17,7 +22,7 @@ import {
   CloudCredentialUnavailableError,
   UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
 } from '@/services/apiErrors';
-import { withFailureReference } from '@/services/failureCopy';
+import { freeUsageLimitMessage, withFailureReference } from '@/services/failureCopy';
 import {
   buildAttachedDocumentContext,
   buildProjectSourceContext,
@@ -50,19 +55,28 @@ import {
   type StreamCallbacks,
   type StreamDelta,
 } from '@/services/streaming';
+import {
+  CONNECTION_LOST_FAILURE,
+  StreamConnectionLostError,
+} from '@/services/streamConnectionLost';
 import type { InteractiveCard, InteractiveCardResponsePayload } from '@agiworkforce/types';
 import {
   parseInteractiveCardDelta,
   parseGeneratedFilesDelta,
   readPersistedInteractiveCards,
   reconcileManagedCloudPublicText,
+  resolveSurvivingLeaf,
   stampLinearParents,
   ManagedCloudAgentRunReferenceSchema,
+  ManagedCloudAgentRunHttpError,
+  isApprovingToolDecision,
+  type ToolApprovalDecisionValue,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
   type ManagedCloudAgentRunInputAnswer,
   type FreeQuotaMessageContent,
   normalizePromotionalChatHistory,
+  INTERACTIVE_CARD_RESPONSE_PATH,
 } from '@agiworkforce/cloud-contracts';
 import {
   createToolCallAccumulator,
@@ -80,16 +94,12 @@ import {
   type PhoneStepOutcome,
 } from '@/src/features/integrations/services/phoneDeviceSteps';
 import { isPhoneStepTool, phoneStepNeedsConfirmation } from '@agiworkforce/types';
-import {
-  checkContentFilter,
-  MINOR_SAFE_REFUSAL,
-  REDUCED_SENSITIVE_CONTENT_REFUSAL,
-} from '@/lib/contentFilter';
-import { isMinorMode } from '@/src/features/auth/services/ageGate';
+import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { useAuthStore } from '@/src/features/auth/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   markLocalModelRefUsed,
+  recordLocalModelTurnFailure,
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
 import {
@@ -115,11 +125,18 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import {
+  isResearchChosenFor,
   styleForConversation,
   useChatViewStore,
   type ChatMode,
   type ChatStyle,
 } from './chatViewStore';
+import {
+  messageArtifactFromShared,
+  offersMessageArtifact,
+  type MessageArtifactScope,
+} from './derivedMessageArtifact';
+import { settleRunningSteps } from './conversationTurnState';
 import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
@@ -134,6 +151,7 @@ import {
   hasMemoryCommand,
 } from '@/src/features/memory/services/memoryCommands';
 import { recognizeText } from '@/src/features/image/services/ocr';
+import { keepShownOrder } from './reconcileCloudMessages';
 import {
   executionModeForConversation,
   executionModeForModel,
@@ -150,6 +168,7 @@ import {
 } from '@/src/features/chat/utils/sessionLabeling';
 import type {
   ChatMessage,
+  ConversationSummary,
   MessageAttachment,
   PendingToolInput,
   PendingToolInputCall,
@@ -159,14 +178,13 @@ import type {
 } from '@/types/chat';
 import {
   RESPONSE_STYLE_GUIDANCE,
-  autoAliasForRoutingProfile,
   getModelMetadataById,
   isAutoModeModelId,
   isTerminalToolStatus,
+  messageKindForAgentEvent,
   type ResearchDeliverableSpec,
   type ResearchSourceRequest,
   type ResearchStep,
-  type RoutingProfileChoice,
 } from '@agiworkforce/types';
 import {
   hasResearchSourceChoice,
@@ -184,7 +202,6 @@ import type { CloudWorkMode } from '@agiworkforce/types';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/src/features/tasks/agiWorkGoal';
 import {
   clarifyCardNeedsResume,
-  INTERACTIVE_CARD_RESPONSE_PATH,
   MOBILE_INTERACTIVE_CARD_CAPABILITY,
   settledClarifyTurn,
 } from '@/src/features/chat/utils/clarifyCard';
@@ -203,13 +220,36 @@ import {
   uploadWithRetry,
 } from '@/src/features/chat/upload/uploadAttachment';
 import { isConversationTemporary } from '@/src/features/chat/upload/uploadContext';
-import { speedFirstSlots } from '@agiworkforce/routing';
-import { isWebSearchAvailable } from '@agiworkforce/search';
+import {
+  agreeToCloudUploadAhead,
+  confirmCloudUpload,
+  takeCloudUploadAgreedAhead,
+} from '@/src/features/chat/utils/cloudUploadConsent';
+import { hasExplicitWebSearchIntent, isWebSearchAvailable } from '@agiworkforce/search';
+import { codeExecutionResultFromDelta } from './codeExecutionResult';
+import type { CodeExecutionResult } from '@agiworkforce/unified-chat/code-execution-result';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
+import { isPastedTextFileName } from '@agiworkforce/utils/composer-paste';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
+import {
+  CLOUD_RUN_CANCEL_ERROR,
+  cancelCloudRun,
+  describeCloudRunError,
+} from '@/src/features/tasks/service';
 import { managedCloudChat } from '@/services/managedCloudChat';
 import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { getProviderOffering } from '@agiworkforce/types';
+import {
+  PROJECT_FILE_CITATIONS_METADATA_KEY,
+  WEB_SEARCH_CITATION_DELTA_KEY,
+} from '@agiworkforce/types';
+import {
+  nativeCitationFromDelta,
+  turnSourceMetadata,
+  turnSourcesWithActivity,
+  type NativeCitation,
+} from '@/src/features/chat/utils/messageSources';
+import { createInlineCitationMarkers } from '@/src/features/chat/utils/inlineCitationMarkers';
 import {
   ensureReadyFreeQuotaOffering,
   useFreeQuotaCatalogueStore,
@@ -217,15 +257,42 @@ import {
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
+import { persistedAttachmentMetadata } from './messageAttachments';
+import { ensureLocalSystemPrompt } from './localSystemPrompt';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import {
+  hasUnfinishedRun,
+  isStoppedFinishReason,
+  settledTurnActivity,
+} from '@/src/features/chat/utils/agentActivity';
+import {
+  askWhetherTurnIsRunning,
+  IN_FLIGHT_TURN_WAITING_MESSAGE,
+  type InFlightTurnVerdict,
+} from '@/src/features/chat/inFlightTurnRecovery';
+import {
+  forgetInFlightTurnRun,
+  recordInFlightTurnRun,
+  recordInFlightTurnSend,
+} from '@/src/features/chat/inFlightTurnRun';
 import {
   EMPTY_RESPONSE_FAILURE,
   parseStreamFailure,
   turnProducedNothing,
   type StreamFailure,
 } from '@/src/features/chat/utils/messageStreamError';
+import { CONTINUE_GENERATION_INSTRUCTION } from '@agiworkforce/unified-chat/continue-generation';
+import {
+  replayToSendOptions,
+  type SendReplayMetadataLike,
+} from '@agiworkforce/unified-chat/regenerate-replay';
+import { continuableCloudModel } from '@/src/features/chat/utils/continuableAnswer';
+import {
+  repairContinuationSeam,
+  SEAM_INSPECTION_WINDOW,
+} from '@agiworkforce/unified-chat/continuation-seam';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import {
   generatedFileArtifactsFromWire,
@@ -234,6 +301,8 @@ import {
   mergeDerivedAndGeneratedFileArtifacts,
 } from '@/src/features/chat/utils/generatedFileArtifacts';
 import { stripLeadingCurrentPromptEcho } from '@/src/features/chat/utils/assistantOutput';
+import type { SkillTurnTools } from '@/src/features/skills/skillRequirements';
+import { PAST_CHAT_CITATIONS_METADATA_KEY } from '@/src/features/chat/utils/referenceCitations';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -244,6 +313,7 @@ export interface SendMessageOptions {
   style?: ChatStyle;
   taskInstruction?: string;
   skillName?: string;
+  skillTools?: SkillTurnTools;
   searchRequested?: boolean;
   onAccepted?: () => void;
   /**
@@ -276,10 +346,14 @@ export interface SendMessageOptions {
     steps: ResearchStep[];
     approvedSteps: ResearchStep[];
     deliverable?: ResearchDeliverableSpec;
+    guidance?: string;
   };
   researchSources?: ResearchSourceRequest;
   research?: boolean;
+  retryOfMessageId?: string;
 }
+
+export type SendErrorRetry = { kind: 'resend' } | { kind: 'regenerate'; messageId: string };
 
 interface DeferredSend {
   content: string;
@@ -292,7 +366,7 @@ interface ExecutionState {
   isStreaming: boolean;
   streamingConversationIds: string[];
   reconnectingMessageIds: string[];
-  stoppingMessageIds: string[];
+  toolInputSendErrors: Record<string, string>;
   streamingContent: string;
   streamingReasoning: string;
   error: string | null;
@@ -300,6 +374,8 @@ interface ExecutionState {
   paywallError: PaywallErrorState | null;
   providerConsentError: ProviderConsentErrorState | null;
   freeCapacityError: FreeCapacityErrorState | null;
+  errorConversationId: string | null;
+  errorRetry: SendErrorRetry | null;
   retryAttempts: Record<string, number>;
   isEditing: boolean;
 
@@ -318,21 +394,38 @@ interface ExecutionState {
     decision: 'start' | 'cancel' | 'retry',
     steps?: ResearchStep[],
     choices?: ResearchPlanChoices,
+    answers?: string,
   ) => Promise<void>;
-  editMessage: (conversationId: string, messageId: string, newContent: string) => boolean;
+  editMessage: (
+    conversationId: string,
+    messageId: string,
+    newContent: string,
+    attachments?: MessageAttachment[],
+  ) => boolean;
   clearError: () => void;
-  setSendError: (message: string) => void;
+  clearErrorFor: (conversationId: string) => void;
+  /** Clears a failure only when no conversation owns it, for the new-chat screen. */
+  clearUnscopedError: () => void;
+  setSendError: (
+    message: string,
+    scope?: { conversationId: string; retry?: SendErrorRetry | null },
+  ) => void;
   clearPaywallError: () => void;
-  setPaywallError: (paywallError: PaywallErrorState) => void;
+  setPaywallError: (paywallError: PaywallErrorState, conversationId?: string) => void;
   clearProviderConsentError: () => void;
   resolveToolApproval: (
     conversationId: string,
     assistantMessageId: string,
     toolCallId: string,
-    decision: 'approved' | 'rejected',
+    decision: ToolApprovalDecisionValue,
     guidance?: string,
   ) => Promise<void>;
   continuePausedCloudTurn: (conversationId: string, assistantMessageId: string) => Promise<void>;
+  continueCloudAnswer: (
+    conversationId: string,
+    assistantMessageId: string,
+    turn?: InFlightTurnVerdict,
+  ) => Promise<boolean>;
   answerToolInput: (
     conversationId: string,
     assistantMessageId: string,
@@ -363,9 +456,9 @@ const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 const deferredSends = new Map<string, DeferredSend[]>();
 const streamingConversations = new Set<string>();
 const cloudStreamingConversations = new Set<string>();
+const cloudRunChecks = new Set<string>();
 let cloudExecutionGeneration = 0;
 const activeCloudRuns = new Map<string, ManagedCloudAgentRunReference>();
-const stoppingRunIds = new Set<string>();
 
 interface PendingApprovalCall {
   toolCallId: string;
@@ -377,7 +470,7 @@ interface PendingApprovalTurn {
   runId: string;
   conversationId: string;
   calls: PendingApprovalCall[];
-  decisions: Map<string, 'approved' | 'rejected'>;
+  decisions: Map<string, ToolApprovalDecisionValue>;
   guidance: Map<string, string>;
   resolving: boolean;
   deviceResults?: Map<string, PhoneStepOutcome>;
@@ -385,6 +478,7 @@ interface PendingApprovalTurn {
   resultsUndelivered?: boolean;
   inputAnswers?: ManagedCloudAgentRunInputAnswer[];
   pausedInput?: PendingToolInput;
+  expired?: boolean;
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
@@ -396,6 +490,17 @@ function isTerminalResumeError(error: unknown): boolean {
 }
 
 const INACTIVE_INPUT_STATUSES = new Set([404, 410]);
+const INACTIVE_INPUT_MESSAGE = 'This request is no longer active.';
+const INPUT_SEND_FAILED = 'Could not send your answer. Check your connection and try again.';
+export const CLOUD_RESUME_SIGN_IN = 'Sign in to resume this AGI Cloud task.';
+
+function setToolInputSendError(messageId: string, error: string | null): void {
+  useChatExecutionStore.setState((state) => {
+    if ((state.toolInputSendErrors[messageId] ?? null) === error) return {};
+    const { [messageId]: _previous, ...rest } = state.toolInputSendErrors;
+    return { toolInputSendErrors: error === null ? rest : { ...rest, [messageId]: error } };
+  });
+}
 
 function inactiveInputReason(error: unknown): string | null {
   return error instanceof ApiHttpError && INACTIVE_INPUT_STATUSES.has(error.status)
@@ -416,6 +521,35 @@ function recordToolInputRequest(calls: PendingToolInputCall[], delta: StreamDelt
   const known = calls.findIndex((entry) => entry.toolCallId === call.toolCallId);
   if (known >= 0) calls[known] = call;
   else calls.push(call);
+}
+
+// The answered form stays on screen until the run accepts the answers, so a
+// failed send gives the person back what they typed.
+function withoutAnsweredInput(message: ChatMessage, turn: PendingApprovalTurn): ChatMessage {
+  if (turn.inputAnswers === undefined || message.pendingToolInput === undefined) return message;
+  const { pendingToolInput: answered, ...rest } = message;
+  return withToolInputOutcome({ ...rest, answeredToolInput: answered }, 'sent');
+}
+
+export type ToolInputOutcome = 'sent' | 'expired';
+
+function withToolInputOutcome(message: ChatMessage, outcome: ToolInputOutcome): ChatMessage {
+  return { ...message, metadata: { ...message.metadata, toolInputOutcome: outcome } };
+}
+
+// streamingContent is one value for every chat that streams, so a failing turn
+// keeps the text its own row received rather than whatever streamed last.
+function turnContentOf(messages: readonly ChatMessage[], messageId: string): string {
+  return messages.find((message) => message.id === messageId)?.content ?? '';
+}
+
+function storedNativeCitations(metadata: ChatMessage['metadata']): NativeCitation[] {
+  const stored = (metadata as Record<string, unknown> | undefined)?.['citations'];
+  if (!Array.isArray(stored)) return [];
+  return stored.flatMap((entry) => {
+    const citation = nativeCitationFromDelta(entry);
+    return citation ? [citation] : [];
+  });
 }
 
 function pendingToolInputPatch(
@@ -516,6 +650,7 @@ function resumePausedTurn(
   turn: PendingApprovalTurn,
   resumeCallbacks: StreamCallbacks,
   signal: AbortSignal,
+  afterSequence: number,
 ): Promise<void> {
   let trackedRunId: string | null = null;
   const release = () => {
@@ -554,6 +689,7 @@ function resumePausedTurn(
       },
       callbacks,
       signal,
+      { afterSequence },
     );
   }
   const deviceResults = turn.deviceResults;
@@ -574,6 +710,7 @@ function resumePausedTurn(
       },
       callbacks,
       signal,
+      { afterSequence },
     );
   }
   const guidance = turn.calls
@@ -592,6 +729,7 @@ function resumePausedTurn(
     },
     callbacks,
     signal,
+    { afterSequence },
   );
 }
 
@@ -612,14 +750,21 @@ async function settlePhoneDeviceSteps(
       status: 'running',
       requiresApproval: false,
     });
+    const generation = cloudExecutionGeneration;
     const outcome =
       decision === 'rejected' ? PHONE_STEP_DECLINED : await runPhoneDeviceStep(call.deviceStep);
-    if (pendingApprovalTurns.get(assistantMessageId) !== turn) return;
-    turn.deviceResults.set(call.toolCallId, outcome);
-    patchPausedToolCall(conversationId, assistantMessageId, call.toolCallId, {
+    const finished: Partial<ToolCall> = {
       status: outcome.isError ? 'failed' : 'succeeded',
       output: outcome.content,
-    });
+    };
+    if (pendingApprovalTurns.get(assistantMessageId) !== turn) {
+      if (turn.expired && generation === cloudExecutionGeneration) {
+        patchPausedToolCall(conversationId, assistantMessageId, call.toolCallId, finished);
+      }
+      return;
+    }
+    turn.deviceResults.set(call.toolCallId, outcome);
+    patchPausedToolCall(conversationId, assistantMessageId, call.toolCallId, finished);
   }
   if (turn.resolving || turn.deviceResults.size < turn.calls.length) return;
   turn.resolving = true;
@@ -661,13 +806,20 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
       return false;
     }
 
-    const decisions = new Map<string, 'approved' | 'rejected'>();
+    const pausedIds = new Set([...calls.map((call) => call.toolCallId), ...phoneSteps.keys()]);
+    const decisions = new Map<string, ToolApprovalDecisionValue>();
     const guidance = new Map<string, string>();
     for (const call of message.toolCalls ?? []) {
-      if (call.toolCallId && call.approvalDecision) {
-        decisions.set(call.toolCallId, call.approvalDecision);
+      if (!call.toolCallId || !pausedIds.has(call.toolCallId)) continue;
+      if (call.approvalDecision) {
+        decisions.set(
+          call.toolCallId,
+          call.approvalDecision === 'approved' && call.approvalScope
+            ? call.approvalScope
+            : call.approvalDecision,
+        );
       }
-      if (call.toolCallId && call.approvalGuidance) {
+      if (call.approvalGuidance) {
         guidance.set(call.toolCallId, call.approvalGuidance);
       }
     }
@@ -709,6 +861,96 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
   return false;
 }
 
+function expiredPausedTurn(
+  message: ChatMessage,
+  turn: PendingApprovalTurn | undefined,
+): ChatMessage {
+  const checkpointIds = new Set(
+    turn && turn.inputAnswers === undefined
+      ? turn.calls
+          .map((call) => call.toolCallId)
+          .filter((toolCallId) => !turn.deviceStarted?.has(toolCallId))
+      : [],
+  );
+  let expired = message;
+  if (message.pendingToolInput !== undefined) {
+    if (turn?.inputAnswers !== undefined) {
+      expired = withToolInputOutcome(withoutAnsweredInput(message, turn), 'expired');
+    } else {
+      const { pendingToolInput: unanswered, ...rest } = message;
+      expired = withToolInputOutcome({ ...rest, answeredToolInput: unanswered }, 'expired');
+    }
+  }
+  return {
+    ...expired,
+    toolCalls: expired.toolCalls?.map((tool) =>
+      tool.toolCallId && (tool.requiresApproval === true || checkpointIds.has(tool.toolCallId))
+        ? {
+            ...tool,
+            status: 'awaiting-approval' as const,
+            requiresApproval: false,
+            approvalDecision: undefined,
+            output: undefined,
+          }
+        : tool,
+    ),
+    metadata: { ...expired.metadata, phoneDeviceSteps: undefined },
+  };
+}
+
+function expirePausedTurns(conversationId: string, assistantMessageIds: readonly string[]): void {
+  const expiring = new Map(assistantMessageIds.map((id) => [id, pendingApprovalTurns.get(id)]));
+  for (const turn of expiring.values()) if (turn) turn.expired = true;
+  for (const id of assistantMessageIds) pendingApprovalTurns.delete(id);
+  const msgStore = getConversationMessageStore(conversationId);
+  const updated = (msgStore.getState().messages[conversationId] ?? []).map((message) =>
+    expiring.has(message.id) ? expiredPausedTurn(message, expiring.get(message.id)) : message,
+  );
+  msgStore.setState((s) => ({ messages: { ...s.messages, [conversationId]: updated } }));
+  for (const id of assistantMessageIds) pushCloudAssistantUpdate(conversationId, updated, id);
+}
+
+// A paused request belongs to the newest turn only. Answering it after a newer
+// turn has started would stream its continuation above, or into, that turn.
+function expireIfSuperseded(conversationId: string, assistantMessageId: string): boolean {
+  const messages = getConversationMessageStore(conversationId).getState().messages[conversationId];
+  const index = messages?.findIndex((message) => message.id === assistantMessageId) ?? -1;
+  const newerTurn =
+    index >= 0 &&
+    messages!
+      .slice(index + 1)
+      .some((message) => message.role === 'user' || message.role === 'assistant');
+  if (
+    !newerTurn &&
+    !abortControllers.has(conversationId) &&
+    !streamingConversations.has(conversationId)
+  ) {
+    return false;
+  }
+  expirePausedTurns(conversationId, [assistantMessageId]);
+  return true;
+}
+
+function expirePausedTurnsBefore(conversationId: string, newerMessageId: string): void {
+  const messages = getConversationMessageStore(conversationId).getState().messages[conversationId];
+  const boundary = messages?.findIndex((message) => message.id === newerMessageId) ?? -1;
+  if (boundary <= 0) return;
+  const paused = messages!
+    .slice(0, boundary)
+    .filter(
+      (message) =>
+        message.role === 'assistant' &&
+        pendingApprovalTurns.get(message.id)?.resolving !== true &&
+        (message.pendingToolInput !== undefined ||
+          ((pendingApprovalTurns.has(message.id) ||
+            message.toolCalls?.some((tool) => tool.requiresApproval === true) ||
+            storedPhoneSteps(message.metadata).size > 0) &&
+            isApprovalTurnLive(message.id))),
+    )
+    .map((message) => message.id);
+  if (paused.length > 0) expirePausedTurns(conversationId, paused);
+}
+
 function undeliveredDeviceTurn(assistantMessageId: string): PendingApprovalTurn | null {
   if (!isApprovalTurnLive(assistantMessageId)) return null;
   const turn = pendingApprovalTurns.get(assistantMessageId);
@@ -729,6 +971,7 @@ export function clearCloudExecutionState(): void {
     streamingConversations.delete(conversationId);
     activeCloudRuns.delete(conversationId);
     cancelledBeforeStream.delete(conversationId);
+    stalledConversations.delete(conversationId);
     deferredSends.delete(conversationId);
     thinkingStartTimes.delete(conversationId);
     thinkingEndTimes.delete(conversationId);
@@ -738,13 +981,122 @@ export function clearCloudExecutionState(): void {
     controller?.abort();
   }
   pendingApprovalTurns.clear();
+  modelShownAtBannerSwitch.clear();
   useChatExecutionStore.setState({
     ...streamingFlags(),
     isEditing: false,
     ...(streamingConversations.size === 0
-      ? { streamingContent: '', streamingReasoning: '', paywallError: null, error: null }
+      ? { streamingContent: '', streamingReasoning: '', ...NO_FAILURE, errorConversationId: null }
       : {}),
   });
+}
+
+export function stopEveryCloudStream(): string[] {
+  const completedAtMs = Date.now();
+  const stoppedRunIds: string[] = [];
+  for (const conversationId of Array.from(cloudStreamingConversations)) {
+    cloudStreamingConversations.delete(conversationId);
+    streamingConversations.delete(conversationId);
+    const run = activeCloudRuns.get(conversationId);
+    if (run) stoppedRunIds.push(run.runId);
+    activeCloudRuns.delete(conversationId);
+    deferredSends.delete(conversationId);
+    thinkingStartTimes.delete(conversationId);
+    thinkingEndTimes.delete(conversationId);
+    lastDeltaTimes.delete(conversationId);
+    const controller = abortControllers.get(conversationId);
+    abortControllers.delete(conversationId);
+    controller?.abort();
+    getConversationMessageStore(conversationId).setState((state) => {
+      const rows = state.messages[conversationId];
+      if (!rows?.some((message) => message.isStreaming)) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: rows.map((message) =>
+            message.isStreaming
+              ? settleMessageTurnState(stoppedByUser(message), 'cancelled', completedAtMs)
+              : message,
+          ),
+        },
+      };
+    });
+  }
+  useChatExecutionStore.setState({
+    ...streamingFlags(),
+    ...(streamingConversations.size === 0 ? { streamingContent: '', streamingReasoning: '' } : {}),
+  });
+  return stoppedRunIds;
+}
+
+const FAILURE_FIELDS = [
+  'error',
+  'failureCode',
+  'paywallError',
+  'providerConsentError',
+  'freeCapacityError',
+] as const;
+type FailureField = (typeof FAILURE_FIELDS)[number];
+const NO_FAILURE: Pick<ExecutionState, FailureField | 'errorRetry'> = {
+  error: null,
+  failureCode: null,
+  paywallError: null,
+  providerConsentError: null,
+  freeCapacityError: null,
+  errorRetry: null,
+};
+
+type ExecutionStateWrite =
+  Partial<ExecutionState> | ((state: ExecutionState) => Partial<ExecutionState>);
+
+// A failure belongs to the conversation whose action raised it: another
+// conversation never shows it, never clears it and never retries it.
+function scopeFailureWrite(
+  state: ExecutionState,
+  partial: Partial<ExecutionState>,
+  conversationId: string,
+  retry: SendErrorRetry | null,
+): Partial<ExecutionState> {
+  const written = FAILURE_FIELDS.filter((field) => field in partial);
+  if (written.length === 0) return partial;
+  if (written.some((field) => partial[field] != null)) {
+    return {
+      ...(state.errorConversationId === conversationId ? {} : NO_FAILURE),
+      ...partial,
+      ...('error' in partial ? { errorRetry: partial.error == null ? null : retry } : {}),
+      errorConversationId: conversationId,
+    };
+  }
+  if (state.errorConversationId !== null && state.errorConversationId !== conversationId) {
+    const kept: Partial<ExecutionState> = { ...partial };
+    for (const field of written) delete kept[field];
+    return kept;
+  }
+  const next = { ...state, ...partial };
+  return {
+    ...partial,
+    ...('error' in partial ? { errorRetry: null } : {}),
+    ...(FAILURE_FIELDS.every((field) => next[field] == null) ? { errorConversationId: null } : {}),
+  };
+}
+
+function failureScopedSet(
+  conversationId: string,
+  retry: () => SendErrorRetry | null = () => null,
+): (write: ExecutionStateWrite) => void {
+  return (write) =>
+    useChatExecutionStore.setState((state) =>
+      scopeFailureWrite(
+        state,
+        typeof write === 'function' ? write(state) : write,
+        conversationId,
+        retry(),
+      ),
+    );
+}
+
+function currentConversationScope(): string | null {
+  return getMsgStore().getState().currentConversationId ?? null;
 }
 
 function markReconnecting(
@@ -770,6 +1122,10 @@ function streamingFlags(): { isStreaming: boolean; streamingConversationIds: str
   };
 }
 
+// A turn cut off here was not finished by the model, so its row settles as
+// stopped and offers Try again instead of reading as a complete answer.
+const stalledConversations = new Set<string>();
+
 AppState.addEventListener('change', (nextState) => {
   if (nextState === 'background') {
     useUploadLifecycleStore.getState().markBackgrounded();
@@ -780,17 +1136,30 @@ AppState.addEventListener('change', (nextState) => {
   for (const cid of Array.from(streamingConversations)) {
     const last = lastDeltaTimes.get(cid) ?? 0;
     if (now - last > TIMEOUTS.STREAM_STALL && !activeCloudRuns.has(cid)) {
-      abortControllers.get(cid)?.abort();
+      const controller = abortControllers.get(cid);
+      if (!controller) continue;
+      stalledConversations.add(cid);
+      controller.abort();
     }
   }
 });
 const cancelledBeforeStream = new Set<string>();
 const MAX_RETRY_ATTEMPTS = 3;
+const modelShownAtBannerSwitch = new Map<string, string>();
+
+export function noteBannerModelSwitch(conversationId: string): void {
+  modelShownAtBannerSwitch.set(conversationId, useModelStore.getState().selectedModel);
+}
+
+function takeBannerModelChoice(conversationId: string): string | undefined {
+  const shownBefore = modelShownAtBannerSwitch.get(conversationId);
+  if (shownBefore === undefined) return undefined;
+  const chosen = useModelStore.getState().selectedModel;
+  return chosen && chosen !== shownBefore ? chosen : undefined;
+}
 const thinkingStartTimes = new Map<string, number>();
 const thinkingEndTimes = new Map<string, number>();
 const lastDeltaTimes = new Map<string, number>();
-const DEFAULT_LOCAL_SYSTEM_PROMPT =
-  "You are AGI, a concise helpful assistant running locally on this device. Answer the user's current request directly. Keep final answers separate from any thinking or reasoning text. Do not invent a different prompt or test unless the user explicitly asks you to create one.";
 
 const CHAT_MODE_PROMPTS: Record<ChatMode, string | null> = {
   chat: null,
@@ -819,7 +1188,7 @@ function createLocalAttachmentReferences(
 ): MessageAttachment[] | undefined {
   if (!attachments || attachments.length === 0) return undefined;
   return attachments.map((attachment) => ({
-    url: attachment.uri,
+    url: resolveLocalChatAttachmentUrl(attachment.uri),
     mimeType: attachment.mimeType,
     fileName: attachment.fileName,
     ...(attachment.fileSize != null ? { fileSize: attachment.fileSize } : {}),
@@ -839,12 +1208,26 @@ function restoreComposerAttachments(attachments?: MessageAttachment[]): Attachme
   }));
 }
 
+const LOCAL_IMAGE_OCR_CACHE_LIMIT = 64;
+const localImageOcrCache = new Map<string, string>();
+
+async function localImageOcrText(url: string): Promise<string> {
+  const cached = localImageOcrCache.get(url);
+  if (cached !== undefined) return cached;
+  const text = (await recognizeText(url)).text.trim();
+  if (localImageOcrCache.size >= LOCAL_IMAGE_OCR_CACHE_LIMIT) {
+    const oldest = localImageOcrCache.keys().next().value;
+    if (oldest !== undefined) localImageOcrCache.delete(oldest);
+  }
+  localImageOcrCache.set(url, text);
+  return text;
+}
+
 async function buildLocalImageOcrContext(imageUploads: MessageAttachment[]): Promise<string[]> {
   const context: string[] = [];
   for (const image of imageUploads) {
     try {
-      const ocr = await recognizeText(image.url);
-      const text = ocr.text.trim();
+      const text = await localImageOcrText(image.url);
       if (text.length > 0) {
         context.push(
           `[Image: ${image.fileName ?? 'attached image'}]\nOn-device OCR text:\n${text}`,
@@ -873,15 +1256,6 @@ function normalizeLocalMessageContent(
     })
     .filter(Boolean)
     .join('\n');
-}
-
-function ensureLocalSystemPrompt(messages: LocalLlmMessage[]): LocalLlmMessage[] {
-  const hasBase = messages.some(
-    (message) =>
-      message.role === 'system' && message.content.trim() === DEFAULT_LOCAL_SYSTEM_PROMPT,
-  );
-  if (hasBase) return messages;
-  return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...messages];
 }
 
 function buildChatViewSystemPrompt(
@@ -990,9 +1364,15 @@ function localSetupMessage(error: unknown): string {
     raw.includes('No local runtime') ||
     raw.includes('Download a model') ||
     raw.includes('not downloaded') ||
+    raw.includes('needs to be downloaded again') ||
+    raw.includes('No local model is configured') ||
+    raw.includes('not selectable for local chat') ||
     raw.includes('not available on this device')
   ) {
     return LOCAL_NO_MODEL_MESSAGE;
+  }
+  if (raw.includes('thermally throttled')) {
+    return 'Your device is too warm to run the on-device model. Let it cool down, then try again.';
   }
   if (raw.includes('APPLE_INTELLIGENCE_UNAVAILABLE')) {
     return 'Apple Intelligence is not available on this device. Choose another on-device model to keep chatting privately.';
@@ -1008,6 +1388,9 @@ function localSetupMessage(error: unknown): string {
   }
   if (raw.includes('APPLE_INTELLIGENCE_RATE_LIMITED')) {
     return 'Apple Intelligence is busy on this device. Wait a moment and try again.';
+  }
+  if (raw.includes('APPLE_INTELLIGENCE_UNSUPPORTED_LANGUAGE')) {
+    return 'Apple Intelligence does not support this language. Write in another language, or choose another on-device model.';
   }
   if (raw.includes('APPLE_INTELLIGENCE_FAILED') || raw.includes('FoundationModels')) {
     return 'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.';
@@ -1049,6 +1432,31 @@ function queueCloudTurnForSync(conversationId: string, messages: ChatMessage[]):
   }
 }
 
+function hasVisibleText(content: string): boolean {
+  return content.replace(/[\u200B\uFEFF]/g, '').trim().length > 0;
+}
+
+function storedCardTextOffsets(metadata: ChatMessage['metadata']): Record<string, number> {
+  const stored = metadata?.['interactiveCardTextOffsets'];
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+  const offsets: Record<string, number> = {};
+  for (const [cardId, offset] of Object.entries(stored as Record<string, unknown>)) {
+    if (typeof offset === 'number' && Number.isFinite(offset) && offset >= 0) {
+      offsets[cardId] = offset;
+    }
+  }
+  return offsets;
+}
+
+function recordCardTextOffset(
+  offsets: Record<string, number>,
+  cardId: string,
+  content: string,
+): void {
+  if (offsets[cardId] !== undefined) return;
+  offsets[cardId] = hasVisibleText(content) ? content.length : 0;
+}
+
 function pushCloudAssistantUpdate(
   conversationId: string,
   messages: ChatMessage[],
@@ -1081,6 +1489,29 @@ function settleToolCalls(
   return changed ? settled : toolCalls;
 }
 
+function sendReplayOf(metadata: ChatMessage['metadata']): SendReplayMetadataLike | undefined {
+  const replay = metadata?.['sendReplay'];
+  return replay && typeof replay === 'object' && !Array.isArray(replay)
+    ? (replay as SendReplayMetadataLike)
+    : undefined;
+}
+
+const GONE_RUN_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+
+function isCloudRunGone(error: unknown): boolean {
+  return error instanceof ManagedCloudAgentRunHttpError && GONE_RUN_STATUSES.has(error.status);
+}
+
+const UNSENT_PASTED_TEXT_MESSAGE =
+  'Your pasted text did not finish uploading, so nothing was sent. Your message is still here. Try sending again.';
+
+function unsentUploadsMessage(fileNames: string[]): string {
+  const files = fileNames.filter((name) => !isPastedTextFileName(name));
+  if (files.length === fileNames.length) return unsentAttachmentMessage(fileNames);
+  if (files.length === 0) return UNSENT_PASTED_TEXT_MESSAGE;
+  return `${unsentAttachmentMessage(files)} Your pasted text is still in your message.`;
+}
+
 function stoppedByUser(message: ChatMessage): ChatMessage {
   if (message.role !== 'assistant') return { ...message, isStreaming: false };
   return {
@@ -1103,11 +1534,13 @@ function settleMessageTurnState(
     error,
   );
   const toolCalls = settleToolCalls(message.toolCalls, status);
-  if (!activity && !research) {
-    return toolCalls === message.toolCalls ? message : { ...message, toolCalls };
+  const settledSteps = settleRunningSteps(message);
+  const agiWorkPlan = settleAgiWorkPlan(message.metadata?.agiWorkPlan, status);
+  if (!activity && !research && !agiWorkPlan) {
+    return toolCalls === message.toolCalls ? settledSteps : { ...settledSteps, toolCalls };
   }
   return {
-    ...message,
+    ...settledSteps,
     ...(toolCalls === message.toolCalls ? {} : { toolCalls }),
     metadata: {
       ...message.metadata,
@@ -1121,14 +1554,24 @@ function settleMessageTurnState(
           }
         : {}),
       ...(research ? { research } : {}),
+      ...(agiWorkPlan ? { agiWorkPlan } : {}),
     },
   };
+}
+
+function settleAgiWorkPlan(
+  value: unknown,
+  status: 'failed' | 'cancelled',
+): AgiWorkPlanStep[] | null {
+  const steps = readAgiWorkPlanSteps(value);
+  if (!steps?.some((step) => step.status === 'in_progress')) return null;
+  return steps.map((step) => (step.status === 'in_progress' ? { ...step, status } : step));
 }
 
 function conversationRowsInOrder(conversationId: string): ChatMessage[] {
   const owned =
     getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
-  return [...owned].sort(compareCloudMessagesByCreatedAtThenId);
+  return keepShownOrder(owned, owned);
 }
 
 function attachTurnStep(conversationId: string, messageId: string, step: StatusStep): void {
@@ -1165,9 +1608,33 @@ function historyMessagesForConversation(
 ): ChatMessage[] {
   const state = getConversationMessageStore(conversationId).getState();
   const owned = state.messages[conversationId] ?? [];
-  if (executionMode !== 'cloud') return owned;
   const conversation = state.conversations.find((candidate) => candidate.id === conversationId);
+  if (executionMode !== 'cloud') return visibleThreadFor(owned, conversation);
   return visibleThreadFor(conversationRowsInOrder(conversationId), conversation);
+}
+
+function cloudAnswerToContinue(
+  conversationId: string,
+  assistantMessageId: string,
+  turn: InFlightTurnVerdict,
+) {
+  if (
+    abortControllers.has(conversationId) ||
+    streamingConversations.has(conversationId) ||
+    cloudRunChecks.has(conversationId)
+  ) {
+    return null;
+  }
+  const conversation = getConversationMessageStore(conversationId)
+    .getState()
+    .conversations.find((c) => c.id === conversationId);
+  if (!conversation) return null;
+  const thread = historyMessagesForConversation(conversationId, 'cloud');
+  const answer = thread[thread.length - 1];
+  if (!answer || answer.id !== assistantMessageId) return null;
+  if (hasUnfinishedRun(answer) && turn !== 'stalled') return null;
+  const model = continuableCloudModel(conversation, answer, turn);
+  return model ? { conversation, thread, answer, model } : null;
 }
 
 /**
@@ -1182,6 +1649,97 @@ function pathEndingAt(conversationId: string, leafMessageId: string | null): Cha
   });
 }
 
+type WireHistoryEntry = {
+  role: string;
+  content:
+    | string
+    | Array<{
+        type: string;
+        text?: string;
+        image_url?: { url: string };
+        file?: { asset_id: string };
+      }>;
+};
+
+function wireHistory(
+  messages: ChatMessage[],
+  executionMode: ConversationExecutionMode,
+  documentContextByMessage: ReadonlyMap<string, string[]> = new Map(),
+): WireHistoryEntry[] {
+  return messages
+    .filter((m) => !m.isStreaming)
+    .flatMap((m): WireHistoryEntry[] => {
+      const settled =
+        m.role === 'assistant'
+          ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
+          : null;
+      const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
+      const documentContext = documentContextByMessage.get(m.id);
+      const turnText = documentContext
+        ? [...documentContext, m.content].filter(Boolean).join('\n\n')
+        : m.content;
+      const replayedAttachments = m.attachments?.filter((a) =>
+        executionMode === 'cloud'
+          ? Boolean(a.assetId) ||
+            (a.mimeType.startsWith('image/') && /^(https:|data:)/i.test(a.url))
+          : a.mimeType.startsWith('image/'),
+      );
+      if (replayedAttachments && replayedAttachments.length > 0) {
+        return [
+          {
+            role: m.role,
+            content: [
+              ...(turnText ? [{ type: 'text' as const, text: turnText }] : []),
+              ...replayedAttachments.map((a) =>
+                a.assetId
+                  ? { type: 'file' as const, file: { asset_id: a.assetId } }
+                  : { type: 'image_url' as const, image_url: { url: a.url } },
+              ),
+            ],
+          },
+          ...settledTurn,
+        ];
+      }
+      return [{ role: m.role, content: turnText }, ...settledTurn];
+    });
+}
+
+const CONTINUE_FAILED_MESSAGE = 'This answer could not be continued. Try again.';
+
+type ContinuationFailure = Partial<
+  Pick<
+    ExecutionState,
+    'error' | 'failureCode' | 'paywallError' | 'providerConsentError' | 'freeCapacityError'
+  >
+>;
+
+function continuationFailure(error: unknown): ContinuationFailure {
+  if (error instanceof ApiPaywallError) {
+    return { paywallError: paywallErrorStateFromApiError(error) };
+  }
+  if (error instanceof CloudProviderConsentRequiredError) return { error: null };
+  const providerConsentError = providerConsentErrorStateFromError(error);
+  if (providerConsentError) {
+    return { error: providerConsentErrorMessage(providerConsentError), providerConsentError };
+  }
+  if (error instanceof ApiFreeCapacityError) {
+    return {
+      error: FREE_CAPACITY_BUSY_MESSAGE,
+      freeCapacityError: freeCapacityErrorStateFromApiError(error),
+    };
+  }
+  if (error instanceof ApiHttpError) {
+    const message = withFailureReference(
+      freeUsageLimitMessage(error) ?? error.message,
+      error.requestId,
+    );
+    return { error: message, failureCode: error.code ? { message, code: error.code } : null };
+  }
+  if (error instanceof RemoteChatDisabledError) return { error: error.message };
+  if (error instanceof StreamConnectionLostError) return { error: CONNECTION_LOST_FAILURE.message };
+  return { error: CONTINUE_FAILED_MESSAGE };
+}
+
 /**
  * Gives a conversation that has only ever been linear the parent pointers its
  * history implies, so the turn about to be written has something to branch
@@ -1189,11 +1747,18 @@ function pathEndingAt(conversationId: string, leafMessageId: string | null): Cha
  * that has never branched there is no parent to read yet, and treating that
  * absence as `null` would file the revision under the root instead of beside
  * the question it revises.
+ *
+ * Runs only while no row has a parent, as the server's `stampLinearParents`
+ * does: every root of a sibling group is null-parented on purpose, and chaining
+ * it onto whichever row precedes it would fold separate versions into one line.
+ * A Local transcript is chained in the order it is held, because a question and
+ * its answer are written in the same millisecond and their random ids would
+ * otherwise decide which one comes first.
  */
 function ensureLocalThreadParents(conversationId: string): ChatMessage[] {
   const store = getConversationMessageStore(conversationId);
   const rows = store.getState().messages[conversationId] ?? [];
-  const stamped = stampLinearParents(rows);
+  const stamped = withThreadParents(conversationId, rows);
   if (stamped !== rows) {
     store.setState((state) => ({
       messages: { ...state.messages, [conversationId]: stamped },
@@ -1202,7 +1767,151 @@ function ensureLocalThreadParents(conversationId: string): ChatMessage[] {
   return stamped;
 }
 
-function setLocalActiveLeaf(conversationId: string, messageId: string): void {
+function withThreadParents(conversationId: string, rows: ChatMessage[]): ChatMessage[] {
+  if (rows.some((row) => row.parentId != null)) return rows;
+  return getConversationMessageStore(conversationId) === useChatCloudMessageStore
+    ? stampLinearParents(rows)
+    : chainInHeldOrder(rows);
+}
+
+function chainInHeldOrder(rows: ChatMessage[]): ChatMessage[] {
+  if (rows.length < 2) return rows;
+  return rows.map((row, index) => {
+    const previous = rows[index - 1];
+    return previous ? { ...row, parentId: previous.id } : row;
+  });
+}
+
+/**
+ * A rewrite that never wrote its new version leaves the parents it stamped
+ * behind, and with no leaf to follow them the next ordinary send writes
+ * parentless rows beside them; a later edit of one of those would read its
+ * missing parent as a root and drop every earlier turn from view. Clearing the
+ * stamped parents by row id keeps a refused, failed or abandoned edit or
+ * regenerate from changing anything at all, even after another writer has
+ * replaced the array, and puts back the leaf an answer withdrawn before it
+ * streamed moved. Runs whatever the attempt returned: a row the attempt added
+ * means its version was written and the stamps are in use.
+ */
+function forgetUnusedThreadParents(
+  conversationId: string,
+  linearRows: ChatMessage[],
+  stampedRows: ChatMessage[],
+  leafBefore: string | null | undefined,
+): void {
+  if (linearRows === stampedRows) return;
+  const linearParents = new Map(
+    linearRows.map((row): [string, string | null | undefined] => [row.id, row.parentId]),
+  );
+  const stampedParents = new Map<string, string>();
+  for (const row of stampedRows) {
+    if (row.parentId != null && linearParents.get(row.id) == null) {
+      stampedParents.set(row.id, row.parentId);
+    }
+  }
+  if (stampedParents.size === 0) return;
+  const heldIds = new Set(stampedRows.map((row) => row.id));
+  const store = getConversationMessageStore(conversationId);
+  const current = store.getState().messages[conversationId];
+  if (!current || current.some((row) => !heldIds.has(row.id))) return;
+  let restored = false;
+  const unstamped = current.map((row) => {
+    if (row.parentId == null || stampedParents.get(row.id) !== row.parentId) return row;
+    restored = true;
+    const { parentId: _stampedParentId, ...unthreaded } = row;
+    return linearParents.get(row.id) === null ? { ...unthreaded, parentId: null } : unthreaded;
+  });
+  if (!restored) return;
+  store.setState((state) => ({ messages: { ...state.messages, [conversationId]: unstamped } }));
+  if (activeLeafOf(conversationId) !== leafBefore) putBackActiveLeaf(conversationId, leafBefore);
+}
+
+/**
+ * Whether an edit or a regenerate here keeps the earlier version beside the new
+ * one. A Local transcript lives on the phone, so it can always hold siblings; a
+ * Cloud one only when its server threads.
+ */
+function keepsEarlierVersions(conversation: ConversationSummary | undefined): boolean {
+  if (!conversation) return false;
+  return (
+    executionModeForConversation(conversation) === 'local' ||
+    isThreadingCapableConversation(conversation)
+  );
+}
+
+/**
+ * How many messages after `messageId` an edit or a regenerate would delete.
+ * Zero when the earlier version is kept, and zero for the last turn: editing
+ * the last question replaces only its own answer, and regenerating the last
+ * answer has nothing after it.
+ */
+function messagesLostByRewrite(
+  conversationId: string,
+  messageId: string,
+  rewrite: 'edit' | 'regenerate',
+): number {
+  const state = getConversationMessageStore(conversationId).getState();
+  const conversation = state.conversations.find((candidate) => candidate.id === conversationId);
+  if (!conversation || keepsEarlierVersions(conversation)) return 0;
+  const rows = state.messages[conversationId] ?? [];
+  const index = rows.findIndex((row) => row.id === messageId);
+  const target = rows[index];
+  if (!target) return 0;
+  const after = rows.length - index - 1;
+  const ownAnswer = target.role === 'user' && rows[index + 1]?.role === 'assistant' ? 1 : 0;
+  if (after - ownAnswer <= 0) return 0;
+  return rewrite === 'edit' ? after : after - ownAnswer;
+}
+
+function lostMessagesPhrase(count: number): { messages: string; they: string } {
+  return count === 1
+    ? { messages: '1 message', they: 'It' }
+    : { messages: `${count} messages`, they: 'They' };
+}
+
+const REWRITE_CONFIRMATION = {
+  edit: {
+    title: 'Edit and resend?',
+    body: (count: number) => {
+      const { messages, they } = lostMessagesPhrase(count);
+      return `This removes the ${messages} after this one. ${they} can't be recovered.`;
+    },
+    confirm: 'Edit and resend',
+  },
+  regenerate: {
+    title: 'Regenerate this answer?',
+    body: (count: number) => {
+      const { messages, they } = lostMessagesPhrase(count);
+      return `This replaces this answer and removes the ${messages} after it. ${they} can't be recovered.`;
+    },
+    confirm: 'Regenerate',
+  },
+} as const;
+
+/**
+ * Runs `proceed` at once when the rewrite keeps every later message, and asks
+ * first when it would delete some: only a conversation that cannot hold an
+ * earlier version still loses the turns after the one rewritten.
+ */
+export function confirmBeforeRewrite(
+  conversationId: string,
+  messageId: string,
+  rewrite: 'edit' | 'regenerate',
+  proceed: () => void,
+): void {
+  const lost = messagesLostByRewrite(conversationId, messageId, rewrite);
+  if (lost === 0) {
+    proceed();
+    return;
+  }
+  const copy = REWRITE_CONFIRMATION[rewrite];
+  Alert.alert(copy.title, copy.body(lost), [
+    { text: 'Cancel', style: 'cancel' },
+    { text: copy.confirm, style: 'destructive', onPress: proceed },
+  ]);
+}
+
+export function setLocalActiveLeaf(conversationId: string, messageId: string): void {
   const store = getConversationMessageStore(conversationId);
   if (store === useChatCloudMessageStore) {
     useChatCloudMessageStore.getState().patchCloudConversation(conversationId, {
@@ -1217,6 +1926,46 @@ function setLocalActiveLeaf(conversationId: string, messageId: string): void {
         : candidate,
     ),
   }));
+}
+
+function activeLeafOf(conversationId: string): string | null | undefined {
+  return getConversationMessageStore(conversationId)
+    .getState()
+    .conversations.find((candidate) => candidate.id === conversationId)?.activeLeafMessageId;
+}
+
+function putBackActiveLeaf(conversationId: string, leaf: string | null | undefined): void {
+  const store = getConversationMessageStore(conversationId);
+  if (store === useChatCloudMessageStore) {
+    if (leaf !== undefined) {
+      useChatCloudMessageStore
+        .getState()
+        .patchCloudConversation(conversationId, { activeLeafMessageId: leaf });
+    }
+    return;
+  }
+  store.setState((state) => ({
+    conversations: state.conversations.map((candidate) => {
+      if (candidate.id !== conversationId) return candidate;
+      const { activeLeafMessageId: _replaced, ...unpointed } = candidate;
+      return leaf === undefined ? unpointed : { ...unpointed, activeLeafMessageId: leaf };
+    }),
+  }));
+}
+
+/**
+ * A turn withdrawn before it streamed takes its answer row with it. A leaf
+ * left naming that row would hang the next turn off a row that no longer
+ * exists, and the walk up from it would stop there and hide every earlier turn.
+ */
+function moveLeafOffRemovedRow(
+  conversationId: string,
+  rowsWithRemoved: ChatMessage[],
+  removedId: string,
+): void {
+  if (activeLeafOf(conversationId) !== removedId) return;
+  const survivor = resolveSurvivingLeaf(rowsWithRemoved, removedId);
+  if (survivor) setLocalActiveLeaf(conversationId, survivor);
 }
 
 /**
@@ -1246,13 +1995,13 @@ async function writeCloudBranchPoint(
   });
 }
 
-const _artifactThemeColors = agiNativeColors.dark;
-
 function deriveChatMessageArtifacts(
   content: string,
   conversationId: string,
   messageId: string,
   createdAt: string,
+  scope: MessageArtifactScope,
+  metadata?: Record<string, unknown>,
 ): NonNullable<ChatMessage['artifacts']> {
   try {
     /* eslint-disable @typescript-eslint/no-require-imports */
@@ -1262,17 +2011,10 @@ function deriveChatMessageArtifacts(
     const shared = deriveArtifacts(content, {
       conversationId,
       messageId,
-      include: 'code',
-      minCodeLines: 4,
+      include: (block) => offersMessageArtifact(block, scope, metadata),
       now: createdAt,
     });
-    return shared.map((s) => ({
-      id: s.id,
-      type: s.type === 'chart' || s.type === 'document' || s.type === 'image' ? s.type : 'code',
-      title: s.title,
-      content: s.content,
-      ...(s.language && s.language !== 'text' ? { language: s.language } : {}),
-    }));
+    return shared.map(messageArtifactFromShared);
   } catch (err) {
     console.warn('[chatExecutionStore] Failed to derive message artifacts:', err);
     return [];
@@ -1280,22 +2022,6 @@ function deriveChatMessageArtifacts(
 }
 
 export { generatedFileArtifactsFromWire } from '@/src/features/chat/utils/generatedFileArtifacts';
-
-export function citationsFromToolCalls(
-  toolCalls: ToolCall[],
-): NonNullable<ChatMessage['citations']> {
-  const seen = new Set<string>();
-  const citations: NonNullable<ChatMessage['citations']> = [];
-  for (const tc of toolCalls) {
-    for (const r of tc.searchResults ?? []) {
-      if (!r.url || seen.has(r.url)) continue;
-      seen.add(r.url);
-      citations.push({ url: r.url, title: r.title, ...(r.snippet ? { snippet: r.snippet } : {}) });
-      if (citations.length >= 8) return citations;
-    }
-  }
-  return citations;
-}
 
 /**
  * Runs for history as well as for a finished stream. `deriveAndMapToMobileArtifacts`
@@ -1321,7 +2047,6 @@ export function captureArtifactsFromMessage(
       messageId,
       createdAt,
       conversationTitle,
-      _artifactThemeColors,
       provenance,
     );
     if (mobileArtifacts.length > 0) {
@@ -1329,6 +2054,24 @@ export function captureArtifactsFromMessage(
     }
   } catch (err) {
     console.warn('[chatExecutionStore] Failed to capture message artifacts:', err);
+  }
+}
+
+function removeArtifactsOfMessages(messages: readonly ChatMessage[]): void {
+  const messageIds = new Set(messages.map((message) => message.id));
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const { useArtifactStore } =
+      require('@/src/features/artifacts/store') as typeof import('@/src/features/artifacts/store');
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const artifactStore = useArtifactStore.getState();
+    for (const artifact of artifactStore.artifacts) {
+      if (artifact.messageId && messageIds.has(artifact.messageId) && !artifact.editedAt) {
+        artifactStore.removeArtifact(artifact.id);
+      }
+    }
+  } catch (err) {
+    console.warn('[chatExecutionStore] Failed to remove replaced message artifacts:', err);
   }
 }
 
@@ -1357,11 +2100,34 @@ function flushDeferredSend(conversationId: string): void {
     .sendMessage(conversationId, next.content, next.model, next.attachments, next.options);
 }
 
+async function uploadAgreedBeforeDeferring(
+  conversationId: string,
+  model: string,
+  attachments: Attachment[] | undefined,
+): Promise<boolean> {
+  const needingUpload = attachments?.filter((attachment) => !attachment.assetId) ?? [];
+  if (needingUpload.length === 0) return true;
+  const conversation = getConversationMessageStore(conversationId)
+    .getState()
+    .conversations.find((candidate) => candidate.id === conversationId);
+  const executionMode = conversation
+    ? executionModeForConversation(conversation)
+    : executionModeForModel(model);
+  if (executionMode !== 'cloud') return true;
+  const account = captureCloudAccountEpoch();
+  if (!(await agreeToCloudUploadAhead(needingUpload))) return false;
+  if (account && !isCloudAccountEpochCurrent(account)) {
+    takeCloudUploadAgreedAhead(needingUpload);
+    return false;
+  }
+  return true;
+}
+
 export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   isStreaming: false,
   streamingConversationIds: [],
   reconnectingMessageIds: [],
-  stoppingMessageIds: [],
+  toolInputSendErrors: {},
   streamingContent: '',
   streamingReasoning: '',
   error: null,
@@ -1369,30 +2135,51 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   paywallError: null,
   providerConsentError: null,
   freeCapacityError: null,
+  errorConversationId: null,
+  errorRetry: null,
   retryAttempts: {},
   isEditing: false,
 
-  clearError: () => set({ error: null, failureCode: null, freeCapacityError: null }),
-  setSendError: (message: string) =>
-    set({ error: message, failureCode: null, freeCapacityError: null }),
+  clearError: () =>
+    set((state) => ({
+      error: null,
+      failureCode: null,
+      freeCapacityError: null,
+      errorRetry: null,
+      ...(state.paywallError === null && state.providerConsentError === null
+        ? { errorConversationId: null }
+        : {}),
+    })),
+  clearErrorFor: (conversationId) =>
+    failureScopedSet(conversationId)({ error: null, failureCode: null, freeCapacityError: null }),
+  clearUnscopedError: () => {
+    if (get().errorConversationId === null) get().clearError();
+  },
+  setSendError: (message, scope) => {
+    const conversationId = scope?.conversationId ?? currentConversationScope();
+    const write = { error: message, failureCode: null, freeCapacityError: null };
+    if (!conversationId) {
+      set({ ...write, errorRetry: null, errorConversationId: null });
+      return;
+    }
+    failureScopedSet(conversationId, () => scope?.retry ?? null)(write);
+  },
   clearPaywallError: () => set({ paywallError: null }),
-  setPaywallError: (paywallError) => set({ paywallError }),
+  setPaywallError: (paywallError, conversationId) => {
+    const owner = conversationId ?? currentConversationScope();
+    if (!owner) {
+      set({ paywallError, errorConversationId: null });
+      return;
+    }
+    failureScopedSet(owner)({ paywallError });
+  },
   clearProviderConsentError: () => set({ providerConsentError: null }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
-    const minorMode = isMinorMode();
-    const reduceSensitiveContent = useSettingsStore.getState().reduceSensitiveContent;
-    if (minorMode || reduceSensitiveContent) {
-      const verdict = checkContentFilter(
-        content,
-        true,
-        minorMode ? MINOR_SAFE_REFUSAL : REDUCED_SENSITIVE_CONTENT_REFUSAL,
-      );
-      if (!verdict.allowed) {
-        Alert.alert('Content not available', verdict.refusal);
-        return false;
-      }
-    }
+    if (options?.retryOfMessageId === undefined) modelShownAtBannerSwitch.delete(conversationId);
+    let failureRetry: SendErrorRetry | null = null;
+    const set = failureScopedSet(conversationId, () => failureRetry);
+    if (refuseFilteredSend(content)) return false;
 
     const queue = getMobileSendQueue();
     try {
@@ -1411,17 +2198,27 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     set({ providerConsentError: null, freeCapacityError: null });
 
     if (abortControllers.has(conversationId)) {
-      const waiting = deferredSends.get(conversationId) ?? [];
-      if (waiting.length >= MAX_DEFERRED_SENDS) {
+      const refuseFullDeferral = () => {
         set({
           error: `Only ${MAX_DEFERRED_SENDS} follow-ups can wait for the current reply. Send this one once the reply finishes.`,
           paywallError: null,
         });
         return false;
+      };
+      if ((deferredSends.get(conversationId)?.length ?? 0) >= MAX_DEFERRED_SENDS) {
+        return refuseFullDeferral();
       }
-      deferredSends.set(conversationId, [...waiting, { content, model, attachments, options }]);
-      options?.onAccepted?.();
-      return true;
+      if (!(await uploadAgreedBeforeDeferring(conversationId, model, attachments))) {
+        set({ error: null, paywallError: null });
+        return false;
+      }
+      if (abortControllers.has(conversationId)) {
+        const waiting = deferredSends.get(conversationId) ?? [];
+        if (waiting.length >= MAX_DEFERRED_SENDS) return refuseFullDeferral();
+        deferredSends.set(conversationId, [...waiting, { content, model, attachments, options }]);
+        options?.onAccepted?.();
+        return true;
+      }
     }
     cancelledBeforeStream.delete(conversationId);
 
@@ -1499,7 +2296,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     let executionModel = requestedModel;
     let routingReason: string | undefined;
-    let appliedRoutingProfile: RoutingProfileChoice | undefined;
     if (FEATURES.auth && executionMode === 'cloud') {
       const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
       if (isClerkLoaded && !isClerkSignedIn) {
@@ -1546,7 +2342,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           set({
             error:
               useFreeQuotaCatalogueStore.getState().error ??
-              'This provider-funded Free model is unavailable right now. Choose another available Free model.',
+              'This Free model is unavailable right now. Choose another available Free model.',
             paywallError: null,
             ...streamingFlags(),
           });
@@ -1566,13 +2362,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
         executionModel = requestedModel;
       } else {
-        const routingProfile = useModelStore.getState().routingProfile;
-        const routingProfileAlias =
-          requestedModel === DEFAULT_AUTO_MODE_ID
-            ? autoAliasForRoutingProfile(routingProfile)
-            : null;
         const route = resolveMobileCloudDispatch({
-          selection: routingProfileAlias ?? requestedModel,
+          selection: requestedModel,
           message: content,
           subscriptionTier: useTierStore.getState().tier,
           history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
@@ -1584,12 +2375,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
           })),
           currentModelKey:
-            !routingProfileAlias && conversation?.model && !isAutoModeModelId(conversation.model)
+            conversation?.model && !isAutoModeModelId(conversation.model)
               ? conversation.model
               : undefined,
-          ...(routingProfileAlias && routingProfile === 'speed'
-            ? { preferSlots: speedFirstSlots() }
-            : {}),
         });
 
         if (route.status === 'unavailable') {
@@ -1610,7 +2398,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
         executionModel = route.modelKey;
         routingReason = route.reason;
-        if (routingProfileAlias) appliedRoutingProfile = routingProfile;
       }
       const imageRefusal = imageLimitRefusal(executionModel, attachments);
       if (imageRefusal) {
@@ -1622,6 +2409,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return false;
       }
     }
+    const storedTurnId = options?.retryOfMessageId ?? options?.regenerateParentMessageId;
+    failureRetry = storedTurnId
+      ? { kind: 'regenerate', messageId: storedTurnId }
+      : options?.interactiveCardResume || options?.branchParentId !== undefined
+        ? null
+        : { kind: 'resend' };
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
     } else if (attachments && attachments.length > 0) {
@@ -1639,26 +2432,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         reusableCloudAttachments.length > 0 ? reusableCloudAttachments : undefined;
 
       if (attachmentsNeedingUpload.length > 0) {
-        const fileNames = attachmentsNeedingUpload.map((a) => a.fileName).join(', ');
-        const userConsented = await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Send files to AGI Cloud?',
-            `"${fileNames}" will be uploaded to AGI Cloud to process your message. Files leave this device.`,
-            [
-              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Upload & Send', style: 'default', onPress: () => resolve(true) },
-            ],
-            { cancelable: true, onDismiss: () => resolve(false) },
-          );
-        });
+        const userConsented =
+          takeCloudUploadAgreedAhead(attachmentsNeedingUpload) ||
+          (await confirmCloudUpload(attachmentsNeedingUpload));
         if (!isTurnAccountCurrent()) return false;
 
         if (!userConsented) {
-          set({
-            error: 'File upload cancelled. Re-send without files or tap Upload & Send to confirm.',
-            paywallError: null,
-            ...streamingFlags(),
-          });
+          set({ error: null, paywallError: null, ...streamingFlags() });
           return false;
         }
 
@@ -1687,7 +2467,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             .filter((x) => x.result === null);
           if (unsent.length > 0) {
             set({
-              error: unsentAttachmentMessage(unsent.map((x) => x.attachment.fileName)),
+              error: unsentUploadsMessage(unsent.map((x) => x.attachment.fileName)),
               paywallError: null,
               ...streamingFlags(),
             });
@@ -1718,7 +2498,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             return false;
           }
           set({
-            error: unsentAttachmentMessage(attachmentsNeedingUpload.map((a) => a.fileName)),
+            error: unsentUploadsMessage(attachmentsNeedingUpload.map((a) => a.fileName)),
             paywallError: null,
             ...streamingFlags(),
           });
@@ -1738,7 +2518,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     const newMessageId = () => (executionMode === 'cloud' ? uuidv7() : generateId());
 
-    const isThreaded = executionMode === 'cloud' && isThreadingCapableConversation(conversation);
+    const isThreaded =
+      executionMode === 'cloud'
+        ? isThreadingCapableConversation(conversation)
+        : keepsEarlierVersions(conversation);
     const regenerateAnchorId = isThreaded ? options?.regenerateParentMessageId : undefined;
     const branchParentId = isThreaded ? options?.branchParentId : undefined;
     const regenerateAnchor = regenerateAnchorId
@@ -1748,6 +2531,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       : undefined;
     if (regenerateAnchorId && !regenerateAnchor) return false;
     const resumesCardTurn = options?.interactiveCardResume === true;
+    if (
+      shouldUseLocalRuntime &&
+      uploadedAttachments &&
+      !temporaryConversation &&
+      !regenerateAnchor &&
+      !resumesCardTurn
+    ) {
+      uploadedAttachments = await keepLocalChatAttachments(conversationId, uploadedAttachments);
+      if (!isTurnAccountCurrent()) return false;
+    }
     const userMessageParentId = regenerateAnchor
       ? undefined
       : branchParentId !== undefined
@@ -1756,6 +2549,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ? (conversation?.activeLeafMessageId ?? undefined)
           : undefined;
 
+    const persistedAttachments = persistedAttachmentMetadata(uploadedAttachments);
     const userMessage: ChatMessage | undefined =
       regenerateAnchor || resumesCardTurn
         ? undefined
@@ -1775,8 +2569,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     resolvedModel: executionModel,
                     ...(routingReason ? { routingReason } : {}),
                     ...(options?.skillName
-                      ? { sendReplay: { hasSkillInstruction: true, skillName: options.skillName } }
+                      ? {
+                          sendReplay: {
+                            hasSkillInstruction: true,
+                            skillName: options.skillName,
+                            ...(options.skillTools?.codeExecution
+                              ? { codeExecutionEnabled: true }
+                              : {}),
+                            ...(options.skillTools?.officeCreation
+                              ? { officeCreationEnabled: true }
+                              : {}),
+                          },
+                        }
                       : {}),
+                    ...(persistedAttachments ? { attachments: persistedAttachments } : {}),
                   },
                 }
               : {}),
@@ -1823,64 +2629,24 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (executionMode !== 'cloud') {
       for (const earlier of existingMessages) {
         if (earlier.isStreaming || earlier.role !== 'user') continue;
-        const earlierDocuments = earlier.attachments?.filter(
+        const earlierAttachments = earlier.attachments?.map(resolveLocalChatAttachment) ?? [];
+        const earlierDocuments = earlierAttachments.filter(
           (a) => !a.assetId && !a.mimeType.startsWith('image/'),
         );
-        if (!earlierDocuments || earlierDocuments.length === 0) continue;
-        const documentContext = await buildAttachedDocumentContext(earlierDocuments);
+        const earlierImages = shouldUseLocalRuntime
+          ? earlierAttachments.filter((a) => !a.assetId && a.mimeType.startsWith('image/'))
+          : [];
+        if (earlierDocuments.length === 0 && earlierImages.length === 0) continue;
+        const documentContext =
+          earlierDocuments.length > 0 ? await buildAttachedDocumentContext(earlierDocuments) : [];
+        const imageContext =
+          earlierImages.length > 0 ? await buildLocalImageOcrContext(earlierImages) : [];
         if (!isTurnAccountCurrent()) return false;
-        earlierDocumentContext.set(earlier.id, documentContext);
+        earlierDocumentContext.set(earlier.id, [...documentContext, ...imageContext]);
       }
     }
 
-    const historyMessages: Array<{
-      role: string;
-      content:
-        | string
-        | Array<{
-            type: string;
-            text?: string;
-            image_url?: { url: string };
-            file?: { asset_id: string };
-          }>;
-    }> = [
-      ...existingMessages
-        .filter((m) => !m.isStreaming)
-        .flatMap((m) => {
-          const settled =
-            m.role === 'assistant'
-              ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
-              : null;
-          const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
-          const documentContext = earlierDocumentContext.get(m.id);
-          const turnText = documentContext
-            ? [...documentContext, m.content].filter(Boolean).join('\n\n')
-            : m.content;
-          const replayedAttachments = m.attachments?.filter((a) =>
-            executionMode === 'cloud'
-              ? Boolean(a.assetId) ||
-                (a.mimeType.startsWith('image/') && /^(https:|data:)/i.test(a.url))
-              : a.mimeType.startsWith('image/'),
-          );
-          if (replayedAttachments && replayedAttachments.length > 0) {
-            return [
-              {
-                role: m.role,
-                content: [
-                  ...(turnText ? [{ type: 'text' as const, text: turnText }] : []),
-                  ...replayedAttachments.map((a) =>
-                    a.assetId
-                      ? { type: 'file' as const, file: { asset_id: a.assetId } }
-                      : { type: 'image_url' as const, image_url: { url: a.url } },
-                  ),
-                ],
-              },
-              ...settledTurn,
-            ];
-          }
-          return [{ role: m.role, content: turnText }, ...settledTurn];
-        }),
-    ];
+    const historyMessages = wireHistory(existingMessages, executionMode, earlierDocumentContext);
 
     if (
       isFreeQuotaChat &&
@@ -2033,7 +2799,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         .getState()
         .conversations.find((conversation) => conversation.id === conversationId)?.temporary ===
       true;
-    if (branchPoint && !conversationIsTemporary) {
+    if (branchPoint && executionMode === 'cloud' && !conversationIsTemporary) {
       try {
         await writeCloudBranchPoint(
           conversationId,
@@ -2098,6 +2864,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         },
       };
     });
+    if (executionMode === 'cloud') {
+      expirePausedTurnsBefore(conversationId, userMessage?.id ?? assistantMessageId);
+    }
+    const storedQuestionId = userMessage?.id ?? regenerateAnchor?.id;
+    failureRetry = storedQuestionId ? { kind: 'regenerate', messageId: storedQuestionId } : null;
 
     msgStore.setState((state) => ({
       conversations: state.conversations.map((c) =>
@@ -2146,14 +2917,22 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     if (cancelledBeforeStream.has(conversationId)) {
       cancelledBeforeStream.delete(conversationId);
+      const rowsWithAnswer = msgStore.getState().messages[conversationId] ?? [];
       msgStore.setState((state) => ({
         messages: {
           ...state.messages,
-          [conversationId]: (state.messages[conversationId] ?? []).filter(
-            (m) => m.id !== assistantMessageId,
-          ),
+          [conversationId]: (state.messages[conversationId] ?? [])
+            .filter((m) => m.id !== assistantMessageId)
+            .map((m) =>
+              userMessage && m.id === userMessage.id
+                ? { ...m, metadata: { ...m.metadata, finishReason: 'stopped' } }
+                : m,
+            ),
         },
       }));
+      if (assistantParentId !== undefined) {
+        moveLeafOffRemovedRow(conversationId, rowsWithAnswer, assistantMessageId);
+      }
       return true;
     }
 
@@ -2216,6 +2995,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           if (parsed.hasReasoning && !thinkingStartTimes.has(conversationId)) {
             thinkingStartTimes.set(conversationId, Date.now());
           }
+          if (
+            thinkingStartTimes.has(conversationId) &&
+            !thinkingEndTimes.has(conversationId) &&
+            parsed.content.length > 0
+          ) {
+            thinkingEndTimes.set(conversationId, Date.now());
+          }
 
           const thinkingStartedAt = thinkingStartTimes.get(conversationId);
           const currentMsgStore = getConversationMessageStore(conversationId);
@@ -2266,6 +3052,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               updateLocalStream(parseCurrentTurnAssistantOutput(localStreamingRaw, content));
             },
           });
+        } catch (generationError) {
+          if (!controller.signal.aborted) {
+            void recordLocalModelTurnFailure(localRef.modelId, generationError);
+          }
+          throw generationError;
         } finally {
           localPeakMemoryMB = await memorySampler.stop();
         }
@@ -2279,7 +3070,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           'The local model returned an empty response. Try again with a shorter prompt.';
         const finalReasoning = parsedFinal.hasReasoning ? parsedFinal.reasoning : undefined;
         const startedAt = thinkingStartTimes.get(conversationId);
-        const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
+        const thinkingEndedAt = thinkingEndTimes.get(conversationId) ?? Date.now();
+        const thinkingDuration = startedAt
+          ? Math.max(0, thinkingEndedAt - startedAt) / 1000
+          : undefined;
+        thinkingEndTimes.delete(conversationId);
 
         const decodeMs = localFirstTokenAt > 0 ? Date.now() - localFirstTokenAt : 0;
         const tokensPerSecond =
@@ -2384,6 +3179,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
         if (parsedFinal.content.trim()) {
           captureCompletedLocalMemory();
+          void announceReplyReadyInBackground(conversationId);
         }
         return true;
       }
@@ -2394,9 +3190,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const executionModelMetadata = getModelMetadataById(executionModel);
       const entitlementState = useTierStore.getState();
+      const webSearchTurnedOff = useChatViewStore.getState().features.webSearch === false;
       const webSearchEnabled =
         FEATURES.webSearch &&
-        useChatViewStore.getState().features.webSearch &&
+        !webSearchTurnedOff &&
         isCapabilityRequestable('canUseWebSearch') &&
         isWebSearchAvailable({
           provider: executionModelMetadata?.provider,
@@ -2408,24 +3205,28 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         useChatViewStore.getState().disabledConnectorIdsByConversation[conversationId] ?? [];
       const researchEnabled =
         FEATURES.research &&
-        (options?.research === true || useChatViewStore.getState().features.research) &&
+        (options?.research === true ||
+          isResearchChosenFor(useChatViewStore.getState(), conversationId)) &&
         executionModelMetadata?.capabilities?.research === true &&
         executionModelMetadata?.capabilities?.search === true &&
         isCapabilityRequestable('canUseDeepResearch');
 
-      const codeExecutionEnabled =
-        FEATURES.codeExecution &&
+      const viewState = useChatViewStore.getState();
+      const cloudExecutionPermitted = FEATURES.codeExecution && viewState.features.codeExecution;
+      const cloudExecutionRequestable =
+        cloudExecutionPermitted &&
+        entitlementState.codeExecutionAvailable &&
+        isCapabilityRequestable('canUseCloudExecution');
+      const runCodeRequested =
+        cloudExecutionRequestable &&
         executionModelMetadata?.capabilities?.codeExecution === true &&
-        entitlementState.codeExecutionAvailable &&
-        isCapabilityRequestable('canUseCloudExecution') &&
-        useChatViewStore.getState().features.codeExecution;
+        (viewState.runCodeByConversation[conversationId] === true ||
+          options?.skillTools?.codeExecution === true);
       const officeFormat = useOutputFormatStore.getState().format;
-      const officeCreationEnabled =
-        FEATURES.codeExecution &&
+      const officeCreationRequested =
+        cloudExecutionRequestable &&
         executionModelMetadata?.capabilities?.tools === true &&
-        entitlementState.codeExecutionAvailable &&
-        isCapabilityRequestable('canUseCloudExecution') &&
-        (useChatViewStore.getState().features.codeExecution || officeFormat !== null);
+        (officeFormat !== null || options?.skillTools?.officeCreation === true);
       if (officeFormat !== null) useOutputFormatStore.getState().setFormat(null);
       const requestedWorkMode = options?.workMode ?? useChatViewStore.getState().workMode;
       const workMode = isCapabilityRequestable('canUseAgiWork') ? requestedWorkMode : 'chat';
@@ -2440,6 +3241,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       let lastParsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
       const turnGeneratedFiles: GeneratedFileWire[] = [];
       const turnInteractiveCards: InteractiveCard[] = [];
+      const turnCardTextOffsets: Record<string, number> = {};
+      const turnNativeCitations: NativeCitation[] = [];
+      const inlineCitations = createInlineCitationMarkers();
+      let liveSources: ReturnType<typeof turnSourcesWithActivity> = [];
+      let liveGeneratedFiles: ReturnType<typeof generatedFileMetadataFromWire> | undefined;
+      let liveInteractiveCards: InteractiveCard[] | undefined;
       let turnFinishReason: string | undefined;
       let turnStreamError: StreamFailure | undefined;
       let agentActivity: AgentActivityState | undefined;
@@ -2448,6 +3255,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       let turnResearch: ResearchRunState | undefined;
       let turnAgiWorkPlan: AgiWorkPlanStep[] | undefined;
       let turnAgiWorkPlanReview: AgiWorkPlanReviewState | undefined;
+      let turnCodeExecutionResult: CodeExecutionResult | undefined;
+
+      const webSearchRequested = webSearchEnabled && !isFreeQuotaChat;
+      const webSearchAskedInText = hasExplicitWebSearchIntent(content);
+      if (webSearchRequested || webSearchAskedInText) {
+        msgStore.setState((s) => ({
+          messages: {
+            ...s.messages,
+            [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+              m.id === assistantMessageId
+                ? {
+                    ...m,
+                    metadata: {
+                      ...m.metadata,
+                      ...(webSearchRequested ? { webSearchRequested: true } : {}),
+                      ...(webSearchAskedInText ? { webSearchAskedInText: true } : {}),
+                    },
+                  }
+                : m,
+            ),
+          },
+        }));
+      }
 
       const thinkingEnabled =
         useModelStore.getState().thinkingEnabledPerModel[executionModel] ?? false;
@@ -2459,6 +3289,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         thinkingEnabled,
       });
 
+      if (userMessage) {
+        recordInFlightTurnSend({
+          conversationId,
+          questionId: userMessage.id,
+          operationId: assistantMessageId,
+        });
+      }
       await streamChat(
         isFreeQuotaChat
           ? {
@@ -2490,7 +3327,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 : {}),
               thinking: thinkingEnabled,
               ...(turnEffort ? { effort: turnEffort } : {}),
-              ...(webSearchEnabled ? { web_search: true } : {}),
+              ...(webSearchEnabled
+                ? { web_search: true }
+                : webSearchTurnedOff
+                  ? { web_search: false }
+                  : {}),
               ...(webSearchEnabled || SHARED_PAGE_URL.test(content) ? { web_fetch: true } : {}),
               ...(webSearchEnabled && options?.searchRequested ? { search_requested: true } : {}),
               ...(researchEnabled ? { research: true } : {}),
@@ -2504,6 +3345,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                         : {}),
                       ...(options.researchResume.deliverable
                         ? { deliverable: options.researchResume.deliverable }
+                        : {}),
+                      ...(options.researchResume.guidance
+                        ? { guidance: options.researchResume.guidance }
                         : {}),
                     },
                   }
@@ -2524,9 +3368,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     },
                   }
                 : {}),
-              ...(codeExecutionEnabled ? { code_execution: true } : {}),
-              ...(officeCreationEnabled ? { office_creation: true } : {}),
-              ...(officeCreationEnabled && officeFormat ? { office_format: officeFormat } : {}),
+              ...(runCodeRequested
+                ? { code_execution: true }
+                : cloudExecutionPermitted
+                  ? {}
+                  : { code_execution: false }),
+              ...(officeCreationRequested
+                ? {
+                    office_creation: true,
+                    ...(officeFormat !== null ? { office_format: officeFormat } : {}),
+                  }
+                : cloudExecutionPermitted
+                  ? {}
+                  : { office_creation: false }),
               x_interactive_cards: MOBILE_INTERACTIVE_CARD_CAPABILITY,
               ...(disabledConnectorIds.length > 0
                 ? { disabled_connector_ids: disabledConnectorIds }
@@ -2557,6 +3411,41 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               },
             }));
           },
+          onProjectSources: (citations) => {
+            if (!isTurnAccountCurrent()) return;
+            msgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+                  m.id === assistantMessageId
+                    ? {
+                        ...m,
+                        metadata: {
+                          ...m.metadata,
+                          [PROJECT_FILE_CITATIONS_METADATA_KEY]: citations,
+                        },
+                      }
+                    : m,
+                ),
+              },
+            }));
+          },
+          onPastChatSources: (citations) => {
+            if (!isTurnAccountCurrent()) return;
+            msgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+                  m.id === assistantMessageId
+                    ? {
+                        ...m,
+                        metadata: { ...m.metadata, [PAST_CHAT_CITATIONS_METADATA_KEY]: citations },
+                      }
+                    : m,
+                ),
+              },
+            }));
+          },
           onModelSubstitution: (substitution) => {
             if (!isTurnAccountCurrent()) return;
             msgStore.setState((s) => ({
@@ -2565,6 +3454,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
                   m.id === assistantMessageId
                     ? { ...m, metadata: { ...m.metadata, ...substitution } }
+                    : m,
+                ),
+              },
+            }));
+          },
+          onTurnNotices: (notices) => {
+            if (!isTurnAccountCurrent()) return;
+            msgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, metadata: { ...m.metadata, ...notices } }
                     : m,
                 ),
               },
@@ -2597,6 +3499,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const firstReference = !activeCloudRuns.has(conversationId);
             activeCloudRuns.set(conversationId, { ...cloudAgentRun });
             if (firstReference) options?.onRunStarted?.(cloudAgentRun.runId);
+            if (firstReference && userMessage) {
+              recordInFlightTurnRun({
+                conversationId,
+                questionId: userMessage.id,
+                runId: cloudAgentRun.runId,
+              });
+            }
             const currentMsgStore = getConversationMessageStore(conversationId);
             currentMsgStore.setState((s) => ({
               messages: {
@@ -2675,7 +3584,27 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const newReasoning = parsedTags.reasoning;
 
             accumulateToolCallDelta(toolAcc, delta);
+            const nativeCitation = nativeCitationFromDelta(delta[WEB_SEARCH_CITATION_DELTA_KEY]);
+            if (nativeCitation) turnNativeCitations.push(nativeCitation);
             const toolCalls = toolCallList(toolAcc);
+            if (
+              nativeCitation ||
+              delta.x_tool_result ||
+              delta.x_search_results ||
+              (delta.x_agent_event &&
+                messageKindForAgentEvent(delta.x_agent_event.event.type) === 'citation')
+            ) {
+              liveSources = turnSourcesWithActivity(toolCalls, turnNativeCitations, agentActivity);
+            }
+            if (nativeCitation) {
+              inlineCitations.recordCitation(nativeCitation.url, liveSources, newContent.length);
+            }
+            inlineCitations.recordSearchResults(delta.x_search_results);
+            const displayedContent = inlineCitations.apply(newContent, liveSources, false);
+            if (delta.x_code_result) {
+              turnCodeExecutionResult =
+                codeExecutionResultFromDelta(delta.x_code_result) ?? turnCodeExecutionResult;
+            }
 
             const nextResearch = reduceResearchDelta(turnResearch, delta);
             if (nextResearch) turnResearch = nextResearch;
@@ -2695,6 +3624,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             if (delta.x_generated_files) {
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
+              liveGeneratedFiles = generatedFileMetadataFromWire(turnGeneratedFiles);
             }
 
             if (delta.x_interactive_card) {
@@ -2703,6 +3633,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 const existing = turnInteractiveCards.findIndex((c) => c.cardId === card.cardId);
                 if (existing >= 0) turnInteractiveCards[existing] = card;
                 else turnInteractiveCards.push(card);
+                recordCardTextOffset(turnCardTextOffsets, card.cardId, newContent);
+                liveInteractiveCards = [...turnInteractiveCards];
               }
             }
 
@@ -2720,7 +3652,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const thinkingStartedAt = thinkingStartTimes.get(conversationId);
             const currentMsgStore = getConversationMessageStore(conversationId);
 
-            set({ streamingContent: newContent, streamingReasoning: newReasoning });
+            set({ streamingContent: displayedContent, streamingReasoning: newReasoning });
             currentMsgStore.setState((s) => {
               const msgs = s.messages[conversationId];
               if (!msgs) return s;
@@ -2730,18 +3662,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               const nextMsgs = [...msgs];
               nextMsgs[index] = {
                 ...target,
-                content: newContent,
+                content: displayedContent,
                 reasoning: newReasoning || undefined,
                 isStreaming: true,
                 ...(toolCalls.length > 0 ? { toolCalls } : {}),
+                ...(liveSources.length > 0 ? { citations: liveSources } : {}),
+                ...(liveInteractiveCards ? { interactiveCards: liveInteractiveCards } : {}),
                 ...(thinkingStartedAt !== undefined ||
                 agentActivity ||
                 cloudAgentRun ||
                 turnResearch ||
-                turnAgiWorkPlan
+                turnAgiWorkPlan ||
+                liveGeneratedFiles ||
+                liveInteractiveCards ||
+                turnCodeExecutionResult
                   ? {
                       metadata: {
                         ...target.metadata,
+                        ...(turnCodeExecutionResult
+                          ? { codeExecutionResult: turnCodeExecutionResult, isExecutingCode: false }
+                          : {}),
+                        ...(liveGeneratedFiles ? { generatedFiles: liveGeneratedFiles } : {}),
+                        ...(liveInteractiveCards
+                          ? {
+                              interactiveCards: liveInteractiveCards,
+                              interactiveCardTextOffsets: { ...turnCardTextOffsets },
+                            }
+                          : {}),
                         ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
                         ...(agentActivity ? { agentActivity } : {}),
                         ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
@@ -2770,10 +3717,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             thinkingEndTimes.delete(conversationId);
 
             const finalToolCalls = toolCallList(toolAcc);
+            const finalCitations = turnSourcesWithActivity(
+              finalToolCalls,
+              turnNativeCitations,
+              agentActivity,
+            );
 
             const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
-            const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
+            const finalContent = inlineCitations.hasPlacements()
+              ? inlineCitations.apply(lastParsedTags.content, finalCitations, true)
+              : (msgs.find((m) => m.id === assistantMessageId)?.content ?? '');
             if (
               turnProducedNothing({
                 content: finalContent,
@@ -2800,10 +3754,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 conversationId,
                 assistantMessageId,
                 completedAt,
+                artifactProvenance.scope,
               ),
               generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
             );
-            const finalCitations = citationsFromToolCalls(finalToolCalls);
             captureArtifactsFromMessage(
               finalContent,
               assistantMessageId,
@@ -2812,10 +3766,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               completedAt,
               artifactProvenance,
             );
+            if (
+              agentActivity?.status === 'running' &&
+              turnStreamError === undefined &&
+              !isStoppedFinishReason(turnFinishReason) &&
+              turnPendingApprovals.length === 0 &&
+              turnPendingInputs.length === 0 &&
+              turnResearch === undefined &&
+              turnAgiWorkPlanReview?.awaitingApproval !== true
+            ) {
+              agentActivity = finishAgentActivityLocally(agentActivity, {
+                status: 'completed',
+                completedAtMs: Date.now(),
+              });
+            }
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
                     ...m,
+                    content: finalContent,
                     isStreaming: false,
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
@@ -2826,11 +3795,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...pendingToolInputPatch(cloudAgentRun?.runId, turnPendingInputs),
                     metadata: {
                       ...m.metadata,
+                      ...turnSourceMetadata(finalToolCalls, turnNativeCitations),
                       ...(generatedFilesMetadata.length > 0
                         ? { generatedFiles: generatedFilesMetadata }
                         : {}),
                       ...(turnInteractiveCards.length > 0
-                        ? { interactiveCards: turnInteractiveCards }
+                        ? {
+                            interactiveCards: turnInteractiveCards,
+                            interactiveCardTextOffsets: { ...turnCardTextOffsets },
+                          }
                         : {}),
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
                       ...(turnFinishReason !== undefined ? { finishReason: turnFinishReason } : {}),
@@ -2891,6 +3864,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             if (turnStreamError === undefined && finalContent.trim()) {
               captureCompletedLocalMemory();
+              if (!cloudAgentRun) void announceReplyReadyInBackground(conversationId);
             }
           },
 
@@ -2906,7 +3880,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
-            const currentContent = get().streamingContent;
+            const currentContent = turnContentOf(msgs, assistantMessageId);
 
             if (error instanceof ApiPaywallError) {
               if (agentActivity) {
@@ -2921,21 +3895,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 turnResearch;
               const updatedMsgs = msgs.map((m) =>
                 m.id === assistantMessageId
-                  ? {
-                      ...m,
-                      content: currentContent || '',
-                      isStreaming: false,
-                      ...(agentActivity || cloudAgentRun || turnResearch
-                        ? {
-                            metadata: {
-                              ...m.metadata,
-                              ...(agentActivity ? { agentActivity } : {}),
-                              ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
-                              ...(turnResearch ? { research: { ...turnResearch } } : {}),
-                            },
-                          }
-                        : {}),
-                    }
+                  ? settleMessageTurnState(
+                      {
+                        ...m,
+                        content: currentContent || '',
+                        isStreaming: false,
+                        ...(agentActivity || cloudAgentRun || turnResearch
+                          ? {
+                              metadata: {
+                                ...m.metadata,
+                                ...(agentActivity ? { agentActivity } : {}),
+                                ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                                ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                              },
+                            }
+                          : {}),
+                      },
+                      'failed',
+                      Date.now(),
+                      paywallActivityErrorFromApiError(error),
+                    )
                   : m,
               );
               currentMsgStore.setState((s) => ({
@@ -3019,24 +3998,31 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (__DEV__) {
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
+            const connectionLost = error instanceof StreamConnectionLostError;
+            const httpFailureMessage =
+              error instanceof ApiHttpError ? (freeUsageLimitMessage(error) ?? error.message) : '';
             const failure =
               error instanceof ApiHttpError
                 ? {
-                    message: withFailureReference(error.message, error.requestId),
+                    message: withFailureReference(httpFailureMessage, error.requestId),
                     code: error.code,
                   }
-                : { message: GENERIC_TURN_FAILURE, code: null };
+                : connectionLost
+                  ? { message: CONNECTION_LOST_FAILURE.message, code: null }
+                  : { message: GENERIC_TURN_FAILURE, code: null };
             const turnFailure: StreamFailure =
               error instanceof ApiHttpError
                 ? {
-                    message: error.message,
+                    message: httpFailureMessage,
                     ...(error.code ? { code: error.code } : {}),
                     ...(error.retryAfterSeconds !== undefined
                       ? { retryAfterSeconds: error.retryAfterSeconds }
                       : {}),
                     ...(error.requestId ? { requestId: error.requestId } : {}),
                   }
-                : { message: GENERIC_TURN_FAILURE };
+                : connectionLost
+                  ? { ...CONNECTION_LOST_FAILURE }
+                  : { message: GENERIC_TURN_FAILURE };
             if (agentActivity) {
               agentActivity = finishAgentActivityLocally(agentActivity, {
                 status: 'failed',
@@ -3125,7 +4111,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
       const currentMsgStore = getConversationMessageStore(conversationId);
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
-      const currentContent = get().streamingContent;
+      const currentContent = turnContentOf(msgs, assistantMessageId);
 
       if (caughtErr instanceof ApiPaywallError) {
         const updatedMsgs = msgs.map((m) =>
@@ -3207,6 +4193,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return true;
     } finally {
+      if (userMessage) forgetInFlightTurnRun(conversationId, userMessage.id);
       if (!shouldUseLocalRuntime || ownsLocalTurn()) {
         thinkingStartTimes.delete(conversationId);
         thinkingEndTimes.delete(conversationId);
@@ -3225,12 +4212,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ) {
           const sweepStore = getConversationMessageStore(conversationId);
           const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+          const stalled = stalledConversations.delete(conversationId);
           if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
             const completedAtMs = Date.now();
             const settledMessages = sweepMsgs.map((m) =>
               m.id === assistantMessageId && m.isStreaming
                 ? settleMessageTurnState(
-                    { ...m, isStreaming: false },
+                    stalled ? stoppedByUser(m) : { ...m, isStreaming: false },
                     controller.signal.aborted ? 'cancelled' : 'failed',
                     completedAtMs,
                     controller.signal.aborted ? undefined : GENERIC_TURN_FAILURE,
@@ -3270,9 +4258,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     decision,
     guidance,
   ) => {
+    const set = failureScopedSet(conversationId);
     if (captureCloudAccountEpoch() === null) {
       set({
-        error: 'Sign in to resume this AGI Cloud task.',
+        error: CLOUD_RESUME_SIGN_IN,
         paywallError: null,
         ...streamingFlags(),
       });
@@ -3283,6 +4272,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!turn || turn.resolving) return;
     if (turn.conversationId !== conversationId) return;
     if (!turn.calls.some((c) => c.toolCallId === toolCallId)) return;
+    if (expireIfSuperseded(conversationId, assistantMessageId)) return;
 
     turn.decisions.set(toolCallId, decision);
     const trimmedGuidance = guidance?.trim();
@@ -3310,8 +4300,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       pushCloudAssistantUpdate(conversationId, projectedMessages, assistantMessageId);
     };
 
+    const approving = isApprovingToolDecision(decision);
     patchToolCall({
-      approvalDecision: decision,
+      approvalDecision: approving ? 'approved' : 'rejected',
+      approvalScope: approving ? decision : undefined,
       approvalGuidance: trimmedGuidance || undefined,
       requiresApproval: true,
     });
@@ -3333,7 +4325,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 ...m,
                 toolCalls: (m.toolCalls ?? []).map((t) => {
                   if (!t.toolCallId || !turn.decisions.has(t.toolCallId)) return t;
-                  return turn.decisions.get(t.toolCallId) === 'approved'
+                  const callDecision = turn.decisions.get(t.toolCallId);
+                  return callDecision !== undefined && isApprovingToolDecision(callDecision)
                     ? { ...t, status: 'running' as const, requiresApproval: false }
                     : {
                         ...t,
@@ -3357,6 +4350,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   },
 
   answerToolInput: async (conversationId, assistantMessageId, answers) => {
+    const set = failureScopedSet(conversationId);
     const existing = pendingApprovalTurns.get(assistantMessageId);
     if (existing?.resolving) return;
     const msgStore = getConversationMessageStore(conversationId);
@@ -3367,6 +4361,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!pausedInput || answers.length === 0) return;
     const pausedIds = new Set(pausedInput.toolCalls.map((call) => call.toolCallId));
     if (!answers.every((answer) => pausedIds.has(answer.toolCallId))) return;
+    setToolInputSendError(assistantMessageId, null);
+    if (expireIfSuperseded(conversationId, assistantMessageId)) return;
 
     pendingApprovalTurns.set(assistantMessageId, {
       runId: pausedInput.runId,
@@ -3381,21 +4377,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       inputAnswers: answers,
       pausedInput,
     });
-    msgStore.setState((s) => ({
-      messages: {
-        ...s.messages,
-        [conversationId]: (s.messages[conversationId] ?? []).map((m) => {
-          if (m.id !== assistantMessageId) return m;
-          const { pendingToolInput: _answered, ...rest } = m;
-          return rest;
-        }),
-      },
-    }));
 
     await get().continuePausedCloudTurn(conversationId, assistantMessageId);
   },
 
   continuePausedCloudTurn: async (conversationId, assistantMessageId) => {
+    const set = failureScopedSet(conversationId);
     const turn = pendingApprovalTurns.get(assistantMessageId);
     if (!turn || turn.conversationId !== conversationId) return;
     const approvalAccountEpoch = captureCloudAccountEpoch();
@@ -3413,9 +4400,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ),
           },
         }));
+        setToolInputSendError(assistantMessageId, CLOUD_RESUME_SIGN_IN);
       }
       set({
-        error: 'Sign in to resume this AGI Cloud task.',
+        error: CLOUD_RESUME_SIGN_IN,
         paywallError: null,
         ...streamingFlags(),
       });
@@ -3430,9 +4418,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       approvalExecutionGeneration === cloudExecutionGeneration &&
       isCloudAccountEpochCurrent(approvalAccountEpoch);
     const msgStore = getConversationMessageStore(conversationId);
+    if (expireIfSuperseded(conversationId, assistantMessageId)) return;
 
-    const existingController = abortControllers.get(conversationId);
-    if (existingController) existingController.abort();
     const controller = new AbortController();
     abortControllers.set(conversationId, controller);
     streamingConversations.add(conversationId);
@@ -3472,11 +4459,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       ...(currentMessage?.interactiveCards ??
         readPersistedInteractiveCards(currentMessage?.metadata)),
     ];
+    const turnCardTextOffsets = storedCardTextOffsets(currentMessage?.metadata);
     const turnPendingApprovals: PendingApprovalCall[] = [];
     const turnPendingInputs: PendingToolInputCall[] = [];
+    const turnNativeCitations: NativeCitation[] = storedNativeCitations(currentMessage?.metadata);
+    const inlineCitations = createInlineCitationMarkers(
+      parseLocalThinking(assistantContent).content,
+    );
     let turnFinishReason: string | undefined;
     let turnStreamError: StreamFailure | undefined;
     let agentActivity = readAgentActivityState(currentMessage?.metadata?.agentActivity);
+    let liveSources: ReturnType<typeof turnSourcesWithActivity> = [];
+    const storedRun = ManagedCloudAgentRunReferenceSchema.safeParse(
+      currentMessage?.metadata?.cloudAgentRun,
+    );
+    const resumeAfterSequence = Math.max(
+      storedRun.success && storedRun.data.runId === turn.runId ? storedRun.data.lastSequence : -1,
+      agentActivity?.lastSequence ?? -1,
+    );
+    let unacknowledgedPublicText = '';
 
     try {
       await resumePausedTurn(
@@ -3492,7 +4493,27 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               agentActivity = applyAgentActivityEvent(agentActivity, delta.x_agent_event);
             }
 
-            if (delta.content) cloudContentRaw += delta.content;
+            let contentChunk = delta.content;
+            const canonicalText =
+              delta.x_agent_event?.event.type === 'text-delta'
+                ? delta.x_agent_event.event.delta
+                : undefined;
+            if (delta.durableReplay && canonicalText !== undefined) {
+              const reconciled = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              );
+              unacknowledgedPublicText = reconciled.pending;
+              contentChunk = reconciled.unmatchedIncoming;
+            }
+            if (contentChunk) cloudContentRaw += contentChunk;
+            if (!delta.durableReplay && contentChunk) unacknowledgedPublicText += contentChunk;
+            if (!delta.durableReplay && canonicalText !== undefined) {
+              unacknowledgedPublicText = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              ).pending;
+            }
             const parsedTags = parseLocalThinking(cloudContentRaw);
             const newContent = parsedTags.content;
             const newReasoning = [priorReasoning, parsedTags.reasoning]
@@ -3500,7 +4521,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               .join('\n\n');
 
             accumulateToolCallDelta(toolAcc, delta);
+            const nativeCitation = nativeCitationFromDelta(delta[WEB_SEARCH_CITATION_DELTA_KEY]);
+            if (nativeCitation) turnNativeCitations.push(nativeCitation);
             const toolCalls = toolCallList(toolAcc);
+            if (
+              nativeCitation ||
+              delta.x_tool_result ||
+              delta.x_search_results ||
+              (delta.x_agent_event &&
+                messageKindForAgentEvent(delta.x_agent_event.event.type) === 'citation')
+            ) {
+              liveSources = turnSourcesWithActivity(toolCalls, turnNativeCitations, agentActivity);
+            }
+            if (nativeCitation) {
+              inlineCitations.recordCitation(nativeCitation.url, liveSources, newContent.length);
+            }
+            inlineCitations.recordSearchResults(delta.x_search_results);
+            const displayedContent = inlineCitations.apply(newContent, liveSources, false);
 
             const approvalReq = delta.x_tool_approval_request;
             if (
@@ -3527,6 +4564,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 );
                 if (existing >= 0) turnInteractiveCards[existing] = card;
                 else turnInteractiveCards.push(card);
+                recordCardTextOffset(turnCardTextOffsets, card.cardId, newContent);
               }
             }
 
@@ -3540,16 +4578,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
-                    ...m,
-                    content: newContent,
+                    ...withoutAnsweredInput(m, turn),
+                    content: displayedContent,
                     reasoning: newReasoning || undefined,
                     isStreaming: true,
                     ...(toolCalls.length > 0 ? { toolCalls } : {}),
-                    ...(agentActivity ? { metadata: { ...m.metadata, agentActivity } } : {}),
+                    ...(liveSources.length > 0 ? { citations: liveSources } : {}),
+                    ...(agentActivity
+                      ? { metadata: { ...withoutAnsweredInput(m, turn).metadata, agentActivity } }
+                      : {}),
                   }
                 : m,
             );
-            set({ streamingContent: newContent, streamingReasoning: newReasoning });
+            set({ streamingContent: displayedContent, streamingReasoning: newReasoning });
             innerMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
             }));
@@ -3558,9 +4599,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           onDone: () => {
             if (!isApprovalAccountCurrent()) return;
             const finalToolCalls = toolCallList(toolAcc);
+            const finalCitations = turnSourcesWithActivity(
+              finalToolCalls,
+              turnNativeCitations,
+              agentActivity,
+            );
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
-            const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
+            const finalContent = inlineCitations.hasPlacements()
+              ? inlineCitations.apply(
+                  parseLocalThinking(cloudContentRaw).content,
+                  finalCitations,
+                  true,
+                )
+              : (msgs.find((m) => m.id === assistantMessageId)?.content ?? '');
             const completedAt = new Date().toISOString();
             const convTitle =
               innerMsgStore.getState().conversations.find((c) => c.id === conversationId)?.title ??
@@ -3572,10 +4624,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 conversationId,
                 assistantMessageId,
                 completedAt,
+                approvalArtifactProvenance.scope,
               ),
               generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
             );
-            const finalCitations = citationsFromToolCalls(finalToolCalls);
             captureArtifactsFromMessage(
               finalContent,
               assistantMessageId,
@@ -3586,6 +4638,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             );
 
             const phoneStepsPaused = pendingPhoneSteps(turnPendingApprovals);
+            if (
+              agentActivity &&
+              turnPendingApprovals.length === 0 &&
+              turnPendingInputs.length === 0
+            ) {
+              agentActivity = settledTurnActivity(agentActivity, {
+                toolCalls: finalToolCalls,
+                streaming: false,
+                hasText: /\S/.test(finalContent),
+              });
+            }
             const hasTurnMetadata =
               turnFinishReason !== undefined ||
               turnStreamError !== undefined ||
@@ -3593,11 +4656,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               generatedFilesMetadata.length > 0 ||
               turnInteractiveCards.length > 0 ||
               phoneStepsPaused.length > 0 ||
+              finalCitations.length > 0 ||
               turn.deviceResults !== undefined;
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
-                    ...m,
+                    ...withoutAnsweredInput(m, turn),
+                    content: finalContent,
                     isStreaming: false,
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
@@ -3609,12 +4674,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(hasTurnMetadata
                       ? {
                           metadata: {
-                            ...m.metadata,
+                            ...withoutAnsweredInput(m, turn).metadata,
+                            ...turnSourceMetadata(finalToolCalls, turnNativeCitations),
                             ...(generatedFilesMetadata.length > 0
                               ? { generatedFiles: generatedFilesMetadata }
                               : {}),
                             ...(turnInteractiveCards.length > 0
-                              ? { interactiveCards: turnInteractiveCards }
+                              ? {
+                                  interactiveCards: turnInteractiveCards,
+                                  interactiveCardTextOffsets: { ...turnCardTextOffsets },
+                                }
                               : {}),
                             ...(turnFinishReason !== undefined
                               ? { finishReason: turnFinishReason }
@@ -3675,29 +4744,41 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }
             const innerMsgStore = getConversationMessageStore(conversationId);
             const msgs = innerMsgStore.getState().messages[conversationId] ?? [];
-            const currentContent = get().streamingContent || cloudContentRaw;
+            const currentContent = turnContentOf(msgs, assistantMessageId);
             const inputTurn = turn.inputAnswers !== undefined;
             const terminal = !inputTurn && isTerminalResumeError(error);
             const inactiveReason = inputTurn ? inactiveInputReason(error) : null;
             const retainDeviceResults =
               turn.deviceResults !== undefined && !terminal && !controller.signal.aborted;
-            if (retainDeviceResults) {
+            const pausedAgain =
+              !terminal &&
+              inactiveReason === null &&
+              !controller.signal.aborted &&
+              turnPendingApprovals.length > 0;
+            if (pausedAgain) {
+              pendingApprovalTurns.set(
+                assistantMessageId,
+                pausedTurn(turn.runId, conversationId, turnPendingApprovals),
+              );
+            } else if (retainDeviceResults) {
               turn.resultsUndelivered = true;
             } else if (turn.deviceResults || terminal || inputTurn) {
               pendingApprovalTurns.delete(assistantMessageId);
             }
             const checkpointIds = new Set(
-              inputTurn || (turn.deviceResults && !terminal)
+              pausedAgain || inputTurn || (turn.deviceResults && !terminal)
                 ? []
                 : turn.calls.map((c) => c.toolCallId),
             );
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
-                    ...m,
+                    ...(inactiveReason === null
+                      ? m
+                      : withToolInputOutcome(withoutAnsweredInput(m, turn), 'expired')),
                     content: currentContent || m.content,
                     isStreaming: false,
-                    ...(inputTurn && inactiveReason === null && turn.pausedInput
+                    ...(inputTurn && !pausedAgain && inactiveReason === null && turn.pausedInput
                       ? { pendingToolInput: turn.pausedInput }
                       : {}),
                     toolCalls: (m.toolCalls ?? []).map((t) =>
@@ -3722,18 +4803,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
             }));
             pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+            if (
+              inputTurn &&
+              !pausedAgain &&
+              inactiveReason === null &&
+              turn.pausedInput &&
+              !controller.signal.aborted
+            ) {
+              setToolInputSendError(assistantMessageId, INPUT_SEND_FAILED);
+            }
             set({
               ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
               error:
-                error instanceof ApiHttpError
-                  ? withFailureReference(error.message, error.requestId)
-                  : GENERIC_TURN_FAILURE,
+                inactiveReason !== null
+                  ? INACTIVE_INPUT_MESSAGE
+                  : error instanceof ApiHttpError
+                    ? withFailureReference(
+                        freeUsageLimitMessage(error) ?? error.message,
+                        error.requestId,
+                      )
+                    : GENERIC_TURN_FAILURE,
             });
           },
         },
         controller.signal,
+        resumeAfterSequence,
       );
     } catch (caughtErr) {
       if (__DEV__ && isApprovalAccountCurrent()) {
@@ -3745,7 +4841,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const inputTurn = turn.inputAnswers !== undefined;
       const terminal = !inputTurn && isTerminalResumeError(caughtErr);
       const inactiveReason = inputTurn ? inactiveInputReason(caughtErr) : null;
-      if (turn.deviceResults !== undefined && !terminal && !controller.signal.aborted) {
+      const pausedAgain =
+        !terminal &&
+        inactiveReason === null &&
+        !controller.signal.aborted &&
+        turnPendingApprovals.length > 0;
+      if (pausedAgain) {
+        pendingApprovalTurns.set(
+          assistantMessageId,
+          pausedTurn(turn.runId, conversationId, turnPendingApprovals),
+        );
+      } else if (turn.deviceResults !== undefined && !terminal && !controller.signal.aborted) {
         turn.resultsUndelivered = true;
       } else if (turn.deviceResults || terminal || inputTurn) {
         pendingApprovalTurns.delete(assistantMessageId);
@@ -3756,13 +4862,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId
             ? {
-                ...m,
+                ...(inactiveReason === null
+                  ? m
+                  : withToolInputOutcome(withoutAnsweredInput(m, turn), 'expired')),
                 content: cloudContentRaw || m.content,
                 isStreaming: false,
-                ...(inputTurn && inactiveReason === null && turn.pausedInput
+                ...(inputTurn && !pausedAgain && inactiveReason === null && turn.pausedInput
                   ? { pendingToolInput: turn.pausedInput }
                   : {}),
                 toolCalls: (m.toolCalls ?? []).map((tool) =>
+                  !pausedAgain &&
                   !inputTurn &&
                   tool.toolCallId &&
                   (!turn.deviceResults || terminal) &&
@@ -3783,8 +4892,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
         }));
         pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
+        if (inputTurn && !pausedAgain && inactiveReason === null && turn.pausedInput) {
+          setToolInputSendError(assistantMessageId, INPUT_SEND_FAILED);
+        }
       }
-      set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '' });
+      set({
+        ...streamingFlags(),
+        streamingContent: '',
+        streamingReasoning: '',
+        ...(inactiveReason !== null ? { error: INACTIVE_INPUT_MESSAGE } : {}),
+      });
     } finally {
       lastDeltaTimes.delete(conversationId);
       if (abortControllers.get(conversationId) === controller) {
@@ -3792,15 +4909,41 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
       streamingConversations.delete(conversationId);
       cloudStreamingConversations.delete(conversationId);
+      if (
+        controller.signal.aborted &&
+        pendingApprovalTurns.get(assistantMessageId) === turn &&
+        isApprovalAccountCurrent()
+      ) {
+        pendingApprovalTurns.delete(assistantMessageId);
+        const stoppedStore = getConversationMessageStore(conversationId);
+        const shownMessages = stoppedStore.getState().messages[conversationId] ?? [];
+        const stoppedMessages = shownMessages.map((m) => {
+          if (m.id !== assistantMessageId) return m;
+          if (turn.inputAnswers !== undefined && m.pendingToolInput !== undefined) {
+            return withToolInputOutcome(withoutAnsweredInput(m, turn), 'expired');
+          }
+          if (turn.deviceResults && m.metadata?.phoneDeviceSteps !== undefined) {
+            return { ...m, metadata: { ...m.metadata, phoneDeviceSteps: undefined } };
+          }
+          return m;
+        });
+        if (stoppedMessages.some((m, index) => m !== shownMessages[index])) {
+          stoppedStore.setState((s) => ({
+            messages: { ...s.messages, [conversationId]: stoppedMessages },
+          }));
+          pushCloudAssistantUpdate(conversationId, stoppedMessages, assistantMessageId);
+        }
+      }
       if (isApprovalAccountCurrent()) {
         const sweepStore = getConversationMessageStore(conversationId);
         const sweepMsgs = sweepStore.getState().messages[conversationId] ?? [];
+        const stalled = stalledConversations.delete(conversationId);
         if (sweepMsgs.some((m) => m.id === assistantMessageId && m.isStreaming)) {
           const completedAtMs = Date.now();
           const settledMessages = sweepMsgs.map((m) =>
             m.id === assistantMessageId && m.isStreaming
               ? settleMessageTurnState(
-                  { ...m, isStreaming: false },
+                  stalled ? stoppedByUser(m) : { ...m, isStreaming: false },
                   controller.signal.aborted ? 'cancelled' : 'failed',
                   completedAtMs,
                   controller.signal.aborted ? undefined : GENERIC_TURN_FAILURE,
@@ -3818,6 +4961,357 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
       set({ ...streamingFlags() });
       void settlePhoneDeviceSteps(conversationId, assistantMessageId);
+      flushDeferredSend(conversationId);
+    }
+  },
+
+  continueCloudAnswer: async (conversationId, assistantMessageId, turn) => {
+    const set = failureScopedSet(conversationId);
+    const unchecked =
+      turn === undefined
+        ? cloudAnswerToContinue(conversationId, assistantMessageId, 'stalled')
+        : null;
+    const mustCheckRun = unchecked !== null && hasUnfinishedRun(unchecked.answer);
+    let target = mustCheckRun
+      ? unchecked
+      : cloudAnswerToContinue(conversationId, assistantMessageId, turn ?? 'idle');
+    if (!target) return false;
+
+    const accountEpoch = captureCloudAccountEpoch();
+    const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
+    if (accountEpoch === null || (FEATURES.auth && isClerkLoaded && !isClerkSignedIn)) {
+      set({ error: 'Sign in to use AGI Cloud.', paywallError: null });
+      return false;
+    }
+
+    if (mustCheckRun) {
+      cloudRunChecks.add(conversationId);
+      let verdict: InFlightTurnVerdict;
+      try {
+        verdict = await askWhetherTurnIsRunning(conversationId, new AbortController().signal);
+      } catch {
+        verdict = 'unknown';
+      } finally {
+        cloudRunChecks.delete(conversationId);
+      }
+      if (!isCloudAccountEpochCurrent(accountEpoch)) return false;
+      if (verdict === 'running' || verdict === 'waiting') {
+        set({ error: IN_FLIGHT_TURN_WAITING_MESSAGE, paywallError: null });
+        return false;
+      }
+      if (verdict !== 'stalled' && verdict !== 'idle') {
+        set({
+          error: 'Could not continue the Cloud response. Check your connection and retry.',
+          paywallError: null,
+        });
+        return false;
+      }
+      target = cloudAnswerToContinue(conversationId, assistantMessageId, 'stalled');
+      if (!target || !hasUnfinishedRun(target.answer)) return false;
+    }
+    const { conversation, thread, answer, model } = target;
+    const generation = cloudExecutionGeneration;
+    const isAccountCurrent = () =>
+      generation === cloudExecutionGeneration && isCloudAccountEpochCurrent(accountEpoch);
+    const provenance: MobileArtifactProvenance = { scope: 'cloud', ownerId: accountEpoch.ownerId };
+
+    const chatView = useChatViewStore.getState();
+    const viewSystemPrompt = buildChatViewSystemPrompt(
+      chatView.chatMode,
+      styleForConversation(chatView, conversationId),
+    );
+    const disabledConnectorIds = chatView.disabledConnectorIdsByConversation[conversationId] ?? [];
+    const messages: WireHistoryEntry[] = [
+      ...(viewSystemPrompt ? [{ role: 'system', content: viewSystemPrompt }] : []),
+      ...wireHistory(thread, 'cloud'),
+      { role: 'user', content: CONTINUE_GENERATION_INSTRUCTION },
+    ];
+
+    const seedContent = answer.content;
+    const priorReasoning = answer.reasoning ?? '';
+    const priorFinishReason = answer.metadata?.finishReason;
+    const priorStreamError = answer.metadata?.streamError;
+    const controller = new AbortController();
+    abortControllers.set(conversationId, controller);
+    streamingConversations.add(conversationId);
+    cloudStreamingConversations.add(conversationId);
+    cancelledBeforeStream.delete(conversationId);
+    lastDeltaTimes.set(conversationId, Date.now());
+
+    const patchAnswer = (patch: (message: ChatMessage) => ChatMessage): ChatMessage[] => {
+      const store = getConversationMessageStore(conversationId);
+      const next = (store.getState().messages[conversationId] ?? []).map((m) =>
+        m.id === assistantMessageId ? patch(m) : m,
+      );
+      store.setState((s) => ({ messages: { ...s.messages, [conversationId]: next } }));
+      return next;
+    };
+    const releaseConversation = () => {
+      abortControllers.delete(conversationId);
+      streamingConversations.delete(conversationId);
+      cloudStreamingConversations.delete(conversationId);
+      activeCloudRuns.delete(conversationId);
+    };
+
+    patchAnswer((m) => ({
+      ...m,
+      isStreaming: true,
+      metadata: {
+        ...m.metadata,
+        finishReason: undefined,
+        ...(priorStreamError !== undefined ? { streamError: undefined } : {}),
+      },
+    }));
+    set({
+      ...streamingFlags(),
+      streamingContent: seedContent,
+      streamingReasoning: priorReasoning,
+      error: null,
+      failureCode: null,
+      paywallError: null,
+    });
+
+    let continuationRaw = '';
+    let continuationText = '';
+    let continuationReasoning = '';
+    let unacknowledgedPublicText = '';
+    let seam: { consumed: number; repaired: string } | null = null;
+    let finishReason: string | undefined;
+    let streamError: StreamFailure | undefined;
+    let cloudAgentRun: ManagedCloudAgentRunReference | undefined;
+
+    const continuation = (final: boolean): string => {
+      if (!seam) {
+        if (!final && continuationText.length < SEAM_INSPECTION_WINDOW) return '';
+        seam = {
+          consumed: continuationText.length,
+          repaired: repairContinuationSeam(seedContent, continuationText),
+        };
+      }
+      return seam.repaired + continuationText.slice(seam.consumed);
+    };
+    const reasoning = () =>
+      [priorReasoning, continuationReasoning].filter(Boolean).join('\n\n') || undefined;
+
+    try {
+      await streamChat(
+        {
+          model,
+          messages,
+          stream: true,
+          operationId: uuidv7(),
+          ...(CLOUD_CONVERSATION_ID.test(conversationId)
+            ? { conversation_id: conversationId }
+            : {}),
+          ...(useChatViewStore.getState().features.webSearch === false
+            ? { web_search: false }
+            : {}),
+          ...(disabledConnectorIds.length > 0
+            ? { disabled_connector_ids: disabledConnectorIds }
+            : {}),
+          ...(conversation.temporary === true &&
+          !useSettingsStore.getState().temporaryChatPersonalized
+            ? { personalization: false as const }
+            : {}),
+        },
+        {
+          onReconnecting: () => markReconnecting(set, assistantMessageId, true),
+          onRunReference: (reference) => {
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            const run = {
+              ...reference,
+              lastSequence: Math.max(cloudAgentRun?.lastSequence ?? -1, reference.lastSequence),
+            };
+            cloudAgentRun = run;
+            activeCloudRuns.set(conversationId, { ...run });
+            patchAnswer((m) => ({ ...m, metadata: { ...m.metadata, cloudAgentRun: { ...run } } }));
+          },
+          onDelta: (delta: StreamDelta) => {
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            markReconnecting(set, assistantMessageId, false);
+            lastDeltaTimes.set(conversationId, Date.now());
+
+            let chunk = delta.content;
+            const canonicalText =
+              delta.x_agent_event?.event.type === 'text-delta'
+                ? delta.x_agent_event.event.delta
+                : undefined;
+            if (delta.durableReplay && canonicalText !== undefined) {
+              const reconciled = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              );
+              unacknowledgedPublicText = reconciled.pending;
+              chunk = reconciled.unmatchedIncoming;
+            }
+            if (chunk) {
+              const previousText = continuationText;
+              continuationRaw += chunk;
+              const parsed = parseLocalThinking(continuationRaw);
+              // The parser trims leading whitespace, which here is the model's
+              // own word or paragraph boundary with the text it continues.
+              const leading = parsed.hasReasoning ? '' : (/^\s+/.exec(continuationRaw)?.[0] ?? '');
+              continuationText = leading + parsed.content;
+              continuationReasoning = parsed.reasoning;
+              if (!delta.durableReplay && continuationText.startsWith(previousText)) {
+                unacknowledgedPublicText += continuationText.slice(previousText.length);
+              }
+            }
+            if (!delta.durableReplay && canonicalText !== undefined) {
+              unacknowledgedPublicText = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              ).pending;
+            }
+            if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
+              finishReason = delta.finish_reason;
+            }
+            streamError ??= parseStreamFailure(delta.x_stream_error);
+
+            const content = seedContent + continuation(false);
+            const nextReasoning = reasoning();
+            set({ streamingContent: content, streamingReasoning: nextReasoning ?? '' });
+            patchAnswer((m) => ({ ...m, content, reasoning: nextReasoning, isStreaming: true }));
+          },
+          onDone: () => {
+            markReconnecting(set, assistantMessageId, false);
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            const added = continuation(true);
+            releaseConversation();
+            const failed = streamError !== undefined || !added.trim();
+            const content = seedContent + added;
+            const completedAt = new Date().toISOString();
+            let artifacts: NonNullable<ChatMessage['artifacts']> = [];
+            if (added) {
+              const conversationTitle =
+                getConversationMessageStore(conversationId)
+                  .getState()
+                  .conversations.find((c) => c.id === conversationId)?.title ?? '';
+              artifacts = mergeDerivedAndGeneratedFileArtifacts(
+                deriveChatMessageArtifacts(
+                  content,
+                  conversationId,
+                  assistantMessageId,
+                  completedAt,
+                  provenance.scope,
+                ),
+                generatedFileArtifactsFromWire(
+                  generatedFileWireFromMetadata(answer.metadata?.generatedFiles),
+                  completedAt,
+                ),
+              );
+              captureArtifactsFromMessage(
+                content,
+                assistantMessageId,
+                conversationId,
+                conversationTitle,
+                completedAt,
+                provenance,
+              );
+            }
+            const settled = patchAnswer((m) => ({
+              ...m,
+              content,
+              reasoning: reasoning(),
+              isStreaming: false,
+              ...(artifacts.length > 0 ? { artifacts } : {}),
+              metadata: {
+                ...m.metadata,
+                finishReason: failed ? priorFinishReason : finishReason,
+                ...(failed && priorStreamError !== undefined
+                  ? { streamError: priorStreamError }
+                  : {}),
+                ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+              },
+            }));
+            if (added) {
+              getConversationMessageStore(conversationId).setState((s) => ({
+                conversations: s.conversations.map((c) =>
+                  c.id === conversationId
+                    ? { ...c, lastMessage: content.slice(0, 100), updatedAt: completedAt }
+                    : c,
+                ),
+              }));
+              pushCloudAssistantUpdate(conversationId, settled, assistantMessageId);
+            }
+            set({
+              ...streamingFlags(),
+              streamingContent: '',
+              streamingReasoning: '',
+              ...(failed
+                ? {
+                    error: streamError
+                      ? withFailureReference(streamError.message, streamError.requestId)
+                      : CONTINUE_FAILED_MESSAGE,
+                  }
+                : {}),
+            });
+          },
+          onError: (error: Error) => {
+            markReconnecting(set, assistantMessageId, false);
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            releaseConversation();
+            const added = continuation(true);
+            const interruptedFailure =
+              error instanceof StreamConnectionLostError
+                ? { ...CONNECTION_LOST_FAILURE }
+                : priorStreamError;
+            const settled = patchAnswer((m) => ({
+              ...m,
+              content: seedContent + added,
+              reasoning: reasoning(),
+              isStreaming: false,
+              metadata: {
+                ...m.metadata,
+                finishReason: priorFinishReason,
+                ...(interruptedFailure !== undefined ? { streamError: interruptedFailure } : {}),
+                ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+              },
+            }));
+            if (added) pushCloudAssistantUpdate(conversationId, settled, assistantMessageId);
+            set({
+              ...streamingFlags(),
+              streamingContent: '',
+              streamingReasoning: '',
+              ...continuationFailure(error),
+            });
+          },
+        },
+        controller.signal,
+        { ignorePickerSpeed: true, purpose: 'continue' },
+      );
+      return true;
+    } catch (caughtErr) {
+      if (!isAccountCurrent()) return true;
+      if (!controller.signal.aborted) set(continuationFailure(caughtErr));
+      return true;
+    } finally {
+      lastDeltaTimes.delete(conversationId);
+      if (abortControllers.get(conversationId) === controller) {
+        abortControllers.delete(conversationId);
+      }
+      streamingConversations.delete(conversationId);
+      cloudStreamingConversations.delete(conversationId);
+      if (isAccountCurrent()) {
+        const stillStreaming = (
+          getConversationMessageStore(conversationId).getState().messages[conversationId] ?? []
+        ).some((m) => m.id === assistantMessageId && m.isStreaming);
+        if (stillStreaming) {
+          const settled = patchAnswer((m) => ({
+            ...m,
+            isStreaming: false,
+            metadata: {
+              ...m.metadata,
+              finishReason: controller.signal.aborted ? 'stopped' : priorFinishReason,
+              ...(!controller.signal.aborted && priorStreamError !== undefined
+                ? { streamError: priorStreamError }
+                : {}),
+            },
+          }));
+          pushCloudAssistantUpdate(conversationId, settled, assistantMessageId);
+        }
+      }
+      set({ ...streamingFlags() });
       flushDeferredSend(conversationId);
     }
   },
@@ -3924,35 +5418,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       finishStop(runConversationId);
       return;
     }
-    if (stoppingRunIds.has(activeRun.runId)) return;
-    stoppingRunIds.add(activeRun.runId);
-    const stoppingIds = (
-      getConversationMessageStore(runConversationId).getState().messages[runConversationId] ?? []
-    )
-      .filter((message) => message.isStreaming && message.role === 'assistant')
-      .map((message) => message.id);
-    set((state) => ({ stoppingMessageIds: [...state.stoppingMessageIds, ...stoppingIds] }));
-    void cancelMobileCloudAgentRun(activeRun.runId)
-      .then(() => {
-        if (
-          streamingConversations.has(runConversationId) ||
-          activeCloudRuns.has(runConversationId)
-        ) {
-          finishStop(runConversationId);
-        }
-      })
-      .catch(() => {
-        set({ error: 'Could not stop the Cloud task. Check its activity before retrying.' });
-      })
-      .finally(() => {
-        stoppingRunIds.delete(activeRun.runId);
-        set((state) => ({
-          stoppingMessageIds: state.stoppingMessageIds.filter((id) => !stoppingIds.includes(id)),
-        }));
+    void cancelMobileCloudAgentRun(activeRun.runId).catch(() => {
+      failureScopedSet(runConversationId)({
+        error: 'Could not stop the Cloud task. Check its activity before retrying.',
       });
+    });
+    finishStop(runConversationId);
   },
 
   retryMessage: (conversationId, messageId, modelOverride) => {
+    const set = failureScopedSet(conversationId, () => ({ kind: 'regenerate', messageId }));
     const state = get();
     if (streamingConversations.has(conversationId)) return;
 
@@ -3960,17 +5435,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const conversation = msgStore
       .getState()
       .conversations.find((candidate) => candidate.id === conversationId);
-    const branches =
-      conversation !== undefined &&
-      executionModeForConversation(conversation) === 'cloud' &&
-      isThreadingCapableConversation(conversation);
-    // Stamped first so the answer already on screen has a question to hang off;
-    // the new answer becomes its sibling rather than replacing it.
-    const rows = branches
-      ? ensureLocalThreadParents(conversationId)
-      : msgStore.getState().messages[conversationId];
+    const branches = keepsEarlierVersions(conversation);
+    const rows = msgStore.getState().messages[conversationId];
     if (!rows) return;
-    const msgs = branches ? visibleThreadFor(rows, conversation) : rows;
+    const msgs = branches
+      ? visibleThreadFor(withThreadParents(conversationId, rows), conversation)
+      : rows;
 
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
     if (msgIndex < 0) return;
@@ -4005,13 +5475,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const userIndex = rows.findIndex((m) => m.id === userMsg.id);
     if (userIndex < 0) return;
 
-    const currentAttempts = state.retryAttempts[messageId] ?? 0;
+    const retriesFailure =
+      assistantMsg === undefined ||
+      assistantMsg.status === 'error' ||
+      assistantMsg.metadata?.['streamError'] !== undefined;
+    const currentAttempts = retriesFailure ? (state.retryAttempts[messageId] ?? 0) : 0;
     const nextAttempt = currentAttempts + 1;
 
     if (nextAttempt > MAX_RETRY_ATTEMPTS) {
       Alert.alert(
         'Retry Limit Reached',
-        `This message has failed ${MAX_RETRY_ATTEMPTS} times. Please check your connection and try a new message.`,
+        `This message failed ${MAX_RETRY_ATTEMPTS} times. Try sending a new message.`,
         [{ text: 'OK' }],
       );
       return;
@@ -4023,14 +5497,28 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // different question and the answer stops making sense. Already-uploaded
     // assets are reused rather than sent again.
     const userAttachments = restoreComposerAttachments(userMsg.attachments);
-    const userModel = modelOverride ?? userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
+    const bannerChoice = takeBannerModelChoice(conversationId);
+    const userModel =
+      modelOverride ?? bannerChoice ?? userMsg.model ?? assistantMsg?.model ?? DEFAULT_AUTO_MODE_ID;
+    const {
+      skillName: retrySkillName,
+      codeExecution: retryCodeExecution,
+      officeCreation: retryOfficeCreation,
+    } = replayToSendOptions(sendReplayOf(userMsg.metadata));
+    const retrySkill = retrySkillName
+      ? {
+          skillName: retrySkillName,
+          skillTools: {
+            codeExecution: retryCodeExecution === true,
+            officeCreation: retryOfficeCreation === true,
+          },
+        }
+      : {};
     const isCloudRetry =
       conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
     const retryAccountEpoch = isCloudRetry ? captureCloudAccountEpoch() : null;
     const isRetryCurrent = () => !isCloudRetry || isCloudAccountEpochCurrent(retryAccountEpoch);
     if (!isRetryCurrent()) return;
-
-    set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
     const anchorMessageId = userMsg.id;
     const removedCount = rows.length - userIndex;
@@ -4039,9 +5527,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const replaceAndRetry = async () => {
       if (!isRetryCurrent()) return;
       if (branches) {
-        await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
-          regenerateParentMessageId: anchorMessageId,
-        });
+        const linearRows = msgStore.getState().messages[conversationId] ?? rows;
+        const leafBefore = activeLeafOf(conversationId);
+        // Stamped only now, so the answer already on screen has a question to
+        // hang off and the new answer becomes its sibling, and so a retry
+        // abandoned before this point leaves no parents behind.
+        const stampedRows = ensureLocalThreadParents(conversationId);
+        try {
+          await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
+            ...retrySkill,
+            regenerateParentMessageId: anchorMessageId,
+            retryOfMessageId: anchorMessageId,
+          });
+        } finally {
+          forgetUnusedThreadParents(conversationId, linearRows, stampedRows, leafBefore);
+        }
         return;
       }
 
@@ -4062,8 +5562,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       let accepted = false;
       try {
         await get().sendMessage(conversationId, userContent, userModel, userAttachments, {
+          ...retrySkill,
+          retryOfMessageId: anchorMessageId,
           onAccepted: () => {
             accepted = true;
+            removeArtifactsOfMessages(replacedRows);
             if (!isCloudRetry) return;
             void deleteCloudMessagesRemote(
               conversationId,
@@ -4071,7 +5574,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               retryAccountEpoch,
             ).catch(() => {
               if (isRetryCurrent()) {
-                set({
+                failureScopedSet(conversationId)({
                   error:
                     'The earlier Cloud response could not be removed. It may reappear after the next sync.',
                 });
@@ -4104,14 +5607,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
     };
 
-    if (backoffMs > 0) {
-      setTimeout(runRetry, backoffMs);
-    } else {
-      runRetry();
-    }
+    const startRetry = () => {
+      if (!isRetryCurrent()) return;
+      if (retriesFailure) {
+        set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
+      }
+      if (backoffMs > 0) {
+        setTimeout(runRetry, backoffMs);
+      } else {
+        runRetry();
+      }
+    };
+
+    confirmBeforeRewrite(conversationId, (assistantMsg ?? userMsg).id, 'regenerate', startRetry);
   },
 
-  resumeResearch: async (conversationId, assistantMessageId, decision, steps, choices) => {
+  resumeResearch: async (conversationId, assistantMessageId, decision, steps, choices, answers) => {
+    const set = failureScopedSet(conversationId);
     if (streamingConversations.has(conversationId)) return;
 
     const msgStore = getConversationMessageStore(conversationId);
@@ -4171,9 +5683,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const resume = {
       ...researchResumePayload(steps ? { ...research, steps } : research),
       ...(choices ? { deliverable: choices.deliverable } : {}),
+      ...(decision === 'start' && answers?.trim() ? { guidance: answers.trim() } : {}),
     };
+    const runSources = choices?.sources ?? research.runConfig?.sources;
     const researchSources =
-      choices && hasResearchSourceChoice(choices.sources) ? choices.sources : undefined;
+      runSources && hasResearchSourceChoice(runSources) ? runSources : undefined;
     if (decision === 'start') {
       if (research.phase !== 'awaiting_approval' || resume.approvedSteps.length === 0) return;
     } else if (!isResearchRunResumable(research)) {
@@ -4241,6 +5755,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   },
 
   respondToInteractiveCard: async (conversationId, assistantMessageId, cardId, payload) => {
+    const set = failureScopedSet(conversationId);
     if (streamingConversations.has(conversationId)) return false;
     const inFlightKey = `${assistantMessageId}:${cardId}`;
     if (interactiveCardResponsesInFlight.has(inFlightKey)) return false;
@@ -4311,6 +5826,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   },
 
   resolveAgiWorkPlan: async (conversationId, assistantMessageId, decision) => {
+    const set = failureScopedSet(conversationId);
     if (streamingConversations.has(conversationId)) return;
     if (agiWorkPlanDecisionsInFlight.has(assistantMessageId)) return;
 
@@ -4350,7 +5866,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: cancelledRows },
       }));
-      if (isCloud) pushCloudAssistantUpdate(conversationId, cancelledRows, assistantMessageId);
+      if (!isCloud) return;
+      pushCloudAssistantUpdate(conversationId, cancelledRows, assistantMessageId);
+      const run = ManagedCloudAgentRunReferenceSchema.safeParse(
+        assistantMsg.metadata?.cloudAgentRun,
+      );
+      if (!run.success) return;
+      const accountEpoch = captureCloudAccountEpoch();
+      try {
+        await cancelCloudRun(run.data.runId);
+      } catch (error) {
+        if (isCloudRunGone(error) || !isCloudAccountEpochCurrent(accountEpoch)) return;
+        set({ error: describeCloudRunError(error, CLOUD_RUN_CANCEL_ERROR) });
+      }
       return;
     }
 
@@ -4441,7 +5969,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
   },
 
-  editMessage: (conversationId, messageId, newContent) => {
+  editMessage: (conversationId, messageId, newContent, attachments) => {
+    const set = failureScopedSet(conversationId);
     const state = get();
 
     if (streamingConversations.has(conversationId)) {
@@ -4459,16 +5988,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const conversation = msgStore
       .getState()
       .conversations.find((candidate) => candidate.id === conversationId);
-    const branches =
-      conversation !== undefined &&
-      executionModeForConversation(conversation) === 'cloud' &&
-      isThreadingCapableConversation(conversation);
-    // Stamped before the edited row's own parent is read: on a conversation
-    // that has never branched there is no parent yet, and null there would
-    // silently mean "root sibling" instead of "beside this question".
-    const msgs = branches
-      ? ensureLocalThreadParents(conversationId)
-      : msgStore.getState().messages[conversationId];
+    const branches = keepsEarlierVersions(conversation);
+    const msgs = msgStore.getState().messages[conversationId];
     if (!msgs) return false;
 
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
@@ -4478,8 +5999,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!targetMsg || targetMsg.role !== 'user') return false;
 
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
-    const editedParentId = targetMsg.parentId ?? null;
-    const editedAttachments = restoreComposerAttachments(targetMsg.attachments);
+    const editedAttachments = restoreComposerAttachments(attachments ?? targetMsg.attachments);
     const isCloudEdit =
       conversation !== undefined && executionModeForConversation(conversation) === 'cloud';
     const accountEpoch = isCloudEdit ? captureCloudAccountEpoch() : null;
@@ -4492,9 +6012,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const trimmedMsgs = msgs.slice(0, msgIndex);
     void (async () => {
       if (branches) {
-        await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
-          branchParentId: editedParentId,
-        });
+        // Stamped before the edited row's own parent is read: on a conversation
+        // that has never branched there is no parent yet, and null there would
+        // silently mean "root sibling" instead of "beside this question".
+        const leafBefore = activeLeafOf(conversationId);
+        const stampedRows = ensureLocalThreadParents(conversationId);
+        const editedParentId = stampedRows.find((row) => row.id === messageId)?.parentId ?? null;
+        try {
+          await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
+            branchParentId: editedParentId,
+          });
+        } finally {
+          forgetUnusedThreadParents(conversationId, msgs, stampedRows, leafBefore);
+        }
         return;
       }
 
@@ -4507,6 +6037,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
           onAccepted: () => {
             accepted = true;
+            removeArtifactsOfMessages(removedTail);
             if (!isCloudEdit) return;
             void deleteCloudMessagesRemote(
               conversationId,

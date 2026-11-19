@@ -1,11 +1,29 @@
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
+import type { MobileChatAppMode } from '@/src/features/chat/store/appModeStore';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
+import { isShownInMode } from '@/src/features/shell/destinationScope';
+import {
+  NOTIFICATIONS_SCREEN_TITLE,
+  SECURITY_LOGIN_SCREEN_TITLE,
+  SHARED_LINKS_SCREEN_TITLE,
+  SUBSCRIPTION_SCREEN_TITLE,
+} from '@/src/features/settings/screenTitles';
 import type { MobileGlobalSearchResult } from './mobileGlobalSearch';
+
+export type SettingsHomeSection = 'Account' | 'Device' | 'Assistant' | 'Cloud' | 'Support';
 
 export interface MobileDestination {
   route: string;
   title: string;
   section: string;
   keywords: readonly string[];
+  settingsSection?: SettingsHomeSection;
+}
+
+export interface SettingsPageSearchResult {
+  route: string;
+  title: string;
+  settingsSection: SettingsHomeSection;
 }
 
 export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
@@ -37,15 +55,18 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
   { route: '/(app)/tasks', title: 'Tasks', section: 'Go to', keywords: ['work', 'runs'] },
   {
     route: '/(app)/cloud-code',
-    title: 'AGI Code sessions',
+    title: `${CLOUD_CODE_SCREEN_TITLE} sessions`,
     section: 'Go to',
-    keywords: ['code', 'repository', 'agi code'],
-  },
-  {
-    route: '/(app)/companion',
-    title: 'Remote',
-    section: 'Go to',
-    keywords: ['desktop', 'pair', 'computer'],
+    keywords: [
+      'code',
+      'repository',
+      'agi code',
+      'remote',
+      'computer',
+      'pair',
+      'desktop',
+      'devices',
+    ],
   },
   {
     route: '/(app)/connectors',
@@ -74,9 +95,9 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
   },
   {
     route: '/(app)/sites',
-    title: 'Published sites',
+    title: 'Sites',
     section: 'Go to',
-    keywords: ['publish', 'artifacts', 'apps'],
+    keywords: ['publish', 'published sites', 'artifacts', 'apps'],
   },
   { route: '/(app)/models', title: 'Models', section: 'Go to', keywords: ['model picker'] },
   {
@@ -96,125 +117,216 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
     route: '/(app)/settings/general',
     title: 'General',
     section: 'Settings',
-    keywords: ['language', 'startup'],
+    keywords: ['language', 'startup', 'haptics', 'haptic feedback'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/settings/appearance',
     title: 'Appearance',
     section: 'Settings',
     keywords: ['theme', 'dark mode', 'text size'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/settings/personalization',
     title: 'Personalization',
     section: 'Settings',
     keywords: ['custom instructions', 'name', 'style'],
+    settingsSection: 'Assistant',
   },
   {
     route: '/(app)/settings/memory',
     title: 'Memory',
     section: 'Settings',
-    keywords: ['remember', 'saved memories'],
+    keywords: ['remember', 'saved memories', 'forget'],
+    settingsSection: 'Assistant',
   },
   {
     route: '/(app)/settings/voice',
     title: 'Voice',
     section: 'Settings',
-    keywords: ['speech', 'read aloud'],
+    keywords: ['speech', 'read aloud', 'dictation', 'voice input', 'microphone'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/settings/voice-language',
     title: 'Voice language',
     section: 'Settings',
     keywords: ['dictation', 'speech language'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/settings/notifications',
-    title: 'Notification settings',
+    title: NOTIFICATIONS_SCREEN_TITLE,
     section: 'Settings',
     keywords: ['push', 'alerts'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/settings/data-controls',
     title: 'Data controls',
     section: 'Settings',
-    keywords: ['export', 'delete', 'training', 'privacy'],
+    keywords: ['export', 'delete', 'delete account', 'training', 'privacy'],
+    settingsSection: 'Assistant',
   },
   {
     route: '/(app)/settings/archived-chats',
     title: 'Archived chats',
     section: 'Settings',
     keywords: ['archive'],
+    settingsSection: 'Cloud',
   },
   {
     route: '/(app)/settings/shared-links',
-    title: 'Shared links',
+    title: SHARED_LINKS_SCREEN_TITLE,
     section: 'Settings',
     keywords: ['share', 'links'],
+    settingsSection: 'Account',
   },
   {
     route: '/(app)/settings/capabilities',
     title: 'Capabilities',
     section: 'Settings',
     keywords: ['web search', 'code', 'images', 'tools'],
+    settingsSection: 'Assistant',
+  },
+  {
+    route: '/(app)/settings/code',
+    title: `${CLOUD_CODE_SCREEN_TITLE} settings`,
+    section: 'Settings',
+    keywords: [
+      'wrap',
+      'wrap long lines',
+      'wrap lines',
+      'long lines',
+      'diff',
+      'code blocks',
+      'coding',
+    ],
+    settingsSection: 'Assistant',
   },
   {
     route: '/(app)/settings/account-security',
-    title: 'Account security',
+    title: SECURITY_LOGIN_SCREEN_TITLE,
     section: 'Settings',
-    keywords: ['password', 'two-factor', 'mfa', 'sessions', 'log out'],
+    keywords: [
+      'account security',
+      'password',
+      'two-factor',
+      'mfa',
+      'passkey',
+      'sessions',
+      'sign in',
+      'log out',
+    ],
+    settingsSection: 'Account',
   },
   {
     route: '/(app)/settings/workspace',
     title: 'Workspace',
     section: 'Settings',
     keywords: ['team', 'members', 'roles', 'invite'],
+    settingsSection: 'Account',
   },
   {
     route: '/(app)/settings/cloud-billing',
-    title: NATIVE_PURCHASES_AVAILABLE ? 'Billing' : 'Plan',
+    title: SUBSCRIPTION_SCREEN_TITLE,
     section: 'Settings',
     keywords: NATIVE_PURCHASES_AVAILABLE
       ? ['plan', 'subscription', 'payment', 'credits']
       : ['plan', 'subscription'],
+    settingsSection: 'Account',
   },
   {
     route: '/(app)/settings/cloud-usage',
     title: 'Usage',
     section: 'Settings',
     keywords: ['limits', 'credits', 'tokens'],
+    settingsSection: 'Cloud',
   },
   {
     route: '/(app)/settings/storage',
     title: 'Storage',
     section: 'Settings',
     keywords: ['cache', 'space'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/settings/parental-controls',
     title: 'Parental controls',
     section: 'Settings',
-    keywords: ['family', 'teen'],
+    keywords: ['family', 'teen', 'age', 'minor'],
+    settingsSection: 'Device',
   },
   {
     route: '/(app)/about',
     title: 'About',
     section: 'Settings',
-    keywords: ['version', 'legal', 'licenses'],
+    keywords: ['version', 'legal', 'licenses', 'terms', 'privacy policy'],
+    settingsSection: 'Support',
   },
 ];
 
-export function searchMobileDestinations(query: string): MobileGlobalSearchResult[] {
+function matchingDestinations(query: string, appMode: MobileChatAppMode): MobileDestination[] {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return [];
   return MOBILE_DESTINATIONS.filter(
     (destination) =>
-      destination.title.toLocaleLowerCase().includes(needle) ||
-      destination.keywords.some((keyword) => keyword.includes(needle)),
-  ).map((destination) => ({
+      isShownInMode(destination.route, appMode) &&
+      (destination.title.toLocaleLowerCase().includes(needle) ||
+        destination.keywords.some((keyword) => keyword.includes(needle))),
+  );
+}
+
+export function searchMobileDestinations(
+  query: string,
+  appMode: MobileChatAppMode,
+): MobileGlobalSearchResult[] {
+  return matchingDestinations(query, appMode).map((destination) => ({
     id: destination.route,
     title: destination.title,
     subtitle: destination.section,
     targetId: destination.route,
   }));
+}
+
+function matchRank(destination: MobileDestination, needle: string): number {
+  const title = destination.title.toLocaleLowerCase();
+  if (title.startsWith(needle)) return 0;
+  const wholeWord = new RegExp(
+    `(^|[^\\p{L}\\p{N}])${escapeRegExp(needle)}($|[^\\p{L}\\p{N}])`,
+    'u',
+  );
+  if (wholeWord.test(title) || destination.keywords.some((keyword) => wholeWord.test(keyword))) {
+    return 1;
+  }
+  return 2;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function searchSettingsPages(
+  query: string,
+  appMode: MobileChatAppMode,
+): SettingsPageSearchResult[] {
+  const needle = query.trim().toLocaleLowerCase();
+  return matchingDestinations(query, appMode)
+    .flatMap((destination) =>
+      destination.settingsSection
+        ? [
+            {
+              rank: matchRank(destination, needle),
+              page: {
+                route: destination.route,
+                title: destination.title,
+                settingsSection: destination.settingsSection,
+              },
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => a.rank - b.rank)
+    .map(({ page }) => page);
 }

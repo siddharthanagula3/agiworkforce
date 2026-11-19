@@ -276,9 +276,9 @@ for (const coarse of [false, true]) {
           expect(typography.body).toMatchObject({ fontSize: 16, lineHeight: 26 });
           expect(typography.prose).toMatchObject({ fontSize: 16, lineHeight: 26 });
           for (const [index, fontSize, lineHeight] of [
-            [0, 20, 28],
-            [1, 18, 28],
-            [2, 16, 26],
+            [0, 24, 32],
+            [1, 20, 28],
+            [2, 17, 24],
           ] as const) {
             expect(typography.headings[index]!.fontSize).toBeCloseTo(fontSize, 2);
             expect(typography.headings[index]!.lineHeight).toBeCloseTo(lineHeight, 2);

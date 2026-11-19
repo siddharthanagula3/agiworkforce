@@ -351,8 +351,7 @@ export function WorkspaceMcpServers() {
             </button>
           </div>
           <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-            The server is contacted once before it is published, so a workspace never hands its
-            members an endpoint that only ever errors.
+            The server is checked once before it is published.
           </p>
         </div>
       ) : null}

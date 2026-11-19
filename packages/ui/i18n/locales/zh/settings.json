@@ -98,6 +98,9 @@
     "voice": "语音",
     "desktop": "常规",
     "computer-use": "电脑操作",
+    "browser-pane": "浏览器",
+    "local-mcp": "开发者",
+    "storage": "存储",
     "groupSettings": "设置",
     "groupCustomize": "自定义",
     "groupDesktop": "桌面应用"

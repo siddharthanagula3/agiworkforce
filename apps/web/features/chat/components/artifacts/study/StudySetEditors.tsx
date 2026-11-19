@@ -12,7 +12,7 @@ import {
   type FlashcardSet,
   type Quiz,
   type QuizQuestion,
-} from './study-set';
+} from '@agiworkforce/unified-chat/study-set';
 
 const FIELD =
   'min-h-11 w-full rounded-md border border-border/60 bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9';

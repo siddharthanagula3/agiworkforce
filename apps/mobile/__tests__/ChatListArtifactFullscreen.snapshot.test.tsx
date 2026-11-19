@@ -61,6 +61,8 @@ jest.mock('lucide-react-native', () => {
     Eye: factory('eye'),
     Code: factory('code'),
     Download: factory('download'),
+    Flag: factory('flag'),
+    MoreHorizontal: factory('more-horizontal'),
     Globe: factory('globe'),
   };
 });
@@ -73,6 +75,7 @@ jest.mock('react-native-gesture-handler', () => {
   const RN = require('react-native');
   return {
     Swipeable: ({ children }: { children: React.ReactNode }) => <RN.View>{children}</RN.View>,
+    ScrollView: RN.ScrollView,
   };
 });
 
@@ -158,18 +161,18 @@ const codeArtifact: Artifact = {
   type: 'code',
   title: 'fibonacci.py',
   language: 'python',
-  content: 'def fib(n):\n    return n if n < 2 else fib(n-1) + fib(n-2)',
+  content: 'print(fib(3))\nprint(fib(4))',
 };
 
 describe('ArtifactFullScreen snapshots', () => {
-  it('locks the tree without onRegenerate (no Refresh button)', () => {
+  it('locks the tree without onRegenerate (no Regenerate in the More menu)', () => {
     const { toJSON } = render(
       <ArtifactFullScreen artifact={codeArtifact} visible={true} onClose={jest.fn()} />,
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('locks the tree with onRegenerate (shows Refresh button)', () => {
+  it('locks the tree with onRegenerate (Regenerate in the More menu)', () => {
     const { toJSON } = render(
       <ArtifactFullScreen
         artifact={codeArtifact}

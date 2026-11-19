@@ -2,6 +2,7 @@ import { PRODUCT_BRAND } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { readAccountRefusal } from '../../utils/accountRefusal';
 import { getExtensionUserAgent, getExtensionVersion } from '../../platform/version';
 
 export type FeedbackKind = 'bug' | 'feature' | 'general';
@@ -54,9 +55,12 @@ async function sendFeedbackRequest(
             }),
           }),
     });
-    return response.ok
-      ? { status: 'sent' }
-      : { status: 'failed', reason: `${PRODUCT_BRAND} answered HTTP ${response.status}` };
+    if (response.ok) return { status: 'sent' };
+    const refusal = await readAccountRefusal(response);
+    return {
+      status: 'failed',
+      reason: refusal?.message ?? `${PRODUCT_BRAND} answered HTTP ${response.status}`,
+    };
   } catch (error) {
     return {
       status: 'failed',

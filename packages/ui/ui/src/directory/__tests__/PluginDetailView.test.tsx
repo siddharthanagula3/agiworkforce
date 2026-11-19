@@ -342,9 +342,7 @@ describe('the Connectors section on a plugin page', () => {
     expect(section.textContent).toContain('Connected');
     expect(section.textContent).toContain('Not connected');
     expect(section.textContent).toContain('Not added');
-    expect(section.textContent).toContain(
-      'Installing a plugin never connects a service by itself.',
-    );
+    expect(section.textContent).toContain('Installing never connects a service.');
     fireEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]!);
     expect(onOpenConnector).toHaveBeenCalledWith('drive');
     expect(screen.getAllByRole('button', { name: 'Connect' })).toHaveLength(2);

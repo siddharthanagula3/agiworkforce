@@ -14,9 +14,13 @@ import type { PlacesCardPlace } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { MapPinned } from '@agiworkforce/icons';
 import { PlacePhotoCarousel } from './PlacePhotoCarousel';
-import { openNowLabel, placeSummaryLine, ratingLabel, reviewCountLabel } from './placeFacts';
-
-export const ASSISTANT_NOTE_HEADING = 'About, from this answer';
+import {
+  ASSISTANT_NOTE_HEADING,
+  openNowLabel,
+  placeSummaryLine,
+  ratingLabel,
+  reviewCountLabel,
+} from '@agiworkforce/unified-chat/place-facts';
 
 interface PlaceDetailPopupProps {
   place: PlacesCardPlace;

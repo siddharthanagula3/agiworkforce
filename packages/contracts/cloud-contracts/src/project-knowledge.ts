@@ -1,10 +1,11 @@
+import projectContract from './project-contract.json' with { type: 'json' };
 import { z } from 'zod';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH = '/api/uploads/presign';
 
 export function managedCloudProjectKnowledgePath(projectId: string): string {
-  return `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`;
+  return `${projectContract.path}/${encodeURIComponent(projectId)}/${projectContract.knowledgeFilesSegment}`;
 }
 
 export function managedCloudProjectKnowledgeFilePath(projectId: string, fileId: string): string {
@@ -17,6 +18,24 @@ export function managedCloudProjectKnowledgeOriginsPath(projectId: string): stri
 
 export function managedCloudProjectKnowledgeRefreshPath(projectId: string, fileId: string): string {
   return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/refresh`;
+}
+
+export function managedCloudProjectKnowledgeReindexPath(projectId: string, fileId: string): string {
+  return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/reindex`;
+}
+
+export function managedCloudProjectKnowledgeTextPath(projectId: string, fileId: string): string {
+  return `${managedCloudProjectKnowledgeFilePath(projectId, fileId)}/text`;
+}
+
+export const KNOWLEDGE_INDEX_IN_PROGRESS_STATUSES = ['pending', 'indexing', 'stale'] as const;
+
+const IN_PROGRESS_STATUSES: ReadonlySet<string> = new Set(KNOWLEDGE_INDEX_IN_PROGRESS_STATUSES);
+
+export function isKnowledgeIndexInProgress(
+  indexing: { status: string } | null | undefined,
+): boolean {
+  return indexing ? IN_PROGRESS_STATUSES.has(indexing.status) : false;
 }
 
 export const ManagedCloudProjectKnowledgeFileIdSchema = z.string().uuid();
@@ -107,6 +126,7 @@ export const ManagedCloudProjectKnowledgeFileSchema = z.object({
   retentionExpiresAt: z.string().nullable().optional(),
   deletedAt: z.string().nullable().optional(),
   storageUri: z.string().min(1),
+  textPreviewKind: z.enum(['text', 'table', 'office']).nullable().optional(),
   indexing: ManagedCloudProjectKnowledgeIndexStateSchema.nullable().optional(),
 });
 

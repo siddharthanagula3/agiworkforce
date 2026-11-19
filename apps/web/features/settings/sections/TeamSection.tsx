@@ -662,7 +662,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
           >
             Workspace
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
             Create and manage your AGI workspace.
           </p>
           <div style={{ marginTop: 'var(--space-2)' }}>
@@ -676,7 +676,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
         {!access.canManageTeam ? (
           <SectionCard title="Workspace administration">
             <div style={{ padding: 'var(--space-5)' }}>
-              <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
+              <p style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.55, margin: 0 }}>
                 Workspace administration requires a Team or Enterprise plan. Choose at least 2 Team
                 seats to create a workspace. Your current plan is {planLabel(access.plan)}.
               </p>
@@ -788,7 +788,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
         >
           Workspace
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Manage workspace details and the AGI accounts with access.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
@@ -944,7 +944,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
         >
           Active members and pending invitations each reserve one seat.
           {seatBilling?.premiumSeatsSold
-            ? ` A Standard seat is ${seatPriceLabel('standard', seatBilling.interval)} and a Premium seat is ${seatPriceLabel('premium', seatBilling.interval)}. Set each member's seat type in the member list.`
+            ? ` Standard is ${seatPriceLabel('standard', seatBilling.interval)}, Premium ${seatPriceLabel('premium', seatBilling.interval)}.`
             : ''}
         </p>
         {seatPaymentPending ? (
@@ -1034,8 +1034,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
             </button>
             <div style={{ flexBasis: '100%' }}>
               <p style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>
-                After you create the invitation, a private link appears here, with a note on whether
-                an invitation email was sent. The recipient must sign in with the invited email.
+                A private link appears here. The recipient must sign in with the invited email.
               </p>
               {seatsAvailable === 0 ? (
                 <p
@@ -1408,10 +1407,9 @@ export function TeamSection({ active = true }: { active?: boolean }) {
           description="Hand the owner role to another member while keeping your own seat."
         >
           <div style={{ padding: 'var(--space-5)' }}>
-            <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
-              A workspace has exactly one owner. Transferring gives that member billing, deletion
-              and every administrative control, and moves you to the role you pick below. Only the
-              new owner can give it back.
+            <p style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.55, margin: 0 }}>
+              The new owner gets billing, deletion and all admin controls. Only they can give it
+              back.
             </p>
             <div
               style={{
@@ -1551,9 +1549,8 @@ export function TeamSection({ active = true }: { active?: boolean }) {
           ) : null}
           {membershipIsOwner ? (
             <>
-              <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
-                Choose a successor. Ownership transfers and your membership is removed in one safe
-                operation, so the workspace is never orphaned.
+              <p style={{ color: 'var(--text-2)', fontSize: 12, lineHeight: 1.55, margin: 0 }}>
+                Choose a successor. Ownership moves to them as you leave.
               </p>
               <label
                 style={{

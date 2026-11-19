@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useSignOut } from '@/lib/identity/client';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 import { clearSignupAttemptMarkers } from '@/app/signup/signupAttemptMarkers';
 import { AUTH_FOOTER_LINK_CLASS } from '@/features/auth/authStyles';
 
 export function TermsReviewSignOut() {
   const signOut = useSignOut();
   const logout = useAuthStore((state) => state.logout);
+  const signedOutPath = useEmbeddedSignInPath() ?? '/login';
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -18,7 +20,7 @@ export function TermsReviewSignOut() {
     try {
       clearSignupAttemptMarkers();
       await logout();
-      await signOut({ redirectUrl: '/login' });
+      await signOut({ redirectUrl: signedOutPath });
     } catch {
       setFailed(true);
       setPending(false);

@@ -1,4 +1,4 @@
-import { DrawerActions } from '@react-navigation/native';
+import { DrawerActions } from 'expo-router/react-navigation';
 
 type DrawerAction = ReturnType<typeof DrawerActions.openDrawer>;
 

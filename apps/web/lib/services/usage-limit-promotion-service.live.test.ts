@@ -27,8 +27,13 @@ vi.mock('@/lib/feature-flags/usage-promotions-gate', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/services/effective-subscription-service', () => ({
+type EntitlementModule = typeof import('@/lib/services/entitlement-resolution');
+
+vi.mock('@/lib/services/effective-subscription-service', async () => ({
   resolveEntitlementBundle: vi.fn(),
+  usageAllowanceSubject: (
+    await vi.importActual<EntitlementModule>('@/lib/services/entitlement-resolution')
+  ).usageAllowanceSubject,
 }));
 
 const {
@@ -222,7 +227,6 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
             userId: account.userId,
             planTier: 'pro',
             workload: 'chat',
-            estimateMicrousd: 0,
             isFlagship: false,
             caps: CAPS,
           },
@@ -341,12 +345,11 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
          values ('qa-uplift', 'limit_uplift', true, now() - interval '1 day',
                  now() + interval '6 days', '{pro}', 5000000, 50, '{weekly}', '{code}')`,
       );
-      await spend(account, 9_950_000, 30);
+      await spend(account, 10_000_000, 30);
       const request = {
         userId: account.userId,
         planTier: 'pro',
         workload: 'code',
-        estimateMicrousd: 100_000,
         isFlagship: false,
         caps: CAPS,
       };
@@ -373,7 +376,7 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
          returning id`,
         [other],
       );
-      await spend({ ...account, userId: other, accountId: otherAccount!.id }, 9_950_000, 30);
+      await spend({ ...account, userId: other, accountId: otherAccount!.id }, 10_000_000, 30);
       await expect(
         resolvePromotionalCaps({ ...request, userId: other }, Date.now(), () => account.db),
       ).resolves.toEqual(CAPS);
@@ -389,12 +392,11 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
          values ('qa-edit', 'limit_uplift', true, now() - interval '1 day',
                  now() + interval '6 days', '{pro}', 30000000, 50, '{weekly}', '{code}')`,
       );
-      await spend(account, 9_950_000, 30);
+      await spend(account, 10_000_000, 30);
       const request = {
         userId: account.userId,
         planTier: 'pro',
         workload: 'code',
-        estimateMicrousd: 100_000,
         isFlagship: false,
         caps: CAPS,
       };

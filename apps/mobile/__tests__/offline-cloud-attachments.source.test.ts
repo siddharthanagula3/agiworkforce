@@ -24,9 +24,11 @@ describe('offline Cloud attachment refusal source shape', () => {
   it('returns false before clearing the quote or skill and before queuing a message', () => {
     expect(attachmentRefusal).not.toBeNull();
     const refusalEnd = (attachmentRefusal?.index ?? -1) + (attachmentRefusal?.[0].length ?? 0);
+    const clearSentQuote = source.match(/const clearSentQuote = \(\) => \{[\s\S]*?\n\s*\};/)?.[0];
+    expect(clearSentQuote).toContain('quotedMessageScopeRef.current = null');
+    expect(clearSentQuote).toContain('setQuotedMessage(null)');
     for (const mutation of [
-      'quotedMessageScopeRef.current = null',
-      'setQuotedMessage(null)',
+      'clearSentQuote()',
       'offlineQueue.enqueue(',
       'enqueueOfflineMessage(',
       'clearSelectedSkill()',
@@ -45,8 +47,8 @@ describe('offline Cloud attachment refusal source shape', () => {
     expect(offlineBranch).toContain('content: finalText');
     expect(offlineBranch).toContain('model: selectedModel');
     expect(offlineBranch).toContain('return true;');
-    expect(source.slice(onlineSendStart)).toContain(
-      'sendMessage(id, finalText, selectedModel, attachments, sendOptions)',
+    expect(source.slice(onlineSendStart)).toMatch(
+      /sendMessage\(id, finalText, selectedModel, attachments, \{\s*\.\.\.sendOptions,/,
     );
   });
 });

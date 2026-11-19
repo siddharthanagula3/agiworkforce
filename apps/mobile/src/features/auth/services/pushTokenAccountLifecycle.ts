@@ -1,10 +1,38 @@
+import { create } from 'zustand';
 import type { PushNotificationAccountContext } from '@/services/notifications';
+import { pushRegistrationPostsSettled } from '@/services/pushRegistrationPosts';
 import {
   PushTokenCleanupCredentialRejectedError,
+  releasePushDeviceForAccountHandover,
   unregisterPushTokenForSignOut,
 } from '@/src/features/auth/services/signOutPushTokenCleanup';
 
 export type ClerkTokenResolver = () => Promise<string | null>;
+
+interface PushRegistrationRequestState {
+  heldForUserId: string | null;
+  generation: number;
+}
+
+export const usePushRegistrationRequestStore = create<PushRegistrationRequestState>(() => ({
+  heldForUserId: null,
+  generation: 0,
+}));
+
+export function holdPushRegistrationFor(userId: string): void {
+  usePushRegistrationRequestStore.setState({ heldForUserId: userId });
+}
+
+export function clearPushRegistrationHold(): void {
+  usePushRegistrationRequestStore.setState({ heldForUserId: null });
+}
+
+export function requestPushReregistration(): void {
+  usePushRegistrationRequestStore.setState((state) => ({
+    heldForUserId: null,
+    generation: state.generation + 1,
+  }));
+}
 
 interface PushTokenOwnerBinding {
   ownerId: string;
@@ -13,6 +41,7 @@ interface PushTokenOwnerBinding {
   getToken: ClerkTokenResolver;
   capturedToken: Promise<string | null>;
   published: boolean;
+  suspended: boolean;
   inheritedCleanupToken: Promise<string | null> | null;
 }
 
@@ -42,6 +71,7 @@ function bindingIsCurrent(binding: PushTokenOwnerBinding): boolean {
   return (
     activeBinding === binding &&
     lifecycleGeneration === binding.generation &&
+    !binding.suspended &&
     !binding.controller.signal.aborted
   );
 }
@@ -95,6 +125,7 @@ export async function beginPushTokenAccountSession(
     getToken,
     capturedToken: captureToken(getToken),
     published: false,
+    suspended: false,
     inheritedCleanupToken:
       previousBinding?.ownerId === normalizedOwnerId
         ? previousBinding.published
@@ -127,6 +158,15 @@ export async function beginPushTokenAccountSession(
   };
 }
 
+export async function releasePushDeviceForAccountChange(authToken: string | null): Promise<void> {
+  if (activeBinding) activeBinding.suspended = true;
+  await pushRegistrationPostsSettled();
+  if (!authToken) {
+    throw new Error('The push registration cannot be released without the account credential');
+  }
+  await releasePushDeviceForAccountHandover(authToken);
+}
+
 export async function clearPushTokenAccountSession(): Promise<void> {
   const previousBinding = activeBinding;
   activeBinding = null;
@@ -136,6 +176,7 @@ export async function clearPushTokenAccountSession(): Promise<void> {
 }
 
 export function __resetPushTokenAccountLifecycleForTests(): void {
+  usePushRegistrationRequestStore.setState({ heldForUserId: null, generation: 0 });
   activeBinding?.controller.abort();
   activeBinding = null;
   lifecycleGeneration += 1;

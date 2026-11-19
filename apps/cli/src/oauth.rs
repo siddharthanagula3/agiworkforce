@@ -5,10 +5,14 @@ use anyhow::{Context, Result};
 
 use crate::terminal_style as ts;
 
-const DEVICE_AUTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const DEVICE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+fn device_client(timeout: std::time::Duration) -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder().timeout(timeout).build()
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Device Code Flow (for AGI Workforce + GitHub Copilot style auth)
+// Device Code Flow (AGI Workforce sign-in)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(serde::Deserialize)]
@@ -65,10 +69,10 @@ pub enum DeviceCodePoll {
 /// `surface` must be one the device-code endpoint accepts: `cli`, `vscode` or
 /// `desktop`.
 pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<DeviceCodeStart> {
-    let client = reqwest::Client::new();
+    let client =
+        device_client(DEVICE_REQUEST_TIMEOUT).context("Failed to prepare the sign-in request")?;
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
-        .timeout(DEVICE_AUTH_TIMEOUT)
         .header("Content-Type", "application/json")
         .header(
             "User-Agent",
@@ -91,7 +95,7 @@ pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<De
         .context("Failed to parse device code response")?;
 
     Ok(DeviceCodeStart {
-        verification_url: verification_url(&device),
+        verification_url: verification_url(&device)?,
         device_code: device.device_code,
         user_code: device.user_code,
         interval_secs: device.interval.max(3),
@@ -99,12 +103,21 @@ pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<De
     })
 }
 
-fn verification_url(device: &DeviceCodeResponse) -> String {
-    device
+fn verification_url(device: &DeviceCodeResponse) -> Result<String> {
+    let raw = device
         .verification_uri_complete
         .clone()
         .or_else(|| device.verification_uri.clone())
-        .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string())
+        .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string());
+    let url = reqwest::Url::parse(&raw).context("Invalid device authorization URL")?;
+    anyhow::ensure!(
+        url.username().is_empty()
+            && url.password().is_none()
+            && url.fragment().is_none()
+            && crate::tier_cache::resolve_agi_api_base(url.as_str()).is_some(),
+        "The device authorization URL is outside the trusted account service"
+    );
+    Ok(url.to_string())
 }
 
 /// Poll the device-token endpoint once.
@@ -113,10 +126,11 @@ fn verification_url(device: &DeviceCodeResponse) -> String {
 /// reported as `Pending`: the grant is still live, and the caller's own
 /// deadline is what ends the wait.
 pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<DeviceCodePoll> {
-    let client = reqwest::Client::new();
+    let Ok(client) = device_client(DEVICE_REQUEST_TIMEOUT) else {
+        return Ok(DeviceCodePoll::Pending);
+    };
     let response = client
         .post(format!("{api_base}/auth/device/token"))
-        .timeout(DEVICE_AUTH_TIMEOUT)
         .header("Content-Type", "application/json")
         .header(
             "User-Agent",
@@ -189,9 +203,19 @@ pub enum DeviceSessionRenewal {
 }
 
 pub async fn renew_device_session(api_base: &str, refresh: &str) -> DeviceSessionRenewal {
-    let response = reqwest::Client::new()
+    renew_device_session_within(api_base, refresh, DEVICE_REQUEST_TIMEOUT).await
+}
+
+async fn renew_device_session_within(
+    api_base: &str,
+    refresh: &str,
+    timeout: std::time::Duration,
+) -> DeviceSessionRenewal {
+    let Ok(client) = device_client(timeout) else {
+        return DeviceSessionRenewal::Unavailable;
+    };
+    let response = client
         .post(format!("{api_base}/auth/device/refresh"))
-        .timeout(DEVICE_AUTH_TIMEOUT)
         .header(
             "User-Agent",
             format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
@@ -240,35 +264,6 @@ fn renewal_refusal(status: reqwest::StatusCode, body: &serde_json::Value) -> Dev
 }
 
 #[cfg(test)]
-mod device_auth_timeout_tests {
-    #[tokio::test]
-    async fn renewal_against_a_server_that_never_answers_gives_up() {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("bind");
-        let base = format!("http://{}", listener.local_addr().expect("address"));
-        let silent = tokio::spawn(async move {
-            let mut held = Vec::new();
-            while let Ok((socket, _)) = listener.accept().await {
-                held.push(socket);
-            }
-        });
-
-        let outcome = tokio::time::timeout(
-            std::time::Duration::from_secs(45),
-            super::renew_device_session(&base, "refresh"),
-        )
-        .await;
-        silent.abort();
-
-        assert!(
-            matches!(outcome, Ok(super::DeviceSessionRenewal::Unavailable)),
-            "renewal did not give up on a server that never answers"
-        );
-    }
-}
-
-#[cfg(test)]
 mod verification_url_tests {
     use super::{verification_url, DeviceCodeResponse};
 
@@ -285,7 +280,7 @@ mod verification_url_tests {
             "verification_uri_complete": "https://agiworkforce.com/auth/device?user_code=ZED3-E49H&surface=cli",
         }));
         assert_eq!(
-            verification_url(&started),
+            verification_url(&started).expect("trusted authorization link"),
             "https://agiworkforce.com/auth/device?user_code=ZED3-E49H&surface=cli"
         );
     }
@@ -298,9 +293,27 @@ mod verification_url_tests {
             "verification_uri": "http://localhost:3000/auth/device",
         }));
         assert_eq!(
-            verification_url(&started),
+            verification_url(&started).expect("trusted local authorization link"),
             "http://localhost:3000/auth/device"
         );
+    }
+
+    #[test]
+    fn device_authorization_refuses_untrusted_or_credentialed_browser_targets() {
+        for target in [
+            "https://untrusted.example/auth/device",
+            "http://agiworkforce.com/auth/device",
+            "https://user:password@agiworkforce.com/auth/device",
+            "file:///tmp/test",
+            "javascript:alert(1)",
+            "https://agiworkforce.com.evil.example/auth/device",
+            "https://agiworkforce.com/auth/device#fragment",
+        ] {
+            let started = device(
+                serde_json::json!({ "device_code": "d", "user_code": "TEST-CODE", "verification_uri_complete": target }),
+            );
+            assert!(verification_url(&started).is_err(), "{target}");
+        }
     }
 }
 
@@ -336,10 +349,68 @@ mod renewal_refusal_tests {
     }
 }
 
+#[cfg(test)]
+mod bounded_request_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn renewal_and_sign_out_give_up_on_a_server_that_never_answers() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                held.push(stream);
+            }
+        });
+        let limit = std::time::Duration::from_millis(200);
+        let bound = std::time::Duration::from_secs(5);
+
+        let renewed =
+            tokio::time::timeout(bound, renew_device_session_within(&base, "refresh", limit))
+                .await
+                .expect("a renewal must end when the server never answers");
+        assert!(matches!(renewed, DeviceSessionRenewal::Unavailable));
+
+        let revoked = tokio::time::timeout(
+            bound,
+            revoke_device_session_within(&base, "access", "refresh", limit),
+        )
+        .await
+        .expect("a sign-out must end when the server never answers");
+        assert!(!revoked);
+        server.abort();
+    }
+
+    #[test]
+    fn a_failed_sign_in_names_the_shell_command() {
+        for reason in [
+            "The sign-in was denied in the browser.",
+            "The sign-in code expired.",
+        ] {
+            let message = sign_in_retry(reason);
+            assert!(message.starts_with(reason), "{message}");
+            assert!(message.contains("`agi login`"), "{message}");
+            assert!(!message.contains("/login"), "{message}");
+        }
+    }
+}
+
 pub async fn revoke_device_session(api_base: &str, access: &str, refresh: &str) -> bool {
-    let mut request = reqwest::Client::new()
+    revoke_device_session_within(api_base, access, refresh, DEVICE_REQUEST_TIMEOUT).await
+}
+
+async fn revoke_device_session_within(
+    api_base: &str,
+    access: &str,
+    refresh: &str,
+    timeout: std::time::Duration,
+) -> bool {
+    let Ok(client) = device_client(timeout) else {
+        return false;
+    };
+    let mut request = client
         .post(format!("{api_base}/auth/logout"))
-        .timeout(DEVICE_AUTH_TIMEOUT)
         .header("X-Requested-With", "XMLHttpRequest")
         .header(
             "User-Agent",
@@ -410,14 +481,14 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
             }
             DeviceCodePoll::AccountUnavailable(reason) => anyhow::bail!(reason),
             DeviceCodePoll::Denied => {
-                anyhow::bail!("The sign-in was denied in the browser. Run /login to try again.")
+                anyhow::bail!(sign_in_retry("The sign-in was denied in the browser."))
             }
             DeviceCodePoll::Authorized(entry) => {
                 eprintln!("\n  {} Authenticated with AGI!", ts::success_header("✓"));
                 return Ok(*entry);
             }
             DeviceCodePoll::Expired => {
-                anyhow::bail!("Device code expired. Please run /login again.")
+                anyhow::bail!(sign_in_retry("The sign-in code expired."))
             }
             DeviceCodePoll::Pending => {
                 if attempt % 6 == 0 {
@@ -431,10 +502,14 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         }
     }
 
-    anyhow::bail!(
-        "Authorization timed out after {}s. Please try again.",
+    anyhow::bail!(sign_in_retry(&format!(
+        "Authorization timed out after {}s.",
         device.expires_in_secs
-    )
+    )))
+}
+
+fn sign_in_retry(reason: &str) -> String {
+    format!("{reason} Run `agi login` to try again.")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

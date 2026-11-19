@@ -367,7 +367,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
               </div>
             ) : (
               <div className="rounded-lg border border-border bg-muted/50 px-4 py-6">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {describeConnectorActions(connector.id)}
                 </p>
               </div>

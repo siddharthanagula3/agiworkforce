@@ -2807,12 +2807,14 @@ ${capabilityTabs}
           };
           var hostInstructions = document.getElementById('hostCustomInstructions');
           var workspaceInstructions = document.getElementById('workspaceCustomInstructions');
+          var hostHasDraft = hostInstructions.value !== savedInstructions.host;
+          var workspaceHasDraft = workspaceInstructions.value !== savedInstructions.workspace;
           savedInstructions.host = instructionContext.host || '';
           savedInstructions.workspace = instructionContext.workspace || '';
-          if (document.activeElement !== hostInstructions) {
+          if (!hostHasDraft && document.activeElement !== hostInstructions) {
             hostInstructions.value = savedInstructions.host;
           }
-          if (document.activeElement !== workspaceInstructions) {
+          if (!workspaceHasDraft && document.activeElement !== workspaceInstructions) {
             workspaceInstructions.value = savedInstructions.workspace;
           }
           updateInstructionCount('host');

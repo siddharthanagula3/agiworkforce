@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
-  "displayName": "Code",
-  "description": "Multi-provider AI coding assistant for VS Code",
+  "displayName": "AGI Code",
+  "description": "AI pair programming in VS Code, run by the AGI CLI on your machine with local models, your own provider keys, or AGI Cloud.",
   "version": "0.0.1",
   "publisher": "agiworkforce",
   "license": "SEE LICENSE IN LICENSE",
@@ -35,7 +35,6 @@
     "ai",
     "llm",
     "chat",
-    "copilot",
     "assistant",
     "coding",
     "agent",
@@ -54,7 +53,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "API endpoint, CLI path, model boundary, auto-apply, startup connection, inline completion, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes and inline completions are disabled until the workspace is trusted.",
+      "description": "API endpoint, CLI path, model boundary, auto-apply, startup connection, inline completion, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Until the workspace is trusted, the local AGI CLI runtime is not started (so chat, agent runs and session history are unavailable), and inline completions are off.",
       "restrictedConfigurations": [
         "agiWorkforce.apiEndpoint",
         "agiWorkforce.cliPath",
@@ -828,7 +827,7 @@
           {
             "id": "understandTaskHandoff",
             "title": "Follow background work from the IDE",
-            "description": "Cloud AGI Work runs started on any device show their state, age and pending approvals in the Cloud Tasks view. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
+            "description": "Cloud tasks started on any device show their state, age and pending approvals in the Cloud tasks list, and Continue in the Cloud hands this branch to a cloud session. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
             "media": {
               "markdown": "media/walkthrough/02-tasks.md"
             },
@@ -839,12 +838,12 @@
           {
             "id": "reviewChanges",
             "title": "Turn intent into a reviewed change",
-            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Settings](command:agi-workforce.openSettings)",
+            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Chat](command:agi-workforce.chat)",
             "media": {
               "markdown": "media/walkthrough/03-review.md"
             },
             "completionEvents": [
-              "onCommand:agi-workforce.openSettings"
+              "onCommand:agi-workforce.chat"
             ]
           },
           {
@@ -877,7 +876,7 @@
         "id": "agiworkforce.agi",
         "name": "agi",
         "fullName": "AGI Code",
-        "description": "Multi-provider AI coding assistant for VS Code",
+        "description": "Ask about the code in this workspace",
         "isSticky": true,
         "commands": [
           {
@@ -1099,6 +1098,30 @@
           "when": "false"
         },
         {
+          "command": "agi-workforce.signInProvider",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshCloudTasks",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshSchedules",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshProjects",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshArtifacts",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshConnectors",
+          "when": "false"
+        },
+        {
           "command": "agi-workforce.openCloudTask",
           "when": "false"
         },
@@ -1226,24 +1249,38 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
+          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send. A workspace setting can turn this off, but only your user setting turns it on."
         },
         "agiWorkforce.respectGitIgnore": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on."
+          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on. A workspace setting can turn this on, but only your user setting turns it off."
         },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting."
+          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting.",
+          "tags": [
+            "telemetry",
+            "usesOnlineServices"
+          ]
         },
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Include your saved workspace memory facts with chat turns. Turn this off to stop sending them without deleting them; the Memory view keeps showing what is stored."
+          "scope": "application",
+          "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored. Only your own user settings can change this. To keep memory off in one repository, folder or remote machine, set agiWorkforce.optOut.memory there.",
+          "tags": [
+            "usesOnlineServices"
+          ]
+        },
+        "agiWorkforce.optOut.memory": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Keep memory off here. Set this in a repository, folder, dev container or remote settings file to stop saved memory facts going with chat turns from this place. It can only turn memory off, never on."
         },
         "agiWorkforce.hoverEnabled": {
           "type": "boolean",
@@ -1258,12 +1295,29 @@
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically apply AI-suggested fixes without showing a diff"
+          "scope": "application",
+          "description": "Automatically apply AI-suggested fixes without showing a diff. Only your own user settings can turn this on. To keep it off in one repository, folder or remote machine, set agiWorkforce.optOut.autoApplyFixes there."
+        },
+        "agiWorkforce.optOut.autoApplyFixes": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Always show a diff before an AI fix is applied here. Set this in a repository, folder, dev container or remote settings file to turn off Auto Apply Fixes for this place. It can only turn the feature off, never on."
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key."
+          "scope": "application",
+          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key. Only your own user settings can turn this on. To keep it off in one repository, folder or remote machine, set agiWorkforce.optOut.inlineCompletions there.",
+          "tags": [
+            "usesOnlineServices"
+          ]
+        },
+        "agiWorkforce.optOut.inlineCompletions": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Keep inline completions off here. Set this in a repository, folder, dev container or remote settings file so no surrounding code is sent for completions from this place. It can only turn completions off, never on."
         },
         "agiWorkforce.inlineCompletions.debounceMs": {
           "type": "number",
@@ -1300,8 +1354,8 @@
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
-          "scope": "machine",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
+          "scope": "application",
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is a user setting that also applies in remote windows, and Bypass Permissions is confirmed per workspace."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
@@ -1315,24 +1369,21 @@
             "max"
           ],
           "default": "medium",
-          "scope": "machine",
-          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. Machine-scoped so a repository cannot raise it."
+          "scope": "application",
+          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. A user setting, so a repository cannot raise it, and it also applies in remote windows."
         },
         "agiWorkforce.agent.thinking": {
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
         },
-        "agiWorkforce.currentTier": {
-          "type": "string",
-          "default": "unknown",
-          "readOnly": true,
-          "description": "Current subscription tier (read-only, populated on activation). Run 'Code: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
-        },
         "agiWorkforce.activateOnStartup": {
           "type": "boolean",
           "default": false,
-          "description": "Start AGI Code background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session."
+          "description": "Start AGI Code background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session.",
+          "tags": [
+            "usesOnlineServices"
+          ]
         },
         "agiWorkforce.useTerminal": {
           "type": "boolean",
@@ -1346,7 +1397,7 @@
         "command": "agi-workforce.chat",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "!terminalFocus && !agi-workforce.hasDiff"
+        "when": "!terminalFocus && !editorTextFocus || !terminalFocus && !agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.explain",
@@ -1391,24 +1442,24 @@
         "command": "agi-workforce.acceptCurrentDiff",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.rejectCurrentDiff",
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.acceptDiff",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.rejectDiff",
         "key": "escape",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor && !suggestWidgetVisible && !editorHasMultipleSelections && !inSnippetMode && !inlineSuggestionVisible && !parameterHintsVisible && !findWidgetVisible"
       },
       {
         "command": "agi-workforce.acceptAllDiffsGlobal",
@@ -1429,7 +1480,7 @@
     "watch": "node esbuild.js --watch",
     "package": "pnpm run clean && node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "verify:package": "node scripts/verify-vsix.mjs",
-    "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
+    "lint": "node scripts/check-vscode-theme-tokens.mjs && eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "vitest run",
     "test:webview": "vitest run --config vitest.webview.config.ts",
     "test:integration": "tsc -p tsconfig.test.json --noEmit && node esbuild.js --tests && node esbuild.js && node out/test/runTests.js",
@@ -1460,19 +1511,18 @@
     "dompurify": "^3.4.17",
     "markdown-it": "^15.0.3",
     "qrcode": "^1.5.4",
-    "ws": "^8.22.0",
+    "ws": "^8.22.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.2.0",
     "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.6",
     "@types/vscode": "^1.100.0",
     "@types/ws": "^8.18.2",
-    "@typescript-eslint/eslint-plugin": "^8.71.2",
-    "@typescript-eslint/parser": "^8.71.2",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
@@ -1482,7 +1532,8 @@
     "glob": "^14.0.2",
     "jsdom": "^25.0.1",
     "mocha": "^11.8.0",
-    "rimraf": "^6.1.3",
+    "ovsx": "1.3.0",
+    "rimraf": "^6.1.4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
   }

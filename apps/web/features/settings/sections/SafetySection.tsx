@@ -117,12 +117,12 @@ export function SafetySection() {
               maxWidth: 520,
               margin: 'var(--space-1) 0 0',
               color: 'var(--text-3)',
-              fontSize: 14,
+              fontSize: 12,
               lineHeight: 1.5,
             }}
           >
-            Refuse explicit or harmful how-to prompts before they reach a Cloud model, without
-            monitoring your chats, alerting anyone or replacing emergency services.{' '}
+            Refuse explicit or harmful how-to prompts. Does not monitor chats, alert anyone or
+            replace emergency services.{' '}
             <a
               href={helpArticlePath(SAFETY_HELP_ARTICLE)}
               target="_blank"

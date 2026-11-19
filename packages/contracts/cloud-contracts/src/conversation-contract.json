@@ -1,0 +1,8 @@
+{
+  "titleMaxLength": 500,
+  "draftMaxLength": 20000,
+  "draftSaveDebounceMs": 1500,
+  "organizationHeader": "x-agi-organization-id",
+  "personalWorkspace": "personal",
+  "workspacesPath": "/api/settings/workspaces"
+}

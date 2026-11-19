@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-18",
+  "lastUpdated": "2026-11-08",
   "purpose": "Machine-readable write-lane map for safe 15+ parallel human/agent implementation work.",
   "recommendedParallelism": {
     "writerLanes": 19,
@@ -75,12 +75,16 @@
     },
     {
       "id": "desktop-native",
-      "name": "Desktop Tauri and local native runtime",
+      "name": "Desktop native hosts and local runtime",
       "ownerRole": "Desktop lead + Rust platform",
-      "ownedWritePaths": ["apps/desktop/src-tauri/**"],
+      "ownedWritePaths": ["apps/desktop/src-tauri/**", "apps/desktop/gpui/**"],
       "readOnlyContextPaths": ["apps/desktop/src/**", "crates/**"],
       "blockedPaths": ["apps/desktop/src/**", "packages/**"],
-      "requiredChecks": ["cargo check -p agiworkforce-desktop"],
+      "requiredChecks": [
+        "cargo check -p agiworkforce-desktop",
+        "cargo check -p agiworkforce-desktop-gpui",
+        "cargo test -p agiworkforce-desktop-gpui --no-default-features"
+      ],
       "escalationOwners": ["Security/privacy lead", "Release owner"]
     },
     {

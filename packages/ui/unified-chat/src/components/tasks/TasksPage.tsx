@@ -542,8 +542,10 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
     >
       <header className="mb-4 flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <ListChecks className="h-5 w-5 text-primary" />
-          <h1 className="font-[var(--chat-font-sans)] text-display">Work history</h1>
+          <ListChecks className="h-5 w-5 text-primary max-md:hidden" />
+          <h1 className="font-[var(--chat-font-sans)] text-display max-md:font-medium">
+            Work history
+          </h1>
         </div>
         <p className="text-sm text-muted-foreground">Your Cloud work sessions</p>
       </header>
@@ -596,9 +598,9 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             {filter === 'archived'
-              ? 'A finished task moves here when you archive it, and stays until you restore it.'
+              ? 'Archived tasks stay here until you restore them.'
               : filter === 'needs_you'
-                ? 'A work session that is waiting for your approval, an answer or a resume shows up here.'
+                ? 'Sessions waiting for your approval, an answer or a resume show up here.'
                 : 'Runs from Work, Research, and long tool sessions show up here.'}
           </p>
           {transport.startWork && filter !== 'archived' && filter !== 'needs_you' ? (
@@ -762,7 +764,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
+                          className="h-7 whitespace-nowrap px-2 text-xs text-muted-foreground max-md:pointer-coarse:h-11"
                           onClick={() => openConversation(run)}
                         >
                           <MessageSquare className="me-1 h-3 w-3" />
@@ -773,7 +775,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
+                          className="h-7 whitespace-nowrap px-2 text-xs text-muted-foreground max-md:pointer-coarse:h-11"
                           disabled={pausingId === run.id}
                           onClick={() =>
                             void (pauseRequested ? handleResume(run.id) : handlePause(run.id))
@@ -796,7 +798,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
+                          className="h-7 whitespace-nowrap px-2 text-xs text-muted-foreground max-md:pointer-coarse:h-11"
                           disabled={pausingId === run.id}
                           onClick={() => void handleResume(run.id)}
                         >
@@ -813,7 +815,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
+                          className="h-7 whitespace-nowrap px-2 text-xs text-muted-foreground max-md:pointer-coarse:h-11"
                           disabled={cancellingId === run.id}
                           onClick={() => void handleCancel(run.id)}
                         >
@@ -830,7 +832,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
+                          className="h-7 whitespace-nowrap px-2 text-xs text-muted-foreground max-md:pointer-coarse:h-11"
                           disabled={archivingId === run.id}
                           onClick={() => void handleArchive(run, false)}
                         >
@@ -847,7 +849,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
+                          className="h-7 whitespace-nowrap px-2 text-xs text-muted-foreground max-md:pointer-coarse:h-11"
                           disabled={archivingId === run.id}
                           onClick={() => void handleArchive(run, true)}
                         >

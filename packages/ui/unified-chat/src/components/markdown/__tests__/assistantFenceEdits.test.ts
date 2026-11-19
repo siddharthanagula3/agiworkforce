@@ -3,6 +3,7 @@ import {
   applyAssistantFenceEdit,
   collectInlineImageSources,
   countEditableAssistantFences,
+  listEditableAssistantFences,
 } from '../assistantFenceEdits';
 
 describe('assistant fence edits', () => {
@@ -147,5 +148,33 @@ describe('assistant fence edits', () => {
         content: 'Reopened',
       }),
     ).toBe(`Before\n${nextFence}document\nReopened\n${nextFence}\nAfter`);
+  });
+
+  it('lists editable fences in the order and with the exact source an edit must name', () => {
+    const markdown = [
+      '```Writing',
+      '  indented first line',
+      '',
+      '```',
+      '```python',
+      'print(1)',
+      '```',
+      '> ```email',
+      '> To: reader@example.com',
+      '> ```',
+      '```prompt',
+      'Summarise this.',
+      '```',
+    ].join('\n');
+    const fences = listEditableAssistantFences(markdown);
+    expect(fences).toEqual([
+      { index: 0, language: 'writing', source: '  indented first line\n' },
+      { index: 1, language: 'email', source: 'To: reader@example.com' },
+      { index: 2, language: 'prompt', source: 'Summarise this.' },
+    ]);
+    expect(fences).toHaveLength(countEditableAssistantFences(markdown));
+    expect(
+      applyAssistantFenceEdit(markdown, { ...fences[2]!, content: 'Summarise it briefly.' }),
+    ).toContain('```prompt\nSummarise it briefly.\n```');
   });
 });

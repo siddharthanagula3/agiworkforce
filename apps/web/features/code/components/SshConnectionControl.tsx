@@ -94,9 +94,8 @@ export function SshConnectionControl({
           <DialogHeader>
             <DialogTitle>SSH coding environment</DialogTitle>
             <DialogDescription>
-              Connect to an existing CLI on a Unix host. Host keys must already be trusted. Uses
-              your SSH agent or default keys; passwords, jump hosts, the host file editor and
-              interactive terminals are unsupported. Remote credentials stay on that host.
+              Uses your SSH agent or keys and an already trusted host key. No passwords or jump
+              hosts. Credentials stay on the host.
             </DialogDescription>
           </DialogHeader>
           {error && (

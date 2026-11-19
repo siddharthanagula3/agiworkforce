@@ -516,7 +516,7 @@ impl BackgroundAgentManager {
         let agents = self.agents.read().await;
         let mut list: Vec<_> = agents.values().cloned().collect();
         // Sort by creation time, newest first
-        list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        list.sort_by_key(|a| std::cmp::Reverse(a.created_at));
         list
     }
 

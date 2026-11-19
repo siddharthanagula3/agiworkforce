@@ -8,6 +8,8 @@ import {
   readProductLink,
 } from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
+import { webContentPageUrl } from '@/src/platform/webContentPage';
+import { isConversationOpenInForeground } from './conversationFocus';
 import { notificationAllowedOnceReadable, vibrationAllowed } from './notificationGate';
 import {
   immediateNotificationTrigger,
@@ -22,10 +24,20 @@ import {
   postPushRegistration,
   stopPushPreferenceSync,
 } from './pushPreferenceSync';
+import {
+  toPushPermissionStatus,
+  trackPushPermissionRequest,
+  type PushPermissionStatus,
+} from './pushPermissionStatus';
 
 let _isSignedIn = false;
 export function setSignedIn(value: boolean): void {
   _isSignedIn = value;
+}
+
+let notePushTypeReceived: (type: unknown) => void = () => {};
+export function setPushTypeReceivedListener(listener: (type: unknown) => void): void {
+  notePushTypeReceived = listener;
 }
 
 export type { NotificationEventType };
@@ -40,11 +52,19 @@ export interface NotificationData {
   [key: string]: unknown;
 }
 
+function isReplyForOpenConversation(data: NotificationData | undefined): boolean {
+  return data?.type === 'chat_message' && isConversationOpenInForeground(data.conversationId);
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
+    notePushTypeReceived(data?.type);
 
-    if (data?.type && !(await notificationAllowedOnceReadable(data.type))) {
+    if (
+      isReplyForOpenConversation(data) ||
+      (data?.type && !(await notificationAllowedOnceReadable(data.type)))
+    ) {
       return {
         shouldShowBanner: false,
         shouldShowList: false,
@@ -119,7 +139,7 @@ export function setPushAccountContext(accountContext: PushNotificationAccountCon
   _accountContext = accountContext;
 }
 
-export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined';
+export type { PushPermissionStatus };
 
 export type PushDeliveryStatus = PushPermissionStatus | 'unregistered';
 
@@ -128,15 +148,8 @@ export async function getPushDeliveryStatus(): Promise<PushDeliveryStatus> {
   return status === 'granted' && _registrationIssue ? 'unregistered' : status;
 }
 
-function toPushPermissionStatus(status: string): PushPermissionStatus {
-  if (status === 'granted') return 'granted';
-  if (status === 'undetermined') return 'undetermined';
-  return 'denied';
-}
-
 export async function getPushPermissionStatus(): Promise<PushPermissionStatus> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return toPushPermissionStatus(status);
+  return toPushPermissionStatus(await Notifications.getPermissionsAsync());
 }
 
 // The OS prompt fires exactly once per install, so it is spent from an explicit
@@ -145,10 +158,11 @@ export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
   const current = await getPushPermissionStatus();
   let status = current;
   if (status !== 'granted') {
-    const requested = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowBadge: true, allowSound: true },
-    });
-    status = toPushPermissionStatus(requested.status);
+    status = await trackPushPermissionRequest(() =>
+      Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+      }),
+    );
   }
   if (status !== 'granted') return status;
 
@@ -157,6 +171,20 @@ export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
     await registerForPushNotifications(_accountContext);
   }
   return _registrationIssue ? 'unregistered' : 'granted';
+}
+
+export async function clearDeliveredNotifications(): Promise<void> {
+  const steps: Array<[string, () => Promise<unknown>]> = [
+    ['dismiss delivered notifications', () => Notifications.dismissAllNotificationsAsync()],
+    ['reset app badge', () => Notifications.setBadgeCountAsync(0)],
+  ];
+  for (const [label, step] of steps) {
+    try {
+      await step();
+    } catch (error) {
+      console.warn(`[notifications] Could not ${label}:`, error);
+    }
+  }
 }
 
 export async function registerForPushNotifications(
@@ -227,6 +255,7 @@ export async function scheduleLocalNotification(opts: {
   threadId?: string;
   /** The one approval this notification is about. */
   approvalId?: string;
+  conversationId?: string;
 }): Promise<void> {
   const priority = opts.priority ?? inferPriority(opts.type);
 
@@ -238,6 +267,7 @@ export async function scheduleLocalNotification(opts: {
     ...(opts.rootId ? { rootId: opts.rootId } : {}),
     ...(opts.threadId ? { threadId: opts.threadId } : {}),
     ...(opts.approvalId ? { approvalId: opts.approvalId } : {}),
+    ...(opts.conversationId ? { conversationId: opts.conversationId } : {}),
   };
 
   const content: Notifications.NotificationContentInput = {
@@ -270,6 +300,28 @@ const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey |
 ];
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LOCAL_CONVERSATION_ID = /^conv_\d+_[a-z0-9]+$/;
+const RELEASE_NOTE_SLUG = /^[a-z0-9-]{1,64}$/;
+
+function readConversationId(data: NotificationData): string | null {
+  const id = data.conversationId;
+  return typeof id === 'string' && (CONVERSATION_ID.test(id) || LOCAL_CONVERSATION_ID.test(id))
+    ? id
+    : null;
+}
+
+export function releaseNoteUrl(data: NotificationData): string | null {
+  const release = data.release;
+  if (typeof release !== 'string' || !RELEASE_NOTE_SLUG.test(release)) return null;
+  return webContentPageUrl(`/release-notes/${release}`);
+}
+
+function openConversation(conversationId: string): void {
+  safeNavigate({
+    pathname: '/(app)/chat/[id]',
+    params: { id: conversationId },
+  } as Parameters<typeof router.push>[0]);
+}
 
 function isAllowedRoute(route: string): boolean {
   return ALLOWED_ROUTE_PREFIXES.some(
@@ -307,6 +359,12 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
   }
 }
 
+function companionHomeRoute(): Parameters<typeof router.push>[0] {
+  return isAllowedRoute('/(app)/companion')
+    ? { pathname: '/(app)/companion' as const }
+    : { pathname: '/(app)/notifications' as const };
+}
+
 /**
  * Where an approval notification opens.
  *
@@ -317,23 +375,24 @@ function safeNavigate(route: Parameters<typeof router.push>[0]): void {
  * can put it in front.
  */
 function approvalRoute(data: NotificationData): Parameters<typeof router.push>[0] {
+  const companionOpen = isAllowedRoute('/(app)/companion');
   const approvalId = readIdentifier(data, 'approvalId') ?? readIdentifier(data, 'requestId');
   const threadId = readIdentifier(data, 'threadId');
   const rootId = readIdentifier(data, 'rootId');
-  if (threadId && rootId) {
+  if (companionOpen && threadId && rootId) {
     return {
       pathname: '/(app)/companion/code/[threadId]' as const,
       params: { threadId, rootId, ...(approvalId ? { approvalId } : {}) },
     };
   }
   const agentId = readIdentifier(data, 'agentId');
-  if (agentId) {
+  if (companionOpen && agentId) {
     return {
       pathname: '/(app)/companion/agent/[id]' as const,
       params: { id: agentId, ...(approvalId ? { approvalId } : {}) },
     };
   }
-  return { pathname: '/(app)/companion' as const };
+  return companionHomeRoute();
 }
 
 const CLOUD_RUN_NOTIFICATION_TYPES: readonly NotificationEventType[] = [
@@ -370,6 +429,13 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   }
 
   notificationCenterStore.add(response.notification);
+  notePushTypeReceived(data.type);
+
+  const localConversationId = data.type === 'chat_message' ? readConversationId(data) : null;
+  if (localConversationId && LOCAL_CONVERSATION_ID.test(localConversationId)) {
+    openConversation(localConversationId);
+    return;
+  }
 
   // Local Mode is the app's own front door, so a tap never lands on a sign-in
   // wall. Whatever the notification was about, the app opens (MOBILE-052).
@@ -394,6 +460,17 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
   const runRoute = cloudRunNotificationRoute(data);
   if (runRoute) {
     safeNavigate(runRoute);
+    return;
+  }
+
+  const researchConversationId =
+    data.type === 'research_completed' ? readConversationId(data) : null;
+  if (researchConversationId) {
+    safeNavigate(
+      `/(app)/open/chat/${encodeURIComponent(researchConversationId)}` as Parameters<
+        typeof router.push
+      >[0],
+    );
     return;
   }
 
@@ -444,15 +521,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       break;
 
     case 'companion_connected':
-      safeNavigate({ pathname: '/(app)/companion' as const });
+      safeNavigate(companionHomeRoute());
       break;
 
     case 'chat_message':
-      if (typeof data.conversationId === 'string' && CONVERSATION_ID.test(data.conversationId)) {
-        safeNavigate({
-          pathname: '/(app)/chat/[id]',
-          params: { id: data.conversationId },
-        } as Parameters<typeof router.push>[0]);
+      if (readConversationId(data)) {
+        openConversation(readConversationId(data) as string);
       } else if (data.route && typeof data.route === 'string') {
         if (isAllowedRoute(data.route)) {
           safeNavigate(data.route as Parameters<typeof router.push>[0]);
@@ -469,6 +543,32 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'heartbeat_info':
       safeNavigate({ pathname: '/(app)/notifications' as const });
       break;
+
+    case 'usage_limit_reset':
+      safeNavigate({ pathname: '/(app)/(tabs)/chat' as const });
+      break;
+
+    case 'research_completed':
+      safeNavigate({ pathname: '/(app)/reports' as const });
+      break;
+
+    case 'code_session_completed':
+    case 'code_session_failed':
+    case 'code_session_needs_input':
+      safeNavigate({ pathname: '/(app)/cloud-code' as const });
+      break;
+
+    case 'product_update': {
+      const url = releaseNoteUrl(data);
+      if (url) {
+        void import('@/lib/safeOpenURL').then(({ openUntrustedUrlInAppBrowser }) =>
+          openUntrustedUrlInAppBrowser(url),
+        );
+      } else {
+        safeNavigate({ pathname: '/(app)/notifications' as const });
+      }
+      break;
+    }
 
     default:
       safeNavigate({ pathname: '/(app)' as const });
@@ -646,7 +746,10 @@ export function setupNotificationListeners(
 
   lifetime.subscriptions.push(
     Notifications.addNotificationReceivedListener((notification) => {
-      if (isCurrent()) notificationCenterStore.add(notification);
+      const data = notification.request.content.data as NotificationData | undefined;
+      if (isCurrent() && !isReplyForOpenConversation(data)) {
+        notificationCenterStore.add(notification);
+      }
     }),
     Notifications.addNotificationResponseReceivedListener((response) => {
       if (isCurrent()) handleNotificationResponse(response);
@@ -676,11 +779,15 @@ function inferPriority(type: NotificationEventType | undefined): NotificationPri
   switch (type) {
     case 'agent_failed':
     case 'emergency_stop_triggered':
+    case 'code_session_failed':
       return 'critical';
     case 'agent_approval_needed':
     case 'approval_pending_escalation':
+    case 'code_session_needs_input':
       return 'high';
     case 'task_completed':
+    case 'research_completed':
+    case 'code_session_completed':
     case 'agent_paused':
     case 'schedule_triggered':
     case 'companion_connected':

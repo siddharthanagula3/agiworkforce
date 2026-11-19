@@ -1,8 +1,8 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, Share, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { Check, ChevronRight, Copy, Share2, TriangleAlert } from 'lucide-react-native';
+import { Check, ChevronRight, Copy, Flag, Share2, TriangleAlert } from 'lucide-react-native';
 import type { CloudCodeChanges, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import {
   CLOUD_CODE_SESSION_COPY,
@@ -14,12 +14,15 @@ import {
   type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
+import { TranscriptFontContext } from '@/components/ui/transcriptFont';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
+import { useTranscriptFontFamily } from '@/src/features/settings/code/useCodeAppearance';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CLOUD_CODE_REPLY_COPY } from '../presentation';
 import { CloudCodeChangesCard } from './CloudCodeChangesCard';
+import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
 
 const EXIT_CODE_OK = 0;
 const CHEVRON_SIZE = 14;
@@ -27,12 +30,13 @@ const EXPANDED_ROTATION = '90deg';
 const REPLY_ACTION_ICON_SIZE = 16;
 const SHARE_FAILED_TITLE = 'Could not share';
 const SHARE_FAILED_BODY = 'Sharing is not available right now. Try again, or copy the reply.';
+const REPORT_THIS_REPLY = 'Report this reply';
 
 function firstLine(output: string): string {
   return output.split('\n')[0]?.trim() ?? '';
 }
 
-function Disclosure({
+export function CodeDisclosure({
   label,
   expanded,
   failed,
@@ -71,7 +75,7 @@ function Disclosure({
   );
 }
 
-function OutputBlock({ text, failed }: { text: string; failed: boolean }) {
+export function CodeOutputBlock({ text, failed }: { text: string; failed: boolean }) {
   const colors = useThemeColors();
 
   return (
@@ -103,7 +107,7 @@ function StepRow({ step }: { step: CloudCodeAgentStep }) {
 
   return (
     <View>
-      <Disclosure
+      <CodeDisclosure
         label={step.label ?? step.toolName}
         expanded={expanded}
         failed={step.isError}
@@ -114,7 +118,9 @@ function StepRow({ step }: { step: CloudCodeAgentStep }) {
           {summary}
         </Text>
       ) : null}
-      {expanded && step.output ? <OutputBlock text={step.output} failed={step.isError} /> : null}
+      {expanded && step.output ? (
+        <CodeOutputBlock text={step.output} failed={step.isError} />
+      ) : null}
     </View>
   );
 }
@@ -127,7 +133,7 @@ function CommandRow({ entry }: { entry: CloudCodeTerminalEntry }) {
 
   return (
     <View>
-      <Disclosure
+      <CodeDisclosure
         label={entry.command}
         expanded={expanded}
         failed={failed}
@@ -140,8 +146,8 @@ function CommandRow({ entry }: { entry: CloudCodeTerminalEntry }) {
       ) : null}
       {expanded ? (
         <View style={{ gap: 6 }}>
-          {entry.stdout ? <OutputBlock text={entry.stdout} failed={false} /> : null}
-          {entry.stderr ? <OutputBlock text={entry.stderr} failed /> : null}
+          {entry.stdout ? <CodeOutputBlock text={entry.stdout} failed={false} /> : null}
+          {entry.stderr ? <CodeOutputBlock text={entry.stderr} failed /> : null}
           <Text
             variant="mono"
             style={{
@@ -164,7 +170,7 @@ function CommandGroup({ entries }: { entries: CloudCodeTerminalEntry[] }) {
 
   return (
     <View>
-      <Disclosure
+      <CodeDisclosure
         label={cloudCodeCommandRanLabel(entries.length)}
         expanded={expanded}
         failed={false}
@@ -183,6 +189,7 @@ function CommandGroup({ entries }: { entries: CloudCodeTerminalEntry[] }) {
 
 export function CloudCodeTaskBubble({ text }: { text: string }) {
   const colors = useThemeColors();
+  const fontFamily = useTranscriptFontFamily();
 
   return (
     <View
@@ -197,7 +204,12 @@ export function CloudCodeTaskBubble({ text }: { text: string }) {
     >
       <Text
         selectable
-        style={{ color: colors.textPrimary, fontSize: typeScale.callout, lineHeight: 24 }}
+        style={{
+          color: colors.textPrimary,
+          fontSize: typeScale.callout,
+          lineHeight: 24,
+          ...(fontFamily ? { fontFamily } : {}),
+        }}
       >
         {text}
       </Text>
@@ -205,7 +217,7 @@ export function CloudCodeTaskBubble({ text }: { text: string }) {
   );
 }
 
-function ReplyActionButton({
+export function CodeReplyActionButton({
   label,
   icon: Icon,
   color,
@@ -229,7 +241,7 @@ function ReplyActionButton({
   );
 }
 
-function ReplyActions({ text }: { text: string }) {
+export function CodeReplyActions({ text, extra }: { text: string; extra?: ReactNode }) {
   const colors = useThemeColors();
   const { status, copy } = useCopyAction();
   const copyColor =
@@ -252,45 +264,83 @@ function ReplyActions({ text }: { text: string }) {
       accessibilityLabel={CLOUD_CODE_REPLY_COPY.actions}
       style={{ flexDirection: 'row', alignItems: 'center', marginLeft: -10 }}
     >
-      <ReplyActionButton
+      <CodeReplyActionButton
         label={copyControlLabel(status, CLOUD_CODE_REPLY_COPY.copy)}
         icon={status === 'copied' ? Check : status === 'failed' ? TriangleAlert : Copy}
         color={copyColor}
         onPress={() => void copy(text)}
       />
-      <ReplyActionButton
+      <CodeReplyActionButton
         label={CLOUD_CODE_REPLY_COPY.share}
         icon={Share2}
         color={colors.textMuted}
         onPress={() => void share()}
       />
+      {extra}
     </View>
   );
 }
 
 function Reply({
+  id,
   text,
   stopReason,
+  sessionId,
 }: {
+  id: string;
   text: string;
   stopReason: CloudCodeAgentStopReason | null;
+  sessionId?: string;
 }) {
   const colors = useThemeColors();
+  const fontFamily = useTranscriptFontFamily();
+  const [reporting, setReporting] = useState(false);
+  const reportable = text.trim().length > 0;
 
   return (
     <View style={{ gap: 6 }}>
-      {text ? <View>{renderMarkdownContent(text, colors)}</View> : null}
+      {text ? (
+        <TranscriptFontContext.Provider value={fontFamily ?? null}>
+          <View>{renderMarkdownContent(text, colors)}</View>
+        </TranscriptFontContext.Provider>
+      ) : null}
       {stopReason ? (
         <Text
           style={{
             color: cloudCodeStopReasonIsFailure(stopReason) ? colors.agentError : colors.textMuted,
             fontSize: typeScale.footnote,
+            ...(fontFamily ? { fontFamily } : {}),
           }}
         >
           {CLOUD_CODE_STOP_REASON_LABELS[stopReason]}
         </Text>
       ) : null}
-      {text.trim() ? <ReplyActions text={text} /> : null}
+      {reportable ? (
+        <CodeReplyActions
+          text={text}
+          extra={
+            <CodeReplyActionButton
+              label={REPORT_THIS_REPLY}
+              icon={Flag}
+              color={colors.textMuted}
+              onPress={() => setReporting(true)}
+            />
+          }
+        />
+      ) : null}
+      {reportable && reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(false)}
+          title={REPORT_THIS_REPLY}
+          target={{
+            messageId: id,
+            conversationId: sessionId ? `cloud-code:${sessionId}` : 'cloud-code',
+            contentExcerpt: text,
+            subject: { kind: 'code-reply', id },
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -318,10 +368,12 @@ export function CloudCodeTranscript({
   items,
   changes,
   onOpenChanges,
+  sessionId,
 }: {
   items: CodeTranscriptItem[];
   changes?: CloudCodeChanges | null;
   onOpenChanges?: () => void;
+  sessionId?: string;
 }) {
   return (
     <View style={{ gap: 14 }}>
@@ -337,7 +389,15 @@ export function CloudCodeTranscript({
             </View>
           );
         }
-        return <Reply key={item.id} text={item.text} stopReason={item.stopReason} />;
+        return (
+          <Reply
+            key={item.id}
+            id={item.id}
+            text={item.text}
+            stopReason={item.stopReason}
+            sessionId={sessionId}
+          />
+        );
       })}
       {changes && onOpenChanges ? (
         <CloudCodeChangesCard changes={changes} onOpen={onOpenChanges} />

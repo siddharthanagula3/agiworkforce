@@ -113,7 +113,7 @@ export function InvoiceList() {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overscroll-x-contain max-md:rounded-lg max-md:border max-md:border-border">
       {state.hasMore ? (
         <p role="status" className="px-4 pb-3 text-sm text-muted-foreground">
           Showing your {state.invoices.length} most recent invoices. Older invoices are available

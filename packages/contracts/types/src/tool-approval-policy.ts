@@ -55,8 +55,7 @@ export const TOOL_APPROVAL_POLICY_OPTIONS: readonly ToolApprovalPolicyOption[] =
     shortLabel: 'Ask',
     label: 'Ask before every action',
     hint: 'Every tool action waits for you, reads included.',
-    description:
-      'Every connector, plugin, and tool action waits for your approval, including actions that only read data.',
+    description: 'Every connector, plugin and tool action waits for your approval, reads included.',
   },
   {
     policy: 'auto_approve_read_only',
@@ -64,7 +63,7 @@ export const TOOL_APPROVAL_POLICY_OPTIONS: readonly ToolApprovalPolicyOption[] =
     label: 'Run read-only actions without asking',
     hint: 'Reads, searches, page fetches and sandboxed code run on their own; writes still ask.',
     description:
-      'Actions that only read data, search the web, fetch a page, or run code in the AGI sandbox run on their own. Anything that writes, deletes, sends, buys, changes credentials, or runs on your own machine still asks, and so does every connector tool AGI does not know.',
+      'Reads, searches, page fetches and sandbox code run on their own. Writes, sends, purchases, credential changes, actions on your machine and unknown tools still ask.',
   },
   {
     policy: 'autonomous',
@@ -72,7 +71,7 @@ export const TOOL_APPROVAL_POLICY_OPTIONS: readonly ToolApprovalPolicyOption[] =
     label: 'Skip approvals',
     hint: 'Tools run on their own. Destructive and unknown actions still ask.',
     description:
-      'Tool actions run without waiting for you. Three things still stop and ask: anything AGI classifies as destructive or irreversible, such as a delete, a message or post other people receive, or a write it cannot undo; every connector tool AGI does not know; and an action that could send data out after untrusted content, such as a web page or an uploaded file, entered a conversation where private data is in reach. Anything your workspace blocks stays blocked, and your per-tool Deny choices in Connectors still win.',
+      'Tools run without waiting. Destructive or irreversible actions, unknown connector tools, and sends after untrusted content meets private data still ask. Workspace blocks and your Deny choices win.',
   },
 ];
 

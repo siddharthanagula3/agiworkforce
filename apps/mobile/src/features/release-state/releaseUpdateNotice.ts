@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import Constants from 'expo-constants';
-import { API_URL } from '@/lib/constants';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { webContentPageUrl } from '@/src/platform/webContentPage';
 import { showToast } from '@/src/shared/components/Toast';
 
 const LAST_SEEN_VERSION_KEY = 'agi-last-seen-app-version';
 
 export function releaseNotesUrl(): string {
-  return `${API_URL.replace(/\/+$/, '')}/release-notes?from=mobile`;
+  return webContentPageUrl('/release-notes');
 }
 
 export function noticeForVersion(lastSeen: string | undefined, current: string): string | null {

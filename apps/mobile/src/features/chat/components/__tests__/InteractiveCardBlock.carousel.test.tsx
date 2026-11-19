@@ -7,7 +7,28 @@ jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('lucide-react-native', () => ({
   ExternalLink: (props: Record<string, unknown>) => <MockView {...props} />,
   MapPinned: (props: Record<string, unknown>) => <MockView {...props} />,
+  Maximize2: (props: Record<string, unknown>) => <MockView {...props} />,
+  Minus: (props: Record<string, unknown>) => <MockView {...props} />,
   Navigation: (props: Record<string, unknown>) => <MockView {...props} />,
+  Plus: (props: Record<string, unknown>) => <MockView {...props} />,
+  X: (props: Record<string, unknown>) => <MockView {...props} />,
+}));
+
+jest.mock('@/services/api', () => ({
+  apiFetch: () =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          tileUrlTemplate: '/api/maps/tile/{z}/{x}/{y}',
+          attribution: 'Map data provider',
+          darkTileUrlTemplate: '/api/maps/tile/{z}/{x}/{y}?style=dark',
+          darkAttribution: 'Dark map data provider',
+          dimLightTiles: false,
+          minZoom: 2,
+          maxZoom: 19,
+        }),
+    }),
 }));
 
 jest.mock('@/services/authSession', () => ({
@@ -18,8 +39,8 @@ jest.mock('@/lib/safeOpenURL', () => ({
   openUntrustedUrlInAppBrowser: jest.fn(),
 }));
 
-jest.mock('@/src/ui/theme', () => ({
-  useThemeColors: () => ({
+jest.mock('@/src/ui/theme', () => {
+  const colors = {
     background: 'colour-background',
     border: 'colour-border',
     surfaceElevated: 'colour-elevated',
@@ -29,8 +50,9 @@ jest.mock('@/src/ui/theme', () => ({
     cameraOverlayText: 'colour-overlay-text',
     textMuted: 'colour-muted',
     textPrimary: 'colour-primary',
-  }),
-}));
+  };
+  return { useThemeColors: () => colors, useTheme: () => ({ colors, isDark: false }) };
+});
 
 import { InteractiveCardBlock } from '../InteractiveCardBlock';
 
@@ -59,7 +81,7 @@ function mapCard(options: { withView: boolean }): InteractiveCard {
               latitude: 35.5,
               longitude: -108,
               zoom: 5,
-              attribution: 'Map data provider',
+              attribution: 'Server view credit',
             },
           }
         : {}),
@@ -77,6 +99,8 @@ function renderCard(withView: boolean, canLoadManagedCloudTiles = true) {
       cards={[mapCard({ withView })]}
       tileBaseUrl="https://app.agi.example/"
       canLoadManagedCloudTiles={canLoadManagedCloudTiles}
+      messageId="msg-map"
+      conversationId="conv-map"
     />,
   );
 }

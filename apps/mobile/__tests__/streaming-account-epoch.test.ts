@@ -417,6 +417,7 @@ describe('run clients keep their creation account', () => {
     guardedFetchMock.mockResolvedValue({
       ok: true,
       status: 200,
+      headers: new Headers(),
       body: { cancel },
       json: async () => ({
         ...snapshot(),
@@ -478,7 +479,12 @@ describe('run clients keep their creation account', () => {
     async (_, invoke) => {
       const services = load();
       const body = deferred<unknown>();
-      guardedFetchMock.mockResolvedValue({ ok: true, status: 200, json: body.read });
+      guardedFetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: body.read,
+      });
       const pending = invoke(services.createMobileCloudAgentRunClient());
       const rejected = expect(pending).rejects.toMatchObject({
         name: 'StaleCloudAccountOperationError',

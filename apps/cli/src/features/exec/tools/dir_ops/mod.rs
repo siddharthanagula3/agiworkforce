@@ -67,6 +67,36 @@ fn withholding_note(withheld: usize) -> String {
     )
 }
 
+const SEARCH_FILES_PER_FILE_CAP: usize = 200;
+const GREP_FILES_PER_FILE_CAP: usize = 100;
+
+fn per_file_cap_note(output: &str, cap: usize) -> Option<String> {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for line in output.lines() {
+        if let Some(file) = matched_file(line) {
+            *counts.entry(file).or_default() += 1;
+        }
+    }
+    let full = counts.values().filter(|count| **count >= cap).count();
+    (full > 0).then(|| {
+        format!(
+            "\n[{full} file(s) reached the limit of {cap} matches per file, so later matches in \
+             them are not listed; search those files with a narrower pattern]"
+        )
+    })
+}
+
+fn search_failed(tool_name: &str, stderr: &str) -> ToolResult {
+    ToolResult {
+        tool_name: tool_name.to_string(),
+        success: false,
+        output: format!(
+            "The search failed, so this says nothing about whether the text exists: {}",
+            stderr.trim()
+        ),
+    }
+}
+
 /// A search answer with the credential files taken out of it.
 fn searched(tool_name: &str, output: String) -> ToolResult {
     let (kept, withheld) = withhold_credential_matches(&output);
@@ -111,12 +141,12 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
     let result = match search_program("grep") {
         Ok(mut command) => {
             command
-                .arg("-rn")
+                .arg("-rnE")
                 .arg("--with-filename")
                 .arg("--null")
                 .arg("--include=*")
                 .arg("-m")
-                .arg("200");
+                .arg(SEARCH_FILES_PER_FILE_CAP.to_string());
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 command.arg(format!("--exclude-dir={directory}"));
             }
@@ -142,8 +172,15 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
                     output: format!("No matches found for pattern: {}", pattern),
                 });
             }
+            if stdout.is_empty() && output.status.code() == Some(2) {
+                return Ok(search_failed("search_files", &stderr));
+            }
 
+            let cap_note = per_file_cap_note(&stdout, SEARCH_FILES_PER_FILE_CAP);
             let mut result = searched("search_files", stdout);
+            if let Some(note) = cap_note {
+                result.output.push_str(&note);
+            }
             if !stderr.is_empty() {
                 result.output.push_str("\n[stderr]\n");
                 result.output.push_str(&stderr);
@@ -312,7 +349,7 @@ pub(super) async fn execute_grep_files(
                 .arg("--null")
                 .arg("--no-heading")
                 .arg("--color=never")
-                .arg("--max-count=100");
+                .arg(format!("--max-count={GREP_FILES_PER_FILE_CAP}"));
             if let Some(g) = include {
                 cmd.arg("--glob").arg(g);
             }
@@ -326,17 +363,7 @@ pub(super) async fn execute_grep_files(
         Err(missing) => Err(missing),
     };
     match found {
-        Ok(o) => {
-            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-            if stdout.is_empty() {
-                return Ok(ToolResult {
-                    tool_name: "grep_files".into(),
-                    success: true,
-                    output: format!("No matches for: {}", pattern),
-                });
-            }
-            Ok(searched("grep_files", stdout))
-        }
+        Ok(o) => Ok(grep_answer(pattern, &o)),
         Err(error) if error.kind() != std::io::ErrorKind::TimedOut => {
             let mut fb = match search_program("grep") {
                 Ok(fb) => fb,
@@ -348,10 +375,24 @@ pub(super) async fn execute_grep_files(
                     })
                 }
             };
-            fb.arg("-rn")
+            let include = include.map(|filter| filter.trim_start_matches("**/"));
+            if let Some(filter) = include.filter(|filter| filter.contains('/')) {
+                return Ok(ToolResult {
+                    tool_name: "grep_files".into(),
+                    success: false,
+                    output: format!(
+                        "rg is not installed, and grep filters by file name only, so include \
+                         must be a file name pattern such as *.rs, not {filter}"
+                    ),
+                });
+            }
+            fb.arg("-rnE")
                 .arg("--with-filename")
                 .arg("--null")
-                .arg("--max-count=100");
+                .arg(format!("--max-count={GREP_FILES_PER_FILE_CAP}"));
+            if let Some(filter) = include {
+                fb.arg(format!("--include={filter}"));
+            }
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 fb.arg(format!("--exclude-dir={directory}"));
             }
@@ -361,10 +402,7 @@ pub(super) async fn execute_grep_files(
             }
             fb.arg("--").arg(pattern).arg(&validated_path);
             match crate::process_tree::output(fb, None, Some(COMMAND_TIMEOUT)).await {
-                Ok(o) => Ok(searched(
-                    "grep_files",
-                    String::from_utf8_lossy(&o.stdout).to_string(),
-                )),
+                Ok(o) => Ok(grep_answer(pattern, &o)),
                 Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: false,
@@ -389,6 +427,26 @@ pub(super) async fn execute_grep_files(
             ),
         }),
     }
+}
+
+fn grep_answer(pattern: &str, output: &std::process::Output) -> ToolResult {
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if stdout.is_empty() {
+        if output.status.code() == Some(2) {
+            return search_failed("grep_files", &String::from_utf8_lossy(&output.stderr));
+        }
+        return ToolResult {
+            tool_name: "grep_files".into(),
+            success: true,
+            output: format!("No matches for: {}", pattern),
+        };
+    }
+    let cap_note = per_file_cap_note(&stdout, GREP_FILES_PER_FILE_CAP);
+    let mut answer = searched("grep_files", stdout);
+    if let Some(note) = cap_note {
+        answer.output.push_str(&note);
+    }
+    answer
 }
 
 pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolResult> {
@@ -433,9 +491,6 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
 
     let full_pattern = format!("{}/{}", base_path.display(), pattern);
 
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
-
     let paths = match glob::glob(&full_pattern) {
         Ok(paths) => paths,
         Err(err) => {
@@ -454,9 +509,8 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
             continue;
         }
         let in_workspace = path
-            .canonicalize()
-            .map(|c| c.starts_with(&cwd_canonical))
-            .unwrap_or(false);
+            .to_str()
+            .is_some_and(|shown| validate_file_path(shown).is_ok());
         if !in_workspace {
             continue;
         }
@@ -672,5 +726,91 @@ mod tests {
                 "{directory} is searched on every query"
             );
         }
+    }
+
+    fn scoped_args(pairs: &[(&str, String)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.clone()))
+            .collect()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_search_reads_its_pattern_as_a_regular_expression_and_reports_a_bad_one() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        std::fs::write(root.join("notes.txt"), "the beta release\n").unwrap();
+        let path = root.to_string_lossy().into_owned();
+
+        let alternation = scoped_args(&[
+            ("pattern", "alpha|beta".to_string()),
+            ("path", path.clone()),
+        ]);
+        let found =
+            crate::path_security::scope_workspace_paths(Some(root.clone()), Vec::new(), async {
+                execute_search_files(&alternation).await
+            })
+            .await
+            .unwrap();
+        assert!(
+            found.output.contains("the beta release"),
+            "{}",
+            found.output
+        );
+
+        let broken = scoped_args(&[("pattern", "(".to_string()), ("path", path)]);
+        for tool in ["search_files", "grep_files"] {
+            let answer = crate::path_security::scope_workspace_paths(
+                Some(root.clone()),
+                Vec::new(),
+                async {
+                    match tool {
+                        "search_files" => execute_search_files(&broken).await,
+                        _ => execute_grep_files(&broken, true).await,
+                    }
+                },
+            )
+            .await
+            .unwrap();
+            assert!(!answer.success, "{tool}: {}", answer.output);
+            assert!(
+                answer.output.contains("The search failed"),
+                "{tool}: {}",
+                answer.output
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_that_reached_the_per_file_limit_is_named_in_a_note() {
+        let full: String = (1..=3)
+            .map(|line| format!("src/a.rs\x00{line}:x\n"))
+            .collect();
+        let note = per_file_cap_note(&format!("{full}src/b.rs\x001:x\n"), 3).expect("a note");
+        assert!(note.contains("1 file(s) reached the limit of 3"), "{note}");
+        assert!(per_file_cap_note("src/b.rs\x001:x\n", 3).is_none());
+    }
+
+    #[tokio::test]
+    async fn glob_lists_files_in_a_folder_added_to_the_workspace() {
+        let workspace = tempfile::tempdir().unwrap();
+        let added = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let extra = added.path().canonicalize().unwrap();
+        std::fs::write(extra.join("shared.ts"), "export {}\n").unwrap();
+        let args = scoped_args(&[
+            ("pattern", "**/*.ts".to_string()),
+            ("path", extra.to_string_lossy().into_owned()),
+        ]);
+
+        let result = crate::path_security::scope_workspace_paths(Some(root), vec![extra], async {
+            execute_glob(&args).await
+        })
+        .await
+        .unwrap();
+
+        assert!(result.success, "{}", result.output);
+        assert!(result.output.contains("shared.ts"), "{}", result.output);
     }
 }

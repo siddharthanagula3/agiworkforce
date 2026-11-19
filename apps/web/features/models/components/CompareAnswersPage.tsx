@@ -217,7 +217,9 @@ export function CompareAnswersPage({ requestedModelIds }: CompareAnswersPageProp
         Models
       </Link>
       <header className="mt-2">
-        <h1 className="text-h2 text-foreground">Compare answers</h1>
+        <h1 className="text-h2 text-foreground max-md:text-display max-md:font-medium">
+          Compare answers
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Send one prompt to two or three models and read their answers side by side.
         </p>
@@ -322,8 +324,7 @@ export function CompareAnswersPage({ requestedModelIds }: CompareAnswersPageProp
               />
             </div>
             <p id={hintId} className="text-xs text-muted-foreground">
-              Each answer counts as its own message on your plan. Nothing here is saved to your
-              chats, and memory stays off so every model answers the same prompt.
+              Each answer counts as a message on your plan. Not saved to chats; memory stays off.
               {concurrency < slots.length ? ` ${concurrencyNote(concurrency)}` : ''}
             </p>
           </form>

@@ -152,7 +152,7 @@ const FAST_PILL_OFF_CLASS =
   'border-[var(--chat-border)] text-muted-foreground hover:bg-muted/60 hover:text-foreground';
 const FAST_PILL_ON_CLASS = 'border-transparent bg-muted text-foreground hover:bg-muted/80';
 const MODEL_TRIGGER_CLASS =
-  'flex min-h-7 min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11';
+  'flex min-h-7 min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11 max-md:pointer-coarse:min-w-11 max-md:pointer-coarse:justify-center';
 
 const CACHE_RESET_HINT_TEXT = 'Switching models here starts a new prompt cache';
 
@@ -864,6 +864,14 @@ export function ComposerFooter({
   const effortPanelId = useId();
   const triggerReceiptId = useId();
   const [nameTipOpen, setNameTipOpen] = useState(false);
+  const nameTipHeldRef = useRef(false);
+  const handleNameTipOpenChange = useCallback((next: boolean) => {
+    if (next && nameTipHeldRef.current) return;
+    setNameTipOpen(next);
+  }, []);
+  const releaseNameTip = useCallback(() => {
+    nameTipHeldRef.current = false;
+  }, []);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [catalogueOpen, setCatalogueOpen] = useState(false);
@@ -1461,6 +1469,14 @@ export function ComposerFooter({
               const trigger = (extra: ButtonHTMLAttributes<HTMLButtonElement> = {}) => (
                 <button
                   {...extra}
+                  onBlur={(event) => {
+                    extra.onBlur?.(event);
+                    releaseNameTip();
+                  }}
+                  onPointerEnter={(event) => {
+                    extra.onPointerEnter?.(event);
+                    releaseNameTip();
+                  }}
                   ref={modelTriggerRef}
                   id={MODEL_SELECTOR_TRIGGER_ID}
                   disabled={modelChangePending}
@@ -1498,7 +1514,7 @@ export function ComposerFooter({
               );
               const withNameTip = (triggerNode: ReactNode) => (
                 <TooltipProvider>
-                  <Tooltip open={nameTipOpen && !open} onOpenChange={setNameTipOpen}>
+                  <Tooltip open={nameTipOpen && !open} onOpenChange={handleNameTipOpenChange}>
                     <TooltipTrigger asChild>{triggerNode}</TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">
                       <span className="block font-medium">
@@ -1601,6 +1617,7 @@ export function ComposerFooter({
                           {promotedModel && renderModelRow(promotedModel)}
                           <FreeQuotaModelSection
                             sources={freeModelSources}
+                            defaultExpanded={!paidPlan}
                             selectedId={selectedModelId}
                             fallback={
                               freeDefaultModel
@@ -1853,6 +1870,8 @@ export function ComposerFooter({
                     }}
                     onCloseAutoFocus={(event) => {
                       event.preventDefault();
+                      nameTipHeldRef.current = true;
+                      setNameTipOpen(false);
                       modelTriggerRef.current?.focus();
                     }}
                   >
@@ -2013,7 +2032,7 @@ export function ComposerFooter({
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {fastAvailability.reason ??
-                        `Faster answers from the same model, at ${fastTier.priceMultiplier}x the usage, billed to usage credits.`}
+                        `Faster answers at ${fastTier.priceMultiplier}x the usage, billed to usage credits.`}
                     </p>
                   </div>
                 )}

@@ -101,11 +101,7 @@ describe('resolveTier account-owned entitlement', () => {
 
     await expect(refreshAccountTierCache(context, loadTier)).resolves.toBe('team');
     expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', 'team');
-    expect(configUpdate).toHaveBeenCalledWith(
-      'currentTier',
-      'team',
-      vscode.ConfigurationTarget.Global,
-    );
+    expect(configUpdate).not.toHaveBeenCalled();
   });
 
   it('clears paid-tier reachability immediately after account sign-out', async () => {
@@ -121,11 +117,7 @@ describe('resolveTier account-owned entitlement', () => {
     await clearAccountTierCache(context);
 
     expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', undefined);
-    expect(configUpdate).toHaveBeenCalledWith(
-      'currentTier',
-      'unknown',
-      vscode.ConfigurationTarget.Global,
-    );
+    expect(configUpdate).not.toHaveBeenCalled();
   });
 
   it('fails closed instead of retaining a stale paid tier when refresh is unavailable', async () => {
@@ -141,5 +133,34 @@ describe('resolveTier account-owned entitlement', () => {
       refreshAccountTierCache(context, vi.fn().mockResolvedValue(undefined)),
     ).resolves.toBeUndefined();
     expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', undefined);
+  });
+
+  it('keeps the verified tier when a read fails while the account session is still held', async () => {
+    const context = makeContext('max', Date.now());
+    vi.mocked(context.secrets.get).mockImplementation((key: string) =>
+      Promise.resolve(key === 'agiWorkforce.accountToken' ? 'account-token' : undefined),
+    );
+    stubConfiguration();
+
+    await expect(
+      refreshAccountTierCache(context, vi.fn().mockResolvedValue(undefined)),
+    ).resolves.toBe('max');
+
+    expect(context.globalState.get('tierStatus.cachedTier')).toBe('max');
+    expect(context.globalState.get('tierStatus.cachedAtMs')).toBeUndefined();
+  });
+
+  it('clears the tier once the session is no longer held', async () => {
+    const context = makeContext('max', Date.now());
+    vi.mocked(context.secrets.get).mockImplementation((key: string) =>
+      Promise.resolve(key === 'agiWorkforce.accountTokenExpired' ? '1' : undefined),
+    );
+    stubConfiguration();
+
+    await expect(
+      refreshAccountTierCache(context, vi.fn().mockResolvedValue(undefined)),
+    ).resolves.toBeUndefined();
+
+    expect(context.globalState.get('tierStatus.cachedTier')).toBeUndefined();
   });
 });

@@ -4,6 +4,7 @@ type ScanModule1 = typeof import('@agiworkforce/types');
 type ScanModule2 = typeof import('@/lib/services/llm-cost-calculator');
 type ScanModule3 = typeof import('@agiworkforce/provider-protocol');
 type ScanModule4 = typeof import('@/app/api/llm/v1/chat/completions/lib/capability-preamble');
+type ScanModule5 = typeof import('@/lib/services/organization-policy-gate');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
@@ -73,6 +74,10 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/capability-preamble', async (impo
   const actual = await importOriginal<ScanModule4>();
   return { ...actual, buildCapabilityPreamble: vi.fn(actual.buildCapabilityPreamble) };
 });
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule5>()),
+  resolveSecretHandlingPolicy: vi.fn(),
+}));
 vi.mock('@agiworkforce/provider-protocol', async (importOriginal) => {
   const actual = await importOriginal<ScanModule3>();
   return {
@@ -100,6 +105,8 @@ import {
   listAvailableManagedProviderIds,
 } from '@/lib/services/provider-adapter-service';
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
+import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
+import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { executeScheduledAgent, scheduledAgentExecutor } from './scheduled-agent-executor';
 import type { ScheduleTask } from './schedule-service';
@@ -132,6 +139,7 @@ const task: ScheduleTask = {
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
 
+const STRIPE_KEY = `sk_live_${'a'.repeat(30)}`;
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 const scopedDb = createWorkspaceMemberDatabaseFake(ORGANIZATION_ID);
 const executionScope = {
@@ -148,6 +156,10 @@ describe('scheduled managed agent executor', () => {
       status: 'active',
     } as never);
     vi.mocked(getSlotForModel).mockReturnValue('general_balanced_pro');
+    vi.mocked(resolveSecretHandlingPolicy).mockResolvedValue({
+      mode: 'warn',
+      organizationId: null,
+    });
     vi.mocked(resolveAutoRoute).mockReturnValue({
       status: 'selected',
       requestedSelection: 'auto-balanced',
@@ -262,6 +274,62 @@ describe('scheduled managed agent executor', () => {
     });
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
     expect(buildServerProviderAdapter).not.toHaveBeenCalled();
+  });
+
+  it('refuses a run whose prompt holds a secret when the workspace blocks secrets, without calling a provider', async () => {
+    vi.mocked(resolveSecretHandlingPolicy).mockResolvedValue({
+      mode: 'block',
+      organizationId: ORGANIZATION_ID,
+    });
+
+    const result = await executeScheduledAgent(
+      { ...task, prompt: `Deploy with ${STRIPE_KEY}` },
+      new AbortController().signal,
+      'run-secret',
+      executionScope,
+    );
+
+    expect(result.cancellation).toMatchObject({
+      reason: 'secret_handling_blocked',
+      code: 'secret_handling_blocked',
+    });
+    expect(result.text).not.toContain(STRIPE_KEY);
+    expect(result.cancellation?.message).not.toContain(STRIPE_KEY);
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+    expect(buildServerProviderAdapter).not.toHaveBeenCalled();
+    expect(drainToLlmResponse).not.toHaveBeenCalled();
+  });
+
+  it('sends the provider the redacted prompt when the workspace redacts secrets', async () => {
+    vi.mocked(resolveSecretHandlingPolicy).mockResolvedValue({
+      mode: 'redact',
+      organizationId: ORGANIZATION_ID,
+    });
+
+    await executeScheduledAgent(
+      { ...task, prompt: `Deploy with ${STRIPE_KEY}` },
+      new AbortController().signal,
+      'run-secret',
+      executionScope,
+    );
+
+    const sent = JSON.stringify(vi.mocked(openAIWireRequestToChatRequest).mock.calls);
+    expect(sent).toContain('Deploy with');
+    expect(sent).not.toContain(STRIPE_KEY);
+    expect(drainToLlmResponse).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the prompt unchanged when the workspace only warns about secrets', async () => {
+    await executeScheduledAgent(
+      { ...task, prompt: `Deploy with ${STRIPE_KEY}` },
+      new AbortController().signal,
+      'run-secret',
+      executionScope,
+    );
+
+    expect(JSON.stringify(vi.mocked(openAIWireRequestToChatRequest).mock.calls)).toContain(
+      STRIPE_KEY,
+    );
   });
 
   it('treats an inactive free record as free access, matching the managed chat gate', async () => {

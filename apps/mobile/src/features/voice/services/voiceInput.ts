@@ -2,8 +2,10 @@ import { Platform } from 'react-native';
 import {
   ExpoSpeechRecognitionModule,
   type ExpoSpeechRecognitionErrorCode,
+  type ExpoSpeechRecognitionErrorEvent,
 } from 'expo-speech-recognition';
 import { audioSessionCategoryFor, type AudioRoute } from './audioRoute';
+import { trackMicPermissionRequest } from './micPermissionRequest';
 import { activeAudioRoute, deviceSpeechLocale } from './speechSettings';
 
 export type VoiceCaptureErrorCode =
@@ -82,7 +84,10 @@ interface CaptureAttempt {
   durationTimer: ReturnType<typeof setTimeout> | null;
   stopTimer: ReturnType<typeof setTimeout> | null;
   removeAbort: () => void;
+  source: CaptureSource;
 }
+
+type CaptureSource = 'microphone' | 'file';
 
 let activeCapture: CaptureAttempt | null = null;
 
@@ -121,7 +126,7 @@ function cancelAttempt(attempt: CaptureAttempt): void {
   }
 }
 
-function createCapture(signal?: AbortSignal): CaptureAttempt {
+function createCapture(source: CaptureSource, signal?: AbortSignal): CaptureAttempt {
   if (activeCapture)
     throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
   let resolve!: CaptureAttempt['resolve'];
@@ -144,6 +149,7 @@ function createCapture(signal?: AbortSignal): CaptureAttempt {
     durationTimer: null,
     stopTimer: null,
     removeAbort: () => undefined,
+    source,
   };
   activeCapture = attempt;
   if (signal) {
@@ -196,13 +202,42 @@ export function getPlatformSTTBackend(): 'ios-speech' | 'android-speech-recogniz
   return 'expo-av';
 }
 
-export async function requestMicPermission(): Promise<boolean> {
+interface PermissionAnswer {
+  granted: boolean;
+}
+
+// Android shows its permission screen for a request even when the permission is
+// already granted, which pauses the app for nothing; only ask when it is not.
+async function ensurePermission(
+  read: () => Promise<PermissionAnswer>,
+  request: () => Promise<PermissionAnswer>,
+): Promise<boolean> {
+  const alreadyGranted = await Promise.resolve()
+    .then(read)
+    .then(
+      (answer) => answer.granted,
+      () => false,
+    );
+  if (alreadyGranted) return true;
   try {
-    const status = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    return status.granted;
+    return (await trackMicPermissionRequest(request)).granted;
   } catch {
     return false;
   }
+}
+
+export function requestMicPermission(): Promise<boolean> {
+  return ensurePermission(
+    () => ExpoSpeechRecognitionModule.getPermissionsAsync(),
+    () => ExpoSpeechRecognitionModule.requestPermissionsAsync(),
+  );
+}
+
+export function requestMicrophoneOnlyPermission(): Promise<boolean> {
+  return ensurePermission(
+    () => ExpoSpeechRecognitionModule.getMicrophonePermissionsAsync(),
+    () => ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync(),
+  );
 }
 
 export function isCapturing(): boolean {
@@ -249,25 +284,76 @@ function languageLabel(lang: string): string {
   }
 }
 
+// expo-speech-recognition builds the on-device recognizer only from API 33; below
+// that it starts the default recognizer, which may send audio to its service.
+const ANDROID_ON_DEVICE_RECOGNIZER_API = 33;
+
+export function onDeviceRecognizerGuaranteed(): boolean {
+  return Platform.OS !== 'android' || Number(Platform.Version) >= ANDROID_ON_DEVICE_RECOGNIZER_API;
+}
+
+function onDeviceRecognizerUnavailable(): VoiceCaptureError {
+  return new VoiceCaptureError(
+    'on-device-recognition-unavailable',
+    'On-device voice recognition is not available on this device.',
+  );
+}
+
+function assertOnDeviceRecognizerPlatform(): void {
+  if (!onDeviceRecognizerGuaranteed()) throw onDeviceRecognizerUnavailable();
+}
+
 /**
  * Speech stays on this device, so a missing on-device model is a refusal with a
  * reason, never a quiet switch to server recognition.
  */
 async function assertOnDeviceRecognition(lang: string): Promise<void> {
+  assertOnDeviceRecognizerPlatform();
   if (
     typeof ExpoSpeechRecognitionModule.supportsOnDeviceRecognition === 'function' &&
     !ExpoSpeechRecognitionModule.supportsOnDeviceRecognition()
   ) {
-    throw new VoiceCaptureError(
-      'on-device-recognition-unavailable',
-      'On-device voice recognition is not available on this device.',
-    );
+    throw onDeviceRecognizerUnavailable();
   }
   if (await isOnDeviceLocaleAvailable(lang)) return;
   throw new VoiceCaptureError(
     'on-device-recognition-unavailable',
     `${languageLabel(lang)} has no on-device speech model installed. Install it in your device's speech settings, or pick another speech language.`,
   );
+}
+
+const NATIVE_ERROR_CODES: Partial<Record<ExpoSpeechRecognitionErrorCode, VoiceCaptureErrorCode>> = {
+  'not-allowed': 'mic-permission-denied',
+  'service-not-allowed': 'on-device-recognition-unavailable',
+  'language-not-supported': 'on-device-recognition-unavailable',
+  aborted: 'aborted',
+};
+
+/**
+ * expo-speech-recognition reports a recognizer that could not be created or
+ * started as "audio-capture": iOS forwards kLSRErrorDomain 300 by message and a
+ * missing microphone input as "Invalid audio source" (which a file source also
+ * reports for its own faults), Android a failed SpeechRecognizer creation with code -1.
+ */
+const RECOGNIZER_START_FAILURE_MESSAGES: Record<CaptureSource, ReadonlySet<string>> = {
+  microphone: new Set(['Failed to initialize recognizer', 'Invalid audio source']),
+  file: new Set(['Failed to initialize recognizer']),
+};
+
+function nativeCaptureErrorCode(
+  event: ExpoSpeechRecognitionErrorEvent,
+  source: CaptureSource,
+): VoiceCaptureErrorCode {
+  if (
+    event.error === 'audio-capture' &&
+    (event.code === -1 ||
+      RECOGNIZER_START_FAILURE_MESSAGES[source].has(
+        (event.message ?? '').trim().replace(/\.$/, ''),
+      ))
+  ) {
+    return 'on-device-recognition-unavailable';
+  }
+  return NATIVE_ERROR_CODES[event.error] ?? 'recognition-error';
 }
 
 function listenToCapture(
@@ -294,16 +380,10 @@ function listenToCapture(
   attempt.listeners.push(
     ExpoSpeechRecognitionModule.addListener('error', (event) => {
       if (!ownsCapture(attempt)) return;
-      const codes: Record<string, VoiceCaptureErrorCode> = {
-        'not-allowed': 'mic-permission-denied',
-        'service-not-allowed': 'on-device-recognition-unavailable',
-        'language-not-supported': 'on-device-recognition-unavailable',
-        aborted: 'aborted',
-      };
       settleCapture(
         attempt,
         new VoiceCaptureError(
-          codes[event.error] ?? 'recognition-error',
+          nativeCaptureErrorCode(event, attempt.source),
           event.message || event.error,
           event.error,
         ),
@@ -337,9 +417,10 @@ export async function startCaptureSession(
   onPartial?: PartialCallback,
   options?: VoiceCaptureOptions,
 ): Promise<VoiceCaptureSession> {
-  const attempt = createCapture(options?.signal);
+  const attempt = createCapture('microphone', options?.signal);
   try {
     assertCapture(attempt);
+    assertOnDeviceRecognizerPlatform();
     const granted = await requestMicPermission();
     assertCapture(attempt);
     if (!granted)
@@ -396,7 +477,7 @@ export async function transcribeAudioFile(
   options?: VoiceCaptureOptions,
 ): Promise<OnDeviceTranscriptResult> {
   if (!uri) throw new VoiceCaptureError('recognition-error', 'No audio file was provided.');
-  const attempt = createCapture(options?.signal);
+  const attempt = createCapture('file', options?.signal);
   try {
     assertCapture(attempt);
     const lang = resolveRecognitionLocale(options?.lang);

@@ -156,13 +156,12 @@ export function AgentsPage({ api = agentsApi }: { api?: AgentsApi }) {
 
   return (
     <div className="min-h-full bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-10 sm:px-6">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-10 sm:px-6 max-md:pt-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <h1 className="text-[28px] font-medium text-foreground">Agents</h1>
+            <h1 className="text-[28px] font-medium text-foreground max-md:leading-[1.2]">Agents</h1>
             <p className="text-sm text-muted-foreground">
-              Assistants with their own instructions, model, tools and files. Chat with one, share
-              it with your workspace, or give it a schedule.
+              Assistants with their own instructions, tools and files.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -209,8 +208,7 @@ export function AgentsPage({ api = agentsApi }: { api?: AgentsApi }) {
           <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-6">
             <h2 className="text-base font-medium text-foreground">No agents yet</h2>
             <p className="text-sm text-muted-foreground">
-              Write the instructions once, pick its tools and files, and every chat with it starts
-              from there. You can also import an agent file from Claude Code.
+              Set instructions, tools and files once, or import a Claude Code agent file.
             </p>
             <Button asChild className="pointer-coarse:min-h-11">
               <Link href={NEW_AGENT_HREF}>Create an agent</Link>

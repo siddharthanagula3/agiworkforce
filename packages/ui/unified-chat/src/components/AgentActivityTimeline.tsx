@@ -14,7 +14,6 @@ import {
   PauseCircle,
   Square,
 } from 'lucide-react';
-import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import {
   isGenerationProgressEntry,
@@ -25,18 +24,15 @@ import {
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 import { cn } from '../lib/utils';
+import { ToolCallCard, type ToolCallStatus } from './ToolCallCard';
 import {
-  ToolCallCard,
-  classifyToolFailure,
-  toolFailureReason,
-  type ToolCallStatus,
-} from './ToolCallCard';
-import type { InlineToolKind } from './InlineToolCall';
-import {
-  readConnectorConnectRequest,
-  type ConnectorAuthorizationReason,
-  type ConnectorConnectRequest,
-} from '../lib/connector-connect-required';
+  connectRequestFor,
+  connectorFailureReason,
+  connectorSentence,
+  isConnectorStep,
+  settledActivityStatus,
+} from '../lib/activity-status';
+import { SCREEN_STEP_ACTIONS, categoryToKind } from '../lib/activity-kinds';
 import {
   agiWorkPlanSentence,
   isAgiWorkGoalEntry,
@@ -44,13 +40,10 @@ import {
   isAgiWorkPlanEntry,
 } from '../lib/agi-work-progress';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
-import {
-  connectorNameFromSummary,
-  connectorStepSentence,
-  parseQualifiedConnectorTool,
-  type ConnectorStepPhase,
-} from './connector-step-sentence';
+import { connectorNameFromSummary, parseQualifiedConnectorTool } from './connector-step-sentence';
 import { AgiMark, translateUiPlural } from '@agiworkforce/ui';
+
+export { hasOpenApprovalDecision, settledActivityStatus } from '../lib/activity-status';
 
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -93,6 +86,12 @@ export interface AgentActivityTimelineProps {
   /** Actions for that failure, rendered beside the summary line. */
   failureActions?: ReactNode;
   /**
+   * The number of sources the finished turn lists under its answer. A search
+   * reports only the results it rendered, so the answer's own list is the count
+   * both places show.
+   */
+  sourceCount?: number;
+  /**
    * The picture a screen step returned, as a data URL, looked up by tool call
    * id. Only the machine that took the shot has one, so every other surface
    * renders the same step without an image rather than a broken one.
@@ -114,29 +113,6 @@ export function hasCanonicalToolActivity(
   return activity?.entries.some((entry) => entry.kind === 'tool') ?? false;
 }
 
-/**
- * The run is holding a decision the user has not made yet.
- *
- * Read from the entries rather than from `activity.status`, because the run
- * status does not survive the race: `approval-requested` sets
- * `awaiting-approval` and a later `task-state-changed` with `paused` overwrites
- * it, so a turn genuinely waiting on a decision was observed reporting
- * `paused`. The tool entry keeps its unresolved `approval` through both, so
- * that is what the question is asked of.
- */
-export function hasOpenApprovalDecision(
-  activity: Pick<AgentActivityState, 'entries'> | undefined,
-): boolean {
-  return (
-    activity?.entries.some(
-      (entry) =>
-        entry.kind === 'tool' &&
-        entry.approval !== undefined &&
-        entry.approval.decision === undefined,
-    ) ?? false
-  );
-}
-
 function isWaitingForInput(activity: Pick<AgentActivityState, 'entries' | 'status'>): boolean {
   return (
     (activity.status === 'paused' || activity.status === 'awaiting-approval') &&
@@ -144,86 +120,8 @@ function isWaitingForInput(activity: Pick<AgentActivityState, 'entries' | 'statu
   );
 }
 
-function lastStepFailed(activity: Pick<AgentActivityState, 'entries'>): boolean {
-  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
-    const entry = activity.entries[index];
-    if (!entry) continue;
-    if (entry.kind === 'error') return true;
-    if (entry.kind !== 'tool' && entry.kind !== 'progress') continue;
-    if (isAgiWorkPlanOverviewEntry(entry)) continue;
-    if (entry.status === 'pending' || entry.status === 'running') continue;
-    return entry.status === 'failed';
-  }
-  return false;
-}
-
-// An undecided approval reads as awaiting one whatever task-state-changed wrote later; a partial run whose last step succeeded reads as completed.
-export function settledActivityStatus(
-  activity: Pick<AgentActivityState, 'entries' | 'status'>,
-): AgentActivityState['status'] {
-  if (hasOpenApprovalDecision(activity)) return 'awaiting-approval';
-  if (activity.status === 'partial' && !lastStepFailed(activity)) return 'completed';
-  return activity.status;
-}
-
-function isConnectorStep(entry: AgentActivityEntry): entry is AgentActivityToolEntry {
-  return entry.kind === 'tool' && (entry.category === 'connector' || entry.category === 'mcp');
-}
-
-function connectorStepPhase(entry: AgentActivityToolEntry): ConnectorStepPhase {
-  switch (entry.status) {
-    case 'completed':
-      return 'finished';
-    case 'cancelled':
-      return 'stopped';
-    case 'awaiting-approval':
-      return 'waiting';
-    case 'failed':
-      return entry.approval?.decision === 'denied' ? 'declined' : 'failed';
-    case 'pending':
-    case 'running':
-    case 'awaiting-device':
-      return 'running';
-  }
-}
-
-function connectRequestFor(entry: AgentActivityToolEntry): ConnectorConnectRequest | null {
-  return readConnectorConnectRequest({
-    qualifiedToolName: entry.name,
-    result: typeof entry.output === 'string' ? entry.output : undefined,
-    isError: entry.status === 'failed',
-  });
-}
-
-function connectorSentence(entry: AgentActivityEntry): string | undefined {
-  if (!isConnectorStep(entry) || entry.unavailable) return undefined;
-  const verifiedConnectorName = connectRequestFor(entry)?.connectorName;
-  return connectorStepSentence({
-    name: entry.name,
-    summary: entry.summary,
-    phase: connectorStepPhase(entry),
-    ...(verifiedConnectorName ? { verifiedConnectorName } : {}),
-  });
-}
-
 function stepSummary(entry: Extract<AgentActivityEntry, { summary: string }>): string {
   return connectorSentence(entry) ?? entry.summary;
-}
-
-const CONNECTOR_AUTHORIZATION_REASONS: Readonly<Record<ConnectorAuthorizationReason, string>> = {
-  not_connected: 'It is not connected.',
-  authorization_expired: 'Its authorization expired or was revoked.',
-  insufficient_scope: 'It needs more permission.',
-  authorization_unavailable: 'The saved authorization was rejected.',
-};
-
-function connectorFailureReason(
-  entry: AgentActivityToolEntry,
-  connectRequest: ConnectorConnectRequest | null,
-): string | undefined {
-  if (!isConnectorStep(entry) || connectorStepPhase(entry) !== 'failed') return undefined;
-  if (connectRequest) return CONNECTOR_AUTHORIZATION_REASONS[connectRequest.reason];
-  return toolFailureReason(classifyToolFailure(entry.error));
 }
 
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
@@ -328,10 +226,16 @@ function isSearchOnlyRun(entries: readonly AgentActivityEntry[]): boolean {
 }
 
 function totalSearchSources(entries: readonly AgentActivityEntry[]): number {
-  return entries.reduce((total, entry) => {
-    if (entry.kind !== 'tool' || entry.category !== 'web-search') return total;
-    return total + (entry.sources?.length ?? 0);
-  }, 0);
+  const urls = new Set<string>();
+  let unkeyed = 0;
+  for (const entry of entries) {
+    if (entry.kind !== 'tool' || entry.category !== 'web-search') continue;
+    for (const source of entry.sources ?? []) {
+      if (source.url) urls.add(source.url);
+      else unkeyed += 1;
+    }
+  }
+  return urls.size + unkeyed;
 }
 
 function formatElapsedDuration(startedAtMs: number, endedAtMs: number): string {
@@ -408,11 +312,14 @@ function cancelledSummary(activity: AgentActivityState): string | undefined {
   return lastSummary(activity, (entry) => !isLocalPlaceholderActivityEntry(entry));
 }
 
-function collapsedCompletionSummary(activity: AgentActivityState): string {
+function collapsedCompletionSummary(
+  activity: AgentActivityState,
+  turnSourceCount?: number,
+): string {
   if (isSearchOnlyRun(activity.entries)) {
     return (
       distinctCompletedToolSummary(activity) ??
-      webSearchCompletedLabel(totalSearchSources(activity.entries))
+      webSearchCompletedLabel(turnSourceCount ?? totalSearchSources(activity.entries))
     );
   }
   return `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`;
@@ -422,6 +329,7 @@ export function buildAgentActivitySummary(
   activity: AgentActivityState,
   nowMs: number,
   workMode?: CloudWorkMode,
+  turnSourceCount?: number,
 ): string {
   const isAgiWork = workMode === AGI_WORK_MODE;
   const active = latestActiveSummary(activity);
@@ -443,7 +351,7 @@ export function buildAgentActivitySummary(
   if (status === 'completed') {
     return isAgiWork
       ? `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`
-      : collapsedCompletionSummary(activity);
+      : collapsedCompletionSummary(activity, turnSourceCount);
   }
   if (isAgiWork) {
     const currentStep = labelForActivity(activity, nowMs, false);
@@ -508,51 +416,6 @@ function connectorInitial(entry: AgentActivityToolEntry): string | undefined {
   return serverId[0]?.toUpperCase();
 }
 
-const SCREEN_STEP_ACTIONS: Readonly<Record<string, (input: Record<string, unknown>) => string>> = {
-  device_screenshot: (input) =>
-    typeof input['display'] === 'number'
-      ? `Looked at display ${String(input['display'])}`
-      : 'Looked at the screen',
-  device_zoom: () => 'Zoomed in on part of the screen',
-  device_move: (input) => `Moved the pointer to ${point(input)}`,
-  device_click: (input) => {
-    const button = typeof input['button'] === 'string' ? String(input['button']) : 'left';
-    const count = typeof input['count'] === 'number' ? input['count'] : 1;
-    const verb = count >= 3 ? 'Triple-clicked' : count === 2 ? 'Double-clicked' : 'Clicked';
-    return `${verb} ${button === 'left' ? '' : `${button} button `}at ${point(input)}`.replace(
-      /\s+/g,
-      ' ',
-    );
-  },
-  device_drag: (input) =>
-    `Dragged from ${point(input)} to ${String(input['toX'])}, ${String(input['toY'])}`,
-  device_scroll: (input) => `Scrolled at ${point(input)}`,
-  device_type: (input) =>
-    typeof input['text'] === 'string'
-      ? `Typed \u201c${truncateAction(input['text'])}\u201d`
-      : 'Typed',
-  device_key: (input) =>
-    typeof input['key'] === 'string' ? `Pressed ${String(input['key'])}` : 'Pressed a key',
-  device_wait: (input) =>
-    typeof input['ms'] === 'number' ? `Waited ${String(input['ms'])}ms` : 'Waited',
-  device_open_app: (input) =>
-    typeof input['application'] === 'string'
-      ? `Opened ${String(input['application'])}`
-      : 'Opened an app',
-};
-
-const MAX_TYPED_ACTION_CHARS = 60;
-
-function truncateAction(value: string): string {
-  return value.length <= MAX_TYPED_ACTION_CHARS
-    ? value
-    : `${value.slice(0, MAX_TYPED_ACTION_CHARS)}\u2026`;
-}
-
-function point(input: Record<string, unknown>): string {
-  return `${String(input['x'])}, ${String(input['y'])}`;
-}
-
 /**
  * What a computer-use step did, in the words a person watching it would use.
  * Built from the step's own arguments rather than its result text, because the
@@ -596,32 +459,6 @@ function ComputerUseStepCard({
       ) : null}
     </div>
   );
-}
-
-function categoryToKind(category: AgentEventToolCategory): InlineToolKind {
-  switch (category) {
-    case 'web-search':
-      return 'web-search';
-    case 'web-fetch':
-      return 'web-fetch';
-    case 'shell':
-    case 'code-execution':
-      return 'bash';
-    case 'filesystem':
-      return 'fs-list';
-    case 'computer-use':
-      return 'browser';
-    case 'connector':
-    case 'mcp':
-      return 'mcp-custom';
-    case 'artifact':
-      return 'write';
-    case 'skill':
-      return 'skill';
-    case 'memory':
-    case 'other':
-      return 'unknown';
-  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -857,6 +694,7 @@ export function AgentActivityTimeline({
   renderInputRequest,
   renderApprovalRequest,
   renderConnectorMark,
+  sourceCount,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -955,8 +793,8 @@ export function AgentActivityTimeline({
   useGenericStartWindowExpiry(activity.startedAtMs, activity.status, setNowMs);
 
   const rawSummary = useMemo(
-    () => buildAgentActivitySummary(activity, nowMs, workMode),
-    [activity, nowMs, workMode],
+    () => buildAgentActivitySummary(activity, nowMs, workMode, sourceCount),
+    [activity, nowMs, workMode, sourceCount],
   );
   const summary = useHeldRunningSummary(
     activity.turnId,

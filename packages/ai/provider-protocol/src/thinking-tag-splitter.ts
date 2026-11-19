@@ -1,5 +1,6 @@
 const OPEN_TAG = '<thinking>';
 const CLOSE_TAG = '</thinking>';
+const CLOSE_TAG_MIN_PREFIX = '</'.length;
 
 export function longestTrailingTagPrefix(value: string, tag: string): number {
   const maxLength = Math.min(value.length, tag.length - 1);
@@ -50,12 +51,15 @@ export class ThinkingTagSplitter {
         this.buffer = this.buffer.slice(closeIdx + CLOSE_TAG.length);
         continue;
       }
-      const retained = isFinal
-        ? 0
-        : longestTrailingTagPrefix(this.buffer, this.thinking ? CLOSE_TAG : OPEN_TAG);
+      const pendingTag = longestTrailingTagPrefix(
+        this.buffer,
+        this.thinking ? CLOSE_TAG : OPEN_TAG,
+      );
+      const truncatedClose = isFinal && this.thinking && pendingTag >= CLOSE_TAG_MIN_PREFIX;
+      const retained = isFinal && !truncatedClose ? 0 : pendingTag;
       const safe = this.buffer.slice(0, this.buffer.length - retained);
       if (safe) parts.push({ type: this.thinking ? 'thinking' : 'text', text: safe });
-      this.buffer = this.buffer.slice(safe.length);
+      this.buffer = truncatedClose ? '' : this.buffer.slice(safe.length);
       return parts;
     }
   }

@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { MAX_CONNECTOR_TOOLS_PER_USER } from '@/lib/user-connector-tools';
 import {
+  ALWAYS_TOOL_SCHEMA_BYTES,
   DEFAULT_TOOL_SCHEMA_BUDGET,
+  DEFAULT_TOOL_SCHEMA_BYTES,
   TOOL_DIRECTORY_TOOL_NAME,
   expandDeferredToolSchemas,
   selectToolSchemas,
   toolDirectoryToolDef,
+  toolSchemaBudgetFor,
   toolSchemaBytes,
 } from '../tool-schema-loader';
 
@@ -130,5 +134,81 @@ describe('progressive retrieval', () => {
     ]);
     expect(expanded).toHaveLength(1);
     expect(expanded[0]?.inputSchema).toEqual(tools[30]?.inputSchema);
+  });
+});
+
+describe('tool access mode budgets', () => {
+  const tools = [
+    tool('linear', 'create_issue', 'Creates an issue in a Linear team.'),
+    tool('github', 'create_pull_request', 'Opens a pull request on a repository.'),
+    tool('gmail', 'send_message', 'Sends an email message.'),
+  ];
+  const turnText = 'open a pull request on the repository';
+
+  it('keeps Auto exactly as the default ranking', () => {
+    expect(toolSchemaBudgetFor('auto')).toEqual(DEFAULT_TOOL_SCHEMA_BUDGET);
+    const auto = selectToolSchemas({ tools, turnText, budget: toolSchemaBudgetFor('auto') });
+    const unset = selectToolSchemas({ tools, turnText });
+    expect(auto).toEqual(unset);
+    expect(auto.tools.map((entry) => entry.toolName)).toEqual(['create_pull_request']);
+  });
+
+  it('admits nothing up front On demand and lists every tool on the directory', () => {
+    const selected = selectToolSchemas({
+      tools,
+      turnText,
+      budget: toolSchemaBudgetFor('on_demand'),
+    });
+    expect(selected.tools).toEqual([]);
+    expect(selected.bytes).toBe(0);
+    expect(selected.deferred.map((entry) => entry.qualifiedName).sort()).toEqual(
+      tools.map((entry) => entry.qualifiedName).sort(),
+    );
+    expect(toolDirectoryToolDef(selected.deferred)?.qualifiedName).toBe(TOOL_DIRECTORY_TOOL_NAME);
+  });
+
+  it('keeps tools already loaded in the conversation On demand', () => {
+    const selected = selectToolSchemas({
+      tools,
+      turnText,
+      pinnedQualifiedNames: ['mcp__gmail__send_message'],
+      budget: toolSchemaBudgetFor('on_demand'),
+    });
+    expect(selected.tools.map((entry) => entry.qualifiedName)).toEqual([
+      'mcp__gmail__send_message',
+    ]);
+    expect(selected.deferred).toHaveLength(2);
+  });
+
+  it('admits every tool Always, relevant to the turn or not', () => {
+    const selected = selectToolSchemas({ tools, turnText, budget: toolSchemaBudgetFor('always') });
+    expect(selected.tools).toHaveLength(3);
+    expect(selected.deferred).toEqual([]);
+  });
+
+  it('caps Always at the per-user tool limit and defers the rest', () => {
+    const many = connectedTools(MAX_CONNECTOR_TOOLS_PER_USER + 5);
+    const selected = selectToolSchemas({
+      tools: many,
+      turnText: 'hello',
+      budget: toolSchemaBudgetFor('always'),
+    });
+    expect(selected.tools).toHaveLength(MAX_CONNECTOR_TOOLS_PER_USER);
+    expect(selected.deferred).toHaveLength(5);
+  });
+
+  it('gives Always a larger byte budget than Auto', () => {
+    expect(toolSchemaBudgetFor('always').maxSchemaBytes).toBe(ALWAYS_TOOL_SCHEMA_BYTES);
+    expect(ALWAYS_TOOL_SCHEMA_BYTES).toBeGreaterThan(DEFAULT_TOOL_SCHEMA_BYTES);
+  });
+
+  it('still bounds Always by bytes when the configured budget runs out', () => {
+    const selected = selectToolSchemas({
+      tools,
+      turnText,
+      budget: { ...toolSchemaBudgetFor('always'), maxSchemaBytes: toolSchemaBytes(tools[0]!) },
+    });
+    expect(selected.tools).toHaveLength(1);
+    expect(selected.deferred).toHaveLength(2);
   });
 });

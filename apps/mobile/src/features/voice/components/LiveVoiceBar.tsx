@@ -5,6 +5,8 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import {
+  Captions,
+  CaptionsOff,
   Check,
   Keyboard,
   Mic,
@@ -35,6 +37,7 @@ import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { formatClock } from '@/src/lib/time';
 import { VoiceOrb } from './VoiceOrb';
+import { VoiceStateGlow } from './VoiceStateGlow';
 import { AudioRoutePicker } from './AudioRoutePicker';
 import { VoiceToolFiles } from './VoiceToolFiles';
 import type { LiveVoiceStatus } from '@/src/features/voice/hooks/useLiveVoiceSession';
@@ -71,6 +74,9 @@ export interface LiveVoiceBarProps {
 const TRANSCRIPT_MAX_HEIGHT = 180;
 const ORB_WIDTH_RATIO = 0.52;
 const ORB_STAGE_HEIGHT_RATIO = 0.7;
+const GLOW_HEIGHT_RATIO = 0.34;
+const HIDE_CAPTIONS_LABEL = 'Hide captions';
+const SHOW_CAPTIONS_LABEL = 'Show captions';
 const APPROVAL_TITLE = 'Waiting for your approval';
 const BACKEND_BUSY_LABEL = 'Working on your request';
 const SLOW_TOOL_SUFFIX = 'is taking longer than usual';
@@ -203,8 +209,9 @@ export function LiveVoiceBar({
   const callElapsedMs = useCallClock(visible, status === 'live' && !paused);
   const insets = useSafeAreaInsets();
   const transcriptRef = useRef<ScrollView>(null);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [stageHeight, setStageHeight] = useState(0);
+  const [captionsShown, setCaptionsShown] = useState(true);
   const handleStageLayout = (event: LayoutChangeEvent) =>
     setStageHeight(event.nativeEvent.layout.height);
 
@@ -226,11 +233,10 @@ export function LiveVoiceBar({
   const headerButtonStyle = {
     width: 44,
     height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.inputSurface,
   } as const;
+  const captionsLabel = captionsShown ? HIDE_CAPTIONS_LABEL : SHOW_CAPTIONS_LABEL;
   const orbPhase =
     status === 'connecting'
       ? 'thinking'
@@ -239,6 +245,7 @@ export function LiveVoiceBar({
         : muted
           ? 'idle'
           : 'listening';
+  const glowPhase = paused || reconnecting || status === 'error' ? 'idle' : orbPhase;
   const controlStyle = {
     width: 48,
     height: 48,
@@ -255,6 +262,8 @@ export function LiveVoiceBar({
       style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
+      <VoiceStateGlow phase={glowPhase} height={Math.round(windowHeight * GLOW_HEIGHT_RATIO)} />
+
       <View
         testID="live-voice-header"
         style={{
@@ -296,6 +305,20 @@ export function LiveVoiceBar({
               )}
             </Pressable>
           ) : null}
+          <Pressable
+            onPress={tap(() => setCaptionsShown((shown) => !shown))}
+            accessibilityRole="button"
+            accessibilityLabel={captionsLabel}
+            accessibilityState={{ selected: captionsShown }}
+            testID="live-voice-captions"
+            style={headerButtonStyle}
+          >
+            {captionsShown ? (
+              <Captions size={20} color={colors.textPrimary} />
+            ) : (
+              <CaptionsOff size={20} color={colors.textPrimary} />
+            )}
+          </Pressable>
           <Pressable
             onPress={tap(() => router.push(VOICE_SETTINGS_ROUTE))}
             accessibilityRole="button"
@@ -368,6 +391,7 @@ export function LiveVoiceBar({
           <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>{error}</Text>
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Pressable
+              hitSlop={{ top: 4, bottom: 4 }}
               onPress={tap(onRetry)}
               accessibilityRole="button"
               accessibilityLabel="Try live voice again"
@@ -388,6 +412,7 @@ export function LiveVoiceBar({
               </Text>
             </Pressable>
             <Pressable
+              hitSlop={{ top: 4, bottom: 4 }}
               onPress={tap(onSwitchToText)}
               accessibilityRole="button"
               accessibilityLabel="Type a message instead"
@@ -410,7 +435,7 @@ export function LiveVoiceBar({
         </View>
       ) : null}
 
-      {turns.length > 0 ? (
+      {captionsShown && turns.length > 0 ? (
         <ScrollView
           testID="live-voice-transcript"
           ref={transcriptRef}
@@ -424,7 +449,10 @@ export function LiveVoiceBar({
               >
                 {turn.role === 'user' ? 'YOU' : 'AGI'}
               </Text>
-              <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, lineHeight: 21 }}>
+              <Text
+                selectable
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, lineHeight: 21 }}
+              >
                 {turn.text}
               </Text>
             </View>

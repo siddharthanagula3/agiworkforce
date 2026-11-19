@@ -59,7 +59,7 @@ const CHAT_EFFORT_VALUE = '';
 const FIELD_GAP = 'flex flex-col gap-1.5';
 const SECTION = 'flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:p-5';
 const HEADING = 'text-sm font-medium text-foreground';
-const HELP = 'text-sm text-muted-foreground';
+const HELP = 'text-xs text-muted-foreground';
 
 function SelectionField({
   legend,
@@ -224,7 +224,7 @@ export function AgentWebsitesField({
   return (
     <fieldset className="flex flex-col gap-2" disabled={disabled}>
       <legend className={HEADING}>Websites</legend>
-      <p id={`${id}-help`} className="text-sm text-muted-foreground">
+      <p id={`${id}-help`} className="text-xs text-muted-foreground">
         Allowed sites become the only ones it reads. Blocked sites are never read.
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -599,8 +599,7 @@ export function AgentConfigForm({
             }}
           />
           <p id={`${id}-budget-help`} className={HELP}>
-            Each person can send this agent up to this many messages a day. Chats stop at the limit
-            until midnight UTC.
+            Messages each person can send a day. Resets at midnight UTC.
           </p>
         </div>
         <div className={FIELD_GAP}>
@@ -627,8 +626,7 @@ export function AgentConfigForm({
             }}
           />
           <p id={`${id}-credits-help`} className={HELP}>
-            Chats and routines that run as this agent stop once it has used this many credits in the
-            calendar month (UTC), whoever is using it.
+            The agent stops once it uses this many credits in a calendar month (UTC).
           </p>
         </div>
       </section>
@@ -640,7 +638,7 @@ export function AgentConfigForm({
         {connectorsReleased() ? (
           <SelectionField
             legend="Connectors"
-            help="The agent uses only the connectors checked here, and only ones the person chatting has connected."
+            help="Only checked connectors that the person chatting has connected."
             allLabel="Every connector the person has connected"
             emptyCopy={
               <>

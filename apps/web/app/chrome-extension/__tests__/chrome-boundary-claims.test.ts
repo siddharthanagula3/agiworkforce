@@ -101,6 +101,16 @@ describe('/chrome-extension, transmission claims', () => {
     expect(collapsed()).not.toMatch(/scoped task permissions|permissions scoped to the task/iu);
   });
 
+  it('describes the site controls the extension has, not permission profiles', () => {
+    const capabilities = copyBlock('CAPABILITIES');
+    expect(capabilities).not.toMatch(/permission profiles?/iu);
+    expect(capabilities).not.toMatch(/allowed actions/iu);
+    expect(capabilities).not.toMatch(/expiry/iu);
+    expect(capabilities).toMatch(/list of approved sites/iu);
+    expect(capabilities).toMatch(/single task/iu);
+    expect(capabilities).toMatch(/Removing a site ends its access/u);
+  });
+
   it(`names the ${CLOUD} gateway as the destination reached from the extension`, () => {
     const source = collapsed();
     expect(source).toMatch(new RegExp(`${CLOUD} gateway`, 'u'));
@@ -155,6 +165,13 @@ describe('/chrome-extension, transmission claims', () => {
     const inference = /k: 'Inference in Chrome',\s*v:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
     expect(inference, 'Inference in Chrome row not found').not.toBeNull();
     expect(inference![1]!).toMatch(new RegExp(`${CLOUD}`, 'u'));
+  });
+
+  it('keeps native messaging apart from the loopback pairing port', () => {
+    const source = collapsed();
+    expect(source).not.toMatch(/native messaging[^.'`]*localhost port/iu);
+    expect(source).not.toMatch(/\b8787\b/u);
+    expect(source).toMatch(/Pairing runs over loopback[^.]*\$\{BROWSER_BRIDGE_DEFAULT_PORT\}/u);
   });
 
   it('sends the reader to the page that details the residual screenshot risk', () => {

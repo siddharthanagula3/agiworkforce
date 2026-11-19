@@ -23,7 +23,7 @@ jest.mock('@/lib/egressGuard', () => ({
 }));
 jest.mock('@/src/platform/platformHeaders', () => ({ platformRequestHeaders: () => ({}) }));
 
-import { NEW_AGENT_DRAFT } from '@agiworkforce/cloud-contracts';
+import { AGENT_CATALOG, NEW_AGENT_DRAFT } from '@agiworkforce/cloud-contracts';
 import {
   createAgent,
   deleteAgent,
@@ -33,6 +33,7 @@ import {
   restoreAgentVersion,
   setAgentStatus,
   startAgentConversation,
+  startCatalogAgentConversation,
   transferAgent,
   updateAgentShare,
   uploadAgentFile,
@@ -85,6 +86,48 @@ describe('agents service', () => {
       '1d4c3a3e-1f9a-4c55-8c11-1f0e0e7b9a01',
     );
     expect(mockPost).toHaveBeenLastCalledWith(`/api/custom-agents/${AGENT.id}/conversations`, {});
+  });
+
+  it('creates a built-in agent copy once and reuses it for later chats', async () => {
+    const entry = AGENT_CATALOG[1];
+    const conversationId = '1d4c3a3e-1f9a-4c55-8c11-1f0e0e7b9a01';
+    const copy = {
+      ...AGENT,
+      name: entry.name,
+      description: entry.description,
+      instructions: entry.instructions,
+    };
+
+    mockGet.mockResolvedValueOnce({ agents: [AGENT] });
+    mockPost.mockResolvedValueOnce({ agent: copy }).mockResolvedValueOnce({ conversationId });
+    await expect(startCatalogAgentConversation(entry)).resolves.toEqual({
+      agent: copy,
+      conversationId,
+    });
+    expect(mockPost).toHaveBeenNthCalledWith(
+      1,
+      '/api/custom-agents',
+      expect.objectContaining({
+        name: entry.name,
+        instructions: entry.instructions,
+        conversationStarters: entry.conversationStarters,
+      }),
+    );
+    expect(mockPost).toHaveBeenNthCalledWith(2, `/api/custom-agents/${copy.id}/conversations`, {});
+
+    mockPost.mockClear();
+    mockGet.mockResolvedValueOnce({ agents: [AGENT, copy] });
+    mockPost.mockResolvedValueOnce({ conversationId });
+    await startCatalogAgentConversation(entry);
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    expect(mockPost).toHaveBeenCalledWith(`/api/custom-agents/${copy.id}/conversations`, {});
+  });
+
+  it('does not start a chat when the built-in copy cannot be created', async () => {
+    mockGet.mockResolvedValueOnce({ agents: [] });
+    mockPost.mockRejectedValueOnce(new Error('down'));
+    await expect(startCatalogAgentConversation(AGENT_CATALOG[0])).rejects.toThrow('down');
+    expect(mockPost).toHaveBeenCalledTimes(1);
   });
 
   it('publishes with a trimmed note, restores, changes status and transfers', async () => {

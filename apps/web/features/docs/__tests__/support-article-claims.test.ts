@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { CANONICAL_SITE_URL } from '@/lib/seo/site';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -26,10 +27,7 @@ function repoText(...segments: string[]): string {
 }
 
 function canonicalSupportUrl(path: string): string {
-  const site = fileText('lib/seo/site.ts');
-  const origin = /NEXT_PUBLIC_APP_URL'\]\s*\?\?\s*'([^']+)'/u.exec(site)?.[1];
-  if (!origin) throw new Error('Missing canonical public origin');
-  return new URL(path, origin).href;
+  return new URL(path, CANONICAL_SITE_URL).href;
 }
 
 describe('BYOK help article follows the implemented credential paths', () => {
@@ -352,8 +350,8 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(repoText('apps', 'desktop', 'electron', 'config.ts')).toMatch(
       /export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin\(\);/u,
     );
-    expect(fileText('app/api/llm/v1/chat/completions/lib/request-processor.ts')).toMatch(
-      /const MANAGED_WEB_CLOUD_TRUST_MODE = 'managed_cloud';/u,
+    expect(fileText('lib/server/managed-cloud-routing/routing-request.ts')).toMatch(
+      /export const MANAGED_CLOUD_TRUST_MODE = 'managed_cloud';/u,
     );
     for (const id of [
       'desktop-and-cli',
@@ -388,7 +386,8 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(review).toContain('let diff = gather_diff(options).await?;');
     expect(review).toContain('session.send(config, &prompt, Box::new(|_chunk| {})).await?;');
     expect(apply).toMatch(/pub async fn apply_from_file[\s\S]{0,180}apply_git_patch/u);
-    expect(apply).toMatch(/pub async fn apply_from_session[\s\S]{0,550}apply_git_patch/u);
+    expect(apply).toMatch(/pub async fn apply_from_session[\s\S]{0,220}apply_session_diff/u);
+    expect(apply).toMatch(/async fn apply_session_diff[\s\S]{0,900}apply_git_patch/u);
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain('`agi review` sends a Git diff to the selected model for review.');
     expect(article).toContain('`agi apply` applies a diff from a file or saved session.');
@@ -481,7 +480,9 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(credentials).toContain('await setApiKey(context.secrets, apiKey.trim());');
     expect(credentials).toContain('await clearApiKey(context.secrets);');
     expect(setup).toContain('const result = await localRuntimes.restartAll();');
-    expect(setup).toContain('const result = await probeCli(cliPath, runCliVersion);');
+    expect(setup).toContain(
+      'const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);',
+    );
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain(
       '**Set API Key** and **Clear API Key** manage the AGI account API key.',

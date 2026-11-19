@@ -396,7 +396,7 @@ impl ArtifactStore {
             .collect();
 
         // Sort by updated_at descending (most recent first)
-        results.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        results.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
 
         // Apply pagination
         let start = filter.offset.unwrap_or(0);

@@ -36,6 +36,8 @@ describe('strict privacy snapshots', () => {
     { settings: { privacy: [] }, version: 'v1' },
     { settings: { privacy: { shareTelemetry: 'true' } }, version: 'v1' },
     { settings: { privacy: { keepOutOfProviderTraining: null } }, version: 'v1' },
+    { settings: { privacy: { allowChatsForModelImprovement: 'true' } }, version: 'v1' },
+    { settings: { privacy: { allowVoiceForModelImprovement: 1 } }, version: 'v1' },
   ])('rejects malformed data rather than manufacturing defaults: %j', async (body) => {
     fetchMock.mockResolvedValueOnce(Response.json(body));
     await expect(readPrivacyPreferences(authority())).rejects.toThrow();

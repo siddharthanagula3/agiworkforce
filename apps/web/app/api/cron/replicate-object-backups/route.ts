@@ -165,6 +165,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let unreadable = 0;
     let cursorUnreadable = 0;
     let bytes = 0;
+    let failed = 0;
 
     for (const source of BACKUP_SOURCES) {
       const stored = await readCursor(source.cursorKey);
@@ -174,27 +175,45 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
       const since = stored.status === 'found' ? parseCursor(stored.value) : fallbackSince;
       let cursor = since;
+      let completed = 0;
       const rows = await getNeonDb().query<StoredObjectRow>(source.sql, [since.at, since.id]);
       scanned += rows.length;
 
       for (const row of rows) {
-        cursor = { at: row.cursor_at, id: row.row_id };
         const key = row.object_reference ? source.toKey(row.object_reference) : null;
         if (!key) {
           unreadable += 1;
-          continue;
+        } else {
+          try {
+            const result = source.readsLegacyPublicBucket
+              ? await replicateObjectWithLegacyFallback(key)
+              : await replicateObject(key);
+            counts[result.outcome] += 1;
+            bytes += result.bytes;
+            if (
+              target &&
+              (result.outcome === 'replicated' || result.outcome === 'already-present')
+            ) {
+              await recordBackupReplica(key, result.bytes, target.bucket);
+            }
+          } catch (error) {
+            failed += 1;
+            logger.error(
+              {
+                source: source.id,
+                objectKey: key,
+                error: error instanceof Error ? error.message : String(error),
+              },
+              'Object backup failed for one object; its source stops here and retries it next run',
+            );
+            break;
+          }
         }
-        const result = source.readsLegacyPublicBucket
-          ? await replicateObjectWithLegacyFallback(key)
-          : await replicateObject(key);
-        counts[result.outcome] += 1;
-        bytes += result.bytes;
-        if (target && (result.outcome === 'replicated' || result.outcome === 'already-present')) {
-          await recordBackupReplica(key, result.bytes, target.bucket);
-        }
+        cursor = { at: row.cursor_at, id: row.row_id };
+        completed += 1;
       }
 
-      if (rows.length > 0) await writeCursor(source.cursorKey, formatCursor(cursor));
+      if (completed > 0) await writeCursor(source.cursorKey, formatCursor(cursor));
       cursors[source.id] = formatCursor(cursor);
     }
 
@@ -208,6 +227,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         cursorUnreadable,
         counts,
         bytes,
+        failed,
         reconciled,
         tracked: summary.tracked,
         crossRegion: isCrossRegionBackup(),
@@ -220,6 +240,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         scanned,
         unreadable,
         cursorUnreadable,
+        failed,
         replicated: counts.replicated,
         alreadyPresent: counts['already-present'],
         missingSource: counts['missing-source'],
@@ -234,7 +255,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         independentCredential: readiness.independentCredential,
         cursors,
       },
-      { status: reconciled.failed > 0 || cursorUnreadable > 0 ? 500 : 200 },
+      { status: failed > 0 || reconciled.failed > 0 || cursorUnreadable > 0 ? 500 : 200 },
     );
   } catch (error) {
     logger.error(

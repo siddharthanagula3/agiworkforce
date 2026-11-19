@@ -15,6 +15,7 @@ import {
   CheckSquare,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Button } from '@/components/ui/Button';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -44,6 +45,7 @@ import {
   MEMORY_IMPORT_UNCERTAIN_MESSAGE,
   type MemoryImportOperation,
 } from '@/src/features/memory/services/memoryImportOperation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type ImportStep = 'compose' | 'preview' | 'done';
 
@@ -348,7 +350,7 @@ export default function MemoryImportScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-4 h-12">
+      <View className="flex-row items-center px-4 min-h-12">
         <Pressable
           accessibilityLabel="Go back"
           accessibilityRole="button"
@@ -360,14 +362,23 @@ export default function MemoryImportScreen() {
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
+        <Text
+          variant="subheading"
+          className="ml-2 flex-1"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ color: colors.textPrimary }}
+        >
           Import Memories
         </Text>
       </View>
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -386,8 +397,8 @@ export default function MemoryImportScreen() {
               </Text>
               <Text className="text-sm leading-5" style={{ color: colors.textSecondary }}>
                 {isCloud
-                  ? 'Only the memories you import are saved to your AGI Cloud account.'
-                  : 'The text is read on this device and the memories stay here. Nothing is uploaded.'}
+                  ? 'Only the memories you import are saved.'
+                  : 'Read on this device. Nothing is uploaded.'}
               </Text>
             </View>
           </Animated.View>
@@ -395,7 +406,7 @@ export default function MemoryImportScreen() {
 
         {suspended && (
           <Text style={{ fontSize: typeScale.body, color: colors.textSecondary }}>
-            Return to the original mode to continue this import. Its destination has not changed.
+            Switch back to the original mode to continue this import.
           </Text>
         )}
         {!suspended && !destinationAvailable && (
@@ -407,8 +418,7 @@ export default function MemoryImportScreen() {
         {!suspended && step === 'compose' && (
           <View>
             <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
-              Ask your other assistant to list what it remembers about you, one per line, and paste
-              it here.
+              Paste what your other assistant remembers about you, one per line.
             </Text>
 
             <Text
@@ -422,6 +432,7 @@ export default function MemoryImportScreen() {
                 const active = option === source;
                 return (
                   <Pressable
+                    hitSlop={{ top: 4, bottom: 4 }}
                     key={option}
                     onPress={() => handleSourceChange(option)}
                     disabled={!canEdit}

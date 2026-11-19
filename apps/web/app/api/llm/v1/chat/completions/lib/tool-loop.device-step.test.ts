@@ -88,15 +88,19 @@ function makeProcessed(withHost: boolean): ProcessedRequest {
       max_tokens: 1000,
       stream: true,
       tools: [
-        {
-          type: 'function',
-          function: {
-            name: 'device_read_file',
-            description: 'read a file on the device',
-            parameters: { type: 'object' },
-          },
+        'device_read_file',
+        'device_browser_navigate',
+        'device_browser_download',
+        'device_calendar_create_event',
+        'device_run_command',
+      ].map((name) => ({
+        type: 'function',
+        function: {
+          name,
+          description: `${name} on the device`,
+          parameters: { type: 'object' },
         },
-      ],
+      })),
     },
   } as unknown as ProcessedRequest;
 }

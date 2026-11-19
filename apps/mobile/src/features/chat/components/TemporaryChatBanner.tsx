@@ -23,6 +23,10 @@ const DATA_USE_ROUTE = '/(app)/settings/cloud-privacy';
 
 let hasShownThisSession = false;
 
+export function __resetTemporaryChatBannerForTests(): void {
+  hasShownThisSession = false;
+}
+
 export function TemporaryChatBanner() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -33,7 +37,11 @@ export function TemporaryChatBanner() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (isTemporaryChat && !hasShownThisSession) {
+    if (!isTemporaryChat) {
+      setVisible(false);
+      return;
+    }
+    if (!hasShownThisSession) {
       hasShownThisSession = true;
       setVisible(true);
     }

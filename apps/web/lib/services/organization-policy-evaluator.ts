@@ -13,6 +13,13 @@ import {
 
 export type PolicySurface = SourceSurface | 'api' | 'unknown';
 
+/**
+ * Whether the rules about where a request came from apply. They are skipped
+ * only for a check made with no end-user request, such as the relay's recheck
+ * of a live pairing whose origin was judged when it was created and claimed.
+ */
+export type RequestOriginRules = 'enforce' | 'skip';
+
 export type PolicyAsk =
   | { resource: 'managed_compute'; surface: PolicySurface; country?: string | null }
   | {
@@ -20,8 +27,10 @@ export type PolicyAsk =
       feature: WorkspaceFeature;
       surface?: PolicySurface;
       country?: string | null;
+      originRules?: RequestOriginRules;
     }
-  | { resource: 'chat_sync'; surface: PolicySurface }
+  | { resource: 'workspace_access'; surface: PolicySurface; country?: string | null }
+  | { resource: 'chat_sync'; surface: PolicySurface; country?: string | null }
   | { resource: 'privacy_mode'; mode: PrivacyMode }
   | { resource: 'audit_export' }
   | { resource: 'external_sharing' }
@@ -202,8 +211,9 @@ function accessRestriction(
   surface: PolicySurface | undefined,
   country: string | null | undefined,
   obligations: PolicyObligation[],
+  originRules: RequestOriginRules = 'enforce',
 ): PolicyDecision | null {
-  if (!countryIsPermittedByControls(policy, country)) {
+  if (originRules === 'enforce' && !countryIsPermittedByControls(policy, country)) {
     return {
       allowed: false,
       code: 'region_not_allowed',
@@ -281,7 +291,13 @@ export function evaluateOrganizationPolicy(
     }
 
     case 'feature': {
-      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      const restriction = accessRestriction(
+        policy,
+        ask.surface,
+        ask.country,
+        obligations,
+        ask.originRules,
+      );
       if (restriction) return restriction;
       if (!policy.controls.featureAccess[ask.feature]) {
         return {
@@ -299,7 +315,20 @@ export function evaluateOrganizationPolicy(
       };
     }
 
+    case 'workspace_access': {
+      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      if (restriction) return restriction;
+      return {
+        allowed: true,
+        code: 'allowed',
+        reason: 'Allowed by workspace policy.',
+        obligations,
+      };
+    }
+
     case 'chat_sync': {
+      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      if (restriction) return restriction;
       if (!surfaceIsSyncable(policy, ask.surface)) {
         return {
           allowed: false,

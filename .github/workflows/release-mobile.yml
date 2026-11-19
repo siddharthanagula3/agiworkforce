@@ -90,7 +90,6 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -198,7 +197,6 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -297,7 +295,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Setup Expo and pinned EAS CLI
-        uses: expo/expo-github-action@9da89d3617bb88139671bad31b09c65714c2ee06 # v9.0.1
+        uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with:
           eas-version: ${{ env.EAS_CLI_VERSION }}
           token: ${{ secrets.EXPO_TOKEN }}
@@ -356,7 +354,16 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
-        run: pnpm --filter @agiworkforce/mobile release:ios:prod -- --auto-submit
+          # eas build reads these names, not the submit profile's, to reach Apple
+          # when a provisioning profile has to be created or repaired.
+          EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apps/mobile/secrets/asc-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          EXPO_APPLE_TEAM_ID="$(jq -er '.submit.production.ios.appleTeamId' apps/mobile/eas.json)"
+          export EXPO_APPLE_TEAM_ID
+          pnpm --filter @agiworkforce/mobile release:ios:prod --auto-submit
 
       - name: Remove local App Store credential
         if: always()
@@ -402,7 +409,7 @@ jobs:
         run: pnpm --filter @agiworkforce/mobile release:verify-associations
 
       - name: Setup Expo and pinned EAS CLI
-        uses: expo/expo-github-action@9da89d3617bb88139671bad31b09c65714c2ee06 # v9.0.1
+        uses: expo/expo-github-action@5273c2136bd09c2a341fe3340d3e767ce5a13015 # v9.0.2
         with:
           eas-version: ${{ env.EAS_CLI_VERSION }}
           token: ${{ secrets.EXPO_TOKEN }}
@@ -439,7 +446,7 @@ jobs:
       - name: Build the tagged Android source and submit that exact build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: pnpm --filter @agiworkforce/mobile release:android:prod -- --auto-submit
+        run: pnpm --filter @agiworkforce/mobile release:android:prod --auto-submit
 
       - name: Remove local Google Play credential
         if: always()

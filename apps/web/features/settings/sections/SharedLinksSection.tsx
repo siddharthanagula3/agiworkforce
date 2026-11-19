@@ -35,6 +35,8 @@ function formatDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+const SHARE_SUMMARY_FLEX = '1 1 12rem';
+
 const actionButtonStyle = {
   padding: 'var(--space-2) var(--space-3)',
   fontSize: 12,
@@ -303,8 +305,8 @@ export function SharedLinksSection() {
         >
           Shared links
         </h1>
-        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Review and revoke conversation links and published artifact pages created from Web chat.
+        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
+          Links and pages you have shared.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="sharing-conversations" label="How sharing works" />
@@ -346,8 +348,7 @@ export function SharedLinksSection() {
             role="status"
             style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-2)', fontSize: 13 }}
           >
-            This list may not show every shared link. You can manage the links shown here
-            individually; links not shown may still be accessible.
+            This list may be incomplete. Links not shown may still work.
           </p>
         ) : null}
         {loading ? (
@@ -384,12 +385,16 @@ export function SharedLinksSection() {
                   padding: 'var(--space-4) var(--space-5)',
                   borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
                   display: 'flex',
+                  flexWrap: 'wrap',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 'var(--space-4)',
+                  gap: 'var(--space-3) var(--space-4)',
                 }}
               >
-                <div style={{ minWidth: 0 }}>
+                <div
+                  className="max-md:basis-full!"
+                  style={{ minWidth: 0, flex: SHARE_SUMMARY_FLEX }}
+                >
                   <div
                     style={{
                       color: 'var(--text-1)',

@@ -139,8 +139,8 @@ describe('/privacy gives the sandbox reclaim the clock the cron actually has', (
     ).toBe(false);
   });
 
-  it('states the age caps the reclaim module declares', () => {
-    const reclaim = readFileSync(path.join(WEB_DIR, 'lib', 'e2b', 'reclaim.ts'), 'utf8');
+  it('states the age caps the reclaim schedule declares', () => {
+    const reclaim = readFileSync(path.join(WEB_DIR, 'lib', 'e2b', 'reclaim-schedule.ts'), 'utf8');
     expect(reclaim).toContain('export const SANDBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000;');
     expect(reclaim).toContain('export const PAUSED_SANDBOX_MAX_AGE_MS = 2 * 60 * 60 * 1000;');
     expect(flat('privacy')).toMatch(/paused gives its slot up after two hours/iu);

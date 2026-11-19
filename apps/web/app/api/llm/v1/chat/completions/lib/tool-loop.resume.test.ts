@@ -65,6 +65,14 @@ describe('isToolOffered, resume authorization boundary', () => {
       expect(isToolOffered(toolName, [], new Set([toolName]))).toBe(true);
     },
   );
+
+  it.each(['generate_image', 'edit_image'])(
+    'requires the image tool %s to be present in the current request offerings',
+    (toolName) => {
+      expect(isToolOffered(toolName, [], new Set())).toBe(false);
+      expect(isToolOffered(toolName, [], new Set([toolName]))).toBe(true);
+    },
+  );
 });
 
 function makeFreshProcessed(

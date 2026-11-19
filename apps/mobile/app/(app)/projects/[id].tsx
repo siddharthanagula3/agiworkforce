@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from 'expo-router';
-import { ArrowLeft, FileText, Menu, Settings2 } from 'lucide-react-native';
+import { ArrowLeft, FileText, Menu, MoreHorizontal, Settings2 } from 'lucide-react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
@@ -13,18 +13,44 @@ import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTa
 import { ProjectArtifactsTab } from '@/src/features/projects/components/ProjectArtifactsTab';
 import { ProjectRoutinesTab } from '@/src/features/projects/components/ProjectRoutinesTab';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { ProjectEditorModal } from '@/src/features/projects/components/ProjectEditorModal';
+import {
+  ProjectInstructionsEntry,
+  ProjectInstructionsSheet,
+} from '@/src/features/projects/components/ProjectInstructionsSheet';
+import { ProjectMemorySheet } from '@/src/features/projects/components/ProjectMemorySheet';
+import { useProjectActions } from '@/src/features/projects/useProjectActions';
+import { useProjectEditor } from '@/src/features/projects/useProjectEditor';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   loadMissingCloudProject,
   refreshCloudProjectDetails,
 } from '@/src/features/projects/service';
 import { CloudProjectOverview } from '@/src/features/projects/components/CloudProjectOverview';
+import {
+  PROJECT_FILE_CITATION_FILE_PARAM,
+  PROJECT_FILE_CITATION_PAGE_PARAM,
+} from '@agiworkforce/types';
+
+const HEADER_SCROLL_STYLE = { flexGrow: 0, maxHeight: '50%' } as const;
 
 type TabId = 'chats' | 'work' | 'sources' | 'artifacts' | 'routines';
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function citedPage(value: string | string[] | undefined): number | undefined {
+  const page = Number(firstParam(value));
+  return Number.isInteger(page) && page > 0 ? page : undefined;
+}
 
 function LocalOnlyFallback({
   projectId,
@@ -54,6 +80,82 @@ function LocalOnlyFallback({
       <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
         Local project. Details, chats, and sources stay on this device.
       </Text>
+    </View>
+  );
+}
+
+function ProjectQuickActions({
+  projectId,
+  projectName,
+  instructions,
+  canEditInstructions,
+  showMemory,
+}: {
+  projectId: string;
+  projectName: string;
+  instructions: string;
+  canEditInstructions: boolean;
+  showMemory: boolean;
+}) {
+  const colors = useThemeColors();
+  const router = useRouter();
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const closeInstructions = useCallback(() => setInstructionsOpen(false), []);
+  const closeMemory = useCallback(() => setMemoryOpen(false), []);
+  const openMemorySettings = useCallback(
+    () => router.push({ pathname: '/(app)/projects/settings/[id]', params: { id: projectId } }),
+    [projectId, router],
+  );
+
+  const hasInstructions = instructions.trim().length > 0;
+  if (!canEditInstructions && !hasInstructions && !showMemory) return null;
+
+  return (
+    <View style={{ marginHorizontal: 16, marginTop: 4, gap: 8 }} testID="project-quick-actions">
+      {canEditInstructions || hasInstructions ? (
+        <ProjectInstructionsEntry
+          instructions={instructions}
+          {...(canEditInstructions ? { onPress: () => setInstructionsOpen(true) } : {})}
+        />
+      ) : null}
+      {showMemory ? (
+        <PressableBox
+          testID="project-view-memory"
+          onPress={() => setMemoryOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="View memory"
+          style={{
+            minHeight: 44,
+            paddingHorizontal: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
+            View memory
+          </Text>
+        </PressableBox>
+      ) : null}
+      {instructionsOpen && canEditInstructions ? (
+        <ProjectInstructionsSheet
+          projectId={projectId}
+          projectName={projectName}
+          instructions={instructions}
+          onClose={closeInstructions}
+        />
+      ) : null}
+      {showMemory ? (
+        <ProjectMemorySheet
+          visible={memoryOpen}
+          projectId={projectId}
+          onClose={closeMemory}
+          onOpenSettings={openMemorySettings}
+        />
+      ) : null}
     </View>
   );
 }
@@ -175,12 +277,19 @@ function TabBar({
 
 export default function ProjectDetailScreen() {
   const colors = useThemeColors();
-  const params = useLocalSearchParams<{ id: string }>();
-  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const params = useLocalSearchParams();
+  const id = firstParam(params.id);
+  const knowledgeFile = firstParam(params[PROJECT_FILE_CITATION_FILE_PARAM])?.trim() || undefined;
+  const page = citedPage(params[PROJECT_FILE_CITATION_PAGE_PARAM]);
   const router = useRouter();
   const navigation = useNavigation();
 
-  const [activeTab, setActiveTab] = useState<TabId>('chats');
+  const [activeTab, setActiveTab] = useState<TabId>(knowledgeFile ? 'sources' : 'chats');
+  const [shownFile, setShownFile] = useState(knowledgeFile);
+  if (shownFile !== knowledgeFile) {
+    setShownFile(knowledgeFile);
+    if (knowledgeFile) setActiveTab('sources');
+  }
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadState, setLoadState] = useState<{ id: string; status: 'loading' | 'error' } | null>(
     null,
@@ -197,6 +306,8 @@ export default function ProjectDetailScreen() {
   );
   const isCloudProject = target === 'cloud' && !!cloudProject;
   const cloudDetails = useCloudProjectStore((s) => (id ? s.details[id] : undefined));
+  const editor = useProjectEditor();
+  const projectActions = useProjectActions(editor.openEdit);
 
   useEffect(() => {
     if (!isCloudProject || appMode !== 'cloud' || !isClerkSignedIn) return;
@@ -226,6 +337,13 @@ export default function ProjectDetailScreen() {
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
   }, [navigation]);
+  const { usesPersistentDrawer } = useResponsiveLayout();
+
+  const { openActions } = projectActions;
+  const handleOpenActions = useCallback(() => {
+    if (!id) return;
+    openActions(id, { variant: 'page', onRemoved: handleBack });
+  }, [handleBack, id, openActions]);
 
   if (!id) {
     return (
@@ -246,6 +364,12 @@ export default function ProjectDetailScreen() {
   const screenTitle = isCloudProject
     ? (cloudProject?.name ?? 'Project')
     : (localProject?.name ?? 'Project');
+  const projectInstructions = isCloudProject
+    ? (cloudProject?.instructions ?? '')
+    : (localProject?.instructions ?? '');
+  const isSharedWithMe = isCloudProject && cloudDetails?.sharedAccess != null;
+  const isArchived = isCloudProject && cloudProject?.isArchived === true;
+  const canEditInstructions = !isArchived && !isSharedWithMe;
   const cloudLoadFailed = loadState?.id === id && loadState?.status === 'error';
 
   const renderHeader = () => {
@@ -271,7 +395,7 @@ export default function ProjectDetailScreen() {
           alignItems: 'center',
           justifyContent: 'space-between',
           paddingHorizontal: 12,
-          height: 48,
+          minHeight: 48,
           borderBottomWidth: 1,
           borderBottomColor: colors.border,
         }}
@@ -287,6 +411,7 @@ export default function ProjectDetailScreen() {
 
         <Text
           numberOfLines={1}
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
           style={{
             flex: 1,
             textAlign: 'center',
@@ -329,18 +454,52 @@ export default function ProjectDetailScreen() {
             <Settings2 size={21} color={colors.textSecondary} />
           </PressableBox>
         ) : null}
-        <PressableBox
-          onPress={handleOpenDrawer}
-          style={{ padding: 8, borderRadius: 8 }}
-          accessibilityLabel="Open menu"
-          accessibilityRole="button"
-        >
-          <Menu size={22} color={colors.textSecondary} />
-        </PressableBox>
+        {target !== 'unknown' && appMode === target ? (
+          <PressableBox
+            testID="project-detail-actions"
+            onPress={handleOpenActions}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 8,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            accessibilityLabel="More project actions"
+            accessibilityRole="button"
+          >
+            <MoreHorizontal size={22} color={colors.textSecondary} />
+          </PressableBox>
+        ) : null}
+        {usesPersistentDrawer ? null : (
+          <PressableBox
+            onPress={handleOpenDrawer}
+            style={{ padding: 8, borderRadius: 8 }}
+            accessibilityLabel="Open menu"
+            accessibilityRole="button"
+          >
+            <Menu size={22} color={colors.textSecondary} />
+          </PressableBox>
+        )}
       </View>
 
       <View style={{ flex: 1 }} testID="project-detail-scroll">
-        {renderHeader()}
+        <ScrollView
+          testID="project-detail-header-scroll"
+          style={HEADER_SCROLL_STYLE}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderHeader()}
+          {target !== 'unknown' && appMode === target ? (
+            <ProjectQuickActions
+              projectId={id}
+              projectName={screenTitle}
+              instructions={projectInstructions}
+              canEditInstructions={canEditInstructions}
+              showMemory={isCloudProject && !isSharedWithMe}
+            />
+          ) : null}
+        </ScrollView>
         {target === 'unknown' ? (
           <ProjectNotice
             title={
@@ -392,11 +551,17 @@ export default function ProjectDetailScreen() {
             ) : activeTab === 'routines' && isCloudProject ? (
               <ProjectRoutinesTab projectId={id} />
             ) : (
-              <ProjectSourcesTab projectId={id} />
+              <ProjectSourcesTab
+                projectId={id}
+                {...(knowledgeFile ? { openFileId: knowledgeFile } : {})}
+                {...(page ? { openPage: page } : {})}
+              />
             )}
           </>
         )}
       </View>
+      <ProjectEditorModal editor={editor} />
+      <ActionMenuSheet menu={projectActions.menu} dismissLabel="Dismiss project actions" />
     </SafeAreaView>
   );
 }

@@ -1,10 +1,11 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use super::session::validate_summary_text;
 
@@ -68,11 +69,46 @@ pub enum LeaseClaim {
 /// The identity every lease this process takes is held under. The first
 /// caller names it; a process is one writer however many threads it runs.
 pub fn process_writer(label: &str) -> &'static WriterIdentity {
-    static IDENTITY: OnceLock<WriterIdentity> = OnceLock::new();
-    IDENTITY.get_or_init(|| WriterIdentity {
+    PROCESS_WRITER.get_or_init(|| WriterIdentity {
         id: uuid::Uuid::new_v4().to_string(),
         label: format!("{label} (pid {})", std::process::id()),
     })
+}
+
+static PROCESS_WRITER: OnceLock<WriterIdentity> = OnceLock::new();
+static CLAIMED_SESSIONS: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+
+/// Hand back every lease this process holds, so the next client to open one
+/// of its sessions takes it without reporting an abandoned writer. Called when
+/// the process ends on purpose; a crash never reaches it, and that lease is
+/// still reported as abandoned.
+pub fn release_process_leases() {
+    if let Some(identity) = PROCESS_WRITER.get() {
+        release_claimed_by(identity);
+    }
+}
+
+fn claimed_sessions() -> std::sync::MutexGuard<'static, BTreeSet<PathBuf>> {
+    CLAIMED_SESSIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn release_claimed_by(identity: &WriterIdentity) {
+    let claimed: Vec<PathBuf> = claimed_sessions().iter().cloned().collect();
+    for session_path in claimed {
+        match release(&session_path, identity) {
+            Ok(Some(_)) => {
+                claimed_sessions().remove(&session_path);
+            }
+            Ok(None) => {}
+            Err(error) => tracing::debug!(
+                %error,
+                path = %session_path.display(),
+                "session writer lease not released"
+            ),
+        }
+    }
 }
 
 pub fn holder_summary(
@@ -182,6 +218,7 @@ fn claim_at(
     force: bool,
 ) -> Result<LeaseClaim> {
     let _arbiter = lock_arbiter(session_path)?;
+    claimed_sessions().insert(session_path.to_path_buf());
     let current = read(session_path);
     let acquired_at = match current.as_ref() {
         Some(lease) if lease.holder_id == identity.id => lease.acquired_at,
@@ -400,6 +437,47 @@ mod tests {
             claim_at(&path, &identity("a"), now, false).expect("reclaim"),
             LeaseClaim::Acquired(_)
         ));
+    }
+
+    #[test]
+    fn a_clean_exit_hands_back_every_lease_so_the_next_open_reports_no_abandoned_writer() {
+        let dir = tempdir().expect("tempdir");
+        let first = session_path(dir.path());
+        let second = dir.path().join("thread-2.jsonl");
+        let quitting = identity(&uuid::Uuid::new_v4().to_string());
+        let other = identity(&uuid::Uuid::new_v4().to_string());
+        claim(&first, &quitting).expect("first session");
+        claim(&second, &other).expect("second session");
+        take_over(&second, &quitting).expect("second session taken");
+        claim(&first, &quitting).expect("renewed");
+
+        release_claimed_by(&quitting);
+
+        assert!(!lease_path(&first).exists());
+        assert!(!lease_path(&second).exists());
+        let resumed = identity(&uuid::Uuid::new_v4().to_string());
+        assert!(matches!(
+            claim(&first, &resumed).expect("resume"),
+            LeaseClaim::Acquired(_)
+        ));
+        assert!(matches!(
+            claim(&second, &resumed).expect("resume"),
+            LeaseClaim::Acquired(_)
+        ));
+    }
+
+    #[test]
+    fn a_lease_another_writer_holds_survives_this_process_exiting() {
+        let dir = tempdir().expect("tempdir");
+        let path = session_path(dir.path());
+        let exiting = identity(&uuid::Uuid::new_v4().to_string());
+        let holder = identity(&uuid::Uuid::new_v4().to_string());
+        claim(&path, &exiting).expect("first claim");
+        take_over(&path, &holder).expect("taken over");
+
+        release_claimed_by(&exiting);
+
+        assert_eq!(read(&path).expect("lease").holder_id, holder.id);
     }
 
     #[test]

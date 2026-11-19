@@ -153,9 +153,9 @@ const RECORDING_PARTLY_ATTACHED_TOAST =
   'Some screenshots were not attached. They are still in your recording.';
 const RECORDING_NOT_ATTACHED_TOAST =
   'No screenshots were attached. They are still in your recording.';
-const ATTACH_RETENTION_NOTE = `Files you attach are saved to your Library and kept until you delete them. A deleted file can be restored for ${RESOURCE_RECOVERY_WINDOW_DAYS} days.`;
+const ATTACH_RETENTION_NOTE = `Saved to your Library until you delete them. Deleted files can be restored for ${RESOURCE_RECOVERY_WINDOW_DAYS} days.`;
 const TEMPORARY_ATTACH_RETENTION_NOTE =
-  'Files you attach in a temporary chat stay out of your Library and are deleted along with the chat.';
+  'Kept out of your Library and deleted with this temporary chat.';
 const ROW_LABEL_LIBRARY = 'Add from library';
 const ROW_LABEL_IMAGE = 'Create image';
 const ROW_LABEL_VIDEO = 'Create video';
@@ -179,7 +179,7 @@ const ROW_LABEL_LOCAL_COMMAND = 'Run a local command';
 const ROW_LABEL_BROWSER = 'Use the browser';
 const ROW_LABEL_DEVICE_STEPS = 'Use this computer';
 const DEVICE_STEPS_TITLE =
-  'When on, AGI can work in your approved folders, apps and browser on this computer during this chat. Turn it off to keep the chat in the cloud.';
+  'Lets AGI use your approved folders, apps and browser here. Off keeps the chat in the cloud.';
 const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 
@@ -238,7 +238,7 @@ const BADGE_MUTED_CLASS = 'bg-muted text-muted-foreground';
 const BADGE_UPGRADE_CLASS = 'bg-primary/10 text-primary';
 const DIVIDER_CLASS = 'my-1 border-t border-border/30';
 const TEMPORARY_EXPLANATION_CLASS = 'px-3 pb-1 ps-10 text-caption text-muted-foreground';
-const MEDIA_OFFER_NOTE_CLASS = 'px-3 pb-1 ps-10 text-sm text-muted-foreground';
+const MEDIA_OFFER_NOTE_CLASS = 'px-3 pb-1 ps-10 text-xs text-muted-foreground';
 const SECTION_HEADING_CLASS =
   'px-3 pb-1 pt-2 text-caption font-semibold uppercase tracking-wide text-muted-foreground';
 const SEARCH_DOCK_CLASS =

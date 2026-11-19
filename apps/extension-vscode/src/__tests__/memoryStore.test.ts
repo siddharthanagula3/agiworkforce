@@ -74,7 +74,9 @@ describe('buildMemoryContextInput', () => {
       ),
       update: vi.fn(),
       has: vi.fn().mockReturnValue(true),
-      inspect: vi.fn().mockReturnValue(undefined),
+      inspect: vi.fn((key: string) =>
+        key === 'memory.enabled' ? { key, globalValue: false } : undefined,
+      ),
     } as unknown as vscode.WorkspaceConfiguration);
 
     expect(buildMemoryContextInput(facts)).toBeUndefined();

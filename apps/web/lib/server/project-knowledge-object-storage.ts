@@ -5,14 +5,14 @@ import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promis
 import path from 'node:path';
 import { readSignedUploadClaims, signUploadClaims } from './upload-signing';
 import {
-  deleteObject,
-  deletePrivateObject,
+  createObjectCleanupPlan,
+  createPrivateObjectWriter,
   getBoundedObject,
   getBoundedPrivateObject,
   isObjectStorageConfigured,
   isPrivateObjectStorageConfigured,
-  putPrivateObject,
   StoredObjectTooLargeError,
+  type ObjectCleanupPlan,
 } from './object-storage';
 
 const UPLOAD_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
@@ -75,7 +75,9 @@ function validKnowledgeKey(key: string): boolean {
   return validKnowledgeUploadKey(key) || isSealedProjectKnowledgeKey(key);
 }
 
-function localPathForKey(key: string): { objectPath: string; metadataPath: string } | null {
+function localPathForKey(
+  key: string,
+): { root: string; objectPath: string; metadataPath: string } | null {
   if (!localStorageEnabled() || !validKnowledgeKey(key)) return null;
   const root = localStorageRoot();
   const objectPath = path.resolve(root, 'objects', key);
@@ -86,7 +88,7 @@ function localPathForKey(key: string): { objectPath: string; metadataPath: strin
   ) {
     return null;
   }
-  return { objectPath, metadataPath };
+  return { root, objectPath, metadataPath };
 }
 
 function parseClaims(value: unknown): ProjectKnowledgeUploadClaims | null {
@@ -283,10 +285,10 @@ async function sealLocalProjectKnowledgeObject(input: {
   etag: string;
   bytes: Buffer;
   contentType: string;
-}): Promise<boolean> {
+}): Promise<SealedProjectKnowledgeObject | null> {
   const destination = localPathForKey(input.sealedKey);
-  if (!destination) return false;
-  if (localEtag(input.bytes) !== input.etag) return false;
+  if (!destination) return null;
+  if (localEtag(input.bytes) !== input.etag) return null;
 
   await mkdir(/* turbopackIgnore: true */ path.dirname(destination.objectPath), {
     recursive: true,
@@ -302,7 +304,15 @@ async function sealLocalProjectKnowledgeObject(input: {
   await writeFile(/* turbopackIgnore: true */ metadataTemp, metadata, { flag: 'wx', mode: 0o600 });
   await rename(/* turbopackIgnore: true */ objectTemp, destination.objectPath);
   await rename(/* turbopackIgnore: true */ metadataTemp, destination.metadataPath);
-  return true;
+  return Object.freeze({
+    key: input.sealedKey,
+    targets: localCleanupPlan(destination.root).targets,
+  });
+}
+
+export interface SealedProjectKnowledgeObject {
+  readonly key: string;
+  readonly targets: Readonly<Record<string, string>>;
 }
 
 /**
@@ -318,43 +328,64 @@ export async function sealProjectKnowledgeObject(input: {
   etag: string | undefined;
   bytes: Buffer;
   contentType: string;
-}): Promise<string | null> {
+}): Promise<SealedProjectKnowledgeObject | null> {
   const sealedKey = sealedProjectKnowledgeKey(input.key);
   if (!sealedKey || !input.etag) return null;
   if (isPrivateObjectStorageConfigured()) {
-    await putPrivateObject({
+    const writer = createPrivateObjectWriter();
+    await writer.put({
       key: sealedKey,
       data: input.bytes,
       contentType: input.contentType,
       contentLength: input.bytes.byteLength,
     });
-    return sealedKey;
+    return Object.freeze({ key: sealedKey, targets: Object.freeze({ private: writer.target }) });
   }
-  return (await sealLocalProjectKnowledgeObject({
+  return sealLocalProjectKnowledgeObject({
     sealedKey,
     etag: input.etag,
     bytes: input.bytes,
     contentType: input.contentType,
-  }))
-    ? sealedKey
-    : null;
+  });
 }
 
-export async function deleteProjectKnowledgeObject(key: string): Promise<void> {
+export function createProjectKnowledgeCleanupPlan(): ObjectCleanupPlan {
   if (isPrivateObjectStorageConfigured()) {
-    await deletePrivateObject(key);
-    if (isObjectStorageConfigured()) await deleteObject(key);
-    return;
+    return createObjectCleanupPlan();
   }
-  const resolved = localPathForKey(key);
-  if (!resolved) throw new Error('The local project knowledge path is invalid.');
-  await Promise.all(
-    [resolved.objectPath, resolved.metadataPath].map(async (target) => {
+  if (!localStorageEnabled()) throw new Error('Project knowledge cleanup is not configured.');
+  return localCleanupPlan(localStorageRoot());
+}
+
+function localCleanupPlan(root: string): ObjectCleanupPlan {
+  const roots = new Map([
+    ['local-bytes', path.join(root, 'objects')],
+    ['local-metadata', path.join(root, 'metadata')],
+  ]);
+  const targets = Object.freeze(Object.fromEntries(roots));
+  return {
+    targets,
+    async remove({ name, location, objectKey }) {
+      const targetRoot = roots.get(name);
+      if (!targetRoot || location !== targetRoot || !validKnowledgeKey(objectKey)) {
+        throw new Error('Object cleanup does not match its pinned local storage target.');
+      }
+      const target = path.join(
+        targetRoot,
+        name === 'local-metadata' ? `${objectKey}.json` : objectKey,
+      );
       try {
         await unlink(/* turbopackIgnore: true */ target);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
-    }),
-  );
+    },
+  };
+}
+
+export async function deleteProjectKnowledgeObject(key: string): Promise<void> {
+  const plan = createProjectKnowledgeCleanupPlan();
+  for (const [name, location] of Object.entries(plan.targets)) {
+    await plan.remove({ name, location, objectKey: key });
+  }
 }

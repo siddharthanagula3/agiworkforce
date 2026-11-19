@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUIStore } from '@shared/stores/layout-store';
 import {
@@ -423,16 +424,24 @@ vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
   getWorstUsagePercent: (usage: { percent: number } | null) => usage?.percent ?? 0,
 }));
 
+const temporaryChatState = vi.hoisted(() => ({
+  setPendingTemporaryChat: vi.fn(),
+  setActiveProject: vi.fn(),
+}));
+
 vi.mock('@shared/stores/web-chat-store', () => {
   const state = {
     updateConversation: vi.fn(),
     loadingConversationIds: [],
     streamingConversationIds: [],
     workModeByConversation: {},
+    setPendingTemporaryChat: temporaryChatState.setPendingTemporaryChat,
   };
   return {
     AGI_WORK_MODE: 'agiwork',
-    useChatStore: (selector: (value: typeof state) => unknown) => selector(state),
+    useChatStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+      getState: () => state,
+    }),
   };
 });
 
@@ -458,8 +467,11 @@ vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
 
 vi.mock('@/features/projects', () => ({
   useManagedCloudProjects: () => ({ projects: shellState.projects }),
-  useProjectStore: (selector: (state: Record<string, () => void>) => unknown) =>
-    selector({ toggleStar: vi.fn(), removeProject: vi.fn() }),
+  useProjectStore: Object.assign(
+    (selector: (state: Record<string, () => void>) => unknown) =>
+      selector({ toggleStar: vi.fn(), removeProject: vi.fn() }),
+    { getState: () => ({ setActiveProject: temporaryChatState.setActiveProject }) },
+  ),
 }));
 
 vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
@@ -470,7 +482,7 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({
   SidebarWordmark: () => <div data-testid="wordmark" />,
 }));
 
-const toastState = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+const toastState = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 
 vi.mock('sonner', () => ({ toast: toastState }));
 
@@ -1321,6 +1333,39 @@ describe('WebAppShell answers a row action the server refused', () => {
     );
   });
 
+  it.each([
+    [true, { archived: false, pinned: true }],
+    [false, { archived: false }],
+  ] as const)(
+    'Undo after archiving a chat with pinned %s restores it as it was',
+    async (isPinned, restored) => {
+      shellState.conversations = [
+        {
+          id: 'c1',
+          title: 'Quarterly revenue model',
+          updatedAt: new Date().toISOString(),
+          isPinned,
+        },
+      ];
+      toastState.mockClear();
+      renderShell();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Row archive' }));
+      await waitFor(() =>
+        expect(toastState).toHaveBeenCalledWith('Chat archived', expect.anything()),
+      );
+      const options = toastState.mock.lastCall?.[1] as {
+        action: { label: string; onClick: () => void };
+      };
+      expect(options.action.label).toBe('Undo');
+      options.action.onClick();
+
+      await waitFor(() => expect(shellState.updateConversation).toHaveBeenCalledTimes(2));
+      expect(shellState.updateConversation).toHaveBeenNthCalledWith(1, 'c1', { archived: true });
+      expect(shellState.updateConversation).toHaveBeenNthCalledWith(2, 'c1', restored);
+    },
+  );
+
   it('stays quiet when the server accepts the change', async () => {
     renderShell();
 
@@ -1328,5 +1373,29 @@ describe('WebAppShell answers a row action the server refused', () => {
 
     await waitFor(() => expect(shellState.updateConversation).toHaveBeenCalled());
     expect(toastState.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('WebAppShell and the desktop menu', () => {
+  it('starts a temporary chat outside any project from New Temporary Chat', () => {
+    temporaryChatState.setActiveProject.mockClear();
+    temporaryChatState.setPendingTemporaryChat.mockClear();
+    routerState.push.mockClear();
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    act(() => {
+      emitAppCommand('new-temporary-chat');
+    });
+
+    expect(temporaryChatState.setActiveProject).toHaveBeenCalledWith(null);
+    expect(temporaryChatState.setPendingTemporaryChat).toHaveBeenCalledWith(true);
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+    expect(temporaryChatState.setActiveProject.mock.invocationCallOrder[0]!).toBeLessThan(
+      routerState.push.mock.invocationCallOrder[0]!,
+    );
   });
 });

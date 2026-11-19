@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
@@ -44,7 +45,27 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
+  createPrivateObjectWriter: () => ({ target: 'fixture-private', put: mockPutPrivateObject }),
+  createObjectCleanupPlan: () => ({
+    targets: { private: 'fixture-private', 'legacy-public': 'fixture-public' },
+    remove: async ({
+      name,
+      location,
+      objectKey,
+    }: {
+      name: string;
+      location: string;
+      objectKey: string;
+    }) => {
+      if (name === 'private' && location === 'fixture-private')
+        await mockDeletePrivateObject(objectKey);
+      else if (name === 'legacy-public' && location === 'fixture-public')
+        await mockDeleteObject(objectKey);
+      else throw new Error('Unexpected pinned cleanup target');
+    },
+  }),
   copyPrivateObjectIfUnchanged: mockCopyPrivateObjectIfUnchanged,
   putPrivateObject: mockPutPrivateObject,
   getBoundedObject: vi.fn(),
@@ -150,6 +171,7 @@ describe('POST /api/projects/[id]/knowledge-files, content inspection', () => {
       String(call[0]).includes(INSERT_SQL_FRAGMENT),
     );
     expect(insertCall?.[1]).toContain(SEALED_URI);
+    expect(insertCall?.[1]).toContain(JSON.stringify({ private: 'fixture-private' }));
     expect(insertCall?.[1]).not.toContain(STORAGE_URI);
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });

@@ -1,7 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { Platform } from 'react-native';
 import { NOTIFICATION_EVENT_TYPES } from '@/services/notificationEventTypes';
-import { DELETE_ACCOUNT_CONFIRMATION } from '@/src/features/settings/cloud-account/deleteAccountConfirmation';
+import {
+  DELETE_ACCOUNT_CONFIRMATION,
+  deleteAccountConfirmation,
+} from '@/src/features/settings/cloud-account/deleteAccountConfirmation';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { REQUIRED_PINNED_HOSTS, PINS_BY_HOST, hasPlaceholderPins } from '@/lib/pinning';
 import {
   CLIENT_VERSION_HEADER,
@@ -129,13 +134,54 @@ describe('deleting an account', () => {
       /Anything the law or an active legal hold requires us to keep is kept/,
     );
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
-      /already cancelled ends when erasure runs, and its unused time is not refunded/,
+      /A paid plan ends when erasure runs, and its unused time is not refunded/,
     );
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
+      /bought on the web stops renewing now, and cancelling the deletion turns renewal back on/,
+    );
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).not.toMatch(/already cancelled/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/signed out/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Local Mode data stays on this device/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Export your Cloud data above first/);
     expect(ACCOUNT_SCREEN).toContain('Cancellation deadline:');
     expect(ACCOUNT_SCREEN).not.toContain('Erasure is scheduled for');
+  });
+
+  it('names store billing only in a build that sells through the App Store or Google Play', () => {
+    const withStores = deleteAccountConfirmation(true).message;
+    const withoutStores = deleteAccountConfirmation(false).message;
+    const storeSentence =
+      'A plan bought through the App Store or Google Play keeps billing until you cancel it there. ';
+
+    expect(withStores).toContain(storeSentence);
+    expect(withoutStores).not.toMatch(/App Store|Google Play/);
+    expect(withStores.replace(storeSentence, '')).toBe(withoutStores);
+    expect(DELETE_ACCOUNT_CONFIRMATION).toEqual(
+      deleteAccountConfirmation(NATIVE_PURCHASES_AVAILABLE),
+    );
+    if (!NATIVE_PURCHASES_AVAILABLE) {
+      expect(DELETE_ACCOUNT_CONFIRMATION.message).not.toMatch(/App Store|Google Play/);
+    }
+  });
+
+  it('sends an iPhone account to remove the app from Sign in with Apple, and no one else', () => {
+    const appleSentence =
+      ' If you signed in with Apple, also remove this app under Settings, your name, Sign in with Apple.';
+    const original = Platform.OS;
+    try {
+      Object.defineProperty(Platform, 'OS', { get: () => 'ios', configurable: true });
+      const onIos = deleteAccountConfirmation(false).message;
+      Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
+      const onAndroid = deleteAccountConfirmation(false).message;
+
+      expect(
+        onIos.endsWith(`Export your Cloud data above first to keep a copy.${appleSentence}`),
+      ).toBe(true);
+      expect(onAndroid).not.toMatch(/Apple/);
+      expect(onIos.replace(appleSentence, '')).toBe(onAndroid);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { get: () => original, configurable: true });
+    }
   });
 
   it('asks before it acts, with the destructive choice marked as one', () => {
@@ -233,5 +279,29 @@ describe('what the client does about the transport it cannot see', () => {
       expect(pins.length).toBeGreaterThan(2);
       for (const pin of pins) expect(pin).toMatch(/^sha256\/[A-Za-z0-9+/]{43}=$/);
     }
+  });
+});
+
+describe('the age rating note on how links open', () => {
+  const note = String(LISTING_IOS.age_rating?.note ?? '');
+  const webContentPage = readFileSync(
+    join(MOBILE_ROOT, 'src', 'platform', 'webContentPage.ts'),
+    'utf8',
+  );
+
+  it('says fixed site pages open in the in-app sheet, as the helper does', () => {
+    expect(webContentPage).toMatch(
+      /export function openWebContentPage[\s\S]*?return openInAppBrowser\(webContentPageUrl/,
+    );
+    expect(note).toContain('apps/mobile/src/platform/webContentPage.ts');
+    expect(note).toMatch(/in-app Safari sheet/);
+    expect(note).not.toMatch(/links open in the system browser/);
+  });
+
+  it('names the change-email page as one that opens the system browser', () => {
+    expect(ACCOUNT_SCREEN).toContain(
+      "openWebAccountPage('https://agiworkforce.com/settings/account', 'system')",
+    );
+    expect(note).toMatch(/change-email page[^.]*open the system browser/);
   });
 });

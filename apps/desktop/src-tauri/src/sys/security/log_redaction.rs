@@ -12,6 +12,14 @@ use regex::Regex;
 /// patterns (e.g. sk-) to avoid partial matches.
 static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
     vec![
+        (
+            Regex::new(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----").expect("static regex"),
+            "[REDACTED_PRIVATE_KEY]",
+        ),
+        (
+            Regex::new(r#"(?i)\b(aws[_-]?(?:secret[_-]?access[_-]?key|session[_-]?token))\b["']?\s*[=:]\s*["']?[^\s,'"}]{8,}["']?"#).expect("static regex"),
+            "$1=[REDACTED_AWS_SECRET]",
+        ),
         // Anthropic API keys (before generic sk- pattern)
         (
             Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").expect("static regex"),
@@ -22,9 +30,9 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
             Regex::new(r"sk-[a-zA-Z0-9_-]{20,}").expect("static regex"),
             "[REDACTED_API_KEY]",
         ),
-        // Google AI / Firebase API keys (AIzaSy prefix)
+        // Google AI / Firebase API keys
         (
-            Regex::new(r"AIzaSy[a-zA-Z0-9_-]{33}").expect("static regex"),
+            Regex::new(r"AIza[a-zA-Z0-9_-]{30,}").expect("static regex"),
             "[REDACTED_GOOGLE_KEY]",
         ),
         // Groq API keys
@@ -39,12 +47,12 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         ),
         // AWS access keys
         (
-            Regex::new(r"AKIA[A-Z0-9]{16}").expect("static regex"),
+            Regex::new(r"A(?:KIA|SIA)[A-Z0-9]{16}").expect("static regex"),
             "[REDACTED_AWS_KEY]",
         ),
         // GitHub tokens (classic)
         (
-            Regex::new(r"gh[ps]_[a-zA-Z0-9]{36,}").expect("static regex"),
+            Regex::new(r"gh[psour]_[a-zA-Z0-9]{30,}").expect("static regex"),
             "[REDACTED_GITHUB_TOKEN]",
         ),
         // GitHub fine-grained personal access tokens
@@ -59,6 +67,10 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
             Regex::new(r"xai-[a-zA-Z0-9]{20,}").expect("static regex"),
             "[REDACTED_XAI_KEY]",
         ),
+        (
+            Regex::new(r"xox[baprs]-[A-Za-z0-9-]{10,}").expect("static regex"),
+            "[REDACTED_SLACK_TOKEN]",
+        ),
         // JWTs (header.payload.signature), ported from the TS redactor.
         (
             Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
@@ -71,7 +83,7 @@ static REDACTION_PATTERNS: Lazy<Vec<(Regex, &'static str)>> = Lazy::new(|| {
         // uses, so a vendor-specific label wins when a value happens to
         // match both a specific format and this generic one.
         (
-            Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{20,}").expect("static regex"),
+            Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{8,}").expect("static regex"),
             "Bearer [REDACTED_TOKEN]",
         ),
         // Generic API key / bearer token patterns in key=value or key:value

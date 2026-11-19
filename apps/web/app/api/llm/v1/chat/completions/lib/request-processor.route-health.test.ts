@@ -36,11 +36,11 @@ vi.mock('@/lib/services/free-lane/runtime-state-service', () => ({
   getFreeLaneRuntimeState: vi.fn(async () => ({})),
 }));
 
+import { resolveRouteHealthRuntimeState } from './request-processor';
 import {
   buildWebCloudAutoRoutingRequest,
-  resolveRouteHealthRuntimeState,
   resolveWebCloudModelRoute,
-} from './request-processor';
+} from '@/lib/server/managed-cloud-routing/routing-request';
 
 const anthropicPremiumModel = getModelsForProvider('anthropic').find(
   (model) =>

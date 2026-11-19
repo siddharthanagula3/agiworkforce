@@ -22,6 +22,7 @@ export async function recordFailedTurn(
         inputTokens: 0,
         outputTokens: 0,
         truncated: true,
+        finishReason: null,
       },
     });
   } catch (error) {

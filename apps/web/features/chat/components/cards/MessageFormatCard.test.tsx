@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { detectCardType } from './index';
+import { detectCardType } from '@agiworkforce/unified-chat/message-format';
 import { MessageFormatCard } from './MessageFormatCard';
 import { RecipeCard } from './RecipeCard';
 

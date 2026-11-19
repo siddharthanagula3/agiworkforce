@@ -40,6 +40,7 @@ import {
 } from '../background/conversation-history';
 import { getFreshClerkAuthContext } from './clerkAuth';
 import { FREE_TRIAL_GATEWAY } from './freeTrialClient';
+import { classifyCloudRefusal } from './cloudRefusal';
 import {
   createExtensionCloudChatClient,
   ManagedCloudOwnerChangedError,
@@ -85,6 +86,8 @@ export class CloudHistoryCacheWindowError extends Error {
     );
   }
 }
+
+const POLICY_BLOCK_RETRY_MS = 5 * 60_000;
 
 export class CloudHistoryUnavailableError extends Error {
   constructor() {
@@ -384,13 +387,35 @@ export async function refreshManagedCloudConversationHistory(
       );
     } catch (error) {
       if (error instanceof ManagedCloudChatHttpError && [401, 403, 404].includes(error.status)) {
+        const serverMessage = error.message.replace(/^HTTP \d{3}: /u, '');
+        const refusal = classifyCloudRefusal(error.status, {
+          error: { ...(error.code ? { code: error.code } : {}), message: serverMessage },
+        });
+        const policyBlock =
+          error.code !== 'workspace_not_accessible' &&
+          (refusal.kind === 'policy' || refusal.kind === 'plan' || refusal.kind === 'account');
         if (options.isCurrent() && !signal.aborted) {
-          await recordCloudSyncState(owner, entry.id, {
-            state: 'blocked',
-            blockedReason:
-              error.status === 404 ? 'not-found' : error.status === 403 ? 'workspace' : 'auth',
-            lastError: 'The account chat could not be read in the current workspace.',
-          });
+          await recordCloudSyncState(
+            owner,
+            entry.id,
+            policyBlock
+              ? {
+                  state: 'blocked',
+                  blockedReason: 'policy',
+                  lastError: refusal.message ?? serverMessage,
+                  retryAfter: Date.now() + POLICY_BLOCK_RETRY_MS,
+                }
+              : {
+                  state: 'blocked',
+                  blockedReason:
+                    error.status === 404
+                      ? 'not-found'
+                      : error.status === 403
+                        ? 'workspace'
+                        : 'auth',
+                  lastError: 'The account chat could not be read in the current workspace.',
+                },
+          );
         }
         throw new CloudHistoryUnavailableError();
       }

@@ -65,6 +65,39 @@ type PostgresModule = typeof import('pg');
 
 let _postgresModule: PostgresModule | null = null;
 
+export interface LocalPostgresTestResult {
+  rows: Record<string, unknown>[];
+  rowCount: number | null;
+}
+export interface LocalPostgresTestClient {
+  host: string;
+  database: string;
+  connect(): Promise<void>;
+  query(
+    sql: string,
+    params?: unknown[],
+  ): Promise<LocalPostgresTestResult | LocalPostgresTestResult[]>;
+  end(): Promise<void>;
+}
+export function createSocketPostgresTestClient(config: {
+  host: string;
+  database: string;
+  user?: string;
+  port?: number;
+  password?: string;
+}): LocalPostgresTestClient {
+  const pending = loadPostgres().then((module) => new module.Client(config));
+  return {
+    host: config.host,
+    database: config.database,
+    connect: async () => {
+      await (await pending).connect();
+    },
+    query: async (sql, params) => (await pending).query(sql, params),
+    end: async () => (await pending).end(),
+  };
+}
+
 async function loadPostgres(): Promise<PostgresModule> {
   if (_postgresModule) return _postgresModule;
   try {

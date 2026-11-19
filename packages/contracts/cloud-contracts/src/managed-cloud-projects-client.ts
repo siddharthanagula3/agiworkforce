@@ -11,6 +11,8 @@ import {
 } from './sync';
 import {
   MANAGED_CLOUD_PROJECTS_PATH,
+  MANAGED_CLOUD_PROJECT_MAX_PAGE_SIZE,
+  MANAGED_CLOUD_PROJECT_MAX_OFFSET,
   MANAGED_CLOUD_PROJECTS_SYNC_PATH,
   ManagedCloudProjectCreateRequestSchema,
   ManagedCloudProjectDeleteResponseSchema,
@@ -86,8 +88,8 @@ export interface ManagedCloudProjectsClient {
   ): Promise<ProjectsSyncPushResponse>;
 }
 
-const PROJECT_LIST_PAGE_SIZE = 100;
-const PROJECT_LIST_MAX_OFFSET = 10_000;
+const PROJECT_LIST_PAGE_SIZE = MANAGED_CLOUD_PROJECT_MAX_PAGE_SIZE;
+const PROJECT_LIST_MAX_OFFSET = MANAGED_CLOUD_PROJECT_MAX_OFFSET;
 
 export async function listAllManagedCloudProjects(
   client: Pick<ManagedCloudProjectsClient, 'listProjects'>,
@@ -196,6 +198,7 @@ export function createManagedCloudProjectsClient(
       const params = new URLSearchParams();
       if (parsed.limit !== undefined) params.set('limit', String(parsed.limit));
       if (parsed.offset !== undefined) params.set('offset', String(parsed.offset));
+      if (parsed.cursor !== undefined) params.set('cursor', parsed.cursor);
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const result = await request(
         {

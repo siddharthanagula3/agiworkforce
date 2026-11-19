@@ -119,16 +119,44 @@ function linkDestinationIsOpen(text: string): boolean {
   return label === 0 || text[label - 1] !== IMAGE_MARKER;
 }
 
+function openLinkLabelStart(tail: string, text: string): number {
+  const destination = tail.lastIndexOf(LINK_DESTINATION_OPEN);
+  if (destination === -1) return -1;
+  const partial = tail.slice(destination + LINK_DESTINATION_OPEN.length);
+  if (partial.includes(LINK_DESTINATION_CLOSE) || partial.includes(LINE_FEED)) return -1;
+  const label = tail.lastIndexOf(LINK_LABEL_OPEN, destination);
+  if (label === -1 || (label > 0 && tail[label - 1] === IMAGE_MARKER)) return -1;
+  return text.endsWith(tail.slice(label)) ? label : -1;
+}
+
+function withoutOpenLink(tail: string, text: string): string | null {
+  const label = openLinkLabelStart(tail, text);
+  if (label === -1) return null;
+  const destination = tail.lastIndexOf(LINK_DESTINATION_OPEN);
+  return tail.slice(0, label) + tail.slice(label + LINK_LABEL_OPEN.length, destination);
+}
+
+/** Shows a link whose address is still arriving, or was cut off, as its plain label. */
+export function dropOpenLinkDestination(tail: string): string {
+  const { text, openCodeRun } = stripCodeSpans(proseOutsideCodeBlocks(tail));
+  if (openCodeRun > 0 || !linkDestinationIsOpen(text)) return tail;
+  return withoutOpenLink(tail, text) ?? tail;
+}
+
 const DANGLING_STRONG = /\*\*\s*$/;
 
 export function completeInlineTokens(tail: string): string {
   const { text, openCodeRun } = stripCodeSpans(proseOutsideCodeBlocks(tail));
-  const strongOpen = strongIsOpen(text);
-  const strongDangles = strongOpen && openCodeRun === 0 && DANGLING_STRONG.test(tail);
+  const linkOpen = linkDestinationIsOpen(text);
+  const unlinked = linkOpen && openCodeRun === 0 ? withoutOpenLink(tail, text) : null;
+  const source = unlinked ?? tail;
+  const prose = unlinked === null ? text : stripCodeSpans(proseOutsideCodeBlocks(source)).text;
+  const strongOpen = strongIsOpen(prose);
+  const strongDangles = strongOpen && openCodeRun === 0 && DANGLING_STRONG.test(source);
 
-  let repaired = strongDangles ? tail.replace(DANGLING_STRONG, '') : tail;
+  let repaired = strongDangles ? source.replace(DANGLING_STRONG, '') : source;
   if (openCodeRun > 0) repaired += BACKTICK.repeat(openCodeRun);
-  if (linkDestinationIsOpen(text)) repaired += LINK_DESTINATION_CLOSE;
+  if (linkOpen && unlinked === null) repaired += LINK_DESTINATION_CLOSE;
   if (strongOpen && !strongDangles) repaired += STRONG_MARKER;
   return repaired;
 }

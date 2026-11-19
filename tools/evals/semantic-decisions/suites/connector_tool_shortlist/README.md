@@ -8,7 +8,7 @@ and it may span connectors.
 ## Production call site
 
 `selectToolSchemas` in
-`apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts:95`. It scores every
+`apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-loader.ts`. It scores every
 tool by word overlap with the turn (`name` weighted 3, `serverId` weighted 2,
 `description` weighted 1, words of three characters or more), sorts pinned first then by
 score, and admits schemas until `maxTools` (32, the `MAX_CONNECTOR_TOOLS_PER_USER`
@@ -47,7 +47,7 @@ Google Drive, Notion, Asana, Jira, Stripe and Vercel: `search_threads`, `suggest
 that file and from `vendor-directory.json`.
 
 Per-tool descriptions and input schemas are **written here**, in the register of the
-three declared GitHub tools at `apps/web/lib/user-connector-tools.ts:265`. They are not
+three declared GitHub tools at `apps/web/lib/user-connector-tools.ts`. They are not
 in the repository to copy: `ConnectorActionSource` in
 `apps/web/lib/connectors/catalog.ts` records that a remote MCP server's tool surface is
 `runtime-discovered`, so the repository knows the names and deliberately does not know

@@ -15,14 +15,17 @@ const composerFocused = vi.fn(async () => true);
 
 vi.mock('electron', () => ({
   clipboard: {
-    readText: async () => clipboardText,
-    read: async () => {
-      const image = clipboardImage;
-      return image === null
+    readText: () => clipboardText,
+    read: async () =>
+      clipboardImage === null
         ? []
-        : [{ types: ['image/png'], getType: async () => new Blob([image], { type: 'image/png' }) }];
-    },
-    writeText: async (value: string) => {
+        : [
+            {
+              types: ['image/png'],
+              getType: async () => new Blob([clipboardImage ?? '']),
+            },
+          ],
+    writeText: (value: string) => {
       clipboardText = value;
       clipboardImage = null;
       clipboardLog.push({ kind: 'text', value });

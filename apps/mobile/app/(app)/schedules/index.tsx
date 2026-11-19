@@ -8,6 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ArrowLeft, Plus, Calendar, Clock, ListFilter } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
@@ -29,15 +30,21 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
-import { sortSchedules, type ScheduleSort } from '@/src/features/schedules/sort';
+import {
+  matchesScheduleFilter,
+  sortSchedules,
+  type ScheduleSort,
+  type ScheduleStatusFilter,
+} from '@/src/features/schedules/sort';
+import { confirmScheduleDeletion } from '@/src/features/schedules/deleteConfirmation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
-const SCHEDULE_FILTERS = [
+const SCHEDULE_FILTERS: readonly { key: ScheduleStatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
   { key: 'paused', label: 'Paused' },
-] as const;
-
-type ScheduleFilter = (typeof SCHEDULE_FILTERS)[number]['key'];
+  { key: 'completed', label: 'Completed' },
+];
 
 const LOCKED_TITLE = NATIVE_PURCHASES_AVAILABLE
   ? 'Scheduled tasks require Basic'
@@ -59,16 +66,14 @@ export default function SchedulesScreen() {
     useScheduleStore();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<ScheduleFilter>('all');
+  const [filter, setFilter] = useState<ScheduleStatusFilter>('all');
   const [sort, setSort] = useState<ScheduleSort>('next-run');
   const [sortOpen, setSortOpen] = useState(false);
 
   const visibleSchedules = useMemo(
     () =>
       sortSchedules(
-        filter === 'all'
-          ? schedules
-          : schedules.filter((schedule) => schedule.isActive === (filter === 'active')),
+        schedules.filter((schedule) => matchesScheduleFilter(schedule, filter)),
         sort,
       ),
     [filter, schedules, sort],
@@ -165,18 +170,9 @@ export default function SchedulesScreen() {
   const handleDelete = useCallback(
     (id: string) => {
       const schedule = schedules.find((s) => s.id === id);
-      Alert.alert(
-        'Delete Schedule',
-        `Are you sure you want to delete "${schedule?.name ?? 'this schedule'}"?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => deleteSchedule(id),
-          },
-        ],
-      );
+      confirmScheduleDeletion(schedule?.name, () => {
+        void deleteSchedule(id);
+      });
     },
     [schedules, deleteSchedule],
   );
@@ -241,8 +237,7 @@ export default function SchedulesScreen() {
           >
             <Text className="text-sm font-medium text-amber-300">{LOCKED_TITLE}</Text>
             <Text className="mt-1 text-sm leading-5 text-white/50">
-              Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause
-              or delete them.
+              Upgrade to run unattended Cloud work. You can still pause or delete tasks.
             </Text>
           </PressableBox>
         ) : (
@@ -268,17 +263,17 @@ export default function SchedulesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={{ ...contentColumn('reading'), flexGrow: 0, flexShrink: 0 }}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}
         >
           {SCHEDULE_FILTERS.map((item) => {
             const selected = item.key === filter;
-            const count =
-              item.key === 'all'
-                ? schedules.length
-                : schedules.filter((schedule) => schedule.isActive === (item.key === 'active'))
-                    .length;
+            const count = schedules.filter((schedule) =>
+              matchesScheduleFilter(schedule, item.key),
+            ).length;
             return (
               <PressableBox
+                hitSlop={{ top: 5, bottom: 5 }}
                 key={item.key}
                 onPress={() => setFilter(item.key)}
                 accessibilityRole="button"
@@ -364,13 +359,19 @@ export default function SchedulesScreen() {
           <Text className="text-center text-sm text-white/50">
             {filter === 'active'
               ? 'No active schedules. Resume one to run it again.'
-              : 'No paused schedules.'}
+              : filter === 'completed'
+                ? 'No completed schedules.'
+                : 'No paused schedules.'}
           </Text>
         </View>
       ) : (
         <FlatList
           data={visibleSchedules}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 100,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -421,7 +422,7 @@ function Header({
 }) {
   const colors = useThemeColors();
   return (
-    <View className="flex-row items-center px-3 h-12">
+    <View testID="schedules-header" className="flex-row items-center px-3 min-h-12">
       <PressableBox
         onPress={onBackPress}
         className="p-2 rounded-lg active:bg-white/5"
@@ -430,15 +431,16 @@ function Header({
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
       </PressableBox>
-      <View
-        pointerEvents="none"
-        style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
+      <Text
+        variant="subheading"
+        accessibilityRole="header"
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        style={{ flex: 1, textAlign: 'center' }}
       >
-        <Text variant="subheading" accessibilityRole="header">
-          Scheduled
-        </Text>
-      </View>
-      <View className="flex-1" />
+        Scheduled
+      </Text>
       <PressableBox
         onPress={onRunsPress}
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -482,31 +484,44 @@ function EmptyState({
 }) {
   const colors = useThemeColors();
   return (
-    <ScrollView
-      className="flex-1"
-      contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <Animated.View entering={FadeIn.duration(motion.moved)} className="items-center pt-6">
-        <View
-          className="w-20 h-20 rounded-2xl items-center justify-center mb-5"
-          style={{ backgroundColor: `${colors.teal}15` }}
-        >
-          <Calendar size={36} color={colors.teal} />
-        </View>
+    <View className="flex-1">
+      <ScrollView
+        testID="schedules-empty-scroll"
+        className="flex-1"
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 24,
+          paddingBottom: 24,
+        }}
+      >
+        <Animated.View entering={FadeIn.duration(motion.moved)} className="items-center pt-6">
+          <View
+            className="w-20 h-20 rounded-2xl items-center justify-center mb-5"
+            style={{ backgroundColor: `${colors.teal}15` }}
+          >
+            <Calendar size={36} color={colors.teal} />
+          </View>
 
-        <Text variant="heading" className="text-center mb-2">
-          {canCreateSchedule ? 'No Schedules' : LOCKED_TITLE}
-        </Text>
-        <Text className="text-white/50 text-center text-sm mb-6 leading-5">
-          {canCreateSchedule
-            ? 'Create recurring AI tasks that run during the daily AGI Cloud scheduling window.'
-            : NATIVE_PURCHASES_AVAILABLE
-              ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
-              : 'Free Cloud chat remains available.'}
-        </Text>
+          <Text variant="heading" className="text-center mb-2">
+            {canCreateSchedule ? 'No Schedules' : LOCKED_TITLE}
+          </Text>
+          <Text className="text-white/50 text-center text-sm leading-5">
+            {canCreateSchedule
+              ? 'Recurring tasks that run in the daily AGI Cloud scheduling window.'
+              : NATIVE_PURCHASES_AVAILABLE
+                ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
+                : 'Free Cloud chat remains available.'}
+          </Text>
+          <View className="mt-2">
+            <HelpArticleLink docId="schedules-and-triggers" label="How schedules work" />
+          </View>
+        </Animated.View>
 
-        {canCreateSchedule || NATIVE_PURCHASES_AVAILABLE ? (
+        {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}
+      </ScrollView>
+
+      {canCreateSchedule || NATIVE_PURCHASES_AVAILABLE ? (
+        <View testID="schedules-empty-action" className="px-6 pt-3 pb-2">
           <Button
             title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
             variant="primary"
@@ -514,11 +529,9 @@ function EmptyState({
             onPress={onCreatePress}
             className="w-full"
           />
-        ) : null}
-      </Animated.View>
-
-      {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}
-    </ScrollView>
+        </View>
+      ) : null}
+    </View>
   );
 }
 

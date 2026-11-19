@@ -79,10 +79,12 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
   CHROME_RESPONSE_RATING_MESSAGE,
+  MOBILE_RESPONSE_RATING_MESSAGE,
+  responseRatingFeedbackBody,
   RESPONSE_RATING_COMMENT_MAX_CHARS,
   RESPONSE_RATING_MESSAGE_MAX_CHARS,
   WEB_RESPONSE_RATING_MESSAGE,
-} from './response-rating-contract';
+} from '@agiworkforce/cloud-contracts';
 
 function request(body: unknown) {
   return new Request('http://localhost:3000/api/feedback', {
@@ -850,6 +852,37 @@ describe('thumbs-down details', () => {
     expect(rows[0]?.message).toBe(CHROME_RESPONSE_RATING_MESSAGE);
     expect(rows[0]?.metadata['message_source']).toBe('note');
     expect(JSON.stringify(rows)).not.toContain('Paris is the capital.');
+  });
+
+  it('stores the mobile app rating the shared builder sends, with its own note', async () => {
+    const rows = feedbackTable();
+
+    const response = await POST(
+      request(
+        responseRatingFeedbackBody({
+          rating: 'down',
+          messageId: 'msg-1',
+          conversationId: 'conversation-7',
+          reason: 'incomplete',
+          surface: 'mobile',
+          platform: 'ios',
+          version: '0.0.1',
+          userAgent: 'mobile',
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(rows[0]?.message).toBe(MOBILE_RESPONSE_RATING_MESSAGE);
+    expect(rows[0]?.subject).toBe('Response rated down: Incomplete response');
+    expect(rows[0]?.metadata).toMatchObject({
+      source: 'mobile',
+      feedback_context: 'response_rating',
+      rating: 'down',
+      reason: 'incomplete',
+      message_id: 'msg-1',
+      message_source: 'note',
+    });
   });
 
   it('marks every web rating it stores with whether the message is its note or the comment', async () => {

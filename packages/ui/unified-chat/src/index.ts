@@ -177,7 +177,11 @@ export { useModel } from './hooks/useModel';
 export { Button, type ButtonProps, ScrollArea } from '@agiworkforce/ui';
 export { ChatBadge } from './components/ui/ChatBadge';
 
-export { MarkdownContent, type MarkdownContentProps } from './components/markdown/MarkdownContent';
+export {
+  MarkdownContent,
+  type FinishedAnswer,
+  type MarkdownContentProps,
+} from './components/markdown/MarkdownContent';
 export { HighlightedCode, type HighlightedCodeProps } from './components/markdown/HighlightedCode';
 export {
   CodeBlockEditorContext,
@@ -536,15 +540,21 @@ export { ChartArtifact } from './components/artifact-components/ChartArtifact';
 export type { ChartArtifactProps } from './components/artifact-components/ChartArtifact';
 export {
   CHART_KINDS,
+  CHART_RENDER_KINDS,
   CHART_ROW_CAP,
   CHART_SERIES_CAP,
   chartSeriesPalette,
   parseChartArtifact,
+  summarizeChart,
   toChartNumber,
 } from './components/artifact-components/chart-spec';
+export { ChartSpecView } from './components/artifact-components/ChartSpecView';
+export type { ChartSpecViewProps } from './components/artifact-components/ChartSpecView';
 export type {
   ChartKind,
   ChartParseResult,
+  ChartRenderKind,
+  ChartRenderSpec,
   ChartRow,
   ChartSeriesSpec,
   ChartSpec,
@@ -553,10 +563,7 @@ export { ReactPreview } from './components/artifact-components/ReactPreview';
 export type { ReactPreviewProps } from './components/artifact-components/ReactPreview';
 export { ArtifactSandboxFrame } from './components/artifact-components/ArtifactSandboxFrame';
 export type { ArtifactSandboxFrameProps } from './components/artifact-components/ArtifactSandboxFrame';
-export {
-  SpreadsheetArtifact,
-  SPREADSHEET_ROW_CAP,
-} from './components/artifact-components/SpreadsheetArtifact';
+export { SpreadsheetArtifact } from './components/artifact-components/SpreadsheetArtifact';
 export type { SpreadsheetArtifactProps } from './components/artifact-components/SpreadsheetArtifact';
 export {
   EmailArtifact,
@@ -567,7 +574,7 @@ export type {
   EmailArtifactProps,
   ParsedEmail,
 } from './components/artifact-components/EmailArtifact';
-export { splitSlides } from './components/artifact-components/PresentationArtifact';
+export { splitSlides } from './lib/presentation-slides';
 export {
   parseTabular,
   parseDelimited,
@@ -579,8 +586,16 @@ export {
   toMarkdownTable,
   isNumericCell,
   numericValue,
+  nextTabularSort,
+  sortTabularRows,
+  SPREADSHEET_ROW_CAP,
 } from './lib/tabular';
-export type { TabularData, SpreadsheetDelimiter, SpreadsheetSafeExport } from './lib/tabular';
+export type {
+  TabularData,
+  TabularSort,
+  SpreadsheetDelimiter,
+  SpreadsheetSafeExport,
+} from './lib/tabular';
 export { selectArtifacts, selectActiveArtifact, selectArtifactById } from './stores/artifactStore';
 
 export { BrandedGreeting } from './components/BrandedGreeting';

@@ -283,7 +283,7 @@ export function SharedWithYouScreen() {
         <SettingsInfo
           testID="shared-with-you-empty"
           title="Nothing shared with you yet"
-          body="Projects, chats, artifacts and connectors that people in your workspace share with you appear here."
+          body="What people in your workspace share with you appears here."
           icon={Users}
         />
       ) : null}

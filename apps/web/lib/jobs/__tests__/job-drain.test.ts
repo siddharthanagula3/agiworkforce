@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { DEFAULT_DATA_REGION, DATA_REGION_IDS } from '@agiworkforce/compliance';
 type ScanModule0 = typeof import('../job-service');
 type ScanModule1 = typeof import('../cancellation');
 
@@ -162,10 +163,20 @@ describe('drainBackgroundJobs', () => {
     });
 
     expect(handler).toHaveBeenCalledTimes(1);
+    expect(mocks.claimJobs).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ region: DEFAULT_DATA_REGION }),
+    );
     expect(mocks.completeJob).toHaveBeenCalledWith(db, expect.objectContaining({ id: 'job-1' }), {
       pushed: true,
     });
     expect(summary).toMatchObject({ claimed: 1, succeeded: 1, retried: 0, deadLettered: 0 });
+  });
+
+  it('passes an explicitly selected worker region to claim admission', async () => {
+    const region = DATA_REGION_IDS.find((value) => value !== DEFAULT_DATA_REGION)!;
+    await drainBackgroundJobs({ db, handlers: {}, budgetMs: 120_000, maxInFlight: 1, region });
+    expect(mocks.claimJobs).toHaveBeenCalledWith(db, expect.objectContaining({ region }));
   });
 
   it('fails a job whose handler throws and counts the outcome the queue decided', async () => {

@@ -1,13 +1,31 @@
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Building2, AlertTriangle, Lock } from 'lucide-react';
+import { Building2, AlertTriangle, ChevronLeft, Lock } from 'lucide-react';
 
 import { WorkspaceConsoleNav } from './WorkspaceConsoleNav';
 
 export type ConsoleRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 const ADMIN_ROLES: ConsoleRole[] = ['owner', 'admin'];
+
+function PhoneTopRow() {
+  return (
+    <div
+      data-testid="workspace-phone-top-row"
+      className="flex h-12 shrink-0 items-center border-b border-border/60 px-2 md:hidden"
+    >
+      <Link
+        href="/chat"
+        aria-label="Back to chat"
+        className="inline-flex h-11 items-center gap-1 rounded-md pe-3 ps-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ChevronLeft aria-hidden className="h-5 w-5" />
+        Chat
+      </Link>
+    </div>
+  );
+}
 
 function EmptyFrame({
   icon,
@@ -21,21 +39,24 @@ function EmptyFrame({
   action?: ReactNode;
 }) {
   return (
-    <main className="mx-auto flex min-h-[70vh] w-full max-w-lg flex-col items-center justify-center gap-4 px-6 text-center">
-      <div
-        className="flex h-11 w-11 items-center justify-center rounded-full"
-        style={{ background: 'var(--bg-hover)', color: 'var(--text-2)' }}
-      >
-        {icon}
-      </div>
-      <h1 className="text-h2" style={{ color: 'var(--text-1)' }}>
-        {title}
-      </h1>
-      <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
-        {body}
-      </p>
-      {action}
-    </main>
+    <>
+      <PhoneTopRow />
+      <main className="mx-auto flex min-h-[70vh] w-full max-w-lg flex-col items-center justify-center gap-4 px-6 text-center max-md:px-4">
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-full"
+          style={{ background: 'var(--bg-hover)', color: 'var(--text-2)' }}
+        >
+          {icon}
+        </div>
+        <h1 className="text-h2" style={{ color: 'var(--text-1)' }}>
+          {title}
+        </h1>
+        <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
+          {body}
+        </p>
+        {action}
+      </main>
+    </>
   );
 }
 
@@ -95,22 +116,25 @@ export function WorkspaceConsoleShell({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-content flex-col gap-4 px-gutter-compact py-4 md:flex-row md:gap-10 md:px-gutter-regular md:py-10">
-      <aside className="w-full shrink-0 md:w-60">
-        <div className="mb-0 md:mb-6">
-          <p
-            className="hidden text-caption font-medium uppercase tracking-[0.14em] md:block"
-            style={{ color: 'var(--text-3)' }}
-          >
-            Administration
-          </p>
-          <h2 className="mt-1 hidden text-h4 md:block" style={{ color: 'var(--text-1)' }}>
-            Workspace
-          </h2>
-        </div>
-        <WorkspaceConsoleNav />
-      </aside>
-      <main className="min-w-0 flex-1">{children}</main>
-    </div>
+    <>
+      <PhoneTopRow />
+      <div className="mx-auto flex w-full max-w-content flex-col gap-4 px-gutter-compact py-4 md:flex-row md:gap-10 md:px-gutter-regular md:py-10">
+        <aside className="w-full shrink-0 md:w-60">
+          <div className="mb-0 md:mb-6">
+            <p
+              className="hidden text-caption font-medium uppercase tracking-[0.14em] md:block"
+              style={{ color: 'var(--text-3)' }}
+            >
+              Administration
+            </p>
+            <h2 className="mt-1 hidden text-h4 md:block" style={{ color: 'var(--text-1)' }}>
+              Workspace
+            </h2>
+          </div>
+          <WorkspaceConsoleNav />
+        </aside>
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
+    </>
   );
 }

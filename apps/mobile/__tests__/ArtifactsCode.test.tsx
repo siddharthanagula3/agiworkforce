@@ -38,6 +38,9 @@ jest.mock('@/services/fileCreation', () => ({
   shareFile: (uri: string) => mockShareFile(uri),
   exportToText: (...args: unknown[]) => mockExportToText(...args),
   exportToMarkdown: (...args: unknown[]) => mockExportToMarkdown(...args),
+  downloadGeneratedFile: jest.fn(() => new Promise(() => undefined)),
+  viewerFileCopy: jest.fn(() => new Promise(() => undefined)),
+  downloadFailureMessage: (_error: unknown, fallback: string) => fallback,
 }));
 
 jest.mock('expo-haptics', () => ({
@@ -81,6 +84,8 @@ jest.mock('lucide-react-native', () => {
     Eye: iconFactory('eye'),
     Code: iconFactory('code'),
     Download: iconFactory('download'),
+    Flag: iconFactory('flag'),
+    MoreHorizontal: iconFactory('more-horizontal'),
     AlertTriangle: iconFactory('alert-triangle'),
     Archive: iconFactory('archive'),
     Clock: iconFactory('clock'),
@@ -196,16 +201,15 @@ describe('mobile artifacts and code screens', () => {
     expect(onExpand).toHaveBeenCalledWith(codeArtifact);
   });
 
-  it('shows generated-file provenance on inline code artifacts', () => {
-    const { getByText } = render(
+  it('shows generated-file details on inline code artifacts as one line with no chips', () => {
+    const { getByText, queryByText } = render(
       <InlineArtifactCard artifact={generatedCodeArtifact} onExpand={jest.fn()} />,
     );
 
-    expect(getByText('Local')).toBeTruthy();
-    expect(getByText('Ready')).toBeTruthy();
-    expect(getByText('Code')).toBeTruthy();
-    expect(getByText('2 KB')).toBeTruthy();
-    expect(getByText('Source: Mobile')).toBeTruthy();
+    expect(getByText('Ready · Code · 2 KB')).toBeTruthy();
+    expect(queryByText('Local')).toBeNull();
+    expect(queryByText('python')).toBeNull();
+    expect(queryByText(/^Source:/)).toBeNull();
   });
 
   it('uses generated-file status as the inline preview when no source text exists', () => {
@@ -241,9 +245,7 @@ describe('mobile artifacts and code screens', () => {
     );
 
     expect(getByText(/Ready/)).toBeTruthy();
-    expect(
-      getByText('Local file. Sharing uses the native sheet and does not upload it to AGI cloud.'),
-    ).toBeTruthy();
+    expect(getByText('Local file. Sharing doesn’t upload it to AGI Cloud.')).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(getByLabelText('Share generated file'));

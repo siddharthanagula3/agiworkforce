@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type LoggerModule = typeof import('@/lib/logger');
+
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<LoggerModule>()),
+  logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
+}));
 
 const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
@@ -244,6 +250,114 @@ describe('durable cloud agent workflow settlement', () => {
     expect(turn?.metadata['truncated']).toBe(false);
   });
 
+  describe('finish reason', () => {
+    function journalStop(reason: string | null) {
+      mocks.query.mockImplementation(async (sql: string) =>
+        String(sql).includes('cloud_agent_events')
+          ? reason === null
+            ? []
+            : [{ reason }]
+          : [{ active_leaf_message_id: null }],
+      );
+    }
+
+    it.each([
+      ['end-turn', 'stop'],
+      ['stop-sequence', 'stop'],
+      ['max-tokens', 'length'],
+      ['refusal', 'content_filter'],
+      ['error', 'error'],
+    ])('records %s from the journalled stop as %s on a completed turn', async (stop, wire) => {
+      journalStop(stop);
+
+      await settleWorkflowInvocation(makeInput(), 'completed');
+
+      expect(persistedTurn()?.metadata['finishReason']).toBe(wire);
+    });
+
+    it('reads the journal as the run owner, bound to the owner and organization claims', async () => {
+      const ORGANIZATION_ID = '55555555-5555-4555-8555-555555555555';
+      const calls: string[] = [];
+      mocks.execute.mockImplementation(async (sql: string) => {
+        calls.push(String(sql));
+        return undefined;
+      });
+      mocks.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+        if (String(sql).includes('set_config')) {
+          calls.push(`claims:${String(params[0])}:${String(params[1])}`);
+          return [];
+        }
+        if (String(sql).includes('cloud_agent_events')) {
+          calls.push('journal');
+          return [{ reason: 'end-turn' }];
+        }
+        return [{ active_leaf_message_id: null }];
+      });
+
+      await settleWorkflowInvocation(makeInput({ organizationId: ORGANIZATION_ID }), 'completed');
+
+      const journalAt = calls.indexOf('journal');
+      expect(journalAt).toBeGreaterThan(-1);
+      const bound = calls.slice(0, journalAt);
+      expect(bound.at(-2)).toBe('set local role app_rls');
+      expect(bound.at(-1)).toBe(`claims:user-1:${ORGANIZATION_ID}`);
+    });
+
+    it('records no reason when the journal holds no closing stop or one that is not final', async () => {
+      journalStop(null);
+      await settleWorkflowInvocation(makeInput(), 'completed');
+      expect(persistedTurn()?.metadata).not.toHaveProperty('finishReason');
+
+      mocks.execute.mockClear();
+      journalStop('tool-use');
+      await settleWorkflowInvocation(makeInput(), 'completed');
+      expect(persistedTurn()?.metadata).not.toHaveProperty('finishReason');
+    });
+
+    it('saves the turn without a reason when the journal read fails', async () => {
+      mocks.query.mockImplementation(async (sql: string) => {
+        if (String(sql).includes('cloud_agent_events')) throw new Error('journal unavailable');
+        return [{ active_leaf_message_id: null }];
+      });
+
+      await settleWorkflowInvocation(makeInput(), 'completed');
+
+      expect(persistedTurn()).not.toBeNull();
+      expect(persistedTurn()?.metadata).not.toHaveProperty('finishReason');
+      expect(mocks.transition).toHaveBeenCalled();
+    });
+
+    it('marks a turn whose closing stop is an error as truncated', async () => {
+      journalStop('error');
+      await settleWorkflowInvocation(makeInput(), 'completed');
+      expect(persistedTurn()?.metadata['truncated']).toBe(true);
+
+      mocks.execute.mockClear();
+      journalStop('end-turn');
+      await settleWorkflowInvocation(makeInput(), 'completed');
+      expect(persistedTurn()?.metadata['truncated']).toBe(false);
+    });
+
+    it('records a failed turn as having no reason', async () => {
+      journalStop('end-turn');
+
+      await settleWorkflowInvocation(makeInput(), 'failed');
+
+      expect(persistedTurn()?.metadata).toHaveProperty('finishReason', null);
+    });
+
+    it.each(['cancelled', 'awaiting_input', 'paused'] as const)(
+      'leaves the reason a client saved alone on a %s turn',
+      async (outcome) => {
+        journalStop('end-turn');
+
+        await settleWorkflowInvocation(makeInput(), outcome);
+
+        expect(persistedTurn()?.metadata).not.toHaveProperty('finishReason');
+      },
+    );
+  });
+
   it('ends a turn whose steps did not all land as partial, with the per-step reasons', async () => {
     mocks.summarize.mockResolvedValue({
       status: 'completed_partial',
@@ -293,6 +407,44 @@ describe('durable cloud agent workflow settlement', () => {
     expect(turn?.content).toBe('Half an answ');
     expect(turn?.metadata).toMatchObject({ truncated: true, truncationReason: 'stream_cancelled' });
   });
+
+  it('records a cancelled turn as stopped by the person once it is written and the run is cancelled', async () => {
+    await settleWorkflowInvocation(makeInput(), 'cancelled');
+
+    const calls = mocks.execute.mock.calls.map(([sql]) => String(sql));
+    const written = calls.findIndex((sql) => sql.includes('insert into web_messages'));
+    const stopped = calls.findIndex(
+      (sql) => sql.includes('update web_messages') && sql.includes('cancellation_requested_at'),
+    );
+    expect(written).toBeGreaterThanOrEqual(0);
+    expect(stopped).toBeGreaterThan(written);
+    expect(mocks.execute.mock.calls[stopped]?.[1]).toEqual([
+      RUN_ID,
+      'user-1',
+      null,
+      'stopped',
+      'agi.chat.desktop.send.turn-1',
+      null,
+    ]);
+    const cancelled = mocks.transition.mock.calls.findIndex(
+      ([, input]) => (input as { state?: string }).state === 'cancelled',
+    );
+    expect(cancelled).toBeGreaterThanOrEqual(0);
+    expect(mocks.execute.mock.invocationCallOrder[stopped]).toBeGreaterThan(
+      mocks.transition.mock.invocationCallOrder[cancelled] ?? Number.POSITIVE_INFINITY,
+    );
+  });
+
+  it.each(['completed', 'failed', 'awaiting_input', 'paused'] as const)(
+    'records no stop on a %s turn',
+    async (outcome) => {
+      await settleWorkflowInvocation(makeInput(), outcome);
+
+      expect(
+        mocks.execute.mock.calls.some(([sql]) => String(sql).includes('cancellation_requested_at')),
+      ).toBe(false);
+    },
+  );
 
   it('persists partial text un-truncated while a run waits on approval', async () => {
     mocks.assistantText.mockResolvedValue({
@@ -455,6 +607,21 @@ describe('durable cloud agent workflow settlement', () => {
     expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ attempt: null }));
   });
 
+  it('releases, rather than charging the reservation for, a failed turn with no observed usage', async () => {
+    await settleWorkflowInvocation(makeInput(), 'failed', undefined, 'provider_error');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ cancelled: true }));
+
+    await settleWorkflowInvocation(makeInput(), 'cancelled');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ cancelled: true }));
+
+    for (const outcome of ['completed', 'awaiting_input', 'paused'] as const) {
+      await settleWorkflowInvocation(makeInput(), outcome);
+      expect(mocks.finalize).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cancelled: false }),
+      );
+    }
+  });
+
   it('prices a run that was cancelled before any provider call at zero', async () => {
     mocks.usage.mockResolvedValue({
       providerCalls: 0,
@@ -478,6 +645,15 @@ describe('durable cloud agent workflow settlement', () => {
       db,
       expect.objectContaining({ usage: expect.objectContaining({ costCents: 0 }) }),
     );
+  });
+
+  it('releases a failed turn the provider never billed, the way the inline stream does', async () => {
+    await settleWorkflowInvocation(makeInput(), 'failed');
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: true }));
+
+    mocks.finalize.mockClear();
+    await settleWorkflowInvocation(makeInput(), 'completed');
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false }));
   });
 
   it('never persists a Temporary Chat turn', async () => {

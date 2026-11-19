@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, Platform } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockOpenInAppBrowser = jest.fn();
@@ -24,17 +24,25 @@ const mockChangeAccountPassword = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockOwnerId = 'account-a';
+let mockClerkPasskeys: { id: string; name: string | null }[] = [];
+let mockStepUpModal: React.ReactElement | null = null;
 let mockEpoch = 1;
 const mockEpochListeners = new Set<() => void>();
 const mockRevokeAll = jest.fn();
 const mockTurnOffTwoFactor = jest.fn();
 const mockStartSetup = jest.fn();
+const mockFetchSignInMethods = jest.fn();
+const mockFetchSignInKeys = jest.fn();
+const mockRemoveSignInKey = jest.fn();
+const mockScrollTo = jest.fn();
 const mockCopySecret = jest.fn();
 const mockWithStepUp = jest.fn();
+const mockSignOut = jest.fn();
 let mockAuthState = {
   isClerkLoaded: true,
   isClerkSignedIn: true,
   clerkUserId: 'account-a' as string | null,
+  signOut: mockSignOut,
 };
 
 jest.mock('expo-clipboard', () => ({
@@ -42,7 +50,7 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 jest.mock('../src/features/auth/hooks/useStepUp', () => ({
-  useStepUp: () => ({ withStepUp: mockWithStepUp, modal: null }),
+  useStepUp: () => ({ withStepUp: mockWithStepUp, modal: mockStepUpModal }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -52,11 +60,20 @@ jest.mock('expo-router', () => ({
 
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
-  const Icon = (props: Record<string, unknown>) => <View {...props} />;
+  const icons = new Map<string, unknown>();
   return new Proxy(
     {},
     {
-      get: (_target, name) => (name === '__esModule' ? true : Icon),
+      get: (_target, name) => {
+        if (name === '__esModule') return true;
+        const key = String(name);
+        if (!icons.has(key)) {
+          icons.set(key, (props: Record<string, unknown>) => (
+            <View {...props} testID={`icon-${key}`} />
+          ));
+        }
+        return icons.get(key);
+      },
     },
   );
 });
@@ -109,7 +126,14 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
 }));
 
 jest.mock('@clerk/expo', () => ({
-  useUser: () => ({ user: { id: mockOwnerId, passwordEnabled: true, reload: mockReloadUser } }),
+  useUser: () => ({
+    user: {
+      id: mockOwnerId,
+      passwordEnabled: true,
+      reload: mockReloadUser,
+      passkeys: mockClerkPasskeys,
+    },
+  }),
   useSession: () => ({ session: null }),
 }));
 
@@ -138,34 +162,55 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   verifyAuthenticatorCode: jest.fn(),
   regenerateBackupCodes: jest.fn(),
   turnOffTwoFactor: (...args: unknown[]) => mockTurnOffTwoFactor(...args),
-  fetchSignInMethods: jest.fn(async () => ({
-    identities: [],
-    keys: [{ id: 'key-1', name: 'Work laptop', kind: 'passkey' }],
-  })),
+  fetchSignInMethods: (...args: unknown[]) => mockFetchSignInMethods(...args),
+  fetchSignInKeys: (...args: unknown[]) => mockFetchSignInKeys(...args),
+  removeSignInKey: (...args: unknown[]) => mockRemoveSignInKey(...args),
 }));
 
 jest.mock('../src/features/settings/Common', () => {
   const { Pressable, Text, View } = require('react-native');
+  const { useEffect } = require('react');
   return {
-    SettingsScreenShell: ({ title, children }: { title: string; children: React.ReactNode }) => (
-      <View>
-        <Text>{title}</Text>
-        {children}
-      </View>
-    ),
+    SettingsScreenShell: ({
+      title,
+      children,
+      scrollRef,
+    }: {
+      title: string;
+      children: React.ReactNode;
+      scrollRef?: { current: unknown };
+    }) => {
+      useEffect(() => {
+        if (scrollRef)
+          scrollRef.current = { scrollTo: (...args: unknown[]) => mockScrollTo(...args) };
+      }, [scrollRef]);
+      return (
+        <View>
+          <Text>{title}</Text>
+          {children}
+        </View>
+      );
+    },
     SettingsInfo: ({ title, body }: { title: string; body: string }) => (
       <View>
         <Text>{title}</Text>
         <Text>{body}</Text>
       </View>
     ),
-    SettingsGroup: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    SettingsGroup: ({ children, footnote }: { children: React.ReactNode; footnote?: string }) => (
+      <View>
+        {children}
+        {footnote ? <Text>{footnote}</Text> : null}
+      </View>
+    ),
     SettingsRow: ({
       label,
+      icon: Icon,
       value,
       onPress,
     }: {
       label: string;
+      icon?: () => React.ReactElement | null;
       value?: string;
       onPress?: () => void;
     }) => (
@@ -174,6 +219,7 @@ jest.mock('../src/features/settings/Common', () => {
         accessibilityLabel={value ? `${label}. ${value}` : label}
         onPress={onPress}
       >
+        {Icon ? <Icon /> : null}
         <Text>{label}</Text>
         {value ? <Text>{value}</Text> : null}
       </Pressable>
@@ -219,6 +265,11 @@ jest.mock('../src/features/settings/Common', () => {
 jest.mock('@/src/features/siri', () => ({ AskFromSiriSetting: () => null }));
 
 import { ownerHandler } from '../test-utils/ownerProps';
+import { ApiHttpError } from '../services/apiErrors';
+import { StepUpCancelledError } from '../src/features/auth/services/stepUp';
+
+const WORK_LAPTOP_KEY = { id: 'key-1', name: 'Work laptop', kind: 'passkey' } as const;
+const HARDWARE_KEY = { id: 'key-2', name: 'Desk key', kind: 'security_key' } as const;
 
 const AccountSecurityScreen = require('../src/features/settings/account-security')
   .default as typeof import('../src/features/settings/account-security').default;
@@ -228,6 +279,8 @@ describe('Mobile Account Security screen', () => {
     jest.clearAllMocks();
     mockAppMode = 'cloud';
     mockOwnerId = 'account-a';
+    mockClerkPasskeys = [];
+    mockStepUpModal = null;
     mockEpoch = 1;
     mockEpochListeners.clear();
     mockModeListeners.clear();
@@ -236,10 +289,17 @@ describe('Mobile Account Security screen', () => {
     mockSaveLockdown.mockResolvedValue(undefined);
     mockReloadUser.mockResolvedValue(undefined);
     mockWithStepUp.mockImplementation(async (_action, _resource, send) => send({}));
+    mockFetchSignInMethods.mockResolvedValue({
+      identities: [{ id: 'identity-1', provider: 'clerk', lastAuthenticatedAt: null }],
+      keys: { state: 'listed', items: [WORK_LAPTOP_KEY] },
+    });
+    mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [WORK_LAPTOP_KEY] });
+    mockRemoveSignInKey.mockResolvedValue(undefined);
     mockAuthState = {
       isClerkLoaded: true,
       isClerkSignedIn: true,
       clerkUserId: 'account-a',
+      signOut: mockSignOut,
     };
     mockFetchStatus.mockResolvedValue({ twoFactorEnabled: true, backupCodesReady: true });
     mockFetchSessionTimeout.mockResolvedValue(60);
@@ -274,7 +334,10 @@ describe('Mobile Account Security screen', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
-    await waitFor(() => expect(screen.getByLabelText('Work laptop. Passkey')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Passkeys and security keys. 1')).toBeTruthy(),
+    );
+    expect(screen.queryByLabelText('Work laptop. Passkey')).toBeNull();
     expect(screen.getByLabelText('Add or remove a sign-in method. Web')).toBeTruthy();
 
     expect(screen.queryByLabelText('Open Web security. Web')).toBeNull();
@@ -284,13 +347,42 @@ describe('Mobile Account Security screen', () => {
 
     expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       1,
-      'https://agiworkforce.com/settings/security',
+      'https://agiworkforce.com/settings/security?from=mobile',
     );
     expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       2,
-      'https://agiworkforce.com/settings/account',
+      'https://agiworkforce.com/settings/account?from=mobile',
     );
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/safety-security');
+  });
+
+  it('names the account sign-in for the reader, never the sign-in vendor', async () => {
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('AGI account')).toBeTruthy());
+    expect(screen.queryByText('Clerk')).toBeNull();
+  });
+
+  describe.each([
+    ['ios', 'iPhone', 'App Lock uses this device’s Face ID, Touch ID or passcode.'],
+    ['android', 'Android', 'App Lock uses this device’s fingerprint, face unlock or screen lock.'],
+  ] as const)('App Lock wording on %s', (os, _name, wording) => {
+    let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+    beforeEach(() => {
+      platform = jest.replaceProperty(Platform, 'OS', os);
+    });
+
+    afterEach(() => {
+      platform.restore();
+    });
+
+    it('describes App Lock with the names the platform uses', async () => {
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText(wording)).toBeTruthy());
+      if (os === 'android') expect(screen.queryByText(/Face ID|Touch ID/)).toBeNull();
+    });
   });
 
   it('does not fetch Cloud security state while the app is in Local Mode', () => {
@@ -393,6 +485,155 @@ describe('Mobile Account Security screen', () => {
     );
   });
 
+  describe('naming this app in the device list', () => {
+    const { parseAccountSessions } = jest.requireActual(
+      '../src/features/settings/account-security/service',
+    ) as typeof import('../src/features/settings/account-security/service');
+
+    const laptopRow = {
+      id: 'sess_laptop',
+      device: 'Macintosh',
+      browser: 'Chrome 141',
+      os: 'macos',
+      surface: 'web',
+      location: null,
+      lastActiveAt: new Date().toISOString(),
+      isCurrent: false,
+    };
+
+    function listServerRows(...rows: Array<Record<string, unknown>>) {
+      mockFetchAccountSessions.mockResolvedValue(
+        parseAccountSessions({ sessions: [...rows, laptopRow], currentSessionKnown: true }),
+      );
+    }
+
+    it('names this app and its platform instead of the HTTP library on Android', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'OkHttp 5.4.0',
+        os: 'android',
+        surface: 'mobile',
+        location: 'Austin',
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() =>
+        expect(screen.getByText('AGI Mobile on Android · Austin (this device)')).toBeTruthy(),
+      );
+      expect(screen.queryByText(/OkHttp/)).toBeNull();
+      expect(screen.queryByText(/Mobile device/)).toBeNull();
+    });
+
+    it('names this app alone when the platform is not recorded', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'OkHttp 5.4.0',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('AGI Mobile (this device)')).toBeTruthy());
+      expect(screen.queryByText(/OkHttp/)).toBeNull();
+    });
+
+    it('names this app on iOS and in the sign-out confirmation of another phone', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      listServerRows({
+        id: 'sess_ios',
+        device: 'iPhone',
+        browser: 'CFNetwork 1568.100.1',
+        os: 'ios',
+        surface: 'mobile',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('AGI Mobile on iOS')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('AGI Mobile on iOS. Active now'));
+
+      expect(alertSpy.mock.calls.at(-1)?.[1]).toBe(
+        'AGI Mobile on iOS will lose access to your AGI account immediately.',
+      );
+      alertSpy.mockRestore();
+    });
+
+    it('names this app when only the HTTP library identifies it', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'okhttp/4.12.0',
+        os: 'android',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() =>
+        expect(screen.getByText('AGI Mobile on Android (this device)')).toBeTruthy(),
+      );
+    });
+
+    it('keeps a desktop client that reports a library agent reading as it did', async () => {
+      listServerRows({
+        id: 'sess_desktop',
+        device: 'Mac',
+        browser: 'CFNetwork 1568.100.1',
+        os: 'macos',
+        surface: 'desktop',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('Mac · CFNetwork 1568.100.1')).toBeTruthy());
+      expect(screen.queryByText(/AGI Mobile/)).toBeNull();
+    });
+
+    it('draws another phone running this app with the phone icon', async () => {
+      listServerRows({
+        id: 'sess_ios',
+        device: 'iPhone',
+        browser: 'CFNetwork 1568.100.1',
+        os: 'ios',
+        surface: 'mobile',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      const row = await screen.findByLabelText('AGI Mobile on iOS. Active now');
+      expect(within(row).queryByTestId('icon-Smartphone')).toBeTruthy();
+      expect(within(row).queryByTestId('icon-Laptop')).toBeNull();
+    });
+
+    it('leaves a desktop browser session reading as it did', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'OkHttp 5.4.0',
+        os: 'android',
+        surface: 'mobile',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('Macintosh · Chrome 141')).toBeTruthy());
+    });
+  });
+
   it('revokes another device only after an explicit confirmation, then re-reads the list', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<AccountSecurityScreen />);
@@ -481,6 +722,7 @@ describe('Mobile Account Security screen', () => {
       isClerkLoaded: true,
       isClerkSignedIn: false,
       clerkUserId: null,
+      signOut: mockSignOut,
     };
     const screen = render(<AccountSecurityScreen />);
 
@@ -493,6 +735,32 @@ describe('Mobile Account Security screen', () => {
     expect(mockFetchStatus).not.toHaveBeenCalled();
     expect(mockFetchAccountSessions).not.toHaveBeenCalled();
   });
+  it('does not report a failure when every session was revoked but this phone could not end its own', async () => {
+    mockRevokeAll.mockResolvedValue(undefined);
+    mockSignOut.mockRejectedValue(new Error('session already revoked'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Log out of all devices')).toBeTruthy());
+    fireEvent.press(screen.getByText('Log out of all devices'));
+    const confirm = alertSpy.mock.calls
+      .at(-1)?.[2]
+      ?.find((button) => button.text === 'Log out everywhere');
+
+    await act(async () => {
+      confirm?.onPress?.();
+    });
+
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
+    expect(mockRevokeAll).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalledWith(
+      'Could not log out of all devices',
+      expect.anything(),
+    );
+    alertSpy.mockRestore();
+    warn.mockRestore();
+  });
+
   it('rejects an old revoke-all confirmation after A to B to A', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<AccountSecurityScreen />);
@@ -819,5 +1087,514 @@ describe('Mobile Account Security screen', () => {
     expect(alertSpy).toHaveBeenCalledTimes(2);
     expect(mockRevokeAccountSession).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  describe('passkeys and security keys', () => {
+    const openKeysPage = async (screen: ReturnType<typeof render>) => {
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 1'));
+      return screen.findByLabelText('Remove Work laptop');
+    };
+
+    const confirmRemoval = async (alertSpy: jest.SpyInstance) => {
+      const buttons = alertSpy.mock.calls.at(-1)?.[2] as
+        { text: string; onPress?: () => void }[] | undefined;
+      await act(async () => {
+        buttons?.find((button) => button.text === 'Remove')?.onPress?.();
+      });
+    };
+
+    it('shows one row with the key count and the phishing footnote in place of the key rows', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [WORK_LAPTOP_KEY, HARDWARE_KEY] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(await screen.findByLabelText('Passkeys and security keys. 2')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'Use passkeys or security keys to sign in. They resist phishing better than passwords.',
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText('Work laptop')).toBeNull();
+      expect(screen.queryByText('Desk key')).toBeNull();
+    });
+
+    it('lists each key with its kind and keeps adding on the Web', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [WORK_LAPTOP_KEY, HARDWARE_KEY] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 2'));
+
+      expect(await screen.findByLabelText('Work laptop. Passkey')).toBeTruthy();
+      expect(screen.getByLabelText('Desk key. Security key')).toBeTruthy();
+      expect(screen.getByLabelText('Remove Desk key')).toBeTruthy();
+      fireEvent.press(screen.getByLabelText('Add a passkey or security key. Web'));
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/settings/security?from=mobile',
+      );
+    });
+
+    it('says so when there are no keys yet', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 0'));
+
+      expect(await screen.findByText('No passkeys or security keys yet.')).toBeTruthy();
+      expect(screen.getByLabelText('Add a passkey or security key. Web')).toBeTruthy();
+    });
+
+    it('asks before removing, then removes through step-up and refreshes the list', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'Remove Work laptop?',
+        'It can no longer sign in to your account.',
+        [
+          expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+          expect.objectContaining({ text: 'Remove', style: 'destructive' }),
+        ],
+      );
+      expect(mockWithStepUp).not.toHaveBeenCalled();
+      mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [] });
+      await confirmRemoval(alertSpy);
+
+      expect(mockWithStepUp).toHaveBeenCalledWith(
+        'account_security.change',
+        'key-1',
+        expect.any(Function),
+      );
+      expect(mockRemoveSignInKey).toHaveBeenCalledWith(
+        'key-1',
+        {},
+        { ownerId: 'account-a', epoch: 1 },
+      );
+      expect(await screen.findByText('No passkeys or security keys yet.')).toBeTruthy();
+      alertSpy.mockRestore();
+    });
+
+    it('removes nothing when the prompt is cancelled', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      const buttons = alertSpy.mock.calls.at(-1)?.[2];
+      await act(async () => {
+        buttons?.find((button) => button.text === 'Cancel')?.onPress?.();
+      });
+
+      expect(mockWithStepUp).not.toHaveBeenCalled();
+      expect(mockRemoveSignInKey).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    });
+
+    it('shows the server message when the last required key cannot be removed', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const message =
+        'Keep at least 2 passkeys or security keys, including one that works across devices. Add another one before removing this one.';
+      mockRemoveSignInKey.mockRejectedValue(new ApiHttpError(message, 409, 'conflict'));
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      await confirmRemoval(alertSpy);
+
+      expect(alertSpy).toHaveBeenLastCalledWith('Could not remove Work laptop', message);
+      expect(mockFetchSignInKeys).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Remove Work laptop')).toBeTruthy();
+      alertSpy.mockRestore();
+    });
+
+    it('refreshes the list without an error when the key is already gone', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      mockRemoveSignInKey.mockRejectedValue(
+        new ApiHttpError('That passkey or security key was not found.', 404, 'not_found'),
+      );
+      mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [] });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      await confirmRemoval(alertSpy);
+
+      expect(await screen.findByText('No passkeys or security keys yet.')).toBeTruthy();
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      alertSpy.mockRestore();
+    });
+
+    it('stays quiet when the step-up confirmation is cancelled', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      mockWithStepUp.mockRejectedValue(new StepUpCancelledError());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      await confirmRemoval(alertSpy);
+
+      expect(mockRemoveSignInKey).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText('Remove Work laptop')).toBeTruthy();
+      alertSpy.mockRestore();
+    });
+
+    it('offers a retry when the keys could not be listed', async () => {
+      mockFetchSignInMethods.mockResolvedValue({ identities: [], keys: { state: 'failed' } });
+      const screen = render(<AccountSecurityScreen />);
+      const row = await screen.findByLabelText('Passkeys and security keys. Unavailable · Retry');
+      mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [WORK_LAPTOP_KEY] });
+      fireEvent.press(row);
+
+      expect(await screen.findByLabelText('Passkeys and security keys. 1')).toBeTruthy();
+      expect(mockFetchSignInKeys).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides the row for an account its organization manages', async () => {
+      mockFetchSignInMethods.mockResolvedValue({ identities: [], keys: { state: 'unavailable' } });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(mockFetchSignInMethods).toHaveBeenCalled());
+      await screen.findByLabelText('Add or remove a sign-in method. Web');
+      expect(screen.queryByText('Passkeys and security keys')).toBeNull();
+      expect(
+        screen.queryByText(
+          'Use passkeys or security keys to sign in. They resist phishing better than passwords.',
+        ),
+      ).toBeNull();
+    });
+
+    it('sends an account that must verify first to the Web instead of listing keys', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'verification_required' },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. Web'));
+
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/settings/security?from=mobile',
+      );
+    });
+
+    it('counts and lists the passkeys already on the account, read-only, with the web to manage them', async () => {
+      mockClerkPasskeys = [
+        { id: 'pk_web_1', name: 'Home Mac' },
+        { id: 'pk_web_2', name: null },
+      ];
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [WORK_LAPTOP_KEY] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 3'));
+
+      expect(await screen.findByLabelText('Work laptop. Passkey')).toBeTruthy();
+      expect(screen.getByLabelText('Home Mac. Passkey')).toBeTruthy();
+      expect(screen.getByLabelText('Passkey. Passkey')).toBeTruthy();
+      expect(screen.queryByLabelText('Remove Home Mac')).toBeNull();
+      fireEvent.press(screen.getByLabelText('Manage Home Mac on the web'));
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/settings/security?from=mobile',
+      );
+    });
+
+    it('does not say there are no keys when only the account passkeys exist', async () => {
+      mockClerkPasskeys = [{ id: 'pk_web_1', name: 'Home Mac' }];
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 1'));
+
+      expect(await screen.findByLabelText('Home Mac. Passkey')).toBeTruthy();
+      expect(screen.queryByText('No passkeys or security keys yet.')).toBeNull();
+    });
+
+    it('closes the page and gives the step-up prompt back to the screen when the keys become unavailable', async () => {
+      const { Text } = require('react-native');
+      mockStepUpModal = <Text>Step-up prompt</Text>;
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      expect(screen.getAllByText('Step-up prompt')).toHaveLength(1);
+
+      mockFetchSignInKeys.mockResolvedValue({ state: 'unavailable' });
+      await confirmRemoval(alertSpy);
+
+      await waitFor(() => expect(screen.queryByLabelText('Remove Work laptop')).toBeNull());
+      expect(screen.queryByText('Passkeys and security keys')).toBeNull();
+      expect(screen.getAllByText('Step-up prompt')).toHaveLength(1);
+      alertSpy.mockRestore();
+    });
+
+    it('does not show the keys row in Local Mode', () => {
+      mockAppMode = 'local';
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(screen.queryByText('Passkeys and security keys')).toBeNull();
+    });
+  });
+
+  describe('security recommendation', () => {
+    it('recommends reviewing devices when another device is signed in, and scrolls to them', async () => {
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(await screen.findByText('Security recommendations')).toBeTruthy();
+      expect(screen.getByText('Review where you’re logged in')).toBeTruthy();
+      expect(screen.getByText('Log out of devices you don’t recognize')).toBeTruthy();
+      expect(screen.getByTestId('security-recommendation-dot')).toBeTruthy();
+      fireEvent(screen.getByTestId('account-sessions-section'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 640, width: 390, height: 300 } },
+      });
+      fireEvent.press(
+        screen.getByLabelText(
+          'Review where you’re logged in. Log out of devices you don’t recognize',
+        ),
+      );
+
+      expect(mockScrollTo).toHaveBeenCalledWith({ y: 632, animated: true });
+    });
+
+    it('stays hidden while the devices load', async () => {
+      mockFetchAccountSessions.mockReturnValue(new Promise(() => undefined));
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('Devices. Checking…');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('stays hidden when the devices could not be loaded', async () => {
+      mockFetchAccountSessions.mockRejectedValue(new Error('offline'));
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('Devices. Unavailable · Retry');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('stays hidden when only this device is signed in', async () => {
+      mockFetchAccountSessions.mockResolvedValue({
+        sessions: [
+          {
+            id: 'sess_mobile',
+            device: 'iPhone',
+            browser: null,
+            location: null,
+            lastActiveAt: new Date().toISOString(),
+            isCurrent: true,
+          },
+        ],
+        currentSessionKnown: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('iPhone (this device). Active now');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('does not guess when this device cannot be matched and only one session is listed', async () => {
+      mockFetchAccountSessions.mockResolvedValue({
+        sessions: [
+          {
+            id: 'sess_only',
+            device: 'iPhone',
+            browser: null,
+            location: null,
+            lastActiveAt: new Date().toISOString(),
+            isCurrent: false,
+          },
+        ],
+        currentSessionKnown: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('iPhone. Active now');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('is not shown in Local Mode', () => {
+      mockAppMode = 'local';
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+  });
+
+  describe('two-factor rows while enrolment is not offered', () => {
+    const settled = (screen: ReturnType<typeof render>) =>
+      waitFor(() => expect(screen.getByLabelText('Passkeys and security keys. 1')).toBeTruthy());
+
+    it('draws nothing for the section when enrolment is unavailable and two-factor is off', async () => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: false,
+        backupCodesReady: false,
+        enrollmentAvailable: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(mockFetchStatus).toHaveBeenCalled();
+      expect(screen.queryByText('Two-factor sign-in')).toBeNull();
+      expect(screen.queryByText('Authenticator app')).toBeNull();
+      expect(screen.queryByText('Set up authenticator app')).toBeNull();
+      expect(screen.queryByText('Temporarily unavailable')).toBeNull();
+      expect(screen.getByLabelText('Advanced Account Security')).toBeTruthy();
+    });
+
+    it('keeps only working rows for an enrolled account while enrolment is unavailable', async () => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: true,
+        backupCodesReady: true,
+        enrollmentAvailable: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
+      expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy();
+      expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy();
+      expect(screen.queryByText('Generate new backup codes')).toBeNull();
+      expect(screen.queryByText('Temporarily unavailable')).toBeNull();
+    });
+
+    it('offers setup and new backup codes when enrolment is available', async () => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: false,
+        backupCodesReady: false,
+        enrollmentAvailable: true,
+      });
+      const off = render(<AccountSecurityScreen />);
+      await settled(off);
+      expect(off.getByText('Two-factor sign-in')).toBeTruthy();
+      expect(off.getByLabelText('Authenticator app. Off')).toBeTruthy();
+      expect(off.getByLabelText('Set up authenticator app').props.accessibilityRole).toBe('button');
+      off.unmount();
+
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: true,
+        backupCodesReady: true,
+        enrollmentAvailable: true,
+      });
+      const on = render(<AccountSecurityScreen />);
+      await settled(on);
+      expect(on.getByLabelText('Generate new backup codes').props.accessibilityRole).toBe('button');
+      expect(on.getByLabelText('Turn off two-factor')).toBeTruthy();
+      expect(on.queryByText('Temporarily unavailable')).toBeNull();
+    });
+
+    it('draws nothing while the status is still loading', async () => {
+      mockFetchStatus.mockReturnValue(new Promise(() => undefined));
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(screen.queryByText('Two-factor sign-in')).toBeNull();
+      expect(screen.queryByText('Authenticator app')).toBeNull();
+    });
+
+    it('draws nothing when the status never loaded', async () => {
+      mockFetchStatus.mockRejectedValue(new Error('offline'));
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(screen.queryByText('Two-factor sign-in')).toBeNull();
+      expect(screen.queryByText('Authenticator app')).toBeNull();
+    });
+
+    it.each([
+      [false, true],
+      [true, false],
+    ])(
+      'names the cannot-turn-back-on consequence only while setup is unavailable (available %s)',
+      async (enrollmentAvailable, warned) => {
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+        mockFetchStatus.mockResolvedValue({
+          twoFactorEnabled: true,
+          backupCodesReady: true,
+          enrollmentAvailable,
+        });
+        const screen = render(<AccountSecurityScreen />);
+        await waitFor(() => expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy());
+        fireEvent.press(screen.getByLabelText('Turn off two-factor'));
+
+        const body = alertSpy.mock.calls.at(-1)?.[1] ?? '';
+        expect(body.includes("You can't turn it back on until setup is available again.")).toBe(
+          warned,
+        );
+        alertSpy.mockRestore();
+      },
+    );
+
+    it('keeps Turn off for an enrolled account when a later status read fails', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: true,
+        backupCodesReady: true,
+        enrollmentAvailable: false,
+      });
+      mockTurnOffTwoFactor.mockResolvedValue(undefined);
+      const screen = render(<AccountSecurityScreen />);
+      await waitFor(() => expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy());
+
+      mockFetchStatus.mockRejectedValue(new Error('offline'));
+      const readsBefore = mockFetchStatus.mock.calls.length;
+      fireEvent.press(screen.getByLabelText('Turn off two-factor'));
+      const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Turn off');
+      await act(async () => {
+        confirm?.onPress?.();
+      });
+      await waitFor(() => expect(mockFetchStatus.mock.calls.length).toBeGreaterThan(readsBefore));
+      await waitFor(() =>
+        expect(screen.getByLabelText('Authenticator app. Unavailable')).toBeTruthy(),
+      );
+
+      expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy();
+      expect(screen.queryByText('Temporarily unavailable')).toBeNull();
+      alertSpy.mockRestore();
+    });
+  });
+
+  describe('authenticator setup QR code', () => {
+    const startSetup = async (otpauthUrl: string) => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: false,
+        backupCodesReady: false,
+        enrollmentAvailable: true,
+      });
+      mockStartSetup.mockResolvedValueOnce({ secret: 'fixture-setup-secret', otpauthUrl });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByText('Set up authenticator app'));
+      await screen.findByLabelText('Setup key');
+      return screen;
+    };
+
+    it('draws the QR code above the setup key with its scan line', async () => {
+      const screen = await startSetup(
+        'otpauth://totp/AGI:person@example.com?secret=FIXTURESECRET&issuer=AGI',
+      );
+
+      expect(screen.getByLabelText('QR code for your authenticator app')).toBeTruthy();
+      expect(
+        screen.getByText('Scan with your authenticator app, or open it on this device'),
+      ).toBeTruthy();
+      const tree = JSON.stringify(screen.toJSON());
+      const at = (text: string) => tree.indexOf(text);
+      expect(at('QR code for your authenticator app')).toBeGreaterThan(-1);
+      expect(at('QR code for your authenticator app')).toBeLessThan(at('Or enter this key'));
+      expect(at('Or enter this key')).toBeLessThan(at('fixture-setup-secret'));
+      expect(at('fixture-setup-secret')).toBeLessThan(at('Copy setup key'));
+      expect(at('Copy setup key')).toBeLessThan(at('Authenticator code'));
+      expect(screen.getByText('Or enter this key')).toBeTruthy();
+      expect(screen.getByText('fixture-setup-secret')).toBeTruthy();
+      expect(screen.getByLabelText('Copy setup key')).toBeTruthy();
+      expect(screen.getByLabelText('Authenticator code')).toBeTruthy();
+    });
+
+    it('hides the QR code and keeps the key when the address cannot be encoded', async () => {
+      const screen = await startSetup('x'.repeat(8000));
+
+      expect(screen.queryByLabelText('QR code for your authenticator app')).toBeNull();
+      expect(screen.queryByText('Or enter this key')).toBeNull();
+      expect(screen.getByText('fixture-setup-secret')).toBeTruthy();
+      expect(screen.getByLabelText('Copy setup key')).toBeTruthy();
+    });
   });
 });

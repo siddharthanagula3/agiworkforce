@@ -8,10 +8,10 @@ export const DIRECTORY_CHIP =
   'inline-flex min-h-8 items-center gap-1 rounded-full border border-transparent px-3 text-sm font-medium';
 
 export const DIRECTORY_ICON_BUTTON =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors motion-reduce:transition-none hover:bg-muted hover:text-foreground';
+  'relative inline-flex size-8 min-h-0 shrink-0 items-center justify-center rounded-md text-muted-foreground pointer-coarse:after:absolute pointer-coarse:after:-inset-1.5 pointer-coarse:after:content-[""] transition-colors motion-reduce:transition-none hover:bg-muted hover:text-foreground';
 
 export const DIRECTORY_MENU_TRIGGER =
-  'inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted';
+  'inline-flex min-h-8 items-center gap-1 whitespace-nowrap rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted';
 
 export const DIRECTORY_CREATE_BUTTON =
   'inline-flex min-h-8 shrink-0 items-center rounded-lg border border-border px-3 text-sm font-medium text-foreground transition-colors motion-reduce:transition-none hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';

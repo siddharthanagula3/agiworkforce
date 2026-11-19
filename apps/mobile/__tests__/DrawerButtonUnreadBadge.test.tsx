@@ -4,6 +4,12 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 
+let mockViewportWidth = 402;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockViewportWidth, height: 874, scale: 3, fontScale: 1 }),
+}));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockPush }),
@@ -39,6 +45,7 @@ describe('DrawerButton unread badge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     notificationCenterStore.clear();
+    mockViewportWidth = 402;
   });
 
   it('renders no badge while everything is read', () => {
@@ -71,8 +78,7 @@ describe('DrawerButton unread badge', () => {
     );
 
     // The pip is 17pt at the corner of the drawer button. It cannot reach the 44pt
-    // minimum without swallowing the drawer's taps, so it is an indicator and
-    // Notifications has its own drawer row.
+    // minimum without swallowing the drawer's taps, so it is an indicator.
     expect(queryByLabelText('1 unread notification')).toBeNull();
     expect(
       getByTestId('drawer-unread-badge', { includeHiddenElements: true }).props
@@ -94,4 +100,57 @@ describe('DrawerButton unread badge', () => {
 
     expect(queryByTestId('drawer-unread-badge', { includeHiddenElements: true })).toBeNull();
   });
+});
+
+describe('DrawerButton beside the permanent sidebar', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    notificationCenterStore.clear();
+  });
+
+  it.each([402, 820, 999])('opens the drawer at %ipt, where the drawer overlays', (width) => {
+    mockViewportWidth = width;
+    const onPress = jest.fn();
+    const { getByLabelText } = render(<DrawerButton onPress={onPress} />);
+
+    fireEvent.press(getByLabelText('Open navigation drawer'));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([1000, 1032, 1376])(
+    'offers no drawer button at %ipt but keeps its slot in the header',
+    (width) => {
+      mockViewportWidth = width;
+      const { queryByLabelText, queryByRole, queryByTestId, root } = render(
+        <DrawerButton testID="screen-open-drawer" onPress={jest.fn()} />,
+      );
+
+      expect(queryByLabelText(/Open navigation drawer/)).toBeNull();
+      expect(queryByRole('button')).toBeNull();
+      expect(queryByTestId('screen-open-drawer')).toBeNull();
+      expect(root).toHaveStyle({ width: 44, height: 44 });
+    },
+  );
+
+  it.each([1032, 1376])(
+    'shows and speaks the unread count at %ipt and opens Notifications from it',
+    (width) => {
+      mockViewportWidth = width;
+      pushNotification('run-1');
+      pushNotification('run-2');
+      const onPress = jest.fn();
+      const { getByLabelText, getByText, queryByLabelText } = render(
+        <DrawerButton onPress={onPress} />,
+      );
+
+      expect(queryByLabelText(/Open navigation drawer/)).toBeNull();
+      expect(getByText('2', { includeHiddenElements: true })).toBeTruthy();
+      const link = getByLabelText('Open notifications, 2 unread');
+      expect(link).toHaveStyle({ width: 44, height: 44 });
+
+      fireEvent.press(link);
+      expect(mockPush).toHaveBeenCalledWith('/(app)/notifications');
+      expect(onPress).not.toHaveBeenCalled();
+    },
+  );
 });

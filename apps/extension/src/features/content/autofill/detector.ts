@@ -63,6 +63,10 @@ export function isLeverUrl(url: string): boolean {
   return matchesAtsHostRules(url, LEVER_HOST_RULES);
 }
 
+export function isJobApplicationHostUrl(url: string): boolean {
+  return isLinkedInUrl(url) || isLeverUrl(url) || isGreenhouseUrl(url) || isAshbyUrl(url);
+}
+
 function findLinkedInFormContainer(): Element | null {
   const modalSelectors = [
     '.jobs-easy-apply-modal',

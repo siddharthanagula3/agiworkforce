@@ -1,5 +1,10 @@
 import { NextRequest } from 'next/server';
-import { listCanonicalModels, listManagedRoutesForModel } from '@agiworkforce/types';
+import {
+  getRoutingSlotModel,
+  listCanonicalModels,
+  listManagedRoutesForModel,
+  resolveModelFamilySlot,
+} from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type ModelPickerModule = typeof import('@agiworkforce/unified-chat/model-picker');
@@ -190,6 +195,25 @@ describe('model catalogue · executability gates selection', () => {
     expect(freeModel).toBeDefined();
     expect(freeModel?.admitted).toBe(true);
     expect(freeModel?.routes.length).toBeGreaterThan(0);
+  });
+
+  it('offers Free the fast OpenAI and fast Anthropic models as included, and every other model as a paid one', async () => {
+    mockConfiguredProviders.mockReturnValue(new Set(['openai', 'anthropic', 'google']));
+
+    const body = await fetchCatalogue();
+    const admitted = body.models.filter((model) => model.admitted);
+
+    expect(admitted.map((model) => model.id).sort()).toEqual(
+      [resolveModelFamilySlot('openai/gpt-fast'), getRoutingSlotModel('fast_anthropic')].sort(),
+    );
+    for (const model of admitted) {
+      expect(model.minimumPlan).toBeNull();
+      expect(model.promotionEndsAt).toBeNull();
+    }
+    for (const model of body.models.filter((entry) => !entry.admitted)) {
+      if (model.availability === 'coming_soon') continue;
+      expect(model.minimumPlan, model.id).not.toBeNull();
+    }
   });
 });
 

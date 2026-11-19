@@ -21,19 +21,25 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-export const ADMISSION_FILE = 'packages/contracts/cloud-contracts/src/chat-attachments.ts';
+export const ADMISSION_FILE = 'packages/contracts/cloud-contracts/src/chat-attachment-policy.json';
 export const CLASSES_FILE = 'packages/contracts/types/src/file-model.ts';
 export const BASELINE_FILE = 'scripts/config/attachment-class-coverage-baseline.json';
 
 /** Images are carried to the model as bytes, so no text extractor applies. */
 const IMAGE_MEDIA_TYPE = /^image\//;
 
-export function listLiterals(source, constantName) {
-  const start = source.indexOf(`const ${constantName} = [`);
-  if (start < 0) return [];
-  const end = source.indexOf('] as const', start);
-  if (end < 0) return [];
-  return [...source.slice(start, end).matchAll(/'([^']+)'/g)].map((match) => match[1]);
+export function declaredAdmission(source) {
+  const policy = JSON.parse(source);
+  for (const field of ['mimeTypes', 'extensions']) {
+    if (
+      !Array.isArray(policy[field]) ||
+      policy[field].length === 0 ||
+      policy[field].some((value) => typeof value !== 'string' || value.length === 0)
+    ) {
+      throw new Error(`The attachment policy has no valid ${field}`);
+    }
+  }
+  return { types: policy.mimeTypes, extensions: policy.extensions };
 }
 
 export function declaredClasses(source) {
@@ -109,8 +115,13 @@ export function read(scanRoot) {
   if (!fs.existsSync(classesPath)) return { error: `${CLASSES_FILE} is missing.` };
 
   const admission = fs.readFileSync(admissionPath, 'utf8');
-  const types = listLiterals(admission, 'CHAT_ATTACHMENT_MIME_TYPES');
-  const extensions = listLiterals(admission, 'CHAT_ATTACHMENT_EXTENSIONS');
+  let types;
+  let extensions;
+  try {
+    ({ types, extensions } = declaredAdmission(admission));
+  } catch (error) {
+    return { error: `${ADMISSION_FILE}: ${error.message}` };
+  }
   const classes = declaredClasses(fs.readFileSync(classesPath, 'utf8'));
   if (types.length === 0 || extensions.length === 0) {
     return { error: `${ADMISSION_FILE} declared no accepted types, which cannot be right.` };

@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
-import { ARTIFACT_TITLE_MAX_CHARS, normalizeArtifactTitle } from '../../stores/artifacts-store';
+import {
+  ARTIFACT_TITLE_MAX_CHARS,
+  normalizeArtifactTitle,
+} from '@agiworkforce/unified-chat/answer-document';
 
 export const RENAME_ARTIFACT_LABEL = 'Rename';
 

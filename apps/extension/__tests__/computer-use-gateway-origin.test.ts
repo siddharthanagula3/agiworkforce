@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 beforeEach(() => {
   vi.resetModules();
-  vi.stubGlobal('chrome', { storage: { local: { get: vi.fn(async () => ({})) } } });
+  vi.stubGlobal('chrome', {
+    runtime: { getManifest: packagedManifest },
+    storage: { local: { get: vi.fn(async () => ({})) } },
+  });
   vi.stubEnv('VITE_API_BASE_URL', '');
 });
 

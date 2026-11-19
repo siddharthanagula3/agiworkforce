@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-20
+Last updated: 2026-11-17
 
 How quality is decided in this repository: what a test has to be worth, what
 blocks a merge, what a regression obliges, and how a test failure finds its
@@ -61,12 +61,15 @@ accident; an advisory lane is advisory because it is not in that list.
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `repo-guards`                                                                | The `scripts/check-*` chain: structure, claims, registries |
 | `database`                                                                   | Migration numbering, dependencies and the ledger           |
-| `js-verify`                                                                  | Unit and integration tests, types, lint                    |
+| `js-lint`, `js-typecheck`                                                    | Lint and types                                             |
+| `js-verify`                                                                  | Unit and integration tests, one package group per runner   |
+| `js-build`                                                                   | Deployable builds and release packaging                    |
 | `security`                                                                   | The security guards and scanning                           |
 | `contracts`                                                                  | Generated protocol types and the contract registry         |
 | `rust-desktop-cli`                                                           | The Rust crates and the CLI                                |
 | `desktop-e2e`, `browser-extension-e2e`, `vscode-extension-e2e`, `mobile-e2e` | Each client surface end to end                             |
 | `web-a11y`                                                                   | Accessibility on the web surface                           |
+| `web-renderer-e2e`                                                           | Web renderer fixtures                                      |
 | `clippy-all-features`, `macos-smoke`, `windows-smoke`                        | Platform-specific breakage                                 |
 
 ## 4. What a test may not be

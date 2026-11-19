@@ -14,7 +14,8 @@
 
 import type { WorkLifecycleStatus } from './lifecycle-status';
 
-export const CLOUD_WORK_MODES = ['chat', 'agiwork'] as const;
+export const AGI_WORK_MODE = 'agiwork' as const;
+export const CLOUD_WORK_MODES = ['chat', AGI_WORK_MODE] as const;
 
 export type CloudWorkMode = (typeof CLOUD_WORK_MODES)[number];
 

@@ -1,0 +1,137 @@
+{
+  "maxBytes": 26214400,
+  "maxMessageBytes": 26214400,
+  "maxImageBytes": 20971520,
+  "maxCount": 20,
+  "withoutHandshake": {
+    "maxBytes": 12582912,
+    "maxImageBytes": 12582912,
+    "maxMessageBytes": 12582912,
+    "maxCount": 10
+  },
+  "fileNameMaxLength": 255,
+  "mimeTypeMaxLength": 255,
+  "mimeTypes": [
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+    "text/plain",
+    "text/markdown",
+    "text/csv",
+    "text/javascript",
+    "text/typescript",
+    "text/html",
+    "text/css",
+    "application/json",
+    "application/x-ipynb+json",
+    "application/xml",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  ],
+  "extensions": [
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".ipynb",
+    ".xml",
+    ".html",
+    ".css",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".py",
+    ".rs",
+    ".go",
+    ".rb",
+    ".sh",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".docx",
+    ".xlsx",
+    ".pptx"
+  ],
+  "imageMimeTypes": ["image/png", "image/jpeg", "image/gif", "image/webp"],
+  "modelImage": {
+    "maxBase64Bytes": 5000000,
+    "maxEdgePixels": 8000,
+    "mediaTypes": ["image/jpeg", "image/png", "image/webp"]
+  },
+  "filePathPrefix": "/api/files/",
+  "largeFiles": {
+    "maxBytes": 524288000,
+    "maxCount": 20,
+    "maxMessageBytes": 2147483648,
+    "cellularConfirmBytes": 52428800,
+    "sandboxStagedBytesMax": 1073741824,
+    "maxPackageInflatedBytes": 1073741824
+  },
+  "kinds": {
+    "pdf": {
+      "maxBytes": 524288000,
+      "maxTextPages": 1000,
+      "maxScanPages": 100000,
+      "maxScanMs": 1800000,
+      "pagesPerStep": 100,
+      "maxOcrPagesPerFile": 100,
+      "ocrPagesPerTurn": 8,
+      "ocrBatchPages": 4,
+      "bufferedMaxBytes": 209715200,
+      "rangeLoading": true
+    },
+    "office": { "maxBytes": 104857600, "maxSlides": 200 },
+    "spreadsheet": { "maxBytes": 52428800, "sampleRows": 200 },
+    "delimited": {
+      "maxBytes": 524288000,
+      "sampleRows": 200,
+      "typeInferenceRows": 10000,
+      "bytesPerStep": 67108864
+    },
+    "text": { "maxBytes": 524288000, "bytesPerStep": 67108864 },
+    "html": { "maxBytes": 41943040 },
+    "notebook": { "maxBytes": 52428800, "maxContainers": 1000000 }
+  },
+  "preparation": {
+    "maxTextChars": 8000000,
+    "segmentBytes": 4194304,
+    "maxIndexedChars": 2000000,
+    "maxIndexedCharsPerUser": 200000000,
+    "embedChatFiles": false,
+    "preparerVersion": 1,
+    "stallMs": 7200000
+  },
+  "turnBudget": {
+    "maxAttachmentTokensPerTurn": 120000,
+    "contextShare": 0.25,
+    "maxInputCentsPerTurn": 10,
+    "cardsShare": 0.25,
+    "laterTurnFileTokens": 5000,
+    "laterTurnTotalTokens": 20000,
+    "cardMaxTokens": 1500,
+    "passageWindows": 10,
+    "passageChars": 1400
+  },
+  "intake": {
+    "maxScanAttempts": 4,
+    "scanGiveUpMs": 1800000,
+    "scanPollScheduleMs": [5000, 10000, 20000, 30000],
+    "awaitingPartsIdleMs": 7200000,
+    "abandonAfterMs": 86400000,
+    "terminalRetentionMs": 604800000,
+    "statusPollMinMs": 2000,
+    "statusPollMaxMs": 10000,
+    "scanUnavailableRefundsPerDay": 3,
+    "budgetWaitMaxMs": 7200000,
+    "leaseMs": {
+      "uploaded": 300000,
+      "inspecting": 300000,
+      "scanningExtra": 300000,
+      "sealing": 900000
+    }
+  }
+}

@@ -130,7 +130,7 @@ describe('Shared links screen', () => {
     render(<SharedLinksScreen />);
     await waitFor(() => expect(mockGet).toHaveBeenCalled());
 
-    expect(screen.getByText('Shared links')).toBeTruthy();
+    expect(screen.getByText('Shared Links')).toBeTruthy();
     expect(screen.getByLabelText('Go back')).toBeTruthy();
   });
 
@@ -151,7 +151,7 @@ describe('Shared links screen', () => {
 
     expect(await screen.findByText('Planning session')).toBeTruthy();
     expect(screen.getByTestId('shared-links-incomplete')).toBeTruthy();
-    expect(screen.getByText(/This list may not include every link you shared\./u)).toBeTruthy();
+    expect(screen.getByText(/Some older links may be missing\./u)).toBeTruthy();
   });
 
   it('does not claim nothing is shared when the server did not confirm the list is complete', async () => {

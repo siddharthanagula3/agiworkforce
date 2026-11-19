@@ -11,6 +11,7 @@ interface MockSubscription {
   status: string;
   current_period_end: number | null;
   cancel_at_period_end?: boolean;
+  subscription_source?: string;
 }
 
 const billing = vi.hoisted(() => ({
@@ -114,24 +115,40 @@ beforeEach(() => {
 });
 
 describe('AccountSection delete account while a paid plan is live', () => {
-  it('disables Delete and tells the user to cancel the plan in Billing first', () => {
-    billing.subscription = proPlan();
+  it('lets a renewing web plan be deleted and says deleting stops its renewal', async () => {
+    billing.subscription = proPlan({ subscription_source: 'stripe' });
     renderAccountSection();
 
     const trigger = screen.getByTestId('delete-account-trigger');
-    expect(trigger).toBeDisabled();
-    expect(trigger.style.color).toBe('var(--text-disabled)');
+    await waitFor(() => expect(trigger).toBeEnabled());
     expect(trigger).toHaveAttribute('aria-describedby', 'delete-account-hint');
-    const note = screen.getByTestId('delete-account-plan-note');
-    expect(note).toHaveTextContent(
-      `Cancel your ${PRO_LABEL} plan in Billing before deleting your account.`,
+    expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
+      new RegExp(
+        `Deleting stops your ${PRO_LABEL} plan renewing and ends it at erasure, not .+\\. Unused time is not refunded\\.`,
+      ),
     );
-    expect(screen.getByRole('link', { name: 'Billing' })).toHaveAttribute(
-      'href',
-      expect.stringContaining('billing'),
-    );
-    expect(screen.queryByText(/Schedule permanent account deletion/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Billing' })).toBeNull();
   });
+
+  it.each([
+    ['apple', 'Apple', 'https://apps.apple.com/account/subscriptions'],
+    ['google', 'Google Play', 'https://play.google.com/store/account/subscriptions'],
+  ])(
+    'lets a renewing %s plan be deleted and says billing continues in the store',
+    async (source, storeName, manageUrl) => {
+      billing.subscription = proPlan({ subscription_source: source });
+      renderAccountSection();
+
+      await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
+      expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
+        `Deleting does not cancel your ${PRO_LABEL} plan. ${storeName} keeps charging until you cancel it there.`,
+      );
+      expect(screen.getByRole('link', { name: 'cancel it there' })).toHaveAttribute(
+        'href',
+        manageUrl,
+      );
+    },
+  );
 
   it('lets a plan already cancelled at period end be deleted now and says what ends', async () => {
     billing.subscription = proPlan({ cancel_at_period_end: true });
@@ -140,7 +157,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
     await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
       new RegExp(
-        `Your ${PRO_LABEL} plan is already cancelled\\. Deleting your account ends it when erasure runs instead of on .+, and the unused time is not refunded\\.`,
+        `Deleting ends your cancelled ${PRO_LABEL} plan at erasure, not .+\\. Unused time is not refunded\\.`,
       ),
     );
   });
@@ -151,15 +168,20 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
-      `A payment for your ${PRO_LABEL} plan is still being collected.`,
+      `A ${PRO_LABEL} payment is still being collected.`,
     );
   });
 
   it('blocks a past-due paid plan as the server does', () => {
-    billing.subscription = proPlan({ status: 'past_due' });
+    billing.subscription = proPlan({ status: 'past_due', subscription_source: 'stripe' });
     renderAccountSection();
 
-    expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
+    const trigger = screen.getByTestId('delete-account-trigger');
+    expect(trigger).toBeDisabled();
+    expect(trigger.style.color).toBe('var(--text-disabled)');
+    expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
+      `A ${PRO_LABEL} payment is still being collected.`,
+    );
   });
 
   it('keeps Delete open on the Free plan with the scheduling note', async () => {

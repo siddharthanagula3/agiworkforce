@@ -1251,7 +1251,7 @@ function matchPathAlias(spec, config, files, repoRoot) {
       const absolute = path.resolve(
         entry.absDir,
         entry.baseUrl ?? '.',
-        target.replace('*', captured),
+        target.replaceAll('*', () => captured),
       );
       const relative = path.relative(repoRoot, absolute).split(path.sep).join('/');
       if (relative.startsWith('../')) continue;

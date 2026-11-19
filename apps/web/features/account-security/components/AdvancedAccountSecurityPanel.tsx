@@ -444,10 +444,10 @@ function OwnedAdvancedAccountSecurityPanel({ session }: { session: SessionAuthor
           />
           Advanced Account Security
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           {status?.state === 'enrolled'
             ? `On since ${formatWhen(status.enrolledAt)}. Every sign-in needs one of your passkeys or security keys.`
-            : 'An optional setting for accounts at higher risk of targeted attacks. Every sign-in needs a passkey or security key, and account recovery gets stricter.'}
+            : 'For accounts at higher risk. Sign-in needs a passkey or security key; recovery is stricter.'}
         </CardDescription>
       </CardHeader>
 
