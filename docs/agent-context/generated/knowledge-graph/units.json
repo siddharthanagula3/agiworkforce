@@ -2411,13 +2411,13 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1978,
+      "files": 1976,
       "roles": {
         "asset": 59,
         "config": 22,
         "doc": 1,
         "other": 24,
-        "source": 1204,
+        "source": 1202,
         "style": 2,
         "test": 666
       }
@@ -2551,14 +2551,14 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 2480,
+      "files": 2478,
       "roles": {
         "asset": 4,
         "config": 14,
         "doc": 4,
         "generated": 1,
         "other": 49,
-        "source": 1227,
+        "source": 1225,
         "style": 1,
         "test": 1180
       }
@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8646,
+      "files": 8626,
       "roles": {
         "asset": 58,
         "config": 94,
@@ -2623,9 +2623,9 @@
         "generated": 2,
         "migration": 752,
         "other": 37,
-        "source": 3618,
+        "source": 3604,
         "style": 37,
-        "test": 3997
+        "test": 3991
       }
     },
     {
@@ -2694,12 +2694,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 262,
+      "files": 250,
       "roles": {
         "asset": 1,
         "config": 21,
         "doc": 182,
-        "generated": 57,
+        "generated": 45,
         "other": 1
       }
     },
@@ -3899,11 +3899,11 @@
         "apps/extension-vscode"
       ],
       "lanes": [],
-      "files": 17,
+      "files": 13,
       "roles": {
         "config": 3,
-        "source": 9,
-        "test": 5
+        "source": 7,
+        "test": 3
       }
     },
     {
@@ -4376,10 +4376,10 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 22,
+      "files": 20,
       "roles": {
         "config": 3,
-        "source": 11,
+        "source": 9,
         "test": 8
       }
     },
@@ -5044,10 +5044,10 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 529,
+      "files": 527,
       "roles": {
         "config": 3,
-        "source": 244,
+        "source": 242,
         "style": 3,
         "test": 279
       }

@@ -6759,8 +6759,6 @@
     ],
     "applyConversationDeltas": [
       "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "packages/client/sync/src/conversations.ts"
     ],
     "applyDesktopCloudSafeSettings": [
@@ -7815,8 +7813,6 @@
     ],
     "ARTIFACT_CSP_CONTENT": [
       "packages/contracts/types/src/artifact-csp.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "artifact_delete": [
@@ -7877,8 +7873,6 @@
       "apps/cli/src/cloud/artifacts.rs"
     ],
     "ARTIFACT_PUSH_BATCH_MAX": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "ARTIFACT_RENDER_FAILURE_MESSAGE": [
@@ -7931,8 +7925,6 @@
     ],
     "ARTIFACT_SANDBOX_ATTR": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "ARTIFACT_SANDBOX_ORIGIN": [
@@ -7944,8 +7936,6 @@
     "ARTIFACT_SANDBOX_SCHEME": [
       "apps/desktop/src-tauri/src/ui/artifact_sandbox.rs",
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "ARTIFACT_SCENE_MESSAGE": [
@@ -8172,8 +8162,6 @@
       "apps/desktop/src/api/artifacts.ts"
     ],
     "ArtifactDerivationPolicy": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "artifactDescription": [
@@ -8262,13 +8250,9 @@
       "apps/mobile/src/features/companion/components/AgentDashboard.tsx"
     ],
     "ArtifactInclusion": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "artifactInclusionForPolicy": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "ArtifactIndexClient": [
@@ -8287,8 +8271,6 @@
       "apps/web/lib/artifact-sandbox.ts"
     ],
     "artifactKindLabel": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "artifactKindTitle": [
@@ -8406,13 +8388,9 @@
       "apps/extension/src/features/side-panel/artifactPanel.ts"
     ],
     "ArtifactProseOptions": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "ArtifactProseSplit": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "ArtifactPublication": [
@@ -8442,8 +8420,6 @@
     "ArtifactRenderPayload": [
       "apps/web/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "artifactReplyFormat": [
@@ -8556,8 +8532,6 @@
     ],
     "ArtifactSandboxKind": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "ArtifactSceneExample": [
@@ -12542,8 +12516,6 @@
     ],
     "BINARY_SNIFF_BYTES": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "BinaryRow": [
@@ -12880,8 +12852,6 @@
       "apps/web/lib/server/object-storage.ts"
     ],
     "BoundedZip": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "BoundFormField": [
@@ -14206,8 +14176,6 @@
     ],
     "buildArtifactSandboxUrl": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "buildArtifactSelectionRequest": [
@@ -14962,8 +14930,6 @@
     ],
     "buildSandboxedHtml": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "buildSandboxIframeUrl": [
@@ -17338,8 +17304,6 @@
       "apps/cli/src/notebook_edit.rs"
     ],
     "cellStyleFormats": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "CELLULAR_CONSENT_SETTING_PATH": [
@@ -27373,8 +27337,6 @@
     ],
     "compileGlob": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "complete": [
@@ -28061,8 +28023,6 @@
       "packages/ai/provider-runtime/src/retry.ts"
     ],
     "computeDerivedArtifactId": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "computeDirectoryCounts": [
@@ -28097,8 +28057,6 @@
       "apps/web/app/api/projects/sync/route.ts"
     ],
     "computePullCursor": [
-      "apps/web/app/api/chat/sync/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/chat/sync/route.ts"
     ],
     "COMPUTER_RUN_IDLE_MS": [
@@ -28612,8 +28570,6 @@
     ],
     "configureArtifactSandboxOrigin": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "configureBrowserPane": [
@@ -28701,8 +28657,6 @@
       "apps/desktop/src/lib/monaco-config.ts"
     ],
     "configurePreviousVersions": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "configureQuickAskBridge": [
@@ -36904,8 +36858,6 @@
     ],
     "decodeHtmlEntities": [
       "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "packages/ui/unified-chat/src/components/markdown/htmlEntities.ts"
     ],
     "decodeJwtSub": [
@@ -36934,8 +36886,6 @@
       "packages/contracts/types/src/index.ts"
     ],
     "decodeXmlEntities": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "decompressionBudget": [
@@ -38615,8 +38565,6 @@
       "apps/web/app/api/artifacts/publish/[token]/viewers/route.ts",
       "apps/web/app/api/chat/conversations/[id]/messages/[messageId]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/tool-grants/[grantId]/route.ts",
       "apps/web/app/api/code/environments/[environmentId]/route.ts",
       "apps/web/app/api/code/sessions/[sessionId]/provider-proxy/[...path]/route.ts",
@@ -38680,8 +38628,6 @@
       "apps/web/app/api/settings/team/[memberId]/route.ts",
       "apps/web/app/api/settings/team/invitations/[invitationId]/route.ts",
       "apps/web/app/api/share/[token]/route.ts",
-      "apps/web/app/api/share/route.ts",
-      "apps/web/app/api/share/route.ts",
       "apps/web/app/api/share/route.ts",
       "apps/web/app/api/skills/[name]/route.ts",
       "apps/web/app/api/skills/installs/[name]/route.ts",
@@ -39046,8 +38992,6 @@
       "apps/web/lib/services/developer-prompt-service.ts"
     ],
     "deleteRegularFile": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "deleteSchedule": [
@@ -39537,13 +39481,9 @@
       "apps/web/lib/hooks/agentActivityLabel.ts"
     ],
     "deriveArtifacts": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "DeriveArtifactsOptions": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "deriveChildContext": [
@@ -39558,8 +39498,6 @@
       "apps/cli/src/cloud/artifacts.rs"
     ],
     "DERIVED_ARTIFACT_NAMESPACE": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "DERIVED_CONTRACT_STATES": [
@@ -39575,8 +39513,6 @@
       "tools/evals/src/artifacts-package.ts"
     ],
     "DerivedCodeBlock": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "deriveDesktopMessageArtifacts": [
@@ -46199,13 +46135,9 @@
       "packages/contracts/licensing/src/index.ts"
     ],
     "editManagedDocx": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "editManagedWorkbook": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "editMaskProblem": [
@@ -46274,8 +46206,6 @@
       "apps/cli/src/diff_model.rs"
     ],
     "editTextFile": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "EEA_COUNTRY_CODES": [
@@ -49713,8 +49643,6 @@
       "packages/tools/skills/src/tool.ts"
     ],
     "executeUrlFetch": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "executeWebMcpTool": [
@@ -50186,8 +50114,6 @@
       "apps/cli/src/output_styles.rs"
     ],
     "EXPLICIT_ARTIFACT_DERIVATION_POLICY": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "explicit_path_entries": [
@@ -50742,8 +50668,6 @@
     ],
     "extractArtifactTitle": [
       "apps/web/features/chat/utils/artifact-detector.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "extractAssistantFinishReason": [
@@ -50797,13 +50721,9 @@
       "apps/desktop/scripts/check-wiring.mjs"
     ],
     "extractHtmlText": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "extractHtmlTitle": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "extractImportsBySpecifier": [
@@ -50843,21 +50763,15 @@
       "scripts/check-document-classes.mjs"
     ],
     "extractPageDescription": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "extractPageMetadata": [
       "apps/extension/src/page-metadata.ts"
     ],
     "extractPagePublishedDate": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "extractPageTitle": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "extractPartialArtifactArgs": [
@@ -50923,8 +50837,6 @@
       "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
     ],
     "extractTrailingUnclosedBlock": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "extractUnifiedDiff": [
@@ -51515,8 +51427,6 @@
       "apps/web/app/api/llm/v1/chat/completions/lib/context/context-manifest.ts"
     ],
     "fenceFetchedPage": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "FenceHtmlMode": [
@@ -53279,8 +53189,6 @@
       "apps/web/lib/github-app.ts"
     ],
     "findOpeningTags": [
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "findOperationalDomain": [
@@ -57642,16 +57550,10 @@
       "apps/web/app/api/billing/refunds/route.ts",
       "apps/web/app/api/chat/conversations/[id]/branches/route.ts",
       "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
       "apps/web/app/api/chat/conversations/[id]/plugin-drafts/[toolCallId]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/tool-grants/route.ts",
       "apps/web/app/api/chat/conversations/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/code/environments/route.ts",
       "apps/web/app/api/code/local-pull-requests/route.ts",
@@ -57910,8 +57812,6 @@
       "apps/web/app/api/settings/team/seat-types/route.ts",
       "apps/web/app/api/settings/workspaces/route.ts",
       "apps/web/app/api/share/[token]/route.ts",
-      "apps/web/app/api/share/route.ts",
-      "apps/web/app/api/share/route.ts",
       "apps/web/app/api/share/route.ts",
       "apps/web/app/api/skills/[name]/download/route.ts",
       "apps/web/app/api/skills/[name]/files/[...path]/route.ts",
@@ -58616,8 +58516,6 @@
     ],
     "getArtifactSandboxOrigin": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "GetAttributeResponse": [
@@ -61192,8 +61090,6 @@
       "packages/ui/icons/src/glyphs/Knowledge.tsx"
     ],
     "globFiles": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "GlobMatch": [
@@ -61202,8 +61098,6 @@
     ],
     "GlobOptions": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "GlobSearchResult": [
@@ -61679,22 +61573,16 @@
     ],
     "GREP_PREVIEW_LIMIT": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "grep_search": [
       "apps/desktop/src-tauri/src/sys/commands/code_search.rs"
     ],
     "grepFiles": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "grepLines": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "GrepMatch": [
@@ -61702,8 +61590,6 @@
     ],
     "GrepOptions": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "GrepSearchResult": [
@@ -62836,8 +62722,6 @@
     ],
     "hasArtifacts": [
       "apps/web/features/chat/utils/artifact-detector.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "hasBillingWaitlistAccess": [
@@ -63184,8 +63068,6 @@
       "scripts/lib/route-observability.mjs"
     ],
     "hasStructuredPageData": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "hasStudyBlocks": [
@@ -66775,8 +66657,6 @@
       "apps/cli/src/tui/widgets/question_overlay.rs"
     ],
     "insertAfterOpeningTag": [
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "insertCitationMarkers": [
@@ -68985,8 +68865,6 @@
     ],
     "isArtifactSandboxMessage": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "isAshbyUrl": [
@@ -70466,8 +70344,6 @@
       "apps/web/lib/server/provider-endpoints.ts"
     ],
     "isManagedSyncEnabled": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "isManagedToolInventoryVersion": [
@@ -70680,8 +70556,6 @@
       "apps/web/lib/server/chat-file-preparation/readers.ts"
     ],
     "isOfficeTextPart": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "isOfflinePaymentMethod": [
@@ -71584,8 +71458,6 @@
     ],
     "isSkippedDirectory": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "isSlackAppConfigured": [
@@ -71994,8 +71866,6 @@
       "apps/mobile/src/features/chat/upload/uploadLifecycle.ts"
     ],
     "isUrlFetchTool": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "isUsableAccelerator": [
@@ -72411,8 +72281,6 @@
     ],
     "joinWorkspacePath": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "Journal": [
@@ -72449,8 +72317,6 @@
       "apps/web/shared/components/seo/JsonLd.tsx"
     ],
     "jsonLdPublishedDate": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "JsonObjectExtraction": [
@@ -75050,8 +74916,6 @@
       "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "listDirectory": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "listDirectoryGroupsWithRoles": [
@@ -78717,8 +78581,6 @@
     "looksBinary": [
       "packages/client/ide-runtime/src/index.ts",
       "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "scripts/lib/rollout/artifact-scan.mjs"
     ],
     "looksLikePastedCode": [
@@ -81353,18 +81215,12 @@
       "apps/web/lib/services/managed-office-file-service.ts"
     ],
     "ManagedOfficeProcessingError": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "ManagedOfficeSource": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "ManagedOfficeVerification": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "ManagedPluginPolicy": [
@@ -81702,8 +81558,6 @@
       "packages/contracts/types/src/managed-usage-limits.ts"
     ],
     "ManagedWorkbookSource": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "ManagedWorktree": [
@@ -82173,8 +82027,6 @@
       "apps/extension/src/features/computer-use/runMarker.ts"
     ],
     "markConversationForSync": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "markConversationGoogleUserData": [
@@ -82463,13 +82315,9 @@
       "apps/web/lib/services/managed-usage-request-service.ts"
     ],
     "markMemoryForSync": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "markMessageForSync": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "markNativeDocument": [
@@ -82488,8 +82336,6 @@
       "apps/web/features/chat/lib/pending-draft-clear.ts"
     ],
     "markProjectForSync": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "markProviderDegraded": [
@@ -82703,8 +82549,6 @@
     ],
     "matchesGlob": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "matchesIgnorePath": [
@@ -83276,8 +83120,6 @@
     ],
     "MAX_GLOB_PATTERN_CHARS": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "MAX_GREP_MATCHES": [
@@ -83477,8 +83319,6 @@
       "apps/mobile/services/nativeFileName.ts"
     ],
     "MAX_OFFICE_TEXT_CHARS": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "MAX_OFFICE_UNCOMPRESSED_BYTES": [
@@ -83947,8 +83787,6 @@
     ],
     "MAX_WORKSPACE_WALK_DEPTH": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "MAX_WORKTREE_BRANCH_PREFIX_LENGTH": [
@@ -93191,46 +93029,30 @@
       "packages/contracts/types/src/chat.ts"
     ],
     "OFFICE_DOCUMENT_FAILURE_REASONS": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "OfficeArchive": [
       "apps/web/features/chat/lib/office-archive.ts"
     ],
     "officeArchiveEntryText": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "OfficeArchiveSizing": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "OfficeDocumentFailureReason": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "officeDocumentKind": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "OfficeDocumentKind": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "OfficeDocumentTextOptions": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "OfficeDocumentUnreadableError": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "officeMemberText": [
@@ -93914,8 +93736,6 @@
       "apps/cli/src/oauth.rs"
     ],
     "OPEN_FILE_FOR_CHECKED_READ": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "OPEN_FILE_TOOL_NAME": [
@@ -94302,8 +94122,6 @@
       "apps/extension-vscode/src/features/surfaces/index.ts"
     ],
     "openChecked": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "openCheckout": [
@@ -94482,8 +94300,6 @@
       "apps/desktop/electron/runtime/appsService.ts"
     ],
     "OpeningTag": [
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "openInteractiveCardUrl": [
@@ -94530,8 +94346,6 @@
     ],
     "openOfficeArchive": [
       "apps/web/features/chat/lib/office-archive.ts",
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "openOpenSourceNotices": [
@@ -95079,19 +94893,13 @@
       "apps/web/app/api/chat/conversations/[id]/messages/[messageId]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/messages/bulk/route.ts",
       "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
       "apps/web/app/api/chat/conversations/[id]/plugin-drafts/[toolCallId]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/restore/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/tool-grants/[grantId]/route.ts",
       "apps/web/app/api/chat/conversations/[id]/tool-grants/route.ts",
       "apps/web/app/api/chat/conversations/bulk/route.ts",
       "apps/web/app/api/chat/conversations/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/checkout/route.ts",
       "apps/web/app/api/completion/route.ts",
@@ -95279,8 +95087,6 @@
       "apps/web/app/api/settings/team/route.ts",
       "apps/web/app/api/settings/team/seat-types/route.ts",
       "apps/web/app/api/settings/workspaces/route.ts",
-      "apps/web/app/api/share/route.ts",
-      "apps/web/app/api/share/route.ts",
       "apps/web/app/api/share/route.ts",
       "apps/web/app/api/skills/[name]/download/route.ts",
       "apps/web/app/api/skills/[name]/files/[...path]/route.ts",
@@ -96351,8 +96157,6 @@
       "apps/desktop/src-tauri/src/sys/commands/chat/state.rs"
     ],
     "PAGE_DESCRIPTION_MAX_CHARS": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "page_down": [
@@ -96368,8 +96172,6 @@
       "apps/extension/src/features/content/in-page-panel/pageActions.ts"
     ],
     "PAGE_TITLE_MAX_CHARS": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "page_up": [
@@ -103537,13 +103339,9 @@
       "apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts",
       "apps/web/app/api/chat/conversations/[id]/messages/bulk/route.ts",
       "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
       "apps/web/app/api/chat/conversations/[id]/restore/route.ts",
       "apps/web/app/api/chat/conversations/bulk/route.ts",
       "apps/web/app/api/chat/conversations/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
-      "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/chat/sync/route.ts",
       "apps/web/app/api/checkout/route.ts",
       "apps/web/app/api/code/environments/route.ts",
@@ -103711,8 +103509,6 @@
       "apps/web/app/api/settings/team/invitations/route.ts",
       "apps/web/app/api/settings/team/route.ts",
       "apps/web/app/api/share/route.ts",
-      "apps/web/app/api/share/route.ts",
-      "apps/web/app/api/share/route.ts",
       "apps/web/app/api/skills/[name]/workspace/route.ts",
       "apps/web/app/api/skills/installs/route.ts",
       "apps/web/app/api/skills/route.ts",
@@ -103830,8 +103626,6 @@
     ],
     "postRenderToArtifactSandbox": [
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "postRenderToSandbox": [
@@ -104535,8 +104329,6 @@
       "apps/web/features/billing/services/stripe-payments.ts"
     ],
     "PreviousVersionKeeper": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "PRICE_NOT_FOUND": [
@@ -108780,8 +108572,6 @@
       "apps/web/app/api/billing/auto-reload/route.ts",
       "apps/web/app/api/billing/overage/route.ts",
       "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "apps/web/app/api/chat/conversations/[id]/route.ts",
       "apps/web/app/api/code/sessions/[sessionId]/provider-proxy/[...path]/route.ts",
       "apps/web/app/api/connectors/account-state/route.ts",
       "apps/web/app/api/connectors/permissions/route.ts",
@@ -108812,8 +108602,6 @@
       "apps/web/app/api/settings/preferences/route.ts",
       "apps/web/app/api/settings/spend-limit/route.ts",
       "apps/web/app/api/settings/workspaces/route.ts",
-      "apps/web/app/api/share/route.ts",
-      "apps/web/app/api/share/route.ts",
       "apps/web/app/api/share/route.ts",
       "apps/web/app/api/skills/[name]/route.ts",
       "apps/web/app/api/slack/installations/[installationId]/channels/route.ts",
@@ -110054,8 +109842,6 @@
       "apps/web/lib/feature-flags/billing-upgrade-gate.ts"
     ],
     "readBinaryFile": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "readBodyCapped": [
@@ -111937,8 +111723,6 @@
       "apps/web/lib/server/chat-file-preparation/text-stream.ts"
     ],
     "readTextFile": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "readThemeBlocks": [
@@ -112328,8 +112112,6 @@
       "apps/cli/src/agent/mod.rs"
     ],
     "recalculateManagedWorkbook": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "recall": [
@@ -115876,8 +115658,6 @@
     ],
     "removeArtifactBlocks": [
       "apps/web/features/chat/utils/artifact-detector.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "removeBankAccountsItem": [
@@ -116536,8 +116316,6 @@
       "apps/web/lib/server/library-thumbnail.ts"
     ],
     "renderManagedOfficeFile": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "renderManifest": [
@@ -125470,8 +125248,6 @@
     "SandboxIncomingMessage": [
       "apps/web/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/index.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
-      "packages/ui/unified-chat/src/lib/artifact-sandbox.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
     "SandboxManager": [
@@ -128149,8 +127925,6 @@
       "apps/mobile/src/features/notebook/service.ts"
     ],
     "SearchOptions": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/src-tauri/src/features/search/fts.rs",
       "apps/desktop/src-tauri/src/features/search/mod.rs"
@@ -135805,8 +135579,6 @@
     ],
     "SKIPPED_WORKSPACE_DIRECTORIES": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "SkippedCase": [
@@ -137165,8 +136937,6 @@
     ],
     "splitProseAroundArtifacts": [
       "apps/web/features/chat/utils/artifact-detector.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "splitRegistryTitle": [
@@ -137850,8 +137620,6 @@
       "apps/web/lib/workflows/start-cloud-code-turn-workflow.ts"
     ],
     "startCloudSyncLoop": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "startCloudWorkRun": [
@@ -138714,8 +138482,6 @@
       "apps/mobile/src/features/voice/services/voiceInput.ts"
     ],
     "stopCloudSyncLoop": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "stopComputerUse": [
@@ -141911,8 +141677,6 @@
       "packages/client/sync/src/messages.ts"
     ],
     "syncNow": [
-      "apps/mobile/services/cloudSyncEngine.ts",
-      "apps/mobile/services/cloudSyncEngine.ts",
       "apps/mobile/services/cloudSyncEngine.ts"
     ],
     "syncObjectCarriesTombstone": [
@@ -143996,8 +143760,6 @@
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
     ],
     "TextEditRefused": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "TextElement": [
@@ -146999,8 +146761,6 @@
     ],
     "toPosixPath": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "toProduct": [
@@ -147367,8 +147127,6 @@
       "apps/mobile/src/features/chat/utils/fileMention.ts"
     ],
     "TrailingUnclosedBlock": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "TRAINING_PREFERENCE_KEYS": [
@@ -151100,66 +150858,42 @@
       "apps/cli/src/permissions.rs"
     ],
     "URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_MAX_CALLS_PER_TURN": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_MAX_CONTENT_CHARS": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_MAX_DOCUMENT_BYTES": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_MAX_EXTRACT_CHARS": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_MAX_REDIRECTS": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_MAX_RESPONSE_BYTES": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_TIMEOUT_MS": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_TOOL": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "URL_FETCH_TOOL_PROMPT_ID": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "UrlContextItem": [
       "packages/contracts/types/src/context.ts"
     ],
     "urlFetchBudgetExhaustedMessage": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "UrlFetchErrorCode": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "packages/contracts/cloud-contracts/src/page-context.ts"
     ],
@@ -151167,18 +150901,12 @@
       "packages/contracts/cloud-contracts/src/page-context.ts"
     ],
     "UrlFetchOutcome": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "UrlFetchOverrides": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "urlFetchToolDef": [
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
-      "apps/web/lib/url-fetch/url-fetch-tool.ts",
       "apps/web/lib/url-fetch/url-fetch-tool.ts"
     ],
     "US_ONLY_ROUTING_TIERS": [
@@ -155177,8 +154905,6 @@
       "packages/contracts/licensing/src/verify.ts"
     ],
     "verifyManagedOfficePackage": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "verifyMessage": [
@@ -158645,8 +158371,6 @@
       "apps/mobile/stores/chat/derivedMessageArtifact.ts"
     ],
     "withoutFlashcardsCounter": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "withoutGenerationProgress": [
@@ -158685,8 +158409,6 @@
       "apps/mobile/src/features/media/image-metadata.ts"
     ],
     "withoutQuizCounter": [
-      "packages/platform/artifacts/src/artifact-derivation.ts",
-      "packages/platform/artifacts/src/artifact-derivation.ts",
       "packages/platform/artifacts/src/artifact-derivation.ts"
     ],
     "withoutQuotedRequestMaterial": [
@@ -158967,8 +158689,6 @@
       "packages/ui/unified-chat/src/lib/workbook-sheets.ts"
     ],
     "workbookPreservationReceipt": [
-      "apps/web/lib/services/managed-office-preservation.ts",
-      "apps/web/lib/services/managed-office-preservation.ts",
       "apps/web/lib/services/managed-office-preservation.ts"
     ],
     "WorkbookPreviewLimitError": [
@@ -159800,8 +159520,6 @@
     ],
     "WorkspaceGrepMatch": [
       "packages/client/ide-runtime/src/index.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
-      "packages/client/ide-runtime/src/workspace.ts",
       "packages/client/ide-runtime/src/workspace.ts"
     ],
     "workspaceGroupHeading": [
@@ -160653,8 +160371,6 @@
     ],
     "WriteConflict": [
       "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "packages/contracts/types/src/resource-metadata-contract.ts"
     ],
     "writeConsolidatedMemory": [
@@ -160812,8 +160528,6 @@
       "apps/web/lib/connectors/directory/snapshot-cache.ts"
     ],
     "writeTextFile": [
-      "apps/desktop/electron/runtime/filesystemService.ts",
-      "apps/desktop/electron/runtime/filesystemService.ts",
       "apps/desktop/electron/runtime/filesystemService.ts"
     ],
     "writeWindowState": [
@@ -160959,26 +160673,18 @@
       "apps/web/lib/server/ooxml-markup.ts"
     ],
     "XmlElement": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "xmlElements": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "xmlReferenceDecoder": [
       "apps/web/lib/server/chat-file-intake/xml-reference-decoder.ts"
     ],
     "xmlStartTags": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "xmlTextRuns": [
-      "apps/web/lib/server/office-document-text.ts",
-      "apps/web/lib/server/office-document-text.ts",
       "apps/web/lib/server/office-document-text.ts"
     ],
     "xmp_packet": [

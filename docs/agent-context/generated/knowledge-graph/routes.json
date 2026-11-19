@@ -3413,42 +3413,6 @@
     {
       "surface": "web",
       "kind": "endpoint",
-      "url": "/api/chat/conversations/:id/messages",
-      "file": "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "segments": [
-        "api",
-        "chat",
-        "conversations",
-        "[id]",
-        "messages"
-      ],
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
-      "url": "/api/chat/conversations/:id/messages",
-      "file": "apps/web/app/api/chat/conversations/[id]/messages/route.ts",
-      "segments": [
-        "api",
-        "chat",
-        "conversations",
-        "[id]",
-        "messages"
-      ],
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
       "url": "/api/chat/conversations/:id/plugin-drafts/:toolCallId",
       "file": "apps/web/app/api/chat/conversations/[id]/plugin-drafts/[toolCallId]/route.ts",
       "segments": [
@@ -3537,42 +3501,6 @@
     {
       "surface": "web",
       "kind": "endpoint",
-      "url": "/api/chat/conversations/:id",
-      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "segments": [
-        "api",
-        "chat",
-        "conversations",
-        "[id]"
-      ],
-      "methods": [
-        "GET",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
-      "url": "/api/chat/conversations/:id",
-      "file": "apps/web/app/api/chat/conversations/[id]/route.ts",
-      "segments": [
-        "api",
-        "chat",
-        "conversations",
-        "[id]"
-      ],
-      "methods": [
-        "GET",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
       "url": "/api/chat/conversations/bulk",
       "file": "apps/web/app/api/chat/conversations/bulk/route.ts",
       "segments": [
@@ -3595,38 +3523,6 @@
         "api",
         "chat",
         "conversations"
-      ],
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
-      "url": "/api/chat/sync",
-      "file": "apps/web/app/api/chat/sync/route.ts",
-      "segments": [
-        "api",
-        "chat",
-        "sync"
-      ],
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
-      "url": "/api/chat/sync",
-      "file": "apps/web/app/api/chat/sync/route.ts",
-      "segments": [
-        "api",
-        "chat",
-        "sync"
       ],
       "methods": [
         "GET",
@@ -9770,40 +9666,6 @@
         "GET",
         "PATCH",
         "DELETE"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
-      "url": "/api/share",
-      "file": "apps/web/app/api/share/route.ts",
-      "segments": [
-        "api",
-        "share"
-      ],
-      "methods": [
-        "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ]
-    },
-    {
-      "surface": "web",
-      "kind": "endpoint",
-      "url": "/api/share",
-      "file": "apps/web/app/api/share/route.ts",
-      "segments": [
-        "api",
-        "share"
-      ],
-      "methods": [
-        "GET",
-        "POST",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
       ]
     },
     {
