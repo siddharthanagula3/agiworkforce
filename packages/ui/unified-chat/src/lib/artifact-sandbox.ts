@@ -22,25 +22,51 @@ function stripCspMetaTags(content: string): string {
   });
 }
 
-function injectHeadContent(documentHtml: string, headContent: string): string {
-  if (/<head\b[^>]*>/i.test(documentHtml)) {
-    return documentHtml.replace(/<head\b[^>]*>/i, (match) => `${match}\n${headContent}`);
-  }
+// The policy opens the document rather than following the first `<head>`-shaped
+// text: that text may sit in a comment or a script string, where a policy meta
+// is inert. A leading meta makes the parser open <head> around it, and the
+// artifact's own <html> and <head> tags then merge into those elements. Complete
+// comments and the doctype stay ahead of it, because a meta before the doctype
+// makes the parser drop the doctype and render in quirks mode. The scan follows
+// the tokenizer exactly (HTML whitespace only, each comment ending at its first
+// closing delimiter) and is linear, so no markup can be counted as prologue.
+const HTML_WHITESPACE = new Set(['\t', '\n', '\f', '\r', ' ']);
+const DOCTYPE = /<!doctype[^>]*>/iy;
 
-  if (/<html\b[^>]*>/i.test(documentHtml)) {
-    return documentHtml.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${headContent}</head>`);
-  }
+function commentEnd(html: string, start: number): number {
+  const data = start + '<!--'.length;
+  if (html.startsWith('>', data)) return data + 1;
+  if (html.startsWith('->', data)) return data + 2;
+  const plain = html.indexOf('-->', data);
+  const bang = html.indexOf('--!>', data);
+  if (plain === -1 && bang === -1) return -1;
+  if (bang === -1 || (plain !== -1 && plain < bang)) return plain + '-->'.length;
+  return bang + '--!>'.length;
+}
 
-  const doctype = documentHtml.match(/^\s*<!doctype[^>]*>/i)?.[0] ?? '';
-  const body = documentHtml.slice(doctype.length);
-  return `${doctype}<html><head>${headContent}</head><body>${body}</body></html>`;
+function prologueLength(html: string): number {
+  let index = 0;
+  for (;;) {
+    while (index < html.length && HTML_WHITESPACE.has(html[index]!)) index += 1;
+    if (!html.startsWith('<!--', index)) break;
+    index = commentEnd(html, index);
+    if (index === -1) return 0;
+  }
+  DOCTYPE.lastIndex = index;
+  const doctype = DOCTYPE.exec(html);
+  return doctype ? index + doctype[0].length : 0;
+}
+
+function prependHeadContent(documentHtml: string, headContent: string): string {
+  const prologue = prologueLength(documentHtml);
+  return `${documentHtml.slice(0, prologue)}${headContent}${documentHtml.slice(prologue)}`;
 }
 
 export function buildSandboxedHtml(content: string): string {
   const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
 
   if (isFullDocument) {
-    return injectHeadContent(stripCspMetaTags(content), CSP_META);
+    return prependHeadContent(stripCspMetaTags(content), CSP_META);
   }
 
   return (
@@ -52,18 +78,10 @@ export function buildSandboxedHtml(content: string): string {
   );
 }
 
-export const __ARTIFACT_SANDBOX_INTERNALS = { CSP_META, BASE_STYLES };
-
 export const ARTIFACT_SANDBOX_SCHEME = 'artifact';
 
 export type ArtifactSandboxKind =
-  | 'html'
-  | 'react'
-  | 'svg'
-  | 'mermaid'
-  | 'markdown'
-  | 'text'
-  | 'code';
+  'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export interface ArtifactRenderPayload {
   type: 'render';
@@ -116,8 +134,7 @@ function normalizeSandboxOrigin(raw: string): string | null {
 
 function tauriArtifactOrigin(): string | null {
   const internals = (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ as
-    | { convertFileSrc?: (path: string, protocol?: string) => string }
-    | undefined;
+    { convertFileSrc?: (path: string, protocol?: string) => string } | undefined;
   if (typeof internals?.convertFileSrc !== 'function') return null;
   try {
     return normalizeSandboxOrigin(internals.convertFileSrc('', ARTIFACT_SANDBOX_SCHEME));

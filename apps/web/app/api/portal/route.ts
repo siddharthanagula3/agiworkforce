@@ -332,19 +332,24 @@ async function handlePortal(request: NextRequest) {
       stripeCustomerId = stripeSubscription.customer as string;
 
       if (stripeCustomerId) {
-        await db
-          .execute('update subscriptions set stripe_customer_id = $1 where user_id = $2', [
+        try {
+          await db.execute('update subscriptions set stripe_customer_id = $1 where user_id = $2', [
             stripeCustomerId,
             userId,
-          ])
-          .catch(() => undefined);
-        logger.info(
-          {
-            userId: userId,
-            customerId: stripeCustomerId,
-          },
-          'Updated subscription with customer_id',
-        );
+          ]);
+          logger.info(
+            {
+              userId: userId,
+              customerId: stripeCustomerId,
+            },
+            'Updated subscription with customer_id',
+          );
+        } catch (storeError) {
+          logger.warn(
+            { userId: userId, customerId: stripeCustomerId, error: storeError },
+            'Could not store the Stripe customer_id on the subscription',
+          );
+        }
       }
     } catch (stripeError) {
       logger.error(

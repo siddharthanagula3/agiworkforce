@@ -24,6 +24,15 @@ export interface KmsProviderOptions {
   env?: Record<string, string | undefined>;
   fetchImpl?: KmsFetch;
   now?: () => Date;
+  requestTimeoutMs?: number;
+}
+
+const KMS_REQUEST_TIMEOUT_MS = 10_000;
+
+function withRequestDeadline(options: KmsProviderOptions): KmsFetch {
+  const call = options.fetchImpl ?? fetch;
+  const timeoutMs = options.requestTimeoutMs ?? KMS_REQUEST_TIMEOUT_MS;
+  return (url, init) => call(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
 }
 
 const AWS_ACCESS_KEY_ENV = 'AGI_KMS_AWS_ACCESS_KEY_ID';
@@ -122,7 +131,7 @@ export function createAwsKmsProvider(options: KmsProviderOptions = {}): CmekProv
     secretAccessKey,
     sessionToken: read(env, AWS_SESSION_TOKEN_ENV),
   };
-  const call = options.fetchImpl ?? fetch;
+  const call = withRequestDeadline(options);
 
   async function invoke(
     descriptor: CmekKeyDescriptor,
@@ -199,7 +208,7 @@ export function createGcpKmsProvider(options: GcpKmsProviderOptions = {}): CmekP
   if (!options.accessToken && !read(env, GCP_CREDENTIALS_ENV)) {
     throw new CmekProviderUnconfiguredError('gcp_kms');
   }
-  const call = options.fetchImpl ?? fetch;
+  const call = withRequestDeadline(options);
   const auth = options.accessToken
     ? { token: options.accessToken }
     : (() => {
@@ -286,7 +295,7 @@ export function createAzureKeyVaultProvider(options: KmsProviderOptions = {}): C
     client_secret: clientSecret,
     scope: AZURE_KEY_VAULT_SCOPE,
   };
-  const call = options.fetchImpl ?? fetch;
+  const call = withRequestDeadline(options);
 
   async function accessToken(): Promise<string> {
     const response = await call(`${AZURE_LOGIN_HOST}/${tenantId}/oauth2/v2.0/token`, {

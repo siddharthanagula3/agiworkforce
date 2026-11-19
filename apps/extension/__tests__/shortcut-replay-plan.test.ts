@@ -108,7 +108,7 @@ describe('recorded shortcut save binding', () => {
   });
 });
 
-function promptReplayHarness(recorded = false) {
+function promptReplayHarness(recorded = false, approvedOrigins: readonly string[] | null = null) {
   const source = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
     'utf8',
@@ -146,7 +146,9 @@ function promptReplayHarness(recorded = false) {
       },
     ],
     ORIGIN_EXTENSION_PAGE,
-    isOriginApprovedForAutomation: () => true,
+    isOriginApprovedForAutomation: (origin: string) =>
+      approvedOrigins === null || approvedOrigins.includes(origin),
+    siteAllowlistReady: Promise.resolve(),
     logger: { warn: vi.fn() },
     handleDeleteShortcut: vi.fn(),
     planShortcutReplay,
@@ -242,6 +244,13 @@ describe('recorded replay target authority', () => {
   it('refuses a selected tab that has navigated to another site', async () => {
     const h = promptReplayHarness(true);
     h.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://different.example' });
+    expect(
+      await h.run({ type: 'REPLAY_SHORTCUT', shortcutId: 'prompt-1', tabId: 7 }, undefined, false),
+    ).toMatchObject({ success: false });
+    expect(h.forwardToContentScript).not.toHaveBeenCalled();
+  });
+  it('refuses a recorded site that is no longer approved for automation', async () => {
+    const h = promptReplayHarness(true, []);
     expect(
       await h.run({ type: 'REPLAY_SHORTCUT', shortcutId: 'prompt-1', tabId: 7 }, undefined, false),
     ).toMatchObject({ success: false });

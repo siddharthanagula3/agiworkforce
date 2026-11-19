@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import type { OrganizationRole } from '@agiworkforce/types';
+import { isOrganizationPermission, type OrganizationRole } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/logger');
 type ScanModule1 = typeof import('@/lib/rate-limit');
 type ScanModule2 = typeof import('@/lib/csrf');
@@ -73,6 +73,7 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 }));
 
 import { createError } from '@/lib/errors';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { clearIpAllowListCacheForTests } from '@/lib/services/organization-ip-allow-list-cache';
 import {
   KEY_ACTOR,
@@ -80,6 +81,7 @@ import {
   ORG,
   createWorkspaceAdminDb,
   defaultWorld,
+  heldPermissions,
   keyHeaders,
   member,
   type WorkspaceAdminWorld,
@@ -113,6 +115,22 @@ function roleOf(userId: string): string | undefined {
 function asSession(userId: string) {
   session.userId = userId;
   session.role = world.members.find((entry) => entry.user_id === userId)!.role;
+}
+
+async function asMemberManager<T>(run: () => Promise<T>): Promise<T> {
+  world.members.push(member('user-delegate', 'member'));
+  asSession('user-delegate');
+  const permissionCheck = vi.mocked(requireMemberPermission);
+  const original = permissionCheck.getMockImplementation();
+  permissionCheck.mockImplementation(
+    async () =>
+      new Set([...heldPermissions('member'), 'members.manage'].filter(isOrganizationPermission)),
+  );
+  try {
+    return await run();
+  } finally {
+    if (original) permissionCheck.mockImplementation(original);
+  }
 }
 
 function auditEvents(eventType: string) {
@@ -305,6 +323,25 @@ describe('PATCH /api/settings/organization/members/[userId]', () => {
     expect(roleOf('user-owner')).toBe('owner');
   });
 
+  it('refuses a member whose only grant is members.manage when they try to demote an admin', async () => {
+    const response = await asMemberManager(() =>
+      PATCH(request('PATCH', 'user-admin', { body: { role: 'member' } }), context('user-admin')),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain('permissions you do not hold');
+    expect(roleOf('user-admin')).toBe('admin');
+  });
+
+  it('lets a member whose only grant is members.manage move a member to viewer', async () => {
+    const response = await asMemberManager(() =>
+      PATCH(request('PATCH', 'user-member', { body: { role: 'viewer' } }), context('user-member')),
+    );
+
+    expect(response.status).toBe(200);
+    expect(roleOf('user-member')).toBe('viewer');
+  });
+
   it('sends ownership changes to the transfer route instead of granting a second owner', async () => {
     asSession('user-owner');
 
@@ -421,6 +458,17 @@ describe('DELETE /api/settings/organization/members/[userId]', () => {
     expect(response.status).toBe(403);
     expect(await response.text()).toContain('Only a workspace owner');
     expect(roleOf('user-owner')).toBe('owner');
+  });
+
+  it('refuses a member whose only grant is members.manage when they try to remove an admin', async () => {
+    const response = await asMemberManager(() =>
+      DELETE(request('DELETE', 'user-admin'), context('user-admin')),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain('permissions you do not hold');
+    expect(roleOf('user-admin')).toBe('admin');
+    expect(mocks.deprovisionMember).not.toHaveBeenCalled();
   });
 
   it('lets a workspace API key remove a viewer and marks the event as the key', async () => {

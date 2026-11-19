@@ -305,11 +305,28 @@ function attachUsageSettlement(
   // see the pre-guard `ProviderProxyUsageParser | null` type.
   const parser = resolvedParser;
 
-  const streamAccumulator = isEventStreamResponse(upstreamResponse)
-    ? parser.createStreamAccumulator()
-    : null;
+  if (!isEventStreamResponse(upstreamResponse)) {
+    const [toCaller, toLedger] = body.tee();
+    after(
+      (async () => {
+        let usage: ProviderProxyUsage | null = null;
+        try {
+          const text = await new Response(toLedger).text();
+          if (text.trim().length > 0) usage = parser.parseJsonBody(JSON.parse(text));
+        } catch (err) {
+          logger.warn(
+            { err, sessionId: meteredCall.sessionId, providerId: meteredCall.providerId },
+            '[e2b] provider-proxy could not parse usage from the upstream response',
+          );
+        }
+        await settleProviderProxyUsage(meteredCall, usage);
+      })(),
+    );
+    return toCaller;
+  }
+
+  const streamAccumulator = parser.createStreamAccumulator();
   const decoder = new TextDecoder();
-  let jsonBuffer = '';
   let settled = false;
   let resolveUsage!: (usage: ProviderProxyUsage | null) => void;
   const usageSignal = new Promise<ProviderProxyUsage | null>((resolve) => {
@@ -321,15 +338,11 @@ function attachUsageSettlement(
     settled = true;
     let usage: ProviderProxyUsage | null = null;
     try {
-      if (streamAccumulator) {
-        usage = stoppedProviderProxyUsage(
-          meteredCall,
-          streamAccumulator.finish(),
-          streamAccumulator.deliveredText(),
-        );
-      } else if (jsonBuffer.trim().length > 0) {
-        usage = parser.parseJsonBody(JSON.parse(jsonBuffer));
-      }
+      usage = stoppedProviderProxyUsage(
+        meteredCall,
+        streamAccumulator.finish(),
+        streamAccumulator.deliveredText(),
+      );
     } catch (err) {
       logger.warn(
         { err, sessionId: meteredCall.sessionId, providerId: meteredCall.providerId },
@@ -351,9 +364,7 @@ function attachUsageSettlement(
   const transformer: TransformerWithCancel<Uint8Array, Uint8Array> = {
     transform(chunk, controller) {
       controller.enqueue(chunk);
-      const text = decoder.decode(chunk, { stream: true });
-      if (streamAccumulator) streamAccumulator.push(text);
-      else jsonBuffer += text;
+      streamAccumulator.push(decoder.decode(chunk, { stream: true }));
     },
     flush() {
       settleOnce();

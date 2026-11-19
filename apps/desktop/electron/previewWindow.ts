@@ -38,6 +38,11 @@ function keepLocal(win: BrowserWindow): void {
     event.preventDefault();
     if (isWebAddress(url)) void shell.openExternal(url);
   });
+  win.webContents.on('will-redirect', (event) => {
+    if (!event.isMainFrame || localPreviewUrl(event.url)) return;
+    event.preventDefault();
+    if (isWebAddress(event.url)) void shell.openExternal(event.url);
+  });
 }
 
 function watchConsole(win: BrowserWindow): void {

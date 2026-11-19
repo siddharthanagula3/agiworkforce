@@ -20,6 +20,8 @@ const DOWNLOAD_PAGE_PATH = '/download';
 const MAX_VERSION_LENGTH = 64;
 const VERSIONED_CACHE_CONTROL = 'public, max-age=3600';
 const LATEST_CACHE_CONTROL = 'no-store';
+const INSTALLER_RESPONSE_TIMEOUT_MS = 30_000;
+const INSTALLER_STALL_TIMEOUT_MS = 30_000;
 
 function installerFilename(assetName: string): string {
   const name = assetName.replace(/[^\w .()-]/g, '').trim();
@@ -33,6 +35,70 @@ function macInstallerAsset(release: StableDesktopRelease, architecture: MacArchi
   if (architecture === 'arm64') return arm64;
   if (architecture === 'x64') return x64;
   return arm64 ?? x64 ?? installers[0] ?? null;
+}
+
+async function fetchInstaller(url: string, transfer: AbortController): Promise<Response> {
+  const timer = setTimeout(
+    () =>
+      transfer.abort(
+        new DOMException('The installer host did not respond in time.', 'TimeoutError'),
+      ),
+    INSTALLER_RESPONSE_TIMEOUT_MS,
+  );
+  try {
+    return await fetch(url, { signal: transfer.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// A large installer may take minutes, so the transfer has no total deadline;
+// instead it ends when no bytes move for INSTALLER_STALL_TIMEOUT_MS in either
+// direction, or when the client goes away, so an idle reader cannot hold the
+// upstream request open.
+function relayWhileProgressing(
+  body: ReadableStream<Uint8Array>,
+  transfer: AbortController,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
+  let relay: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let stall: ReturnType<typeof setTimeout> | undefined;
+  const armStall = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => {
+      const reason = new DOMException(
+        'The installer download stopped making progress.',
+        'TimeoutError',
+      );
+      transfer.abort(reason);
+      relay?.error(reason);
+    }, INSTALLER_STALL_TIMEOUT_MS);
+  };
+  return new ReadableStream<Uint8Array>(
+    {
+      start(controller) {
+        relay = controller;
+        armStall();
+      },
+      async pull(controller) {
+        armStall();
+        const { done, value } = await reader.read();
+        if (done) {
+          clearTimeout(stall);
+          controller.close();
+          return;
+        }
+        controller.enqueue(value);
+        armStall();
+      },
+      async cancel(reason) {
+        clearTimeout(stall);
+        transfer.abort(reason);
+        await reader.cancel(reason).catch(() => undefined);
+      },
+    },
+    { highWaterMark: 0 },
+  );
 }
 
 function unavailable(platform: string) {
@@ -98,15 +164,16 @@ async function handleDownload(request: NextRequest) {
     throw createError.serviceUnavailable('Release asset URL is not trusted');
   }
 
-  const fileResponse = await fetch(downloadUrl, {
-    signal: AbortSignal.timeout(30_000),
-  });
+  const transfer = new AbortController();
+  const fileResponse = await fetchInstaller(downloadUrl, transfer);
 
   if (!fileResponse.ok) {
+    transfer.abort();
     throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
   }
 
-  return new NextResponse(fileResponse.body, {
+  const body = fileResponse.body ? relayWhileProgressing(fileResponse.body, transfer) : null;
+  return new NextResponse(body, {
     status: 200,
     headers: {
       'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
