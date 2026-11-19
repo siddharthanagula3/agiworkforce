@@ -362,7 +362,7 @@ requireIncludes('.github/workflows/release-cli.yml', 'group: release-cli-${{ git
 requireIncludes('.github/workflows/release-cli.yml', 'cancel-in-progress: false');
 requireIncludes(
   '.github/workflows/release-cli.yml',
-  'softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3',
+  'softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4',
 );
 requireIncludes('.github/workflows/release-cli.yml', 'generate_release_notes: true');
 requireNotIncludes('.github/workflows/release-cli.yml', 'body_path: CHANGELOG.md');
