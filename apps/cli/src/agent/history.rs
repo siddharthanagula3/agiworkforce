@@ -117,7 +117,9 @@ impl AgentSession {
             self.checkpoint_log
                 .restore_files(index, self.checkpoint_file_authority())
         });
-        if mode.restores_conversation() {
+        let files_retryable = files.as_ref().is_some_and(|report| report.retryable);
+        let restores_conversation = mode.restores_conversation() && !files_retryable;
+        if restores_conversation {
             self.messages.truncate(message_count);
             self.checkpoint_log.truncate(index);
             self.checkpoint_captures.clear();
@@ -126,7 +128,7 @@ impl AgentSession {
         Ok(RewindOutcome {
             prompt,
             files,
-            conversation_restored: mode.restores_conversation(),
+            conversation_restored: restores_conversation,
             remaining: self.checkpoint_log.len(),
         })
     }
@@ -181,15 +183,16 @@ impl AgentSession {
         })
     }
 
-    pub(crate) fn note_file_edit_started(
+    pub(crate) async fn note_file_edit_started(
         &mut self,
         call_id: &str,
         tool: &str,
         args: &serde_json::Value,
         root: Option<&std::path::Path>,
     ) {
+        let edited = checkpoints::edited_paths(tool, args, root).await;
         let authority = self.checkpoint_file_authority().cloned();
-        let captured: Vec<std::path::PathBuf> = checkpoints::edited_paths(tool, args, root)
+        let captured: Vec<std::path::PathBuf> = edited
             .into_iter()
             .filter(|path| self.checkpoint_log.capture(path, authority.as_ref()))
             .collect();

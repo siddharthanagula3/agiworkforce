@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { Config, __CONFIG_DEFAULTS, SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+import {
+  Config,
+  __CONFIG_DEFAULTS,
+  OPT_OUT_SETTING_KEYS,
+  SETTINGS_PANEL_SETTING_KEYS,
+} from '../platform/config';
 
 interface PkgConfigContrib {
   type: string;
@@ -10,12 +16,13 @@ interface PkgConfigContrib {
   description?: string;
   deprecationMessage?: string;
   readOnly?: boolean;
+  scope?: string;
 }
 
 interface ExtensionPackageJson {
   contributes?: {
     configuration?: { properties?: Record<string, PkgConfigContrib> };
-    commands?: Array<{ command: string; title: string }>;
+    commands?: Array<{ command: string; title: string; category?: string }>;
   };
   capabilities?: {
     untrustedWorkspaces?: {
@@ -53,7 +60,6 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   respectGitIgnore: 'agiWorkforce.respectGitIgnore',
   editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
-  currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
   activateOnStartup: 'agiWorkforce.activateOnStartup',
   useTerminal: 'agiWorkforce.useTerminal',
@@ -99,15 +105,55 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
   });
 
   it('exposes every active mutable extension option in the branded settings panel', () => {
+    const optOuts = new Set<string>(OPT_OUT_SETTING_KEYS);
     const activeMutableKeys = Object.entries(pkgSettings)
       .filter(
         ([, setting]) => setting.readOnly !== true && setting.deprecationMessage === undefined,
       )
       .map(([key]) => key.replace(/^agiWorkforce\./u, ''))
+      .filter((key) => !optOuts.has(key))
       .sort();
 
     expect([...SETTINGS_PANEL_SETTING_KEYS].sort()).toEqual(activeMutableKeys);
   });
+
+  it('keeps the repository opt-outs out of the user settings panel and declares each one', () => {
+    const declaredOptOuts = Object.keys(pkgSettings)
+      .filter((key) => key.startsWith('agiWorkforce.optOut.'))
+      .map((key) => key.replace(/^agiWorkforce\./u, ''))
+      .sort();
+
+    expect([...OPT_OUT_SETTING_KEYS].sort()).toEqual(declaredOptOuts);
+    expect(SETTINGS_PANEL_SETTING_KEYS.filter((key) => declaredOptOuts.includes(key))).toEqual([]);
+  });
+
+  it.each(['agiWorkforce.agent.mode', 'agiWorkforce.agent.effort'])(
+    'declares %s user-only and inherited by remote windows (application scope)',
+    (key) => {
+      expect(pkgSettings[key]?.scope).toBe('application');
+    },
+  );
+
+  it.each([
+    ['agiWorkforce.autoApplyFixes', 'agiWorkforce.optOut.autoApplyFixes'],
+    ['agiWorkforce.memory.enabled', 'agiWorkforce.optOut.memory'],
+    ['agiWorkforce.inlineCompletions.enabled', 'agiWorkforce.optOut.inlineCompletions'],
+  ])(
+    'takes %s only from local user settings and lets %s turn it off anywhere',
+    (enablingKey, optOutKey) => {
+      expect(pkgSettings[enablingKey]?.scope).toBe('application');
+      expect(pkgSettings[optOutKey]).toMatchObject({
+        type: 'boolean',
+        default: false,
+        scope: 'resource',
+      });
+      expect(pkgSettings[optOutKey]?.description).toMatch(/only turn .* off, never on/u);
+      expect(pkgSettings[enablingKey]?.description).toContain(optOutKey);
+      expect(
+        readPackageJson().capabilities?.untrustedWorkspaces?.restrictedConfigurations,
+      ).not.toContain(optOutKey);
+    },
+  );
 
   it('requires an explicit opt-in before sending editor context for inline completions', () => {
     expect(__CONFIG_DEFAULTS.inlineCompletionsEnabled).toBe(false);
@@ -179,13 +225,16 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     ).toBe(false);
   });
 
-  it('contributes one sign-in command and one title prefix', () => {
+  it('contributes one sign-in command and one title prefix from the name registry', () => {
     const commands = readPackageJson().contributes?.commands ?? [];
 
     expect(commands.filter((entry) => /Sign In to AGI Cloud/u.test(entry.title ?? ''))).toEqual([
       expect.objectContaining({ command: 'agi-workforce.signIn' }),
     ]);
-    expect(commands.filter((entry) => !(entry.title ?? '').startsWith('AGI Code: '))).toEqual([]);
+    expect(
+      commands.filter((entry) => !(entry.title ?? '').startsWith(`${PRODUCT_NAMES.code}: `)),
+    ).toEqual([]);
+    expect(commands.filter((entry) => entry.category !== undefined)).toEqual([]);
   });
 
   it('treats agent.mode = plan as active plan mode', () => {

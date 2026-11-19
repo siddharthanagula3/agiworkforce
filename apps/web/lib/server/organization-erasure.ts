@@ -138,6 +138,12 @@ export const ORGANIZATION_ANONYMIZED_COLUMNS: ReadonlyArray<{
     reason:
       'Settled provider cost per request, owned by the member who made it and needed for overage reconciliation; the funding organization is detached.',
   },
+  {
+    table: 'project_knowledge_objects',
+    column: 'organization_id',
+    reason:
+      'Stored-source ledger for project files (0419), owned by the member whose project references the bytes. That project demotes to Personal rather than being deleted (user_projects below), so the row survives and follows it: a scoped delete would drop the accounting for bytes a live file still references, and a row still naming the deleted workspace would no longer match its project. The row clears object_key, user_id and organization_id itself once the cleanup job confirms the bytes are gone.',
+  },
 ];
 
 export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {

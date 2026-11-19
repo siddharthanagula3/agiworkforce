@@ -73,6 +73,12 @@ export function displayVersion(declared: string | null | undefined, sha: string 
   return `${PLUGIN_DIRECTORY_FALLBACK_VERSION}${VERSION_BUILD_SEPARATOR}${PLUGIN_DIRECTORY_SHA_VERSION_PREFIX}${sha.slice(0, PLUGIN_DIRECTORY_SHORT_SHA_LENGTH)}`;
 }
 
+const UNDECLARED_VERSION_PREFIX = `${PLUGIN_DIRECTORY_FALLBACK_VERSION}${VERSION_BUILD_SEPARATOR}${PLUGIN_DIRECTORY_SHA_VERSION_PREFIX}`;
+
+export function declaredVersion(version: string): string | null {
+  return version.startsWith(UNDECLARED_VERSION_PREFIX) ? null : version;
+}
+
 export function installedVersion(version: string, sha: string): string {
   const base = version.split(VERSION_BUILD_SEPARATOR)[0] ?? '';
   const semver = isPluginSemver(base) ? base : PLUGIN_DIRECTORY_FALLBACK_VERSION;

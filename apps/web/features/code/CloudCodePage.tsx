@@ -47,10 +47,12 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { AgiMark } from '@shared/components/agi/AgiMark';
+import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
+import { GITHUB_RECONNECT_REQUIRED_REASON } from '@/lib/github-installation-access';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 import { useNotebookWorkspace } from '@/features/notebook/hooks/useNotebookWorkspace';
 import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
@@ -72,6 +74,7 @@ import {
   DEFAULT_RUNTIME_ID,
   type CodeStatusFilter,
   filterAndSortSessions,
+  githubInstallHref,
   parseExtraHosts,
   REPOSITORY_MINIMUM_NETWORK_ACCESS,
   sessionContextChip,
@@ -98,6 +101,7 @@ import {
   localSessionDeletedLine,
   localWorktreeRemovedLine,
   preferredLocalRootId,
+  resolveLocalRoute,
   startingModelId,
   type LocalPlacement,
 } from './local-code';
@@ -130,6 +134,7 @@ const HEADER_GLYPH_SIZE = 16;
 const NOTICE_GLYPH_SIZE = 16;
 const DEFAULT_SESSION_TITLE_WORDS = 6;
 const GREETING_MARK_SIZE = 28;
+const CODE_RAIL_DRAWER_ID = 'code-rail-drawer';
 const GREETING_NAME_SLOT = '{name}';
 const UPGRADE_PLAN_SLOT = '{plan}';
 const UPGRADE_PATH = '/upgrade';
@@ -150,6 +155,10 @@ function makeRequestId(): string {
 // toUserMessage keeps a sentence somebody wrote and drops operator detail.
 function friendlyError(error: unknown): string {
   return toUserMessage(error, CODE_COPY.loadFailed);
+}
+
+function requiresGitHubReconnect(error: unknown): boolean {
+  return error instanceof CloudCodeApiError && error.code === GITHUB_RECONNECT_REQUIRED_REASON;
 }
 
 const READY_POLLS = 20;
@@ -208,10 +217,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [selectedId, publishSelectedId] = useState<string | null>(sessionId ?? null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
   const [turns, setTurns] = useState<CodeTurnRecord[]>([]);
+  const [truncatedSessionId, setTruncatedSessionId] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<CodeApprovalPrompt[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
@@ -242,6 +253,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [railDrawerOpen, setRailDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const phone = useShellLayout().tier === 'compact';
   const [localEditorDirty, setLocalEditorDirty] = useState(false);
   const [localSession, publishLocalSession] = useState<LocalDeveloperSession | null>(null);
   const [localPrompt, setLocalPrompt] = useState('');
@@ -292,6 +304,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
   const setLocalSession = useCallback(
     (next: LocalDeveloperSession | null) => {
+      routeLocalRef.current = null;
       if (
         localSelectionRef.current?.rootId !== next?.rootId ||
         localSelectionRef.current?.id !== next?.id
@@ -345,10 +358,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
   const routeSessionRef = useRef<string | null>(sessionId ?? null);
+  const routeWaitingNotice = useRef<string | null>(null);
   const routeLocalRef = useRef<{ rootId: string; threadId: string } | null>(
     typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
   );
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleEditedRef = useRef(false);
 
   const router = useRouter();
   const routerRef = useRef(router);
@@ -417,7 +432,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     const next = sessionId ?? null;
     if (routeSessionRef.current === next) return;
     routeSessionRef.current = next;
-    if (next !== null) setRouteNotice(null);
+    if (next !== null) {
+      routeLocalRef.current = null;
+      setRouteNotice(null);
+    }
     if (selectionRef.current === next) return;
     setSelectedId(next);
     setTurns([]);
@@ -568,6 +586,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         if (!current()) return;
         replaceSession(body.session, owner);
         setEntries(body.terminalEntries);
+        setTruncatedSessionId(body.turnsTruncated === true ? body.session.id : null);
         // Merge rather than replace: this read races the turn running in this
         // tab, and a response computed before that turn's row existed would
         // wipe it out of the transcript.
@@ -653,7 +672,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
 
   useEffect(() => {
     if (!renaming) return;
-    const frame = window.requestAnimationFrame(() => titleInputRef.current?.select());
+    titleEditedRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (!titleEditedRef.current) titleInputRef.current?.select();
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [renaming]);
 
@@ -849,17 +871,29 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   useEffect(() => {
     const wanted = routeLocalRef.current;
     if (wanted === null || !local.settled || local.loading) return;
+    const resolution = resolveLocalRoute(local.groups, wanted, local.error);
+    if (resolution.kind === 'waiting') {
+      routeWaitingNotice.current = resolution.notice;
+      setRouteNotice(resolution.notice);
+      return;
+    }
     routeLocalRef.current = null;
-    const found = local.groups
-      .find((group) => group.rootId === wanted.rootId)
-      ?.sessions.find((session) => session.id === wanted.threadId);
-    if (found) {
-      setLocalSession(found);
+    if (resolution.kind === 'found') {
+      const waiting = routeWaitingNotice.current;
+      routeWaitingNotice.current = null;
+      setRouteNotice((current) => (current === waiting ? null : current));
+      setLocalSession(resolution.session);
       return;
     }
     setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
-  }, [local.settled, local.loading, local.groups, setLocalSession]);
+  }, [local.settled, local.loading, local.groups, local.error, setLocalSession]);
+
+  const dismissRouteNotice = useCallback(() => {
+    routeLocalRef.current = null;
+    routeWaitingNotice.current = null;
+    setRouteNotice(null);
+  }, []);
 
   const openLocalSession = useCallback(
     (session: LocalDeveloperSession) => {
@@ -1184,7 +1218,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         void loadChanges(selectedSession.id);
       } catch (commitError) {
         if (!owner.isCurrent()) return;
-        setError(friendlyError(commitError));
+        const message = friendlyError(commitError);
+        setError(message);
+        setReconnectError(requiresGitHubReconnect(commitError) ? message : null);
       } finally {
         if (owner.isCurrent()) setCommitting(false);
       }
@@ -1338,7 +1374,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       replaceSession(body.session, owner);
     } catch (pullRequestError) {
       if (!owner.isCurrent()) return;
-      setError(friendlyError(pullRequestError));
+      const message = friendlyError(pullRequestError);
+      setError(message);
+      setReconnectError(requiresGitHubReconnect(pullRequestError) ? message : null);
     } finally {
       if (owner.isCurrent()) setPullRequestBusy(false);
     }
@@ -1435,6 +1473,13 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           reviewingMcp={local.reviewingMcp}
           mcpRefusals={local.mcpRefusals}
           onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
+          showArchived={local.showArchived}
+          onToggleArchived={() => local.setShowArchived(!local.showArchived)}
+          sessionActions={local.sessionActions}
+          actionError={local.actionError}
+          onRename={local.renameSession}
+          onSetArchived={(session, archived) => void local.setSessionArchived(session, archived)}
+          onSetPinned={(session, pinned) => void local.setSessionPinned(session, pinned)}
         />
       </>
     ) : null,
@@ -1555,7 +1600,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       )}
       {localArchivedThread !== null && !selectedSession && (
         <div className={styles['notice']} role="status" data-testid="local-session-archived">
-          <span>{localSessionArchivedLine(localArchivedThread)}</span>
+          <span>
+            {localSessionArchivedLine(localArchivedThread, local.sessionActions.unarchive)}
+          </span>
           <span className={styles['noticeActions']}>
             <button
               type="button"
@@ -1573,10 +1620,16 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{routeNotice}</span>
           <span className={styles['noticeActions']}>
+            {routeNotice === routeWaitingNotice.current &&
+              routeNotice !== LOCAL_CODE_COPY.sessionWithheld && (
+                <button type="button" className={styles['secondaryButton']} onClick={local.refresh}>
+                  {CODE_COPY.retry}
+                </button>
+              )}
             <button
               type="button"
               className={styles['secondaryButton']}
-              onClick={() => setRouteNotice(null)}
+              onClick={dismissRouteNotice}
             >
               <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
               {CODE_COPY.dismiss}
@@ -1589,6 +1642,11 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{error}</span>
           <span className={styles['noticeActions']}>
+            {error === reconnectError && (
+              <a className={styles['primaryButton']} href={githubInstallHref()}>
+                {CODE_COPY.githubReauthorizeAction}
+              </a>
+            )}
             <button
               type="button"
               className={styles['secondaryButton']}
@@ -1612,18 +1670,19 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
 
   const narrowHeaderSlot = narrow ? (
-    <div className={styles['appBarSlot']}>
-      <span className={styles['appBarTitle']}>{CODE_COPY.surface}</span>
+    <div className={styles['appBarSlot']} data-testid="code-app-bar">
       <button
         ref={railTriggerRef}
         type="button"
-        className={styles['headerButton']}
+        className={styles['appBarButton']}
         aria-label={CODE_COPY.recents}
         aria-expanded={railDrawerOpen}
+        aria-controls={CODE_RAIL_DRAWER_ID}
         onClick={() => setRailDrawerOpen(true)}
       >
         <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
       </button>
+      <span className={styles['appBarTitle']}>{CODE_COPY.surface}</span>
     </div>
   ) : null;
 
@@ -1675,6 +1734,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         {narrow && !pane && (
           <Sheet open={railDrawerOpen} onOpenChange={setRailDrawerOpen}>
             <SheetContent
+              id={CODE_RAIL_DRAWER_ID}
               side="left"
               className="w-[290px] max-w-[85vw] gap-0 overflow-y-auto p-0"
               onCloseAutoFocus={(event) => {
@@ -1757,7 +1817,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                           value={titleDraft}
                           aria-label={CODE_COPY.renameLabel}
                           maxLength={CODE_LIMITS.title}
-                          onChange={(event) => setTitleDraft(event.target.value)}
+                          onChange={(event) => {
+                            titleEditedRef.current = true;
+                            setTitleDraft(event.target.value);
+                          }}
                           onBlur={() => void handleRename()}
                           onKeyDown={(event) => {
                             if (isImeComposingKey(event.nativeEvent)) return;
@@ -1839,6 +1902,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                           </div>
                         )}
 
+                        {!detailLoading && truncatedSessionId === selectedSession.id && (
+                          <div className={styles['notice']} role="status">
+                            <span>{CODE_COPY.earlierTurnsNotShown}</span>
+                          </div>
+                        )}
+
                         {!detailLoading && (
                           <CodeTranscript
                             session={selectedSession}
@@ -1891,7 +1960,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                       </div>
                     </div>
                   ) : (
-                    <div className={styles['greetingArea']}>
+                    <div className={styles['greetingArea']} data-testid="code-home">
                       <div className={styles['center']}>
                         <h1 className={styles['greeting']}>
                           <AgiMark size={GREETING_MARK_SIZE} spinning={busy} />
@@ -1906,26 +1975,31 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                         {showSetupLinks && (
                           <nav className={styles['setupLinks']} aria-label={CODE_COPY.setupLabel}>
                             <span className={styles['setupLabel']}>{CODE_COPY.setupLabel}</span>
-                            <Link href={CODE_ROUTES.cli} className={styles['setupChip']}>
-                              <TerminalSquare size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-                              {CODE_COPY.setupTerminal}
-                            </Link>
-                            <Link
-                              href={CODE_ROUTES.editorExtension}
-                              className={styles['setupChip']}
-                            >
-                              <Code2 size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-                              {CODE_COPY.setupEditor}
-                            </Link>
-                            <ContinueOnDesktop
-                              label={CODE_COPY.setupDesktop}
-                              fallbackHref={CODE_ROUTES.desktop}
-                              glyphSize={NOTICE_GLYPH_SIZE}
-                              className={styles['setupChip']}
-                            />
+                            <div className={styles['setupChips']} data-testid="code-setup-chips">
+                              <Link href={CODE_ROUTES.cli} className={styles['setupChip']}>
+                                <TerminalSquare size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                                {CODE_COPY.setupTerminal}
+                              </Link>
+                              <Link
+                                href={CODE_ROUTES.editorExtension}
+                                className={styles['setupChip']}
+                              >
+                                <Code2 size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                                {CODE_COPY.setupEditor}
+                              </Link>
+                              <ContinueOnDesktop
+                                label={CODE_COPY.setupDesktop}
+                                fallbackHref={CODE_ROUTES.desktop}
+                                glyphSize={NOTICE_GLYPH_SIZE}
+                                className={styles['setupChip']}
+                              />
+                            </div>
                           </nav>
                         )}
-                        <CodeUsageDashboard planTier={availability?.planTier ?? null} />
+                        <CodeUsageDashboard
+                          planTier={availability?.planTier ?? null}
+                          linkOnly={phone}
+                        />
                       </div>
                     </div>
                   )}

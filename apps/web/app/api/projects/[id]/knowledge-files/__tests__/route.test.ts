@@ -3,7 +3,7 @@ type OriginalProjectKnowledgeObjectStorageModule =
 import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
+import { MAX_PLAN_ATTACHMENT_BYTES, MAX_PROJECT_KNOWLEDGE_FILES } from '@agiworkforce/types';
 
 const {
   mockGetClerkAuthUser,
@@ -13,6 +13,8 @@ const {
   mockResolveActiveOrganizationId,
   mockSealProjectKnowledgeObject,
   mockDeleteProjectKnowledgeObject,
+  mockTransaction,
+  mockTxExecute,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
@@ -21,6 +23,8 @@ const {
   mockResolveActiveOrganizationId: vi.fn(),
   mockSealProjectKnowledgeObject: vi.fn(),
   mockDeleteProjectKnowledgeObject: vi.fn(),
+  mockTransaction: vi.fn(),
+  mockTxExecute: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -40,7 +44,7 @@ vi.mock('@/lib/server/rls-db', () => ({
     db: {
       query: (...args: unknown[]) => mockNeonQuery(...args),
       execute: vi.fn().mockResolvedValue(1),
-      transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+      transaction: (...args: unknown[]) => mockTransaction(...args),
       withUser: vi.fn(() => ({})),
       dispose: vi.fn(),
     },
@@ -228,6 +232,9 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       targets: { private: 'fixture-private' },
     });
     mockDeleteProjectKnowledgeObject.mockResolvedValue(undefined);
+    mockTransaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) =>
+      run({ query: (...args: unknown[]) => mockNeonQuery(...args), execute: mockTxExecute }),
+    );
   });
 
   it('retains staging when the sealed source cannot be registered', async () => {
@@ -235,7 +242,6 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-    mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockRejectedValueOnce(new Error('Registration unavailable'));
 
     const res = await POST(
@@ -307,7 +313,6 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-    mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
       extractedText: 'The launch date is October 4.',
@@ -396,7 +401,6 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-    mockNeonQuery.mockResolvedValueOnce([]);
     mockExtractProjectKnowledgeFile.mockRejectedValue(
       new MockProjectKnowledgeExtractionError('The uploaded file failed its integrity check.'),
     );
@@ -504,7 +508,6 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-    mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
 
     const res = await POST(
@@ -530,7 +533,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
     );
     expect(insertCall?.[1]).toContain(SEALED_KEY);
-    expect(insertCall?.[1]?.[12]).toBe(JSON.stringify({ private: 'fixture-private' }));
+    expect(insertCall?.[1]?.[10]).toBe(JSON.stringify({ private: 'fixture-private' }));
     expect(insertCall?.[1]).not.toContain(UPLOADED_KEY);
   });
 
@@ -539,7 +542,6 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-    mockNeonQuery.mockResolvedValueOnce([]);
     mockSealProjectKnowledgeObject.mockResolvedValue(null);
 
     const res = await POST(
@@ -570,7 +572,6 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     mockNeonQuery.mockResolvedValueOnce([{ count: 1 }]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-    mockNeonQuery.mockResolvedValueOnce([{ id: 'kb-old', version: 1 }]);
     mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
     mockNeonQuery.mockResolvedValueOnce([]);
     mockExtractProjectKnowledgeFile.mockResolvedValue({
@@ -597,14 +598,150 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
     const insertCall = mockNeonQuery.mock.calls.find((call) =>
       String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
     );
-    expect(insertCall?.[1]).toContain(2);
-    expect(insertCall?.[1]).toContain('kb-old');
+    expect(String(insertCall?.[0])).toContain('coalesce(max(version), 0) + 1');
+    expect(String(insertCall?.[0])).toContain('order by version desc');
 
     const supersedeCall = mockNeonQuery.mock.calls.find((call) =>
       String(call?.[0] ?? '').includes('set superseded_at = now()'),
     );
-    expect(supersedeCall?.[1]).toEqual(['kb-old', 'proj-1']);
-    expect(String(supersedeCall?.[0] ?? '')).toContain('project_id = $2');
-    expect(String(supersedeCall?.[0] ?? '')).not.toContain('deleted_at');
+    expect(supersedeCall?.[1]).toEqual(['proj-1', 'spec.pdf', 'file-1']);
+    expect(String(supersedeCall?.[0] ?? '')).toContain('id <> $3');
+  });
+
+  it('inserts and retires inside one transaction that holds the per-name lock first', async () => {
+    const order: string[] = [];
+    mockTransaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) => {
+      order.push('begin');
+      const result = await run({
+        query: (...args: unknown[]) => mockNeonQuery(...args),
+        execute: mockTxExecute,
+      });
+      order.push('commit');
+      return result;
+    });
+    mockTxExecute.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('pg_advisory_xact_lock')) order.push('lock');
+      return 1;
+    });
+    mockNeonQuery.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('from user_projects')) return [{ id: 'proj-1' }];
+      if (text.includes('count(*)')) return [{ count: 1 }];
+      if (text.includes('coalesce(sum(k.byte_count)')) return [{ total: 0 }];
+      if (text.includes('insert into project_knowledge_files')) {
+        order.push('insert');
+        return [KB_FILE_ROW];
+      }
+      if (text.includes('set superseded_at')) order.push('supersede');
+      return [];
+    });
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: 'Corrected text.',
+      anchors: [],
+      objectKey: UPLOADED_KEY,
+      etag: '"etag-1"',
+    });
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 2048,
+        checksumSha256: 'b'.repeat(64),
+        sourceSurface: 'web',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
+      }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(201);
+    expect(order).toEqual(['begin', 'lock', 'insert', 'supersede', 'commit']);
+  });
+
+  it('answers a failed retirement as a failure and not as a created replacement', async () => {
+    mockNeonQuery.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('from user_projects')) return [{ id: 'proj-1' }];
+      if (text.includes('count(*)')) return [{ count: 1 }];
+      if (text.includes('coalesce(sum(k.byte_count)')) return [{ total: 0 }];
+      if (text.includes('insert into project_knowledge_files')) return [KB_FILE_ROW];
+      if (text.includes('set superseded_at')) throw new Error('supersede failed');
+      return [];
+    });
+    mockTransaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) =>
+      run({ query: (...args: unknown[]) => mockNeonQuery(...args), execute: mockTxExecute }),
+    );
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: 'Corrected text.',
+      anchors: [],
+      objectKey: UPLOADED_KEY,
+      etag: '"etag-1"',
+    });
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 2048,
+        checksumSha256: 'b'.repeat(64),
+        sourceSurface: 'web',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
+      }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(500);
+  });
+
+  it('lets a project at its file cap replace a file it already holds', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([
+      { count: MAX_PROJECT_KNOWLEDGE_FILES, replaces_current: true },
+    ]);
+    mockNeonQuery.mockResolvedValueOnce([]);
+    mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
+    mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
+    mockExtractProjectKnowledgeFile.mockResolvedValue({
+      extractedText: 'Corrected text.',
+      anchors: [],
+      objectKey: UPLOADED_KEY,
+      etag: '"etag-1"',
+    });
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'spec.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 2048,
+        checksumSha256: 'b'.repeat(64),
+        sourceSurface: 'web',
+        storageUri: 'knowledge-files/projects/proj-1/spec.pdf',
+      }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(201);
+  });
+
+  it('still refuses a new file name once the project is at its file cap', async () => {
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    mockNeonQuery.mockResolvedValueOnce([
+      { count: MAX_PROJECT_KNOWLEDGE_FILES, replaces_current: false },
+    ]);
+
+    const res = await POST(
+      makePostRequest('proj-1', {
+        fileName: 'other.pdf',
+        mimeType: 'application/pdf',
+        byteCount: 2048,
+        checksumSha256: 'c'.repeat(64),
+        sourceSurface: 'web',
+        storageUri: 'knowledge-files/projects/proj-1/other.pdf',
+      }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(409);
+    expect(mockExtractProjectKnowledgeFile).not.toHaveBeenCalled();
   });
 });

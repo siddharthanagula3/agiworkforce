@@ -2,14 +2,32 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  legalHoldPredicate,
   projectContentHoldPredicate,
   type LegalHoldResourceType,
 } from '@/lib/services/legal-hold-gate';
+import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 
 export interface DeletedProjectScope {
   projectId: string;
   userId: string;
   organizationId: string | null;
+}
+
+export async function projectStorageUrisUnderHold(
+  tx: Pick<DatabaseAdapter, 'query'>,
+  storageUris: readonly string[],
+): Promise<Set<string>> {
+  if (storageUris.length === 0) return new Set();
+  const held = legalHoldPredicate('project_file', { alias: 'r', nextParamIndex: 2 });
+  const rows = await tx.query<{ storage_uri: string }>(
+    `select distinct r.storage_uri
+       from project_knowledge_files r
+      where r.storage_uri = any($1::text[])
+        and ${held.sql}`,
+    [[...storageUris], ...held.params],
+  );
+  return new Set(rows.map((row) => row.storage_uri));
 }
 
 export class ProjectContentHeldError extends Error {
@@ -51,6 +69,7 @@ export async function assertProjectContentUnheld(
   tx: Pick<DatabaseAdapter, 'query'>,
   scope: DeletedProjectScope,
 ): Promise<void> {
+  await serializeDestructionWithHolds(tx, scope.organizationId);
   const projectHeld = projectContentHoldPredicate('project', {
     project: 'p.id',
     nextParamIndex: 4,
@@ -115,6 +134,7 @@ export async function retireOwnedProjectInTransaction(
   tx: Pick<DatabaseAdapter, 'query' | 'execute'>,
   scope: DeletedProjectScope,
 ): Promise<boolean> {
+  await serializeDestructionWithHolds(tx, scope.organizationId);
   const held = projectContentHoldPredicate('project', { project: 'p.id', nextParamIndex: 4 });
   const unheld = { ...held, sql: `not ${held.sql}` };
   const params = [scope.projectId, scope.userId, scope.organizationId];

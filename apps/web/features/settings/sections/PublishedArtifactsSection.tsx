@@ -450,13 +450,12 @@ export function PublishedArtifactsSection() {
         >
           Published artifacts
         </h2>
-        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Artifacts you published. A public page opens for anyone with the link; a workspace page
-          opens only for signed-in members of your workspace. Pages do not expire, so unpublishing
-          is the only way to take one down.
+        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
+          Public pages open for anyone with the link, workspace pages for members. They stay up
+          until unpublished.
         </p>
       </div>
-      <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>
+      <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
         One page at a time, newest publications first.
       </p>
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>

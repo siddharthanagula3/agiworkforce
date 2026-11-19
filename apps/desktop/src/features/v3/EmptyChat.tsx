@@ -35,7 +35,7 @@ export function EmptyChat({
   onOpenConnectors,
   hasConnectedTools = false,
 }: EmptyChatProps) {
-  const setDraftContent = useChatStore((state) => state.setDraftContent);
+  const appendDraftContent = useChatStore((state) => state.appendDraftContent);
   const user = useUnifiedAuthStore(selectUser);
   const blockedOnLocalModel = Boolean(onSetUpLocalModel) && needsLocalModelSetup;
 
@@ -90,7 +90,7 @@ export function EmptyChat({
             <button
               key={label}
               type="button"
-              onClick={() => setDraftContent(prompt)}
+              onClick={() => appendDraftContent(prompt)}
               className="group flex min-h-20 items-start gap-3 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-4 py-3 text-left text-sm text-[var(--chat-text-secondary)] transition-colors hover:border-[var(--chat-accent-primary)]/35 hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
             >
               <Icon

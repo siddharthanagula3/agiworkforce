@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
+  MANAGED_USAGE_LIMITS,
   managedUsageComparisonLabel,
   managedUsageMultiplier,
   managedUsageMultipliers,
@@ -25,19 +26,15 @@ describe('published usage multipliers are derived, not asserted', () => {
     expect(managedUsageMultiplier('pro', 'basic')).toBe(5);
     expect(managedUsageMultiplier('max', 'pro')).toBe(5);
     expect(managedUsageMultiplier('max_15x', 'pro')).toBeNull();
-    expect(managedUsageMultipliers('max_15x', 'pro')).toEqual({
-      fiveHour: 20,
-      weekly: 10,
-      monthly: 10,
-    });
+    expect(MANAGED_USAGE_LIMITS.max_15x.fiveHourCredits).toBeNull();
+    expect(managedUsageMultipliers('max_15x', 'pro')).toBeNull();
     expect(managedUsageMultiplier('team', 'pro')).toBe(1);
     expect(managedUsageMultiplier('enterprise', 'pro')).toBeNull();
   });
 
-  it('names each Max plan for what its five-hour window gives over Pro', () => {
+  it('names no plan for a multiple, since the multiple is derived from the table', () => {
     for (const tier of ['max', 'max_15x'] as const) {
-      const factor = managedUsageMultipliers(tier, 'pro')?.fiveHour;
-      expect(BILLING_PLAN_PRICING[tier].label).toBe(`Max ${factor}x`);
+      expect(BILLING_PLAN_PRICING[tier].label).not.toMatch(/\d+x/iu);
     }
   });
 
@@ -82,8 +79,10 @@ describe('published usage multipliers are derived, not asserted', () => {
 
   it('refuses to publish a comparison the table cannot support', () => {
     expect(managedUsageComparisonLabel('pro', 'basic', 'Basic')).toBe('5x more usage than Basic');
+    const weeklyMultiple =
+      MANAGED_USAGE_LIMITS.max_15x.weeklyCredits / MANAGED_USAGE_LIMITS.pro.weeklyCredits;
     expect(managedUsageComparisonLabel('max_15x', 'pro', 'Pro')).toBe(
-      '20x more usage per session and 10x more weekly usage than Pro',
+      `${weeklyMultiple}x more weekly usage than Pro`,
     );
     expect(managedUsageComparisonLabel('team', 'pro', 'Pro')).toBe('Same usage as Pro');
     expect(managedUsageComparisonLabel('enterprise', 'pro', 'Pro')).toBeNull();

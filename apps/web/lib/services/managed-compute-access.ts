@@ -106,19 +106,49 @@ function scopedRequestForOrganization(organizationId: string | null): ScopedRequ
   };
 }
 
+async function resolveBudgetOrganizationIds(
+  db: DatabaseAdapter,
+  userId: string,
+  selectedOrganizationId: string | null,
+): Promise<string[]> {
+  const organizationIds = selectedOrganizationId ? [selectedOrganizationId] : [];
+  try {
+    const fundingOrganizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
+    if (fundingOrganizationId && fundingOrganizationId !== selectedOrganizationId) {
+      organizationIds.push(fundingOrganizationId);
+    }
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[managed-compute-access] funding organization unreadable; spend limit checked for the selected workspace only',
+    );
+  }
+  return organizationIds;
+}
+
 async function withSpendLimit(
   db: DatabaseAdapter,
+  userId: string,
   policyDecision: PolicyGateResult,
 ): Promise<ManagedComputeAccessDecision> {
   if (!policyDecision.allowed) return policyDecision;
-  const spend = await evaluateSpendLimit(db, policyDecision.organizationId);
-  if (spend.allowed) return policyDecision;
-  return {
-    allowed: false,
-    code: spend.code,
-    reason: spend.reason,
-    organizationId: policyDecision.organizationId,
-  };
+  const organizationIds = await resolveBudgetOrganizationIds(
+    db,
+    userId,
+    policyDecision.organizationId,
+  );
+  for (const organizationId of organizationIds) {
+    const spend = await evaluateSpendLimit(organizationId);
+    if (!spend.allowed) {
+      return {
+        allowed: false,
+        code: spend.code,
+        reason: spend.reason,
+        organizationId: policyDecision.organizationId,
+      };
+    }
+  }
+  return policyDecision;
 }
 
 export async function evaluateManagedComputeWorkspaceAccess(
@@ -141,7 +171,7 @@ export async function evaluateManagedComputeWorkspaceAccess(
     );
     if (!featureDecision.allowed) return featureDecision;
   }
-  return withSpendLimit(db, policyDecision);
+  return withSpendLimit(db, userId, policyDecision);
 }
 
 export async function evaluateManagedComputeAccess(

@@ -70,23 +70,65 @@ impl InstalledPlugins {
     /// command families converge on one file instead of drifting apart
     /// again on the next read.
     pub fn load(plugins_dir: &Path) -> Self {
-        let path = plugins_dir.join("installed.json");
-        let mut registry: Self = match std::fs::read_to_string(&path) {
-            Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
-            Err(_) => Self::default(),
-        };
+        let mut registry = Self::read(plugins_dir);
         if reconcile_with_disk(plugins_dir, &mut registry) {
             let _ = registry.save(plugins_dir);
         }
         registry
     }
 
-    /// Save installed.json to the plugins directory.
+    /// The registry on disk. A file that does not parse is moved aside and
+    /// named before anything replaces it.
+    fn read(plugins_dir: &Path) -> Self {
+        let path = plugins_dir.join("installed.json");
+        let Ok(contents) = std::fs::read_to_string(&path) else {
+            return Self::default();
+        };
+        let error = match serde_json::from_str::<Self>(&contents) {
+            Ok(registry) => return registry,
+            Err(error) => error,
+        };
+        let kept = plugins_dir.join(format!(
+            "installed.json.corrupt-{}",
+            Utc::now().format("%Y%m%d%H%M%S")
+        ));
+        report_registry_problem(match std::fs::rename(&path, &kept) {
+            Ok(()) => format!(
+                "Plugins: {} could not be read ({error}). It was kept as {}; installed plugins were listed again with user scope and no signature label.",
+                path.display(),
+                kept.display()
+            ),
+            Err(rename_error) => format!(
+                "Plugins: {} could not be read ({error}) and was left as it is ({rename_error}). Fix or move it; plugin changes are not saved until then.",
+                path.display()
+            ),
+        });
+        Self::default()
+    }
+
+    /// Save installed.json to the plugins directory, replacing it whole. A
+    /// file already there that does not parse is never written over.
     pub fn save(&self, plugins_dir: &Path) -> Result<()> {
         let path = plugins_dir.join("installed.json");
+        if let Ok(existing) = std::fs::read_to_string(&path) {
+            if serde_json::from_str::<Self>(&existing).is_err() {
+                bail!(
+                    "{} could not be read; fix or move it before plugins change",
+                    path.display()
+                );
+            }
+        }
         let contents = serde_json::to_string_pretty(self)?;
-        std::fs::write(&path, contents)?;
-        Ok(())
+        crate::mcp::registry::replace_file(&path, &contents)
+    }
+}
+
+fn report_registry_problem(notice: String) {
+    tracing::warn!("{notice}");
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(notice);
+    } else {
+        crate::output::print_warn(&notice);
     }
 }
 
@@ -606,6 +648,7 @@ pub fn is_git_checkout(install_path: &Path) -> bool {
 
 pub fn update_plugin_checkout(
     install_path: &Path,
+    marker: &Path,
     signature: &crate::plugins::PluginSignaturePolicy,
 ) -> std::result::Result<PluginCheckoutUpdate, String> {
     if let Some(pinned) = pinned_at(install_path) {
@@ -613,45 +656,60 @@ pub fn update_plugin_checkout(
             "pinned to {pinned}; install it again with --ref <tag> to move it"
         ));
     }
-    let before = head_commit(install_path);
+    if marker.exists() {
+        return Err(
+            "an earlier update to it was pulled and never decided; run `agi marketplace update` to review it"
+                .to_string(),
+        );
+    }
+    let before = head_commit(install_path)
+        .ok_or_else(|| "its current commit could not be read".to_string())?;
+    std::fs::write(marker, &before)
+        .map_err(|error| format!("it could not be held off while updating: {error}"))?;
+    let release_unchanged = || {
+        if head_commit(install_path).as_deref() == Some(before.as_str()) {
+            let _ = std::fs::remove_file(marker);
+        }
+    };
     let mut pull = agiworkforce_worktree::host_git();
     pull.arg("-C").arg(install_path).args(["pull", "--ff-only"]);
-    let output = crate::platform::runtime::git::host_git_network_output(pull)
-        .map_err(|error| format!("git error: {error}"))?;
+    let output = match crate::platform::runtime::git::host_git_network_output(pull) {
+        Ok(output) => output,
+        Err(error) => {
+            release_unchanged();
+            return Err(format!("git error: {error}"));
+        }
+    };
     if !output.status.success() {
+        release_unchanged();
         return Err(format!(
             "update failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    if before.is_some() && before == head_commit(install_path) {
+    if head_commit(install_path).as_deref() == Some(before.as_str()) {
+        let _ = std::fs::remove_file(marker);
         return Ok(PluginCheckoutUpdate::UpToDate);
     }
     match crate::plugins::evaluate_plugin_signature(install_path, signature) {
-        Ok(state) => Ok(PluginCheckoutUpdate::Updated {
-            version: read_manifest_version(install_path),
-            changed_files: changed_files_since(install_path, "ORIG_HEAD"),
-            signature: state.label(),
-        }),
-        Err(error) => {
-            let mut rollback = agiworkforce_worktree::host_git();
-            rollback
-                .arg("-C")
-                .arg(install_path)
-                .args(["reset", "--hard", "ORIG_HEAD"]);
-            let rolled_back = matches!(
-                crate::platform::runtime::git::host_git_output(rollback),
-                Ok(ref out) if out.status.success()
-            );
-            Err(format!(
-                "update refused ({error}){}",
-                if rolled_back {
-                    ", kept the previous version"
-                } else {
-                    ", rollback failed: remove the plugin"
-                }
-            ))
+        Ok(state) => {
+            std::fs::remove_file(marker).map_err(|error| {
+                format!("the update was kept but the plugin could not be turned back on: {error}")
+            })?;
+            Ok(PluginCheckoutUpdate::Updated {
+                version: read_manifest_version(install_path),
+                changed_files: changed_files_since(install_path, &before),
+                signature: state.label(),
+            })
         }
+        Err(error) => Err(format!(
+            "update refused ({error}){}",
+            if put_update_back(install_path, Some(before.as_str()), marker) {
+                ", kept the previous version"
+            } else {
+                ", and it could not be put back: the plugin stays off until it is updated or reinstalled"
+            }
+        )),
     }
 }
 
@@ -758,13 +816,7 @@ fn ask_to_keep_update(review: &PluginUpdateReview) -> bool {
 /// Put a plugin back on the commit the person last agreed to and let it
 /// load again. When that cannot be done the marker stays, and with it the
 /// plugin stays off: what is on disk is something nobody agreed to.
-fn undo_update(
-    name: &str,
-    install_path: &Path,
-    approved_commit: Option<&str>,
-    marker: &Path,
-    reason: &str,
-) {
+fn put_update_back(install_path: &Path, approved_commit: Option<&str>, marker: &Path) -> bool {
     let put_back = approved_commit.is_some_and(|commit| {
         let mut reset = agiworkforce_worktree::host_git();
         reset
@@ -776,7 +828,17 @@ fn undo_update(
             Ok(ref out) if out.status.success()
         )
     });
-    let outcome = if put_back && std::fs::remove_file(marker).is_ok() {
+    put_back && std::fs::remove_file(marker).is_ok()
+}
+
+fn undo_update(
+    name: &str,
+    install_path: &Path,
+    approved_commit: Option<&str>,
+    marker: &Path,
+    reason: &str,
+) {
+    let outcome = if put_update_back(install_path, approved_commit, marker) {
         ", kept the previous version"
     } else {
         ", and it could not be put back: the plugin stays off until it is updated or reinstalled"
@@ -1126,6 +1188,39 @@ mod tests {
     }
 
     #[test]
+    fn a_registry_that_does_not_parse_is_kept_aside_and_never_written_over() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("installed.json");
+        let truncated = r#"{"version": 1, "plugins": {"tool": {"scope": "project""#;
+        std::fs::write(&path, truncated).unwrap();
+
+        let refused = InstalledPlugins::default().save(tmp.path()).unwrap_err();
+        assert!(format!("{refused:#}").contains("installed.json"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), truncated);
+
+        let loaded = InstalledPlugins::load(tmp.path());
+        assert!(loaded.plugins.is_empty());
+        let kept: Vec<PathBuf> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("installed.json.corrupt-"))
+            })
+            .collect();
+        assert_eq!(kept.len(), 1, "the unreadable file is kept beside it");
+        assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), truncated);
+
+        InstalledPlugins::default().save(tmp.path()).unwrap();
+        let saved: InstalledPlugins =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(saved.plugins.is_empty());
+    }
+
+    #[test]
     fn test_list_installed_no_crash() {
         // Should not crash even with a nonexistent home dir
         let reg = Marketplace::list_installed(Path::new("/tmp/nonexistent-agiworkforce-test"));
@@ -1458,6 +1553,110 @@ mod tests {
         );
         assert!(is_commit_id(&"a".repeat(40)) && is_commit_id(&"0".repeat(64)));
         assert!(!is_commit_id("--hard") && !is_commit_id(&"g".repeat(40)));
+    }
+
+    #[test]
+    fn a_single_plugin_update_holds_the_plugin_off_until_it_is_kept_or_put_back() {
+        let policy = crate::plugins::PluginSignaturePolicy::default();
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+
+        let refusing = crate::plugins::PluginSignaturePolicy {
+            require_signed: true,
+            ..Default::default()
+        };
+        let error = match update_plugin_checkout(&install_path, &marker, &refusing) {
+            Err(error) => error,
+            Ok(_) => panic!("an unsigned update must be refused when signatures are required"),
+        };
+        assert!(error.contains("kept the previous version"), "{error}");
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert!(!marker.exists(), "put back, it loads again");
+
+        match update_plugin_checkout(&install_path, &marker, &policy) {
+            Ok(PluginCheckoutUpdate::Updated {
+                version,
+                changed_files,
+                ..
+            }) => {
+                assert_eq!(version, "2.0.0");
+                assert_eq!(
+                    changed_files,
+                    vec!["M .agiworkforce-plugin/plugin.json".to_string()]
+                );
+            }
+            _ => panic!("a valid update is kept"),
+        }
+        assert!(!marker.exists(), "kept, it loads again");
+
+        assert!(matches!(
+            update_plugin_checkout(&install_path, &marker, &policy),
+            Ok(PluginCheckoutUpdate::UpToDate)
+        ));
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn a_single_plugin_update_never_runs_over_an_update_nobody_decided() {
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        let approved = head_commit(&install_path).expect("a commit");
+        std::fs::write(&marker, &approved).unwrap();
+
+        let error = match update_plugin_checkout(
+            &install_path,
+            &marker,
+            &crate::plugins::PluginSignaturePolicy::default(),
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("an undecided update must be reviewed first"),
+        };
+        assert!(error.contains("agi marketplace update"), "{error}");
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), approved);
+    }
+
+    #[test]
+    fn a_single_plugin_update_that_pulls_nothing_leaves_the_plugin_on() {
+        let (origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        drop(origin);
+
+        let error = match update_plugin_checkout(
+            &install_path,
+            &marker,
+            &crate::plugins::PluginSignaturePolicy::default(),
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("a pull from a missing origin fails"),
+        };
+        assert!(error.contains("update failed"), "{error}");
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn an_update_that_cannot_be_put_back_keeps_the_plugin_off() {
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        let unknown_commit = "0".repeat(40);
+        std::fs::write(&marker, &unknown_commit).unwrap();
+
+        assert!(!put_update_back(
+            &install_path,
+            Some(unknown_commit.as_str()),
+            &marker
+        ));
+        assert!(!put_update_back(&install_path, None, &marker));
+        assert!(marker.exists());
+
+        let approved = head_commit(&install_path).expect("a commit");
+        assert!(put_update_back(
+            &install_path,
+            Some(approved.as_str()),
+            &marker
+        ));
+        assert!(!marker.exists());
     }
 
     #[test]

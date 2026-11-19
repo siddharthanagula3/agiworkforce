@@ -34,8 +34,10 @@ import {
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
+  CloudAccountRequired,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
@@ -45,7 +47,13 @@ import {
   isStepUpCancelled,
   type StepUpIdentity,
 } from '@/src/features/auth/services/stepUp';
-import { exportCloudUserData } from '@/services/cloudDataExport';
+import {
+  CloudExportSharingUnavailableError,
+  PartialCloudDataExportError,
+  describePartialCloudDataExport,
+  exportCloudUserData,
+  shareCloudDataExport,
+} from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
@@ -61,6 +69,13 @@ import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
+import {
+  activeDeviceAccount,
+  deviceAccountErrorMessage,
+  getDeviceAccountsClerk,
+  planSignOutHandover,
+  readDeviceAccounts,
+} from '@/src/features/accounts/deviceAccounts';
 
 const ORGANIZATION_PATH = '/api/settings/organization';
 
@@ -83,6 +98,27 @@ function parseOrganizationId(body: unknown): string | null {
 }
 
 export default function CloudAccountScreen() {
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title="Account">
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() =>
+            router.push(beginCloudPostAuthIntentForDestination('/(app)/settings/cloud-account'))
+          }
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SignedInCloudAccount />;
+}
+
+function SignedInCloudAccount() {
   const colors = useThemeColors();
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
@@ -374,7 +410,17 @@ export default function CloudAccountScreen() {
   const handleSignOut = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+    const deviceAccounts = readDeviceAccounts(getDeviceAccountsClerk());
+    const signedInAccount = deviceAccounts.multiSession
+      ? activeDeviceAccount(deviceAccounts)
+      : null;
+    const handover = planSignOutHandover(deviceAccounts);
+    const message = signedInAccount
+      ? handover
+        ? `Log out of ${signedInAccount.email} on this device? You will continue as ${handover.next.email}.`
+        : `Log out of ${signedInAccount.email} on this device?`
+      : 'Log out of AGI Cloud on this device?';
+    Alert.alert('Log Out', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
@@ -389,8 +435,8 @@ export default function CloudAccountScreen() {
           }
           setLoggingOut(true);
           signOut()
-            .catch(() => {
-              Alert.alert('Sign out failed', 'Please try again.');
+            .catch((error: unknown) => {
+              Alert.alert('Sign out failed', deviceAccountErrorMessage(error, 'sign-out'));
             })
             .finally(() => setLoggingOut(false));
         },
@@ -426,21 +472,60 @@ export default function CloudAccountScreen() {
       return;
     }
 
-    setExporting(true);
-    exportCloudUserData(account)
-      .catch((error: unknown) => {
-        if (isStaleCloudAccountOperation(error) || !isCloudAccountEpochCurrent(account)) {
-          return;
-        }
-        Alert.alert(
-          'Export failed',
-          'AGI could not create your Cloud data export. Check your connection and try again.',
-        );
-      })
-      .finally(() => {
-        if (isCloudAccountEpochCurrent(account)) setExporting(false);
-      });
-  }, [appMode, captureVisibleAccount, setAppMode]);
+    const runExport = (work: Promise<void>) => {
+      setExporting(true);
+      work
+        .catch((error: unknown) => {
+          if (isStaleCloudAccountOperation(error) || !isCloudAccountEpochCurrent(account)) {
+            return;
+          }
+          if (error instanceof PartialCloudDataExportError) {
+            const leavesRowsOut =
+              error.completeness.truncated_sections.length > 0 ||
+              error.completeness.skipped_rows.length > 0;
+            Alert.alert(
+              'Your export is incomplete',
+              describePartialCloudDataExport(error.completeness),
+              [
+                { text: 'Cancel', style: 'cancel' },
+                ...(leavesRowsOut
+                  ? [
+                      {
+                        text: 'Get help',
+                        onPress: () =>
+                          router.push('/(app)/support' as Parameters<typeof router.push>[0]),
+                      },
+                    ]
+                  : []),
+                {
+                  text: 'Save what’s included',
+                  onPress: () => {
+                    if (!isCloudAccountEpochCurrent(account)) return;
+                    runExport(shareCloudDataExport(account, error.document, 'partial'));
+                  },
+                },
+              ],
+            );
+            return;
+          }
+          if (error instanceof CloudExportSharingUnavailableError) {
+            Alert.alert(
+              'Export not saved',
+              'This device has no way to save or share the export file. Nothing was shared.',
+            );
+            return;
+          }
+          Alert.alert(
+            'Export failed',
+            'AGI could not create your Cloud data export. Check your connection and try again.',
+          );
+        })
+        .finally(() => {
+          if (isCloudAccountEpochCurrent(account)) setExporting(false);
+        });
+    };
+    runExport(exportCloudUserData(account));
+  }, [appMode, captureVisibleAccount, router, setAppMode]);
 
   const handleDeleteAccount = useCallback(() => {
     const intent = beginDeletionIntent('schedule');
@@ -471,7 +556,18 @@ export default function CloudAccountScreen() {
                 if (!deletionIntentIsCurrent(intent)) return;
                 const receipt = parseAccountDeletionScheduleReceipt(res);
                 await signOut().catch(() => {});
-                Alert.alert('Account deletion scheduled', receipt.message);
+                const storeBilling = receipt.storeBilling;
+                if (!storeBilling) {
+                  Alert.alert('Account deletion scheduled', receipt.message);
+                  return;
+                }
+                Alert.alert('Account deletion scheduled', receipt.message, [
+                  { text: 'OK', style: 'cancel' },
+                  {
+                    text: 'Open subscriptions',
+                    onPress: () => void openExternalUrl(storeBilling.manageUrl),
+                  },
+                ]);
               })
               .catch(async (err: unknown) => {
                 if (isStepUpCancelled(err)) return;
@@ -485,7 +581,7 @@ export default function CloudAccountScreen() {
                       ? [
                           { text: 'OK', style: 'cancel' },
                           {
-                            text: 'Open Billing',
+                            text: 'View plan',
                             onPress: () =>
                               router.push(
                                 '/(app)/settings/cloud-billing' as Parameters<
@@ -498,12 +594,9 @@ export default function CloudAccountScreen() {
                   );
                   return;
                 }
-                const is401 = err instanceof Error && err.message.includes('401');
                 Alert.alert(
-                  is401 ? 'Session expired' : 'Could not confirm deletion scheduling',
-                  is401
-                    ? 'Your session expired. Sign in to the original account and check deletion status before taking another action.'
-                    : 'The scheduling outcome is unknown. Check the refreshed status in this account before taking another action. A status check may not reflect a request still in progress.',
+                  'Could not confirm deletion scheduling',
+                  'The scheduling outcome is unknown. Check the refreshed status in this account before taking another action. A status check may not reflect a request still in progress.',
                 );
                 await refreshDeletionStatus(intent.owner, account);
               })
@@ -576,7 +669,9 @@ export default function CloudAccountScreen() {
                 Alert.alert(
                   receipt.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
                   receipt.cancelled
-                    ? 'Your account deletion was cancelled.'
+                    ? receipt.planRenewal
+                      ? receipt.message
+                      : 'Your account deletion was cancelled.'
                     : 'The server confirmed that no account deletion is pending.',
                 );
               })

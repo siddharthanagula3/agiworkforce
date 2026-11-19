@@ -38,6 +38,7 @@ vi.mock('workflow', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db.current }));
 vi.mock('@/lib/services/agent-notification-service', () => ({
   notifyAgentRunEvent: (...args: unknown[]) => mocks.notify(...args),
+  trackAgentRunOutcome: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
   getCloudAgentExecutionUsage: mocks.usage,

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { parseCloudTaskHandoffQuery, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import {
   CODE_COPY,
   DEFAULT_CODE_ENVIRONMENT,
   contextWindowLabel,
+  continueInVsCodeHref,
   DEFAULT_CODE_FILTERS,
   environmentChipLabel,
   filterAndSortSessions,
@@ -114,5 +115,31 @@ describe('groupCodeSessions', () => {
   it('leaves out a group with no sessions', () => {
     expect(groupCodeSessions([session('a', 'ready')]).map((group) => group.id)).toEqual(['ready']);
     expect(groupCodeSessions([])).toEqual([]);
+  });
+});
+
+describe('continueInVsCodeHref', () => {
+  const session = (overrides: Partial<CloudCodeSession>) =>
+    ({
+      id: 'sess_1',
+      title: 'Fix the clock',
+      workingBranch: 'agi/fix-clock',
+      repositoryUrl: 'https://github.com/Acme/Widgets.git',
+      ...overrides,
+    }) as CloudCodeSession;
+
+  it('carries the session repository so the editor can find the matching clone', () => {
+    const href = continueInVsCodeHref(session({}));
+    expect(href).not.toBeNull();
+    expect(parseCloudTaskHandoffQuery(new URL(href as string).search)).toMatchObject({
+      runId: 'sess_1',
+      branch: 'agi/fix-clock',
+      repository: 'acme/widgets',
+    });
+  });
+
+  it('offers no link when the session has no repository or no branch', () => {
+    expect(continueInVsCodeHref(session({ repositoryUrl: null }))).toBeNull();
+    expect(continueInVsCodeHref(session({ workingBranch: null }))).toBeNull();
   });
 });

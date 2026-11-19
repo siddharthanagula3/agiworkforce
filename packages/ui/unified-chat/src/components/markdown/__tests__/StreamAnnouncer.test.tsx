@@ -1,7 +1,11 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { StreamAnnouncer, STREAM_ANNOUNCE_INTERVAL_MS } from '../StreamAnnouncer';
+import {
+  StreamAnnouncer,
+  STREAM_ANNOUNCE_INTERVAL_MS,
+  announcementPlainText,
+} from '../StreamAnnouncer';
 
 function announcer(): HTMLElement {
   return screen.getByTestId('stream-announcer');
@@ -146,5 +150,25 @@ describe('StreamAnnouncer announcements', () => {
     expect(region.getAttribute('aria-atomic')).toBe('true');
     expect(region.className).toContain('sr-only');
     expect(region.contains(screen.getByTestId('body'))).toBe(false);
+  });
+});
+
+describe('StreamAnnouncer plain text', () => {
+  it('announces the words of a message, not its markdown', () => {
+    render(
+      <StreamAnnouncer text="**Step 1 check:** Does a *vector* stay put? `yes` " isStreaming>
+        <p>body</p>
+      </StreamAnnouncer>,
+    );
+
+    advance(STREAM_ANNOUNCE_INTERVAL_MS);
+
+    expect(announcer().textContent).toBe('Step 1 check: Does a vector stay put? yes');
+  });
+
+  it('drops heading, list and link syntax', () => {
+    expect(announcementPlainText('## Plan\n- see [the notes](https://x.test/a) now ')).toBe(
+      'Plan see the notes now',
+    );
   });
 });

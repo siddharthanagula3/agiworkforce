@@ -59,7 +59,12 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 });
 
 import { CreditService } from '@/lib/services/credit-service';
-import { processRequest, resolveTurnWebDomainPolicy } from './request-processor';
+import { WEB_DOMAIN_RULE_MESSAGE } from '@agiworkforce/cloud-contracts';
+import {
+  parseChatCompletionRequestBody,
+  processRequest,
+  resolveTurnWebDomainPolicy,
+} from './request-processor';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import type { AuthGateSuccess } from './auth-gate';
 
@@ -223,5 +228,48 @@ describe('the provider built-in search under website rules', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(nativeSearchTools(result.llmRequest.tools)).toEqual([]);
+  });
+});
+
+describe('research site rules the request names', () => {
+  function body(sources: Record<string, unknown>) {
+    return {
+      model: PRO_CHAT_MODEL,
+      messages: [{ role: 'user', content: 'research this' }],
+      research_sources: sources,
+    };
+  }
+
+  it.each([
+    ['allow_domains', ['nature']],
+    ['deny_domains', ['nature.com', 'not a site']],
+  ])('refuses a %s entry that is not a domain instead of dropping it', (field, values) => {
+    const parsed = parseChatCompletionRequestBody(body({ [field]: values }));
+    expect(parsed.success).toBe(false);
+    if (parsed.success) return;
+    expect(parsed.error.issues.map((issue) => issue.message)).toContain(WEB_DOMAIN_RULE_MESSAGE);
+  });
+
+  it('carries the normalized rule, so the receipt names the enforced site', () => {
+    const parsed = parseChatCompletionRequestBody(
+      body({
+        allow_domains: ['Nature.com.', 'https://www.nature.com/articles'],
+        deny_domains: ['*.ads.example'],
+      }),
+    );
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.research_sources?.allow_domains).toEqual(['nature.com']);
+    expect(parsed.data.research_sources?.deny_domains).toEqual(['ads.example']);
+  });
+
+  it('enforces a trailing-dot site as a real allowlist', async () => {
+    const result = await processRequest(
+      searchTurn('rules-trailing-dot-1', { research_sources: { allow_domains: ['nature.com.'] } }),
+      auth(),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.webSearchDomainPolicy).toEqual({ allow: ['nature.com'], deny: [] });
   });
 });

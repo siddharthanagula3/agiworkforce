@@ -118,8 +118,8 @@ pub(super) async fn execute_mcp_tool(
             match mgr.execute_tool(name, arguments, privacy_mode).await {
                 Ok(output) => Ok(tools::ToolResult {
                     tool_name: name.to_string(),
-                    success: true,
-                    output,
+                    success: !output.is_error,
+                    output: output.text,
                 }),
                 Err(e) => Ok(tools::ToolResult {
                     tool_name: name.to_string(),

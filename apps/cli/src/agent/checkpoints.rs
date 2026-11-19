@@ -91,6 +91,7 @@ pub struct RestoreReport {
     pub restored: Vec<PathBuf>,
     pub removed: Vec<PathBuf>,
     pub skipped: Vec<(PathBuf, String)>,
+    pub retryable: bool,
 }
 
 #[derive(Debug)]
@@ -362,20 +363,25 @@ impl CheckpointLog {
             .skip(from)
             .flat_map(|checkpoint| checkpoint.files.iter())
         {
-            if !seen.insert(snapshot.path.clone()) {
+            let path = &snapshot.path;
+            let resolved = authority
+                .context("the session workspace file authority is unavailable")
+                .and_then(|authority| authority.resolve(path));
+            let destination = match &resolved {
+                Ok((root, relative)) => (root.path().to_path_buf(), relative.clone()),
+                Err(_) => (PathBuf::new(), path.clone()),
+            };
+            if !seen.insert(destination) {
                 continue;
             }
-            let path = &snapshot.path;
             if let FileState::Untracked(reason) = &snapshot.before {
                 report.skipped.push((path.clone(), reason.clone()));
                 continue;
             }
-            let resolved = authority
-                .context("the session workspace file authority is unavailable")
-                .and_then(|authority| authority.resolve(path));
             let (root, relative) = match resolved {
                 Ok(resolved) => resolved,
                 Err(error) => {
+                    report.retryable = true;
                     report.skipped.push((path.clone(), format!("{error:#}")));
                     continue;
                 }
@@ -384,7 +390,10 @@ impl CheckpointLog {
                 FileState::Absent => match root.remove_file(&relative) {
                     Ok(true) => report.removed.push(path.clone()),
                     Ok(false) => {}
-                    Err(error) => report.skipped.push((path.clone(), format!("{error:#}"))),
+                    Err(error) => {
+                        report.retryable = true;
+                        report.skipped.push((path.clone(), format!("{error:#}")));
+                    }
                 },
                 FileState::Contents(digest) => {
                     let written = self.read_blob(digest).and_then(|bytes| {
@@ -393,10 +402,13 @@ impl CheckpointLog {
                     match written {
                         Ok(true) => report.restored.push(path.clone()),
                         Ok(false) => {}
-                        Err(error) => report.skipped.push((
-                            path.clone(),
-                            format!("its saved copy could not be restored: {error:#}"),
-                        )),
+                        Err(error) => {
+                            report.retryable = true;
+                            report.skipped.push((
+                                path.clone(),
+                                format!("its saved copy could not be restored: {error:#}"),
+                            ));
+                        }
                     }
                 }
                 FileState::Untracked(_) => unreachable!(),
@@ -604,7 +616,10 @@ pub(crate) fn transcript_index(messages: &[Message], position: usize) -> usize {
         .count()
 }
 
-pub(crate) fn edited_paths(tool: &str, args: &Value, root: Option<&Path>) -> Vec<PathBuf> {
+pub(crate) async fn edited_paths(tool: &str, args: &Value, root: Option<&Path>) -> Vec<PathBuf> {
+    let base = root
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok());
     let mut raw: Vec<String> = Vec::new();
     if PATH_TOOLS.contains(&tool) {
         if let Some(path) = PATH_KEYS
@@ -614,29 +629,12 @@ pub(crate) fn edited_paths(tool: &str, args: &Value, root: Option<&Path>) -> Vec
             raw.push(path.to_string());
         }
     } else if tool == "apply_patch" {
-        if let Some(patch) = args.get("patch").and_then(Value::as_str) {
-            for line in patch.lines() {
-                let Some(target) = line
-                    .strip_prefix("--- ")
-                    .or_else(|| line.strip_prefix("+++ "))
-                else {
-                    continue;
-                };
-                let target = target.split('\t').next().unwrap_or(target).trim();
-                if target.is_empty() || target == "/dev/null" {
-                    continue;
-                }
-                let target = target
-                    .strip_prefix("a/")
-                    .or_else(|| target.strip_prefix("b/"))
-                    .unwrap_or(target);
-                raw.push(target.to_string());
+        if let (Some(patch), Some(base)) = (args.get("patch").and_then(Value::as_str), &base) {
+            if let Ok(targets) = crate::apply_patch::patch_targets(patch, base).await {
+                raw.extend(targets.into_iter().map(|target| target.name));
             }
         }
     }
-    let base = root
-        .map(Path::to_path_buf)
-        .or_else(|| std::env::current_dir().ok());
     let mut paths: Vec<PathBuf> = Vec::new();
     for entry in raw {
         let entry = entry.trim();

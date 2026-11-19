@@ -104,8 +104,7 @@ export function ToolApprovalDefaultsPanel() {
           Tool approvals
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          The default answer for connector, plugin, and tool actions across this account. Per-tool
-          Allow, Ask, and Deny choices in Connectors win over this default.
+          Default for tool actions. Per-tool choices in Connectors win.
         </p>
         <p
           className={`mt-2 text-xs ${loadError || saveError ? 'text-danger' : 'text-muted-foreground'}`}

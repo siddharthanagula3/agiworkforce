@@ -424,6 +424,94 @@ describe('condition watches', () => {
     expect(executor).toHaveBeenCalledTimes(1);
   });
 
+  it('records which occurrence a met condition admitted', async () => {
+    const { db } = finalizeDatabase(taskRow, { ...runRow, status: 'success' });
+    mocks.evaluateScheduleCondition.mockResolvedValue({
+      checkedAt: '2026-09-17T12:00:00.000Z',
+      met: true,
+      detail: 'The watched page changed',
+      contentSha256: 'def',
+    });
+    const execute = db.execute as ReturnType<typeof vi.fn>;
+
+    await processClaimedScheduleRun(
+      db,
+      claim({ task: { ...claim().task, condition } }),
+      vi.fn(async () => ({ text: 'done', model: 'auto-balanced' })),
+      { timeoutMs: 1_000, now: () => new Date('2026-09-17T12:00:01.000Z') },
+    );
+
+    const stateCall = execute.mock.calls.find(([sql]) =>
+      String(sql).includes('set condition_state'),
+    );
+    expect(JSON.parse((stateCall?.[1] as string[])[1]!)).toMatchObject({
+      met: true,
+      admittedFor: '2026-09-17T12:00:00.000Z',
+    });
+  });
+
+  it('retries a failed admitted occurrence without a second page change', async () => {
+    const admitted = {
+      checkedAt: '2026-09-17T12:00:00.000Z',
+      met: true,
+      detail: 'The watched page changed',
+      contentSha256: 'def',
+      admittedFor: '2026-09-17T12:00:00.000Z',
+    };
+    const { db } = finalizeDatabase(taskRow, { ...runRow, status: 'success' });
+    mocks.evaluateScheduleCondition.mockResolvedValue({
+      checkedAt: '2026-09-17T12:05:00.000Z',
+      met: false,
+      detail: 'The watched page has not changed',
+      contentSha256: 'def',
+    });
+    const executor = vi.fn(async () => ({ text: 'done', model: 'auto-balanced' }));
+
+    await processClaimedScheduleRun(
+      db,
+      claim({
+        attemptCount: 2,
+        task: { ...claim().task, condition, conditionState: admitted },
+      }),
+      executor,
+      { timeoutMs: 1_000, now: () => new Date('2026-09-17T12:05:01.000Z') },
+    );
+
+    expect(mocks.evaluateScheduleCondition).not.toHaveBeenCalled();
+    expect(executor).toHaveBeenCalledTimes(1);
+  });
+
+  it('still checks a retry whose occurrence the condition never admitted', async () => {
+    const earlierOccurrence = {
+      checkedAt: '2026-09-16T12:00:00.000Z',
+      met: true,
+      detail: 'The watched page changed',
+      contentSha256: 'abc',
+      admittedFor: '2026-09-16T12:00:00.000Z',
+    };
+    const { db } = finalizeDatabase(taskRow, { ...runRow, status: 'cancelled' });
+    mocks.evaluateScheduleCondition.mockResolvedValue({
+      checkedAt: '2026-09-17T12:05:00.000Z',
+      met: false,
+      detail: 'The watched page has not changed',
+      contentSha256: 'abc',
+    });
+    const executor = vi.fn();
+
+    await processClaimedScheduleRun(
+      db,
+      claim({
+        attemptCount: 2,
+        task: { ...claim().task, condition, conditionState: earlierOccurrence },
+      }),
+      executor,
+      { timeoutMs: 1_000, now: () => new Date('2026-09-17T12:05:01.000Z') },
+    );
+
+    expect(mocks.evaluateScheduleCondition).toHaveBeenCalledTimes(1);
+    expect(executor).not.toHaveBeenCalled();
+  });
+
   it('does not check a condition for a run a trigger or a person started', async () => {
     const { db } = finalizeDatabase(taskRow, { ...runRow, status: 'success' });
     const executor = vi.fn(async () => ({ text: 'done', model: 'auto-balanced' }));

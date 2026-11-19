@@ -22,7 +22,10 @@ import {
   shareAgent,
   type AgentRow,
 } from '@/lib/services/custom-agent-service';
-import { listWorkspaceMembers } from '@/lib/services/organization-member-admin-service';
+import {
+  listWorkspaceMembers,
+  readWorkspaceMember,
+} from '@/lib/services/organization-member-admin-service';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 
 export const runtime = 'nodejs';
@@ -33,6 +36,10 @@ async function shareState(
   row: AgentRow,
 ): Promise<AgentShareResponse> {
   if (!row.organization_id) {
+    return { visibility: row.visibility, workspaceName: null, members: [] };
+  }
+  const membership = await readWorkspaceMember(serviceDb(), row.organization_id, userId);
+  if (membership?.status !== 'active') {
     return { visibility: row.visibility, workspaceName: null, members: [] };
   }
   const [access, page, organizations] = await Promise.all([

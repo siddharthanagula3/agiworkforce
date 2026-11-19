@@ -614,6 +614,29 @@ describe('useChatStream native web search citation annotations', () => {
   });
 });
 
+describe('useChatStream inline citations from a provider that cites as it writes', () => {
+  it('places a chip at the end of each sentence a citation arrived in', async () => {
+    installFetch([
+      contentDelta('Node.js 24 is the current LTS line. '),
+      citationDelta('https://nodejs.org/en/about/previous-releases', 'Node.js releases'),
+      contentDelta('It moves to maintenance on October 20, 2026. '),
+      citationDelta('https://github.com/nodejs/release', 'nodejs/release'),
+      contentDelta('Node.js 26 becomes LTS on October 28.'),
+    ]);
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('latest node lts');
+    });
+
+    const expected =
+      'Node.js 24 is the current LTS line. It moves to maintenance on October 20, 2026.[1] ' +
+      'Node.js 26 becomes LTS on October 28.[2]';
+    await waitFor(() => expect(assistantMessage()?.content).toBe(expected));
+    expect(saveBodies.at(-1)?.['content']).toBe(expected);
+  });
+});
+
 function groundedSearchResults(spans: Array<{ endIndex: number; positions: number[] }>) {
   return {
     choices: [

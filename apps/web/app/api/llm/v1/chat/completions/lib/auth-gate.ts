@@ -1,11 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  BILLING_PLAN_PRICING,
-  isEnterprisePlanTier,
-  isEntitledSubscriptionStatusForTier,
-} from '@agiworkforce/types';
+import { isEnterprisePlanTier, isEntitledSubscriptionStatusForTier } from '@agiworkforce/types';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser, isAccountUnavailableError } from '@/lib/api-auth';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -13,12 +9,7 @@ import { resolveEffectiveSubscription } from '@/lib/services/effective-subscript
 import { buildFreeWebsiteSubscription, isFreePlanTier } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import {
-  canUseManagedCloudChatSurface,
-  getCloudChatSurfaceCapability,
-  type AuthenticatedSurfaceClass,
-  type BoundSurface,
-} from '@/lib/free-chat-surface-policy';
+import type { AuthenticatedSurfaceClass, BoundSurface } from '@/lib/free-chat-surface-policy';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
@@ -31,7 +22,7 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import type { EnterpriseCollectionAccessState } from '@/lib/services/subscription-access-policy';
 import { timePhase } from '@/lib/observability/phase-timer';
 import { developerProjectSpendRefusal } from '@/lib/developer-api/project-spend';
-import { resolveAuthenticatedSurface } from './request-surface';
+import { managedCloudSurfaceRefusal, resolveAuthenticatedSurface } from './request-surface';
 import { CHAT_TURN_PHASE } from './turn-phases';
 import {
   CURRENT_TERMS_VERSION,
@@ -87,45 +78,8 @@ function enforceManagedCloudSurface(
   success: AuthGateSuccess,
 ): AuthGateResult {
   const surface = resolveAuthenticatedSurface(request, success);
-  if (canUseManagedCloudChatSurface(success.subscription.plan_tier, surface)) return success;
-
-  const capability = getCloudChatSurfaceCapability(surface);
-  const error =
-    capability === null
-      ? {
-          message:
-            'This credential is not bound to an AGI client. Use the AGI web, desktop or mobile app, the browser extension, the CLI or the IDE extension, or an API key.',
-          code: 'managed_cloud_surface_unknown',
-        }
-      : capability === 'developer_surfaces'
-        ? {
-            message: `Managed Cloud CLI, browser extension, and IDE access require ${BILLING_PLAN_PRICING.pro.label} or higher.`,
-            code: 'developer_surface_plan_required',
-            requiredTier: 'pro',
-          }
-        : capability === 'managed_api'
-          ? {
-              message: `Managed API access requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
-              code: 'managed_api_plan_required',
-              requiredTier: 'pro',
-            }
-          : {
-              message: 'Managed Cloud chat is not available on this plan.',
-              code: 'managed_chat_plan_required',
-            };
-
-  return {
-    ok: false,
-    response: NextResponse.json(
-      {
-        error: {
-          ...error,
-          type: 'invalid_request_error',
-        },
-      },
-      { status: 403 },
-    ),
-  };
+  const refusal = managedCloudSurfaceRefusal(success.subscription.plan_tier, surface);
+  return refusal ? { ok: false, response: refusal } : success;
 }
 
 function termsRefusal(

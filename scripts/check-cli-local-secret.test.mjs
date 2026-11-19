@@ -45,6 +45,7 @@ function healthyTree(extra = {}) {
       'pub const ACCOUNT_TOKEN: &str = "account/token";\n',
     'apps/cli/src/auth.rs': 'const CREDENTIAL_USE_LOG: &str = "credential-use.jsonl";\n',
     'apps/cli/src/cloud/api_keys.rs': 'pub const API_KEYS_PATH: &str = "/api/settings/api-keys";\n',
+    'apps/cli/src/features/a2a/registry.rs': 'const TOKEN_REQUIRED_KEY: &str = "token_required";\n',
     ...extra,
   });
 }

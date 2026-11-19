@@ -114,6 +114,10 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /verifyGitHubWebhookSignature\s*\(/,
     reason: 'GitHub signs the payload; there is no browser and no cookie principal.',
   },
+  'llm/v1/chat/completions/resume-caller/route.ts': {
+    call: BEARER_GATE,
+    reason: 'runAuthGate refuses any request without a Bearer header before identity resolves.',
+  },
   'llm/v1/chat/completions/resume-device/route.ts': {
     call: BEARER_GATE,
     reason: 'runAuthGate refuses any request without a Bearer header before identity resolves.',
@@ -145,6 +149,11 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
   'mobile/iap/google-notifications/route.ts': {
     call: /verifyGooglePubSubPushIdentity\s*\(/,
     reason: 'Google Pub/Sub presents a signed push identity token; no user session is involved.',
+  },
+  'pair/standing/route.ts': {
+    call: /isRelayCaller\s*\(/,
+    reason:
+      'Only the Remote Control relay calls this, with the shared SIGNALING_INTERNAL_SECRET as its Bearer token; no user session is read.',
   },
   'scim/v2/Groups/[groupId]/route.ts': {
     call: /withScim\s*\(/,

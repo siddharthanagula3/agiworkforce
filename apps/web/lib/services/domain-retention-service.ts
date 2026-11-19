@@ -141,6 +141,45 @@ function memberScoped(alias: string): string {
     ) and ${notHeld(alias)}`;
 }
 
+function researchReportInWorkspace(alias: string): string {
+  return `exists (
+      select 1 from public.web_conversations c
+       where c.id = ${alias}.conversation_id
+         and c.user_id = ${alias}.user_id
+         and c.organization_id = $1
+    )`;
+}
+
+// A notification carries no workspace of its own; only one whose target is a
+// resource of this workspace is the workspace's to delete. Settings, schedule
+// and untargeted notices belong to the account.
+function notificationInWorkspace(alias: string): string {
+  return `(
+      (${alias}.target_kind = 'chat' and exists (
+        select 1 from public.web_conversations c
+         where c.id::text = ${alias}.target_id
+           and c.user_id = ${alias}.user_id
+           and c.organization_id = $1))
+      or (${alias}.target_kind = 'work' and exists (
+        select 1 from public.cloud_agent_runs r
+         where r.id::text = ${alias}.target_id
+           and r.user_id = ${alias}.user_id
+           and r.organization_id = $1))
+      or (${alias}.target_kind = 'code-session' and exists (
+        select 1 from public.cloud_code_sessions s
+         where s.id::text = ${alias}.target_id
+           and s.user_id = ${alias}.user_id
+           and s.organization_id = $1))
+      or (${alias}.target_kind = 'research' and exists (
+        select 1 from public.research_reports rr
+          join public.web_conversations c on c.id = rr.conversation_id
+         where rr.id::text = ${alias}.target_id
+           and rr.user_id = ${alias}.user_id
+           and c.user_id = rr.user_id
+           and c.organization_id = $1))
+    )`;
+}
+
 function rowsOnlySweeper(options: { heldSql: string; deleteSql: string }): DomainSweeper {
   return {
     countHeld: (db, context) =>
@@ -447,14 +486,14 @@ export function createDomainSweepers(
     notifications: rowsOnlySweeper({
       heldSql: `select count(*)::int as count from public.notifications t
                  where t.created_at < $2
-                   and exists (select 1 from public.organization_members m
-                                where m.organization_id = $1 and m.user_id = t.user_id)
+                   and ${notificationInWorkspace('t')}
                    and ${isHeld('t')}`,
       deleteSql: `delete from public.notifications
                    where id in (
                      select t.id from public.notifications t
                       where t.created_at < $2
-                        and ${memberScoped('t')}
+                        and ${notificationInWorkspace('t')}
+                        and ${notHeld('t')}
                       order by t.created_at asc
                       limit $4
                    )
@@ -468,14 +507,14 @@ export function createDomainSweepers(
     research: rowsOnlySweeper({
       heldSql: `select count(*)::int as count from public.research_reports t
                  where t.created_at < $2
-                   and exists (select 1 from public.organization_members m
-                                where m.organization_id = $1 and m.user_id = t.user_id)
+                   and ${researchReportInWorkspace('t')}
                    and ${isHeld('t')}`,
       deleteSql: `delete from public.research_reports
                    where id in (
                      select t.id from public.research_reports t
                       where t.created_at < $2
-                        and ${memberScoped('t')}
+                        and ${researchReportInWorkspace('t')}
+                        and ${notHeld('t')}
                       order by t.created_at asc
                       limit $4
                    )

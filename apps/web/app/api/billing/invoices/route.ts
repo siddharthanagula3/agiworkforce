@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { listUserBillingInvoices } from '@/lib/services/billing-invoice-service';
+import { readUserBillingInvoicePage } from '@/lib/services/billing-invoice-service';
 
 async function handleGetInvoices(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-invoices');
@@ -25,9 +25,11 @@ async function handleGetInvoices(request: NextRequest) {
   }
 
   try {
-    return NextResponse.json({
-      invoices: await listUserBillingInvoices(scoped.db, scoped.userId),
-    });
+    const { invoices, available, hasMore } = await readUserBillingInvoicePage(
+      scoped.db,
+      scoped.userId,
+    );
+    return NextResponse.json({ invoices, available, hasMore });
   } catch (error) {
     logger.error({ error, userId: scoped.userId }, 'Failed to fetch Stripe invoices');
     throw createError.internal('Failed to fetch invoices');

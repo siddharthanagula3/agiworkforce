@@ -10,6 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requireCatalogModel } from './catalogModelFixtures';
+import { ACCOUNT_REFUSAL_TEXT_MAX_LENGTH } from '../utils/accountRefusal';
 
 import {
   presentChatError,
@@ -401,6 +402,62 @@ describe('presentChatError', () => {
 
   it('never returns an empty headline', () => {
     expect(presentChatError('   ').headline).toBe("AGI couldn't finish the reply.");
+  });
+
+  it.each([
+    [
+      'an incident lockdown',
+      {
+        code: 'FORBIDDEN',
+        message: 'This workspace is locked down while an incident is investigated.',
+      },
+      'permission',
+    ],
+    [
+      'a workspace policy',
+      { code: 'surface_not_allowed', message: 'Your workspace does not allow this client.' },
+      'permission',
+    ],
+    [
+      'a plan limit',
+      {
+        code: 'developer_surface_plan_required',
+        message: 'Your plan does not include this client.',
+      },
+      'subscription',
+    ],
+  ])('shows the server wording for %s without offering a sign-in', (_case, error, category) => {
+    const presented = presentChatError(
+      `[agi-cloud] API error (HTTP 403): ${JSON.stringify({ error })}`,
+    );
+
+    expect(presented.headline).toBe(error.message);
+    expect(presented.category).toBe(category);
+    expect(presented.retryable).toBe(false);
+    expect(presented.action).toBeUndefined();
+  });
+
+  it('bounds the server wording of a refusal to one short line', () => {
+    const presented = presentChatError(
+      `[agi-cloud] API error (HTTP 403): ${JSON.stringify({
+        error: { code: 'FORBIDDEN', message: `Locked.\n${'x'.repeat(5_000)}` },
+      })}`,
+    );
+
+    expect(presented.headline.startsWith('Locked. x')).toBe(true);
+    expect(presented.headline).not.toContain('\n');
+    expect(Array.from(presented.headline)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+    expect(presented.category).toBe('permission');
+  });
+
+  it('shows the server wording for an outage and lets the user retry', () => {
+    const presented = presentChatError(
+      '[agi-cloud] API error (HTTP 503): {"error":{"code":"SERVICE_UNAVAILABLE","message":"Service temporarily unavailable"}}',
+    );
+
+    expect(presented.headline).toBe('Service temporarily unavailable');
+    expect(presented.retryable).toBe(true);
+    expect(presented.action).toBeUndefined();
   });
 
   it('keeps a long boundary refusal readable instead of burying it', () => {

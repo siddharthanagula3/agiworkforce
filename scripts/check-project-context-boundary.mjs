@@ -13,8 +13,10 @@ import {
 } from './lib/project-context-boundary.mjs';
 
 /**
- * Reads that bind no account and are reached only behind one that does. Each
- * entry states why; the guard fails on anything not listed here.
+ * Reads that bind no account and are reached only behind one that does, or
+ * that a scheduled sweep runs with no account at all on project ids it read
+ * from the database itself, never from a caller. Each entry states why; the
+ * guard fails on anything not listed here.
  */
 export const BASELINE = Object.freeze([
   {
@@ -23,6 +25,14 @@ export const BASELINE = Object.freeze([
       'readProjectKnowledgeIndexStates takes an already authorised project id and runs on the ' +
       'row-level-security adapter; both callers under app/api/projects read the project for the ' +
       'signed-in user first. Move the owner into the statement if a third caller appears.',
+  },
+  {
+    file: 'apps/web/lib/server/retention/deleted-project-files.ts',
+    reason:
+      'purgeDeletedProjectFiles is called only by the purge-deleted-media cron behind ' +
+      'verifyCronRequest. It reads user_projects by the project ids of the deleted knowledge ' +
+      'rows it selected itself, to learn each file workspace so legal holds are serialized per ' +
+      'workspace; no caller supplies an id and there is no account to bind.',
   },
 ]);
 

@@ -24,6 +24,8 @@ const WRITE_SCOPES = new Set(['write', 'write-all']);
 
 // A deploy is recognised from what a step actually runs, so a new deploy
 // workflow is covered the day it lands rather than when someone lists it.
+// The release markers are anchored to a command position, so a guard that
+// only quotes the command, such as repo-operability.yml, is not a release.
 const DEPLOY_MARKERS = [
   /\bvercel\b[^\n]*\bdeploy\b/,
   /\bvercel\b[^\n]*\bpromote\b/,
@@ -33,7 +35,22 @@ const DEPLOY_MARKERS = [
   /\bwrangler\b[^\n]*\bdeploy\b/,
   /\bnpm\s+publish\b/,
   /\bpnpm\s+publish\b/,
+  /(?:^|[\s;&|(])vsce\s+publish\b/m,
+  /(?:^|[\s;&|(])ovsx\s+publish\b/m,
+  /\bpublish-chrome-web-store\.mjs\b/,
+  /(?:^|[\s;&|(])cosign\s+sign-blob\b/m,
 ];
+
+const RELEASE_ACTIONS = [/^softprops\/action-gh-release@/];
+
+const GLOBAL_INSTALLS = [
+  /(?:^|[\s;&|(])npm\s+(?:install|i|add)\b[^\n]*\s(?:--global|-g)\b/m,
+  /(?:^|[\s;&|(])pnpm\s+(?:add|install|i)\b[^\n]*\s(?:--global|-g)\b/m,
+  /(?:^|[\s;&|(])yarn\s+global\s+add\b/m,
+];
+
+const SCRIPTED_INSTALL =
+  /(?:^|[\s;&|(])(?:pnpm\s+(?:install|i)|npm\s+(?:ci|install|i)|yarn\s+install)\b[^\n]*/gm;
 
 // Fields an outside contributor controls. Interpolated into a shell they are
 // executed, not quoted.
@@ -131,7 +148,55 @@ export function writeScopes(permissions) {
 
 export function isDeployJob(job) {
   const text = jobText(job);
-  return DEPLOY_MARKERS.some((marker) => marker.test(text));
+  if (DEPLOY_MARKERS.some((marker) => marker.test(text))) return true;
+  return actionReferences(job).some((uses) => RELEASE_ACTIONS.some((action) => action.test(uses)));
+}
+
+function pushTags(document) {
+  const on = document?.on ?? document?.[true];
+  const tags = on && typeof on === 'object' && !Array.isArray(on) ? on.push?.tags : undefined;
+  if (typeof tags === 'string') return [tags];
+  return Array.isArray(tags) ? tags.map(String) : [];
+}
+
+function environmentName(job) {
+  const environment = job.environment;
+  if (typeof environment === 'string') return environment;
+  return typeof environment?.name === 'string' ? environment.name : null;
+}
+
+function secretPattern(name) {
+  return new RegExp(`\\bsecrets\\.${name}\\b`);
+}
+
+/** The signing secrets a job reads, from the names the contract binds to an environment. */
+export function signingSecretsRead(job, contract) {
+  const text = jobText(job);
+  return Object.keys(contract.signingSecrets ?? {}).filter((name) =>
+    secretPattern(name).test(text),
+  );
+}
+
+function runText(job) {
+  return steps(job)
+    .map((step) => step.run)
+    .filter((run) => typeof run === 'string')
+    .join('\n');
+}
+
+export function runsGlobalInstall(job) {
+  const text = runText(job);
+  return GLOBAL_INSTALLS.some((pattern) => pattern.test(text));
+}
+
+export function scriptedInstalls(job) {
+  return [...runText(job).matchAll(SCRIPTED_INSTALL)]
+    .map((match) => match[0].trim())
+    .filter((line) => !/\s--ignore-scripts\b/.test(line));
+}
+
+function uploadsArtifact(job) {
+  return actionReferences(job).some((uses) => uses.startsWith('actions/upload-artifact@'));
 }
 
 function actionReferences(job) {
@@ -277,23 +342,125 @@ function checkProductionEnvironment({ workflows, contract, errors }) {
   const found = new Set();
   for (const { file, jobs } of workflows) {
     for (const [name, job] of jobs) {
-      if (!isDeployJob(job)) continue;
-      const environment = job.environment;
-      const environmentName =
-        typeof environment === 'string' ? environment : (environment?.name ?? null);
-      if (environmentName === null) {
+      if (!isDeployJob(job) && signingSecretsRead(job, contract).length === 0) continue;
+      const declaredName = environmentName(job);
+      if (declaredName === null) {
         found.add(`${file}:${name}`);
         continue;
       }
-      if (declared.size > 0 && !declared.has(environmentName)) {
+      if (declared.size > 0 && !declared.has(declaredName)) {
         errors.push(
-          `${file}:${name} deploys into environment "${environmentName}", which ${CONTRACT_PATH} ` +
+          `${file}:${name} deploys into environment "${declaredName}", which ${CONTRACT_PATH} ` +
             'does not list. An environment nobody declared has no reviewers and no secrets policy.',
         );
       }
     }
   }
   reportBaseline({ rule: 'deployWithoutEnvironment', found, contract, errors });
+}
+
+// A repository secret reaches a workflow on any pushed branch that names it;
+// an environment secret reaches only a job that declares the environment and
+// passes its reviewers and tag policy.
+function checkSigningSecrets({ workflows, contract, errors }) {
+  const bindings = contract.signingSecrets ?? {};
+  const declared = new Set(contract.productionEnvironments ?? []);
+  for (const [secret, environment] of Object.entries(bindings)) {
+    if (!declared.has(environment)) {
+      errors.push(
+        `${CONTRACT_PATH}: signingSecrets binds ${secret} to "${environment}", which ` +
+          'productionEnvironments does not list.',
+      );
+    }
+  }
+  for (const { file, document, jobs } of workflows) {
+    const workflowText = JSON.stringify(document?.env ?? '');
+    for (const secret of Object.keys(bindings)) {
+      if (secretPattern(secret).test(workflowText)) {
+        errors.push(
+          `${file} reads ${secret} at workflow level, which hands the signing key to every job in it.`,
+        );
+      }
+    }
+    for (const [name, job] of jobs) {
+      for (const secret of signingSecretsRead(job, contract)) {
+        const required = bindings[secret];
+        const actual = environmentName(job);
+        if (actual !== required) {
+          errors.push(
+            `${file}:${name} reads ${secret} in ${actual === null ? 'no environment' : `environment "${actual}"`}. ` +
+              `It may be read only in environment "${required}", where it is stored as an environment secret.`,
+          );
+        }
+      }
+    }
+  }
+}
+
+// The release environments allow only their tags to deploy. A job that names
+// one must be triggered by those tags, or the policy the owner applies and the
+// workflow disagree and the release can never be approved.
+function checkReleaseEnvironments({ workflows, contract, errors }) {
+  const release = contract.releaseEnvironments ?? {};
+  const declared = new Set(contract.productionEnvironments ?? []);
+  for (const [environment, entry] of Object.entries(release)) {
+    if (!declared.has(environment)) {
+      errors.push(
+        `${CONTRACT_PATH}: releaseEnvironments lists "${environment}", which productionEnvironments does not.`,
+      );
+    }
+    if (!Array.isArray(entry?.tags) || entry.tags.length === 0) {
+      errors.push(`${CONTRACT_PATH}: releaseEnvironments "${environment}" names no tag pattern.`);
+    }
+  }
+  for (const { file, document, jobs } of workflows) {
+    const triggers = pushTags(document);
+    for (const [name, job] of jobs) {
+      const environment = environmentName(job);
+      if (environment === null || !(environment in release)) continue;
+      const allowed = new Set(release[environment]?.tags ?? []);
+      const outside = triggers.filter((tag) => !allowed.has(tag));
+      if (triggers.length === 0 || outside.length > 0) {
+        errors.push(
+          `${file}:${name} deploys into "${environment}", which allows only tags ` +
+            `${[...allowed].join(', ')}, but the workflow is triggered by ` +
+            `${triggers.length === 0 ? 'no tag' : triggers.join(', ')}.`,
+        );
+      }
+    }
+  }
+}
+
+// npm resolves a global install fresh, with no lockfile, no integrity pin and
+// no minimum release age. In a release job that is code chosen at release time
+// running beside the artifact, the signing key or a write token.
+function checkReleaseToolInstalls({ workflows, contract, errors }) {
+  const found = new Set();
+  for (const { file, document, jobs } of workflows) {
+    if (pushTags(document).length === 0) continue;
+    for (const [name, job] of jobs) {
+      const holdsRelease =
+        isDeployJob(job) ||
+        signingSecretsRead(job, contract).length > 0 ||
+        uploadsArtifact(job) ||
+        writeScopes(resolvedPermissions(document, job)).length > 0;
+      if (holdsRelease && runsGlobalInstall(job)) found.add(`${file}:${name}`);
+    }
+  }
+  reportBaseline({ rule: 'releaseJobGlobalInstall', found, contract, errors });
+}
+
+// Every step of a job can request its OIDC token, so an install script that
+// runs in a job holding id-token: write can authenticate as that job.
+function checkOidcInstalls({ workflows, contract, errors }) {
+  const found = new Set();
+  for (const { file, document, jobs } of workflows) {
+    for (const [name, job] of jobs) {
+      if (!writeScopes(resolvedPermissions(document, job)).includes('id-token')) continue;
+      if (scriptedInstalls(job).length > 0) found.add(`${file}:${name}`);
+    }
+  }
+  reportBaseline({ rule: 'oidcJobRunsInstallScripts', found, contract, errors });
 }
 
 function checkPullRequestTarget({ workflows, errors }) {
@@ -372,6 +539,10 @@ export function checkWorkflowHardening(repoRoot = REPO_ROOT) {
   checkTimeouts({ workflows, contract, errors });
   checkDeployConcurrency({ workflows, errors });
   checkProductionEnvironment({ workflows, contract, errors });
+  checkSigningSecrets({ workflows, contract, errors });
+  checkReleaseEnvironments({ workflows, contract, errors });
+  checkReleaseToolInstalls({ workflows, contract, errors });
+  checkOidcInstalls({ workflows, contract, errors });
   checkPullRequestTarget({ workflows, errors });
   checkScriptInjection({ workflows, contract, errors });
 

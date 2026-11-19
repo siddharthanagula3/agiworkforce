@@ -48,7 +48,7 @@ const SELF_SERVE: readonly LedgerRow[] = [
   {
     label: 'Delete your account',
     value:
-      'Request it from account settings. Erasure is scheduled 24 hours out and then performed by a daily job, which also deletes your identity at our authentication provider. You get no confirmation email, but cancellation is self-serve: sign back in and cancel from Settings > Account any time inside that window.',
+      'Request it from account settings. Erasure is scheduled 24 hours out and then carried out by a daily job, which also deletes your identity at our authentication provider. If an active legal hold covers your account, erasure waits until the hold is released. You get no confirmation email, but cancellation is self-serve: sign back in and cancel from Settings > Account any time inside that window.',
   },
   {
     label: 'Turn analytics off',

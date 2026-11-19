@@ -199,6 +199,24 @@ describe('SettingsPanel', () => {
     });
 
     expect(configurationUpdate).not.toHaveBeenCalled();
+    expect(panelPostMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'settings.snapshot' }),
+    );
+    expect(panelPostMessage).toHaveBeenCalledWith({
+      type: 'settings.error',
+      message: 'That value is not valid for this setting. Your previous value is unchanged.',
+    });
+  });
+
+  it('stays silent for unknown settings keys and unrelated malformed messages', async () => {
+    SettingsPanel.createOrShow(context);
+    panelPostMessage.mockClear();
+
+    await webviewMessageHandler!({ type: 'settings.update', key: 'notASetting', value: 1 });
+    await webviewMessageHandler!({ type: 'settings.bogus' });
+
+    expect(configurationUpdate).not.toHaveBeenCalled();
+    expect(panelPostMessage).not.toHaveBeenCalled();
   });
 
   it('keeps raw VS Code settings as an explicit escape hatch', async () => {

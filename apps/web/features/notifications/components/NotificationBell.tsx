@@ -80,13 +80,16 @@ function NotificationRow({ item, onOpen }: NotificationRowProps) {
 }
 
 export function NotificationBell() {
+  const { isLoaded, isSignedIn, userId } = useSession();
+  if (!isLoaded || !isSignedIn) return null;
+  return <AccountNotificationBell key={userId ?? ''} />;
+}
+
+function AccountNotificationBell() {
   const router = useRouter();
-  const { isLoaded, isSignedIn } = useSession();
   const [open, setOpen] = useState(false);
   const [markAllError, setMarkAllError] = useState(false);
-  const feed = useNotificationFeed(isLoaded && Boolean(isSignedIn));
-
-  if (!isLoaded || !isSignedIn) return null;
+  const feed = useNotificationFeed(true);
 
   const openItem = (item: NotificationFeedItem) => {
     feed.markRead(item.id);

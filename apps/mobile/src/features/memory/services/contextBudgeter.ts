@@ -5,11 +5,13 @@ import {
 } from '@agiworkforce/agent-core';
 import { getModelById, MODEL_LIST } from '@/lib/models';
 import type { ModelDef } from '@/lib/models';
+import { getSelectableModelById } from '@/src/features/model-picker/service';
 import type { ChatMessage } from '@/types/chat';
 
 export type BudgetStatus = 'ok' | 'warn' | 'compact';
 
 export interface ContextBudget {
+  runsOnDevice: boolean;
   contextWindowTokens: number;
   hardCapTokens: number;
   warnThresholdTokens: number;
@@ -32,6 +34,8 @@ function toContextMessage(msg: ChatMessage): AgentContextMessage {
 }
 
 function getContextWindow(modelId: string): number {
+  const onDevice = getSelectableModelById(modelId);
+  if (onDevice?.contextWindow) return onDevice.contextWindow;
   const model = getModelById(modelId);
   if (model?.contextWindow) return model.contextWindow;
   const fallback = MODEL_LIST[0] as ModelDef | undefined;
@@ -97,6 +101,7 @@ export function computeContextBudget(
   }
 
   return {
+    runsOnDevice: getSelectableModelById(modelId) !== undefined,
     contextWindowTokens: contextWindow,
     hardCapTokens,
     warnThresholdTokens,

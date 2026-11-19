@@ -14,6 +14,7 @@ import {
 } from '@/lib/services/active-workspace-service';
 import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
+import { hasInvalidModelImprovementConsent } from '@/lib/server/model-improvement-consent';
 import { SKILL_SETTINGS_NAMESPACE } from '@/lib/services/skill-install-service';
 import { serializeUserSettings } from '@/lib/services/user-settings-payload';
 import { autonomousToolApprovalsAvailable } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
@@ -81,6 +82,9 @@ function validatedSettingsDelta(current: Record<string, unknown>, parsed: Settin
           : (parsed.value ?? parsed.settings ?? {}),
       }
     : (parsed.settings ?? {});
+  if (hasInvalidModelImprovementConsent(delta)) {
+    throw createError.validation('Model improvement choices must be on or off');
+  }
   serializeUserSettings({ ...current, ...delta });
   return delta;
 }

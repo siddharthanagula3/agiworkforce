@@ -176,10 +176,15 @@ async function readAvailability(request: PhoneStepRequest): Promise<PhoneStepOut
       start: wallClock(new Date(start)),
       end: wallClock(new Date(end)),
     }));
-  return {
-    content: JSON.stringify({ timeZone: timeZone(), busy: spans(busy), free: spans(free) }),
-    isError: false,
-  };
+  const content = JSON.stringify({ timeZone: timeZone(), busy: spans(busy), free: spans(free) });
+  if (content.length > MAX_DEVICE_STEP_OUTPUT_LENGTH) {
+    return {
+      content:
+        'The calendar has too many separate events in that range to summarise, so no availability was returned. Ask again with a shorter range.',
+      isError: true,
+    };
+  }
+  return { content, isError: false };
 }
 
 async function writableCalendar(): Promise<Calendar.Calendar | null> {

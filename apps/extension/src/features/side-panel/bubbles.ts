@@ -76,6 +76,7 @@ import {
 import { buildConnectorInputForm, type ConnectorInputBinding } from './connectorInputForm';
 import { buildAgiWorkPlanReview, type AgiWorkPlanReviewBinding } from './agiWorkPlanReview';
 import { buildImageViewerButton } from './mediaViewer';
+import { USER_TAKEOVER_MAX_MINUTES } from '../computer-use/runOwnership';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
@@ -1517,7 +1518,9 @@ export function buildBrowserTurnControls(handlers: {
   let paused = false;
   const render = (): void => {
     toggle.textContent = paused ? t('spBrowserHandBack') : t('spBrowserTakeOver');
-    toggle.title = paused ? t('spBrowserHandBackTitle') : t('spBrowserTakeOverTitle');
+    toggle.title = paused
+      ? t('spBrowserHandBackTitle')
+      : t('spBrowserTakeOverTitle', [USER_TAKEOVER_MAX_MINUTES]);
   };
   toggle.addEventListener('click', () => {
     toggle.disabled = true;

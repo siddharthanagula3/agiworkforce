@@ -1,4 +1,4 @@
-import projectContract from './project-contract.json';
+import projectContract from './project-contract.json' with { type: 'json' };
 import { z } from 'zod';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 
@@ -138,6 +138,7 @@ export type ManagedCloudProjectKnowledgeRegisterRequest = z.infer<
 
 export const ManagedCloudProjectKnowledgeRegisterResponseSchema = z.object({
   file: ManagedCloudProjectKnowledgeFileSchema,
+  notice: z.string().min(1).optional(),
 });
 
 export const ManagedCloudProjectKnowledgeDeleteResponseSchema = z.object({

@@ -224,10 +224,8 @@ export function DeviceSignInToggle({ active = true }: { active?: boolean }) {
             Approve sign-in from a device code
           </div>
           <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
-            Lets the CLI, desktop and mobile apps sign in by showing you a short code to approve
-            here. Turn this off if you never use them. Anyone who can get you to approve a code they
-            generated gains access to your account, so only approve a code you started yourself.
-            Turning this off prevents new approvals; it does not sign out devices already connected.
+            Lets apps sign in with a code you approve here. Only approve codes you started. Off
+            keeps existing devices signed in.
           </p>
         </div>
         <Switch

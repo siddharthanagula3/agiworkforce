@@ -8,6 +8,7 @@ import {
   type AccountMemoryState,
   type AccountMemoryStore,
 } from '../memory/accountMemoryStore';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 type Handler = (...args: unknown[]) => unknown;
 
@@ -52,7 +53,10 @@ function installAccountMemory(options: { signedOut?: boolean; facts?: MemoryFact
   return { store, facts: () => facts };
 }
 
-function mockConfiguration(values: Record<string, unknown>): {
+function mockConfiguration(
+  values: Record<string, unknown>,
+  workspaceValues: Record<string, unknown> = {},
+): {
   update: ReturnType<typeof vi.fn>;
 } {
   const update = vi.fn(async (key: string, value: unknown) => {
@@ -64,7 +68,11 @@ function mockConfiguration(values: Record<string, unknown>): {
         get: vi.fn((key: string, fallback?: unknown) => values[key] ?? fallback),
         update,
         has: vi.fn().mockReturnValue(true),
-        inspect: vi.fn((key: string) => ({ key, globalValue: values[key] })),
+        inspect: vi.fn((key: string) => ({
+          key,
+          globalValue: values[key],
+          workspaceValue: workspaceValues[key],
+        })),
       }) as unknown as vscode.WorkspaceConfiguration,
   );
   return { update };
@@ -209,9 +217,50 @@ describe('memory enable/disable controls', () => {
     await handlers.get('agi-workforce.memory.toggle')?.();
     expect(update).toHaveBeenLastCalledWith('memory.enabled', false, expect.anything());
     expect(refresh).toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls.at(-1)?.[0]).toContain(
+      'Memory turned off in your user settings',
+    );
 
     await handlers.get('agi-workforce.memory.toggle')?.();
     expect(update).toHaveBeenLastCalledWith('memory.enabled', true, expect.anything());
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls.at(-1)?.[0]).toContain(
+      'Memory turned on in your user settings',
+    );
+  });
+
+  it('leaves the user setting alone when a repository opt-out keeps memory off', async () => {
+    const values: Record<string, unknown> = { 'memory.enabled': false };
+    const { update } = mockConfiguration(values, { 'optOut.memory': true });
+    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Turn memory on' as never);
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue('I prefer Rust');
+    const account = installAccountMemory();
+
+    await handlers.get('agi-workforce.memory.toggle')?.();
+    expect(update).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls.at(-1)?.[0]).toBe(
+      'Memory stays off here because agiWorkforce.optOut.memory is on for this workspace. Your user setting was not changed.',
+    );
+
+    await handlers.get('agi-workforce.memory.create')?.();
+    expect(update).not.toHaveBeenCalled();
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+    expect(account.store.add).not.toHaveBeenCalled();
+    expect(account.facts()).toHaveLength(0);
+  });
+
+  it('turns the user setting off from a window a repository already keeps off', async () => {
+    const values: Record<string, unknown> = { 'memory.enabled': true };
+    const { update } = mockConfiguration(values, { 'optOut.memory': true });
+    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+
+    await handlers.get('agi-workforce.memory.toggle')?.();
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith('memory.enabled', false, expect.anything());
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls.at(-1)?.[0]).toContain(
+      'Memory turned off in your user settings',
+    );
   });
 
   it('keeps stored facts readable while memory is off', async () => {
@@ -234,7 +283,7 @@ describe('memory enable/disable controls', () => {
     surface?.hide();
     await pending;
 
-    expect(surface?.title).toBe('AGI Code, Memory');
+    expect(surface?.title).toBe(`${PRODUCT_NAMES.code}, Memory`);
     expect(surface?.items).toEqual([expect.objectContaining({ label: 'Prefer Rust' })]);
   });
 

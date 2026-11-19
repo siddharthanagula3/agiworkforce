@@ -22,8 +22,21 @@ describe('product links on mobile', () => {
   });
 
   it('opens the native screen when this build ships it', () => {
-    expect(nativeRouteForProductLink({ target: 'browser-task', id: 'run-1' })).toBe('/(app)/tasks');
+    expect(nativeRouteForProductLink({ target: 'browser-task', id: 'run-1' })).toBe(
+      '/(app)/tasks?runId=run-1',
+    );
     expect(nativeRouteForProductLink({ target: 'file', id: 'asset-1' })).toBe('/(app)/library');
+  });
+
+  it('opens a work notification on its own run instead of the bare task list', async () => {
+    expect(nativeRouteForProductLink({ target: 'work', id: 'run-1' })).toBe(
+      '/(app)/tasks?runId=run-1',
+    );
+    const route = await resolveNativeProductLinkRoute(
+      { target: 'work', id: 'run 2' },
+      { hasConversation: () => false, sync: async () => undefined },
+    );
+    expect(route).toBe('/(app)/tasks?runId=run%202');
   });
 
   it('falls back to the web resolver when the native screen is switched off', () => {

@@ -31,6 +31,12 @@ vi.mock('@/lib/server/rls-db', () => ({
     db: {
       query: (...args: unknown[]) => mockNeonQuery(...args),
       execute: vi.fn().mockResolvedValue(1),
+      transaction: vi.fn((fn: (db: unknown) => unknown) =>
+        fn({
+          query: (...args: unknown[]) => mockNeonQuery(...args),
+          execute: vi.fn().mockResolvedValue(1),
+        }),
+      ),
     },
     userId: (await mockGetClerkAuthUser()).userId,
     organizationId: null,

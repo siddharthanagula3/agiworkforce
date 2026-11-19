@@ -19,3 +19,23 @@ export function useDesktopVoiceHotkey(onToggle: () => void): void {
     return host.onVoiceHotkey(() => handler.current());
   }, [host]);
 }
+
+/**
+ * Runs when the shell hides this window. The global shortcut aims at whichever
+ * window is showing, so a capture left running in a hidden window would never
+ * receive its stop.
+ */
+export function useDesktopWindowHidden(onHidden: () => void, enabled: boolean): void {
+  const host = useDesktopHost();
+  const handler = useRef(onHidden);
+  handler.current = onHidden;
+
+  useEffect(() => {
+    if (!host || !enabled) return undefined;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') handler.current();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [host, enabled]);
+}

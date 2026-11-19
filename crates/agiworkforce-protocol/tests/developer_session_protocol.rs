@@ -284,6 +284,7 @@ fn a_turn_ends_with_a_typed_failure_or_an_explicit_null() {
         failure: None,
         managed_request_ids: Vec::new(),
         unsent_steers: 0,
+        context_tokens: None,
     };
     let value = serde_json::to_value(&completed).expect("serialize completed");
     assert_eq!(value["status"], "completed");
@@ -318,6 +319,57 @@ fn a_turn_ends_with_a_typed_failure_or_an_explicit_null() {
     assert_eq!(
         serde_json::from_value::<TurnEndedNotification>(value).expect("round trip"),
         failed
+    );
+}
+
+#[test]
+fn a_turn_states_its_context_occupancy_apart_from_what_it_consumed() {
+    let measured = TurnEndedNotification {
+        thread_id: "thread-1".to_string(),
+        turn_id: "turn-1".to_string(),
+        status: TurnStatus::Completed,
+        response: "done".to_string(),
+        input_tokens: 20_100,
+        output_tokens: 200,
+        error: None,
+        failure: None,
+        managed_request_ids: Vec::new(),
+        unsent_steers: 0,
+        context_tokens: Some(10_200),
+    };
+    let value = serde_json::to_value(&measured).expect("serialize measured");
+    assert_eq!(value["contextTokens"], 10_200);
+    assert_eq!(value["inputTokens"], 20_100);
+    assert_eq!(
+        serde_json::from_value::<TurnEndedNotification>(value).expect("round trip"),
+        measured
+    );
+
+    let unmeasured = TurnEndedNotification {
+        context_tokens: None,
+        ..measured
+    };
+    let value = serde_json::to_value(&unmeasured).expect("serialize unmeasured");
+    assert!(
+        value.get("contextTokens").is_none(),
+        "a host that did not measure occupancy says nothing: {value}"
+    );
+
+    let from_older_host = serde_json::json!({
+        "threadId": "thread-1",
+        "turnId": "turn-1",
+        "status": "completed",
+        "response": "done",
+        "inputTokens": 20_100,
+        "outputTokens": 200,
+        "error": null,
+        "failure": null,
+    });
+    assert_eq!(
+        serde_json::from_value::<TurnEndedNotification>(from_older_host)
+            .expect("older host")
+            .context_tokens,
+        None
     );
 }
 

@@ -44,23 +44,38 @@ async function handleGet(request: NextRequest, context: RouteContext) {
   }
 
   const [row] = await db.query<{ output: unknown }>(
-    `select e.envelope -> 'event' -> 'output' as output
-       from web_conversations c
+    `with recursive lineage(conversation_id) as (
+       select c.id
+         from web_conversations c
+        where c.id = $1
+          and c.user_id = $2
+          and c.organization_id is not distinct from $3
+          and c.deleted_at is null
+       union
+       select c.id
+         from lineage l
+         join conversation_branches b
+           on b.target_conversation_id = l.conversation_id
+          and b.user_id = $2
+         join web_conversations c
+           on c.id = b.source_conversation_id
+          and c.user_id = $2
+          and c.organization_id is not distinct from $3
+          and c.deleted_at is null
+     )
+     select e.envelope -> 'event' -> 'output' as output
+       from lineage l
        join cloud_agent_runs r
-         on r.conversation_id = c.id
-        and r.user_id = c.user_id
+         on r.conversation_id = l.conversation_id
+        and r.user_id = $2
        join cloud_agent_events e
          on e.run_id = r.id
         and e.user_id = r.user_id
-      where c.id = $1
-        and c.user_id = $2
-        and c.organization_id is not distinct from $3
-        and c.deleted_at is null
-        and e.event_type = 'tool-execution-end'
+      where e.event_type = 'tool-execution-end'
         and e.envelope -> 'event' ->> 'toolCallId' = $4
         and e.envelope -> 'event' ->> 'name' = $5
         and e.envelope -> 'event' ->> 'isError' = 'false'
-      order by e.sequence desc
+      order by (l.conversation_id = $1) desc, e.sequence desc
       limit 1`,
     [id, userId, organizationId, toolCallId, PLUGIN_DRAFT_TOOL_NAME],
   );

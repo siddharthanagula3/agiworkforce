@@ -19,9 +19,10 @@ import { useChatStore, useChatMessageStore, useChatCloudMessageStore } from '@/s
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { setDraft, type DraftProvenance } from '@/src/features/chat/draftStore';
+import type { DraftProvenance } from '@/src/features/chat/draftStore';
 import {
   stageComposerAttachments,
+  stageComposerText,
   takeComposerAttachments,
 } from '@/src/features/chat/composerHandoff';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
@@ -34,6 +35,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { createSharePreviewAdmission, type SharePreviewStatus } from './sharePreviewAdmission';
+import { createShareReceiptSettlement, omittedSharedFilesNotice } from './shareReceiptSettlement';
 
 const MAX_SHARED_BYTES = 100 * 1024;
 const NEW_CHAT_DRAFT_KEY = 'new-chat';
@@ -66,9 +68,13 @@ export default function SharePreviewScreen() {
     text?: string;
     nativeTruncated?: string;
     handoff?: string;
+    receipt?: string;
+    omittedFiles?: string;
   }>();
   const rawText = typeof params.text === 'string' ? params.text : '';
   const handoffKey = typeof params.handoff === 'string' ? params.handoff : '';
+  const [receipt] = useState(() => createShareReceiptSettlement(params.receipt));
+  const omittedNotice = omittedSharedFilesNotice(params.omittedFiles);
   const appMode = useChatAppModeStore((state) => state.appMode);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
@@ -155,6 +161,9 @@ export default function SharePreviewScreen() {
   useEffect(() => {
     admission.isCurrent();
   }, [admission, previewIdentity]);
+  useEffect(() => {
+    receipt.observe(status);
+  }, [receipt, status]);
   const sending = status === 'pending';
   const canSend = status === 'idle' || status === 'refused';
   const canCheckChat = status === 'accepted' || status === 'uncertain';
@@ -186,7 +195,8 @@ export default function SharePreviewScreen() {
     const openConversationId = useChatStore.getState().currentConversationId;
     const draftKey = openConversationId ?? NEW_CHAT_DRAFT_KEY;
     stageComposerAttachments(draftKey, accepted);
-    if (draftText.trim() && provenance) setDraft(draftKey, draftText, provenance);
+    if (draftText.trim()) stageComposerText(draftKey, draftText);
+    receipt.settle('adopted');
 
     if (openConversationId) {
       router.replace({
@@ -218,7 +228,8 @@ export default function SharePreviewScreen() {
     if (!pageUrl || !provenance || !admission.acquire()) return;
     const openConversationId = useChatStore.getState().currentConversationId;
     const draftKey = openConversationId ?? NEW_CHAT_DRAFT_KEY;
-    setDraft(draftKey, `${draftText}\n\n`, provenance);
+    stageComposerText(draftKey, `${draftText}\n\n`);
+    receipt.settle('adopted');
     if (openConversationId) {
       router.replace({
         pathname: '/(app)/chat/[id]' as const,
@@ -242,6 +253,8 @@ export default function SharePreviewScreen() {
   } as const;
 
   const handleDismiss = () => {
+    if (status === 'invalid') receipt.release();
+    else receipt.settle('discarded');
     admission.invalidate();
     if (router.canGoBack()) {
       router.back();
@@ -299,7 +312,9 @@ export default function SharePreviewScreen() {
             {status === 'refused'
               ? 'Your message was not accepted. The shared content is still here. You can try sending again.'
               : status === 'invalid'
-                ? 'This preview is no longer active for its original mode or account. Dismiss it and share again.'
+                ? receipt.reoffers
+                  ? 'This preview is no longer active for its original mode or account. Dismiss it to review the shared content again.'
+                  : 'This preview is no longer active for its original mode or account. Dismiss it and share again.'
                 : status === 'accepted'
                   ? 'Your message was accepted. Open the chat to check its progress.'
                   : 'The outcome could not be confirmed. Check your chat before sharing again to avoid duplicates.'}
@@ -321,6 +336,26 @@ export default function SharePreviewScreen() {
               style={{ flex: 1, color: themeColors.agentWarning, fontSize: typeScale.footnote }}
             >
               Content was truncated to 100 KB before sending.
+            </Text>
+          </View>
+        )}
+        {omittedNotice && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              backgroundColor: themeColors.agentWarning + '22',
+              borderRadius: 8,
+              padding: 12,
+            }}
+          >
+            <AlertTriangle size={16} color={themeColors.agentWarning} />
+            <Text
+              accessibilityRole="alert"
+              style={{ flex: 1, color: themeColors.agentWarning, fontSize: typeScale.footnote }}
+            >
+              {omittedNotice}
             </Text>
           </View>
         )}

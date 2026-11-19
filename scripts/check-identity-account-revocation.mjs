@@ -99,32 +99,55 @@ const PRINCIPAL_RETURN =
   /\breturn\s+(?!null\b|undefined\b|await\s+getClerkAuthUser\b)[A-Za-z_$({]/g;
 const EXPORTED_FUNCTION = /^export\s+(?:async\s+)?function\s+(\w+)/gm;
 
+const DELEGATED_RETURN = /^return\s+(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/;
+
+/** Whether the call opened by the statement's first paren is the whole returned expression. */
+function returnsOnlyTheCall(statement) {
+  const open = statement.indexOf('(');
+  let depth = 0;
+  for (let index = open; index < statement.length; index += 1) {
+    if (statement[index] === '(') depth += 1;
+    else if (statement[index] === ')') {
+      depth -= 1;
+      if (depth === 0) return /^\s*;/.test(statement.slice(index + 1));
+    }
+  }
+  return false;
+}
+
+/**
+ * A return that hands the caller whatever another function of the same module
+ * returns is gated exactly when that function is: it has the gate, and every
+ * principal it returns is dominated by it. Anything else in the expression, such
+ * as a fallback principal, was never gated by that function.
+ */
+function delegatesToGatedFunction(source, statement, seen) {
+  const callee = DELEGATED_RETURN.exec(statement)?.[1];
+  if (!callee || seen.has(callee) || !returnsOnlyTheCall(statement)) return false;
+  const found = functionBody(source, callee);
+  if (found === null || !new RegExp(`\\b${ACCOUNT_GATE}\\s*\\(`).test(found.body)) return false;
+  const ungated = ungatedReturns(source, callee, new Set(seen));
+  return ungated !== null && ungated.length === 0;
+}
+
 /** Every return that hands a caller a principal, and whether the gate ran first. */
 export function ungatedReturns(source, name, seen = new Set()) {
   if (seen.has(name)) return null;
-  const visited = new Set(seen).add(name);
   const found = functionBody(source, name);
   if (found === null) return null;
+  seen.add(name);
   const { body } = found;
   const depth = depths(body);
   const gates = [...body.matchAll(new RegExp(`\\b${ACCOUNT_GATE}\\s*\\(`, 'g'))].map(
     (match) => match.index,
   );
   const ungated = [];
-  PRINCIPAL_RETURN.lastIndex = 0;
   for (const match of body.matchAll(PRINCIPAL_RETURN)) {
     if (gates.some((gate) => dominates(body, gate, match.index, depth))) continue;
-    const delegate = /^return\s+(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/.exec(body.slice(match.index));
-    if (delegate) {
-      const callee = functionBody(source, delegate[1]);
-      const returns = callee ? ungatedReturns(source, delegate[1], visited) : null;
-      if (
-        returns?.length === 0 &&
-        new RegExp(`\\b${ACCOUNT_GATE}\\s*\\(`).test(withCallees(source, callee.body))
-      )
-        continue;
-    }
-    ungated.push(body.slice(match.index, body.indexOf('\n', match.index)).trim());
+    const statement = body.slice(match.index, body.indexOf('\n', match.index)).trim();
+    const expression = body.slice(match.index).replace(/\s+/g, ' ');
+    if (delegatesToGatedFunction(source, expression, seen)) continue;
+    ungated.push(statement);
   }
   return ungated;
 }

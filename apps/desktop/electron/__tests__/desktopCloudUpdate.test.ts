@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { describe, expect, it, vi } from 'vitest';
 import {
   DESKTOP_CLOUD_RELEASE_AVAILABILITY_URL,
@@ -29,7 +30,7 @@ describe('desktop cloud update contract', () => {
       downloadUrl: '',
       downloading: true,
     });
-    expect(prompt.message).toBe('An update for AGI Desktop is downloading.');
+    expect(prompt.message).toBe(`An update for ${PRODUCT_NAMES.desktop} is downloading.`);
     expect(prompt.downloadButton).toBeNull();
   });
   it('does not infer a download from automatic update capability', () => {
@@ -53,7 +54,7 @@ describe('desktop cloud update contract', () => {
       stagedVersion: null,
       readyToInstall: true,
     });
-    expect(prompt.message).toBe('AGI Desktop update is ready to install.');
+    expect(prompt.message).toBe(`${PRODUCT_NAMES.desktop} update is ready to install.`);
     expect(prompt.restartButton).toBe(0);
   });
   it('uses the published availability and signed-installer routes', async () => {
@@ -211,7 +212,7 @@ describe('desktop cloud update contract', () => {
     );
 
     await expect(checkDesktopCloudUpdate('1.2.0', 'x64', armOnly as typeof fetch)).rejects.toThrow(
-      /no signed AGI Desktop x64 installer/i,
+      new RegExp(`no signed ${PRODUCT_NAMES.desktop} x64 installer`, 'i'),
     );
   });
 });
@@ -235,7 +236,7 @@ describe('desktop cloud update origin and in-place prompts', () => {
       readyToInstall: true,
     });
 
-    expect(prompt.title).toBe('AGI Desktop update ready');
+    expect(prompt.title).toBe(`${PRODUCT_NAMES.desktop} update ready`);
     expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Relaunch to update');
     expect(prompt.downloadButton).toBeNull();
   });

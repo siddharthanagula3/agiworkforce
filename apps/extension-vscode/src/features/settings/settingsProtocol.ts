@@ -223,6 +223,13 @@ export function isSettingsSection(value: unknown): value is SettingsSection {
   return typeof value === 'string' && SETTINGS_SECTIONS.some((section) => section === value);
 }
 
+export function isRejectedSettingsUpdate(input: unknown): boolean {
+  const envelope = messageEnvelopeSchema.safeParse(input);
+  if (!envelope.success || envelope.data.type !== 'settings.update') return false;
+  const key = envelope.data.key;
+  return SETTINGS_PANEL_SETTING_KEYS.some((candidate) => candidate === key);
+}
+
 export function parseSettingsWebviewMessage(input: unknown): SettingsWebviewMessage | undefined {
   const parsed = messageEnvelopeSchema.safeParse(input);
   if (!parsed.success) return undefined;

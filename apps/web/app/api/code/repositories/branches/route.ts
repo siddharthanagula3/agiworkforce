@@ -88,7 +88,7 @@ async function handleList(request: NextRequest) {
   try {
     const token = await getInstallationAccessToken(installationId, {
       repositories: [repository.name],
-      permissions: { metadata: 'read' },
+      permissions: { contents: 'read' },
     });
     const listed = await listGitHubRepositoryBranches(token, repository.owner, repository.name, {
       perPage: BRANCHES_PER_PAGE,

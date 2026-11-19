@@ -11,6 +11,7 @@ pub mod cloud_model_select;
 pub mod cloud_models;
 pub mod cloud_new_chat_defaults;
 pub mod code_composer_drafts;
+pub mod code_search;
 pub mod code_sessions;
 pub mod code_settings;
 pub mod code_worktree_apply;

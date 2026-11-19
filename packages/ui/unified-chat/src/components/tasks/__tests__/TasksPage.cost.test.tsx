@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { TasksPage } from '../TasksPage';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000010';
@@ -40,7 +41,11 @@ function renderTasks(run: CloudAgentRun) {
 }
 
 async function openDetails() {
-  fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+    }),
+  );
 }
 
 describe('Tasks per-task cost and usage', () => {

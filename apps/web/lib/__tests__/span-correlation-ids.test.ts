@@ -13,6 +13,7 @@ vi.mock('@/lib/logger', () => {
 });
 vi.mock('@/lib/services/agent-notification-service', () => ({
   notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+  trackAgentRunOutcome: vi.fn(),
 }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: vi.fn(),

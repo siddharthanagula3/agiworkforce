@@ -8,7 +8,6 @@ import type {
   DeveloperWebhookDelivery,
   DeveloperWebhookEndpoint,
 } from '@/features/developers/types';
-import { platformTenantKeyRing } from '@/lib/crypto/cmek';
 import { openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
 import {
   DEVELOPER_WEBHOOK_MAX_ATTEMPTS,
@@ -31,9 +30,10 @@ import { PermanentJobError, enqueueJob } from '@/lib/jobs/job-service';
 import { logger } from '@/lib/logger';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { PLATFORM_TENANT_KEY_ENV } from '@/lib/server/organization-encryption-keys';
+import { platformTenantRing } from '@/lib/server/organization-encryption-keys';
 
 export const DEVELOPER_WEBHOOK_ENDPOINT_LIMIT = 10;
+const ENDPOINT_ADMISSION_LOCK_PREFIX = 'agi:developer-webhook-endpoint-admission:';
 export const DEVELOPER_WEBHOOK_DELIVERY_PAGE = 50;
 
 const DELIVERY_JOB_KIND = 'webhooks.developer-delivery';
@@ -103,7 +103,7 @@ function toDelivery(row: DeliveryRow): DeveloperWebhookDelivery {
 
 function keyRingFor(userId: string): KeyRing {
   try {
-    return platformTenantKeyRing(PLATFORM_TENANT_KEY_ENV, `developer-webhooks:${userId}`);
+    return platformTenantRing(`developer-webhooks:${userId}`);
   } catch (error) {
     logger.error({ error }, 'Developer webhook secrets cannot be sealed without the platform key');
     throw createError.capabilityUnavailable(
@@ -161,28 +161,33 @@ export async function createWebhookEndpoint(
   userId: string,
   input: { url: string; description: string | null; eventTypes: DeveloperWebhookEventType[] },
 ): Promise<{ endpoint: DeveloperWebhookEndpoint; secret: string }> {
-  const [count] = await db.query<{ total: string | number }>(
-    `select count(*) as total from public.developer_webhook_endpoints where user_id = $1`,
-    [userId],
-  );
-  if (Number(count?.total ?? 0) >= DEVELOPER_WEBHOOK_ENDPOINT_LIMIT) {
-    throw createError.validation(
-      `You can register ${DEVELOPER_WEBHOOK_ENDPOINT_LIMIT} endpoints. Remove one to add another.`,
-    );
-  }
-
   const url = await assertDeliverableUrl(input.url);
   const endpointId = randomUUID();
   const { secret, prefix } = generateWebhookSecret();
   const sealed = sealEnvelope(keyRingFor(userId), secret, 'versioned', secretContext(endpointId));
 
-  const [row] = await db.query<EndpointRow>(
-    `insert into public.developer_webhook_endpoints
-       (id, user_id, url, description, event_types, secret_enc, secret_prefix)
-     values ($1, $2, $3, $4, $5, $6, $7)
-     returning ${ENDPOINT_COLUMNS}`,
-    [endpointId, userId, url, input.description, input.eventTypes, sealed, prefix],
-  );
+  const row = await db.transaction(async (tx) => {
+    await tx.query(`select pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+      `${ENDPOINT_ADMISSION_LOCK_PREFIX}${userId}`,
+    ]);
+    const [count] = await tx.query<{ total: string | number }>(
+      `select count(*) as total from public.developer_webhook_endpoints where user_id = $1`,
+      [userId],
+    );
+    if (Number(count?.total ?? 0) >= DEVELOPER_WEBHOOK_ENDPOINT_LIMIT) {
+      throw createError.validation(
+        `You can register ${DEVELOPER_WEBHOOK_ENDPOINT_LIMIT} endpoints. Remove one to add another.`,
+      );
+    }
+    const [inserted] = await tx.query<EndpointRow>(
+      `insert into public.developer_webhook_endpoints
+         (id, user_id, url, description, event_types, secret_enc, secret_prefix)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       returning ${ENDPOINT_COLUMNS}`,
+      [endpointId, userId, url, input.description, input.eventTypes, sealed, prefix],
+    );
+    return inserted;
+  });
   if (!row) throw createError.internal('The endpoint could not be saved.');
   return { endpoint: toEndpoint(row), secret };
 }

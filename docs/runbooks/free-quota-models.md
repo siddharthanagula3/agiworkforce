@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-22
+Last updated: 2026-11-11
 
 A free quota model is a QwenCloud model served from the promotional free quota
 on the company's QwenCloud account. Free plan accounts reach one in two ways:
@@ -547,7 +547,7 @@ until the record is gone:
 
 ## Reminders
 
-`apps/web/app/api/cron/remind-free-quota-renewal/route.ts` runs hourly at :22,
+`apps/web/app/api/cron/remind-free-quota-renewal/route.ts` runs hourly at :05,
 with its logic in `apps/web/lib/server/free-quota-renewal.ts`. It tells platform
 admins:
 

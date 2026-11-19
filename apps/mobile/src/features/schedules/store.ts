@@ -123,6 +123,8 @@ async function loadRecentRunsPage(
   return { runs: parsed.data.runs.map(toRecentRun), nextCursor: parsed.data.nextCursor };
 }
 
+export type RecentRunsReadKind = 'refresh' | 'more';
+
 interface ScheduleState {
   schedules: Schedule[];
   recentRuns: RecentScheduleRun[];
@@ -130,6 +132,7 @@ interface ScheduleState {
   recentRunsLoading: boolean;
   recentRunsLoadingMore: boolean;
   recentRunsError: string | null;
+  recentRunsErrorSource: RecentRunsReadKind | null;
   runsBySchedule: Record<string, ScheduleRun[]>;
   runsLoadingBySchedule: Record<string, boolean>;
   runsErrorBySchedule: Record<string, string | null>;
@@ -164,6 +167,7 @@ export const useScheduleStore = create<ScheduleState>()(
       recentRunsLoading: false,
       recentRunsLoadingMore: false,
       recentRunsError: null,
+      recentRunsErrorSource: null,
       runsBySchedule: {},
       runsLoadingBySchedule: {},
       runsErrorBySchedule: {},
@@ -393,7 +397,7 @@ export const useScheduleStore = create<ScheduleState>()(
       fetchRecentRuns: async () => {
         const account = captureCloudAccountEpoch();
         if (!account) return;
-        set({ recentRunsLoading: true, recentRunsError: null });
+        set({ recentRunsLoading: true, recentRunsError: null, recentRunsErrorSource: null });
         try {
           const page = await loadRecentRunsPage(null);
           if (!isCloudAccountEpochCurrent(account)) return;
@@ -403,6 +407,7 @@ export const useScheduleStore = create<ScheduleState>()(
           console.warn('Failed to fetch recent schedule runs:', error);
           set({
             recentRunsError: 'Could not load scheduled runs. Check your connection and retry.',
+            recentRunsErrorSource: 'refresh',
           });
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ recentRunsLoading: false });
@@ -413,7 +418,11 @@ export const useScheduleStore = create<ScheduleState>()(
         const account = captureCloudAccountEpoch();
         const { recentRunsCursor, recentRunsLoading, recentRunsLoadingMore } = get();
         if (!account || !recentRunsCursor || recentRunsLoading || recentRunsLoadingMore) return;
-        set({ recentRunsLoadingMore: true, recentRunsError: null });
+        set((state) =>
+          state.recentRunsErrorSource === 'refresh'
+            ? { recentRunsLoadingMore: true }
+            : { recentRunsLoadingMore: true, recentRunsError: null, recentRunsErrorSource: null },
+        );
         try {
           const page = await loadRecentRunsPage(recentRunsCursor);
           if (!isCloudAccountEpochCurrent(account)) return;
@@ -427,7 +436,14 @@ export const useScheduleStore = create<ScheduleState>()(
         } catch (error) {
           if (!isCloudAccountEpochCurrent(account)) return;
           console.warn('Failed to fetch more schedule runs:', error);
-          set({ recentRunsError: 'Could not load more runs. Check your connection and retry.' });
+          set((state) =>
+            state.recentRunsErrorSource === 'refresh'
+              ? state
+              : {
+                  recentRunsError: 'Could not load more runs. Check your connection and retry.',
+                  recentRunsErrorSource: 'more',
+                },
+          );
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ recentRunsLoadingMore: false });
         }
@@ -445,6 +461,7 @@ export const useScheduleStore = create<ScheduleState>()(
           recentRunsLoading: false,
           recentRunsLoadingMore: false,
           recentRunsError: null,
+          recentRunsErrorSource: null,
           runsBySchedule: {},
           runsLoadingBySchedule: {},
           runsErrorBySchedule: {},

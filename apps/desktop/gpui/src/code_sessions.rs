@@ -1,8 +1,6 @@
 use agiworkforce_protocol::developer_session::{
     AcknowledgedResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadRenameParams,
-    ThreadRenameResponse, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadSummary,
-    THREAD_SEARCH_DEFAULT_LIMIT, THREAD_SEARCH_MAX_LIMIT, THREAD_SEARCH_QUERY_MAX_CHARS,
-    THREAD_TITLE_MAX_CHARS,
+    ThreadRenameResponse, ThreadStatus, ThreadSummary, THREAD_TITLE_MAX_CHARS,
 };
 use anyhow::{ensure, Result};
 
@@ -24,16 +22,12 @@ pub struct KeptArchives {
 
 #[derive(Default)]
 pub struct CodeSessions {
-    pub query: String,
     pub include_archived: bool,
-    pub showing_search: bool,
-    pub hits: Vec<ThreadSearchHit>,
     pub operation: Option<uuid::Uuid>,
     pub error: Option<String>,
     pub notice: Option<String>,
     pub renaming: Option<String>,
     pub kept_archives: Option<KeptArchives>,
-    pub reset_query: bool,
 }
 
 impl CodeSessions {
@@ -46,39 +40,12 @@ impl CodeSessions {
     }
 }
 
-pub fn search_params(query: &str, include_archived: bool) -> Result<ThreadSearchParams> {
-    let query = query.trim();
-    ensure!(
-        !query.is_empty()
-            && !query.contains('\0')
-            && query.chars().count() <= THREAD_SEARCH_QUERY_MAX_CHARS,
-        "Enter a search of 1 to {THREAD_SEARCH_QUERY_MAX_CHARS} characters"
-    );
-    Ok(ThreadSearchParams {
-        query: query.to_owned(),
-        limit: Some(THREAD_SEARCH_DEFAULT_LIMIT),
-        include_archived,
-    })
-}
-
-pub fn accept_search(response: ThreadSearchResponse) -> Result<Vec<ThreadSearchHit>> {
-    ensure!(
-        response.hits.len() <= THREAD_SEARCH_MAX_LIMIT as usize,
-        "The session search returned more hits than it allows"
-    );
-    for hit in &response.hits {
-        ensure!(
-            !hit.thread.id.is_empty() && (hit.title_matched || !hit.matches.is_empty()),
-            "A session search hit had no session or match"
-        );
-        ensure!(
-            hit.matches
-                .iter()
-                .all(|item| !item.role.is_empty() && !item.snippet.is_empty()),
-            "A session search snippet was empty"
-        );
+pub fn row_label(thread: &ThreadSummary, label: String) -> String {
+    if thread.status == ThreadStatus::Archived {
+        format!("Archived: {label}")
+    } else {
+        label
     }
-    Ok(response.hits)
 }
 
 pub fn rename_params(thread_id: &str, title: &str) -> Result<ThreadRenameParams> {

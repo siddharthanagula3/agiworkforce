@@ -113,7 +113,15 @@ vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
 
 import { DELETE, GET } from '../route';
 
-const db = { query: vi.fn(), execute: vi.fn() };
+const db: {
+  query: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+  transaction: (fn: (tx: typeof db) => unknown) => unknown;
+} = {
+  query: vi.fn(),
+  execute: vi.fn(),
+  transaction: (fn) => fn(db),
+};
 const context = () => ({ params: Promise.resolve({ id: 'p-1', fileId: 'f-1' }) });
 const file = {
   fileName: 'report "q3".pdf',
@@ -264,28 +272,38 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
     });
 
     it('commits removal intent without calling object storage', async () => {
-      db.query.mockResolvedValueOnce([{ id: 'f-1' }]);
+      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'f-1' }]);
       mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 
       const response = await del();
 
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({ success: true });
-      expect(db.query).toHaveBeenCalledTimes(1);
-      expect(db.query.mock.calls[0]?.[0]).toContain('set deleted_at=now()');
+      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.query.mock.calls[1]?.[0]).toContain('set deleted_at=now()');
       expect(db.execute).not.toHaveBeenCalled();
       expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
     });
 
+    it('takes the legal-hold placement lock before it decides', async () => {
+      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'f-1' }]);
+
+      await del();
+
+      expect(db.query.mock.calls[0]?.[0]).toContain('pg_advisory_xact_lock_shared');
+      expect(db.query.mock.calls[1]?.[0]).toContain('set deleted_at=now()');
+    });
+
     it('acknowledges an already removed row without reacquiring its object', async () => {
       db.query
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ deleted_at: '2026-11-10T00:00:00Z', held: false }]);
 
       const response = await del();
 
       expect(response.status).toBe(200);
-      expect(db.query.mock.calls[1]?.[1]).toEqual([
+      expect(db.query.mock.calls[2]?.[1]).toEqual([
         'p-1',
         'user-1',
         'org-1',
@@ -296,19 +314,22 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
     });
 
     it('does not restore metadata or depend on storage availability', async () => {
-      db.query.mockResolvedValueOnce([{ id: 'f-1' }]);
+      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'f-1' }]);
       mocks.deleteProjectKnowledgeObject.mockRejectedValue(new Error('s3 down'));
 
       const response = await del();
 
       expect(response.status).toBe(200);
-      expect(db.query).toHaveBeenCalledTimes(1);
+      expect(db.query).toHaveBeenCalledTimes(2);
       expect(db.execute).not.toHaveBeenCalled();
       expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
     });
 
     it('refuses and audits a held source without promising an unqueued deletion', async () => {
-      db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([{ deleted_at: null, held: true }]);
+      db.query
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ deleted_at: null, held: true }]);
       const response = await del();
       expect(response.status).toBe(403);
       expect(JSON.stringify(await response.json())).not.toContain('will be deleted');

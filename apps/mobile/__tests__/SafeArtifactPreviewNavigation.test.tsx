@@ -1,5 +1,5 @@
 import { Linking } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { render, waitFor } from '@testing-library/react-native';
 import { SafeArtifactPreview } from '../src/features/chat/components/SafeArtifactPreview';
 
 type WebViewProps = {
@@ -10,6 +10,10 @@ type WebViewProps = {
 };
 
 let lastProps: WebViewProps | undefined;
+
+jest.mock('../src/features/chat/components/mermaidRuntime', () => ({
+  loadMermaidRuntime: () => Promise.resolve('window.mermaid = {};'),
+}));
 
 jest.mock('react-native-webview', () => ({
   __esModule: true,
@@ -29,8 +33,9 @@ describe('SafeArtifactPreview navigation', () => {
 
   it.each(['html', 'svg', 'mermaid'] as const)(
     'sends every %s request through the policy and blocks page navigation and new windows',
-    (kind) => {
+    async (kind) => {
       render(<SafeArtifactPreview content="<p>x</p>" kind={kind} />);
+      await waitFor(() => expect(lastProps).toBeDefined());
       expect(lastProps?.originWhitelist).toEqual(['*']);
       expect(lastProps?.setSupportMultipleWindows).toBe(false);
       expect(lastProps?.javaScriptCanOpenWindowsAutomatically).toBe(false);

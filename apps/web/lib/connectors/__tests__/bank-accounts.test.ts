@@ -41,7 +41,10 @@ vi.mock('@/lib/connectors/plaid-config', async (importOriginal) => ({
 vi.mock('@/lib/custom-connector-crypto', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   encryptConnectorToken: (token: string) => `enc:${token}`,
-  decryptConnectorToken: (sealed: string) => sealed.replace(/^enc:/, ''),
+  decryptConnectorToken: (sealed: string) => {
+    if (!sealed.startsWith('enc:')) throw new Error('sealed token cannot be opened');
+    return sealed.slice('enc:'.length);
+  },
 }));
 vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
@@ -120,6 +123,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 import {
   connectBankAccounts,
   executeBankAccountsTool,
+  readBankAccountOverview,
   removeBankAccountsItem,
   removeBankItem,
   setBankItemExcludedAccounts,
@@ -217,6 +221,18 @@ describe('removing one bank', () => {
     expect(state.rows).toEqual([]);
   });
 
+  it('keeps a link it cannot open and reports the removal as incomplete', async () => {
+    seed(ITEM_A, 'token-a');
+    seed(ITEM_B, 'token-b');
+    state.rows.find((row) => row.id === ITEM_B)!.access_token_enc = 'damaged-ciphertext';
+
+    await expect(removeBankAccountsItem(USER)).rejects.toThrow('Try again in a few minutes');
+    expect(state.rows.map((row) => row.id)).toEqual([ITEM_B]);
+    expect(state.calls).toEqual([
+      { path: '/item/remove', body: expect.objectContaining({ access_token: 'token-a' }) },
+    ]);
+  });
+
   it('never re-points the grant at a carried-over link when a live bank survives', async () => {
     seedCarriedOver(ITEM_A, 'token-dead');
     seed(ITEM_B, 'token-b');
@@ -289,6 +305,74 @@ describe('choosing accounts', () => {
 
     const request = state.calls.find((call) => call.path === '/transactions/get');
     expect((request?.body['options'] as { account_ids?: string[] }).account_ids).toEqual(['acc-1']);
+  });
+});
+
+describe('the overview transaction window', () => {
+  const RANGE = { startDate: '2026-10-10', endDate: '2026-11-08' };
+
+  function bankHistory(counts: Record<string, { date: string; count: number }>) {
+    state.plaid['/accounts/get'] = () => accounts('acc-1');
+    state.plaid['/transactions/get'] = (body) => {
+      const history = counts[body['access_token'] as string]!;
+      const { count, offset } = body['options'] as { count: number; offset: number };
+      const size = Math.max(0, Math.min(count, history.count - offset));
+      return {
+        body: {
+          total_transactions: history.count,
+          transactions: Array.from({ length: size }, () => ({
+            account_id: 'acc-1',
+            date: history.date,
+            name: 'Purchase',
+            amount: 1,
+            iso_currency_code: 'USD',
+            pending: false,
+          })),
+        },
+      };
+    };
+  }
+
+  it('keeps the newest transactions across banks when the older bank alone fills the window', async () => {
+    seed(ITEM_A, 'token-a');
+    seed(ITEM_B, 'token-b');
+    bankHistory({
+      'token-a': { date: '2026-10-15', count: 2_000 },
+      'token-b': { date: '2026-11-01', count: 1_000 },
+    });
+
+    const overview = await readBankAccountOverview(USER, RANGE);
+
+    if (overview.status !== 'ready') throw new Error(`expected ready, got ${overview.status}`);
+    expect(overview.totalTransactions).toBe(3_000);
+    expect(overview.transactions).toHaveLength(2_000);
+    expect(overview.transactions.filter((row) => row.date === '2026-11-01')).toHaveLength(1_000);
+    expect(overview.transactions.filter((row) => row.date === '2026-10-15')).toHaveLength(1_000);
+  });
+
+  it('reads the same newest window whichever bank was linked first', async () => {
+    seed(ITEM_A, 'token-b');
+    seed(ITEM_B, 'token-a');
+    bankHistory({
+      'token-a': { date: '2026-10-15', count: 2_000 },
+      'token-b': { date: '2026-11-01', count: 1_000 },
+    });
+
+    const overview = await readBankAccountOverview(USER, RANGE);
+
+    if (overview.status !== 'ready') throw new Error(`expected ready, got ${overview.status}`);
+    expect(overview.transactions.filter((row) => row.date === '2026-11-01')).toHaveLength(1_000);
+  });
+
+  it('asks each bank for no more than the window', async () => {
+    seed(ITEM_A, 'token-a');
+    bankHistory({ 'token-a': { date: '2026-10-15', count: 5_000 } });
+
+    const overview = await readBankAccountOverview(USER, RANGE);
+
+    if (overview.status !== 'ready') throw new Error(`expected ready, got ${overview.status}`);
+    expect(overview.transactions).toHaveLength(2_000);
+    expect(state.calls.filter((call) => call.path === '/transactions/get')).toHaveLength(4);
   });
 });
 

@@ -46,6 +46,7 @@ import type {
   PurchaseVerificationInput,
   TaxCalculationResult,
 } from './domain';
+import { REFUND_REQUEST_METADATA_KEY } from './domain';
 import {
   normalizeCurrency,
   normalizeEnvironment,
@@ -579,9 +580,45 @@ export async function readStripeSubscriptionPayment(
     ? await stripe.subscriptions.retrieve(subscriptionReference)
     : null;
   return {
+    subscriptionReference: subscription?.id ?? null,
     servicePeriod: latest ? normalizeProviderPeriod(latest.period.start, latest.period.end) : null,
     withdrawalConsent: withdrawalConsentOf(subscription?.metadata),
   };
+}
+
+function refundResultOf(refund: Stripe.Refund): ChargeRefundResult {
+  const amount = normalizeMoney(refund.amount, refund.currency);
+  if (!amount) throw new Error(`Stripe returned refund ${refund.id} without an amount`);
+  const normalized = { reference: refund.id, status: refund.status ?? null, amount };
+  if (refund.status === 'succeeded') return { outcome: 'refunded', refund: normalized };
+  if (refund.status === 'failed' || refund.status === 'canceled') {
+    return { outcome: 'rejected', code: `refund_${refund.status}` };
+  }
+  return { outcome: 'pending', refund: normalized };
+}
+
+export interface StripeRefundsForRequest {
+  active: ChargeRefundResult | null;
+  failedAttempts: number;
+}
+
+export async function findStripeRefundsForRequest(
+  chargeReference: string,
+  requestId: string,
+): Promise<StripeRefundsForRequest> {
+  let pending: ChargeRefundResult | null = null;
+  let failedAttempts = 0;
+  for await (const refund of getStripeClient().refunds.list({
+    charge: chargeReference,
+    limit: 100,
+  })) {
+    if (refund.metadata?.[REFUND_REQUEST_METADATA_KEY] !== requestId) continue;
+    const result = refundResultOf(refund);
+    if (result.outcome === 'refunded') return { active: result, failedAttempts };
+    if (result.outcome === 'pending') pending = result;
+    else failedAttempts += 1;
+  }
+  return { active: pending, failedAttempts };
 }
 
 export async function refundStripeCharge(input: ChargeRefundInput): Promise<ChargeRefundResult> {
@@ -602,12 +639,7 @@ export async function refundStripeCharge(input: ChargeRefundInput): Promise<Char
     }
     throw error;
   }
-  const amount = normalizeMoney(refund.amount, refund.currency);
-  if (!amount) throw new Error(`Stripe returned refund ${refund.id} without an amount`);
-  return {
-    outcome: 'refunded',
-    refund: { reference: refund.id, status: refund.status ?? null, amount },
-  };
+  return refundResultOf(refund);
 }
 
 export async function cancelStripeSubscriptionNow(subscriptionReference: string): Promise<boolean> {
@@ -661,6 +693,86 @@ export async function cancelLiveStripeSubscriptionsNow(owner: {
     if (await cancelStripeSubscriptionNow(reference)) canceled.push(reference);
   }
   return canceled;
+}
+
+export const ACCOUNT_DELETION_RENEWAL_METADATA_KEY = 'account_deletion_stopped_renewal';
+
+export type AccountDeletionRenewalStop =
+  | { outcome: 'stopped'; canceledAt: string | null }
+  | { outcome: 'not_renewing' }
+  | { outcome: 'ended' }
+  | { outcome: 'scheduled_change' };
+
+/**
+ * Sets a renewing subscription to end at its period end and tags it with the
+ * deletion deadline, so undoing that one deletion can tell the renewal was
+ * turned off by it and not by the customer.
+ */
+export async function stopStripeRenewalForAccountDeletion(
+  subscriptionReference: string,
+  deletionScheduledFor: string,
+): Promise<AccountDeletionRenewalStop> {
+  const stripe = getStripeClient();
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(subscriptionReference);
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return { outcome: 'ended' };
+    throw error;
+  }
+  if (ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) return { outcome: 'ended' };
+  if (subscription.cancel_at_period_end || subscription.cancel_at) {
+    return { outcome: 'not_renewing' };
+  }
+  if (subscription.schedule) return { outcome: 'scheduled_change' };
+  const updated = await stripe.subscriptions.update(
+    subscription.id,
+    {
+      cancel_at_period_end: true,
+      metadata: { [ACCOUNT_DELETION_RENEWAL_METADATA_KEY]: deletionScheduledFor },
+    },
+    { idempotencyKey: `account-deletion-stop-renewal:${subscription.id}:${deletionScheduledFor}` },
+  );
+  return {
+    outcome: 'stopped',
+    canceledAt: updated.canceled_at ? new Date(updated.canceled_at * 1000).toISOString() : null,
+  };
+}
+
+/**
+ * Turns renewal back on only when the subscription still carries the tag left
+ * by the deletion being undone. Any other cancellation is the customer's and
+ * stays as it is.
+ */
+export async function restoreStripeRenewalAfterAccountDeletion(
+  subscriptionReference: string,
+  deletionScheduledFor: string,
+): Promise<'restored' | 'unchanged'> {
+  const stripe = getStripeClient();
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(subscriptionReference);
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return 'unchanged';
+    throw error;
+  }
+  const tag = subscription.metadata?.[ACCOUNT_DELETION_RENEWAL_METADATA_KEY];
+  const expected = Date.parse(deletionScheduledFor);
+  if (!tag || !Number.isFinite(expected) || Date.parse(tag) !== expected) return 'unchanged';
+  const restore =
+    !ENDED_SUBSCRIPTION_STATUSES.has(subscription.status) &&
+    subscription.cancel_at_period_end === true;
+  await stripe.subscriptions.update(
+    subscription.id,
+    {
+      ...(restore ? { cancel_at_period_end: false } : {}),
+      metadata: { [ACCOUNT_DELETION_RENEWAL_METADATA_KEY]: '' },
+    },
+    {
+      idempotencyKey: `account-deletion-restore-renewal:${subscription.id}:${deletionScheduledFor}`,
+    },
+  );
+  return restore ? 'restored' : 'unchanged';
 }
 
 export const stripePaymentProvider: PollablePaymentProvider = {

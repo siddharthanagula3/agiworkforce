@@ -59,6 +59,7 @@ export function OnboardingWizard() {
   const [error, setError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const editedFields = useRef({ preferredName: false, workDescription: false });
+  const completionAdmitted = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +81,8 @@ export function OnboardingWizard() {
 
   const finish = useCallback(
     async (prompt?: string) => {
+      if (completionAdmitted.current) return;
+      completionAdmitted.current = true;
       setSubmitting(true);
       setError(null);
       try {
@@ -89,6 +92,7 @@ export function OnboardingWizard() {
         );
       } catch (caught) {
         setError(toUserMessage(caught, 'Failed to save your preferences'));
+        completionAdmitted.current = false;
         setSubmitting(false);
       }
     },
@@ -96,6 +100,8 @@ export function OnboardingWizard() {
   );
 
   const skip = useCallback(async () => {
+    if (completionAdmitted.current) return;
+    completionAdmitted.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -103,6 +109,7 @@ export function OnboardingWizard() {
       router.replace(CHAT_PATH);
     } catch (caught) {
       setError(toUserMessage(caught, 'Failed to skip setup'));
+      completionAdmitted.current = false;
       setSubmitting(false);
     }
   }, [router]);
@@ -242,6 +249,7 @@ export function OnboardingWizard() {
               </p>
               <StarterPrompts
                 useCase={primaryUseCase || null}
+                disabled={submitting}
                 onSelect={(prompt) => void finish(prompt)}
               />
               <div className="mt-2 flex items-center justify-between gap-3">

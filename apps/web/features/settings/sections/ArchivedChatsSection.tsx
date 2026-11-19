@@ -86,7 +86,7 @@ export function ArchivedChatsSection() {
         >
           Archived chats
         </h1>
-        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
+        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
           Restore chats to the sidebar or move them to Recently deleted.
         </p>
       </div>

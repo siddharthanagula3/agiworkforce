@@ -5,12 +5,14 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { GIT_MAX_BUFFER } from './git-output.mjs';
 
 export const LOCK_FILE = 'apps/web/lib/prompts/published-prompt-versions.json';
 
 export function committedLock(repoRoot, revision = 'HEAD', file = LOCK_FILE) {
   try {
     return execFileSync('git', ['show', `${revision}:${file}`], {
+      maxBuffer: GIT_MAX_BUFFER,
       cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],

@@ -5,6 +5,24 @@ const SERVICE_WORKER_PATH = '/sw.js';
 const SUBSCRIPTION_ENDPOINT = '/api/web-push';
 const BASE64_GROUP_CHARS = 4;
 const CLAIMED_BY_ANOTHER_ACCOUNT_STATUS = 403;
+const DISABLED_STORAGE_KEY = 'agi.web-push.disabled';
+
+function markDisabled(disabled: boolean): void {
+  try {
+    if (disabled) window.localStorage.setItem(DISABLED_STORAGE_KEY, 'true');
+    else window.localStorage.removeItem(DISABLED_STORAGE_KEY);
+  } catch {
+    // Blocked storage only loses the memory that the user turned this browser off.
+  }
+}
+
+function wasDisabled(): boolean {
+  try {
+    return window.localStorage.getItem(DISABLED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
 
 export type WebPushEnableResult = 'enabled' | 'denied' | 'unavailable';
 
@@ -134,6 +152,7 @@ export async function syncExistingSubscription(): Promise<void> {
   const registration = await registerNotificationWorker();
   if (!registration) return;
   if (!(await registration.pushManager.getSubscription())) return;
+  if (wasDisabled()) return;
 
   const publicKey = await fetchVapidPublicKey();
   if (!publicKey) return;
@@ -151,6 +170,7 @@ export async function enableWebPush(): Promise<WebPushEnableResult> {
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') return 'denied';
+  markDisabled(false);
 
   const [registration, publicKey] = await Promise.all([
     registerNotificationWorker(),
@@ -170,6 +190,7 @@ export async function disableWebPush(): Promise<boolean> {
   const registration = await registerNotificationWorker();
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) return true;
+  markDisabled(true);
 
   let removedOnServer = false;
   try {

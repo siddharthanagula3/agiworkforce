@@ -102,4 +102,62 @@ describe('save an artifact to the Library from mobile', () => {
       content: '# Launch plan\n\nShip it.',
     });
   });
+
+  it('does not show a saved receipt for an artifact that was never submitted', async () => {
+    mockPost.mockResolvedValue({ id: 'file-1' });
+    const second: MobileArtifact = {
+      ...CLOUD_DOC,
+      id: 'cloud-doc-2',
+      title: 'Roadmap',
+      content: '# Roadmap',
+    };
+    useArtifactStore.setState({ artifacts: [CLOUD_DOC, second] });
+    const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
+    fireEvent.press(screen.getByLabelText('Save to Library'));
+    await waitFor(() => expect(screen.getByLabelText('Saved to Library')).toBeTruthy());
+
+    fireEvent.press(screen.getByTestId('artifact-preview-close'));
+    fireEvent.press(screen.getByTestId('artifact-card-cloud-doc-2'));
+
+    const save = screen.getByTestId('artifact-save-library');
+    expect(save.props.accessibilityLabel).toBe('Save to Library');
+    expect(save.props.accessibilityState?.disabled).not.toBe(true);
+    fireEvent.press(save);
+    await waitFor(() => expect(screen.getByLabelText('Saved to Library')).toBeTruthy());
+    expect(mockPost).toHaveBeenCalledTimes(2);
+    expect(mockPost).toHaveBeenLastCalledWith('/api/library', {
+      fileName: 'Roadmap.md',
+      content: '# Roadmap',
+    });
+  });
+
+  it('keeps a pending save from becoming the next artifact receipt', async () => {
+    let settleFirst: (value: { id: string }) => void = () => undefined;
+    mockPost.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          settleFirst = resolve;
+        }),
+    );
+    const second: MobileArtifact = {
+      ...CLOUD_DOC,
+      id: 'cloud-doc-2',
+      title: 'Roadmap',
+      content: '# Roadmap',
+    };
+    useArtifactStore.setState({ artifacts: [CLOUD_DOC, second] });
+    const screen = render(<ArtifactsGalleryScreen initialArtifactId="cloud-doc" />);
+    fireEvent.press(screen.getByLabelText('Save to Library'));
+    fireEvent.press(screen.getByTestId('artifact-preview-close'));
+    fireEvent.press(screen.getByTestId('artifact-card-cloud-doc-2'));
+
+    expect(screen.getByTestId('artifact-save-library').props.accessibilityLabel).toBe(
+      'Save to Library',
+    );
+    settleFirst({ id: 'file-1' });
+    await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('artifact-save-library').props.accessibilityLabel).toBe(
+      'Save to Library',
+    );
+  });
 });

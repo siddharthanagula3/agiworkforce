@@ -21,7 +21,7 @@ import {
 import { resolveAuthenticatedSurface } from './request-surface';
 import { logger } from '@/lib/logger';
 import type { getUserScopedDb } from '@/lib/server/rls-db';
-import { runAuthGate, type AuthGateSuccess } from './auth-gate';
+import type { AuthGateSuccess } from './auth-gate';
 import { withManagedTurnSlot } from './turn-slot';
 import { processRequest, type ProcessedRequest } from './request-processor';
 import { loadMcpToolDefs, type ResumeApproval } from './tool-loop';
@@ -97,10 +97,9 @@ function buildSyntheticRequest(
 
 export async function admitToolResultResume(
   request: NextRequest,
-  action: (authResult: AuthGateSuccess) => Promise<NextResponse | Response>,
+  authResult: AuthGateSuccess,
+  action: () => Promise<NextResponse | Response>,
 ): Promise<NextResponse | Response> {
-  const authResult = await runAuthGate(request);
-  if (!authResult.ok) return authResult.response;
   return withManagedTurnSlot(
     { userId: authResult.userId, planTier: authResult.subscription.plan_tier },
     async () => {
@@ -141,7 +140,7 @@ export async function admitToolResultResume(
       const spendGateResponse = await buildSpendLimitGateResponse(userId);
       if (spendGateResponse) return spendGateResponse;
 
-      return action(authResult);
+      return action();
     },
   );
 }

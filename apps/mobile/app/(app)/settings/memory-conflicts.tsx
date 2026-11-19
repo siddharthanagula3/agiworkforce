@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { GitCompareArrows } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -32,32 +32,51 @@ export default function MemoryConflictsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    try {
-      setConflicts(await listMemoryConflicts(scope));
-      setError(null);
-    } catch (caught) {
-      setConflicts([]);
-      setError(failureMessage(caught, LOAD_FAILED_MESSAGE));
-    }
-  }, [scope]);
+  const scopeEpochRef = useRef(0);
+  const loadSeqRef = useRef(0);
+
+  const load = useCallback(
+    async (epoch: number) => {
+      const seq = ++loadSeqRef.current;
+      const current = () => epoch === scopeEpochRef.current && seq === loadSeqRef.current;
+      try {
+        const next = await listMemoryConflicts(scope);
+        if (!current()) return;
+        setConflicts(next);
+        setError(null);
+      } catch (caught) {
+        if (!current()) return;
+        setConflicts([]);
+        setError(failureMessage(caught, LOAD_FAILED_MESSAGE));
+      }
+    },
+    [scope],
+  );
 
   useEffect(() => {
     setConflicts(null);
-    void load();
+    setError(null);
+    setRestoringId(null);
+    void load(scopeEpochRef.current);
+    return () => {
+      scopeEpochRef.current += 1;
+    };
   }, [load]);
 
   const restore = useCallback(
     async (conflict: MemoryConflict) => {
+      const epoch = scopeEpochRef.current;
       setRestoringId(conflict.id);
       setError(null);
       try {
         await restoreReplacedMemory(scope, conflict.id);
-        await Promise.all([load(), fetchMemories()]);
+        await Promise.all([load(epoch), fetchMemories()]);
       } catch (caught) {
-        setError(failureMessage(caught, RESTORE_FAILED_MESSAGE));
+        if (epoch === scopeEpochRef.current) {
+          setError(failureMessage(caught, RESTORE_FAILED_MESSAGE));
+        }
       } finally {
-        setRestoringId(null);
+        if (epoch === scopeEpochRef.current) setRestoringId(null);
       }
     },
     [fetchMemories, load, scope],

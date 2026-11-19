@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   canAccessModelForSubscriptionTier,
   getAllowedModelsForTier,
@@ -13,7 +14,7 @@ const policy = vi.hoisted(() => ({
   })),
 }));
 vi.mock('@/lib/services/model-policy-gate', () => ({
-  evaluateModelAccessForRequest: policy.evaluate,
+  evaluateModelAccessForOrganization: policy.evaluate,
 }));
 
 const { evaluateProviderProxyModelAccess, PROVIDER_PROXY_MODEL_NOT_IN_PLAN_CODE } =
@@ -26,9 +27,15 @@ const proModel = getAllowedModelsForTier('pro_additions').find((model) =>
   canAccessModelForSubscriptionTier(model, 'pro'),
 );
 
-function ask(model: string, overrides: Partial<{ planTier: string; providerId: string }> = {}) {
+const db = { query: vi.fn() } as unknown as DatabaseAdapter;
+
+function ask(
+  model: string,
+  overrides: Partial<{ planTier: string; providerId: string; organizationId: string | null }> = {},
+) {
   return {
-    userId: 'user-1',
+    db,
+    organizationId: overrides.organizationId === undefined ? 'org-1' : overrides.organizationId,
     planTier: overrides.planTier ?? 'pro',
     providerId: overrides.providerId ?? getModelMetadataById(model)?.provider ?? 'anthropic',
     model,
@@ -77,17 +84,30 @@ describe('a coding agent asking the proxy for a model', () => {
       code: 'model_not_allowed',
       message: 'Your workspace does not allow this model.',
     });
-    expect(policy.evaluate).toHaveBeenCalledWith('user-1', {
+    expect(policy.evaluate).toHaveBeenCalledWith(db, 'org-1', {
       provider: getModelMetadataById(proModel!)?.provider,
       modelId: proModel,
     });
+  });
+
+  it('asks the policy of the organization that owns the session, not a selected workspace', async () => {
+    await evaluateProviderProxyModelAccess(ask(proModel!, { organizationId: 'org-owner' }));
+
+    expect(policy.evaluate).toHaveBeenCalledWith(db, 'org-owner', expect.any(Object));
+  });
+
+  it('asks as personal scope for a session no organization owns', async () => {
+    await evaluateProviderProxyModelAccess(ask(proModel!, { organizationId: null }));
+
+    expect(policy.evaluate).toHaveBeenCalledWith(db, null, expect.any(Object));
   });
 
   it('names the transport when the call travels through another provider', async () => {
     await evaluateProviderProxyModelAccess(ask(proModel!, { providerId: 'openrouter' }));
 
     expect(policy.evaluate).toHaveBeenCalledWith(
-      'user-1',
+      db,
+      'org-1',
       expect.objectContaining({ transportProvider: 'openrouter' }),
     );
   });

@@ -176,15 +176,17 @@ export async function linkVerifiedGitHubInstallation(
        account_login,
        account_type,
        verified_repositories,
+       writable_repositories,
        ownership_verified_at
      )
-     values ($1, $2, $3, $4, $5, now())
+     values ($1, $2, $3, $4, $5, $6, now())
      on conflict (installation_id)
      do update set
        user_id = excluded.user_id,
        account_login = excluded.account_login,
        account_type = excluded.account_type,
        verified_repositories = excluded.verified_repositories,
+       writable_repositories = excluded.writable_repositories,
        ownership_verified_at = now(),
        access_token_enc = null,
        access_token_expires_at = null
@@ -197,6 +199,7 @@ export async function linkVerifiedGitHubInstallation(
       installation.accountLogin,
       installation.accountType,
       installation.verifiedRepositories,
+      installation.writableRepositories,
     ],
   );
   return rows.length > 0;

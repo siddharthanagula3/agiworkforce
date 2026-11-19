@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { CodeFirstRunWizard } from './CodeFirstRunWizard';
+import { CODE_ROUTES } from '../code-surface';
+
+const INTRO_HEADING = `Set up ${PRODUCT_NAMES.code}`;
 
 describe('CodeFirstRunWizard', () => {
   it('walks the three steps in order with a step count', async () => {
@@ -9,7 +13,7 @@ describe('CodeFirstRunWizard', () => {
     render(<CodeFirstRunWizard onFinish={vi.fn()} />);
 
     expect(screen.getByText('Step 1 of 3')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Set up AGI Code' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: INTRO_HEADING })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
 
     await user.click(screen.getByRole('button', { name: 'Get started' }));
@@ -31,6 +35,12 @@ describe('CodeFirstRunWizard', () => {
       'href',
       '/api/github/install/start?returnPath=%2Fcode',
     );
+    const connect = new URL(
+      screen.getByRole('link', { name: 'Connect GitHub' }).getAttribute('href') ?? '',
+      'https://agi.test',
+    );
+    expect(connect.pathname).toBe(CODE_ROUTES.githubInstall);
+    expect(connect.searchParams.get('returnPath')).toBe(CODE_ROUTES.root);
   });
 
   it('goes back a step, and leaves the setup from the first step', async () => {
@@ -41,7 +51,7 @@ describe('CodeFirstRunWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Get started' }));
     await user.click(screen.getByRole('button', { name: 'Back' }));
 
-    expect(screen.getByRole('heading', { name: 'Set up AGI Code' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: INTRO_HEADING })).toBeInTheDocument();
     expect(onFinish).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Back' }));

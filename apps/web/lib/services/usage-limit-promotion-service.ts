@@ -16,7 +16,6 @@ import {
 } from '@agiworkforce/types';
 import { z } from 'zod';
 
-import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 import { USAGE_WORKLOADS } from '@/lib/billing/usage-attribution';
 import { readFeatureFlagConfig } from '@/lib/feature-flags/flag-config';
 import { readUsagePromotionsOn } from '@/lib/feature-flags/usage-promotions-gate';
@@ -31,7 +30,10 @@ import {
   getPlanSessionUsageCapMicrousd,
   getPlanWeeklyUsageCapMicrousd,
 } from '@/lib/server/managed-usage-policy';
-import { resolveEntitlementBundle } from '@/lib/services/effective-subscription-service';
+import {
+  resolveEntitlementBundle,
+  usageAllowanceSubject,
+} from '@/lib/services/effective-subscription-service';
 
 const PROMOTION_ID = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const APPLY_KEY = /^[A-Za-z0-9._:-]{8,128}$/;
@@ -427,15 +429,14 @@ interface WindowUsage {
 }
 
 /**
- * The rolling windows as admission sums them (0347): signed deductions, past
- * overage left out unless asked for, plus the share that predates the account's
- * last reset, which the reset took out of the windows.
+ * The rolling windows as admission sums them (0347): signed deductions, overage
+ * left out, plus the share that predates the account's last reset, which the
+ * reset took out of the windows.
  */
 async function readWindowUsage(
   db: DatabaseAdapter,
   userId: string,
   resetAt: string | null,
-  includeOverage: boolean,
 ): Promise<WindowUsage> {
   const [row] = await db.query<Record<string, string | number | null>>(
     `select
@@ -456,8 +457,8 @@ async function readWindowUsage(
      where t.user_id = $1
        and t.transaction_type = 'deduction'
        and t.created_at >= now() - make_interval(hours => $3)
-       and ($5::boolean or t.metadata->>'is_overage' is distinct from 'true')`,
-    [userId, ROLLING_SESSION_WINDOW_HOURS, ROLLING_WEEKLY_WINDOW_HOURS, resetAt, includeOverage],
+       and t.metadata->>'is_overage' is distinct from 'true'`,
+    [userId, ROLLING_SESSION_WINDOW_HOURS, ROLLING_WEEKLY_WINDOW_HOURS, resetAt],
   );
   const positive = (key: string) => Math.max(0, amount(row?.[key]));
   return {
@@ -489,6 +490,7 @@ interface GrantRow {
 }
 
 interface UpliftClaim {
+  appliedAt: string;
   expiresAt: string;
   committedMicrousd: number;
 }
@@ -519,6 +521,7 @@ async function readAccountGrants(
     if (row.kind === 'limit_uplift') {
       if (Date.parse(iso(row.expires_at)) > nowMs) {
         grants.claimedUplifts.set(row.promotion_id, {
+          appliedAt: iso(row.applied_at ?? new Date(nowMs)),
           expiresAt: iso(row.expires_at),
           committedMicrousd: amount(row.committed_microusd),
         });
@@ -581,20 +584,21 @@ async function insertResetGrants(
   return rows.length;
 }
 
-/** Grants the resets a live referral promotion gives the referrer of a rewarded referral. */
+/** Grants the resets a referral promotion that was live when the referral was rewarded gives its referrer. */
 export async function grantReferralResets(
   db: DatabaseAdapter,
-  input: { userId: string; planTier: string; referralId: string },
+  input: { userId: string; planTier: string; referralId: string; eligibleAtMs?: number },
   nowMs: number = Date.now(),
 ): Promise<number> {
   if (!(await readUsagePromotionsOn(input.userId, input.planTier, nowMs))) return 0;
   const promotions = await listUsageLimitPromotions(db, { enabledOnly: true });
+  const eligibleAtMs = input.eligibleAtMs ?? nowMs;
   let issued = 0;
   for (const promotion of promotions) {
     if (
       promotion.kind !== 'limit_reset' ||
       promotion.resetSource !== 'referral' ||
-      !isLive(promotion, nowMs) ||
+      !isLive(promotion, eligibleAtMs) ||
       !coversPlan(promotion, input.planTier)
     ) {
       continue;
@@ -612,7 +616,7 @@ export async function grantReferralResets(
 
 class CeilingReached extends Error {}
 
-/** What a claim must still commit: null when the claim already covers the promotion as it stands. */
+/** What a claim must still commit to reach the exposure its terms allow: null when it already covers them. */
 function recostOf(
   claim: UpliftClaim | undefined,
   promotion: UpliftPromotion,
@@ -622,7 +626,7 @@ function recostOf(
   const covers =
     Date.parse(claim.expiresAt) >= Date.parse(promotion.endsAt) &&
     claim.committedMicrousd >= exposureMicrousd;
-  return covers ? null : exposureMicrousd;
+  return covers ? null : Math.max(0, exposureMicrousd - claim.committedMicrousd);
 }
 
 function upliftHeldOrFunded(
@@ -640,12 +644,13 @@ function fitsCeiling(promotion: UpliftPromotion, additionalMicrousd: number): bo
 
 /**
  * Claims an uplift for an account, or re-costs a claim the promotion has
- * outgrown, if the promotion's ceiling still covers the most it can add. A
- * claim whose expiry predates the promotion's end, or whose commitment is
- * below the exposure at the promotion's current terms, is extended and charged
- * the full current exposure again under the same row lock. That over-counts what
- * the earlier commitment already covered, which keeps the ceiling above the true
- * worst case after any edit.
+ * outgrown, if the promotion's ceiling still covers the most it can add. The
+ * exposure is the most the promotion's current terms can add from the moment
+ * the account claimed to the promotion's end, so allowance already consumed
+ * under earlier terms still counts against an edit. A claim whose expiry
+ * predates the promotion's end, or whose commitment is below that exposure, is
+ * extended and topped up to it under the same row lock. The commitment never
+ * falls, which keeps the ceiling above the true worst case after any edit.
  */
 async function claimUplift(
   db: DatabaseAdapter,
@@ -687,7 +692,10 @@ async function claimUplift(
         !existing.ends_short &&
         amount(existing.committed_microusd) >= exposureMicrousd;
       if (covered) return true;
-      const additional = exposureMicrousd;
+      const additional =
+        existing && !existing.lapsed
+          ? Math.max(0, exposureMicrousd - amount(existing.committed_microusd))
+          : exposureMicrousd;
       if (amount(locked.committed_microusd) + additional > amount(locked.cost_ceiling_microusd)) {
         throw new CeilingReached();
       }
@@ -730,13 +738,19 @@ async function claimUplift(
   }
 }
 
-function exposureOf(promotion: UpliftPromotion, base: LimitCaps, nowMs: number): number {
+function exposureOf(
+  promotion: UpliftPromotion,
+  base: LimitCaps,
+  nowMs: number,
+  claim?: UpliftClaim,
+): number {
+  const fromMs = claim ? Math.min(nowMs, Date.parse(claim.appliedAt)) : nowMs;
   return upliftExposure({
     sessionCap: base.session,
     weeklyCap: base.weekly,
     percent: promotion.upliftPercent,
     windows: promotion.upliftWindows,
-    remainingMs: Date.parse(promotion.endsAt) - nowMs,
+    remainingMs: Date.parse(promotion.endsAt) - fromMs,
     sessionWindowHours: ROLLING_SESSION_WINDOW_HOURS,
     weeklyWindowHours: ROLLING_WEEKLY_WINDOW_HOURS,
   });
@@ -770,7 +784,6 @@ export async function resolvePromotionalCaps(
     userId: string;
     planTier: string;
     workload: string | null;
-    estimateMicrousd: number;
     isFlagship: boolean;
     caps: LimitCaps;
   },
@@ -797,7 +810,7 @@ export async function resolvePromotionalCaps(
     for (const promotion of uplifts) {
       const claim = grants.claimedUplifts.get(promotion.id);
       if (!claim) continue;
-      const exposure = exposureOf(promotion, base, nowMs);
+      const exposure = exposureOf(promotion, base, nowMs, claim);
       const additional = recostOf(claim, promotion, exposure);
       if (additional === null) {
         claimed.push(promotion);
@@ -815,17 +828,15 @@ export async function resolvePromotionalCaps(
       return applyUplifts(base, claimed, null);
     }
 
-    const usage = await readWindowUsage(db, input.userId, grants.lastResetAt, false);
+    const usage = await readWindowUsage(db, input.userId, grants.lastResetAt);
     const used = sinceReset(usage);
     const passes = (window: UsageLimitUpliftWindow) => {
       const cap = window === 'session' ? base.session : base.weekly;
       const spent = window === 'session' ? used.session : used.weekly;
-      return cap !== null && spent + input.estimateMicrousd > cap;
+      return cap !== null && spent >= cap;
     };
     const flagshipPasses =
-      input.isFlagship &&
-      base.flagshipWeekly !== null &&
-      used.flagship + input.estimateMicrousd > base.flagshipWeekly;
+      input.isFlagship && base.flagshipWeekly !== null && used.flagship >= base.flagshipWeekly;
     for (const promotion of unclaimed) {
       const needed =
         promotion.upliftWindows.some(passes) ||
@@ -909,12 +920,7 @@ export async function readSummaryPromotions(
       const promotion = byId.get(grant.promotionId);
       return promotion?.kind === 'limit_reset' && coversPlan(promotion, input.planTier);
     });
-    const [enforced, displayed] = await Promise.all([
-      readWindowUsage(db, input.userId, grants.lastResetAt, false),
-      grants.lastResetAt === null
-        ? Promise.resolve(null)
-        : readWindowUsage(db, input.userId, grants.lastResetAt, true),
-    ]);
+    const usage = await readWindowUsage(db, input.userId, grants.lastResetAt);
     const next = usable[0] ? byId.get(usable[0].promotionId) : undefined;
     const uplifts = promotions.filter(
       (promotion): promotion is UpliftPromotion =>
@@ -924,7 +930,7 @@ export async function readSummaryPromotions(
         upliftHeldOrFunded(
           grants.claimedUplifts.get(promotion.id),
           promotion,
-          exposureOf(promotion, input.caps, nowMs),
+          exposureOf(promotion, input.caps, nowMs, grants.claimedUplifts.get(promotion.id)),
         ),
     );
     const everyWorkload = uplifts.filter((promotion) => promotion.upliftWorkloads.length === 0);
@@ -935,7 +941,7 @@ export async function readSummaryPromotions(
           grants: usable.map((grant) => ({ grant_id: grant.id, expires_at: grant.expiresAt })),
           can_apply: canApply(
             next?.kind === 'limit_reset' ? next : undefined,
-            sinceReset(enforced),
+            sinceReset(usage),
             input.caps,
           ),
           last_applied_at: grants.lastResetAt,
@@ -949,9 +955,9 @@ export async function readSummaryPromotions(
         })),
       },
       refreshed: {
-        session: displayed?.sessionBeforeReset ?? 0,
-        weekly: displayed?.weeklyBeforeReset ?? 0,
-        flagshipWeekly: displayed?.flagshipWeeklyBeforeReset ?? 0,
+        session: usage.sessionBeforeReset,
+        weekly: usage.weeklyBeforeReset,
+        flagshipWeekly: usage.flagshipWeeklyBeforeReset,
       },
       upliftPercent: {
         session: strongestPercent(everyWorkload, 'session'),
@@ -1058,7 +1064,8 @@ export async function applyUsageLimitReset(
           and ($3::uuid is null or g.id = $3::uuid)
         order by g.expires_at asc, g.id asc
         limit 1
-        for update of g`,
+        for update of g
+        for no key update of p`,
       [input.userId, planTier, input.grantId],
     );
     if (!grant) return { status: 'refused', reason: 'no_reset' };
@@ -1076,7 +1083,6 @@ export async function applyUsageLimitReset(
         tx,
         input.userId,
         lastReset?.applied_at ? iso(lastReset.applied_at) : null,
-        false,
       ),
     );
     const nearest = Math.max(
@@ -1114,15 +1120,9 @@ export async function readAccountLimitCaps(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<{ planTier: string; caps: LimitCaps }> {
-  const subscription = (await resolveEntitlementBundle(db, userId)).subscription;
-  const planTier = subscription?.plan_tier || 'free';
-  const subject = {
-    tier: planTier,
-    catalogVersion: subscription?.plan_catalog_version ?? null,
-    revenueContext: revenueContextOfSubscription(subscription),
-  };
+  const subject = usageAllowanceSubject(await resolveEntitlementBundle(db, userId));
   return {
-    planTier,
+    planTier: subject.tier,
     caps: {
       session: getPlanSessionUsageCapMicrousd(subject),
       weekly: getPlanWeeklyUsageCapMicrousd(subject),
@@ -1134,13 +1134,18 @@ export async function readAccountLimitCaps(
 /** Grants a rewarded referral's referrer the resets a live referral promotion gives. */
 export async function grantReferralResetsToReferrer(
   db: DatabaseAdapter,
-  input: { referrerId: string; referralId: string },
+  input: { referrerId: string; referralId: string; eligibleAtMs?: number },
   nowMs: number = Date.now(),
 ): Promise<number> {
   const { planTier } = await readAccountLimitCaps(db, input.referrerId);
   return grantReferralResets(
     db,
-    { userId: input.referrerId, planTier, referralId: input.referralId },
+    {
+      userId: input.referrerId,
+      planTier,
+      referralId: input.referralId,
+      eligibleAtMs: input.eligibleAtMs,
+    },
     nowMs,
   );
 }

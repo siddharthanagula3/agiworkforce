@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, KeyRound, Lock } from 'lucide-react';
-import type { SendPreviewPresentation } from '@agiworkforce/types';
+import { PRIVACY_MODE_DISPLAY, type SendPreviewPresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
 
 export interface SendPreviewProps {
@@ -32,7 +32,7 @@ function compactDestinationLabel(presentation: SendPreviewPresentation): string 
   if (presentation.providerMode === 'DirectByok') {
     return presentation.destinationLabel.replace(/^Sent to\s+/i, '') || 'BYOK';
   }
-  return 'Managed cloud';
+  return PRIVACY_MODE_DISPLAY[presentation.privacyMode].label;
 }
 
 export function SendPreview({

@@ -1,5 +1,5 @@
-import { vi } from 'vitest';
-import type { SessionAuthority } from '../request-authority';
+import { vi, type Mock } from 'vitest';
+import type { SessionAuthority, RequestAuthority } from '../request-authority';
 import { bindNativeSession } from '../native-session-authority';
 import { createRequestAuthority } from '../request-authority';
 
@@ -13,7 +13,47 @@ export function deferred<T = void>() {
   return { promise, resolve, reject };
 }
 
-export function passkeyFixture() {
+interface FixtureKey {
+  id: string;
+  name: string | null;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+  update: Mock<(input: { name: string }) => Promise<unknown>>;
+  delete: Mock<() => Promise<void>>;
+}
+
+interface FixtureUser {
+  id: string;
+  passkeys: FixtureKey[];
+  createPasskey: Mock<() => Promise<void>>;
+  reload: Mock<() => Promise<{ id: string }>>;
+}
+
+interface FixtureSession {
+  id: string;
+  user: FixtureUser;
+  getToken: Mock<() => Promise<string>>;
+}
+
+interface PasskeyFixture {
+  key: FixtureKey;
+  user: FixtureUser;
+  session: FixtureSession;
+  clerk: {
+    loaded: boolean;
+    user: FixtureUser;
+    session: FixtureSession;
+    signOut: Mock;
+    addListener: NonNullable<SessionAuthority['subscribe']>;
+  };
+  listeners: Set<() => void>;
+  emit: () => void;
+  request: RequestAuthority;
+  scope: { authority: RequestAuthority; onDispatch: Mock };
+  retire: () => void;
+}
+
+export function passkeyFixture(): PasskeyFixture {
   const listeners = new Set<() => void>();
   const key = {
     id: 'pk_1',

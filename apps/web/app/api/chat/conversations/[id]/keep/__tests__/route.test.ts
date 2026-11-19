@@ -54,7 +54,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/services/tier-unit-quota-service', () => ({
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   FreeDailyLimitError: class FreeDailyLimitError extends Error {},
   PlanDownloadLimitError: class PlanDownloadLimitError extends Error {},
   MONTHLY_DOWNLOAD_LIMIT_CODE: 'monthly_download_limit_reached',
@@ -244,4 +245,77 @@ describe('POST /api/chat/conversations/[id]/keep', () => {
       expect.objectContaining({ userId: 'user-1', messageId: ASSISTANT_MESSAGE }),
     );
   });
+
+  it('keeps a completed generated image whose text is empty, in order, with its metadata', async () => {
+    const imageMetadata = {
+      toolType: 'image-generation',
+      imageUrl: 'https://cdn.example/a.png',
+      imageGenPrompt: 'a cat',
+    };
+    mocks.txQuery.mockReset();
+    mocks.txQuery
+      .mockResolvedValueOnce([{ id: USER_MESSAGE, role: 'user', content: 'a cat', metadata: {} }])
+      .mockResolvedValueOnce([
+        { id: ASSISTANT_MESSAGE, role: 'assistant', content: '​', metadata: imageMetadata },
+      ]);
+
+    const response = await call({
+      messages: [
+        { id: USER_MESSAGE, role: 'user', content: 'a cat' },
+        { id: ASSISTANT_MESSAGE, role: 'assistant', content: '', metadata: imageMetadata },
+        { role: 'assistant', content: '', metadata: { toolType: 'image-generation' } },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ kept: 2, keptFiles: 2 });
+    expect(mocks.assertFreeDailyAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ requested: { message_writes: 2 } }),
+    );
+    expect(mocks.txQuery.mock.calls[1]?.[1]).toEqual([
+      ASSISTANT_MESSAGE,
+      CONVERSATION,
+      'assistant',
+      '​',
+      null,
+      JSON.stringify(imageMetadata),
+      USER_MESSAGE,
+    ]);
+    expect(mocks.setActiveLeaf).toHaveBeenCalledWith(tx, expect.anything(), ASSISTANT_MESSAGE);
+  });
+
+  it('keeps files the saved messages attach even when the upload carried no conversation', async () => {
+    const attached = 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e';
+    await call({
+      messages: [
+        {
+          id: USER_MESSAGE,
+          role: 'user',
+          content: 'Summarize this',
+          metadata: {
+            attachments: [
+              { id: 'local-1', assetId: attached, type: 'file', name: 'notes.pdf' },
+              { id: 'local-2', assetId: 'not-a-uuid', type: 'file', name: 'bad.pdf' },
+              { id: 'local-3', assetId: attached.toUpperCase(), type: 'file', name: 'dup.pdf' },
+            ],
+          },
+        },
+        {
+          role: 'assistant',
+          content: 'Done',
+          metadata: {
+            attachments: [{ id: 'x', assetId: ASSISTANT_MESSAGE, type: 'file', name: 'x' }],
+          },
+        },
+      ],
+    });
+
+    const [sql, params] = mocks.txExecute.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain('id = any($4::uuid[])');
+    expect(sql).toContain('user_id = $2');
+    expect(sql).toContain('organization_id is not distinct from $3');
+    expect(params).toEqual([CONVERSATION, 'user-1', 'org-1', [attached]]);
+  });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/tier-unit-quota-service');

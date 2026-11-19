@@ -277,6 +277,8 @@ describe('POST /api/pair/initiate audit trail', () => {
       expect.anything(),
       'remote_control',
       expect.any(String),
+      undefined,
+      {},
     );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();

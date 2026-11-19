@@ -69,6 +69,16 @@ function rejectDevelopmentArtifacts(files) {
   }
 }
 
+const PRE_RELEASE_PROPERTY = 'Microsoft.VisualStudio.Code.PreRelease';
+
+function vsixManifestDeclaresPreRelease(vsixManifestXml) {
+  const property = new RegExp(
+    `<Property\\s+Id="${PRE_RELEASE_PROPERTY.replaceAll('.', '\\.')}"\\s+Value="([^"]*)"`,
+    'u',
+  ).exec(vsixManifestXml);
+  return property !== null && property[1] === 'true';
+}
+
 function readOption(args, name) {
   const index = args.indexOf(name);
   if (index === -1) return undefined;
@@ -84,6 +94,7 @@ async function main() {
   const args = process.argv.slice(2).filter((arg) => arg !== '--');
   const command = args[0] || 'package';
   const noDeps = args.includes('--no-dependencies');
+  const preRelease = args.includes('--pre-release');
   const packagePath = readOption(args, '--out');
   const files = await listFiles({
     cwd: process.cwd(),
@@ -100,6 +111,7 @@ async function main() {
       cwd: process.cwd(),
       useYarn: false,
       dependencies: !noDeps,
+      preRelease,
       ...(packagePath ? { packagePath } : {}),
     });
   } else {
@@ -110,6 +122,7 @@ async function main() {
 module.exports = {
   PACKAGED_RUNTIME_OUTPUT_ALLOWLIST,
   validatePackagedRuntimeOutput,
+  vsixManifestDeclaresPreRelease,
 };
 
 if (require.main === module) {

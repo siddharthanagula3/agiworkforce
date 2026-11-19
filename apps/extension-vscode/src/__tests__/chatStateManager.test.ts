@@ -21,12 +21,15 @@ import {
   isAutoPickerModelId,
 } from '../features/model-picker/modelConstants';
 import {
+  LocalRuntimeClient,
   LocalRuntimeProtocolError,
-  type LocalRuntimeClient,
   type LocalRuntimeEvent,
 } from '../integrations/localRuntimeClient';
-import type { LocalRuntimePool } from '../integrations/localRuntimePool';
-import type { ConversationTreeProvider } from '../features/trees/conversationTreeProvider';
+import { LocalRuntimePool } from '../integrations/localRuntimePool';
+import { ConversationTreeProvider } from '../features/trees/conversationTreeProvider';
+import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
+import { trackLastTextEditor } from '../platform/lastTextEditor';
+import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import {
   setContextPanelInstance,
   validateWorkspaceContextFile,
@@ -40,11 +43,25 @@ import {
 } from '../features/instructions';
 import { SYNTHETIC_LOCAL_MODEL_ID, requireCatalogModel } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
-import { modelDisplayNameById } from '@agiworkforce/types';
+import { modelDisplayNameById, PRODUCT_NAMES } from '@agiworkforce/types';
 import * as api from '../utils/api';
+import { Config } from '../platform/config';
 import * as accountAccess from '../features/surfaces/accountAccess';
 import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
 import * as tierResolver from '../integrations/tierResolver';
+
+function completeTurnFor(harness: { emit(event: LocalRuntimeEvent): void }): Promise<void> {
+  harness.emit({
+    type: 'turn_completed',
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    status: 'completed',
+    response: 'done',
+    inputTokens: 1,
+    outputTokens: 1,
+  });
+  return Promise.resolve();
+}
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -76,6 +93,9 @@ function makeHarness(
   } = {},
 ) {
   const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+  const notificationListeners = new Set<
+    (notification: { method: string; params?: unknown }) => void
+  >();
   const startedThreads = new Map<string, ThreadSummary>();
   const runtime = {
     startThread: vi
@@ -129,7 +149,13 @@ function makeHarness(
       listeners.add(listener);
       return { dispose: () => listeners.delete(listener) };
     }),
-    onNotification: vi.fn(() => ({ dispose: () => undefined })),
+    onNotification: vi.fn(
+      (listener: (notification: { method: string; params?: unknown }) => void) => {
+        notificationListeners.add(listener);
+        return { dispose: () => notificationListeners.delete(listener) };
+      },
+    ),
+    reconnectThread: vi.fn().mockResolvedValue(null),
     offers: vi.fn().mockResolvedValue(false),
   };
   const pool = {
@@ -159,11 +185,15 @@ function makeHarness(
   return {
     context,
     manager,
+    pool,
     runtime,
     conversationTreeProvider,
     posted,
     emit(event: LocalRuntimeEvent) {
       for (const listener of listeners) listener(event);
+    },
+    notify(notification: { method: string; params?: unknown }) {
+      for (const listener of notificationListeners) listener(notification);
     },
   };
 }
@@ -279,6 +309,78 @@ describe('ChatStateManager local turn lifecycle', () => {
     },
   );
 
+  it('discards a web page that finishes loading after New Chat replaced the conversation', async () => {
+    const harness = makeHarness();
+    let answerInput: (value: string) => void = () => undefined;
+    vi.mocked(vscode.window.showInputBox).mockImplementationOnce(
+      () =>
+        new Promise<string | undefined>((resolve) => {
+          answerInput = resolve;
+        }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'OLD_CONVERSATION_PAGE_BODY',
+      }),
+    );
+    let send: Promise<void> | undefined;
+    try {
+      const attaching = harness.manager.handleMessage({
+        type: 'attachContext',
+        payload: { kind: 'url' },
+      });
+      await harness.manager.handleMessage({ type: 'newChat' });
+
+      answerInput('https://example.test/page');
+      await attaching;
+
+      expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(false);
+
+      send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hello' } });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      expect(JSON.stringify(harness.runtime.startTurn.mock.calls[0]?.[0])).not.toContain(
+        'OLD_CONVERSATION_PAGE_BODY',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      if (send !== undefined) await send;
+    }
+  });
+
+  it('keeps a web page that finishes loading in the same conversation', async () => {
+    const harness = makeHarness();
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('https://example.test/page');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'CURRENT_PAGE_BODY',
+      }),
+    );
+    try {
+      await harness.manager.handleMessage({ type: 'attachContext', payload: { kind: 'url' } });
+
+      expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('rechecks retained pinned context files against current gitignore before dispatch', async () => {
     const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-pinned-context-')));
     const file = path.join(root, 'ordinary.txt');
@@ -363,6 +465,48 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('renders the sidebar for an untrusted workspace without starting the CLI', async () => {
+    vscode.workspace.isTrusted = false;
+    const spawn = vi.fn();
+    const pool = new LocalRuntimePool(
+      (cwd) =>
+        new LocalRuntimeClient({
+          cliPath: '/usr/local/bin/agi',
+          workspaceTrusted: () => vscode.workspace.isTrusted,
+          cwd,
+          clientVersion: '0.3.0',
+          spawn,
+        }),
+    );
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      new ConversationTreeProvider(pool),
+      context.workspaceState,
+      pool,
+    );
+
+    await manager.handleMessage({ type: 'ready' });
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        type: 'runtimeStatus',
+        payload: expect.objectContaining({ status: 'workspace-untrusted' }),
+      }),
+    );
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        type: 'recentConversations',
+        payload: expect.objectContaining({ total: 0 }),
+      }),
+    );
+    await pool.shutdownAll();
+  });
+
   it.each([
     [
       'a relative cwd',
@@ -435,6 +579,317 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('refuses a send on a Local default that is not running instead of starting Auto', async () => {
+    const configured = vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+    try {
+      const harness = makeHarness();
+      await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+
+      await harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: { text: 'WORKSPACE_SECRET', clientMessageId: 'msg-local-down' },
+      });
+
+      expect(harness.runtime.startThread).not.toHaveBeenCalled();
+      expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+      expect(harness.manager.activeModel()).toBe(SYNTHETIC_LOCAL_MODEL_ID);
+      expect(harness.posted).toContainEqual({
+        type: 'error',
+        payload: expect.objectContaining({
+          headline: expect.stringContaining(SYNTHETIC_LOCAL_MODEL_ID),
+        }),
+      });
+      expect(harness.posted).not.toContainEqual({ type: 'model', payload: { model: 'auto' } });
+
+      harness.runtime.listLocalModels.mockResolvedValue({
+        models: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
+      });
+      const send = harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: { text: 'Now it runs', clientMessageId: 'msg-local-up' },
+      });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      await send;
+
+      expect(harness.runtime.startThread).toHaveBeenCalledOnce();
+      expect(harness.runtime.startThread).toHaveBeenCalledWith(
+        expect.objectContaining({ model: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }),
+      );
+    } finally {
+      configured.mockRestore();
+    }
+  });
+
+  it.each(['ready', 'newChat'] as const)(
+    'keeps a Local default that is not running on %s and says so, never Auto',
+    async (trigger) => {
+      const configured = vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+      try {
+        const harness = makeHarness();
+        await harness.context.globalState.update('tierStatus.cachedTier', 'max');
+        if (trigger === 'newChat') {
+          await harness.manager.handleMessage({ type: 'ready' });
+          harness.posted.splice(0);
+        }
+
+        await harness.manager.handleMessage({ type: trigger });
+
+        expect(harness.manager.activeModel()).toBe(SYNTHETIC_LOCAL_MODEL_ID);
+        expect(harness.posted).not.toContainEqual({ type: 'model', payload: { model: 'auto' } });
+        expect(harness.posted).toContainEqual({
+          type: 'error',
+          payload: expect.objectContaining({
+            headline: expect.stringContaining(SYNTHETIC_LOCAL_MODEL_ID),
+          }),
+        });
+        const modelWrites = vi
+          .mocked(vscode.workspace.getConfiguration)
+          .mock.results.flatMap(
+            (result) =>
+              (result.value as { update: { mock: { calls: unknown[][] } } }).update.mock.calls,
+          )
+          .filter((call) => call[0] === 'model');
+        expect(modelWrites).toEqual([]);
+      } finally {
+        configured.mockRestore();
+      }
+    },
+  );
+
+  it('reopens the conversation a surface held before the window reloaded', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'kept-1' }),
+        messages: [{ role: 'user', text: 'Earlier prompt' }],
+        transcriptTruncated: false,
+      },
+    });
+    await harness.context.workspaceState.update(
+      'agiWorkforce.openThread.panel:AGI Chat 2',
+      'kept-1',
+    );
+    harness.manager.bindRestoreKey('panel:AGI Chat 2', true);
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.conversationTreeProvider?.resolveThread).toHaveBeenCalledWith('kept-1');
+    expect(harness.manager.activeThreadId()).toBe('kept-1');
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'conversationLoaded',
+        payload: expect.objectContaining({ threadId: 'kept-1' }),
+      }),
+    );
+  });
+
+  it('restores nothing in Restricted Mode, and a new surface starts empty', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'kept-1' }),
+        messages: [],
+        transcriptTruncated: false,
+      },
+    });
+    await harness.context.workspaceState.update('agiWorkforce.openThread.sidebar', 'kept-1');
+    harness.manager.bindRestoreKey('sidebar', true);
+    vscode.workspace.isTrusted = false;
+    try {
+      await harness.manager.handleMessage({ type: 'ready' });
+    } finally {
+      vscode.workspace.isTrusted = true;
+    }
+    expect(harness.conversationTreeProvider?.resolveThread).not.toHaveBeenCalled();
+
+    harness.manager.bindRestoreKey('sidebar', false);
+    await vi.waitFor(() =>
+      expect(harness.context.workspaceState.get('agiWorkforce.openThread.sidebar')).toBeUndefined(),
+    );
+  });
+
+  it('remembers the session a send starts and forgets it on New Chat', async () => {
+    const harness = makeHarness();
+    harness.manager.bindRestoreKey('sidebar', true);
+    const send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hi' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    expect(harness.context.workspaceState.get('agiWorkforce.openThread.sidebar')).toBe('thread-1');
+
+    await harness.manager.handleMessage({ type: 'newChat' });
+    await vi.waitFor(() =>
+      expect(harness.context.workspaceState.get('agiWorkforce.openThread.sidebar')).toBeUndefined(),
+    );
+  });
+
+  it('applies a code block to the text editor the user left when the chat panel has focus', async () => {
+    const editor = {
+      document: {
+        uri: vscode.Uri.file('/workspace/src/app.ts'),
+        languageId: 'typescript',
+        isUntitled: false,
+        getText: () => '',
+        lineCount: 1,
+        lineAt: () => ({ text: '' }),
+      },
+      selection: new vscode.Selection(0, 0, 0, 0),
+      setDecorations: vi.fn(),
+    } as unknown as vscode.TextEditor;
+    let changeActive: ((next: vscode.TextEditor | undefined) => void) | undefined;
+    vi.mocked(vscode.window.onDidChangeActiveTextEditor).mockImplementationOnce(((
+      listener: (next: vscode.TextEditor | undefined) => void,
+    ) => {
+      changeActive = listener;
+      return new vscode.Disposable(() => undefined);
+    }) as never);
+    vscode.window.activeTextEditor = editor;
+    const tracking = trackLastTextEditor();
+    vscode.window.visibleTextEditors = [editor];
+    vscode.window.activeTextEditor = undefined;
+    changeActive?.(undefined);
+    const showDiff = vi.fn(() => ({ id: 'diff-1' }));
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      undefined,
+      context.workspaceState,
+      undefined,
+      { showDiff } as unknown as DiffDecorationProvider,
+    );
+    try {
+      await manager.handleMessage({
+        type: 'proposeDiff',
+        payload: { code: 'const a = 1;', language: 'typescript' },
+      });
+    } finally {
+      tracking.dispose();
+      vscode.window.visibleTextEditors = [];
+    }
+
+    expect(showDiff).toHaveBeenCalledWith(editor, '', 'const a = 1;', expect.anything(), {
+      filePath: expect.any(String),
+    });
+    expect(posted).toContainEqual(expect.objectContaining({ type: 'diffProposed' }));
+  });
+
+  it('refuses to apply a code block in another language to the focused file', async () => {
+    const editor = {
+      document: {
+        uri: vscode.Uri.file('/workspace/src/index.ts'),
+        languageId: 'typescript',
+        isUntitled: false,
+        getText: () => '',
+        lineCount: 50,
+        lineAt: () => ({ text: '' }),
+      },
+      selection: new vscode.Selection(39, 0, 39, 0),
+      setDecorations: vi.fn(),
+    } as unknown as vscode.TextEditor;
+    vscode.window.activeTextEditor = editor;
+    const showDiff = vi.fn(() => ({ id: 'diff-1' }));
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      undefined,
+      context.workspaceState,
+      undefined,
+      { showDiff } as unknown as DiffDecorationProvider,
+    );
+    try {
+      await manager.handleMessage({
+        type: 'proposeDiff',
+        payload: { code: 'def parse(path):\n    return []', language: 'python' },
+      });
+    } finally {
+      vscode.window.activeTextEditor = undefined;
+    }
+
+    expect(showDiff).not.toHaveBeenCalled();
+    expect(posted).toContainEqual({
+      type: 'diffProposalFailed',
+      payload: { message: expect.stringContaining('does not belong in') },
+    });
+  });
+
+  it('leaves staged attachments for the user when a generated prompt is sent', async () => {
+    const harness = makeHarness();
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 6,
+            dataUrl: 'data:text/plain;base64,U0VDUkVU',
+          },
+        ],
+      },
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain this code', standalone: true },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurnFor(harness);
+    await send;
+
+    expect(JSON.stringify(harness.runtime.startTurn.mock.calls[0]?.[0])).not.toContain('notes.txt');
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'attachmentsConsumed' }),
+    );
+  });
+
+  it('clears the chat when the session it shows is archived or deleted elsewhere', async () => {
+    const removed = new vscode.EventEmitter<string>();
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const harness = makeHarness();
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      { onDidRemoveThread: removed.event, refresh: vi.fn() } as unknown as ConversationTreeProvider,
+      context.workspaceState,
+      harness.pool,
+    );
+    const send = manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hi' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurnFor(harness);
+    await send;
+    expect(manager.activeThreadId()).toBe('thread-1');
+
+    removed.fire('another-thread');
+    expect(manager.activeThreadId()).toBe('thread-1');
+    removed.fire('thread-1');
+
+    expect(manager.activeThreadId()).toBeUndefined();
+    expect(posted).toContainEqual({ type: 'conversationCleared' });
+    manager.dispose();
+  });
+
   it('persists onboarding completion in global extension state', async () => {
     const harness = makeHarness();
 
@@ -468,6 +923,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).toContainEqual({
       type: 'fileSearchResults',
       payload: {
+        query: 'app',
         files: [
           {
             path: 'src/app.ts',
@@ -1610,6 +2066,51 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('keeps a retired turn out of the cleared conversation while its interrupt settles', async () => {
+    let resolveInterrupt!: () => void;
+    const delayedInterrupt = new Promise<void>((resolve) => {
+      resolveInterrupt = resolve;
+    });
+    const harness = makeHarness({ interruptTurn: delayedInterrupt });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Old conversation' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.manager.resetConversation();
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    const clearedAt = harness.posted.length;
+
+    harness.emit({
+      type: 'output_delta',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      delta: 'stale fragment',
+    });
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      toolCallId: 'tool-1',
+      name: 'read_file',
+      category: 'read',
+      summary: 'Read a file',
+      input: {},
+    } as LocalRuntimeEvent);
+    harness.emit({
+      type: 'turn_interrupted',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    } as LocalRuntimeEvent);
+    resolveInterrupt();
+    await send;
+
+    const afterClear = harness.posted.slice(clearedAt);
+    expect(afterClear.some((message) => message.type === 'token')).toBe(false);
+    expect(afterClear.some((message) => message.type === 'toolCallStart')).toBe(false);
+  });
+
   it('fails closed when a Local session is aimed at catalog or Auto routing', async () => {
     const harness = makeHarness({
       localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
@@ -2040,6 +2541,49 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  it('sends the effort a later settings change chose, not the earlier composer pick', async () => {
+    const harness = makeHarness();
+    harness.runtime.offers.mockImplementation(
+      async (capability: string) => capability === 'reasoningEffortLadder',
+    );
+    await realContextWorkspace(harness);
+    const handlers = vi
+      .mocked(vscode.workspace.onDidChangeConfiguration)
+      .mock.calls.map(([listener]) => listener as (event: vscode.ConfigurationChangeEvent) => void);
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'high' } });
+
+    const effortSpy = vi.spyOn(Config, 'agentEffort').mockReturnValue('low');
+    for (const handler of handlers) {
+      handler({
+        affectsConfiguration: (section: string) => section === 'agiWorkforce.agent.effort',
+      });
+    }
+
+    expect(harness.posted.filter((message) => message.type === 'effortChanged').at(-1)).toEqual({
+      type: 'effortChanged',
+      payload: expect.objectContaining({ effort: 'low' }),
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Think less' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'low' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    effortSpy.mockRestore();
   });
 
   it('sends an older CLI only a level it accepts, and offers it only those four', async () => {
@@ -2933,7 +3477,10 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: { id: 'web-conversation-1', source: 'cloud' },
     });
     expect(adopt).toHaveBeenCalledWith('web-conversation-1', '/workspace');
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+    expect(harness.conversationTreeProvider?.resolveThread).toHaveBeenCalledWith(
+      'web-conversation-1',
+    );
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'agi-workforce.openConversation',
       'web-conversation-1',
     );
@@ -2949,7 +3496,110 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
-  it('refuses automatic Undo when checkpoints cannot prove reply ownership', async () => {
+  it('counts only edits that finished, not attempts that failed', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const edit = (toolCallId: string, path: string, sequence: number) =>
+      harness.emit({
+        type: 'tool_execution_start',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        toolCallId,
+        name: 'edit_file',
+        category: 'filesystem',
+        summary: `Edit ${path}`,
+        input: { path, old_string: 'a', new_string: 'b' },
+      });
+    const finish = (toolCallId: string, isError: boolean, sequence: number) =>
+      harness.emit({
+        type: 'tool_execution_end',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        toolCallId,
+        name: 'edit_file',
+        output: isError ? 'old_string not found' : 'Edited',
+        isError,
+      });
+    edit('call-1', 'src/missing.ts', 1);
+    finish('call-1', true, 2);
+    edit('call-2', 'src/retry.ts', 3);
+    finish('call-2', true, 4);
+    edit('call-3', 'src/retry.ts', 5);
+    finish('call-3', false, 6);
+    edit('call-4', 'src/unfinished.ts', 7);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Done.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({ turnId: 'turn-1', changedFiles: 1 }),
+    });
+  });
+
+  it('reports no changed files when every edit failed', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/example.txt',
+      input: { path: 'src/example.txt', old_string: 'absent', new_string: 'x' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'old_string not found',
+      isError: true,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'I could not apply that edit.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.not.objectContaining({ changedFiles: expect.anything() }),
+    });
+  });
+
+  it('offers no Undo for a reply, because checkpoints cannot prove which reply they belong to', async () => {
     const harness = makeHarness();
     const rewindThread = vi.fn().mockResolvedValue({
       restoredFiles: ['src/math.ts'],
@@ -2993,6 +3643,17 @@ describe('ChatStateManager local turn lifecycle', () => {
       input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
     });
     harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'Edited src/math.ts',
+      isError: false,
+    });
+    harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
       turnId: 'turn-1',
@@ -3008,18 +3669,14 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: expect.objectContaining({ turnId: 'turn-1', changedFiles: 1 }),
     });
 
-    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
-    await harness.manager.handleMessage({ type: 'undoTurn', payload: { turnId: 'turn-1' } });
-
+    expect(
+      parseBoundWebviewMessage(
+        { type: 'undoTurn', payload: { turnId: 'turn-1' }, origin: 'o', epoch: 0 },
+        { origin: 'o', epoch: 0 },
+      ),
+    ).toBeUndefined();
     expect(listCheckpoints).not.toHaveBeenCalled();
     expect(rewindThread).not.toHaveBeenCalled();
-    expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      expect.stringContaining('cannot verify which checkpoint belongs to that reply'),
-    );
-    expect(harness.posted).not.toContainEqual({
-      type: 'turnChangesUndone',
-      payload: { turnId: 'turn-1' },
-    });
   });
 
   it('forwards dropped image attachments as image turn input', async () => {
@@ -3217,6 +3874,65 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('omits an attachment removed while the turn is still being prepared', async () => {
+    const harness = makeHarness();
+    let releaseLadder!: () => void;
+    const ladderGate = new Promise<boolean>((resolve) => {
+      releaseLadder = () => resolve(false);
+    });
+    harness.runtime.offers.mockImplementation(async (capability: string) =>
+      capability === 'reasoningEffortLadder' ? ladderGate : false,
+    );
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 5,
+            dataUrl: 'data:text/plain;base64,aGVsbG8=',
+          },
+        ],
+      },
+    });
+    const ack = harness.posted.find((m) => m.type === 'attachFilesAck') as {
+      type: 'attachFilesAck';
+      payload: { added: Array<{ id: string }> };
+    };
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Summarize the attachment' },
+    });
+    await vi.waitFor(() =>
+      expect(harness.runtime.offers).toHaveBeenCalledWith('reasoningEffortLadder'),
+    );
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'removePendingAttachment',
+      payload: { id: ack.payload.added[0]!.id },
+    });
+    releaseLadder();
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: [{ type: 'text', text: 'Summarize the attachment', text_elements: [] }],
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('forwards dropped text attachments as explicitly untrusted text input', async () => {
     const harness = makeHarness();
     await harness.manager.handleMessage({
@@ -3332,6 +4048,37 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('settles the composer when Stop arrives and nothing is running', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'cancel' });
+
+    expect(harness.posted).toContainEqual({ type: 'done' });
+    expect(harness.runtime.interruptTurn).not.toHaveBeenCalled();
+  });
+
+  it('marks only the refused follow-up as failed while a turn keeps running', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix it' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const before = harness.posted.length;
+
+    harness.manager.rejectUnreadableSend('msg-too-long');
+
+    const after = harness.posted.slice(before);
+    expect(after).toEqual([
+      {
+        type: 'followUpStatus',
+        payload: expect.objectContaining({ kind: 'error', clientMessageId: 'msg-too-long' }),
+      },
+    ]);
+    await completeTurnFor(harness);
+    await send;
+  });
+
   it('stops before turn dispatch when cancellation arrives during thread startup', async () => {
     const harness = makeHarness();
     let resolveThread!: (thread: ThreadSummary) => void;
@@ -3389,6 +4136,197 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  async function runApprovalTurn(
+    harness: ReturnType<typeof makeHarness>,
+  ): Promise<{ finish: () => Promise<void> }> {
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Ship it' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    return {
+      finish: async () => {
+        harness.emit({
+          type: 'turn_completed',
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          status: 'completed',
+          response: 'done',
+          inputTokens: 1,
+          outputTokens: 1,
+        });
+        await send;
+      },
+    };
+  }
+
+  function requestApproval(
+    harness: ReturnType<typeof makeHarness>,
+    requestId: string,
+    kind: string,
+  ): void {
+    harness.emit({
+      type: 'approval_requested',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      requestId,
+      kind,
+      summary: 'Allow?',
+      detail: kind,
+    });
+  }
+
+  it('asks again for a push to another branch after one push was allowed for the session', async () => {
+    const harness = makeHarness();
+    const turn = await runApprovalTurn(harness);
+    requestApproval(
+      harness,
+      'push-1',
+      'GitPush { remote: "origin", branch: "feature", force: false }',
+    );
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'push-1' }),
+        }),
+      ),
+    );
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'push-1', decision: 'session' },
+    });
+
+    requestApproval(
+      harness,
+      'push-2',
+      'GitPush { remote: "origin", branch: "main", force: false }',
+    );
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'push-2' }),
+        }),
+      ),
+    );
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+
+    requestApproval(
+      harness,
+      'push-3',
+      'GitPush { remote: "origin", branch: "feature", force: false }',
+    );
+    await vi.waitFor(() => expect(harness.runtime.respondToApproval).toHaveBeenCalledTimes(2));
+    expect(harness.runtime.respondToApproval).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requestId: 'push-3', decision: 'approved' }),
+    );
+    await turn.finish();
+  });
+
+  it('never remembers or offers a session answer for a force push', async () => {
+    const harness = makeHarness();
+    const turn = await runApprovalTurn(harness);
+    const forced = 'GitPush { remote: "origin", branch: "main", force: true }';
+    requestApproval(harness, 'force-1', forced);
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'approvalRequested',
+        payload: expect.objectContaining({ requestId: 'force-1', sessionScopeOffered: false }),
+      }),
+    );
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'force-1', decision: 'session' },
+    });
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'force-1', decision: 'approved' }),
+    );
+
+    requestApproval(harness, 'force-2', forced);
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'force-2' }),
+        }),
+      ),
+    );
+    expect(harness.runtime.respondToApproval).toHaveBeenCalledOnce();
+    await turn.finish();
+  });
+
+  it('closes a card the runtime already resolved, and never answers it afterwards', async () => {
+    const harness = makeHarness();
+    const turn = await runApprovalTurn(harness);
+    requestApproval(harness, 'timed-out', 'Exec { command: "pnpm test" }');
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'timed-out' }),
+        }),
+      ),
+    );
+    harness.emit({
+      type: 'agent_event',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      envelope: {
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+        sequence: 9,
+        emittedAtMs: 0,
+        event: { type: 'approval-resolved', approvalId: 'timed-out', decision: 'cancelled' },
+      },
+    } as unknown as LocalRuntimeEvent);
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'approvalResolved',
+        payload: { requestId: 'timed-out', outcome: 'expired' },
+      }),
+    );
+
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'timed-out', decision: 'once' },
+    });
+    expect(harness.runtime.respondToApproval).not.toHaveBeenCalled();
+    expect(harness.runtime.interruptTurn).not.toHaveBeenCalled();
+    await turn.finish();
+  });
+
+  it('marks an answer to an approval the runtime no longer holds as expired, keeping the turn', async () => {
+    const harness = makeHarness({
+      approvalFailure: new LocalRuntimeProtocolError(
+        'Approval request is no longer pending',
+        -32004,
+      ),
+    });
+    const turn = await runApprovalTurn(harness);
+    requestApproval(harness, 'gone', 'Exec { command: "pnpm test" }');
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual(
+        expect.objectContaining({
+          type: 'approvalRequested',
+          payload: expect.objectContaining({ requestId: 'gone' }),
+        }),
+      ),
+    );
+    await harness.manager.handleMessage({
+      type: 'respondToApproval',
+      payload: { requestId: 'gone', decision: 'once' },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'approvalResolved',
+      payload: { requestId: 'gone', outcome: 'expired' },
+    });
+    expect(harness.runtime.interruptTurn).not.toHaveBeenCalled();
+    expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'error' }));
+    await turn.finish();
   });
 
   it('interrupts and settles the turn when an approval response is rejected', async () => {
@@ -4119,6 +5057,179 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
+  async function completeTurn(
+    harness: Pick<ReturnType<typeof makeHarness>, 'emit'>,
+    turnId = 'turn-1',
+  ): Promise<void> {
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId,
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+  }
+
+  it('continues the same persisted session after the CLI exits mid-turn', async () => {
+    const harness = makeHarness();
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'First turn' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({ type: 'runtime_disconnected', error: 'AGI local runtime exited' });
+    await first;
+
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Follow-up' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    await completeTurn(harness);
+    await second;
+
+    expect(harness.runtime.startThread).toHaveBeenCalledOnce();
+    expect(harness.runtime.startTurn.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ threadId: 'thread-1' }),
+    );
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'conversationBoundaryChanged' }),
+    );
+  });
+
+  it('announces a new session before starting one when the old session is gone after an exit', async () => {
+    const harness = makeHarness();
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'First turn' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({ type: 'runtime_disconnected', error: 'AGI local runtime exited' });
+    await first;
+    harness.runtime.readThread.mockRejectedValueOnce(
+      new LocalRuntimeProtocolError('thread not found', -32004),
+    );
+    const boundaryBeforeStart: boolean[] = [];
+    harness.runtime.startThread.mockImplementationOnce(async () => {
+      boundaryBeforeStart.push(
+        harness.posted.some((message) => message.type === 'conversationBoundaryChanged'),
+      );
+      return threadSummary({ id: 'thread-2' });
+    });
+
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Follow-up' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-2',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await second;
+
+    expect(harness.runtime.startThread).toHaveBeenCalledTimes(2);
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({ type: 'conversationBoundaryChanged' }),
+    );
+    expect(boundaryBeforeStart).toEqual([true]);
+  });
+
+  it('rebinds an idle conversation to the live client after its old client was disposed', async () => {
+    const harness = makeHarness();
+    const first = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'First turn' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurn(harness);
+    await first;
+
+    const disposed = new Error('AGI local runtime client is disposed');
+    harness.runtime.listLocalModels.mockRejectedValue(disposed);
+    harness.runtime.readThread.mockRejectedValue(disposed);
+    harness.runtime.startTurn.mockRejectedValue(disposed);
+    const live = makeHarness();
+    live.runtime.readThread.mockResolvedValue({
+      thread: threadSummary({ id: 'thread-1' }),
+      messages: [],
+      transcriptTruncated: false,
+    });
+    vi.mocked(harness.pool.forWorkspace).mockReturnValue(
+      live.runtime as unknown as LocalRuntimeClient,
+    );
+
+    harness.posted.splice(0);
+    await harness.manager.refreshRuntimeStatus();
+    expect(harness.posted).toContainEqual({ type: 'runtimeStatus', payload: { status: 'ready' } });
+
+    const second = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Follow-up' },
+    });
+    await vi.waitFor(() => expect(live.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurn(live);
+    await second;
+
+    expect(harness.runtime.startTurn).toHaveBeenCalledOnce();
+    expect(live.runtime.startThread).not.toHaveBeenCalled();
+    expect(live.runtime.startTurn.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ threadId: 'thread-1' }),
+    );
+  });
+
+  it('reloads the streamed answer when the runtime reports lost notifications', async () => {
+    const harness = makeHarness();
+    const turn = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const delta = (index: number, text: string): LocalRuntimeEvent => ({
+      type: 'output_delta',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      index,
+      delta: text,
+    });
+    harness.emit(delta(0, 'Hel'));
+    harness.runtime.reconnectThread.mockResolvedValueOnce({
+      turnId: 'turn-1',
+      partialResponse: 'Hello wor',
+      nextDeltaIndex: 3,
+      pendingApprovals: [],
+    });
+
+    harness.notify({ method: 'server/warning', params: { code: 'notification_lag', skipped: 2 } });
+    harness.emit(delta(2, 'lo wor'));
+    await vi.waitFor(() =>
+      expect(harness.posted).toContainEqual({
+        type: 'streamReplaced',
+        payload: { text: 'Hello wor' },
+      }),
+    );
+    harness.emit(delta(3, 'ld'));
+
+    expect(harness.runtime.reconnectThread).toHaveBeenCalledWith('thread-1');
+    expect(harness.posted).not.toContainEqual({ type: 'token', payload: { text: 'lo wor' } });
+    expect(harness.posted).toContainEqual({ type: 'token', payload: { text: 'ld' } });
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'sessionNotice',
+        payload: expect.objectContaining({ message: expect.stringContaining('missed') }),
+      }),
+    );
+    await completeTurn(harness);
+    await turn;
+  });
+
   it('settles the UI turn when the local app-server disconnects', async () => {
     const harness = makeHarness();
     let settled = false;
@@ -4153,7 +5264,7 @@ describe('ChatStateManager context usage reporting', () => {
     } as ContextPanelProvider);
   });
 
-  it('reports the runtime-measured turn tokens against the catalog context window', async () => {
+  it('reports the context the CLI measured against the catalog window, not the turn’s summed tokens', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
     const model = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id)).find(
@@ -4172,15 +5283,52 @@ describe('ChatStateManager context usage reporting', () => {
       turnId: 'turn-1',
       status: 'completed',
       response: 'done',
-      inputTokens: 41_200,
-      outputTokens: 1_800,
+      inputTokens: 20_100,
+      outputTokens: 200,
+      contextTokens: 10_200,
     });
     await send;
 
-    expect(harness.posted).toContainEqual({
-      type: 'contextUsage',
-      payload: { usedTokens: 43_000, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+    const contextPosts = harness.posted.filter((message) => message.type === 'contextUsage');
+    expect(contextPosts).toEqual([
+      {
+        type: 'contextUsage',
+        payload: { usedTokens: 10_200, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+      },
+    ]);
+  });
+
+  it('shows no context figure when the CLI did not measure one', async () => {
+    const harness = makeHarness();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
     });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 20_100,
+      outputTokens: 200,
+    });
+    await send;
+
+    const contextPosts = harness.posted.filter((message) => message.type === 'contextUsage');
+    expect(contextPosts).toEqual([{ type: 'contextUsage', payload: { usedTokens: 0 } }]);
+
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+    await harness.manager.showSessionStatus();
+    const rows = vi.mocked(vscode.window.showQuickPick).mock.calls.at(-1)?.[0] as Array<{
+      label: string;
+      description?: string;
+    }>;
+    expect(rows.find((entry) => entry.label.endsWith('Context'))?.description).toBe(
+      'Not measured yet in this window',
+    );
   });
 
   it('feeds the session token counter the runtime-measured counts, not a char estimate', async () => {
@@ -4225,6 +5373,7 @@ describe('ChatStateManager context usage reporting', () => {
       response: 'done',
       inputTokens: 900,
       outputTokens: 100,
+      contextTokens: 1_000,
     });
     await send;
 
@@ -4261,6 +5410,7 @@ describe('ChatStateManager session compaction', () => {
       response: 'done',
       inputTokens: 90_000,
       outputTokens: 10_000,
+      contextTokens: 100_000,
     });
     await send;
     return harness;
@@ -4454,7 +5604,7 @@ describe('ChatStateManager session compaction', () => {
     await harness.manager.compactConversation();
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code: nothing in this session is old enough to summarize yet.',
+      `${PRODUCT_NAMES.code}: nothing in this session is old enough to summarize yet.`,
     );
     expect(harness.posted.filter((message) => message.type === 'sessionNotice')).toHaveLength(0);
   });
@@ -4589,13 +5739,40 @@ describe('ChatStateManager slash commands', () => {
     const runCommand = vi.fn();
     Object.assign(harness.runtime, { runCommand });
 
+    const compact = vi.spyOn(harness.manager, 'compactConversation').mockResolvedValue();
+
     await harness.manager.handleMessage({ type: 'requestSlashCommands' });
     await harness.manager.handleMessage({ type: 'runSlashCommand', payload: { name: '/compact' } });
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+    expect(compact).toHaveBeenCalledOnce();
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'agi-workforce.compactConversation',
     );
     expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it('runs /rewind, /status, /export and /model on the chat they were typed in', async () => {
+    const harness = makeHarness();
+    const rewind = vi.spyOn(harness.manager, 'showCheckpoints').mockResolvedValue();
+    const status = vi.spyOn(harness.manager, 'showSessionStatus').mockResolvedValue();
+    const exported = vi.spyOn(harness.manager, 'exportConversation').mockResolvedValue();
+
+    for (const name of ['/rewind', '/status', '/export', '/model']) {
+      await harness.manager.handleMessage({ type: 'runSlashCommand', payload: { name } });
+    }
+
+    expect(rewind).toHaveBeenCalledOnce();
+    expect(status).toHaveBeenCalledOnce();
+    expect(exported).toHaveBeenCalledOnce();
+    expect(harness.posted).toContainEqual(expect.objectContaining({ type: 'modelPickerData' }));
+    for (const command of [
+      'agi-workforce.showCheckpoints',
+      'agi-workforce.showSessionStatus',
+      'agi-workforce.exportConversation',
+      'agi-workforce.selectModel',
+    ]) {
+      expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(command);
+    }
   });
 
   it('turns a prompt command into a draft rather than running it', async () => {
@@ -4660,7 +5837,7 @@ describe('ChatStateManager error classification', () => {
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Code: Trust this workspace before resuming a developer session.',
+      `${PRODUCT_NAMES.code}: Trust this workspace before resuming a developer session.`,
       'Manage Trust',
     );
   });

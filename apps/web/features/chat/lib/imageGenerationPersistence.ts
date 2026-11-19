@@ -1,9 +1,6 @@
 import type { RequestAuthority } from '@/lib/identity/request-authority';
-import {
-  saveMessageToDb,
-  notifyPersistenceFailure,
-  EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-} from '@/lib/hooks/useChatStream';
+import { saveMessageToDb, notifyPersistenceFailure } from '@/lib/hooks/useChatStream';
+import { EMPTY_KEPT_ASSISTANT_CONTENT } from '@/lib/chat-kept-messages';
 import { CHAT_MESSAGE_PERSISTENCE_TIMEOUT_MS } from '@shared/config/network';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 
@@ -54,12 +51,13 @@ export function imageRegenerationPendingMetadata(
 
 export function imageGenerationFailureMetadata(
   previous: MessageMetadata | undefined,
-  options: { paywall?: MessageMetadata['paywall']; retryAt?: string } = {},
+  options: { paywall?: MessageMetadata['paywall']; retryAt?: string; jobId?: string } = {},
 ): MessageMetadata {
   return mergeImageGenerationMetadata(previous, {
     toolType: 'image-generation',
     ...(options.paywall ? { paywall: options.paywall } : {}),
     imageRetryAt: options.retryAt,
+    imageJobId: options.jobId,
   });
 }
 
@@ -113,7 +111,7 @@ export async function persistImageGenerationAssistantMessage(params: {
         {
           id: messageId,
           role: 'assistant',
-          content: content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          content: content || EMPTY_KEPT_ASSISTANT_CONTENT,
           model,
           metadata,
         },

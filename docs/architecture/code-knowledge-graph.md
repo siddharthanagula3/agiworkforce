@@ -2243,14 +2243,13 @@ new destination lease or durable receipt. Helper fixtures cover explicit refusal
 uncertainty, stale ownership, callback timing and routing failure; all remain
 unexecuted and do not establish mounted component, native or StrictMode behavior.
 
-Separate OPEN `MOBILE-IOS-SHARE-INBOX-DELIVERY-01` concerns native received-copy
-preservation, not this UI admission correction. `AGIShareInbox.swift` aggregates
-manifests, moves only the first ten file records and skips failed moves, then
-removes consumed manifests and the entire shared files directory. JS disposal can
-suppress the returned callback; root navigation stages attachments in an in-memory
-Map with destructive take and no durable acknowledgment. Cross-process claims,
-manifest-owned cleanup and retryable durable delivery need a coherent design;
-no native fix, original-source deletion or observed runtime loss is claimed.
+Separate `MOBILE-IOS-SHARE-INBOX-DELIVERY-01` concerns native received-copy
+preservation, not this UI admission correction. `AGIShareInbox.swift` claims a
+bounded batch by renaming its manifests into a receipt directory, copies the
+files into app caches and deletes only that receipt's App Group copies when JS
+acknowledges it; an unacknowledged receipt is delivered again. Share Preview
+hands shared text to the composer through `composerHandoff`, which appends it
+after a parked draft. Device acceptance remains open.
 
 ## Android shared copies reserve distinct targets and report text clipping
 

@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { CodeSessionView } from '@/src/features/companion/components/CodeSessionView';
 import { manualReconnect } from '@/services/companion';
 import { useConnectionStore } from '@/stores/connectionStore';
@@ -69,7 +70,7 @@ export default function CodeSessionScreen() {
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)/companion' as Parameters<typeof router.replace>[0]);
+    else router.replace('/(app)/cloud-code' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handlePair = useCallback(() => {
@@ -80,27 +81,30 @@ export default function CodeSessionScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-3 h-12">
-        <PressableBox
-          onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={20} color={colors.textSecondary} />
-        </PressableBox>
-        <Text variant="subheading" className="ml-2 flex-1">
-          AGI Code
-        </Text>
-      </View>
       {connected && threadId && rootId ? (
         <CodeSessionView
           rootId={rootId}
           threadId={threadId}
+          onBack={handleBack}
           {...(approvalId ? { focusApprovalId: approvalId } : {})}
         />
       ) : (
-        <DesktopUnavailable onPair={handlePair} />
+        <>
+          <View className="flex-row items-center px-3 h-12">
+            <PressableBox
+              onPress={handleBack}
+              className="p-2 rounded-lg active:bg-white/5"
+              accessibilityLabel="Go back"
+              accessibilityRole="button"
+            >
+              <ArrowLeft size={20} color={colors.textSecondary} />
+            </PressableBox>
+            <Text variant="subheading" className="ml-2 flex-1">
+              {CLOUD_CODE_SCREEN_TITLE}
+            </Text>
+          </View>
+          <DesktopUnavailable onPair={handlePair} />
+        </>
       )}
     </SafeAreaView>
   );

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -27,8 +28,8 @@ describe('desktop settings IA · nav ↔ render consistency', () => {
       'Usage',
       'Capabilities',
       'Connectors',
-      'AGI Code',
-      'AGI Extension',
+      PRODUCT_NAMES.code,
+      PRODUCT_NAMES.extension,
       'Extensions',
       'Developer',
     ];

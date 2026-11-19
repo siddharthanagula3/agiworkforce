@@ -88,6 +88,14 @@ describe(DEVELOPER_REQUEST_LOGS_PATH, () => {
     expect(mocks.listDeveloperRequestLogs).toHaveBeenCalledWith(db, 'user-1', before);
   });
 
+  it('passes an opaque keyset cursor through to the next page', async () => {
+    const before = Buffer.from(
+      JSON.stringify(['2026-10-19T10:00:00.123456Z', '0190a000-0000-7000-8000-000000000004']),
+    ).toString('base64url');
+    await GET(request(`?before=${before}`));
+    expect(mocks.listDeveloperRequestLogs).toHaveBeenCalledWith(db, 'user-1', before);
+  });
+
   it('rejects a cursor that is not a timestamp before reaching the database', async () => {
     const response = await GET(request('?before=yesterday'));
     expect(response.status).toBe(400);

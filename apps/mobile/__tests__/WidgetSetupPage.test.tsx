@@ -70,6 +70,11 @@ describe('Quick Access screen, describes only real integrations', () => {
       expect(getByText(label)).toBeTruthy();
     }
 
+    expect(
+      getByText('Hear an answer without opening the app, once Ask from Siri is on'),
+    ).toBeTruthy();
+    expect(queryByText(/Dictate a question, review it in chat/)).toBeNull();
+
     expect(getByText('Share Sheet')).toBeTruthy();
     expect(getByText('Review and create a real Apple Reminder')).toBeTruthy();
     expect(getAllByText(/choose Share to AGI/i).length).toBeGreaterThan(0);
@@ -92,6 +97,8 @@ describe('Quick Access screen, describes only real integrations', () => {
     expect(getByText('Home Screen Widget')).toBeTruthy();
     expect(getByText('App Shortcuts')).toBeTruthy();
     expect(getByText('Links Open In The App')).toBeTruthy();
+    expect(getByText(/drag AGI Mobile onto it/)).toBeTruthy();
+    expect(queryByText(/AGI Workforce/)).toBeNull();
 
     expect(queryByText(/Google Assistant/)).toBeNull();
     expect(queryByText(/Control Center/)).toBeNull();

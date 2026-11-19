@@ -29,11 +29,17 @@ function runReleaseGuard(
 ) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'agi-privacy-declarations-')));
   try {
-    for (const directory of ['scripts/release', 'store-listing/ios', 'store-listing/android']) {
+    for (const directory of [
+      'scripts/release',
+      'store-listing/ios',
+      'store-listing/android',
+      'src/features/billing',
+    ]) {
       fs.mkdirSync(path.join(root, directory), { recursive: true });
     }
     for (const file of [
       'app.config.js',
+      'src/features/billing/storePurchases.json',
       'scripts/release/verify-privacy-declarations.mjs',
       'store-listing/android/data-safety.json',
     ]) {

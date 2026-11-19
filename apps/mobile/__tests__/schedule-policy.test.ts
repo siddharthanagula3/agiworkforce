@@ -79,6 +79,36 @@ describe('Mobile schedule policy', () => {
       expect(parseNaturalLanguage(phrase)).toBeNull();
     },
   );
+
+  it.each([
+    ['Every Saturday at 6pm', [6], '18:00'],
+    ['Saturdays at 6pm', [6], '18:00'],
+    ['Every Sat at 6:30pm', [6], '18:30'],
+    ['Every Sunday at 6pm', [0], '18:00'],
+    ['Every Saturday @ noon', [6], '12:00'],
+    ['Every Saturday at midnight', [6], '00:00'],
+    ['Check inventory at the depot, Saturdays at 7am', [6], '07:00'],
+  ])('reads the clock in %j rather than the letters inside a weekday', (phrase, days, time) => {
+    expect(parseNaturalLanguage(phrase)).toMatchObject({
+      recurrence: 'weekly',
+      daysOfWeek: days,
+      timeOfDay: time,
+    });
+  });
+
+  it('defaults to 09:00 only when no clock was given', () => {
+    expect(parseNaturalLanguage('Every Saturday')).toMatchObject({
+      daysOfWeek: [6],
+      timeOfDay: '09:00',
+    });
+  });
+
+  it.each(['Every Saturday at lunch', 'Every day at the office', 'Saturdays at 25'])(
+    'rejects %j instead of replacing a clock it cannot read with the default',
+    (phrase) => {
+      expect(parseNaturalLanguage(phrase)).toBeNull();
+    },
+  );
 });
 
 describe('Mobile one-time schedule timing', () => {

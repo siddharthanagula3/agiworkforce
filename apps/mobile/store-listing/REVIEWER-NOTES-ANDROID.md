@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-09-26
+Last updated: 2026-11-11
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
@@ -30,27 +30,28 @@ on-device ML Kit Prompt API over AICore, no model file is downloaded at all
 (`native/android/withAGIAICore.cjs` pulls in `com.google.mlkit:genai-prompt`;
 its catalog entry carries `fileSizeBytes: 0` because nothing is fetched). On every
 other device the default is **AGI Standard**, an Apache-2.0 open-weights model of
-roughly 2 GB at Q4, downloaded once and run through ExecuTorch or llama.rn. Both
+about 2.7 GB, downloaded once and run through ExecuTorch or llama.rn. Both
 entries, with their exact model identifiers, licences and sizes, are defined in
 `packages/platform/local-llm/src/catalog.ts`, that file is the single source of
 truth for what can run on a device, and this document deliberately points at it
 rather than restating identifiers that would then drift.
 
-Local chats are stored in a local SQLite database encrypted with SQLCipher
-(`app.config.js` → `['expo-sqlite', { useSQLCipher: true }]`). The 256-bit key is
-generated with `expo-crypto` and held by `expo-secure-store`, which is
-Android Keystore-backed (`storage/db.ts`).
+Local chats are stored in an encrypted MMKV store whose 256-bit key is held by
+`expo-secure-store`, which is Android Keystore-backed (`lib/mmkv.ts`). On-device
+memory and model records use a local SQLite database encrypted with SQLCipher
+(`app.config.js` → `['expo-sqlite', { useSQLCipher: true }]`, key handling in
+`storage/db.ts`).
 
 Local Mode does not merely _avoid_ our servers, it is prevented from reaching
 them: `lib/egressGuard.ts` throws `EgressBlockedError` on any outbound request to
 an AGI managed-cloud host while Local Mode is active.
 
-**AGI Cloud (optional, requires sign-in).** Signing in enables server-side chat,
-web search, and image generation (`lib/v1FeatureFlags.ts` → `cloudChat`,
-`webSearch`, `imageGen` are all `true`). Sign-in is Clerk's native `AuthView`
-sheet, not a browser (`app/(auth)/login.tsx` → `<AuthView mode="signInOrUp" />`).
-Its Free plan is open to anyone who signs in. Paid plans and credit top-ups are
-sold only through Google Play Billing.
+**AGI Cloud (optional, requires sign-in).** Signing in enables server-side chat
+and web search on the Free plan, which is open to anyone who signs in
+(`lib/v1FeatureFlags.ts` → `cloudChat`, `webSearch` are `true`). Sign-in is
+Clerk's native `AuthView` sheet, not a browser (`app/(auth)/login.tsx` →
+`<AuthView mode="signInOrUp" />`). This version is free, sells nothing and has
+no in-app products; see **Billing** below.
 
 ## How to review it
 
@@ -62,8 +63,8 @@ Cloud features require sign-in. Before submission, provide an active review
 account (email and password, no one-time code) in Play Console's secure App
 access instructions; do not put credentials in this repository. The Cloud entry path
 includes age confirmation, and a signed-in account must accept the current
-Terms before Cloud unlocks. If Play products are included, the review account
-must be able to see and test those products through Google Play Billing.
+Terms before Cloud unlocks. The review account needs no purchase setup: this
+version has no in-app products.
 
 ## Age gate and minor-safe mode
 
@@ -165,18 +166,22 @@ Merged into the manifest by library config plugins rather than listed above:
   document/text scanning with on-device OCR (`native/android/withAGIVisionOCR.cjs`).
 - `USE_BIOMETRIC` from `expo-local-authentication`, for the optional App Lock,
   opt-in from Settings → Safety & Security. Off by default.
-- `READ_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`
-  and `expo-file-system`, for choosing an existing image or document to attach on
-  Android 12 and earlier. Android 13+ uses the photo picker and the document
-  picker, which need no storage permission.
-
 - `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED` from `expo-notifications`,
   which is only added to production and preview builds (`conditionalPlugins` in
-  `app.config.js`). Used for background-task and cloud-job completion alerts.
-- `READ_CALENDAR` / `WRITE_CALENDAR` from `expo-calendar`, for the optional
-  device-calendar context connector. Off by default; the permission strings say
-  "only after you enable device calendar context".
-- `com.android.vending.BILLING` from `expo-iap`, see **Billing** below.
+  `app.config.js`). Used for model-download, reminder and cloud-job completion
+  alerts, and for agent actions waiting on the user's approval.
+- `READ_CALENDAR` / `WRITE_CALENDAR` from `expo-calendar`, optional: the calendar
+  is read when the user asks about their schedule, and an event is added only
+  after the user confirms it in a chat
+  (`src/features/settings/permissions/registry.ts` → `calendar`).
+- `READ_EXTERNAL_STORAGE`, `READ_MEDIA_VISUAL_USER_SELECTED`,
+  `ACCESS_MEDIA_LOCATION` and `SYSTEM_ALERT_WINDOW`, which libraries would add,
+  are removed through `android.blockedPermissions` in `app.config.js`. Images and
+  documents are chosen through the system photo picker and document picker.
+- `com.android.vending.BILLING`, which `expo-iap` would add, is removed from the
+  manifest: `app.config.js` lists it in `android.blockedPermissions` while
+  `src/features/billing/storePurchases.json` sets `"nativePurchases": false`. See **Billing**
+  below.
 - `WRITE_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`'s
   own `AndroidManifest.xml`. It is legacy-only: on Android 13+ it is stripped by
   `maxSdkVersion` and the app never requests it.
@@ -190,8 +195,8 @@ rest of the app usable.
 **One exception, stated plainly: notifications.** `POST_NOTIFICATIONS` is the only
 permission the app can prompt for without a permission-specific tap. Once the user
 has signed in to AGI Cloud and the app is in Cloud mode, a root-layout effect
-(`app/_layout.tsx:275-297`) calls `registerForPushNotifications`, which requests
-the permission if it is not already granted (`services/notifications.ts:154-159`).
+in `app/_layout.tsx` calls `registerForPushNotifications`, which requests the
+permission if it is not already granted (`services/notifications.ts`).
 On Android 13+ that is the system POST_NOTIFICATIONS dialog, and on a review device
 it appears shortly after the first Cloud sign-in completes, not on a tap of a
 notifications control. It never fires in Local Mode, never before sign-in, and
@@ -216,51 +221,50 @@ not by AGI's servers: `voiceInput.ts` starts `ExpoSpeechRecognitionModule` with
 
 Two files in the repo describe this declaration:
 `store-listing/android/data-safety.json` holds the per-type records, and
-`LISTING-METADATA-ANDROID.json` → `data_safety` holds the listing copy. **They now
-declare the same seven types with the same sharing answer**; an earlier revision
-of this file described two disagreements between them, and both have been closed
-in the files rather than only in this prose.
+`LISTING-METADATA-ANDROID.json` → `data_safety` holds the listing copy. They
+declare the same nine types with the same sharing answers, and
+`__tests__/ios-store-submission-config.test.ts` fails if they drift apart.
 
-| Declared type         | Backed by                                                                                                                                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Email address, Name   | Clerk sign-in only (`app/(auth)/login.tsx`). Never collected in Local Mode.                                                                                                                                   |
-| User IDs              | The account identifier carried by authenticated cloud requests (`services/api.ts`).                                                                                                                           |
-| Other in-app messages | Cloud-mode chat content, uploaded to AGI Cloud and processed by the model provider serving the request.                                                                                                       |
-| Photos                | Image attachments the user picks for a Cloud message (`src/features/media/photo-picker.ts`), and the Cloud profile photo, which is uploaded to Clerk (`src/features/settings/index.tsx` → `handleEditPhoto`). |
-| Files and docs        | A document attached to a Cloud message through `expo-document-picker` (`app/(app)/chat/[id].tsx:703`, `app/(app)/(tabs)/chat.tsx:596`).                                                                       |
-| Device or other IDs   | An app-generated UUID from `lib/deviceId.ts`, registered with the push token by `services/notifications.ts` → `POST /api/mobile/push-token`. Created only when push is enabled; it is not an advertising ID.  |
+| Declared type             | Shared | Backed by                                                                                                                                                                                                     |
+| ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email address, Name       | No     | Clerk sign-in only (`app/(auth)/login.tsx`). Never collected in Local Mode.                                                                                                                                   |
+| User IDs                  | No     | The account identifier carried by authenticated cloud requests (`services/api.ts`).                                                                                                                           |
+| Other in-app messages     | Yes    | Cloud-mode chat content, uploaded to AGI Cloud and forwarded to the model provider serving the request.                                                                                                       |
+| Photos                    | Yes    | Image attachments the user picks for a Cloud message (`src/features/media/photo-picker.ts`), and the Cloud profile photo, which is uploaded to Clerk (`src/features/settings/index.tsx` → `handleEditPhoto`). |
+| Files and docs            | Yes    | A document attached to a Cloud message through `expo-document-picker` (`app/(app)/chat/[id].tsx`, `app/(app)/(tabs)/chat.tsx`).                                                                               |
+| Voice or sound recordings | Yes    | Live voice mode in an AGI Cloud chat streams the microphone to AGI Cloud for the session (`src/features/voice/services/liveVoiceSession.ts`). Dictation transcribes on the device and uploads no audio.       |
+| Device or other IDs       | No     | An app-generated UUID from `lib/deviceId.ts`, registered with the push token by `services/notifications.ts` → `POST /api/mobile/push-token`. Created only when push is enabled; it is not an advertising ID.  |
+| App interactions          | No     | Product analytics events in AGI Cloud, only after the user allows them in Settings → Privacy → Product analytics (`src/features/settings/cloud-privacy/ProductAnalyticsConsentGroup.tsx`).                    |
 
 Every type is marked optional in both files, because every one of them is
 collected only after a Cloud sign-in the user does not have to perform: a
 signed-out user who has completed onboarding lands in Local Mode and is never
 redirected to a sign-in wall (`app/_layout.tsx`).
 
-**Sharing: declared "no", and here is exactly what that rests on.** The ground
-fact, which we state plainly because it is what you would find by inspecting
-traffic: in Cloud mode the user's messages and attachments leave the device,
-reach AGI Cloud, and are forwarded server-side to the model provider serving the
-request. Both files answer Play's sharing question **no** on the service-provider
-basis, the model, storage, auth and push subprocessors listed at
-https://agiworkforce.com/subprocessors process that data on AGI's behalf, not for
-their own purposes.
+**Sharing: declared "yes" for messages, photos, files and voice.** In Cloud
+mode the user's messages and attachments leave the device, reach AGI Cloud, and
+are forwarded server-side to the model provider serving the request. On the
+Free plan some of those providers' terms allow training on what they receive,
+which is use for their own purposes, so those four types are declared shared
+(`sharingBasis` in `store-listing/android/data-safety.json`). Identity data goes
+only to Clerk and push delivery only to the push service, both acting on AGI's
+behalf, so those types are declared not shared. The subprocessors are listed at
+https://agiworkforce.com/subprocessors.
 
 What the source tree can prove about this, and does:
 
 - Every outbound request from the device goes to an AGI-controlled host.
   `agiworkforce.com`, `api.agiworkforce.com`, `signaling.agiworkforce.com`
-  (`lib/constants.ts:2-16`), plus Clerk for sign-in and the push service. No
-  third party receives data directly from the device.
+  (`lib/constants.ts` → `API_URL`, `GATEWAY_URL`, `WS_URL`), plus Clerk for
+  sign-in and the push service. No third party receives data directly from the
+  device.
 - **The app contains no analytics SDK, no crash-reporting SDK and no ad SDK.**
   `apps/mobile/package.json` has no Sentry, Firebase, Crashlytics, Amplitude,
-  PostHog, Mixpanel, Segment, Bugsnag or Datadog dependency, so no telemetry
-  stream leaves for a third party's own purposes.
+  PostHog, Mixpanel, Segment, Bugsnag or Datadog dependency; product analytics
+  events go only to AGI Cloud.
 - No advertising identifier is collected: no `AD_ID` permission, no
   `AdvertisingIdClient` call, and `usesAdvertisingId: false` in
   `store-listing/android/data-safety.json`.
-
-Whether Play's service-provider exception covers each subprocessor is a
-contractual question the repo cannot settle, so we do not assert it from code.
-it rests on the data-processing terms behind the subprocessor list above.
 
 Security practices, each verifiable:
 
@@ -278,153 +282,192 @@ Local Mode is active, verified in `__tests__/egress-guard.test.ts`.
 
 ## Billing: please read
 
-**This build sells auto-renewing subscriptions and consumable credit top-ups
-through Google Play Billing. There is no card-entry form and no other in-app
-checkout.**
+**This version is free and has no in-app products. Nothing is sold in the app,
+there is no card-entry form or other checkout, and nothing in the app links to a
+purchase.**
 
-The `expo-iap` 5.8.1 integration is `src/features/billing/useMobileIap.ts`,
-rendered by `src/features/settings/cloud-billing/index.tsx`. It sells four
-subscriptions (Basic, Pro, Max 5x, Max 20x, each with one monthly base plan) and
-four consumable credit top-ups; the product and base plan IDs are listed in
-`docs/runbooks/mobile-store-products.md`.
+One build-level value decides it: `src/features/billing/storePurchases.json` sets
+`"nativePurchases": false`, and
+`src/features/billing/nativePurchaseAvailability.ts` exports it as
+`NATIVE_PURCHASES_AVAILABLE`, which every purchase path reads. It is fixed at
+build time; no server response or over-the-air update can turn it on. With it
+false:
 
-How to buy during review:
+- The app shows no purchase, upgrade, top-up, restore-purchases,
+  compare-plans or contact-sales control, and no price.
+- The app never opens a Play Billing connection.
+  `src/features/billing/useMobileIap.ts` picks an inert implementation at build
+  time, and `src/features/billing/mobileIapService.ts` refuses catalog and
+  verify calls, so the app never calls `/api/mobile/iap/*`.
+- `app.config.js` removes the permission `com.android.vending.BILLING` from the
+  manifest.
+- The purchase client library `expo-iap` (5.8.3, `package.json`) is still linked
+  into the binary and its config plugin is still registered in `app.config.js`,
+  but nothing calls it.
+- On the server, the `/api/mobile/iap/*` routes (owner
+  `apps/web/lib/server/mobile-iap-catalog.ts`) stay off unless the deployment
+  sets `MOBILE_IAP_ENABLED`. This version never calls them either way.
 
-1. Sign in with the review account and open Settings → Billing.
-2. Every signed-in account can buy; there is no waitlist or access code in the
-   app. Credit top-ups need an active plan and are not sold in Japan.
-3. Plans appear with Play's own localized price for the configured base plan.
-   The Play purchase sheet shows the exact charge.
-4. The app sends the purchase token to `/api/mobile/iap/verify`. Access is
-   granted only after the server verifies it with the Play Developer API. The
-   server then acknowledges the purchase with Play, and the app acknowledges or
-   consumes it on the device.
-5. With a paid plan active, **Usage top-ups** lists the consumables. Purchased
-   credits do not expire.
+What you will see under **Settings → Subscription**: a screen titled **Plan**
+(`src/features/settings/cloud-billing/index.tsx`, the
+`if (!NATIVE_PURCHASES_AVAILABLE)` branch) with:
 
-What the Billing screen shows:
+- **Current plan**, and the renewal or end date if the plan has one.
+- **Billing**, as plain text with no link, only for an account that already
+  holds a paid plan: **Managed on the web**, **By your organization**, or
+  **Managed where you subscribed**. A Free-plan account gets no Billing row.
+- **What your plan includes**, which lists the current plan's features only.
+- **Usage**, the account's usage, read natively from the usage API.
+- **Help with your plan**, which opens the in-app support screen.
 
-- Billing may first show **Loading native purchases**. Its plan-change row can
-  read **Upgrade plan**, **Adjust plan**, or **Choose plan**; Team and
-  Enterprise accounts may also see **Workspace administration**.
-- **Changing plans.** The current plan is marked and every other plan is
-  labelled **Upgrade** or **Downgrade**. An upgrade replaces the subscription
-  at once and charges the prorated difference; a downgrade is deferred to the
-  next renewal. The screen says so before the tap.
-- **Pending payments.** A purchase Play reports as pending is shown as
-  **Waiting for approval** and is never granted early. It completes on its own
-  when Play confirms the payment, including when the app was closed.
-- **Restore purchases** is always present and never charges.
-- A subscription bought on another platform is identified as managed elsewhere
-  and the app does not offer a second recurring purchase. Such an account can
-  still buy credit top-ups here.
+How a locked feature is presented: when something is outside the account's
+plan, the app says it "isn’t included in your plan" (or that the plan's
+allowance is used up for now) and offers **Close**, plus **Choose a standard
+model** when the locked item is a model, with no upgrade button, plan comparison
+or link (`src/features/chat/components/PaywallBottomSheet.tsx`). Elsewhere the
+same rule holds: a model the plan does not include is not listed in the model
+picker, and other plan-locked features are described as not included, never as
+something to buy.
 
-Every purchase path is behind one server answer from the server owner
-`mobile-iap-catalog.ts`, which requires the deployment to set
-`MOBILE_IAP_ENABLED` and to map product keys to Play product IDs. If no products
-appear, the screen shows **"Purchases are not available right now"** with one of
-these reasons: "Native purchases are not enabled for this deployment." when the
-flag is off, "Google Play products have not been registered for this build."
-when the flag is on but the Play product map is empty.
+Paid plans exist for the AGI Cloud web product. An account that already holds a
+paid plan gets that plan's access after signing in here. The app neither sells
+nor advertises those plans, names no price, and has no link to where they are
+sold.
 
-A purchase made with a Play license-tester account is a test purchase and is
-not charged. The production service verifies it with Google Play and grants it
-only to an AGI account that has been allowed to receive test purchases; the
-review account supplied in Play Console is one. For any other account the
-purchase is refused, the Billing screen says **"This purchase was made in the
-store's test environment, which this account is not set up to use. Nothing was
-charged."**, and it is left unacknowledged so Play cancels it.
+The review account needs no purchase setup: there are no test purchases to
+make, no products to load and nothing to restore.
 
-Before submitting (operator steps, not for the reviewer): the review account
-must be allowed to receive test purchases (operator dashboard, Flags, Store test
-purchases; `docs/runbooks/mobile-store-products.md` section 4.1). This tree cannot
-verify that allowance, the live deployment flag or Play Console product
-registration. All three must be in place before this build is submitted, and the
-purchase, restore, renewal, refund, plan-change and pending-payment paths
-validated with Play test purchases.
+Before submitting (operator step, not for the reviewer): do not activate Play
+products for this release. Selling in the app needs `nativePurchases` set to
+`true`, a new build and a new review.
 
 ## External links
 
-This section identifies website, store, legal and support destinations in the
+This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
-**A. Billing and account-management destinations.** Availability depends on
-the signed-in account and plan.
+**A. Account destinations.** These account links render in this version:
 
-| #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
-| --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:729`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:451`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:258`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
-| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:130` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:740`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
-| A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
-| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:456`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
-| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:584`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
+| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                      |
+| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
+| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Custom Tab.                                                      |
+| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Custom Tab.                              |
+| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Custom Tab.                                                                    |
 
-Web billing links (A1 to A5) show only on the US App Store storefront and never on Android; elsewhere they are plain text, and purchase help opens in-app support.
+No link in the app opens a page about pricing, billing, invoices, sales or
+upgrades.
 
 **B. Non-billing destinations.** The sign-in and account-creation flows open
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
 account Terms confirmation also links to Terms and Privacy
 (`app/(auth)/login.tsx`, `src/features/auth/components/MobileSignUp.tsx`).
-Settings → Privacy links to Terms and Privacy
+Settings → Privacy links to Privacy, Data rights requests and Terms
 (`src/features/settings/cloud-privacy/index.tsx`). Settings → Personalization links its
 custom-instructions helper to the acceptable-use page
 (`src/features/settings/personalization/index.tsx`). Password recovery opens
-`agiworkforce.com/login`, whose password step offers Forgot password
-(`app/(auth)/reset-password.tsx`), and
-the desktop-pairing safety disclosure opens `agiworkforce.com/security`
-(`src/features/companion/components/PairingRiskDisclosure.tsx`).
+`agiworkforce.com/login`, whose password step offers Forgot password, and
+account recovery opens `agiworkforce.com/recover`
+(`app/(auth)/reset-password.tsx`). The desktop-pairing safety disclosure opens
+`agiworkforce.com/security`
+(`src/features/companion/components/PairingRiskDisclosure.tsx`). When the
+server refuses a locked or suspended account, the alert's **Open on the web**
+opens the reset-password or appeal page (`services/api.ts`), and the updated
+Terms notice opens `/terms` (`services/termsNotice.ts`).
 
-**C. Opened in an in-app Custom Tab, not the browser.** Settings → About opens
-`agiworkforce.com`, `/privacy` and `/terms` through `openInAppBrowser`
-(`app/(app)/about.tsx:224`, `:230`, `:236`). Assistant output that contains a link
-opens the same way and is never auto-followed
-(`src/features/chat/components/MessageContentRenderer.tsx:19-32`); a non-`http(s)`
-scheme requires a confirmation alert first.
+**C. Opened in an in-app Custom Tab, not the browser.** These go through
+`openInAppBrowser` (`lib/safeOpenURL.ts`), which opens an in-app Custom Tab
+rather than leaving the app: Settings →
+About opens `agiworkforce.com`, `/privacy`, `/terms`, `/acceptable-use`, `/help`
+and `/status` (`app/(app)/about.tsx`); Settings opens the Help Center
+(`src/features/settings/index.tsx`); Settings → Permissions opens a help article
+(`src/features/settings/permissions/index.tsx`); the first-run disclosure opens
+`/privacy` and the India notice at `/privacy/india`
+(`src/features/onboarding/components/FirstRunDisclosureModal.tsx`); the cloud
+provider consent opens `/privacy` and the provider list at `/subprocessors`
+(`src/features/settings/cloud-privacy/NamedProviderConsentModal.tsx`,
+`services/providerConsent.ts`); and a notification whose target has no screen in
+the app opens its web page (`services/notifications.ts`). A link in assistant
+output, and a map place or route card, also opens in a Custom Tab and is never
+auto-followed; a non-`http(s)` scheme requires a confirmation alert first
+(`src/features/chat/components/MarkdownInline.tsx`,
+`src/features/chat/components/InteractiveCardBlock.tsx`).
 
-**D. Not `agiworkforce.com`.** Settings → Connectors → GitHub opens the GitHub App
-install flow at `${API_URL}/api/github/install/start`
-(`src/features/settings/cloud-connectors/index.tsx:690`, URL from
-`services/connectors.ts:7-9`), an OAuth start on our own host. The Connect GitHub
-button in the new cloud code session sheet runs the same install from the app
-(`src/features/cloud-code/githubInstall.ts`). It first opens
+**D. Not `agiworkforce.com`, or not a web page.** Settings → Connectors
+authorizes a connector in an in-app authentication session
+(`services/connectors.ts`, `authorizeConnectorInApp`). The Connect GitHub
+button in the new cloud code session sheet runs the GitHub App install from the
+app (`src/features/cloud-code/githubInstall.ts`). It first opens
 `agiworkforce.com/github/connect`, which names the requesting AGI account before
 GitHub, and always returns through the verified link
 `https://agiworkforce.com/github/installed`: inside an authentication session on
 iOS 17.4 and later, as a universal link in Safari on older iOS, and as a verified
 App Link from a browser tab on Android. The app then names the GitHub account and
 asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
-`app/legal/article-50.tsx:34` opens the EU AI Act text at
-`artificialintelligenceact.eu`. A map result card opens the maps app
-(`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to
-`support@agiworkforce.com`, and the Android settings intents in
-`src/features/edge-cases/components/StorageFullModal.tsx`, are the only other
-`Linking.openURL` targets in the app.
+`app/legal/article-50.tsx` opens the EU AI Act text at
+`artificialintelligenceact.eu`. A cloud task that asks the user to open a link
+shows an **Open link** button for it
+(`src/features/tasks/components/CloudRunInputForm.tsx`). The remaining
+`Linking.openURL` targets are not web pages: `mailto:` to
+`support@agiworkforce.com` (`app/(app)/about.tsx`, `services/contentReport.ts`)
+and to the account's own address for the desktop link
+(`src/features/companion/components/DesktopSetupChecklistView.tsx`), an
+`otpauth:` link to an authenticator app
+(`src/features/settings/account-security/TwoFactorSection.tsx`), and the
+device-settings intents (`app/(app)/settings/integrations.tsx`,
+`src/features/integrations/components/DeviceIntegrationStatus.tsx`).
 
-**E. Present in source but unreachable in this binary.** The Stripe
-billing-portal link (`src/features/settings/cloud-billing/index.tsx:292`), dead
-behind `FEATURES.billing === false`.
+**E. Present in source but not rendered in this version.** These controls
+exist in the source for a build that sells through the store. None of them
+renders while `NATIVE_PURCHASES_AVAILABLE` is `false`:
 
-Users who subscribed to AGI on the web see their plan's features unlocked when
-they sign in here. The app never prices or initiates that purchase. **There is no
-alternative in-app payment path**, no web checkout, no UPI sheet, no card form.
-and none of the links above reaches one.
+- `src/features/settings/cloud-billing/index.tsx`: **View invoices**
+  (`agiworkforce.com/billing`), **Workspace administration**
+  (`agiworkforce.com/settings/team`), **Manage on web** (the subscription-owner
+  alert), **Help with a purchase** (`agiworkforce.com/help`), the Terms and
+  Privacy links under the purchase list, and the Stripe billing-portal link,
+  which is also dead behind `FEATURES.billing === false`. All of them are on the
+  purchase screen, which this version never draws: Settings → Subscription
+  returns the Plan screen described above first.
+- `src/features/chat/components/PaywallBottomSheet.tsx`: **Contact Sales**
+  (`agiworkforce.com/contact-sales`). The sheet draws no upgrade, plan or sales
+  button while `NATIVE_PURCHASES_AVAILABLE` is `false`.
+- `app/(app)/settings/workspace.tsx`: **Create on web** and **Open workspace
+  settings on the web** (`agiworkforce.com/settings/team`). Both, like the web
+  billing links above, require `useWebBillingLinksAllowed`
+  (`src/features/billing/webBillingLinks.ts`), which returns false on Android.
+
+**There is no alternative in-app payment path**, no web checkout, no UPI sheet,
+no card form, and none of the links above reaches one.
 
 ## Account deletion and data export
 
-In-app, no support ticket and no website visit:
+Requested in the app, with no support ticket:
 
-**Settings → Account → Delete Account** → confirmation alert → `DELETE
-/api/user/delete-account`. The confirmation states that the AGI Cloud account and
-all cloud data, chats, projects, memory, artifacts, are permanently deleted
-within 24 hours, that it cannot be undone, and that on-device Local Mode data
-stays on the device and must be removed separately. Source:
-`src/features/settings/cloud-account/index.tsx`. The deletion is bound to the
+**Settings → Account → Delete Account** → confirmation alert → identity check →
+`DELETE /api/user/delete-account`. The request schedules deletion of the AGI
+Cloud account and its cloud data (chats, projects, memory, artifacts) and
+returns a cancellation deadline 24 hours later; the app shows it and signs out,
+and signing back in before the deadline lets the person cancel. After the
+deadline a daily job ends any Stripe billing still live, erases the data and
+deletes the sign-in identity, so erasure can finish later than the deadline.
+Data under an active legal hold, and the records the privacy policy lists as
+kept, are kept. On-device Local Mode data stays on the device and is removed
+separately. Sources: `src/features/settings/cloud-account/index.tsx`,
+`src/features/settings/cloud-account/deleteAccountConfirmation.ts`,
+`apps/web/app/api/user/delete-account/route.ts`. The deletion is bound to the
 account epoch captured when the dialog opened, so a mid-flight account switch
 cannot delete the wrong account.
+
+When the server refuses, nothing is scheduled and the app shows why. A paid plan
+that still renews (bought on the web, since this version sells nothing) has to
+be cancelled where it was bought first, so a renewal cannot charge after the
+account is gone; the app names where but does not link to the billing page.
+Once the plan is cancelled, deletion is scheduled straight away, the remaining
+paid time ends when erasure runs, and the confirmation says the unused time is
+not refunded. A cancelled plan with a payment still being collected, and the
+only owner of a workspace, are also refused, with the reason shown.
 
 **Settings → Data Controls** offers **Export Local Data**, chats, memory,
 settings and installed model details, which runs entirely on the device
@@ -433,39 +476,40 @@ settings and installed model details, which runs entirely on the device
 device-only chats are wiped from Settings → Storage.
 
 The web-facing deletion URL declared for Data safety is
-`https://agiworkforce.com/settings/account`
-(`store-listing/android/data-safety.json`).
+`https://agiworkforce.com/help/delete-your-account`
+(`store-listing/android/data-safety.json` → `dataDeletionRequestUrl`).
 
 ## AI disclosure
 
-First run shows a blocking disclosure before the device-tier screen
-(`app/(public)/onboarding.tsx` → `composeFirstRunDisclosure`, accepted via
-`recordDisclosureAcceptance`). Its summary states, verbatim:
+First run shows a blocking disclosure, "Before you start", before the
+device-tier screen (`app/(public)/onboarding.tsx` →
+`composeShortFirstRunDisclosure`, drawn by
+`src/features/onboarding/components/FirstRunDisclosureModal.tsx`, accepted via
+`recordDisclosureAcceptance`). It states, verbatim, "You are chatting with an
+AI, and it can make mistakes.", says what Local Mode and AGI Cloud collect, and
+links to the Privacy Policy and the India DPDP notice. **Why we show this**
+expands the EU AI Act Article 50(1) text verbatim
+(`packages/contracts/compliance/src/article50-disclosure.ts`). Acceptance is
+recorded with a hash of the copy.
 
-- "You are interacting with an AI system."
-- "Responses can be inaccurate. Review important output before using it."
-- "AI-generated text, audio, image, or video is marked when you export or share it."
-
-It also carries the EU AI Act Article 50(1) and 50(2) text verbatim and the
-penalty notice (`packages/contracts/compliance/src/article50-disclosure.ts`).
-Acceptance is recorded with a hash of the exact copy shown.
-
-**What that third line covers in this binary, stated so it is not read wider than
-the code.** The marking is implemented on the Data Controls export: Settings →
+**How AI-generated output is marked when exported, stated so it is not read
+wider than the code.** The marking is implemented on the Data Controls export: Settings →
 Data Controls → Export Local Data wraps each conversation transcript in a
 machine-readable Article 50(2) provenance marker naming the provider and model
-(`services/dsarExport.ts:49-72`, via `wrapTextExportWithMarker` in
-`packages/contracts/compliance/src/article50-marker.ts:56-78`). The ordinary
+(`buildMarkedTranscript` in `services/dsarExport.ts`, via
+`wrapTextExportWithMarker` in
+`packages/contracts/compliance/src/article50-marker.ts`). The ordinary
 conversation export and share from the chat screen, PDF, plain text, Markdown,
 copy-to-clipboard (`services/fileCreation.ts`), carries role labels only and
-does not add that marker. The disclosure sentence is a product commitment that
-one export path meets today and the other does not yet.
+does not add that marker.
 
-In the chat UI itself, every completed assistant turn carries a provenance footer
-naming its source, "AGI Cloud", or "Local Mode · <model name>" for on-device
-inference (`src/features/chat/components/ProvenanceFooter.tsx:10-14`, rendered
-from `src/features/chat/components/MessageBubble.tsx:894-895`). The footer names
-the system rather than printing the literal words "AI-generated".
+In the chat UI itself, every completed assistant turn that records its model
+carries a provenance footer naming its source: "AGI Cloud · <model name>" (or
+"AGI Cloud" alone when the model is not known), or "Local Mode · <model name>"
+for on-device inference (`src/features/chat/components/ProvenanceFooter.tsx`,
+rendered from `getProvenance` in
+`src/features/chat/components/MessageBubble.tsx`). The footer names the system
+rather than printing the literal words "AI-generated".
 
 Before any model is downloaded, the device-tier screen names the recommended
 model and its download size, and offers "Pick a different model", the user is
@@ -473,11 +517,10 @@ never given a model without being told which one it is.
 
 We do not claim full compliance with India's DPDP Act 2023. The itemised notice
 is published at https://agiworkforce.com/privacy/india; consent withdrawal and
-the export/delete controls above are implemented; the obligations we have not met
-
-- verifiable parental consent under s.9, notice in Eighth Schedule languages
-  under s.6(4), and India data residency, are listed at
-  https://agiworkforce.com/trust.
+the export/delete controls above are implemented; the obligations we have not
+met, verifiable parental consent under s.9, notice in Eighth Schedule languages
+under s.6(4), and India data residency, are listed at
+https://agiworkforce.com/trust.
 
 ## Contact
 

@@ -64,6 +64,7 @@ describe('VS Code sidebar file mentions', () => {
         data: {
           type: 'fileSearchResults',
           payload: {
+            query: 'app',
             files: [
               {
                 path: 'src/app.ts',
@@ -129,6 +130,87 @@ describe('VS Code sidebar file mentions', () => {
         clientMessageId: expect.stringMatching(/^msg-/),
         references: [reference],
       },
+    });
+  });
+
+  describe('a search result that arrives late', () => {
+    const readme = { path: 'README.md', label: 'README.md' };
+
+    function type(input: HTMLTextAreaElement, text: string): void {
+      input.value = text;
+      input.setSelectionRange(text.length, text.length);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    function results(query: string, files = [readme]): void {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'fileSearchResults', payload: { query, files } },
+        }),
+      );
+    }
+
+    function pressEnter(input: HTMLTextAreaElement): void {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    }
+
+    it('does not reopen the picker or touch the draft after the mention was left', () => {
+      boot();
+      const input = document.getElementById('userInput') as HTMLTextAreaElement;
+      type(input, 'Please review @REA');
+      type(input, 'Please review @REA ');
+
+      results('REA');
+
+      expect(document.querySelector('.mention-dropdown.visible')).toBeNull();
+      expect(input.value).toBe('Please review @REA ');
+    });
+
+    it('does not reopen the picker after Escape', () => {
+      boot();
+      const input = document.getElementById('userInput') as HTMLTextAreaElement;
+      type(input, 'Please review @REA');
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      results('REA');
+
+      expect(document.querySelector('.mention-dropdown.visible')).toBeNull();
+    });
+
+    it('ignores the answer to an earlier query once a newer one is typed', () => {
+      boot();
+      const input = document.getElementById('userInput') as HTMLTextAreaElement;
+      type(input, 'Please review @RE');
+      type(input, 'Please review @REA');
+
+      results('RE');
+      expect(document.querySelector('.mention-dropdown.visible')).toBeNull();
+
+      results('REA');
+      expect(document.querySelectorAll('.mention-item')).toHaveLength(1);
+    });
+
+    it('inserts the current result over the typed mention only', () => {
+      boot();
+      const input = document.getElementById('userInput') as HTMLTextAreaElement;
+      type(input, 'Please review @REA');
+
+      results('REA');
+      pressEnter(input);
+
+      expect(input.value).toBe('Please review @README.md ');
+    });
+
+    it('refuses to insert when the caret has left the mention', () => {
+      boot();
+      const input = document.getElementById('userInput') as HTMLTextAreaElement;
+      type(input, 'Please review @REA');
+      results('REA');
+      input.setSelectionRange(3, 3);
+
+      pressEnter(input);
+
+      expect(input.value).toBe('Please review @REA');
     });
   });
 });

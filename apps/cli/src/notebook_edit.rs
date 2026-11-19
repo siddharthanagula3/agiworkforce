@@ -30,6 +30,16 @@ pub enum CellKind {
     Raw,
 }
 
+impl CellKind {
+    fn cell_type(self) -> &'static str {
+        match self {
+            CellKind::Code => "code",
+            CellKind::Markdown => "markdown",
+            CellKind::Raw => "raw",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotebookEditRequest {
     pub path: String,
@@ -75,8 +85,8 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
     };
 
     let total = cells.len();
-    let serialized = serde_json::to_string_pretty(&nb)?;
-    write_atomic(path, serialized.as_bytes())
+    let serialized = nbformat_json(&nb)?;
+    write_atomic(path, &serialized)
         .with_context(|| format!("write notebook {}", path.display()))?;
 
     Ok(NotebookEditResult {
@@ -85,6 +95,22 @@ pub fn apply(req: &NotebookEditRequest) -> Result<NotebookEditResult> {
         affected_index: result.1,
         total_cells: total,
     })
+}
+
+/// The notebook laid out as nbformat writes it: one-space indent, keys in
+/// sorted order, and a final newline. A notebook Jupyter saved then changes
+/// only in the cells that were edited.
+fn nbformat_json(nb: &serde_json::Value) -> Result<Vec<u8>> {
+    let mut buf = Vec::new();
+    {
+        let mut serializer = serde_json::Serializer::with_formatter(
+            &mut buf,
+            serde_json::ser::PrettyFormatter::with_indent(b" "),
+        );
+        nb.serialize(&mut serializer)?;
+    }
+    buf.push(b'\n');
+    Ok(buf)
 }
 
 /// Write `bytes` to `path` atomically: write to a temp file in the same
@@ -131,20 +157,14 @@ fn apply_insert(
     let kind = req.kind.unwrap_or(CellKind::Code);
     let content = req.content.clone().unwrap_or_default();
     let new_id = format!("cell-{}", uuid::Uuid::new_v4());
-    let cell_type = match kind {
-        CellKind::Code => "code",
-        CellKind::Markdown => "markdown",
-        CellKind::Raw => "raw",
-    };
     let source: Vec<String> = content.lines().map(|l| format!("{l}\n")).collect();
-    let new_cell = serde_json::json!({
+    let mut new_cell = serde_json::json!({
         "id": new_id,
-        "cell_type": cell_type,
+        "cell_type": kind.cell_type(),
         "source": source,
         "metadata": {},
-        "execution_count": null,
-        "outputs": [],
     });
+    conform_cell_to_kind(&mut new_cell, kind);
     let index = req.index.unwrap_or(cells.len()).min(cells.len());
     cells.insert(index, new_cell);
     Ok((Some(new_id), index))
@@ -163,14 +183,34 @@ fn apply_replace(
         cell["source"] = serde_json::json!(lines);
     }
     if let Some(kind) = req.kind {
-        let s = match kind {
-            CellKind::Code => "code",
-            CellKind::Markdown => "markdown",
-            CellKind::Raw => "raw",
-        };
-        cell["cell_type"] = serde_json::json!(s);
+        cell["cell_type"] = serde_json::json!(kind.cell_type());
+        conform_cell_to_kind(cell, kind);
     }
     Ok((id, idx))
+}
+
+fn conform_cell_to_kind(cell: &mut serde_json::Value, kind: CellKind) {
+    let Some(fields) = cell.as_object_mut() else {
+        return;
+    };
+    fields
+        .entry("metadata")
+        .or_insert_with(|| serde_json::json!({}));
+    match kind {
+        CellKind::Code => {
+            fields
+                .entry("execution_count")
+                .or_insert(serde_json::Value::Null);
+            fields
+                .entry("outputs")
+                .or_insert_with(|| serde_json::json!([]));
+            fields.remove("attachments");
+        }
+        CellKind::Markdown | CellKind::Raw => {
+            fields.remove("execution_count");
+            fields.remove("outputs");
+        }
+    }
 }
 
 fn apply_delete(
@@ -372,5 +412,176 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(tmp.path()).unwrap()).unwrap();
         let source = updated["cells"][0]["source"].as_array().unwrap();
         assert!(source[0].as_str().unwrap().contains("new"));
+    }
+
+    const JUPYTER_SAVED: &str = r##"{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "a",
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "1\n"
+     ]
+    }
+   ],
+   "source": [
+    "x = 1\n",
+    "print(x)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "b",
+   "metadata": {},
+   "source": [
+    "# Résumé\n"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
+"##;
+
+    #[test]
+    fn a_one_cell_edit_of_a_notebook_jupyter_saved_changes_only_that_cell() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        tmp.write_all(JUPYTER_SAVED.as_bytes()).unwrap();
+        let req = NotebookEditRequest {
+            path: tmp.path().to_string_lossy().into(),
+            mode: NotebookEditMode::Replace,
+            cell_id: Some("b".into()),
+            index: None,
+            kind: None,
+            content: Some("# Summary".into()),
+        };
+
+        apply(&req).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(tmp.path()).unwrap(),
+            JUPYTER_SAVED.replace("# Résumé", "# Summary")
+        );
+    }
+
+    fn edited_cells(tmp: &NamedTempFile, req: &NotebookEditRequest) -> serde_json::Value {
+        apply(req).unwrap();
+        let updated: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(tmp.path()).unwrap()).unwrap();
+        updated["cells"].clone()
+    }
+
+    fn kind_request(
+        tmp: &NamedTempFile,
+        mode: NotebookEditMode,
+        cell_id: Option<&str>,
+        kind: CellKind,
+    ) -> NotebookEditRequest {
+        NotebookEditRequest {
+            path: tmp.path().to_string_lossy().into(),
+            mode,
+            cell_id: cell_id.map(String::from),
+            index: None,
+            kind: Some(kind),
+            content: Some("print(1)".into()),
+        }
+    }
+
+    #[test]
+    fn replacing_a_markdown_cell_with_code_adds_the_code_only_fields() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        write_notebook(
+            &mut tmp,
+            r##"[{"id":"m1","cell_type":"markdown","source":["# t\n"],"metadata":{}}]"##,
+        );
+        let cells = edited_cells(
+            &tmp,
+            &kind_request(&tmp, NotebookEditMode::Replace, Some("m1"), CellKind::Code),
+        );
+        assert_eq!(cells[0]["cell_type"], "code");
+        assert!(cells[0]["execution_count"].is_null());
+        assert_eq!(cells[0]["outputs"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn replacing_a_code_cell_with_markdown_or_raw_drops_the_code_only_fields() {
+        for kind in [CellKind::Markdown, CellKind::Raw] {
+            let mut tmp = NamedTempFile::new().unwrap();
+            write_notebook(
+                &mut tmp,
+                r#"[{"id":"c1","cell_type":"code","source":["x=1\n"],"metadata":{},"execution_count":3,"outputs":[{"output_type":"stream","name":"stdout","text":["1\n"]}]}]"#,
+            );
+            let cells = edited_cells(
+                &tmp,
+                &kind_request(&tmp, NotebookEditMode::Replace, Some("c1"), kind),
+            );
+            let cell = cells[0].as_object().unwrap();
+            assert_eq!(cell["cell_type"], kind.cell_type());
+            assert!(!cell.contains_key("execution_count"));
+            assert!(!cell.contains_key("outputs"));
+            assert!(cell.contains_key("metadata"));
+        }
+    }
+
+    #[test]
+    fn replacing_a_markdown_cell_with_code_drops_attachments() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        write_notebook(
+            &mut tmp,
+            r#"[{"id":"m1","cell_type":"markdown","source":["x\n"],"metadata":{},"attachments":{"a.png":{"image/png":"AA=="}}}]"#,
+        );
+        let cells = edited_cells(
+            &tmp,
+            &kind_request(&tmp, NotebookEditMode::Replace, Some("m1"), CellKind::Code),
+        );
+        assert!(!cells[0].as_object().unwrap().contains_key("attachments"));
+    }
+
+    #[test]
+    fn a_same_kind_code_replacement_keeps_cached_outputs() {
+        let mut tmp = NamedTempFile::new().unwrap();
+        write_notebook(
+            &mut tmp,
+            r#"[{"id":"c1","cell_type":"code","source":["x=1\n"],"metadata":{},"execution_count":3,"outputs":[{"output_type":"stream","name":"stdout","text":["1\n"]}]}]"#,
+        );
+        let cells = edited_cells(
+            &tmp,
+            &kind_request(&tmp, NotebookEditMode::Replace, Some("c1"), CellKind::Code),
+        );
+        assert_eq!(cells[0]["execution_count"], 3);
+        assert_eq!(cells[0]["outputs"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn inserted_cells_carry_only_the_fields_their_kind_allows() {
+        for (kind, is_code) in [
+            (CellKind::Code, true),
+            (CellKind::Markdown, false),
+            (CellKind::Raw, false),
+        ] {
+            let mut tmp = NamedTempFile::new().unwrap();
+            write_notebook(&mut tmp, r#"[]"#);
+            let cells = edited_cells(
+                &tmp,
+                &kind_request(&tmp, NotebookEditMode::Insert, None, kind),
+            );
+            let cell = cells[0].as_object().unwrap();
+            assert_eq!(cell.contains_key("execution_count"), is_code);
+            assert_eq!(cell.contains_key("outputs"), is_code);
+            assert!(cell.contains_key("metadata"));
+        }
     }
 }

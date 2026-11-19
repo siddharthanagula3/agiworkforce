@@ -38,6 +38,7 @@ import {
 import { generateReferenceId } from '@/lib/support/handoff/reference-id';
 
 import {
+  findLatestTicketBySubject,
   getStaffTicket,
   getTicketForStaff,
   getTicketForUser,
@@ -180,8 +181,20 @@ export async function openTicket(input: OpenTicketInput): Promise<OpenedSupportT
   return { ticket, staffNotified: await notifySupportTeam(ticket, input.userId) };
 }
 
-export function listTickets(userId: string, limit = MAX_TICKETS_LISTED): Promise<SupportTicket[]> {
-  return listTicketsForUser(userId, Math.min(Math.max(limit, 1), MAX_TICKETS_LISTED));
+export function findLatestTicket(userId: string, subject: string): Promise<SupportTicket | null> {
+  return findLatestTicketBySubject(userId, subject);
+}
+
+export async function listTicketsPage(
+  userId: string,
+  offset = 0,
+): Promise<{ tickets: SupportTicket[]; nextOffset: number | null }> {
+  const rows = await listTicketsForUser(userId, MAX_TICKETS_LISTED + 1, offset);
+  const hasMore = rows.length > MAX_TICKETS_LISTED;
+  return {
+    tickets: hasMore ? rows.slice(0, MAX_TICKETS_LISTED) : rows,
+    nextOffset: hasMore ? offset + MAX_TICKETS_LISTED : null,
+  };
 }
 
 export async function readTicket(ticketId: string, userId: string): Promise<SupportTicketThread> {
@@ -212,7 +225,11 @@ export async function replyToTicket(input: {
     message: clamp(input.message, MAX_TICKET_MESSAGE_CHARS),
     isStaff: input.isStaff ?? false,
   });
-  if (!reply) throw new TicketNotFoundError();
+  if (!reply) {
+    const current = await getTicketForUser(input.ticketId, input.userId);
+    if (current && !OPEN_TICKET_STATUSES.includes(current.status)) throw new TicketClosedError();
+    throw new TicketNotFoundError();
+  }
 
   if (ticket.status === 'resolved') {
     await updateTicketStatus({

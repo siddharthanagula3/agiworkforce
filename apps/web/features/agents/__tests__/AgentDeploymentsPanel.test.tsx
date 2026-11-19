@@ -201,4 +201,38 @@ describe('AgentDeploymentsPanel', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(await screen.findByText('No deployments yet.')).toBeInTheDocument();
   });
+
+  it('says how many deployments could not be loaded and retries them', async () => {
+    const SECOND_ID = '0190a000-0000-7000-8000-0000000000d2';
+    const api = fakeApi({
+      activity: vi.fn(async () => ({
+        conversations: [],
+        routines: [SCHEDULE_ID, SECOND_ID].map((id) => ({
+          id,
+          name: 'Routine',
+          status: 'active' as const,
+          lastExecutedAt: null,
+          nextExecutionAt: null,
+        })),
+      })),
+    });
+    const getSchedule = vi.fn(async (id: string) => {
+      if (id === SECOND_ID) throw new Error('offline');
+      return schedule();
+    });
+    render(
+      <AgentDeploymentsPanel
+        api={api}
+        agent={managedAgent()}
+        schedules={scheduleApiFake({ getSchedule } as Partial<ScheduleApi>)}
+      />,
+    );
+    expect(await screen.findByRole('heading', { name: 'Weekday digest' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('1 deployment could not be loaded.');
+    expect(screen.queryByText('No deployments yet.')).toBeNull();
+    getSchedule.mockImplementation(async (id: string) => schedule({ id, name: `Routine ${id}` }));
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(2);
+  });
 });

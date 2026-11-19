@@ -13,7 +13,7 @@ import { getDisplayName } from '@/src/features/model-picker/service';
 import { useThemeColors } from '@/src/ui/theme';
 import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
-import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
+import { isoToZonedDateInput, isoToZonedTimeInput, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { TimezonePickerField } from './TimezonePickerField';
@@ -59,6 +59,16 @@ export function ScheduleForm({
   const [scheduledDate, setScheduledDate] = useState(
     isoToZonedDateInput(initialData?.scheduledAt, initialTimezone),
   );
+  const [initialOnce] = useState(() =>
+    initialData?.recurrence === 'once' && initialData.scheduledAt
+      ? {
+          instant: initialData.scheduledAt,
+          date: isoToZonedDateInput(initialData.scheduledAt, initialTimezone),
+          time: isoToZonedTimeInput(initialData.scheduledAt, initialTimezone),
+          timezone: initialTimezone,
+        }
+      : null,
+  );
   const [timezone, setTimezone] = useState(initialTimezone);
   const [agentId, setAgentId] = useState<string | null>(initialData?.agentId ?? null);
   const [connectors, setConnectors] = useState<string[] | null>(initialData?.connectors ?? null);
@@ -103,7 +113,13 @@ export function ScheduleForm({
         newErrors.scheduledAt = 'Date is required for one-time schedules';
       } else {
         try {
-          oneTimeInstant = zonedDateAndTimeToIso(scheduledDate, timeOfDay, timezone);
+          oneTimeInstant =
+            initialOnce &&
+            initialOnce.date === scheduledDate &&
+            initialOnce.time === timeOfDay &&
+            initialOnce.timezone === timezone
+              ? initialOnce.instant
+              : zonedDateAndTimeToIso(scheduledDate, timeOfDay, timezone);
           if (new Date(oneTimeInstant).getTime() <= Date.now()) {
             newErrors.scheduledAt = 'Choose a date and time in the future';
           }
@@ -126,7 +142,7 @@ export function ScheduleForm({
 
     setErrors(newErrors);
     return { valid: Object.keys(newErrors).length === 0, oneTimeInstant };
-  }, [name, prompt, recurrence, scheduledDate, timeOfDay, timezone, daysOfWeek]);
+  }, [name, prompt, recurrence, scheduledDate, timeOfDay, timezone, daysOfWeek, initialOnce]);
 
   const handleRecurrenceChange = useCallback(
     (
@@ -268,6 +284,7 @@ export function ScheduleForm({
             dayOfMonth={dayOfMonth}
             timeOfDay={timeOfDay}
             scheduledDate={scheduledDate}
+            timezone={timezone}
             onChange={handleRecurrenceChange}
           />
           {errors.recurrence ? (
@@ -347,7 +364,12 @@ export function ScheduleForm({
         </View>
       </ScrollView>
 
-      <ModelPickerSheet sheetRef={modelPickerRef} modelScope="cloud" onSelect={setModel} />
+      <ModelPickerSheet
+        sheetRef={modelPickerRef}
+        modelScope="cloud"
+        selectedModelId={model}
+        onSelect={setModel}
+      />
     </KeyboardAvoidingView>
   );
 }

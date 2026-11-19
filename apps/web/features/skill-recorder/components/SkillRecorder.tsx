@@ -33,6 +33,7 @@ import {
   holdRecording,
   mountRecorder,
   refreshRecorder,
+  retainFrames,
   setRecorderView,
   useRecorderState,
 } from '../lib/recorder-store';
@@ -47,7 +48,7 @@ import {
   defaultSelection,
   formatClock,
   frameDataUrl,
-  recordingFiles,
+  recordingEntries,
 } from '../lib/recording-files';
 
 export const RECORD_SKILL_TITLE = 'Record a skill';
@@ -113,7 +114,7 @@ function hostIsMac(): boolean {
 
 export interface SkillRecorderProps {
   id: string;
-  onDraftSkill: (files: File[]) => void;
+  onDraftSkill: (files: File[]) => Promise<readonly File[]>;
   draftBlockedReason: string | null;
 }
 
@@ -215,6 +216,7 @@ export function SkillRecorder({ id, onDraftSkill, draftBlockedReason }: SkillRec
           open={recorder.view === 'review'}
           recording={recorder.recording}
           draftBlockedReason={draftBlockedReason}
+          busy={busy}
           onDiscard={() =>
             confirm({
               title: DISCARD_TITLE,
@@ -227,8 +229,14 @@ export function SkillRecorder({ id, onDraftSkill, draftBlockedReason }: SkillRec
           onDraft={(indexes) => {
             const recording = recorder.recording;
             if (!recording) return;
-            onDraftSkill(recordingFiles(recording, indexes));
-            holdRecording(null);
+            void run(async () => {
+              const entries = recordingEntries(recording, indexes);
+              const taken = new Set(await onDraftSkill(entries.map((entry) => entry.file)));
+              retainFrames(
+                recording,
+                entries.filter((entry) => !taken.has(entry.file)).map((entry) => entry.frame),
+              );
+            });
           }}
         />
       )}
@@ -489,12 +497,14 @@ function ReviewDialog({
   open,
   recording,
   draftBlockedReason,
+  busy,
   onDiscard,
   onDraft,
 }: {
   open: boolean;
   recording: SkillCaptureRecording;
   draftBlockedReason: string | null;
+  busy: boolean;
   onDiscard: () => void;
   onDraft: (indexes: number[]) => void;
 }) {
@@ -585,7 +595,7 @@ function ReviewDialog({
           <Button
             type="button"
             className="rounded-full"
-            disabled={selected.size === 0 || draftBlockedReason !== null}
+            disabled={selected.size === 0 || draftBlockedReason !== null || busy}
             onClick={() => onDraft([...selected])}
           >
             {DRAFT_LABEL}

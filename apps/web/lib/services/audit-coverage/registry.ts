@@ -46,7 +46,6 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'chat/conversations/[id]/route.ts', reason: 'own_content' },
   { route: 'chat/conversations/bulk/route.ts', reason: 'own_content' },
   { route: 'chat/conversations/route.ts', reason: 'own_content' },
-  { route: 'chat/sync/route.ts', reason: 'no_governed_state' },
   { route: 'code/local-sessions/activity/route.ts', reason: 'no_governed_state' },
   { route: 'consent/route.ts', reason: 'dedicated_record' },
   { route: 'email/unsubscribe/route.ts', reason: 'dedicated_record' },
@@ -81,13 +80,11 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'mobile/push-token/route.ts', reason: 'no_governed_state' },
   { route: 'notifications/route.ts', reason: 'own_content' },
   { route: 'page-context/read/route.ts', reason: 'no_governed_state' },
+  { route: 'pair/standing/route.ts', reason: 'no_governed_state' },
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/reindex/route.ts', reason: 'own_content' },
-  { route: 'projects/[id]/knowledge-files/[fileId]/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/google-drive/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/route.ts', reason: 'own_content' },
-  { route: 'projects/[id]/route.ts', reason: 'own_content' },
-  { route: 'projects/sync/route.ts', reason: 'no_governed_state' },
   { route: 'referrals/code/route.ts', reason: 'own_content' },
   { route: 'search/route.ts', reason: 'own_content' },
   { route: 'settings/organization/active/route.ts', reason: 'no_governed_state' },
@@ -204,6 +201,14 @@ export const ROUTE_HANDLER_DELEGATES: readonly RouteHandlerDelegate[] = [
   {
     route: 'artifacts/runtime/live/[artifactId]/complete/route.ts',
     handler: 'app/api/artifacts/runtime/artifact-completion.ts',
+  },
+  {
+    route: 'llm/v1/chat/completions/resume-caller/route.ts',
+    handler: 'app/api/llm/v1/chat/completions/lib/tool-result-resume.ts',
+  },
+  {
+    route: 'llm/v1/chat/completions/resume-device/route.ts',
+    handler: 'app/api/llm/v1/chat/completions/lib/tool-result-resume.ts',
   },
   { route: 'models/free-quota/completions/route.ts', handler: 'lib/server/free-quota-turn.ts' },
   {

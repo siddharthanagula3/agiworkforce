@@ -13,6 +13,8 @@
 
 import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import catalog from '../_locales/en/messages.json';
+import { streamFailureText } from '../src/features/side-panel/chat-state';
 import {
   canAccessModelForSubscriptionTier,
   classifyManagedQuotaErrorCode,
@@ -102,6 +104,9 @@ import {
   clearAuthToken,
   signOutOfAccount,
   getManagedModelAccess,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
   parseQuotaWarningHeader,
   streamFreeChat,
   streamManagedChatApproval,
@@ -162,11 +167,15 @@ function makeRawStreamResponse(payload: string, status = 200): Response {
   } as unknown as Response;
 }
 
-function makeErrorResponse(status: number, bodyText: string): Response {
+function makeErrorResponse(
+  status: number,
+  bodyText: string,
+  headers: Record<string, string> = {},
+): Response {
   return {
     ok: false,
     status,
-    headers: new Headers(),
+    headers: new Headers(headers),
     body: null,
     text: vi.fn().mockResolvedValue(bodyText),
   } as unknown as Response;
@@ -407,6 +416,77 @@ describe('getManagedModelAccess', () => {
     await expect(getManagedModelAccess('token')).rejects.toThrow('Invalid model-access response');
   });
 
+  it('tells a rejected credential, a policy refusal and an unavailable server apart', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(activeUsageResponse());
+    await expect(getManagedModelAccess('token')).rejects.toBeInstanceOf(
+      ManagedAccessAuthRequiredError,
+    );
+
+    const policy = 'This workspace is locked down while an incident is investigated.';
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'FORBIDDEN', message: policy } }), {
+        status: 403,
+      }),
+    );
+    const refused = getManagedModelAccess('token');
+    await expect(refused).rejects.toBeInstanceOf(ManagedAccessRefusedError);
+    await expect(refused).rejects.toThrow(policy);
+
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 503, headers: { 'Retry-After': '5' } }))
+      .mockResolvedValueOnce(activeUsageResponse());
+    const unavailable = getManagedModelAccess('token').catch((error: unknown) => error);
+    const error = await unavailable;
+    expect(error).not.toBeInstanceOf(ManagedAccessAuthRequiredError);
+    expect(error).not.toBeInstanceOf(ManagedAccessRefusedError);
+    expect(error).toBeInstanceOf(ManagedAccessUnavailableError);
+    expect((error as ManagedAccessUnavailableError).retryAfterSeconds).toBe(5);
+  });
+
+  it('tells a plan refusal from a workspace policy by the reason the server gives', async () => {
+    const plan = 'Your plan does not include Cloud in the CLI and VS Code.';
+    fetchMock
+      .mockResolvedValueOnce(activeUsageResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error: { code: 'developer_surface_plan_required', message: plan } }),
+          { status: 403 },
+        ),
+      );
+    const planRefusal = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(planRefusal).toBeInstanceOf(ManagedAccessRefusedError);
+    expect(planRefusal).toMatchObject({ kind: 'plan', message: plan });
+
+    const policy = 'Your workspace administrator does not allow access from the Chrome extension.';
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: { type: 'organization_policy', code: 'surface_not_allowed', message: policy },
+        }),
+        { status: 403 },
+      ),
+    );
+    const policyRefusal = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(policyRefusal).toMatchObject({ kind: 'policy', message: policy });
+
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'organization_policy',
+            code: 'workspace_policy_unavailable',
+            message: 'We could not confirm your workspace security settings.',
+          },
+        }),
+        { status: 503, headers: { 'retry-after': '5' } },
+      ),
+    );
+    const policyOutage = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(policyOutage).toBeInstanceOf(ManagedAccessUnavailableError);
+  });
+
   it('propagates an abort without retrying or converting it into admission', async () => {
     const controller = new AbortController();
     const abort = new DOMException('Aborted', 'AbortError');
@@ -464,15 +544,18 @@ describe('clearAuthToken', () => {
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
 
-  it('erases the saved autofill profile so sign-out reaches the stored PII', async () => {
-    chromeMock._localStore['agi_autofill_profile'] = {
+  it('keeps the saved autofill profile, which only a sign-out the user chose removes', async () => {
+    const profile = {
       firstName: 'Ada',
       email: 'ada@example.test',
       currentCompany: 'Analytical Engines',
     };
+    chromeMock._localStore['agi_autofill_profile'] = profile;
 
     await clearAuthToken();
+    expect(chromeMock._localStore['agi_autofill_profile']).toEqual(profile);
 
+    await signOutOfAccount();
     expect(chromeMock._localStore['agi_autofill_profile']).toBeUndefined();
   });
 
@@ -526,12 +609,27 @@ describe('signOutOfAccount', () => {
     clerkAuthMock.revokeSyncedWebSession.mockRejectedValueOnce(new Error('Network unavailable'));
     chromeMock._sessionStore['agi_clerk_session_token'] = 'session-token';
     chromeMock._localStore['agi_dev_bearer_token'] = 'development-token';
-    await expect(signOutOfAccount()).resolves.toEqual({ webSessionEnded: false });
+    await expect(signOutOfAccount()).resolves.toEqual({
+      webSessionEnded: false,
+      profileCleared: true,
+    });
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledBefore(
       clerkAuthMock.revokeSyncedWebSession,
     );
     expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
+    expect(clerkAuthMock.signOutClerk).toHaveBeenCalledOnce();
+  });
+
+  it('reports a failed profile removal without blocking session cleanup', async () => {
+    chromeMock._localStore['agi_autofill_profile'] = { email: 'ada@example.test' };
+    chromeMock._sessionStore['agi_clerk_session_token'] = 'session-token';
+    chromeMock.storage.local.remove.mockImplementationOnce(async () => undefined);
+    chromeMock.storage.local.remove.mockRejectedValueOnce(new Error('Storage unavailable'));
+    const result = await signOutOfAccount();
+    expect(result).toEqual({ webSessionEnded: true, profileCleared: false });
+    expect(chromeMock._localStore['agi_autofill_profile']).toEqual({ email: 'ada@example.test' });
+    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(clerkAuthMock.signOutClerk).toHaveBeenCalledOnce();
   });
 });
@@ -613,6 +711,121 @@ describe('streamFreeChat, auth and quota errors', () => {
     );
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required' });
+  });
+});
+
+describe('streamFreeChat, a refusal that names its reason', () => {
+  const refusal = (code: string, message: string) =>
+    makeErrorResponse(403, JSON.stringify({ error: { code, message } }));
+
+  it.each(['model_may_train', 'no_training_model_available', 'model_not_available'])(
+    'shows the server reason for %s and keeps the model switch available',
+    async (code) => {
+      const message = 'This model may train on your chats. Choose another model.';
+      fetchMock.mockResolvedValueOnce(refusal(code, message));
+      const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+      expect(chunks[0]).toMatchObject({ type: 'error', code: 'model_refused', message });
+    },
+  );
+
+  it('shows an administrator refusal in the server words as a policy, not a plan', async () => {
+    const message = 'Your workspace administrator has turned off web search.';
+    fetchMock.mockResolvedValueOnce(refusal('feature_disabled', message));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'policy_blocked', message });
+  });
+
+  it('labels any 403 the workspace policy sends as a policy, whatever its code', async () => {
+    const message = 'Your workspace administrator does not allow access from the Chrome extension.';
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        403,
+        JSON.stringify({
+          error: { type: 'organization_policy', code: 'surface_not_allowed', message },
+        }),
+      ),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'policy_blocked', message });
+  });
+
+  it('falls back to the fixed sentence when the server gave no reason', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(403, 'plan gated'));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({
+      code: 'plan_required',
+      message: 'This AGI Cloud capability is not available for the current account.',
+    });
+  });
+});
+
+describe('streamFreeChat, a rate limit that states its wait', () => {
+  it('carries the Retry-After header in seconds', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': '30' }));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ code: 'rate_limited', retryAfterSeconds: 30 });
+  });
+
+  it('reads a Retry-After given as an HTTP date', async () => {
+    const at = new Date(Date.now() + 120_000).toUTCString();
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': at }));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    const seconds = (chunks[0] as { retryAfterSeconds?: number }).retryAfterSeconds;
+    expect(seconds).toBeGreaterThanOrEqual(115);
+    expect(seconds).toBeLessThanOrEqual(121);
+  });
+
+  it('does not say try again twice once a wait is stated', async () => {
+    type Entry = { message: string; placeholders?: Record<string, { content: string }> };
+    Object.assign(globalThis.chrome as object, {
+      i18n: {
+        getUILanguage: () => 'en',
+        getMessage: (key: string, substitutions: string[] = []) => {
+          const entry = (catalog as Record<string, Entry>)[key];
+          if (!entry) return '';
+          return entry.message.replace(/\$([A-Z_]+)\$/g, (_match, name: string) => {
+            const index = Number(
+              (entry.placeholders?.[name.toLowerCase()]?.content ?? '$0').slice(1),
+            );
+            return substitutions[index - 1] ?? '';
+          });
+        },
+      },
+    });
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': '30' }));
+    const stated = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}'));
+    const unstated = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    const withWait = streamFailureText((stated[0] as { message: string }).message, {
+      retryAfterSeconds: (stated[0] as { retryAfterSeconds?: number }).retryAfterSeconds,
+    });
+    const withoutWait = streamFailureText((unstated[0] as { message: string }).message, {});
+    expect(withWait.match(/Try again/g)).toHaveLength(1);
+    expect(withWait).toContain('30 seconds');
+    expect(withoutWait.match(/Try again/g)).toHaveLength(1);
+  });
+
+  it('falls back to the wait in the response body', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        429,
+        JSON.stringify({
+          error: { code: 'RATE_LIMIT_EXCEEDED', retry_after_seconds: 45 },
+        }),
+      ),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ code: 'rate_limited', retryAfterSeconds: 45 });
+  });
+
+  it('states no wait when none was given or the figure is not credible', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}'));
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': '999999999' }));
+    const none = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    const absurd = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(none[0]).not.toHaveProperty('retryAfterSeconds');
+    expect(absurd[0]).not.toHaveProperty('retryAfterSeconds');
   });
 });
 
@@ -1138,6 +1351,20 @@ describe('streamFreeChat, SSE happy path', () => {
       ],
       canRespond: true,
     });
+  });
+
+  it('sends the browser time zone so a scheduled task defaults to the user zone', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as Record<string, unknown>;
+    expect(body['client_timezone']).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
   });
 
   it('sends the caller-owned retry-stable idempotency key', async () => {
@@ -1804,6 +2031,90 @@ describe('streamFreeChat, model routing', () => {
     expect(chunks.at(-1)).toEqual({ type: 'done' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${FREE_TRIAL_GATEWAY}${runPath}?after=-1&limit=100`);
+  });
+
+  it('reads text deltas by message kind so a live acknowledgement shortens the replay', async () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+    const liveDelta = {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_752_000_000_123,
+      event: { type: 'text-delta', delta: 'Hel' },
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(
+        makeStreamResponse(
+          [
+            JSON.stringify({ choices: [{ delta: { content: 'Hello ' }, finish_reason: null }] }),
+            JSON.stringify({
+              choices: [{ delta: { x_agent_event: liveDelta }, finish_reason: null }],
+            }),
+          ],
+          200,
+          {
+            'X-AGI-Agent-Run-Id': runId,
+            'X-AGI-Agent-Run-URL': runPath,
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            run: {
+              id: runId,
+              userId: 'user-1',
+              requestId: 'request-1',
+              conversationId: 'conversation-1',
+              originSurface: 'chrome',
+              workMode: 'agiwork',
+              state: 'completed',
+              provider: 'openai',
+              model: FREE_TRIAL_MODEL,
+              lastEventSequence: 2,
+              cancellationRequestedAt: null,
+              completedAt: '2026-07-17T20:00:00.000Z',
+              createdAt: '2026-07-17T19:00:00.000Z',
+              updatedAt: '2026-07-17T20:00:00.000Z',
+            },
+            events: [
+              {
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence: 1,
+                emittedAtMs: 1_752_000_000_124,
+                event: { type: 'text-delta', delta: 'lo world' },
+              },
+              {
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence: 2,
+                emittedAtMs: 1_752_000_000_125,
+                event: { type: 'stop', reason: 'end-turn' },
+              },
+            ],
+            nextAfterSequence: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        workMode: 'agiwork',
+      }),
+    );
+
+    expect(chunks.filter((chunk) => chunk.type === 'text')).toEqual([
+      { type: 'text', text: 'Hello ' },
+      { type: 'text', text: 'world' },
+    ]);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${FREE_TRIAL_GATEWAY}${runPath}?after=0&limit=100`);
   });
 
   it('rejects a runtime-invalid role without calling the gateway', async () => {

@@ -1189,34 +1189,44 @@ export async function deleteScimUser(
   if (!existing) throw new ScimError(404, `User ${userId} not found`);
   assertVersionMatches(existing.version, expectedVersion, 'User', userId);
 
-  let membershipRevoked = false;
-  if (existing.linked_user_id) {
-    const deleted = await db.execute(
-      `delete from organization_members
-        where organization_id = $1
-          and user_id = $2
-          and role <> 'owner'`,
-      [ctx.organizationId, existing.linked_user_id],
+  const { removed, membershipRevoked } = await db.transaction(async (tx) => {
+    const lockedRows = await tx.query<ScimProvisionedUserRow>(
+      `select ${SCIM_USER_SELECT_COLUMNS}
+         from scim_provisioned_users
+        where id = $1 and connection_id = $2 and organization_id = $3
+        limit 1
+          for update`,
+      [userId, ctx.connectionId, ctx.organizationId],
     );
-    membershipRevoked = deleted > 0;
-    if (membershipRevoked) {
-      await invalidateActiveOrganizationCache(existing.linked_user_id);
-      await recordScimMembershipAudit(
-        ctx,
-        'scim_membership_revoked',
-        existing.linked_user_id,
-        null,
+    const locked = lockedRows[0];
+    if (!locked) throw new ScimError(404, `User ${userId} not found`);
+    assertVersionMatches(locked.version, expectedVersion, 'User', userId);
+
+    let revoked = false;
+    if (locked.linked_user_id) {
+      const deleted = await tx.execute(
+        `delete from organization_members
+          where organization_id = $1
+            and user_id = $2
+            and role <> 'owner'`,
+        [ctx.organizationId, locked.linked_user_id],
       );
+      revoked = deleted > 0;
     }
+    await tx.execute(
+      'delete from scim_provisioned_users where id = $1 and connection_id = $2 and organization_id = $3',
+      [userId, ctx.connectionId, ctx.organizationId],
+    );
+    return { removed: locked, membershipRevoked: revoked };
+  });
+
+  if (membershipRevoked && removed.linked_user_id) {
+    await invalidateActiveOrganizationCache(removed.linked_user_id);
+    await recordScimMembershipAudit(ctx, 'scim_membership_revoked', removed.linked_user_id, null);
   }
 
-  await db.execute(
-    'delete from scim_provisioned_users where id = $1 and connection_id = $2 and organization_id = $3',
-    [userId, ctx.connectionId, ctx.organizationId],
-  );
-
   const revocationWarnings = membershipRevoked
-    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, existing.linked_user_id)
+    ? await revokeCredentialsAfterScimRemoval(db, ctx.organizationId, removed.linked_user_id)
     : [];
 
   await touchConnection(db, ctx);
@@ -1936,19 +1946,33 @@ export async function deleteScimGroup(
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
   assertVersionMatches(existing.version, expectedVersion, 'Group', groupId);
 
-  const members = await getScimGroupMembers(db, ctx, groupId);
+  const { members, revokedUserIds } = await db.transaction(async (tx) => {
+    const lockedRows = await tx.query<Pick<ScimGroupRow, 'version'>>(
+      `select version
+         from scim_groups
+        where id = $1 and connection_id = $2 and organization_id = $3
+        limit 1
+          for update`,
+      [groupId, ctx.connectionId, ctx.organizationId],
+    );
+    const locked = lockedRows[0];
+    if (!locked) throw new ScimError(404, `Group ${groupId} not found`);
+    assertVersionMatches(locked.version, expectedVersion, 'Group', groupId);
 
-  const revokedUserIds = await db.transaction(async (tx) => {
+    const groupMembers = await getScimGroupMembers(tx, ctx, groupId);
     await tx.execute(
       'delete from scim_groups where id = $1 and connection_id = $2 and organization_id = $3',
       [groupId, ctx.connectionId, ctx.organizationId],
     );
 
-    return reconcileGroupMembers(
-      tx,
-      ctx,
-      members.map((member) => member.id),
-    );
+    return {
+      members: groupMembers,
+      revokedUserIds: await reconcileGroupMembers(
+        tx,
+        ctx,
+        groupMembers.map((member) => member.id),
+      ),
+    };
   });
 
   const revocationWarnings = await revokeCredentialsAfterScimRemoval(

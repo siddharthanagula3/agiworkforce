@@ -130,7 +130,7 @@ nothing is left.
 
 - Done when: The new-chat screen explains the available modes and gives examples of what each is for.
 - Wave: 3
-- Already works on: mobile, cli, vscode, chrome
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

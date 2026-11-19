@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { AnswerUiCardBodySchema } from './answer-ui';
 import { ManagedMediaImageAspectRatioSchema } from './managed-media';
+import { isAllowedMapSearchProviderUrl } from './map-urls';
 import {
   CLARIFY_HEADER_MAX_LENGTH,
   CLARIFY_MAX_OPTIONS,
@@ -18,6 +20,7 @@ import {
   MAP_SEARCH_MAX_ZOOM,
   MAP_SEARCH_MIN_ZOOM,
   MAP_SEARCH_QUERY_MAX_LENGTH,
+  MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH,
   PLACES_CARD_ADDRESS_MAX_LENGTH,
   PLACES_CARD_ATTRIBUTION_MAX_LENGTH,
   PLACES_CARD_CATEGORY_MAX_LENGTH,
@@ -44,8 +47,9 @@ import {
   PRODUCT_COMPARISON_TITLE_MAX_LENGTH,
   isKnownInteractiveCardKind,
   type InteractiveCard,
-  type MapSearchAction,
 } from '@agiworkforce/types';
+
+export { isAllowedMapSearchProviderUrl };
 
 const HttpsUrlSchema = z
   .string()
@@ -403,29 +407,6 @@ const MapSearchActionSchema = z
   })
   .strict();
 
-export function isAllowedMapSearchProviderUrl(
-  value: string,
-  provider?: MapSearchAction['provider'],
-): boolean {
-  try {
-    const url = new URL(value);
-    const google =
-      (!provider || provider === 'google_maps') &&
-      url.origin === 'https://www.google.com' &&
-      url.pathname === '/maps/search/' &&
-      url.searchParams.get('api') === '1' &&
-      Boolean(url.searchParams.get('query'));
-    const openStreetMap =
-      (!provider || provider === 'openstreetmap') &&
-      url.origin === 'https://www.openstreetmap.org' &&
-      url.pathname === '/search' &&
-      Boolean(url.searchParams.get('query'));
-    return google || openStreetMap;
-  } catch {
-    return false;
-  }
-}
-
 const LatitudeSchema = z.number().finite().min(-85.05112878).max(85.05112878);
 const LongitudeSchema = z.number().finite().min(-180).max(180);
 
@@ -455,11 +436,23 @@ export const MapSearchCardBodySchema = z
     actions: z.array(MapSearchActionSchema).min(1).max(2),
     view: MapSearchViewSchema.optional(),
     places: z.array(MapSearchPlaceSchema).max(MAP_SEARCH_MAX_PLACES).optional(),
+    unresolvedStops: z
+      .array(z.string().min(1).max(MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH))
+      .min(1)
+      .max(MAP_SEARCH_MAX_PLACES)
+      .optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
     if (!body.view && body.places && body.places.length > 0) {
       ctx.addIssue({ code: 'custom', path: ['places'], message: 'places require a view' });
+    }
+    if (body.unresolvedStops && !body.places?.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['unresolvedStops'],
+        message: 'unresolved stops require located places',
+      });
     }
     if (new Set(body.actions.map((action) => action.provider)).size !== body.actions.length) {
       ctx.addIssue({ code: 'custom', path: ['actions'], message: 'duplicate map provider' });
@@ -600,19 +593,21 @@ export function parseInteractiveCardDelta(payload: unknown): InteractiveCard | n
   if (!isKnownInteractiveCardKind(kind)) return { ...common, recognized: false, kind };
 
   const parsed =
-    kind === 'clarify.v1'
-      ? ClarifyCardBodySchema.safeParse(rawBody)
-      : kind === 'image.v1'
-        ? ImageCardBodySchema.safeParse(rawBody)
-        : kind === 'itinerary.v1'
-          ? ItineraryCardBodySchema.safeParse(rawBody)
-          : kind === 'map-search.v1'
-            ? MapSearchCardBodySchema.safeParse(rawBody)
-            : kind === 'places.v1'
-              ? PlacesCardBodySchema.safeParse(rawBody)
-              : kind === 'product-comparison.v1'
-                ? ProductComparisonCardBodySchema.safeParse(rawBody)
-                : McpAppCardBodySchema.safeParse(rawBody);
+    kind === 'answer-ui.v1'
+      ? AnswerUiCardBodySchema.safeParse(rawBody)
+      : kind === 'clarify.v1'
+        ? ClarifyCardBodySchema.safeParse(rawBody)
+        : kind === 'image.v1'
+          ? ImageCardBodySchema.safeParse(rawBody)
+          : kind === 'itinerary.v1'
+            ? ItineraryCardBodySchema.safeParse(rawBody)
+            : kind === 'map-search.v1'
+              ? MapSearchCardBodySchema.safeParse(rawBody)
+              : kind === 'places.v1'
+                ? PlacesCardBodySchema.safeParse(rawBody)
+                : kind === 'product-comparison.v1'
+                  ? ProductComparisonCardBodySchema.safeParse(rawBody)
+                  : McpAppCardBodySchema.safeParse(rawBody);
   if (!parsed.success) return { ...common, recognized: false, kind };
 
   return { ...common, recognized: true, kind, body: parsed.data } as InteractiveCard;

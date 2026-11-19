@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 import { RELEASES } from '@/lib/changelog-entries';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -66,7 +67,7 @@ const PRINCIPLES = [
   },
   {
     title: 'Your keys, your bill, no markup.',
-    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop remains cloud only.`,
+    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop takes no key of its own: its local coding sessions use the CLI's.`,
   },
   {
     title: `One contract layer, ${SURFACE_COUNT} surfaces at different stages.`,
@@ -168,7 +169,10 @@ export default function AboutPage() {
                   label: 'Model catalog',
                   value: `${CATALOG_SCOPES.catalogueEntries.text} · ${CATALOG_SCOPES.providerRecords.text}, as of ${CATALOG_AS_OF}`,
                 },
-                { label: 'Trust modes', value: 'Local · BYOK · Managed cloud' },
+                {
+                  label: 'Trust modes',
+                  value: `${PRIVACY_MODE_DISPLAY.local.label} · ${PRIVACY_MODE_DISPLAY.byok.label} · ${PRIVACY_MODE_DISPLAY.managed.label}`,
+                },
                 { label: 'Data policy', value: POSITIONING.routeBoundary },
                 { label: 'Set in', value: 'Geist' },
                 {

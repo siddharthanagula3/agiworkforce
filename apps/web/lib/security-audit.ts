@@ -3,6 +3,7 @@ import { AUDIT_EVENT_SCHEMA_VERSION, type AuditRetentionClass } from '@agiworkfo
 import { resourceUriFor } from './identity/resource-uri';
 import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
+import { createError } from './errors';
 import { getRequestId } from './observability/trace-context';
 import { getKeyValueStore } from './server/key-value';
 import { trackAuditedProductEvent } from './server/product-analytics';
@@ -238,6 +239,12 @@ export type AuditEventType =
   | 'legal_hold_created'
   | 'legal_hold_released'
   | 'deletion_blocked_by_legal_hold'
+  /**
+   * A deletion somebody already asked for reached its end: the recovery window
+   * ran out and no hold still covered the content, so the bytes and the row
+   * went. Written per workspace and store, counted rather than named.
+   */
+  | 'deleted_content_purged'
   | 'secret_detected'
   | 'spend_cap_exceeded'
   | 'ip_not_allowed'
@@ -452,6 +459,7 @@ export interface AuditEvent {
   causationId?: string;
   operationRef?: string;
   retentionClass?: AuditRetentionClass;
+  requireWorkspaceTrail?: boolean;
 }
 
 /**
@@ -470,6 +478,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'legal_hold_created',
   'legal_hold_released',
   'deletion_blocked_by_legal_hold',
+  'deleted_content_purged',
   'retention_sweep_completed',
   'domain_retention_sweep_completed',
   'retention_policy_changed',
@@ -711,6 +720,11 @@ export async function recordAuditEvent(event: AuditEvent): Promise<void> {
     );
   } catch (err) {
     logger.error({ error: err, eventType }, 'Failed to record enterprise audit event');
+    if (event.requireWorkspaceTrail) {
+      throw createError
+        .serviceUnavailable('The workspace audit trail is unavailable. Try again.')
+        .asUserSafe();
+    }
   }
 }
 

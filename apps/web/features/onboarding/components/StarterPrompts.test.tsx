@@ -50,4 +50,17 @@ describe('StarterPrompts', () => {
 
     expect(onSelect).toHaveBeenCalledWith(DEFAULT_STARTER_PROMPTS[0]);
   });
+
+  it('does not hand a prompt to onSelect while disabled', async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+
+    render(<StarterPrompts useCase={null} disabled onSelect={onSelect} />);
+
+    const button = screen.getByRole('button', { name: DEFAULT_STARTER_PROMPTS[0] });
+    expect(button).toBeDisabled();
+    await user.click(button);
+
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });

@@ -237,23 +237,32 @@ export async function runRollback({
   }
 
   await requestRollback(fetchImpl, config, targetId, options.reason);
-  await recordEventImpl(config, {
-    event: 'rolled_back',
-    surface: 'web',
-    environment: 'production',
-    outcome: 'succeeded',
-    actor: config.actor,
-    source: 'rollback_workflow',
-    commitSha:
-      typeof target.meta?.githubCommitSha === 'string' ? target.meta.githubCommitSha : null,
-    deploymentId: targetId,
-    previousDeploymentId: current?.id ?? null,
-    reason: options.reason,
-    runUrl: options.runUrl,
-    detail: { requested: options.to ?? null },
-  });
   console.log(`production rolled back from ${current?.id ?? 'nothing'} to ${targetId}`);
-  return { rolledBack: true, targetId, currentId: current?.id ?? null };
+  let auditRecorded = true;
+  try {
+    const row = await recordEventImpl(config, {
+      event: 'rolled_back',
+      surface: 'web',
+      environment: 'production',
+      outcome: 'succeeded',
+      actor: config.actor,
+      source: 'rollback_workflow',
+      commitSha:
+        typeof target.meta?.githubCommitSha === 'string' ? target.meta.githubCommitSha : null,
+      deploymentId: targetId,
+      previousDeploymentId: current?.id ?? null,
+      reason: options.reason,
+      runUrl: options.runUrl,
+      detail: { requested: options.to ?? null },
+    });
+    auditRecorded = row !== null;
+  } catch (error) {
+    auditRecorded = false;
+    console.warn(
+      `::warning::Production was rolled back to ${targetId}, but the release audit trail was not written: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  return { rolledBack: true, auditRecorded, targetId, currentId: current?.id ?? null };
 }
 
 async function main() {

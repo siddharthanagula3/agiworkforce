@@ -48,6 +48,10 @@ pub(crate) fn registry_from_builtins_and_skills(
     let mut registry = CommandRegistry::default();
     registry.extend(builtin_slash_registry_commands());
     for skill in skills {
+        if registry.find(&skill.name).is_some() {
+            tracing::warn!(skill = %skill.name, "a skill shares its name with a command already listed, so the slash command keeps running that command");
+            continue;
+        }
         registry.push(registry_command_from_skill(skill, CommandSource::Project));
     }
     registry
@@ -91,12 +95,20 @@ fn plugin_command_registry_entries(
     reserved_names: &std::collections::HashSet<String>,
 ) -> Vec<RegistryCommand> {
     let mut out: Vec<RegistryCommand> = Vec::new();
+    for path in plugin_command_files() {
+        push_plugin_command(&path, reserved_names, &mut out);
+    }
+    out
+}
+
+fn plugin_command_files() -> Vec<std::path::PathBuf> {
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
     let mut plugins_mgr = crate::plugins::PluginsManager::new();
     if plugins_mgr
         .load_all(std::env::current_dir().ok().as_deref())
         .is_err()
     {
-        return out;
+        return files;
     }
     for entry in plugins_mgr.command_path_entries() {
         let plugin_root = entry.plugin_root;
@@ -106,22 +118,83 @@ fn plugin_command_registry_entries(
         }
         if command_path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&command_path) {
-                for dir_entry in entries.flatten() {
-                    let path = dir_entry.path();
+                let mut children: Vec<std::path::PathBuf> = entries
+                    .flatten()
+                    .map(|dir_entry| dir_entry.path())
+                    .collect();
+                children.sort();
+                for path in children {
                     if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &path) {
                         continue;
                     }
                     if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("md")
                     {
-                        push_plugin_command(&path, reserved_names, &mut out);
+                        files.push(path);
                     }
                 }
             }
         } else if command_path.is_file() {
-            push_plugin_command(&command_path, reserved_names, &mut out);
+            files.push(command_path);
         }
     }
-    out
+    files
+}
+
+fn plugin_command_name(path: &std::path::Path) -> Option<String> {
+    match path.file_stem().and_then(|stem| stem.to_str()) {
+        Some(stem) if !stem.is_empty() => Some(stem.to_string()),
+        _ => None,
+    }
+}
+
+pub(crate) fn expand_plugin_command_invocation(input: &str) -> Option<String> {
+    let (name, args) = crate::custom_commands::parse_custom_invocation(input)?;
+    expand_plugin_command_from_files(&plugin_command_files(), name, args)
+}
+
+fn expand_plugin_command_from_files(
+    files: &[std::path::PathBuf],
+    name: &str,
+    args: &str,
+) -> Option<String> {
+    let path = files.iter().find(|path| {
+        plugin_command_name(path).is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+    })?;
+    crate::custom_commands::expand_command_file(path, args)
+}
+
+/// The prompt a non-builtin slash command resolves to, in the precedence the
+/// palette registers its entries: skill, then plugin command, then custom
+/// command. `Err` is a skill that matched but cannot load.
+pub(crate) fn expand_dynamic_slash_invocation(
+    input: &str,
+    name: &str,
+    request: &str,
+) -> Option<std::result::Result<String, String>> {
+    if is_builtin_slash_name(name) {
+        return None;
+    }
+    resolve_dynamic_slash_invocation(
+        || crate::skills::skill_command_prompt(name, request),
+        || expand_plugin_command_invocation(input),
+        || crate::custom_commands::expand_custom_slash_invocation(input),
+    )
+}
+
+fn is_builtin_slash_name(name: &str) -> bool {
+    builtin_slash_registry_commands()
+        .iter()
+        .any(|command| command.matches_name(name))
+}
+
+fn resolve_dynamic_slash_invocation(
+    skill: impl FnOnce() -> Option<std::result::Result<String, String>>,
+    plugin: impl FnOnce() -> Option<String>,
+    custom: impl FnOnce() -> Option<String>,
+) -> Option<std::result::Result<String, String>> {
+    skill()
+        .or_else(|| plugin().map(Ok))
+        .or_else(|| custom().map(Ok))
 }
 
 fn push_plugin_command(
@@ -129,9 +202,8 @@ fn push_plugin_command(
     reserved_names: &std::collections::HashSet<String>,
     out: &mut Vec<RegistryCommand>,
 ) {
-    let name = match path.file_stem().and_then(|stem| stem.to_str()) {
-        Some(stem) if !stem.is_empty() => stem.to_string(),
-        _ => return,
+    let Some(name) = plugin_command_name(path) else {
+        return;
     };
     if reserved_names.contains(&name) {
         return;
@@ -221,8 +293,13 @@ fn append_tui_shortcuts(help: &mut String) {
     help.push_str("\nKeyboard shortcuts:\n");
     let _ = writeln!(
         help,
-        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits, then Bypass -> FullAuto when started with --allow-dangerously-skip-permissions",
-        "Shift+Tab"
+        "  {:<14} Cycle mode: {} -> {} -> {}, then {} -> {} when started with --allow-dangerously-skip-permissions",
+        "Shift+Tab",
+        crate::tui::MODE_DEFAULT,
+        crate::tui::MODE_PLAN,
+        crate::tui::MODE_AUTO,
+        crate::tui::MODE_BYPASS,
+        crate::tui::MODE_FULL_AUTO
     );
     let _ = writeln!(help, "  {:<14} Open command palette", "/");
     let _ = writeln!(
@@ -256,26 +333,38 @@ fn append_tui_shortcuts(help: &mut String) {
         "Type + Enter"
     );
     let _ = writeln!(help, "  {:<14} Redraw the screen", "Ctrl-L");
-    let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
+    let _ = writeln!(
+        help,
+        "  {:<14} Stop a running turn; otherwise clear the composer, or quit when pressed twice on an empty one",
+        "Ctrl-C"
+    );
     let _ = writeln!(help, "  Customize global actions with [ui.keybindings]");
 
     help.push_str("\nModes (cycle with Shift+Tab):\n");
-    let _ = writeln!(help, "  {:<14} Normal conversation (grey)", "Default");
-    let _ = writeln!(help, "  {:<14} Read-only planning, no edits (blue)", "Plan");
+    let _ = writeln!(
+        help,
+        "  {:<14} Normal conversation (grey)",
+        crate::tui::MODE_DEFAULT
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} Read-only planning, no edits (blue)",
+        crate::tui::MODE_PLAN
+    );
     let _ = writeln!(
         help,
         "  {:<14} Auto-accept file edits (green)",
-        "AcceptEdits"
+        crate::tui::MODE_AUTO
     );
     let _ = writeln!(
         help,
         "  {:<14} Skip all tool confirmation (yellow)",
-        "Bypass"
+        crate::tui::MODE_BYPASS
     );
     let _ = writeln!(
         help,
         "  {:<14} No prompts at all - extreme caution (red)",
-        "FullAuto"
+        crate::tui::MODE_FULL_AUTO
     );
 }
 
@@ -381,11 +470,11 @@ mod tests {
     #[test]
     fn registry_builder_appends_skills_after_builtins() {
         let skills = vec![crate::skills::Skill {
-            name: "release-notes".to_string(),
+            name: "ship-notes".to_string(),
             description: "Draft release notes".to_string(),
             content: String::new(),
             body: String::new(),
-            path: std::path::PathBuf::from(".agiworkforce/skills/release-notes.md"),
+            path: std::path::PathBuf::from(".agiworkforce/skills/ship-notes.md"),
             allow_implicit: true,
             category: None,
             required_env_vars: vec![],
@@ -404,7 +493,7 @@ mod tests {
                 .commands()
                 .last()
                 .map(|command| (command.name.as_str(), command.kind)),
-            Some(("release-notes", CommandKind::Prompt))
+            Some(("ship-notes", CommandKind::Prompt))
         );
     }
 
@@ -432,11 +521,11 @@ mod tests {
     #[test]
     fn registry_builder_appends_prompts_after_skills_and_drops_builtin_collisions() {
         let skills = vec![crate::skills::Skill {
-            name: "release-notes".to_string(),
+            name: "ship-notes".to_string(),
             description: "Draft release notes".to_string(),
             content: String::new(),
             body: String::new(),
-            path: std::path::PathBuf::from(".agiworkforce/skills/release-notes.md"),
+            path: std::path::PathBuf::from(".agiworkforce/skills/ship-notes.md"),
             allow_implicit: true,
             category: None,
             required_env_vars: vec![],
@@ -475,7 +564,7 @@ mod tests {
                 .take(2)
                 .map(|command| command.name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["prompts:draft-pr", "release-notes"]
+            vec!["prompts:draft-pr", "ship-notes"]
         );
     }
 
@@ -536,6 +625,116 @@ mod tests {
         assert_eq!(
             registry.find("app").map(|command| command.name.as_str()),
             Some("desktop")
+        );
+    }
+
+    #[test]
+    fn plugin_command_invocation_loads_the_command_body() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("registry-audit-example.md");
+        std::fs::write(
+            &file,
+            "---\ndescription: Audit the registry\n---\nAudit $1 against $ARGUMENTS",
+        )
+        .unwrap();
+        let files = vec![file];
+
+        assert_eq!(
+            expand_plugin_command_from_files(&files, "registry-audit-example", "main release"),
+            Some("Audit main against main release".to_string())
+        );
+        assert_eq!(
+            expand_plugin_command_from_files(&files, "Registry-Audit-Example", ""),
+            Some("Audit  against ".to_string())
+        );
+    }
+
+    #[test]
+    fn a_colliding_name_runs_the_entry_the_palette_shows() {
+        let skill = || Some(Ok("skill body".to_string()));
+        let plugin = || Some("plugin body".to_string());
+        let custom = || Some("custom body".to_string());
+
+        assert_eq!(
+            resolve_dynamic_slash_invocation(skill, plugin, custom),
+            Some(Ok("skill body".to_string()))
+        );
+        assert_eq!(
+            resolve_dynamic_slash_invocation(|| None, plugin, custom),
+            Some(Ok("plugin body".to_string()))
+        );
+        assert_eq!(
+            resolve_dynamic_slash_invocation(|| None, || None, custom),
+            Some(Ok("custom body".to_string()))
+        );
+        assert_eq!(
+            resolve_dynamic_slash_invocation(|| None, || None, || None),
+            None
+        );
+    }
+
+    #[test]
+    fn a_skill_named_like_a_built_in_leaves_the_built_in_alone() {
+        let skill = |name: &str| crate::skills::Skill {
+            name: name.to_string(),
+            description: "A user skill".to_string(),
+            content: String::new(),
+            body: String::new(),
+            path: std::path::PathBuf::from(format!(".agiworkforce/skills/{name}.md")),
+            allow_implicit: true,
+            category: None,
+            required_env_vars: vec![],
+            required_tools: vec![],
+            required_connections: vec![],
+            version: None,
+            content_hash: crate::skills::hash_skill_content(b""),
+            tree_hash: None,
+        };
+        let registry = registry_from_builtins_and_skills(&[skill("review"), skill("tools")]);
+        for name in ["review", "tools"] {
+            let matching: Vec<&RegistryCommand> = registry
+                .commands()
+                .iter()
+                .filter(|command| command.matches_name(name))
+                .collect();
+            assert_eq!(matching.len(), 1, "/{name} is listed once");
+            assert_eq!(
+                matching[0].kind,
+                CommandKind::Local,
+                "/{name} stays built in"
+            );
+            assert!(
+                expand_dynamic_slash_invocation(&format!("/{name}"), name, "").is_none(),
+                "/{name} is never answered by a skill"
+            );
+        }
+    }
+
+    #[test]
+    fn a_skill_that_cannot_load_does_not_fall_through_to_a_custom_command() {
+        assert_eq!(
+            resolve_dynamic_slash_invocation(
+                || Some(Err("missing tools".to_string())),
+                || None,
+                || Some("custom body".to_string()),
+            ),
+            Some(Err("missing tools".to_string()))
+        );
+    }
+
+    #[test]
+    fn plugin_command_invocation_ignores_unknown_names_and_unreadable_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("known.md");
+        std::fs::write(&file, "Body").unwrap();
+        let missing = temp.path().join("gone.md");
+        let files = vec![file, missing];
+
+        assert_eq!(expand_plugin_command_from_files(&files, "other", ""), None);
+        assert_eq!(expand_plugin_command_from_files(&files, "gone", ""), None);
+        assert_eq!(
+            expand_plugin_command_from_files(&files, "known", ""),
+            Some("Body".to_string())
         );
     }
 }

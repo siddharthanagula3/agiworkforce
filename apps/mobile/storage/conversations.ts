@@ -27,7 +27,7 @@ export async function listConversations(opts?: {
   const rows = await db.getAllAsync<Record<string, unknown>>(
     `SELECT * FROM conversations
      WHERE (archived_at IS ${archived ? 'NOT NULL' : 'NULL'})
-     ORDER BY pinned DESC, updated_at DESC
+     ORDER BY pinned DESC, updated_at DESC, rowid DESC
      LIMIT ? OFFSET ?;`,
     [limit, offset],
   );

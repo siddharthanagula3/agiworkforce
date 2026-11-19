@@ -7,6 +7,7 @@ import { HOLDABLE_RESOURCES } from '@agiworkforce/types';
 
 import {
   countHeldResources,
+  countHeldRows,
   formatHold,
   legalHoldExclusion,
   legalHoldPredicate,
@@ -161,6 +162,42 @@ describe('the hold predicate, evaluated as a database would', () => {
     expect(await sweep(db)).toEqual(['c-elsewhere']);
   });
 
+  it('preserves a conversation whose cascading messages are held and nothing else is', async () => {
+    const db = workspace([
+      holdRow({ scope: 'member', subject_user_id: 'alice', resource_types: ['message'] }),
+    ]);
+    expect(await sweep(db)).toEqual(['c-bob', 'c-elsewhere']);
+  });
+
+  it('preserves a conversation whose cascading artifacts are held and nothing else is', async () => {
+    const db = workspace([
+      holdRow({ scope: 'member', subject_user_id: 'bob', resource_types: ['artifact'] }),
+    ]);
+    db.tables.set('web_artifacts', [
+      { id: 'a-bob', user_id: 'bob', organization_id: ORG, conversation_id: 'c-bob' },
+    ]);
+    expect(await sweep(db)).toEqual(['c-alice', 'c-elsewhere']);
+  });
+
+  it('lets a conversation go when the hold names a store that does not cascade from it', async () => {
+    const db = workspace([
+      holdRow({ scope: 'member', subject_user_id: 'alice', resource_types: ['file'] }),
+    ]);
+    expect(await sweep(db)).toEqual(['c-alice', 'c-bob', 'c-elsewhere']);
+  });
+
+  it('lets a conversation go once the hold on its messages is released', async () => {
+    const db = workspace([
+      holdRow({
+        scope: 'member',
+        subject_user_id: 'alice',
+        resource_types: ['message'],
+        released_at: '2026-09-01T00:00:00.000Z',
+      }),
+    ]);
+    expect(await sweep(db)).toEqual(['c-alice', 'c-bob', 'c-elsewhere']);
+  });
+
   it('reaches a held person through the parent that owns the row', async () => {
     const db = workspace([holdRow({ scope: 'member', subject_user_id: 'alice' })]);
     expect(await sweep(db, 'web_messages', 'message')).toEqual(['m-bob']);
@@ -168,6 +205,19 @@ describe('the hold predicate, evaluated as a database would', () => {
 });
 
 describe('what a hold currently preserves', () => {
+  it('counts a conversation as held when only its messages are held', async () => {
+    const db = workspace([
+      holdRow({ scope: 'member', subject_user_id: 'alice', resource_types: ['message'] }),
+    ]);
+    const held = await countHeldRows(db as unknown as DatabaseAdapter, 'conversation', {
+      table: 'web_conversations',
+      alias: 'candidate',
+      where: 'candidate.organization_id = $1',
+      params: [ORG],
+    });
+    expect(held).toBe(1);
+  });
+
   it('counts the rows the same predicate would exclude', async () => {
     const db = workspace(
       [holdRow({ id: 'h-custodian', scope: 'custodian', subject_user_id: null })],
@@ -230,7 +280,7 @@ describe('the predicate covers every store a hold can name', () => {
         nextParamIndex: 3,
       });
       expect(exclusion.sql).toContain('$3');
-      expect(exclusion.params).toEqual([resource.resourceType]);
+      expect(exclusion.params[0]).toBe(resource.resourceType);
       expect(exclusion.table).toBe(resource.table);
     }
   });

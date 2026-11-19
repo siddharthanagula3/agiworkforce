@@ -10,6 +10,7 @@ import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { getProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 import { retireProjectKnowledgeFile, ProjectContentHeldError } from '@/lib/server/project-deletion';
 import { refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
+import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
   findReadableProjectKnowledgeFile,
@@ -71,7 +72,10 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   const { id: projectId, fileId } = await context.params;
   let removed: boolean;
   try {
-    removed = await retireProjectKnowledgeFile(db, { projectId, fileId, userId, organizationId });
+    removed = await db.transaction(async (tx) => {
+      await serializeDestructionWithHolds(tx, organizationId);
+      return retireProjectKnowledgeFile(tx, { projectId, fileId, userId, organizationId });
+    });
   } catch (error) {
     if (error instanceof ProjectContentHeldError) {
       return refuseHeldDeletion({

@@ -117,7 +117,7 @@ async function remindAccount(
     const earliest = purchases.reduce((first, purchase) =>
       new Date(purchase.expires_at) < new Date(first.expires_at) ? purchase : first,
     );
-    await sendBillingNotice(db, {
+    const notice = await sendBillingNotice(db, {
       userId,
       title: `Purchased credits expire on ${formatDate(earliest.expires_at)}`,
       message: `${lines.join(' ')} ${expiryRuleSentence(rule)}`,
@@ -125,6 +125,9 @@ async function remindAccount(
       dedupeKey: `purchased-credit-expiry:${userId}:${earliest.id}`,
       action: { label: 'See your credits', url: absoluteUrl('/settings/usage') },
     });
+    if (!notice.settled) {
+      throw new Error('The expiry reminder reached neither channel and will be retried');
+    }
   }
 
   await db.execute(

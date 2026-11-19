@@ -13,13 +13,19 @@ import {
 import {
   ASK_BEFORE_ACTING_KEY,
   browserPermissionModeToStored,
+  DEFAULT_BROWSER_PERMISSION_MODE,
   readBrowserPermissionMode,
+  type BrowserPermissionMode,
 } from '../computer-use/askBeforeActing';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
   BROWSER_CONTROL_CONSENT_HEADLINE,
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
+import { WORKER_RESTARTED_REASON } from '../computer-use/runMarker';
+import { USER_TAKEOVER_MAX_MINUTES } from '../computer-use/runOwnership';
+import { assistantHostWindowId } from '../surface/assistantPanel';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
 import { buildImageViewerButton } from './mediaViewer';
 import {
@@ -813,8 +819,11 @@ const CANCELLATION_REASON_COPY: Record<string, string> = {
   tab_intent_changed:
     'The tab left the page this run was approved for, so the run was stopped before acting. Go back to that page and start the task again.',
   tab_removed: 'The tab this run was driving was closed.',
+  takeover_expired: `The page was not handed back within ${USER_TAKEOVER_MAX_MINUTES} minutes, so the task ended and AGI let go of the tab. Start the task again to continue.`,
   user_cleared: 'The run was stopped when the log was cleared.',
   user_stopped: 'You stopped the run.',
+  [WORKER_RESTARTED_REASON]:
+    'Chrome stopped the extension in the background, so this task ended and nothing more will happen on the page. Start the task again to continue.',
 };
 
 export function describeCancellationReason(reason: unknown): string | null {
@@ -1082,7 +1091,9 @@ export interface ComputerUsePanelAPI {
   setRunState(running: boolean, runId?: string, generation?: number): void;
   setPaused(paused: boolean, reason?: string): void;
   ownsRun(runId: unknown): boolean;
+  acceptsRunWindow(windowId: unknown): boolean;
   noteRunActivity(): void;
+  confirmRunState(): void;
 }
 
 export function buildComputerUsePanel(): ComputerUsePanelAPI {
@@ -1120,54 +1131,71 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   controlsLabel.className = 'sp-cu-controls-label';
   controlsLabel.textContent = 'AGI Cloud • powered by AGI';
 
+  const MODE_COPY: Record<BrowserPermissionMode, { label: string; tooltip: string }> = {
+    ask: { label: t('spAutonomyAskFirst'), tooltip: t('spAutonomyAskFirstTooltip') },
+    auto: { label: t('spAutonomyAuto'), tooltip: t('spAutonomyAutoTooltip') },
+    full: { label: t('spAutonomyFullAccess'), tooltip: t('spAutonomyFullAccessTooltip') },
+  };
+
   const askLabel = document.createElement('label');
   askLabel.className = 'sp-cu-ask-toggle';
-  askLabel.title =
-    'When on, the agent asks before every click, typed text or page change. When off, it works in Auto and asks only before buying, sending, deleting, signing in, granting access or downloading.';
 
-  const askCheckbox = document.createElement('input');
-  askCheckbox.type = 'checkbox';
-  askCheckbox.id = 'sp-cu-ask-checkbox';
-  askCheckbox.checked = false;
+  const modeSelect = document.createElement('select');
+  modeSelect.id = 'sp-cu-mode-select';
+  modeSelect.setAttribute('aria-label', t('spAutonomyMenuHeading'));
+  for (const mode of ['ask', 'auto', 'full'] as const) {
+    const option = document.createElement('option');
+    option.value = mode;
+    option.textContent = MODE_COPY[mode].label;
+    modeSelect.appendChild(option);
+  }
 
-  let askPreferenceMutation = 0;
+  const showMode = (mode: BrowserPermissionMode): void => {
+    modeSelect.value = mode;
+    askLabel.title = MODE_COPY[mode].tooltip;
+  };
+  showMode(DEFAULT_BROWSER_PERMISSION_MODE);
+
+  let modeMutation = 0;
   chrome.storage?.local?.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime?.lastError) return;
-    if (askPreferenceMutation !== 0) return;
-    askCheckbox.checked = readBrowserPermissionMode(items?.[ASK_BEFORE_ACTING_KEY]) === 'ask';
+    if (modeMutation !== 0) return;
+    showMode(readBrowserPermissionMode(items?.[ASK_BEFORE_ACTING_KEY]));
   });
 
   chrome.storage?.onChanged?.addListener((changes, area) => {
     if (area !== 'local' || !(ASK_BEFORE_ACTING_KEY in changes)) return;
-    if (askCheckbox.disabled) return;
-    askCheckbox.checked =
-      readBrowserPermissionMode(changes[ASK_BEFORE_ACTING_KEY]?.newValue) === 'ask';
+    if (modeSelect.disabled) return;
+    showMode(readBrowserPermissionMode(changes[ASK_BEFORE_ACTING_KEY]?.newValue));
   });
 
-  askCheckbox.addEventListener('change', () => {
-    const next = askCheckbox.checked;
-    const mutation = ++askPreferenceMutation;
-    askCheckbox.disabled = true;
+  modeSelect.addEventListener('change', () => {
+    const previous = askLabel.title;
+    const previousMode = (Object.keys(MODE_COPY) as BrowserPermissionMode[]).find(
+      (mode) => MODE_COPY[mode].tooltip === previous,
+    );
+    const next = modeSelect.value as BrowserPermissionMode;
+    const mutation = ++modeMutation;
+    modeSelect.disabled = true;
+    askLabel.title = MODE_COPY[next].tooltip;
     void (async () => {
       try {
         await chrome.storage.local.set({
-          [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next ? 'ask' : 'auto'),
+          [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next),
         });
       } catch {
-        if (askPreferenceMutation === mutation) askCheckbox.checked = !next;
+        if (modeMutation === mutation && previousMode) showMode(previousMode);
         showHandoffBanner(
-          'The Ask before acting setting could not be saved. The previous setting is still active.',
+          'The permission mode could not be saved. The previous setting is still active.',
           'error',
         );
       } finally {
-        if (askPreferenceMutation === mutation) askCheckbox.disabled = false;
+        if (modeMutation === mutation) modeSelect.disabled = false;
       }
     })();
   });
 
-  const askText = document.createTextNode('Ask before acting');
-  askLabel.appendChild(askCheckbox);
-  askLabel.appendChild(askText);
+  askLabel.appendChild(modeSelect);
 
   const clearBtn = document.createElement('button');
   clearBtn.className = 'sp-cu-clear-btn';
@@ -1193,7 +1221,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   takeOverBtn.type = 'button';
   takeOverBtn.className = 'sp-cu-takeover-btn';
   takeOverBtn.textContent = 'Take over';
-  takeOverBtn.title = 'Pause AGI and use the page yourself; it continues when you hand it back';
+  takeOverBtn.title = t('spBrowserTakeOverTitle', [USER_TAKEOVER_MAX_MINUTES]);
   takeOverBtn.hidden = true;
 
   const continueBtn = document.createElement('button');
@@ -1209,6 +1237,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   let runStateRevision = 0;
   let cancellationPending = false;
   let panelClosed = false;
+  let hostWindowId: number | undefined;
+  const hostWindow = assistantHostWindowId()
+    .then((windowId) => {
+      hostWindowId = windowId;
+      return windowId;
+    })
+    .catch(() => undefined);
   const pendingApprovals = new Set<() => void>();
   const dismissPendingApprovals = (): void => {
     for (const dismiss of [...pendingApprovals]) dismiss();
@@ -1329,6 +1364,10 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     return typeof runId === 'string' && activeRunId === runId;
   }
 
+  function acceptsRunWindow(windowId: unknown): boolean {
+    return typeof windowId !== 'number' || windowId === hostWindowId;
+  }
+
   function noteRunActivity(): void {
     if (!activeRunId) return;
     armRunActivityWatchdog();
@@ -1404,9 +1443,10 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     if (activeRunId || panelClosed) return;
     const generation = activeRunGeneration;
     const revision = runStateRevision;
-    const state = await readBackgroundRunState();
+    const [state, windowId] = await Promise.all([readBackgroundRunState(), hostWindow]);
     if (state?.success !== true || state.running !== true || typeof state.runId !== 'string')
       return;
+    if (typeof state.windowId === 'number' && state.windowId !== windowId) return;
     if (
       panelClosed ||
       activeRunId ||
@@ -1477,11 +1517,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     const runId = activeRunId;
     if (!runId) return;
     activeRunId = null;
-    void chrome.runtime.sendMessage({
+    const closing: CancelComputerUseMessage = {
       type: 'CANCEL_COMPUTER_USE',
       runId,
       reason: 'panel_closed',
-    });
+      ...(hostWindowId === undefined ? {} : { windowId: hostWindowId }),
+    };
+    void chrome.runtime.sendMessage(closing);
   });
 
   void adoptBackgroundRun();
@@ -1620,7 +1662,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     submitTask();
   });
   goalInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    if (event.key !== 'Enter' || event.shiftKey || isImeComposingKey(event)) return;
     event.preventDefault();
     submitTask();
   });
@@ -1769,7 +1811,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     else renderGuidance();
   });
   guidanceInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    if (event.key !== 'Enter' || event.shiftKey || isImeComposingKey(event)) return;
     event.preventDefault();
     void submitGuidance();
   });
@@ -2012,7 +2054,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   }
 
   function isAskBeforeActing(): boolean {
-    return askCheckbox.checked;
+    return modeSelect.value === 'ask';
   }
 
   function showApprovalCard(
@@ -2106,6 +2148,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     setRunState,
     setPaused,
     ownsRun,
+    acceptsRunWindow,
     noteRunActivity,
+    confirmRunState: () => void reconcileRunState(),
   };
 }

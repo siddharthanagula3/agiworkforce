@@ -191,6 +191,45 @@ test('a real rollback posts to the rollback endpoint after reading the plan', as
   assert.ok(decodeURIComponent(write.url).includes('description=bad+deploy'));
 });
 
+test('an audit-storage failure after an accepted rollback is a warning, not a failed command', async () => {
+  const calls = [];
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (message) => warnings.push(message);
+  try {
+    const result = await runRollback({
+      argv: ['--reason', 'bad deploy'],
+      env: { ...ENV, AGI_DATABASE_URL: 'postgresql://fixture.invalid/audit' },
+      fetchImpl: recordingFetch(calls),
+      recordEventImpl: async () => {
+        throw new Error('fixture audit outage');
+      },
+    });
+    assert.equal(result.rolledBack, true);
+    assert.equal(result.auditRecorded, false);
+    assert.equal(result.targetId, 'dpl_good');
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.ok(calls.some((call) => call.method === 'POST'));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /dpl_good/u);
+  assert.match(warnings[0], /fixture audit outage/u);
+});
+
+test('a refused rollback never reaches the audit trail', async () => {
+  await assert.rejects(
+    runRollback({
+      argv: ['--reason', 'bad deploy'],
+      env: ENV,
+      fetchImpl: async (url, init = {}) =>
+        init.method === 'POST' ? { ok: false, status: 403 } : recordingFetch([])(url, init),
+      recordEventImpl: () => assert.fail('a refused rollback must not be audited as done'),
+    }),
+    RollbackError,
+  );
+});
+
 for (const env of [{}, { VERCEL_TOKEN: 'fixture-token', VERCEL_ORG_ID: ' \t ' }]) {
   test(`a drill reports missing prerequisites without contacting Vercel or the database (${Object.keys(env).join(', ') || 'all missing'})`, async () => {
     const reports = [];

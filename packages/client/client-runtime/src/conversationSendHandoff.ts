@@ -4,6 +4,10 @@ export function handOffConversationSend(conversationId: string, text: string): v
   pendingSends.set(conversationId, text);
 }
 
+export function peekConversationSend(conversationId: string): string | null {
+  return pendingSends.get(conversationId) ?? null;
+}
+
 export function takeConversationSend(conversationId: string): string | null {
   const text = pendingSends.get(conversationId) ?? null;
   pendingSends.delete(conversationId);

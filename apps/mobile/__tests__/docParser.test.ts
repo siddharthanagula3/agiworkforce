@@ -74,6 +74,41 @@ describe('parseDocument pdf text extraction', () => {
   it('emits only the operand of a text-showing operator', async () => {
     await expect(parsePdfText('%PDF-1.4\nBT\n(orphan)\n(kept) Tj\nET\n')).resolves.toBe('kept');
   });
+
+  it('does not end a text object at ET letters inside a string literal', async () => {
+    stagePdf(
+      '%PDF-1.4\nBT\n/F1 12 Tf\n(Introduction.) Tj\n0 -20 Td\n(BUDGET APPROVED) Tj\n0 -20 Td\n(Amount: 1200) Tj\nET\n',
+    );
+
+    const parsed = await parseDocument('file:///tmp/attachment.pdf', 'application/pdf');
+
+    expect(parsed.text).toBe('Introduction. BUDGET APPROVED Amount: 1200');
+    expect(parsed.metadata.partial).toBeUndefined();
+  });
+
+  it('does not end a text object at ET letters inside a font name', async () => {
+    await expect(
+      parsePdfText('%PDF-1.4\nBT\n/ET 12 Tf\n(kept) Tj\nET\nBT\n(next) Tj\nET\n'),
+    ).resolves.toBe('kept next');
+  });
+
+  it('marks a PDF whose text object never closes as partially read', async () => {
+    stagePdf('%PDF-1.4\nBT\n(first) Tj\n(second) Tj\n');
+
+    const parsed = await parseDocument('file:///tmp/attachment.pdf', 'application/pdf');
+
+    expect(parsed.text).toBe('first second');
+    expect(parsed.metadata.partial).toBe(true);
+  });
+
+  it('marks a PDF with an unterminated literal as partially read', async () => {
+    stagePdf('%PDF-1.4\nBT\n(good) Tj ( dangling\nET\nBT\n(after) Tj\nET\n');
+
+    const parsed = await parseDocument('file:///tmp/attachment.pdf', 'application/pdf');
+
+    expect(parsed.text).toBe('good after');
+    expect(parsed.metadata.partial).toBe(true);
+  });
 });
 
 const CRAFTED_PDFS: ReadonlyArray<readonly [string, () => string]> = [

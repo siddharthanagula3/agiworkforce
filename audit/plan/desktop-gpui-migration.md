@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Desktop surface maintainers + Rust platform
-Last updated: 2026-11-14
+Last updated: 2026-11-18
 
 The active goal is a complete GPUI desktop application with the web application's
 product workflows and additional permissioned local implementation, using Claude,
@@ -815,12 +815,11 @@ spreadsheet values/formula caches and existing extractor resource limits. The
 same truncated directory reproduces a bounds panic with 0.37.0 in an isolated
 fixture project; the fixed reader returns an error.
 
-Retained Tauri now uses rusqlite 0.41.1 / libsqlite3-sys 0.39.1 while preserving
-bundled SQLCipher and vendored OpenSSL. The binding's SQLCipher source pin still
-selects an affected engine upstream, so the root Cargo patch supplies the
-unmodified SQLCipher 4.20.0 amalgamation with SQLite 3.54.1. The source carrier
-verifies file hashes during builds; an independently modified copy fails that
-guard. Attribution, license delivery, provenance and the removal condition live
+Retained Tauri now uses rusqlite 0.42.0 / libsqlite3-sys 0.40.0 while preserving
+bundled SQLCipher and vendored OpenSSL. That binding builds from the crates.io
+SQLCipher 4.20.0 source crate with SQLite 3.54.1, so no Cargo patch or
+in-repository copy of the engine remains; `Cargo.lock` pins the crate's
+checksum. Attribution, license delivery and provenance live
 in [the dependency patch owner](../../docs/security/dependency-patches.md#sqlcipher-engine-source)
 and `THIRD_PARTY_LICENSES.md`.
 
@@ -1612,7 +1611,7 @@ not reused as positive evidence.
 ## Shared object lifecycle prerequisite for native removal
 
 The deletion dependency now has an append-only schema candidate,
-`0398_project_knowledge_object_lifecycle.sql`, and a server reconciliation driver.
+`0419_project_knowledge_object_lifecycle.sql`, and a server reconciliation driver.
 It is not deployed or wired into destructive callers, and native removal remains
 unavailable. `WEB-PROJECT-OBJECT-LIFECYCLE-01` remains open.
 
@@ -1662,7 +1661,7 @@ script syntax check, Prettier, Neon up/down schema validation and generated
 context checks pass. Application-role insert/removal, hard cascades and key-change
 rollback are exercised; a clean rollback removes only its schema/ledger state and
 keeps file data. `check:migration-dependencies` remains red as intended: migration
-0398 is unapplied, and the pre-existing account-security reference to unapplied
+0419 is unapplied, and the pre-existing account-security reference to unapplied
 0394 also remains. No dependency allowlist, applied checksum or guard was changed.
 The test script is not covered by Web's TS ESLint file pattern; its syntax and
 actual isolated execution are checked instead. No real storage call was made.
@@ -1745,7 +1744,7 @@ lifecycle command, all 20 migration-CLI tests, Web typecheck, targeted service
 ESLint, script syntax, formatting and regenerated context-index checks pass.
 The MJS scripts are outside the repository's ESLint file pattern; their syntax
 and actual execution are checked instead. `check:migration-dependencies` still
-rejects the existing unapplied 0394 account-security reference and 0398 lifecycle
+rejects the existing unapplied 0394 account-security reference and 0419 lifecycle
 service. No allowlist or applied migration state changed. Account-erasure
 inventory integration remains incomplete as recorded above.
 
@@ -1782,7 +1781,7 @@ bytes, destination and signing region across configuration changes. These are
 private fixture checks, not evidence of live registration, legacy namespace
 adoption, durable dispatch or native confirmation acceptance. The candidate
 schema remains unapplied, and the registration service now correctly joins the
-existing lifecycle service in the migration-dependency guard's refusal of 0398.
+existing lifecycle service in the migration-dependency guard's refusal of 0419.
 
 A negative control temporarily restores first-cleanup namespace adoption inside
 a private fixture transaction. The real driver then reaches a deliberately
@@ -1796,7 +1795,7 @@ checks, formatting and generated-context checks. Two existing upload-test mocks
 now retain the real sealed-key helper through partial imports; their 30 direct,
 resumable and interrupted-upload cases pass. The repository mock-export guard
 remains red for 92 other incomplete factories, with no missing writer export
-introduced by this change. Unapplied migration 0398, legacy namespace/region
+introduced by this change. Unapplied migration 0419, legacy namespace/region
 adoption, durable deletion/erasure callers and native acceptance remain open.
 
 Retired objects now form an outbox for the existing background-job model.
@@ -1859,7 +1858,7 @@ Web typecheck, targeted ESLint, CI shell syntax and existing CI/SQL-hold guards
 pass. The SQL-hold guard enumerates SQL destruction, so its green result does not
 replace the worker's direct storage tests. The repository mock-export guard
 still reports 92 other incomplete factories, and migration dependencies still
-reject unapplied 0394 and the 0398 services. No validation exemption was added.
+reject unapplied 0394 and the 0419 services. No validation exemption was added.
 
 ## Transactional project and source retirement
 
@@ -1893,7 +1892,7 @@ retirement blocking orders through PostgreSQL lock state, verifies late admissio
 is rejected without creating a ledger entry, and verifies repeatable-read parent
 retirement fails without deleting the parent.
 
-The migration fixture executes the actual compiled function from unapplied 0398;
+The migration fixture executes the actual compiled function from unapplied 0419;
 it does not overwrite that function before testing it. SQL statement parsing now
 optionally preserves literal bodies so the fixture can compare the executable
 definition with its canonical compiler while ignoring commented decoys. Existing
@@ -1905,7 +1904,7 @@ API/service tests, 47 migration/parser/resource checks, fresh Web typecheck,
 targeted ESLint, formatting, script syntax, generated-context indexes, migration
 structure and the existing 16-site SQL-hold guard pass. The latter does not
 enumerate provider byte-removal callbacks. Migration dependencies still reject
-the existing unapplied 0394 reference and the 0398 services; no exemption was
+the existing unapplied 0394 reference and the 0419 services; no exemption was
 added. The full mock-export guard still reports 92 incomplete factories and
 aggregate drift (4,510 dropped exports against a ceiling of 4,324); its findings
 include the existing auth mock in the project fields test. No omission of the
@@ -1914,7 +1913,7 @@ remains a minimal service/RLS fixture, not
 acceptance of the complete production migration chain. Account erasure,
 retention, staging cleanup, legacy provenance adoption, backup/version handling,
 in-flight hold linearization, incomplete-job repair, deployed regional workers
-and native/live acceptance remain open. Migration 0398 is unapplied and the
+and native/live acceptance remain open. Migration 0419 is unapplied and the
 lifecycle flaw remains OPEN.
 
 ## Project retention through the shared lifecycle
@@ -1954,7 +1953,7 @@ lifecycle command passes, as do 158 focused tests across ten API/service files,
 fresh Web typecheck, targeted ESLint, the existing SQL-hold guard, script syntax
 and generated-context indexes. These remain local fixture results, not deployed
 or full production-policy acceptance. The fresh migration-dependency check still
-rejects unapplied 0394/0398 dependencies. The full mock-export guard still reports
+rejects unapplied 0394/0419 dependencies. The full mock-export guard still reports
 92 incomplete factories and the same aggregate drift; it reports none in the
 project-deletion, retention or hold modules touched here. No guard exception was
 added.
@@ -2531,6 +2530,20 @@ shared attachment drafts and full release acceptance remain open. The user ended
 the autonomous migration goal and requested this implementation be committed and
 pushed; the broader migration is not claimed complete.
 
+## Native Code session search
+
+The Code sidebar searches the open folder's sessions through the CLI's existing
+`thread/search` owner. Titles and transcripts match case-insensitively; other
+folders are excluded by the host, not the client. Archived sessions are left out
+unless the sidebar's archived filter is on, and the search request carries that
+filter. Results
+replace the folder list until the query is cleared, and a newer search or a folder
+change discards a slower response. Account-only connections refuse the request.
+
+`test:gpui:search` runs the packaged CLI with an isolated home and verifies title
+matches, folder isolation, empty results, blank-query refusal and account refusal.
+Native-window input and screen-reader use of the field are not yet verified.
+
 ## Commit boundary validation
 
 The PostgreSQL lifecycle harness uses the data-layer package's server-only
@@ -2550,11 +2563,20 @@ only declared, lease-fenced deletion dispatchers. Negative cases retain the
 account and membership requirements for automation. The legal-hold ownership
 read includes retired projects so holds cannot disappear during cleanup.
 
-Migration 0398 remains unapplied. Its exact consumer exceptions follow the
+Migration 0419 remains unapplied. Its exact consumer exceptions follow the
 existing coordinated source-publication policy: production deployment still
 unconditionally verifies the migration ledger before building, and rejects
 pending migrations. Native removal remains disabled pending lifecycle acceptance.
 No production schema change or release cutover is included in this push.
+
+The lifecycle migration was renumbered from 0398 to 0419 when this branch merged
+main, whose append-only chain already held 0398 through 0418. Its project hold
+function is regenerated from the canonical predicate, which now delegates to
+the `legal_hold_preserves` definer function from 0416. Held project and source
+removal is refused rather than deferred. Main's deleted-project-files purge
+still removes expired rows, but leaves any object the reference ledger tracks to
+the lifecycle worker; it deletes bytes itself only for rows retired before the
+ledger existed, which the migration's live-row backfill does not register.
 
 ## Coding session management and new-session defaults
 

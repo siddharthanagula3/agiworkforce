@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { PROVIDER_ALIASES, normalizeRouteId } from '@/lib/services/llm-cost-calculator';
 
 export type ObservabilityDimension = 'route' | 'model' | 'user' | 'tenant';
 
@@ -63,7 +64,16 @@ function toNullableNumber(value: SqlScalar): number | null {
 const ROUTE_ID_EXPRESSION = `coalesce(pce.metadata->>'servedRouteId', pce.provider || '/' || coalesce(pce.model, ''))`;
 const INPUT_TOKENS_EXPRESSION = `coalesce((pce.metadata->>'inputTokens')::numeric, (pce.metadata->>'promptTokens')::numeric, 0)`;
 const RETAIL_COST_EXPRESSION = `(pce.metadata->>'retailCostCents')::numeric`;
-const FALLBACK_EXPRESSION = `(pce.metadata->>'reservedRouteId') is not null and (pce.metadata->>'reservedRouteId') <> (pce.provider || '/' || coalesce(pce.model, ''))`;
+function canonicalRouteSql(expression: string): string {
+  const provider = `lower(btrim(split_part(${expression}, '/', 1)))`;
+  const aliases = Object.entries(PROVIDER_ALIASES)
+    .map(([alias, canonical]) => `when '${alias}' then '${canonical}'`)
+    .join(' ');
+  return `(case when strpos(${expression}, '/') = 0 then ${expression} else (case ${provider} ${aliases} else ${provider} end) || substr(${expression}, strpos(${expression}, '/')) end)`;
+}
+
+const RESERVED_ROUTE_ID_EXPRESSION = `(pce.metadata->>'reservedRouteId')`;
+const FALLBACK_EXPRESSION = `${RESERVED_ROUTE_ID_EXPRESSION} is not null and ${canonicalRouteSql(RESERVED_ROUTE_ID_EXPRESSION)} <> ${canonicalRouteSql(ROUTE_ID_EXPRESSION)}`;
 const LATENCY_EXPRESSION = `case
     when mur.provider_started_at is not null and mur.provider_succeeded_at is not null
       then extract(epoch from (mur.provider_succeeded_at - mur.provider_started_at)) * 1000
@@ -246,7 +256,9 @@ export async function explainManagedUsageRequest(
     deliveredProvider: row.delivered_provider,
     deliveredModel: row.delivered_model,
     routeId,
-    fallbackOccurred: reservedRouteId !== null && reservedRouteId !== routeId,
+    fallbackOccurred:
+      reservedRouteId !== null &&
+      (routeId === null || normalizeRouteId(reservedRouteId) !== normalizeRouteId(routeId)),
     fallbackReason: row.fallback_reason,
     fallbackSequence: Array.isArray(row.fallback_sequence) ? row.fallback_sequence : [],
     cacheReadTokens: toNumber(row.cache_read_tokens),

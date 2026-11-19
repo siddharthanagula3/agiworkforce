@@ -10,6 +10,8 @@ export type ReminderCreationErrorCode =
   | 'date-invalid'
   | 'time-format'
   | 'time-invalid'
+  | 'time-nonexistent'
+  | 'time-ambiguous'
   | 'date-required'
   | 'date-past'
   | 'time-past'
@@ -23,6 +25,8 @@ const REMINDER_ERROR_MESSAGES: Record<ReminderCreationErrorCode, string> = {
   'date-invalid': 'Enter a valid calendar date.',
   'time-format': 'Enter the time as HH:mm.',
   'time-invalid': 'Enter a valid 24-hour time.',
+  'time-nonexistent': 'A clock change skips this time on that date. Choose another time.',
+  'time-ambiguous': 'A clock change repeats this time on that date. Choose another time.',
   'date-required': 'Add a date before adding a time.',
   'date-past': 'Choose today or a future date.',
   'time-past': 'Choose a future date and time.',
@@ -87,15 +91,72 @@ function localDayNumber(date: Date): number {
   return date.getFullYear() * 10_000 + (date.getMonth() + 1) * 100 + date.getDate();
 }
 
+export interface ReminderDuePrefill {
+  dateInput: string;
+  timeInput: string;
+  instant: Date | null;
+}
+
+const CLOCK_CHANGE_OFFSETS_MS = [30 * 60_000, 60 * 60_000];
+
+function hasLocalWallTime(
+  date: Date,
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+): boolean {
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day &&
+    date.getHours() === hour &&
+    date.getMinutes() === minute
+  );
+}
+
+function resolveLocalWallTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+): Date {
+  const dueDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (!hasLocalWallTime(dueDate, year, month, day, hour, minute)) {
+    invalidInput('time-nonexistent');
+  }
+  const repeated = CLOCK_CHANGE_OFFSETS_MS.some((offset) =>
+    [dueDate.getTime() - offset, dueDate.getTime() + offset].some((time) =>
+      hasLocalWallTime(new Date(time), year, month, day, hour, minute),
+    ),
+  );
+  if (repeated) invalidInput('time-ambiguous');
+  return dueDate;
+}
+
 export function parseReminderDueInputs(
   rawDate: string,
   rawTime: string,
   now: Date = new Date(),
+  prefill?: ReminderDuePrefill,
 ): ReminderDue | null {
   const dateInput = rawDate.trim();
   const timeInput = rawTime.trim();
   if (!dateInput && !timeInput) return null;
   if (!dateInput) invalidInput('date-required');
+
+  if (
+    prefill?.instant &&
+    timeInput &&
+    dateInput === prefill.dateInput &&
+    timeInput === prefill.timeInput
+  ) {
+    const dueDate = new Date(prefill.instant.getTime());
+    if (dueDate.getTime() <= now.getTime()) invalidInput('time-past');
+    return { dueDate, allDay: false };
+  }
 
   const { year, month, day } = parseDateParts(dateInput);
   if (!timeInput) {
@@ -107,7 +168,7 @@ export function parseReminderDueInputs(
   }
 
   const { hour, minute } = parseTimeParts(timeInput);
-  const dueDate = new Date(year, month - 1, day, hour, minute, 0, 0);
+  const dueDate = resolveLocalWallTime(year, month, day, hour, minute);
   if (dueDate.getTime() <= now.getTime()) invalidInput('time-past');
   return { dueDate, allDay: false };
 }
@@ -116,16 +177,14 @@ function pad(value: number): string {
   return String(value).padStart(2, '0');
 }
 
-export function reminderDueInputsFromISO(value: string | undefined): {
-  dateInput: string;
-  timeInput: string;
-} {
-  if (!value) return { dateInput: '', timeInput: '' };
+export function reminderDueInputsFromISO(value: string | undefined): ReminderDuePrefill {
+  if (!value) return { dateInput: '', timeInput: '', instant: null };
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return { dateInput: '', timeInput: '' };
+  if (!Number.isFinite(date.getTime())) return { dateInput: '', timeInput: '', instant: null };
   return {
     dateInput: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
     timeInput: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+    instant: date,
   };
 }
 

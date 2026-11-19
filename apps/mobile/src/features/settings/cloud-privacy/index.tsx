@@ -13,7 +13,7 @@ import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
 import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
 import { ProductAnalyticsConsentGroup } from './ProductAnalyticsConsentGroup';
-import { ProviderTrainingOptOutGroup } from './ProviderTrainingOptOutGroup';
+import { TrainingPreferenceGroups } from './TrainingPreferenceGroups';
 import { UsOnlyRoutingGroup } from './UsOnlyRoutingGroup';
 
 const PRIVACY_ITEMS = [
@@ -30,7 +30,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'retention',
     label: 'Data retention',
-    body: 'Deleted and temporary chats are erased for good after 30 days.',
+    body: 'Deleted and temporary chats are normally deleted for good after 30 days. A workspace legal hold can keep them longer.',
   },
 ] as const;
 
@@ -178,7 +178,7 @@ export default function CloudPrivacyScreen() {
         </Text>
       </View>
 
-      <ProviderTrainingOptOutGroup />
+      <TrainingPreferenceGroups />
 
       <UsOnlyRoutingGroup />
 

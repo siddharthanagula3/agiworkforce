@@ -572,6 +572,63 @@ function markerSatisfied({ statement, reference, marker }) {
   ).test(statement);
 }
 
+/** The module specifiers a file may use to import a module: the app alias and the relative path. */
+function importSpecifiers(fromFile, modulePath) {
+  const withoutExtension = modulePath.replace(/\.[cm]?[jt]sx?$/, '');
+  const specifiers = new Set([withoutExtension.replace(/^apps\/web\//, '@/')]);
+  const relative = path.posix.relative(path.posix.dirname(fromFile), withoutExtension);
+  specifiers.add(relative.startsWith('.') ? relative : `./${relative}`);
+  return specifiers;
+}
+
+function importsSymbolFrom(source, symbol, specifiers) {
+  for (const specifier of specifiers) {
+    const escaped = specifier.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+    const pattern = new RegExp(
+      `import\\s+(?:type\\s+)?\\{[^}]*\\b${symbol}\\b[^}]*\\}\\s*from\\s*['"]${escaped}['"]`,
+    );
+    if (pattern.test(source)) return true;
+  }
+  return false;
+}
+
+/** The text of one top-level declaration in a module, up to the next declaration. */
+function declarationOf(source, symbol) {
+  const start = new RegExp(
+    `(?:^|\\n)(?:export\\s+)?(?:async\\s+)?(?:const|function)\\s+${symbol}\\b`,
+  ).exec(source);
+  if (start === null) return null;
+  const rest = source.slice(start.index + start[0].length);
+  const next = /\n(?:export\s+)?(?:async\s+)?(?:const|function|class|type|interface)\s/.exec(rest);
+  return next === null ? rest : rest.slice(0, next.index);
+}
+
+/** Whether a helper's own declaration states the marker as a predicate. */
+function helperStatesMarker(repoRoot, helper, marker) {
+  const module = readSource(repoRoot, helper.module);
+  const declaration = module === null ? null : declarationOf(module, helper.symbol);
+  if (declaration === null) return false;
+  return new RegExp(
+    `(?:^|[^\\w])(?:\\w+\\s*\\.\\s*)?(?:not\\s+)?${marker}\\s*(?:is\\b|=|<|>|!)`,
+    'i',
+  ).test(declaration);
+}
+
+/**
+ * A helper stands in for the marker only as the symbol of the module the contract
+ * names (defined there or imported from there) and only while that declaration
+ * still states the marker. A same-named local helper earns nothing.
+ */
+function statementUsesCreditedHelper({ repoRoot, statement, raw, relativePath, helpers, marker }) {
+  return helpers.some((helper) => {
+    if (!statement.includes(helper.symbol)) return false;
+    const reachable =
+      relativePath === helper.module ||
+      importsSymbolFrom(raw, helper.symbol, importSpecifiers(relativePath, helper.module));
+    return reachable && helperStatesMarker(repoRoot, helper, marker);
+  });
+}
+
 /**
  * A production statement that puts a marked table in scope and never narrows
  * that scope to the rows still standing is reading withdrawn rows.
@@ -581,7 +638,7 @@ export function findUnfilteredReads({ repoRoot = REPO_ROOT, files, contract, mar
   for (const helper of contract.predicateHelpers ?? []) {
     for (const table of helper.resources) {
       const entries = helpersFor.get(table) ?? [];
-      entries.push(helper.symbol);
+      entries.push(helper);
       helpersFor.set(table, entries);
     }
   }
@@ -608,7 +665,11 @@ export function findUnfilteredReads({ repoRoot = REPO_ROOT, files, contract, mar
         const marker = markers.softDeleted ?? markers.archived;
         const references = tableReferences(lower, table);
         if (references.length === 0) continue;
-        if ((helpersFor.get(table) ?? []).some((symbol) => statement.includes(symbol))) continue;
+        const helpers = helpersFor.get(table) ?? [];
+        if (
+          statementUsesCreditedHelper({ repoRoot, statement, raw, relativePath, helpers, marker })
+        )
+          continue;
         if (
           references.every((reference) => markerSatisfied({ statement: lower, reference, marker }))
         )

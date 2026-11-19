@@ -14,6 +14,7 @@ const LOCAL_MODEL = 'qa-runner/qa-local';
 const CONFIGURED_MODEL = 'qa-provider/qa-default';
 import {
   EMPTY_LOCAL_TURN,
+  LOCAL_CODE_COPY,
   detectTestCommand,
   localApprovalDecisions,
   localFileChangeLabel,
@@ -39,6 +40,7 @@ import {
   localTurnStopReason,
   newSessionLabel,
   preferredLocalRootId,
+  resolveLocalRoute,
   sharedUnavailableLine,
   localReviewComment,
   localReviewCommentsMessage,
@@ -539,6 +541,61 @@ describe('local code surface', () => {
     ).toBeNull();
 
     expect(sharedUnavailableLine([group()])).toBeNull();
+  });
+});
+
+describe('resolving a linked local session', () => {
+  const wanted = { rootId: 'root-1', threadId: 'thread-1' };
+  const target = session;
+
+  it('opens the session when the folder lists it, even after a later failed read', () => {
+    const listed = group({ rootId: 'root-1', sessions: [target] });
+
+    expect(resolveLocalRoute([listed], wanted, null)).toEqual({ kind: 'found', session: target });
+    expect(resolveLocalRoute([listed], wanted, 'closed')).toEqual({
+      kind: 'found',
+      session: target,
+    });
+  });
+
+  it('waits, and says why, when the folder could not be read', () => {
+    const resolution = resolveLocalRoute(
+      [
+        group({
+          rootId: 'root-1',
+          sessions: [],
+          unavailable: { message: 'Timed out.', hint: 'Try again.' },
+        }),
+      ],
+      wanted,
+      null,
+    );
+
+    expect(resolution).toEqual({ kind: 'waiting', notice: 'Timed out. Try again.' });
+  });
+
+  it('waits when the folder withholds its sessions until commands are allowed', () => {
+    const resolution = resolveLocalRoute(
+      [group({ rootId: 'root-1', sessions: [], sessionsWithheld: true })],
+      wanted,
+      null,
+    );
+
+    expect(resolution).toEqual({ kind: 'waiting', notice: LOCAL_CODE_COPY.sessionWithheld });
+  });
+
+  it('waits when the whole list failed, whatever the stale groups say', () => {
+    expect(resolveLocalRoute([], wanted, 'closed')).toEqual({
+      kind: 'waiting',
+      notice: LOCAL_CODE_COPY.sessionUnreadable,
+    });
+  });
+
+  it('calls the session missing only from a complete list', () => {
+    expect(resolveLocalRoute([group({ rootId: 'root-1', sessions: [] })], wanted, null)).toEqual({
+      kind: 'missing',
+    });
+    expect(resolveLocalRoute([], wanted, null)).toEqual({ kind: 'missing' });
   });
 });
 

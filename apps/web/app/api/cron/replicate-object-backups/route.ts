@@ -14,6 +14,7 @@ import {
   recordBackupReplica,
   reconcileBackupDeletions,
   replicateObject,
+  replicateObjectWithLegacyFallback,
   resolveObjectBackupTarget,
   type ReplicationOutcome,
 } from '@/lib/server/object-backup';
@@ -58,6 +59,7 @@ interface BackupSource {
   cursorKey: string;
   sql: string;
   toKey: (reference: string) => string | null;
+  readsLegacyPublicBucket: boolean;
 }
 
 /**
@@ -78,6 +80,7 @@ const BACKUP_SOURCES: readonly BackupSource[] = [
            order by created_at asc, id asc
            limit ${MAX_ASSETS_PER_RUN}`,
     toKey: (reference) => reference,
+    readsLegacyPublicBucket: false,
   },
   {
     id: 'project-knowledge',
@@ -90,17 +93,22 @@ const BACKUP_SOURCES: readonly BackupSource[] = [
            order by created_at asc, id asc
            limit ${MAX_ASSETS_PER_RUN}`,
     toKey: objectKeyFromStorageUri,
+    readsLegacyPublicBucket: true,
   },
 ];
 
-async function readCursor(key: string): Promise<string | null> {
+type CursorRead =
+  { status: 'found'; value: string } | { status: 'absent' } | { status: 'unreadable' };
+
+async function readCursor(key: string): Promise<CursorRead> {
   const store = getKeyValueStore();
-  if (!store) return null;
+  if (!store) return { status: 'absent' };
   try {
-    return await store.get<string>(key);
+    const value = await store.get<string>(key);
+    return value ? { status: 'found', value } : { status: 'absent' };
   } catch (error) {
     logger.warn({ error }, '[object-backup] cursor could not be read');
-    return null;
+    return { status: 'unreadable' };
   }
 }
 
@@ -155,11 +163,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const cursors: Record<string, string> = {};
     let scanned = 0;
     let unreadable = 0;
+    let cursorUnreadable = 0;
     let bytes = 0;
 
     for (const source of BACKUP_SOURCES) {
       const stored = await readCursor(source.cursorKey);
-      const since = stored === null ? fallbackSince : parseCursor(stored);
+      if (stored.status === 'unreadable') {
+        cursorUnreadable += 1;
+        continue;
+      }
+      const since = stored.status === 'found' ? parseCursor(stored.value) : fallbackSince;
       let cursor = since;
       const rows = await getNeonDb().query<StoredObjectRow>(source.sql, [since.at, since.id]);
       scanned += rows.length;
@@ -171,7 +184,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           unreadable += 1;
           continue;
         }
-        const result = await replicateObject(key);
+        const result = source.readsLegacyPublicBucket
+          ? await replicateObjectWithLegacyFallback(key)
+          : await replicateObject(key);
         counts[result.outcome] += 1;
         bytes += result.bytes;
         if (target && (result.outcome === 'replicated' || result.outcome === 'already-present')) {
@@ -190,6 +205,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       {
         scanned,
         unreadable,
+        cursorUnreadable,
         counts,
         bytes,
         reconciled,
@@ -199,22 +215,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       'Object backups replicated',
     );
 
-    return NextResponse.json({
-      scanned,
-      unreadable,
-      replicated: counts.replicated,
-      alreadyPresent: counts['already-present'],
-      missingSource: counts['missing-source'],
-      tooLarge: counts['too-large'],
-      reconciled: reconciled.checked,
-      backupDeletesPropagated: reconciled.deleted,
-      tracked: summary.tracked,
-      newestReplicatedAt: summary.newestReplicatedAt,
-      oldestVerifiedAt: summary.oldestVerifiedAt,
-      crossRegion: isCrossRegionBackup(),
-      independentCredential: readiness.independentCredential,
-      cursors,
-    });
+    return NextResponse.json(
+      {
+        scanned,
+        unreadable,
+        cursorUnreadable,
+        replicated: counts.replicated,
+        alreadyPresent: counts['already-present'],
+        missingSource: counts['missing-source'],
+        tooLarge: counts['too-large'],
+        reconciled: reconciled.checked,
+        backupDeletesPropagated: reconciled.deleted,
+        reconcileFailed: reconciled.failed,
+        tracked: summary.tracked,
+        newestReplicatedAt: summary.newestReplicatedAt,
+        oldestVerifiedAt: summary.oldestVerifiedAt,
+        crossRegion: isCrossRegionBackup(),
+        independentCredential: readiness.independentCredential,
+        cursors,
+      },
+      { status: reconciled.failed > 0 || cursorUnreadable > 0 ? 500 : 200 },
+    );
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },

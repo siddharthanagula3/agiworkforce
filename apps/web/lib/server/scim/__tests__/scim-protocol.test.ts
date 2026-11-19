@@ -68,6 +68,48 @@ describe('SCIM filter parsing', () => {
     expect(filter).toEqual({ attribute: 'userName', operator: 'eq', value: '" or 1=1 --' });
   });
 
+  it('decodes JSON unicode escapes so an escaped spelling finds the same resource', () => {
+    expect(parseScimGroupFilter('displayName eq "\\u0045ngineers"')?.value).toBe('Engineers');
+    expect(parseScimUserFilter('userName eq "\\u0061da@example.com"')?.value).toBe(
+      'ada@example.com',
+    );
+    expect(parseScimUserFilter('userName eq "caf\\u00e9"')?.value).toBe('café');
+    expect(parseScimUserFilter('userName eq "\\ud83d\\ude00"')?.value).toBe('\u{1f600}');
+  });
+
+  it('decodes an escape exactly once', () => {
+    expect(parseScimUserFilter('userName eq "\\\\u0045"')?.value).toBe('\\u0045');
+  });
+
+  it('keeps the short escapes working', () => {
+    expect(parseScimUserFilter('userName eq "a\\/b\\tc\\"d\\\\e"')?.value).toBe('a/b\tc"d\\e');
+  });
+
+  it.each([
+    ['a truncated unicode escape', 'userName eq "\\u00"'],
+    ['a non-hex unicode escape', 'userName eq "\\u00zz"'],
+    ['an escape JSON does not define', 'userName eq "\\a"'],
+    ['a lone high surrogate', 'userName eq "\\ud83d"'],
+    ['a lone low surrogate', 'userName eq "\\ude00"'],
+    ['a NUL escape', 'userName eq "a\\u0000b"'],
+    ['a raw control character', 'userName eq "a\tb"'],
+  ])('refuses %s as an invalid filter', (_label, filter) => {
+    try {
+      parseScimUserFilter(filter);
+      throw new Error('expected the filter to be refused');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ScimError);
+      expect((error as ScimError).status).toBe(400);
+      expect((error as ScimError).scimType).toBe('invalidFilter');
+    }
+  });
+
+  it('measures the length cap on the decoded value', () => {
+    expect(parseScimUserFilter(`userName eq "${'\\u0061'.repeat(60)}"`)?.value).toBe(
+      'a'.repeat(60),
+    );
+  });
+
   it('caps filter length so a huge filter cannot be buffered', () => {
     expect(() => parseScimUserFilter(`userName eq "${'a'.repeat(600)}"`)).toThrowError(ScimError);
   });

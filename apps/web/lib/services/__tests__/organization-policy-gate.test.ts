@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  diagnoseMemberPolicy,
   evaluateActiveWorkspacePolicy,
   resolveEffectiveWorkspaceControls,
   resolveIpAllowListPolicy,
@@ -1269,5 +1270,52 @@ describe('resolveEffectiveWorkspaceControls', () => {
     await expect(resolveEffectiveWorkspaceControls(h.db, 'user-1')).rejects.toMatchObject(
       ACCOUNT_CONTROL_UNAVAILABLE,
     );
+  });
+});
+
+describe('diagnoseMemberPolicy without a saved policy', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const managedComputeAsk = { resource: 'managed_compute', surface: 'web' } as const;
+
+  it('refuses a managed-compute ask while the billing hold is read-only, as admission does', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]).mockResolvedValueOnce(overdueContractRow(95));
+
+    const diagnosis = await diagnoseMemberPolicy(
+      h.db,
+      ORGANIZATION_ID,
+      'user-1',
+      managedComputeAsk,
+    );
+
+    expect(diagnosis.effective).toBeNull();
+    expect(diagnosis.decision?.allowed).toBe(false);
+    expect(diagnosis.decision?.code).toBe('billing_read_only');
+  });
+
+  it('allows the ask as unscoped when the collection state is current', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]).mockResolvedValueOnce(NO_OPEN_INVOICE);
+
+    const diagnosis = await diagnoseMemberPolicy(
+      h.db,
+      ORGANIZATION_ID,
+      'user-1',
+      managedComputeAsk,
+    );
+
+    expect(diagnosis.decision?.allowed).toBe(true);
+    expect(diagnosis.decision?.code).toBe('unscoped');
+  });
+
+  it('returns no decision and reads no billing state when there is no ask', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    const diagnosis = await diagnoseMemberPolicy(h.db, ORGANIZATION_ID, 'user-1', null);
+
+    expect(diagnosis).toEqual({ effective: null, decision: null });
+    expect(h.query).toHaveBeenCalledTimes(1);
   });
 });

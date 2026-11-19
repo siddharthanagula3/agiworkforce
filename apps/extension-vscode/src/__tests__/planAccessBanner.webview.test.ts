@@ -1,6 +1,6 @@
 /**
  * The meter banner names the account's plan from the billing catalog, so the
- * $200 plan reads "Max 20x" rather than a capitalised tier key, and the plan
+ * $200 plan reads by its catalog label rather than a capitalised tier key, and the plan
  * that unlocks Managed Cloud in the editor comes from the shared capability
  * table instead of a list kept in the webview.
  *
@@ -139,13 +139,13 @@ describe('plan access banner in the VS Code meter', () => {
     });
   });
 
-  it('sends a paused Max 20x subscription to billing under its catalog name', async () => {
+  it('sends a paused $200 subscription to billing under its catalog name', async () => {
     const payload = await payloadFor('max_15x', 'past_due');
 
     expect(payload).toMatchObject({
       managedDeveloperEligible: false,
       accountPlanTier: 'max_15x',
-      accountPlanLabel: 'Max 20x',
+      accountPlanLabel: BILLING_PLAN_PRICING.max_15x.label,
       accountPlanNeedsBilling: true,
     });
 
@@ -153,7 +153,7 @@ describe('plan access banner in the VS Code meter', () => {
     postUsageMeter(payload);
 
     expect(banner()).toEqual({
-      text: 'Max 20x subscription needs attention · Managed Cloud paused',
+      text: `${BILLING_PLAN_PRICING.max_15x.label} subscription needs attention · Managed Cloud paused`,
       action: 'billing',
       button: 'Manage billing',
       collapsed: 'Billing needs attention',

@@ -596,10 +596,12 @@ export function normalizeWebDomain(raw: string): string | null {
   value = value.replace(/^\*\./, '').replace(/^\./, '');
   const pathStart = value.indexOf('/');
   if (pathStart !== -1) value = value.slice(0, pathStart);
-  value = value.replace(/:\d+$/, '');
+  value = value.replace(/:\d+$/, '').replace(/\.$/, '');
   if (value.startsWith('www.')) value = value.slice(4);
   return WEB_DOMAIN_PATTERN.test(value) ? value : null;
 }
+
+export const WEB_DOMAIN_RULE_MESSAGE = 'Each site must be a domain such as example.com.';
 
 /** A workspace's website rules: when `allow` is non-empty, nothing else may be read. */
 export interface WebDomainRules {
@@ -684,7 +686,7 @@ const WebDomainListSchema = z
       .string()
       .max(2048)
       .refine((value) => normalizeWebDomain(value) !== null, {
-        message: 'Each site must be a domain such as example.com.',
+        message: WEB_DOMAIN_RULE_MESSAGE,
       }),
   )
   .max(CONNECTOR_POLICY_LIST_LIMIT);

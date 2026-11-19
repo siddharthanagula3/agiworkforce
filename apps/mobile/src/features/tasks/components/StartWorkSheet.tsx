@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -21,6 +21,7 @@ interface StartWorkSheetProps {
   visible: boolean;
   submitting: boolean;
   error: string | null;
+  initialGoal?: string | undefined;
   onClose: () => void;
   onSubmit: (submission: StartWorkSubmission) => void;
 }
@@ -29,6 +30,7 @@ export function StartWorkSheet({
   visible,
   submitting,
   error,
+  initialGoal,
   onClose,
   onSubmit,
 }: StartWorkSheetProps) {
@@ -44,12 +46,19 @@ export function StartWorkSheet({
     [projects],
   );
 
-  const handleClose = useCallback(() => {
-    if (submitting) return;
+  useEffect(() => {
+    if (visible) {
+      if (initialGoal) setGoal(initialGoal);
+      return;
+    }
     setGoal('');
     setConstraints('');
     setDeliverable('');
     setProjectId(undefined);
+  }, [initialGoal, visible]);
+
+  const handleClose = useCallback(() => {
+    if (submitting) return;
     onClose();
   }, [onClose, submitting]);
 

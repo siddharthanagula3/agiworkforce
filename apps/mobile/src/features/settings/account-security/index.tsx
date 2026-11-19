@@ -140,6 +140,8 @@ export default function AccountSecurityScreen() {
     savingLockdown,
   } = preferences;
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
+  const [auditFailed, setAuditFailed] = useState(false);
+  const auditRequest = useRef(0);
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordAccount, setPasswordAccount] = useState<CloudAccountEpoch | null>(null);
   const [accountRevision, setAccountRevision] = useState(0);
@@ -201,13 +203,9 @@ export default function AccountSecurityScreen() {
       setLoading(true);
       setError(null);
       try {
-        const [nextStatus, entries] = await Promise.all([
-          fetchAccountSecurityStatus(signal),
-          fetchAuditLog(20, signal).catch(() => [] as AuditLogEntry[]),
-        ]);
+        const nextStatus = await fetchAccountSecurityStatus(signal);
         if (!isCloudAccountEpochCurrent(account)) return;
         setOwnedStatus({ account, value: nextStatus });
-        setAuditEntries(entries);
       } catch {
         if (signal?.aborted) return;
         if (!isCloudAccountEpochCurrent(account)) return;
@@ -218,6 +216,30 @@ export default function AccountSecurityScreen() {
     },
     [clerkUserId],
   );
+
+  const loadAudit = useCallback(
+    async (signal?: AbortSignal) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId) return;
+      const request = ++auditRequest.current;
+      const current = () =>
+        request === auditRequest.current && !signal?.aborted && isCloudAccountEpochCurrent(account);
+      setAuditEntries(null);
+      setAuditFailed(false);
+      try {
+        const entries = await fetchAuditLog(20, signal);
+        if (current()) setAuditEntries(entries);
+      } catch {
+        if (current()) setAuditFailed(true);
+      }
+    },
+    [clerkUserId],
+  );
+
+  const reloadSecurity = useCallback(() => {
+    void loadStatus();
+    void loadAudit();
+  }, [loadAudit, loadStatus]);
 
   const loadSessions = useCallback(
     async (signal?: AbortSignal) => {
@@ -319,7 +341,12 @@ export default function AccountSecurityScreen() {
                   return revokeAllAccountSessions(headers, account);
                 });
                 if (!current()) return;
-                await signOut();
+                await signOut().catch((signOutError: unknown) => {
+                  console.warn(
+                    '[AccountSecurity] local sign-out after revoking every session failed:',
+                    signOutError,
+                  );
+                });
               } catch (revokeError) {
                 if (!current() || isStepUpCancelled(revokeError)) return;
                 Alert.alert(
@@ -389,7 +416,9 @@ export default function AccountSecurityScreen() {
     setOwnedStatus(null);
     setLoading(false);
     setError(null);
+    auditRequest.current += 1;
     setAuditEntries(null);
+    setAuditFailed(false);
     setOwnedSessions(null);
     setSessionsError(null);
     setRevokingSessionId(null);
@@ -402,6 +431,7 @@ export default function AccountSecurityScreen() {
     if (!isClerkSignedIn || appMode !== 'cloud') return;
     const controller = new AbortController();
     void loadStatus(controller.signal);
+    void loadAudit(controller.signal);
     void loadSessions(controller.signal);
     setSignInMethods(null);
     setSignInMethodsError(false);
@@ -413,7 +443,7 @@ export default function AccountSecurityScreen() {
         if (!controller.signal.aborted) setSignInMethodsError(true);
       });
     return () => controller.abort();
-  }, [accountRevision, appMode, isClerkSignedIn, loadSessions, loadStatus]);
+  }, [accountRevision, appMode, isClerkSignedIn, loadAudit, loadSessions, loadStatus]);
 
   const groupedAuditEntries = useMemo(
     () => (auditEntries ? groupAuditEntries(auditEntries) : []),
@@ -478,7 +508,7 @@ export default function AccountSecurityScreen() {
         status={appMode === 'cloud' ? status : null}
         statusLabel={twoFactorValue}
         withStepUp={withStepUp}
-        onChanged={() => void loadStatus()}
+        onChanged={reloadSecurity}
       />
       <SettingsGroup>
         <SettingsRow
@@ -491,7 +521,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Sign-in methods"
-        body="Add or remove sign-in methods in Security settings on the web."
+        body="Add or remove sign-in methods on the web."
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -659,7 +689,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Device protection"
-        body="AGI App Lock uses the Face ID, Touch ID, or passcode already enrolled on this device."
+        body="App Lock uses this device’s Face ID, Touch ID or passcode."
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -676,12 +706,20 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Recent security activity"
-        body="Sign-ins and account changes recorded for this account, newest first."
+        body="Sign-ins and account changes, newest first."
         icon={History}
       />
       <SettingsGroup>
         {appMode !== 'cloud' ? (
           <SettingsRow label="Activity" icon={History} value="Cloud mode required" isLast />
+        ) : auditFailed ? (
+          <SettingsRow
+            label="Activity"
+            icon={History}
+            value="Unavailable · Retry"
+            onPress={() => void loadAudit()}
+            isLast
+          />
         ) : auditEntries === null ? (
           <SettingsRow label="Activity" icon={History} value="Checking…" isLast />
         ) : auditEntries.length === 0 ? (
@@ -707,7 +745,7 @@ export default function AccountSecurityScreen() {
         <SettingsGroup>
           <SettingsSwitchRow
             label="Lockdown mode"
-            description="Blocks connectors, web access, code execution and Deep Research in every chat."
+            description="Blocks connectors, web access, code execution and Deep Research."
             icon={Lock}
             value={lockdown}
             onValueChange={(next) => void preferences.changeLockdown(next)}
@@ -730,7 +768,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Managed on the web"
-        body="Manage passkeys and security keys in Security settings on the web."
+        body="Add or remove passkeys and security keys on the web."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

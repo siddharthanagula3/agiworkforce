@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
 import { isApplePlatform, useMenuKeyboard, useUiTranslation } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { reportClientFailure, type ClientFailureDetail } from '../lib/client-failures';
 import { cn } from '../lib/utils';
 import { useChatStore } from '../stores/chatStore';
@@ -66,6 +67,7 @@ import {
 } from '../lib/slashCommands';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
+  PRODUCT_NAMES,
   getModelMetadataById,
   resolveModelEffort,
   validateAttachmentFile,
@@ -1011,7 +1013,8 @@ export function ChatInput({
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.defaultPrevented) return;
-      if (handleSlashMenuKey(e.key)) {
+      const composing = isImeComposingKey(e.nativeEvent);
+      if (!composing && handleSlashMenuKey(e.key)) {
         e.preventDefault();
         return;
       }
@@ -1027,10 +1030,7 @@ export function ChatInput({
         return;
       }
 
-      if (
-        matchesShortcut(e, COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, isApplePlatform()) &&
-        !e.nativeEvent.isComposing
-      ) {
+      if (matchesShortcut(e, COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, isApplePlatform()) && !composing) {
         e.preventDefault();
         onFollowUpInvert?.();
         handleSend();
@@ -1039,7 +1039,7 @@ export function ChatInput({
 
       const shortcutMatches =
         sendShortcut === 'mod-enter' ? (e.metaKey || e.ctrlKey) && !e.shiftKey : !e.shiftKey;
-      if (e.key === 'Enter' && shortcutMatches && !e.nativeEvent.isComposing) {
+      if (e.key === 'Enter' && shortcutMatches && !composing) {
         e.preventDefault();
         handleSend();
       }
@@ -1384,7 +1384,7 @@ export function ChatInput({
                         disabled && 'cursor-not-allowed opacity-50',
                       )}
                     >
-                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : 'Work'}
+                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : PRODUCT_NAMES.work}
                     </button>
                   ))}
                 </div>

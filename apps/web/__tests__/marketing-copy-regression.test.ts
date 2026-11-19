@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const WEB_ROOT = join(__dirname, '..');
 const SKIPPED_SOURCE_DIRS = new Set(['node_modules', '.next', 'dist', 'coverage', '__tests__']);
@@ -185,7 +188,7 @@ describe('public marketing copy regressions', () => {
     expect(continuityGroup?.[1]).toBeDefined();
     expect(continuityGroup?.[1]).not.toMatch(/CLI|VS Code/);
     expect(faq).toContain(
-      'Moving between Local, BYOK, and managed Cloud is not an ordinary model switch',
+      `Moving between Local, BYOK, and ${CLOUD} is not an ordinary model switch`,
     );
   });
 
@@ -377,7 +380,7 @@ describe('public marketing copy regressions', () => {
     expect(teams).not.toContain('invite-only managed cloud');
     expect(teams).not.toContain('Cloud · by invite');
     expect(teams).not.toContain('AGI Cloud invite');
-    expect(teams).toContain('integrations on managed cloud');
+    expect(teams).toContain(`integrations on ${CLOUD.toLowerCase()}`);
     expect(teams).toContain('Cloud · hosted by us');
   });
 
@@ -466,7 +469,7 @@ describe('public marketing copy regressions', () => {
     expect(offenders, 'managed cloud is open by default, not invite-only').toEqual([]);
   });
 
-  it('names the managed trust boundary Managed Cloud, not hosted or Cloud Managed', () => {
+  it(`names the managed trust boundary ${CLOUD}, not hosted or Cloud Managed`, () => {
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(join(WEB_ROOT, dir), { withFileTypes: true })) {

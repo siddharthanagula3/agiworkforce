@@ -91,6 +91,10 @@
       "schedule": "12 4 * * *"
     },
     {
+      "path": "/api/cron/expire-support-access-grants",
+      "schedule": "3 2 * * *"
+    },
+    {
       "path": "/api/cron/expire-support-handoffs",
       "schedule": "0 2 * * *"
     },

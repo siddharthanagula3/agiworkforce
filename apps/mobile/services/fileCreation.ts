@@ -1,4 +1,6 @@
 import {
+  cacheDirectory,
+  deleteAsync,
   documentDirectory,
   getInfoAsync,
   moveAsync,
@@ -18,12 +20,9 @@ import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agi
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
-import {
-  EXPORT_CONTENT_STYLES,
-  EXPORT_MATH_SCRIPT,
-  markdownToExportHtml,
-} from '@/services/exportMarkdownHtml';
+import { EXPORT_CONTENT_STYLES, markdownToExportHtml } from '@/services/exportMarkdownHtml';
 import { markdownToDocxBase64 } from './docxExport';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export const EXPORTS_DIR = `${documentDirectory}exports/`;
 
@@ -76,7 +75,7 @@ function sanitizeFileName(title: string): string {
 }
 
 function markdownToHtml(content: string, title: string): string {
-  const { html, hasMath } = markdownToExportHtml(content);
+  const { html } = markdownToExportHtml(content);
 
   const timestamp = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
@@ -137,7 +136,6 @@ function markdownToHtml(content: string, title: string): string {
   <div class="footer">
     Exported from AGI Workforce
   </div>
-  ${hasMath ? EXPORT_MATH_SCRIPT : ''}
 </body>
 </html>`;
 }
@@ -267,6 +265,15 @@ export async function shareFile(
     jpg: 'public.jpeg',
     jpeg: 'public.jpeg',
     zip: 'public.zip-archive',
+    mp4: 'public.mpeg-4',
+    mov: 'com.apple.quicktime-movie',
+    webm: 'public.movie',
+    gif: 'com.compuserve.gif',
+    webp: 'org.webmproject.webp',
+    mp3: 'public.mp3',
+    wav: 'com.microsoft.waveform-audio',
+    m4a: 'public.mpeg-4-audio',
+    txt: 'public.plain-text',
   };
   const mimeMap: Record<string, string> = {
     pdf: 'application/pdf',
@@ -282,11 +289,22 @@ export async function shareFile(
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
     zip: 'application/zip',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    m4a: 'audio/mp4',
+    txt: 'text/plain',
   };
   if (options.isCurrent?.() === false) return;
+  const uti = utiMap[ext ?? ''];
+  const mimeType = mimeMap[ext ?? ''];
   await Sharing.shareAsync(uri, {
-    UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
-    mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
+    ...(uti ? { UTI: uti } : {}),
+    ...(mimeType ? { mimeType } : {}),
   });
 }
 
@@ -401,14 +419,60 @@ export interface LocalVideoPlayer {
   directoryUri: string;
 }
 
+const PLAYABLE_VIDEO_EXTENSIONS: Readonly<Record<string, string>> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
+
+const VIDEO_PREVIEW_DIR = `${cacheDirectory}video-previews/`;
+
+// Previews live in the cache, one directory per account and video, so replaying reuses the bytes
+// and Clear cache reclaims them; explicit exports stay in EXPORTS_DIR.
+async function videoPreviewDirectory(key: string): Promise<{ uri: string; reusable: boolean }> {
+  const owner = captureCloudAccountEpoch()?.ownerId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const uri = owner
+    ? `${VIDEO_PREVIEW_DIR}${owner}/${key}/`
+    : `${VIDEO_PREVIEW_DIR}transient/${Crypto.randomUUID()}/`;
+  if (!(await getInfoAsync(uri)).exists) {
+    await makeDirectoryAsync(uri, { intermediates: true });
+  }
+  return { uri, reusable: Boolean(owner) };
+}
+
+async function cachedPreviewVideoName(directoryUri: string, key: string): Promise<string | null> {
+  for (const extension of Object.values(PLAYABLE_VIDEO_EXTENSIONS)) {
+    const name = `video-${key}.${extension}`;
+    if ((await getInfoAsync(`${directoryUri}${name}`)).exists) return name;
+  }
+  return null;
+}
+
 export async function prepareLocalVideoPlayer(
   url: string,
   background: string,
 ): Promise<LocalVideoPlayer> {
   const key = videoFileKey(url);
-  const videoUri = await downloadGeneratedFile(url, `video-${key}.mp4`);
-  const directoryUri = videoUri.slice(0, videoUri.lastIndexOf('/') + 1);
-  const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
+  const directory = await videoPreviewDirectory(key);
+  const directoryUri = directory.uri;
+  let videoName = directory.reusable ? await cachedPreviewVideoName(directoryUri, key) : null;
+  if (!videoName) {
+    const downloaded = await fetchGeneratedFileBytes(url);
+    const extension = downloaded.contentType
+      ? PLAYABLE_VIDEO_EXTENSIONS[downloaded.contentType]
+      : undefined;
+    if (!extension) {
+      throw new Error('The saved video format is not supported.');
+    }
+    videoName = `video-${key}.${extension}`;
+    const partialUri = `${directoryUri}${Crypto.randomUUID()}.part`;
+    await writeAsStringAsync(partialUri, downloaded.base64, { encoding: EncodingType.Base64 });
+    if ((await getInfoAsync(`${directoryUri}${videoName}`)).exists) {
+      await deleteAsync(partialUri, { idempotent: true });
+    } else {
+      await moveAsync({ from: partialUri, to: `${directoryUri}${videoName}` });
+    }
+  }
   const playerUri = `${directoryUri}player.html`;
   await writeAsStringAsync(
     playerUri,
@@ -422,7 +486,7 @@ export async function prepareLocalVideoPlayer(
     ].join(''),
     { encoding: EncodingType.UTF8 },
   );
-  return { videoUri, playerUri, directoryUri };
+  return { videoUri: `${directoryUri}${videoName}`, playerUri, directoryUri };
 }
 
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {

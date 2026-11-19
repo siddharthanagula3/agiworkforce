@@ -31,10 +31,12 @@ const mockTurnOffTwoFactor = jest.fn();
 const mockStartSetup = jest.fn();
 const mockCopySecret = jest.fn();
 const mockWithStepUp = jest.fn();
+const mockSignOut = jest.fn();
 let mockAuthState = {
   isClerkLoaded: true,
   isClerkSignedIn: true,
   clerkUserId: 'account-a' as string | null,
+  signOut: mockSignOut,
 };
 
 jest.mock('expo-clipboard', () => ({
@@ -216,7 +218,12 @@ jest.mock('../src/features/settings/Common', () => {
   };
 });
 
-import AccountSecurityScreen from '../src/features/settings/account-security';
+jest.mock('@/src/features/siri', () => ({ AskFromSiriSetting: () => null }));
+
+import { ownerHandler } from '../test-utils/ownerProps';
+
+const AccountSecurityScreen = require('../src/features/settings/account-security')
+  .default as typeof import('../src/features/settings/account-security').default;
 
 describe('Mobile Account Security screen', () => {
   beforeEach(() => {
@@ -235,6 +242,7 @@ describe('Mobile Account Security screen', () => {
       isClerkLoaded: true,
       isClerkSignedIn: true,
       clerkUserId: 'account-a',
+      signOut: mockSignOut,
     };
     mockFetchStatus.mockResolvedValue({ twoFactorEnabled: true, backupCodesReady: true });
     mockFetchSessionTimeout.mockResolvedValue(60);
@@ -328,6 +336,38 @@ describe('Mobile Account Security screen', () => {
     expect(screen.getByText('Change password')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Rate limit exceeded ×2')).toBeTruthy());
     expect(screen.getByText('Login success')).toBeTruthy();
+  });
+
+  it('says activity is unavailable when only the history request fails, and retries it', async () => {
+    mockFetchAuditLog.mockRejectedValue(new Error('offline'));
+
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Activity. Unavailable · Retry')).toBeTruthy(),
+    );
+    expect(screen.queryByText('No activity recorded yet')).toBeNull();
+
+    mockFetchAuditLog.mockResolvedValue([
+      {
+        id: 'a1',
+        action: 'login_success',
+        ipAddress: null,
+        createdAt: '2026-07-31T18:00:00.000Z',
+      },
+    ]);
+    fireEvent.press(screen.getByLabelText('Activity. Unavailable · Retry'));
+
+    await waitFor(() => expect(screen.getByText('Login success')).toBeTruthy());
+    expect(screen.queryByLabelText('Activity. Unavailable · Retry')).toBeNull();
+  });
+
+  it('still reports a genuinely empty history as no recorded activity', async () => {
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('No activity recorded yet')).toBeTruthy());
+    expect(screen.queryByLabelText('Activity. Unavailable · Retry')).toBeNull();
   });
 
   it('reloads the timeout after an unconfirmed save', async () => {
@@ -444,6 +484,7 @@ describe('Mobile Account Security screen', () => {
       isClerkLoaded: true,
       isClerkSignedIn: false,
       clerkUserId: null,
+      signOut: mockSignOut,
     };
     const screen = render(<AccountSecurityScreen />);
 
@@ -456,6 +497,32 @@ describe('Mobile Account Security screen', () => {
     expect(mockFetchStatus).not.toHaveBeenCalled();
     expect(mockFetchAccountSessions).not.toHaveBeenCalled();
   });
+  it('does not report a failure when every session was revoked but this phone could not end its own', async () => {
+    mockRevokeAll.mockResolvedValue(undefined);
+    mockSignOut.mockRejectedValue(new Error('session already revoked'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Log out of all devices')).toBeTruthy());
+    fireEvent.press(screen.getByText('Log out of all devices'));
+    const confirm = alertSpy.mock.calls
+      .at(-1)?.[2]
+      ?.find((button) => button.text === 'Log out everywhere');
+
+    await act(async () => {
+      confirm?.onPress?.();
+    });
+
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
+    expect(mockRevokeAll).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalledWith(
+      'Could not log out of all devices',
+      expect.anything(),
+    );
+    alertSpy.mockRestore();
+    warn.mockRestore();
+  });
+
   it('rejects an old revoke-all confirmation after A to B to A', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<AccountSecurityScreen />);
@@ -572,7 +639,7 @@ describe('Mobile Account Security screen', () => {
     });
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByText('Set up authenticator app'));
-    const copy = (await screen.findByLabelText('Copy setup key')).props.onPress as () => void;
+    const copy = ownerHandler(await screen.findByLabelText('Copy setup key'), 'onPress');
     await act(async () => {
       mockEpoch += 2;
       mockEpochListeners.forEach((listener) => listener());
@@ -659,9 +726,17 @@ describe('Mobile Account Security screen', () => {
       const screen = render(<AccountSecurityScreen />);
       fireEvent.press(await screen.findByLabelText('Macintosh · Chrome 141. 3h ago'));
       const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Sign out');
+      if (boundary === 'unmount') {
+        await act(async () => {
+          screen.unmount();
+        });
+      }
       await act(async () => {
-        if (boundary === 'unmount') screen.unmount();
-        else if (boundary === 'epoch') {
+        if (boundary === 'unmount') {
+          confirm?.onPress?.();
+          return;
+        }
+        if (boundary === 'epoch') {
           mockEpoch += 2;
           mockEpochListeners.forEach((listener) => listener());
         } else if (boundary === 'auth') {
@@ -740,7 +815,7 @@ describe('Mobile Account Security screen', () => {
     );
     const screen = render(<AccountSecurityScreen />);
     const row = await screen.findByLabelText('Macintosh · Chrome 141. 3h ago');
-    const press = row.props.onPress as () => void;
+    const press = ownerHandler(row, 'onPress');
     act(() => {
       press();
       press();

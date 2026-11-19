@@ -15,6 +15,7 @@ import {
   cloudCodeCommandRanLabel,
   cloudCodeRepositoryLabel,
   cloudCodeStopReasonIsFailure,
+  cloudTaskRepositoryName,
   encodeCloudTaskHandoffQuery,
   REMOTE_CODE_LIMITS,
   type CloudCodeAgentTurnRecord,
@@ -128,6 +129,7 @@ function cloudCodeHandoff(session: CloudCodeSession): CloudTaskHandoff {
     goal: session.title,
     plan: [],
     branch: session.workingBranch,
+    repository: cloudTaskRepositoryName(session.repositoryUrl),
   };
 }
 
@@ -217,7 +219,10 @@ export function buildCloudCodeSessionItems(
     detail: 'Start a chat in this window from this session’s conversation',
     action: 'continue-here',
   });
-  if (detail.session.workingBranch !== null) {
+  if (
+    detail.session.workingBranch !== null &&
+    cloudTaskRepositoryName(detail.session.repositoryUrl) !== null
+  ) {
     items.push({
       label: `$(git-branch) ${BRING_CLOUD_BRANCH_IN}`,
       description: detail.session.workingBranch,

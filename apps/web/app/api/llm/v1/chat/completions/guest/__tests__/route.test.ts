@@ -230,7 +230,19 @@ describe(GUEST_CHAT_PATH, () => {
     const response = await POST(post(HELLO));
 
     expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe('guest_admission_unavailable');
     expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('says the service is unavailable, not full, when spend cannot be held', async () => {
+    mocks.reserve.mockRejectedValue(new Error('store down'));
+
+    const response = await POST(post(HELLO));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe('guest_admission_unavailable');
+    expect(body.error.message).not.toMatch(/capacity/i);
   });
 
   it('refuses every turn when there is no shared store to count spend in', async () => {
@@ -239,7 +251,7 @@ describe(GUEST_CHAT_PATH, () => {
     const response = await POST(post(HELLO));
 
     expect(response.status).toBe(503);
-    expect((await response.json()).error.code).toBe('guest_capacity_reached');
+    expect((await response.json()).error.code).toBe('guest_admission_unavailable');
   });
 
   it('refuses what the platform policy blocks before any model call', async () => {

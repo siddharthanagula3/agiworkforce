@@ -16,7 +16,7 @@ import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/suppor
 export function SettingsScreenShell({
   title,
   children,
-  backHref = '/(app)/(tabs)/settings',
+  backHref = '/(app)/settings',
   help,
   refreshControl,
   overlay,
@@ -37,6 +37,7 @@ export function SettingsScreenShell({
       <ScreenHeader title={title} onBack={goBack} />
       <ScrollView
         className="flex-1"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,

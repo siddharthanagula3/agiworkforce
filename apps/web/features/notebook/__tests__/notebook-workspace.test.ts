@@ -6,6 +6,7 @@ import type {
   NotebookListFilesResult,
   NotebookUploadResult,
 } from '../services/notebook-api';
+import { NotebookApiError } from '../services/notebook-api';
 import { createNotebookWorkspace } from '../services/notebook-workspace';
 
 const A = '11111111-1111-4111-8111-111111111111';
@@ -201,6 +202,36 @@ describe('notebook workspace ownership', () => {
     });
     expect(workspace.getSnapshot(A).cells[0]?.error).toContain('Code may have run');
     expect(api.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the server validation message and keeps prior output when a run is rejected before any cell ran', async () => {
+    const rejection = new NotebookApiError(
+      'Cell 2: Cell code must be 1–50000 characters and contain no null bytes',
+      400,
+    );
+    const { workspace, api, cellId } = setup();
+    vi.mocked(api.runAll).mockResolvedValueOnce({
+      session: session(A),
+      runId: 'run',
+      fromTop: true,
+      networkAccess: 'none',
+      completed: true,
+      results: [{ cellId, ok: true, outputs: [{ kind: 'stream', data: 'kept' }] }],
+    });
+    await workspace.runAll(A);
+    vi.mocked(api.runAll).mockRejectedValueOnce(rejection);
+    await workspace.runAll(A);
+    const snapshot = workspace.getSnapshot(A);
+    expect(snapshot.runAllError).toContain('Cell 2');
+    expect(snapshot.runAllError).not.toContain('Code may have run');
+    expect(snapshot.cells[0]).toMatchObject({
+      status: 'ok',
+      outputs: [{ kind: 'stream', data: 'kept' }],
+    });
+
+    vi.mocked(api.execute).mockRejectedValueOnce(rejection);
+    await workspace.runCell(A, cellId);
+    expect(workspace.getSnapshot(A).cells[0]?.error).toContain('Cell 2');
   });
 
   it('invalidates whole-run provenance and output when input changes', async () => {

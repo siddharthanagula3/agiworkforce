@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::process::Command;
 
 pub use agiworkforce_worktree::{
-    parse_worktree_porcelain, Worktree, WorktreeEntry, WorktreeOptions,
+    parse_worktree_porcelain, IncludeOutcome, Worktree, WorktreeEntry, WorktreeOptions,
 };
 
 /// Runs the shared crate's subprocesses under the CLI's process-tree owner.
@@ -108,6 +108,7 @@ pub struct SessionWorktree {
     pub root: PathBuf,
     pub generated: bool,
     pub created: bool,
+    pub included: IncludeOutcome,
 }
 
 async fn git_text(dir: &Path, args: &[&str]) -> Result<String> {
@@ -205,56 +206,6 @@ async fn exclude_session_worktrees(root: &Path) -> Result<()> {
         .with_context(|| format!("writing {}", exclude.display()))
 }
 
-async fn copy_worktree_includes(root: &Path, worktree: &Path) -> Result<usize> {
-    let Ok(text) = std::fs::read_to_string(root.join(".worktreeinclude")) else {
-        return Ok(0);
-    };
-    let mut copied = 0;
-    for pattern in text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-    {
-        let full = root.join(pattern.trim_start_matches('/'));
-        let Some(full) = full.to_str() else {
-            continue;
-        };
-        for source in glob::glob(full)
-            .with_context(|| format!("reading the .worktreeinclude pattern {pattern}"))?
-            .flatten()
-        {
-            let Ok(relative) = source.strip_prefix(root) else {
-                continue;
-            };
-            if !source.is_file()
-                || relative.starts_with(SESSION_WORKTREE_DIR)
-                || relative.starts_with(".git")
-            {
-                continue;
-            }
-            let mut check = Command::new("git");
-            check
-                .current_dir(root)
-                .args(["check-ignore", "--quiet", "--"])
-                .arg(relative);
-            let ignored = crate::process_tree::output(check, None, Some(GIT_WORKTREE_TIMEOUT))
-                .await
-                .is_ok_and(|output| output.status.success());
-            if !ignored {
-                continue;
-            }
-            let target = worktree.join(relative);
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(&source, &target)
-                .with_context(|| format!("copying {} into the worktree", relative.display()))?;
-            copied += 1;
-        }
-    }
-    Ok(copied)
-}
-
 pub async fn open_session_worktree(
     start: &Path,
     requested: Option<&str>,
@@ -305,6 +256,7 @@ pub async fn open_session_worktree(
             root,
             generated,
             created: false,
+            included: IncludeOutcome::default(),
         });
     }
     anyhow::ensure!(
@@ -341,7 +293,9 @@ pub async fn open_session_worktree(
             String::from_utf8_lossy(&output.stderr).trim()
         );
     }
-    copy_worktree_includes(&root, &path).await?;
+    let included = agiworkforce_worktree::copy_included_files(&ProcessTreeRunner, &root, &path)
+        .await
+        .context("copying the .worktreeinclude files into the worktree")?;
     Ok(SessionWorktree {
         name,
         path,
@@ -350,7 +304,28 @@ pub async fn open_session_worktree(
         root,
         generated,
         created: true,
+        included,
     })
+}
+
+async fn has_commits_beyond(dir: &Path, base: &str, revision: &str) -> Result<bool> {
+    let ahead = git_text(
+        dir,
+        &["rev-list", "--count", &format!("{base}..{revision}")],
+    )
+    .await?;
+    Ok(ahead != "0")
+}
+
+async fn existing_session_branch(worktree: &SessionWorktree) -> Option<String> {
+    let branch = format!("refs/heads/{}", worktree.branch);
+    git_text(
+        &worktree.root,
+        &["rev-parse", "--verify", "--quiet", &branch],
+    )
+    .await
+    .ok()
+    .map(|_| branch)
 }
 
 pub async fn session_worktree_has_work(worktree: &SessionWorktree) -> Result<bool> {
@@ -360,12 +335,13 @@ pub async fn session_worktree_has_work(worktree: &SessionWorktree) -> Result<boo
     {
         return Ok(true);
     }
-    let ahead = git_text(
-        &worktree.path,
-        &["rev-list", "--count", &format!("{}..HEAD", worktree.base)],
-    )
-    .await?;
-    Ok(ahead != "0")
+    if has_commits_beyond(&worktree.path, &worktree.base, "HEAD").await? {
+        return Ok(true);
+    }
+    match existing_session_branch(worktree).await {
+        Some(branch) => has_commits_beyond(&worktree.root, &worktree.base, &branch).await,
+        None => Ok(false),
+    }
 }
 
 pub async fn list_session_worktrees(start: &Path) -> Result<Vec<SessionWorktree>> {
@@ -394,12 +370,27 @@ pub async fn list_session_worktrees(start: &Path) -> Result<Vec<SessionWorktree>
                 root: root.clone(),
                 generated: false,
                 created: false,
+                included: IncludeOutcome::default(),
             })
         })
         .collect())
 }
 
 pub async fn remove_session_worktree(worktree: &SessionWorktree, force: bool) -> Result<()> {
+    let owned_branch = if worktree.branch.starts_with(SESSION_BRANCH_PREFIX) {
+        existing_session_branch(worktree).await
+    } else {
+        None
+    };
+    if let Some(branch) = owned_branch.as_deref() {
+        if !force && has_commits_beyond(&worktree.root, &worktree.base, branch).await? {
+            anyhow::bail!(
+                "branch {} has commits that are not on {}, so the worktree and its branch were kept",
+                worktree.branch,
+                worktree.base
+            );
+        }
+    }
     if force {
         git_text(
             &worktree.root,
@@ -414,7 +405,7 @@ pub async fn remove_session_worktree(worktree: &SessionWorktree, force: bool) ->
     } else {
         exit_worktree(&worktree.root, &worktree.path).await?;
     }
-    if worktree.branch.starts_with(SESSION_BRANCH_PREFIX) {
+    if owned_branch.is_some() {
         git_text(&worktree.root, &["branch", "-D", &worktree.branch]).await?;
     }
     Ok(())
@@ -469,5 +460,144 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .current_dir(dir)
+            .args(args)
+            .status()
+            .expect("git");
+        assert!(status.success(), "git {args:?}");
+    }
+
+    fn init_include_repo(dir: &Path) {
+        init_repo(dir);
+        git(dir, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(dir.join(".gitignore"), "copy.env\nplain.env\n").unwrap();
+        git(dir, &["add", ".gitignore"]);
+        git(dir, &["commit", "-q", "-m", "ignore"]);
+        std::fs::write(dir.join(".worktreeinclude"), "copy.env\nplain.env\n").unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_session_worktree_does_not_copy_an_included_symlink_to_an_outside_file() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let repo = tempfile::tempdir().unwrap();
+        init_include_repo(repo.path());
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("secret"), "outside-marker").unwrap();
+        std::os::unix::fs::symlink(outside.path().join("secret"), repo.path().join("copy.env"))
+            .unwrap();
+        std::fs::write(repo.path().join("plain.env"), "PLAIN=1\n").unwrap();
+
+        let worktree = open_session_worktree(repo.path(), Some("leak"))
+            .await
+            .expect("open");
+
+        assert!(worktree.created);
+        assert_eq!(
+            std::fs::read_to_string(worktree.path.join("plain.env")).unwrap(),
+            "PLAIN=1\n"
+        );
+        assert!(std::fs::symlink_metadata(worktree.path.join("copy.env")).is_err());
+        assert_eq!(worktree.included.copied, vec!["plain.env".to_string()]);
+        assert!(worktree
+            .included
+            .refused
+            .iter()
+            .any(|(path, _)| path == "copy.env"));
+    }
+
+    fn branch_exists(repo: &Path, branch: &str) -> bool {
+        std::process::Command::new("git")
+            .current_dir(repo)
+            .args([
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/{branch}"),
+            ])
+            .status()
+            .expect("git")
+            .success()
+    }
+
+    #[tokio::test]
+    async fn commits_left_on_the_session_branch_keep_the_worktree_and_its_branch() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        git(repo.path(), &["config", "commit.gpgsign", "false"]);
+        let worktree = open_session_worktree(repo.path(), None)
+            .await
+            .expect("open");
+        assert!(worktree.generated);
+        std::fs::write(worktree.path.join("work.txt"), "kept").unwrap();
+        git(&worktree.path, &["add", "work.txt"]);
+        git(&worktree.path, &["commit", "-q", "-m", "work"]);
+        git(
+            &worktree.path,
+            &["switch", "-q", "--detach", &worktree.base],
+        );
+
+        assert!(session_worktree_has_work(&worktree).await.expect("state"));
+        assert!(remove_session_worktree(&worktree, false).await.is_err());
+        assert!(worktree.path.exists());
+        assert!(branch_exists(repo.path(), &worktree.branch));
+
+        remove_session_worktree(&worktree, true)
+            .await
+            .expect("forced removal");
+        assert!(!branch_exists(repo.path(), &worktree.branch));
+    }
+
+    #[tokio::test]
+    async fn an_unused_session_worktree_is_removed_with_its_branch() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        let worktree = open_session_worktree(repo.path(), None)
+            .await
+            .expect("open");
+
+        assert!(!session_worktree_has_work(&worktree).await.expect("state"));
+        remove_session_worktree(&worktree, false)
+            .await
+            .expect("removal");
+        assert!(!worktree.path.exists());
+        assert!(!branch_exists(repo.path(), &worktree.branch));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_session_worktree_does_not_write_through_a_symlink_on_the_checked_out_branch() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let repo = tempfile::tempdir().unwrap();
+        init_include_repo(repo.path());
+        let outside = tempfile::tempdir().unwrap();
+        let victim = outside.path().join("victim");
+        std::fs::write(&victim, "outside-marker").unwrap();
+        git(repo.path(), &["checkout", "-q", "-b", "worktree-demo"]);
+        std::os::unix::fs::symlink(&victim, repo.path().join("copy.env")).unwrap();
+        git(repo.path(), &["add", "-f", "copy.env"]);
+        git(repo.path(), &["commit", "-q", "-m", "link"]);
+        git(repo.path(), &["checkout", "-q", "main"]);
+        std::fs::write(repo.path().join("copy.env"), "source-marker").unwrap();
+
+        let worktree = open_session_worktree(repo.path(), Some("demo"))
+            .await
+            .expect("open");
+
+        assert!(worktree.created);
+        assert_eq!(worktree.branch, "worktree-demo");
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "outside-marker");
+        assert!(worktree.included.copied.is_empty());
+        assert!(worktree
+            .included
+            .refused
+            .iter()
+            .any(|(path, _)| path == "copy.env"));
     }
 }

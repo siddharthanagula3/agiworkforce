@@ -23,8 +23,10 @@ import {
   CloudCodeValidationError,
   asCloudCodeSessionStatusFilter,
   deleteCloudCodeSession,
+  getCloudCodeAgentTurn,
   listCloudCodeAgentTurns,
   listCloudCodeSessions,
+  readCloudCodeAgentTurnWindow,
   renameCloudCodeSession,
   runCloudCodeCommand,
   setCloudCodeSessionArchived,
@@ -293,6 +295,85 @@ describe('the Recents status filter', () => {
     expect(asCloudCodeSessionStatusFilter(undefined)).toBe('all');
     expect(asCloudCodeSessionStatusFilter('archived')).toBe('archived');
     expect(() => asCloudCodeSessionStatusFilter('deleted')).toThrow(CloudCodeValidationError);
+  });
+});
+
+describe('the turn history of a long session', () => {
+  function turnAt(index: number) {
+    return {
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      goal: `goal ${index}`,
+      state: 'completed',
+      stop_reason: 'done',
+      steps_used: 1,
+      input_tokens: 0,
+      output_tokens: 0,
+      final_message: `answer ${index}`,
+      error_message: null,
+      created_at: new Date(Date.UTC(2026, 8, 7, 12, 0, index)).toISOString(),
+    };
+  }
+
+  function newestFirst(count: number) {
+    return Array.from({ length: count }, (_, offset) => turnAt(count - offset));
+  }
+
+  it('reads the newest turns, oldest first, so the latest outcome is never the one dropped', async () => {
+    const adapter = db((sql) => (/from cloud_code_agent_turns/.test(sql) ? newestFirst(51) : []));
+
+    const window = await readCloudCodeAgentTurnWindow(adapter as never, OWNER, SESSION_ID);
+
+    expect(queries[0]?.sql).toContain('order by created_at desc, id desc');
+    expect(queries[0]?.sql).toContain('limit 51');
+    expect(window.truncated).toBe(true);
+    expect(window.turns).toHaveLength(50);
+    expect(window.turns[0]?.goal).toBe('goal 2');
+    expect(window.turns[49]?.goal).toBe('goal 51');
+  });
+
+  it('says nothing was left out when the session fits the window', async () => {
+    const adapter = db((sql) => (/from cloud_code_agent_turns/.test(sql) ? newestFirst(50) : []));
+
+    const window = await readCloudCodeAgentTurnWindow(adapter as never, OWNER, SESSION_ID);
+
+    expect(window.truncated).toBe(false);
+    expect(window.turns).toHaveLength(50);
+  });
+
+  it('loads steps only for the turns it returns', async () => {
+    const adapter = db((sql) => (/from cloud_code_agent_turns/.test(sql) ? newestFirst(3) : []));
+
+    await listCloudCodeAgentTurns(adapter as never, OWNER, SESSION_ID);
+
+    expect(queries[1]?.sql).toContain('t.id in ($4, $5, $6)');
+    expect(queries[1]?.params).toEqual([
+      SESSION_ID,
+      'user-1',
+      null,
+      turnAt(1).id,
+      turnAt(2).id,
+      turnAt(3).id,
+    ]);
+  });
+
+  it('finds one turn by its id under the owner filter, whatever its position', async () => {
+    const adapter = db((sql) => (/from cloud_code_agent_turns/.test(sql) ? [turnAt(51)] : []));
+
+    const turn = await getCloudCodeAgentTurn(adapter as never, OWNER, SESSION_ID, turnAt(51).id);
+
+    expect(turn).toMatchObject({ turnId: turnAt(51).id, finalMessage: 'answer 51' });
+    expect(queries[0]?.sql).toContain('id = $2');
+    expect(queries[0]?.sql).toContain('user_id = $3');
+    expect(queries[0]?.sql).not.toContain('limit');
+    expect(queries[0]?.params).toEqual([SESSION_ID, turnAt(51).id, 'user-1', null]);
+  });
+
+  it('answers null for a turn that is not this owner session or not an id', async () => {
+    const missing = await getCloudCodeAgentTurn(db([]) as never, OWNER, SESSION_ID, turnAt(7).id);
+    const malformed = await getCloudCodeAgentTurn(db([]) as never, OWNER, SESSION_ID, 'not-a-uuid');
+
+    expect(missing).toBeNull();
+    expect(malformed).toBeNull();
   });
 });
 

@@ -2,6 +2,7 @@ import { PRODUCT_BRAND } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { readAccountRefusal } from '../../utils/accountRefusal';
 import { getExtensionUserAgent, getExtensionVersion } from '../../platform/version';
 
 export type FeedbackKind = 'bug' | 'feature' | 'general';
@@ -23,41 +24,53 @@ interface FeedbackBody {
   metadata?: Record<string, string>;
 }
 
-async function postFeedback(
+async function sendFeedbackRequest(
   secrets: vscode.SecretStorage,
-  body: FeedbackBody,
+  request: { path: string; method: 'POST' | 'DELETE'; body?: FeedbackBody },
 ): Promise<FeedbackOutcome> {
   const token = await getAccountToken(secrets);
   if (token === undefined || token === '') return { status: 'signed-out' };
   try {
-    const response = await fetch(`${getCloudWebOrigin()}/api/feedback`, {
-      method: 'POST',
+    const { body } = request;
+    const response = await fetch(`${getCloudWebOrigin()}${request.path}`, {
+      method: request.method,
       headers: {
-        'Content-Type': 'application/json',
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         Authorization: `Bearer ${token}`,
         ...platformRequestHeaders(),
       },
-      body: JSON.stringify({
-        subject: body.subject,
-        message: body.message,
-        metadata: {
-          source: 'vscode',
-          platform: `${vscode.env.appName} ${vscode.version} on ${process.platform}`,
-          version: getExtensionVersion(),
-          user_agent: getExtensionUserAgent(),
-          ...body.metadata,
-        },
-      }),
+      ...(body === undefined
+        ? {}
+        : {
+            body: JSON.stringify({
+              subject: body.subject,
+              message: body.message,
+              metadata: {
+                source: 'vscode',
+                platform: `${vscode.env.appName} ${vscode.version} on ${process.platform}`,
+                version: getExtensionVersion(),
+                user_agent: getExtensionUserAgent(),
+                ...body.metadata,
+              },
+            }),
+          }),
     });
-    return response.ok
-      ? { status: 'sent' }
-      : { status: 'failed', reason: `${PRODUCT_BRAND} answered HTTP ${response.status}` };
+    if (response.ok) return { status: 'sent' };
+    const refusal = await readAccountRefusal(response);
+    return {
+      status: 'failed',
+      reason: refusal?.message ?? `${PRODUCT_BRAND} answered HTTP ${response.status}`,
+    };
   } catch (error) {
     return {
       status: 'failed',
       reason: error instanceof Error ? error.message : `${PRODUCT_BRAND} could not be reached`,
     };
   }
+}
+
+function postFeedback(secrets: vscode.SecretStorage, body: FeedbackBody): Promise<FeedbackOutcome> {
+  return sendFeedbackRequest(secrets, { path: '/api/feedback', method: 'POST', body });
 }
 
 export function submitFeedback(
@@ -86,5 +99,15 @@ export function submitAnswerRating(
       message_id: answer.messageId,
       ...(answer.conversationId === undefined ? {} : { conversation_id: answer.conversationId }),
     },
+  });
+}
+
+export function removeAnswerRating(
+  secrets: vscode.SecretStorage,
+  messageId: string,
+): Promise<FeedbackOutcome> {
+  return sendFeedbackRequest(secrets, {
+    path: `/api/feedback?message_id=${encodeURIComponent(messageId)}`,
+    method: 'DELETE',
   });
 }

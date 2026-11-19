@@ -2,7 +2,7 @@
  * Tests for utility functions in src/utils.ts.
  *
  * Covers: logger, sleep, withTimeout, RateLimiter, domUtils, formUtils,
- * storageUtils, and validators.
+ * the background storageUtils, and validators.
  *
  * @vitest-environment jsdom
  */
@@ -17,9 +17,9 @@ import {
   RateLimiter,
   domUtils,
   formUtils,
-  storageUtils,
   validators,
 } from '../src/utils';
+import { storageUtils } from '../src/features/background/storageUtils';
 
 const _storageData: Record<string, unknown> = {};
 

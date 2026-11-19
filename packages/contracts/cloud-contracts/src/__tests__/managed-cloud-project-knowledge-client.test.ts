@@ -77,6 +77,63 @@ describe('createManagedCloudProjectKnowledgeClient', () => {
     expect(getHeaders).toHaveBeenCalledTimes(3);
   });
 
+  describe('a direct storage upload that carries required headers', () => {
+    const SIGNED_URL =
+      'https://storage.example.test/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption';
+
+    function presignResponse(uploadHeaders: Record<string, string>) {
+      return jsonResponse({
+        uploadUrl: SIGNED_URL,
+        uploadMethod: 'PUT',
+        uploadHeaders,
+        storageKey: STORAGE_KEY,
+      });
+    }
+
+    it('sends every header the server returned, encryption included', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(
+          presignResponse({
+            'Content-Type': 'text/plain',
+            'x-amz-server-side-encryption': 'AES256',
+          }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ file: REGISTERED_FILE }, 201));
+      const uploadFetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+      const client = createManagedCloudProjectKnowledgeClient({
+        sourceSurface: 'desktop',
+        fetchImpl,
+        uploadFetchImpl,
+      });
+
+      await client.upload('project-1', new File(['hello'], 'notes.txt', { type: 'text/plain' }));
+
+      const sent = new Headers((uploadFetchImpl.mock.calls[0] as [string, RequestInit])[1].headers);
+      expect(Object.fromEntries(sent.entries())).toEqual({
+        'content-type': 'text/plain',
+        'x-amz-server-side-encryption': 'AES256',
+      });
+    });
+
+    it('refuses to send an upload that omits a header the url was signed with', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(presignResponse({ 'Content-Type': 'text/plain' }));
+      const uploadFetchImpl = vi.fn();
+      const client = createManagedCloudProjectKnowledgeClient({
+        sourceSurface: 'desktop',
+        fetchImpl,
+        uploadFetchImpl,
+      });
+
+      await expect(
+        client.upload('project-1', new File(['hello'], 'notes.txt', { type: 'text/plain' })),
+      ).rejects.toThrow('x-amz-server-side-encryption');
+      expect(uploadFetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
   it('registers the opaque object key and never sends the legacy public URL', async () => {
     const fetchImpl = vi
       .fn()
@@ -112,6 +169,38 @@ describe('createManagedCloudProjectKnowledgeClient', () => {
       checksumSha256: CHECKSUM,
     });
     expect(String(registration[1].body)).not.toContain('public.example.test');
+  });
+
+  it('hands the registration notice to the caller and still returns the file', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          uploadUrl: 'https://upload.example.test/signed',
+          uploadMethod: 'PUT',
+          uploadHeaders: { 'Content-Type': 'text/plain' },
+          storageKey: STORAGE_KEY,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ file: REGISTERED_FILE, notice: 'Some pages were not read.' }, 201),
+      );
+    const client = createManagedCloudProjectKnowledgeClient({
+      sourceSurface: 'web',
+      fetchImpl,
+      uploadFetchImpl: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    });
+    const onNotice = vi.fn();
+
+    const result = await client.upload(
+      'project-1',
+      new File(['hello'], 'notes.txt', { type: 'text/plain' }),
+      { onNotice },
+    );
+
+    expect(result).toEqual(REGISTERED_FILE);
+    expect(onNotice).toHaveBeenCalledTimes(1);
+    expect(onNotice).toHaveBeenCalledWith('Some pages were not read.');
   });
 
   it('deletes the uploaded object when registration fails', async () => {

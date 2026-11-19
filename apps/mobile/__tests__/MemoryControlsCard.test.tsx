@@ -53,11 +53,7 @@ describe('MemoryControlsCard', () => {
     expect(screen.getByText('Memory')).toBeTruthy();
     expect(screen.getByText('Search and reference chats')).toBeTruthy();
     expect(screen.getByText('Generate memory from chat history')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Let AGI search your other chats on this device for relevant details when answering.',
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText('Search your other chats on this device when answering.')).toBeTruthy();
 
     const switches = screen.UNSAFE_getAllByType(NativeSwitch);
     expect(switches).toHaveLength(4);
@@ -134,11 +130,7 @@ describe('MemoryControlsCard', () => {
       generateMemoryFromHistory: true,
     });
 
-    expect(
-      screen.getByText(
-        'Let AGI search your other Cloud chats for relevant details when answering.',
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText('Search your other Cloud chats when answering.')).toBeTruthy();
     const switches = screen.UNSAFE_getAllByType(NativeSwitch);
     expect(switches[1].props).toMatchObject({ value: false, disabled: false });
     expect(switches[2].props).toMatchObject({ value: true, disabled: false });

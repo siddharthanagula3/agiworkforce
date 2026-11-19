@@ -4,8 +4,11 @@ import { runInlineCommand } from '../core/runInlineCommand';
 import { Config } from '../platform/config';
 import * as api from '../utils/api';
 import * as analytics from '../features/analytics/productAnalytics';
+import * as recovery from '../core/cloudUtilityErrorActions';
 import { t } from '../l10n';
 import { ExtensionContext } from './__mocks__/vscode';
+import { setEditorUtilityChat } from '../features/editor-utilities';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
@@ -137,6 +140,30 @@ describe('inline edit ownership across asynchronous work', () => {
     expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
   }
 
+  it.each(['fix', 'refactor', 'tests', 'docs'] as const)(
+    'runs %s in the chat on a Local default model instead of sending it to AGI Cloud',
+    async (command) => {
+      vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+      vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('a.ts');
+      const completion = vi.spyOn(api, 'chatCompletion');
+      const chat = vi.fn();
+      setEditorUtilityChat(chat);
+      const target = editorFixture();
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = target.editor;
+      try {
+        await runInlineCommand(new ExtensionContext() as never, command);
+      } finally {
+        setEditorUtilityChat(undefined);
+      }
+
+      expect(completion).not.toHaveBeenCalled();
+      expectNoWrite(target);
+      expect(chat).toHaveBeenCalledOnce();
+      expect(String(chat.mock.calls[0]?.[0])).toContain('a.ts, lines 1-1:');
+      expect(String(chat.mock.calls[0]?.[0])).toContain('const x = 0;');
+    },
+  );
+
   it.each(['untrusted', 'credential'] as const)(
     'keeps the existing %s outbound refusal before the request',
     async (refusal) => {
@@ -173,6 +200,28 @@ describe('inline edit ownership across asynchronous work', () => {
       expect(run.completion).not.toHaveBeenCalled();
       expectNoWrite(target);
       expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each(['tests', 'docs'] as const)(
+    'opens the %s result beside the code and never replaces the selection, even with auto-apply on',
+    async (command) => {
+      vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
+        t('applyEdit.applyInline') as never,
+      );
+      vi.spyOn(api, 'chatCompletion').mockResolvedValue(
+        '```typescript\nit("works", () => expect(x).toBe(0));\n```',
+      );
+      const target = editorFixture();
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = target.editor;
+
+      await runInlineCommand(new ExtensionContext() as never, command);
+
+      expectNoWrite(target);
+      expect(target.text()).toBe('const x = 0;');
+      expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining('it("works"') }),
+      );
     },
   );
 
@@ -321,6 +370,69 @@ describe('inline edit ownership across asynchronous work', () => {
     expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     expect(vscode.window.showWarningMessage).toHaveBeenCalled();
     expect(vscode.workspace.openTextDocument).toHaveBeenCalledOnce();
+  });
+
+  describe('retry after a recoverable failure', () => {
+    function failThenRetry(target = editorFixture()) {
+      const completion = vi
+        .spyOn(api, 'chatCompletion')
+        .mockRejectedValueOnce(new Error('fetch failed: ECONNRESET'))
+        .mockResolvedValue('```typescript\nconst x = 1;\n```');
+      let retry: (() => void | PromiseLike<void>) | undefined;
+      vi.spyOn(recovery, 'showCloudUtilityErrorActions').mockImplementation(
+        async (_error, options) => {
+          retry = options.retry;
+        },
+      );
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = target.editor;
+      const first = runInlineCommand(new ExtensionContext() as never, 'fix');
+      return {
+        target,
+        completion,
+        first,
+        retry: async () => {
+          await first;
+          if (retry === undefined) throw new Error('The failure must offer a retry');
+          await retry();
+        },
+      };
+    }
+
+    it('retries the file and range the failed command started on, not the active editor', async () => {
+      const run = failThenRetry();
+      const other = editorFixture('/workspace/b.ts');
+      other.change('const secret = 42;');
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = other.editor;
+      other.editor.selection = new vscode.Selection(0, 0, 0, 18);
+
+      await run.retry();
+
+      expect(run.completion).toHaveBeenCalledTimes(2);
+      const sent = JSON.stringify(run.completion.mock.calls[1]?.[1]);
+      expect(sent).toContain('const x = 0;');
+      expect(sent).not.toContain('secret');
+      expect(other.edit).not.toHaveBeenCalled();
+      expect(other.text()).toBe('const secret = 42;');
+      expect(run.target.text()).toBe('const x = 1;');
+    });
+
+    it.each(['changed', 'closed'] as const)(
+      'refuses to retry and sends nothing when the original file was %s',
+      async (change) => {
+        const run = failThenRetry();
+        await run.first;
+        if (change === 'changed') run.target.change('const x = 7;');
+        else run.target.close();
+
+        await run.retry();
+
+        expect(run.completion).toHaveBeenCalledOnce();
+        expect(run.target.edit).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+          expect.stringContaining('run it again'),
+        );
+      },
+    );
   });
 
   it('records an accepted edit if cancellation arrives after the host committed it', async () => {

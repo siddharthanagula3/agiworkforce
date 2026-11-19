@@ -21,21 +21,26 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useFonts } from 'expo-font';
-import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
+import {
+  isTermsAnswerPending,
+  useTermsAcceptanceStore,
+} from '@/src/features/auth/store/termsAcceptanceStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
 import {
   activateCloudAccount,
+  hasCloudAccountOwner,
   invalidateCloudAccount,
+  recordedCloudAccountOwnerId,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
-  beginPushTokenAccountSession,
-  clearPushTokenAccountSession,
-} from '@/src/features/auth/services/pushTokenAccountLifecycle';
+  isSignInOwedForEndedSession,
+  oweSignInForEndedSession,
+  settleSignInForEndedSession,
+} from '@/src/features/auth/services/endedSession';
+import { usePushTokenAccountRegistration } from '@/src/features/auth/hooks/usePushTokenAccountRegistration';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
@@ -46,23 +51,26 @@ import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import {
+  CLERK_LOAD_SETTLE_MS,
   CLERK_NATIVE_AUTH_OPTIONS,
   CLERK_PUBLISHABLE_KEY,
+  holdTokensUntilClerkAnswers,
   setClerkTokenMinter,
 } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
-import { clearAuthSession, getAuthToken } from '@/services/authSession';
+import { clearAuthSession } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
-import { syncDeviceLanguage } from '@/src/i18n';
+import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
 import {
   parseSharedFilesParam,
   stageSharedFileAttachments,
 } from '@/src/features/share-preview/sharedAttachments';
 import {
+  beginCloudPostAuthIntent,
   clearPostAuthIntent,
   consumePostAuthDestination,
 } from '@/src/features/auth/services/postAuthIntent';
@@ -72,9 +80,7 @@ export { default as ErrorBoundary } from './error';
 
 setUuidV7RandomSource((byteCount) => Crypto.getRandomBytes(byteCount));
 import {
-  registerForPushNotifications,
   setupNotificationListeners,
-  setPushAccountContext,
   handleInitialNotification,
   setNavigatorReady,
   setSignedIn,
@@ -82,15 +88,20 @@ import {
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
-import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
+import {
+  CLOUD_SIGN_IN_RETURN_PATH,
+  resolveRootRedirect,
+} from '@/src/features/auth/services/rootRouting';
+import { isCloudAccountAdditionOpenFor } from '@/src/features/auth/services/accountAddition';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { ToastHost } from '@/src/shared/components/Toast';
-import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
+import { CloudSyncErrorNotice } from '@/src/features/edge-cases/components/CloudSyncErrorNotice';
 import { CapabilityProvider } from '@/src/lib/Capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
+import { useLocalModelMemoryRelease } from '@/src/features/model-picker/useLocalModelMemoryRelease';
 import '../global.css';
 
 holdLaunchSplash();
@@ -114,9 +125,8 @@ function queueBackgroundFetchLifecycle(operation: () => Promise<void>): Promise<
 // launch, a disabled instance). Everything keyed off it then reads "Checking…"
 // for the life of the process and the rows it gates do nothing when tapped.
 // Signed-out is the fail-closed answer for Cloud and it is the truthful one for
-// a Local-only session, so settle on it rather than waiting forever.
-const CLERK_LOAD_SETTLE_MS = 8_000;
-
+// a Local-only session, so settle on it after CLERK_LOAD_SETTLE_MS rather than
+// waiting forever.
 function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn, isLoaded } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
@@ -128,8 +138,10 @@ function ClerkTokenBridge() {
 
   useEffect(() => {
     if (isLoaded) return;
+    holdTokensUntilClerkAnswers();
     const settle = setTimeout(() => {
       console.warn('[RootLayout] Clerk did not load, settling on signed out');
+      setClerkTokenMinter(null, null);
       setClerkUserId(null);
       setClerkSignedIn(false);
       setCloudAccess(false);
@@ -150,18 +162,22 @@ function ClerkTokenBridge() {
         void useTermsAcceptanceStore.getState().verify(userId);
       }
       if (termsUserId !== userId || termsStatus !== 'accepted') {
+        if (recordedCloudAccountOwnerId() !== userId) useRolloutStore.getState().clear();
         if (useAuthStore.getState().isClerkSignedIn) {
           invalidateCloudAccount();
           clearLocalCloudAccountState();
         }
         setCloudAccess(false);
         setClerkSignedIn(false);
-        setClerkLoaded(true);
+        if (!isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId)) {
+          setClerkLoaded(true);
+        }
         return;
       }
       const owner = activateCloudAccount(userId);
       if (owner.changed) {
         clearLocalCloudAccountState();
+        useRolloutStore.getState().clear();
         startCloudSyncLoop();
       }
       setCloudAccess(true);
@@ -178,6 +194,9 @@ function ClerkTokenBridge() {
       void refreshRolloutRings();
       void registerAppTransactionForAccount(userId);
     } else {
+      // Every sign-out the person chooses retires the Cloud owner before Clerk
+      // answers, so an owner still recorded here means the session ended under them.
+      if (hasCloudAccountOwner()) oweSignInForEndedSession();
       useRolloutStore.getState().clear();
       clearPostAuthIntent();
       setClerkTokenMinter(null, null);
@@ -202,6 +221,21 @@ function ClerkTokenBridge() {
     termsStatus,
   ]);
 
+  // Loaded with signed-in false reads as signed out, and the chat tab answers
+  // that by persisting Local Mode. A session whose Terms answer is still in
+  // flight is neither, so it stays unloaded, bounded by the same settle window.
+  const termsAnswerPending =
+    isLoaded &&
+    isSignedIn === true &&
+    typeof userId === 'string' &&
+    isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId);
+
+  useEffect(() => {
+    if (!termsAnswerPending) return;
+    const settle = setTimeout(() => setClerkLoaded(true), CLERK_LOAD_SETTLE_MS);
+    return () => clearTimeout(settle);
+  }, [termsAnswerPending, setClerkLoaded]);
+
   useEffect(() => {
     return () => {
       clearPostAuthIntent();
@@ -216,16 +250,12 @@ function ClerkTokenBridge() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Newsreader_500Medium,
-    Newsreader_600SemiBold,
-  });
   const [storageStatus, setStorageStatus] = useState<'pending' | 'ready' | 'unavailable'>(
     'pending',
   );
   const isMmkvReady = storageStatus === 'ready';
 
-  useLaunchSplashRelease(storageStatus !== 'pending' && (fontsLoaded || fontError !== null));
+  useLaunchSplashRelease(storageStatus !== 'pending');
   const isLoading = useAuthStore((s) => s.isLoading);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);
@@ -253,6 +283,7 @@ export default function RootLayout() {
       themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
     );
   }, [themeMode]);
+  useLocalModelMemoryRelease();
   const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   const resetAppLock = useCallback(() => {
@@ -266,6 +297,7 @@ export default function RootLayout() {
           style: 'destructive',
           onPress: () => {
             void (async () => {
+              invalidateCloudAccount();
               await clearAuthSession();
               await clearBiometricFlag();
             })().catch((err) => {
@@ -281,10 +313,10 @@ export default function RootLayout() {
     setStorageStatus('pending');
     initMmkvEncryption()
       .then(async () => {
-        const language = await syncDeviceLanguage();
+        const language = await restoreStoredLanguage();
         if (language.directionChanged) {
-          void reloadAppAsync('Apply device language direction').catch((err) => {
-            console.warn('[RootLayout] device language direction reload failed:', err);
+          void reloadAppAsync('Apply app language direction').catch((err) => {
+            console.warn('[RootLayout] app language direction reload failed:', err);
             setStorageStatus('ready');
           });
           return;
@@ -372,42 +404,7 @@ export default function RootLayout() {
     return removeListeners;
   }, [isInitialized]);
 
-  useEffect(() => {
-    if (
-      !FEATURES.auth ||
-      !FEATURES.cloudChat ||
-      !isClerkSignedIn ||
-      !clerkUserId ||
-      !isInitialized
-    ) {
-      if (isInitialized && (!isClerkSignedIn || !clerkUserId)) {
-        setPushAccountContext(null);
-        void clearPushTokenAccountSession().catch((err) => {
-          console.warn('[RootLayout] Push-token account cleanup failed:', err);
-        });
-      }
-      return;
-    }
-
-    let disposed = false;
-    void beginPushTokenAccountSession(clerkUserId, getAuthToken)
-      .then(async (accountContext) => {
-        if (!accountContext || disposed || !accountContext.isCurrent()) return;
-        if (!isCloud) return;
-        setPushAccountContext(accountContext);
-        await registerForPushNotifications(accountContext);
-      })
-      .catch((err) => {
-        if (!disposed) {
-          console.warn('[RootLayout] Push notification setup failed:', err);
-        }
-      });
-
-    return () => {
-      disposed = true;
-      setPushAccountContext(null);
-    };
-  }, [isClerkSignedIn, clerkUserId, isCloud, isInitialized]);
+  usePushTokenAccountRegistration({ isClerkSignedIn, clerkUserId, isCloud, isInitialized });
 
   // Polling for cloud approvals has nothing to poll outside Cloud Mode, and
   // nothing to report when the user has turned background alerts off
@@ -451,7 +448,7 @@ export default function RootLayout() {
       isAgeGateConfirmed() &&
       segments[0] !== '(auth)'
     ) {
-      router.replace('/(auth)/login');
+      router.replace(beginCloudPostAuthIntent());
       return;
     }
     const redirect = resolveRootRedirect({
@@ -461,7 +458,10 @@ export default function RootLayout() {
       isClerkSignedIn,
       onboardingDone: Boolean(storage.getString('onboarding-done')),
       ageGateConfirmed: isAgeGateConfirmed(),
+      signInOwedForEndedSession: isSignInOwedForEndedSession(),
+      addingAccount: isCloudAccountAdditionOpenFor(clerkUserId),
     });
+    if (redirect?.pathname === CLOUD_SIGN_IN_RETURN_PATH) settleSignInForEndedSession();
     if (redirect) {
       const destination =
         redirect.pathname === '/(app)' && isClerkSignedIn ? consumePostAuthDestination() : null;
@@ -521,12 +521,14 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isInitialized) return;
     return subscribeToIOSShareInbox(
-      ({ text, truncated, files }) => {
+      ({ receiptId, text, truncated, files, unavailableFileCount }) => {
         const handoffKey = stageSharedFileAttachments(files);
         router.push(
           `/(app)/share-preview?text=${encodeURIComponent(text)}${
             truncated ? '&nativeTruncated=1' : ''
-          }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}` as Parameters<
+          }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}${
+            receiptId ? `&receipt=${encodeURIComponent(receiptId)}` : ''
+          }${unavailableFileCount > 0 ? `&omittedFiles=${unavailableFileCount}` : ''}` as Parameters<
             typeof router.push
           >[0],
         );
@@ -617,13 +619,14 @@ export default function RootLayout() {
         const text = getParam('text');
         const nativeTruncated = getParam('truncated') === '1';
         const handoffKey = stageSharedFileAttachments(parseSharedFilesParam(getParam('files')));
-        if ((text && text.trim()) || handoffKey) {
+        const omittedFiles = getParam('omitted');
+        if ((text && text.trim()) || handoffKey || omittedFiles) {
           router.push(
             `/(app)/share-preview?text=${encodeURIComponent(text ?? '')}${
               nativeTruncated ? '&nativeTruncated=1' : ''
-            }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}` as Parameters<
-              typeof router.push
-            >[0],
+            }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}${
+              omittedFiles ? `&omittedFiles=${encodeURIComponent(omittedFiles)}` : ''
+            }` as Parameters<typeof router.push>[0],
           );
         }
         break;
@@ -755,7 +758,7 @@ export default function RootLayout() {
               </TextScaleBoundary>
             </ThemeVars>
             <OfflineBanner />
-            <CloudSyncErrorBanner />
+            <CloudSyncErrorNotice />
             <ToastHost />
             <AccountSecurityVerificationPrompt />
             {/* The lock covers the app, it does not replace it: unmounting the

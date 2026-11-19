@@ -178,23 +178,39 @@ export function resolveResearchConnectorPolicy(
   return { allowed, refused };
 }
 
-export type ResearchConnectorOutcome = 'read' | 'unsearchable' | 'failed' | 'unavailable';
+export type ResearchConnectorOutcome =
+  'read' | 'partial' | 'unsearchable' | 'failed' | 'unavailable';
 
 export interface ResearchConnectorRead {
   connectorId: string;
   label: string;
   outcome: ResearchConnectorOutcome;
   sources: ResearchFileSource[];
+  searchesAsked?: number;
+  searchesAnswered?: number;
 }
 
-const CONNECTOR_OUTCOME_NOTES: Record<Exclude<ResearchConnectorOutcome, 'read'>, string> = {
+const CONNECTOR_OUTCOME_NOTES: Record<
+  Exclude<ResearchConnectorOutcome, 'read' | 'partial'>,
+  string
+> = {
   unsearchable: 'this app offers no search that research can use',
   failed: 'the search failed',
   unavailable: 'this app is not connected to this account',
 };
 
+function partialSearchNote(read: ResearchConnectorRead): string {
+  const asked = read.searchesAsked ?? 0;
+  const answered = read.searchesAnswered ?? 0;
+  return asked > answered
+    ? `only ${answered} of ${asked} searches in this app were answered, so its results may be incomplete`
+    : 'some searches in this app were not answered, so its results may be incomplete';
+}
+
 export function researchConnectorOutcomeNote(read: ResearchConnectorRead): string | null {
-  return read.outcome === 'read' ? null : CONNECTOR_OUTCOME_NOTES[read.outcome];
+  if (read.outcome === 'read') return null;
+  if (read.outcome === 'partial') return partialSearchNote(read);
+  return CONNECTOR_OUTCOME_NOTES[read.outcome];
 }
 
 export function researchConnectorSourcesPrompt(reads: readonly ResearchConnectorRead[]): string {
@@ -202,8 +218,14 @@ export function researchConnectorSourcesPrompt(reads: readonly ResearchConnector
   const searched = reads
     .filter((read) => read.outcome === 'read')
     .map((read) => `${read.label} (${read.sources.length} found)`);
+  const partial = reads
+    .filter((read) => read.outcome === 'partial')
+    .map(
+      (read) =>
+        `${read.label} (${read.sources.length} found; ${researchConnectorOutcomeNote(read)})`,
+    );
   const unread = reads
-    .filter((read) => read.outcome !== 'read')
+    .filter((read) => read.outcome !== 'read' && read.outcome !== 'partial')
     .map((read) => `${read.label} (${researchConnectorOutcomeNote(read)})`);
   const sources = reads.flatMap((read) =>
     read.sources.map((source) => ({ ...source, label: read.label })),
@@ -219,6 +241,9 @@ export function researchConnectorSourcesPrompt(reads: readonly ResearchConnector
   return [
     'The user chose connected apps as sources for this research, and they were searched for its planned questions.',
     searched.length > 0 ? `Searched: ${searched.join(', ')}.` : '',
+    partial.length > 0
+      ? `Only partly searched: ${partial.join('; ')}. Say so in the report rather than presenting those results as complete.`
+      : '',
     unread.length > 0
       ? `Could not be searched: ${unread.join('; ')}. Say so in the report rather than substituting a web result for them.`
       : '',

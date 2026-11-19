@@ -48,7 +48,10 @@ import {
   readModelSubstitution,
   type ModelSubstitution,
 } from '@/src/features/chat/utils/fallbackNotice';
-import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
+import {
+  createManagedChatIdempotencyKey,
+  type ManagedChatPurpose,
+} from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudAgentRunClient,
   parseToolStatusDelta,
@@ -68,6 +71,7 @@ import {
   type ManagedCloudAgentRunReference,
   type FreeQuotaMessageContent,
 } from '@agiworkforce/cloud-contracts';
+import { getDeviceTimeZone } from '../src/platform/deviceTimeZone';
 import { platformRequestHeaders } from '../src/platform/platformHeaders';
 import { phoneDeviceHostHeaders } from '@/src/features/integrations/services/phoneDeviceHost';
 
@@ -415,6 +419,7 @@ interface InitialStreamRequest {
   connector_tools_enabled?: boolean;
   disabled_connector_ids?: string[];
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
+  client_timezone?: string;
 }
 
 interface ApprovalResumeRequest {
@@ -453,6 +458,8 @@ export interface FreeQuotaStreamRequest {
   }>;
 }
 
+type CompletionPurpose = Extract<ManagedChatPurpose, 'send' | 'continue'>;
+
 async function attemptStream(
   body:
     | InitialStreamRequest
@@ -465,6 +472,7 @@ async function attemptStream(
   account: CloudAccountEpoch,
   path: string = COMPLETIONS_PATH,
   sessionRecovered = false,
+  purpose: CompletionPurpose = 'send',
 ): Promise<boolean> {
   assertCloudAccountEpochCurrent(account);
   const token = await getAuthToken();
@@ -504,7 +512,7 @@ async function attemptStream(
             path === TOOL_INPUT_RESUME_PATH ||
             path === DEVICE_STEP_RESUME_PATH
               ? 'tool-resume'
-              : 'send',
+              : purpose,
           operationId,
         }),
         Authorization: `Bearer ${token}`,
@@ -524,7 +532,7 @@ async function attemptStream(
       const recovered = await recoverStreamSession(account);
       assertCloudAccountEpochCurrent(account);
       if (recovered) {
-        return attemptStream(body, callbacks, signal, account, path, true);
+        return attemptStream(body, callbacks, signal, account, path, true, purpose);
       }
     }
 
@@ -587,6 +595,7 @@ async function attemptStream(
 
   for await (const event of readServerSentEvents(response, {
     acceptUnterminatedFinalFrame: true,
+    signal,
     onChunk: () => {
       assertCloudAccountEpochCurrent(account);
       callbacks.onActivity?.();
@@ -697,8 +706,19 @@ function withPickerSpeed(body: InitialStreamRequest): InitialStreamRequest {
   return speed ? { ...body, speed } : body;
 }
 
+function withDeviceTimeZone(body: InitialStreamRequest): InitialStreamRequest {
+  if (body.client_timezone) return body;
+  const clientTimeZone = getDeviceTimeZone();
+  return clientTimeZone ? { ...body, client_timezone: clientTimeZone } : body;
+}
+
 export interface StreamChatOptions {
   ignorePickerSpeed?: boolean;
+  /**
+   * The gateway keeps its adaptive response budget off for a `continue`, so a
+   * turn cut off by that budget is not cut off again at the same point.
+   */
+  purpose?: CompletionPurpose;
 }
 
 export async function streamChat(
@@ -731,7 +751,7 @@ export async function streamChat(
     return;
   }
 
-  const request = options.ignorePickerSpeed ? body : withPickerSpeed(body);
+  const request = withDeviceTimeZone(options.ignorePickerSpeed ? body : withPickerSpeed(body));
   let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
   let combinedSignal = signal
@@ -907,7 +927,15 @@ export async function streamChat(
     }
 
     try {
-      const completed = await attemptStream(request, timedCallbacks, combinedSignal, account);
+      const completed = await attemptStream(
+        request,
+        timedCallbacks,
+        combinedSignal,
+        account,
+        COMPLETIONS_PATH,
+        false,
+        options.purpose,
+      );
       if (completed) {
         clearTimeout(timeoutId);
         return;

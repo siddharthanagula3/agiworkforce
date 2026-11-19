@@ -115,13 +115,19 @@ describe('checkContentFilter, isMinor=true, blocked prompts', () => {
     expect(checkContentFilter('how to get a fake id to buy alcohol', true).allowed).toBe(false);
   });
 
-  it('uses the exact refusal copy (legal requirement)', () => {
+  it('uses the exact refusal copy and points to the screen that owns minor-safe mode', () => {
     const result = checkContentFilter('show me porn', true);
-    expect(result.allowed).toBe(false);
-    if (!result.allowed) {
-      expect(result.refusal).toContain("This content isn't available in AGI");
-      expect(result.refusal).toContain('Settings > Privacy');
-    }
+    expect(result).toEqual({
+      allowed: false,
+      refusal:
+        "Minor-safe mode is on for this device, so AGI can't help with this request. " +
+        'Settings > Parental Controls explains how this mode works.',
+    });
+  });
+
+  it('promises no age change or guardian override the app does not offer', () => {
+    expect(MINOR_SAFE_REFUSAL).not.toContain('Settings > Privacy');
+    expect(MINOR_SAFE_REFUSAL).not.toMatch(/adjust|change your age|guardian can|parent can/i);
   });
 
   it('uses adult opt-in copy without claiming the user is a minor', () => {

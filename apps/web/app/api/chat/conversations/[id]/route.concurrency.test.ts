@@ -140,6 +140,41 @@ describe('conversation optimistic concurrency', () => {
     expect(response.status).toBe(404);
   });
 
+  it('writes an automatic title only over the title it expected', async () => {
+    mocks.query.mockResolvedValue([{ ...conversationRow, server_version: '45' }]);
+
+    const response = await PUT(put({ title: 'Auto', expectedTitle: 'New Chat' }), context);
+
+    expect(response.status).toBe(200);
+    expect(updateCall()?.[0]).toContain('title = $22::text');
+    expect(updateCall()?.[1][21]).toBe('New Chat');
+  });
+
+  it('leaves a title the owner already set and answers with it', async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      /update web_conversations/.test(sql)
+        ? []
+        : /title <> \$4/.test(sql)
+          ? [{ ...conversationRow, server_version: '46' }]
+          : [],
+    );
+
+    const response = await PUT(put({ title: 'Auto', expectedTitle: 'New Chat' }), context);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe('"46"');
+    const body = (await response.json()) as { conversation: { title: string } };
+    expect(body.conversation.title).toBe('Renamed elsewhere');
+  });
+
+  it('does not guard a rename that names no expected title', async () => {
+    mocks.query.mockResolvedValue([{ ...conversationRow, server_version: '47' }]);
+
+    await PUT(put({ title: 'Mine' }), context);
+
+    expect(updateCall()?.[1][21]).toBeNull();
+  });
+
   it('rejects an If-Match that is not a version', async () => {
     const response = await PUT(put({ title: 'Mine' }, { 'If-Match': '"abc"' }), context);
 

@@ -4,6 +4,7 @@ import {
   listInstalledModels,
   markInstalledModelUsed,
 } from '../../../storage/installedModels';
+import { liveInstalledModels } from '../../../services/executorchModels';
 import {
   DEFAULT_LOCAL_MODEL_ID,
   getAutoModeById,
@@ -72,7 +73,8 @@ async function resolveAutoModelId(
 }
 
 export async function resolveLocalModelRef(requestedModelId: string): Promise<LocalModelRef> {
-  const installed = await listInstalledModels().catch(() => []);
+  const recorded = await listInstalledModels().catch(() => []);
+  const installed = await liveInstalledModels(recorded).catch(() => recorded);
   const installedIds = new Set(installed.map((model) => model.id));
   const autoMode = getAutoModeById(requestedModelId);
   const modelId = autoMode
@@ -104,7 +106,10 @@ export async function resolveLocalModelRef(requestedModelId: string): Promise<Lo
 
   const installedModel =
     installed.find((entry) => entry.id === model.id) ??
-    (await getInstalledModel(model.id).catch(() => null));
+    (await getInstalledModel(model.id)
+      .then((entry) => (entry ? liveInstalledModels([entry]) : []))
+      .then((entries) => entries[0] ?? null)
+      .catch(() => null));
 
   if (installedModel?.local_path) {
     return {

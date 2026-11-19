@@ -1,4 +1,8 @@
-import { formatBillingMoney } from '@agiworkforce/types';
+import {
+  billingCurrencyTerms,
+  formatBillingMoney,
+  type PriceTaxBehavior,
+} from '@agiworkforce/types';
 
 export { formatBillingMoney, formatUsdAmount } from '@agiworkforce/types';
 
@@ -32,6 +36,15 @@ export function formatRecurringMoney(
 ): string {
   const amount = formatBillingMoney(minorUnits, currency, { trimWholeUnits: true });
   return `${amount}/${interval === 'yearly' ? 'year' : 'month'}`;
+}
+
+export function formatRenewalTerms(
+  terms: { amountCents: number; currency: string; taxBehavior: PriceTaxBehavior },
+  interval: 'monthly' | 'yearly',
+): string {
+  const price = formatRecurringMoney(terms.amountCents, terms.currency, interval);
+  if (terms.taxBehavior === 'exclusive') return `${price} plus tax`;
+  return `${price} including ${billingCurrencyTerms(terms.currency)?.includedTax?.label ?? 'tax'}`;
 }
 
 export function formatRatio(value: number): string {

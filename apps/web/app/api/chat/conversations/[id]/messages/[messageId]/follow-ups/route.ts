@@ -17,7 +17,8 @@ type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 function cachedSuggestions(metadata: Record<string, unknown> | null): string[] | null {
   const stored = metadata?.[FOLLOW_UP_SUGGESTIONS_METADATA_KEY];
   if (!Array.isArray(stored)) return null;
-  return stored.filter((entry): entry is string => typeof entry === 'string');
+  const suggestions = stored.filter((entry): entry is string => typeof entry === 'string');
+  return suggestions.length > 0 ? suggestions : null;
 }
 
 async function handleGenerateFollowUps(request: NextRequest, context: RouteContext) {
@@ -75,13 +76,31 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
     signal: request.signal,
   });
 
+  if (suggestions.length === 0) {
+    const [current] = await db.query<{ metadata: Record<string, unknown> | null }>(
+      `select metadata
+         from web_messages
+        where id = $1 and conversation_id = $2 and deleted_at is null
+        limit 1`,
+      [messageId, conversationId],
+    );
+    const winner = cachedSuggestions(current?.metadata ?? null);
+    if (winner) return NextResponse.json({ suggestions: winner, cached: true });
+    return NextResponse.json({ suggestions, cached: false });
+  }
+
   // Cached on the turn that produced them so a reload never pays for a second
-  // generation. A failed write costs a regeneration, never the answer.
+  // generation. A failed write costs a regeneration, never the answer. An empty
+  // result is a refusal or an unusable reply, never a set worth keeping, and a
+  // set another request already saved is never replaced.
   try {
     await db.execute(
       `update web_messages
           set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
-        where id = $2 and conversation_id = $3`,
+        where id = $2 and conversation_id = $3
+          and coalesce(jsonb_array_length(
+                case when jsonb_typeof(metadata -> '${FOLLOW_UP_SUGGESTIONS_METADATA_KEY}') = 'array'
+                     then metadata -> '${FOLLOW_UP_SUGGESTIONS_METADATA_KEY}' end), 0) = 0`,
       [
         JSON.stringify({ [FOLLOW_UP_SUGGESTIONS_METADATA_KEY]: suggestions }),
         messageId,

@@ -29,6 +29,7 @@ export interface AgentEditor {
   change: (patch: Partial<AgentConfig>) => void;
   save: () => Promise<ManagedCloudAgent | null>;
   replaceAgent: (agent: ManagedCloudAgent) => void;
+  syncAgent: (agent: ManagedCloudAgent) => void;
   reload: () => void;
 }
 
@@ -80,6 +81,10 @@ export function useAgentEditor(agentId: string | null, enabled: boolean): AgentE
     setDraft(agentDraftFromAgent(next));
   }, []);
 
+  const syncAgent = useCallback((next: ManagedCloudAgent) => {
+    setAgent(next);
+  }, []);
+
   const save = useCallback(async () => {
     if (saving || problem || !editable) return null;
     const account = captureCloudAccountEpoch();
@@ -113,6 +118,7 @@ export function useAgentEditor(agentId: string | null, enabled: boolean): AgentE
     change,
     save,
     replaceAgent,
+    syncAgent,
     reload: () => setAttempt((value) => value + 1),
   };
 }

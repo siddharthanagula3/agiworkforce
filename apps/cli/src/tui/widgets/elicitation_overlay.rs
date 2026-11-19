@@ -64,6 +64,13 @@ pub enum FieldKind {
     },
     /// Boolean toggle (true / false).
     Bool { value: bool },
+    /// JSON number or integer, edited as text and submitted as a JSON number.
+    Number {
+        value: String,
+        integer: bool,
+        minimum: Option<f64>,
+        maximum: Option<f64>,
+    },
 }
 
 /// One form field with its name and interactive state.
@@ -76,10 +83,24 @@ pub struct FormField {
     pub sensitive: bool,
 }
 
+fn parse_number(text: &str, integer: bool) -> Option<serde_json::Number> {
+    let text = text.trim();
+    if let Ok(whole) = text.parse::<i64>() {
+        return Some(serde_json::Number::from(whole));
+    }
+    if integer {
+        return None;
+    }
+    text.parse::<f64>()
+        .ok()
+        .and_then(serde_json::Number::from_f64)
+}
+
 impl FormField {
-    /// Serialize current value to JSON for the response payload.
-    fn to_json(&self) -> serde_json::Value {
-        match &self.kind {
+    /// Serialize current value to JSON for the response payload. An optional
+    /// number left empty is omitted rather than sent as an empty string.
+    fn to_json(&self) -> Option<serde_json::Value> {
+        Some(match &self.kind {
             FieldKind::Text { value } => serde_json::Value::String(value.clone()),
             FieldKind::Enum { options, selected } => {
                 serde_json::Value::String(options[*selected].clone())
@@ -95,13 +116,46 @@ impl FormField {
                     .collect(),
             ),
             FieldKind::Bool { value } => serde_json::Value::Bool(*value),
+            FieldKind::Number { value, integer, .. } => {
+                serde_json::Value::Number(parse_number(value, *integer)?)
+            }
+        })
+    }
+
+    /// Why the typed value cannot be submitted as this field's JSON type.
+    fn number_problem(&self) -> Option<String> {
+        let FieldKind::Number {
+            value,
+            integer,
+            minimum,
+            maximum,
+        } = &self.kind
+        else {
+            return None;
+        };
+        if value.trim().is_empty() && !self.required {
+            return None;
         }
+        let Some(number) = parse_number(value, *integer).and_then(|number| number.as_f64()) else {
+            return Some(if *integer {
+                "enter a whole number".to_string()
+            } else {
+                "enter a number".to_string()
+            });
+        };
+        if let Some(minimum) = minimum.filter(|minimum| number < *minimum) {
+            return Some(format!("at least {minimum}"));
+        }
+        if let Some(maximum) = maximum.filter(|maximum| number > *maximum) {
+            return Some(format!("at most {maximum}"));
+        }
+        None
     }
 
     /// One-line text representation for the text renderer.
     fn render_value(&self) -> String {
         match &self.kind {
-            FieldKind::Text { value } => {
+            FieldKind::Text { value } | FieldKind::Number { value, .. } => {
                 if value.is_empty() {
                     "___________________________".to_string()
                 } else if self.sensitive {
@@ -278,6 +332,12 @@ fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
                             }
                         }
                     }
+                    Some(numeric @ ("integer" | "number")) => FieldKind::Number {
+                        value: default_text(prop),
+                        integer: numeric == "integer",
+                        minimum: prop.get("minimum").and_then(|bound| bound.as_f64()),
+                        maximum: prop.get("maximum").and_then(|bound| bound.as_f64()),
+                    },
                     _ => FieldKind::Text {
                         value: default_text(prop),
                     },
@@ -447,7 +507,9 @@ impl ElicitationOverlayState {
     fn collect_content(&self) -> serde_json::Value {
         let mut map = serde_json::Map::new();
         for f in &self.fields {
-            map.insert(f.name.clone(), f.to_json());
+            if let Some(value) = f.to_json() {
+                map.insert(f.name.clone(), value);
+            }
         }
         serde_json::Value::Object(map)
     }
@@ -456,6 +518,17 @@ impl ElicitationOverlayState {
         if button_idx == BUTTON_ACCEPT && !self.scroll.end_was_shown() {
             self.refused_unread = true;
             return ViewAction::Continue;
+        }
+        if button_idx == BUTTON_ACCEPT {
+            if let Some(index) = self
+                .fields
+                .iter()
+                .position(|field| field.number_problem().is_some())
+            {
+                self.focus = Focus::Field(index);
+                self.reveal_focus.set(true);
+                return ViewAction::Continue;
+            }
         }
         let response = match button_idx {
             BUTTON_ACCEPT if self.mode == ElicitationMode::Url => {
@@ -483,11 +556,15 @@ impl ElicitationOverlayState {
             "  "
         };
         let suffix = match &field.kind {
-            FieldKind::Enum { .. } => "  ← / → to cycle",
-            FieldKind::MultiEnum { .. } => "  ← / → move, Space toggle",
-            FieldKind::Bool { .. } => "  Space to toggle",
-            FieldKind::Text { .. } if field.sensitive => "  hidden",
-            FieldKind::Text { .. } => "",
+            FieldKind::Enum { .. } => "  ← / → to cycle".to_string(),
+            FieldKind::MultiEnum { .. } => "  ← / → move, Space toggle".to_string(),
+            FieldKind::Bool { .. } => "  Space to toggle".to_string(),
+            FieldKind::Text { .. } if field.sensitive => "  hidden".to_string(),
+            FieldKind::Text { .. } => String::new(),
+            FieldKind::Number { .. } => field
+                .number_problem()
+                .map(|problem| format!("  {problem}"))
+                .unwrap_or_default(),
         };
         let req_mark = if field.required { "*" } else { " " };
         format!(
@@ -814,7 +891,9 @@ impl InteractiveView for ElicitationOverlayState {
                 if let Focus::Field(i) = self.focus {
                     if i < self.fields.len() {
                         match &mut self.fields[i].kind {
-                            FieldKind::Text { value } => value.push(c),
+                            FieldKind::Text { value } | FieldKind::Number { value, .. } => {
+                                value.push(c)
+                            }
                             FieldKind::MultiEnum {
                                 selected, cursor, ..
                             } if c == ' ' => {
@@ -832,7 +911,9 @@ impl InteractiveView for ElicitationOverlayState {
             KeyAction::Backspace => {
                 if let Focus::Field(i) = self.focus {
                     if i < self.fields.len() {
-                        if let FieldKind::Text { value } = &mut self.fields[i].kind {
+                        if let FieldKind::Text { value } | FieldKind::Number { value, .. } =
+                            &mut self.fields[i].kind
+                        {
                             value.pop();
                         }
                     }
@@ -1339,6 +1420,142 @@ mod tests {
 
         let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
         assert_eq!(content["api_key"], "my-secret-token");
+    }
+
+    fn number_request() -> ElicitationRequest {
+        ElicitationRequest {
+            message: "How many".into(),
+            requested_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "quantity": {"type": "integer", "minimum": 1, "maximum": 10, "default": 2},
+                    "ratio": {"type": "number"}
+                },
+                "required": ["quantity"]
+            }),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
+        }
+    }
+
+    fn field_index(s: &ElicitationOverlayState, name: &str) -> usize {
+        s.fields.iter().position(|f| f.name == name).unwrap()
+    }
+
+    fn type_into(s: &mut ElicitationOverlayState, name: &str, text: &str) {
+        s.focus = Focus::Field(field_index(s, name));
+        for c in text.chars() {
+            s.handle_key(KeyAction::Char(c));
+        }
+    }
+
+    fn press_accept(s: &mut ElicitationOverlayState) {
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        draw(s, 90, 30);
+        s.handle_key(KeyAction::Enter);
+    }
+
+    #[test]
+    fn an_unchanged_numeric_default_is_accepted_as_a_json_number() {
+        let mut s = ElicitationOverlayState::default();
+        s.open("srv", number_request());
+
+        press_accept(&mut s);
+
+        let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
+        assert_eq!(content["quantity"], serde_json::json!(2));
+        assert!(content["quantity"].is_i64());
+        assert!(content.get("ratio").is_none());
+    }
+
+    #[test]
+    fn typed_numbers_are_submitted_with_their_schema_type() {
+        let mut s = ElicitationOverlayState::default();
+        s.open("srv", number_request());
+        s.focus = Focus::Field(field_index(&s, "quantity"));
+        s.handle_key(KeyAction::Backspace);
+        type_into(&mut s, "quantity", "7");
+        type_into(&mut s, "ratio", "0.25");
+
+        press_accept(&mut s);
+
+        let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
+        assert_eq!(content["quantity"], serde_json::json!(7));
+        assert_eq!(content["ratio"], serde_json::json!(0.25));
+    }
+
+    #[test]
+    fn a_value_that_is_not_a_number_blocks_accept_and_names_the_problem() {
+        let mut s = ElicitationOverlayState::default();
+        s.open("srv", number_request());
+        type_into(&mut s, "quantity", "x");
+
+        press_accept(&mut s);
+
+        assert!(s.result.is_none());
+        assert!(s.visible);
+        assert_eq!(s.focus, Focus::Field(field_index(&s, "quantity")));
+        assert!(s.render_text().contains("enter a whole number"));
+    }
+
+    #[test]
+    fn a_fraction_is_not_an_integer_and_a_number_outside_its_bounds_is_refused() {
+        let mut s = ElicitationOverlayState::default();
+        s.open("srv", number_request());
+        let quantity = field_index(&s, "quantity");
+
+        s.fields[quantity].kind = FieldKind::Number {
+            value: "2.5".into(),
+            integer: true,
+            minimum: Some(1.0),
+            maximum: Some(10.0),
+        };
+        assert_eq!(
+            s.fields[quantity].number_problem().as_deref(),
+            Some("enter a whole number")
+        );
+
+        s.fields[quantity].kind = FieldKind::Number {
+            value: "11".into(),
+            integer: true,
+            minimum: Some(1.0),
+            maximum: Some(10.0),
+        };
+        assert_eq!(
+            s.fields[quantity].number_problem().as_deref(),
+            Some("at most 10")
+        );
+
+        s.fields[quantity].kind = FieldKind::Number {
+            value: "0".into(),
+            integer: true,
+            minimum: Some(1.0),
+            maximum: Some(10.0),
+        };
+        press_accept(&mut s);
+        assert!(s.result.is_none());
+        assert_eq!(
+            s.fields[quantity].number_problem().as_deref(),
+            Some("at least 1")
+        );
+    }
+
+    #[test]
+    fn a_required_number_left_empty_blocks_accept_but_an_optional_one_is_omitted() {
+        let mut s = ElicitationOverlayState::default();
+        s.open("srv", number_request());
+        s.focus = Focus::Field(field_index(&s, "quantity"));
+        s.handle_key(KeyAction::Backspace);
+
+        press_accept(&mut s);
+        assert!(s.result.is_none());
+
+        type_into(&mut s, "quantity", "3");
+        press_accept(&mut s);
+        let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
+        assert_eq!(content["quantity"], serde_json::json!(3));
+        assert!(content.get("ratio").is_none());
     }
 
     #[test]

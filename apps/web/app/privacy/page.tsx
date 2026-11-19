@@ -121,8 +121,9 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         </Link>{' '}
         shows which CLI releases are published.
         <br />
-        <strong>What we hold:</strong> nothing about the local model request. The current Desktop
-        and web apps use Cloud; they do not expose Local inference.
+        <strong>What we hold:</strong> nothing about the local model request. Desktop chat and the
+        web app use Cloud; a Desktop local coding session runs the CLI and can use a model that
+        Ollama or LM Studio serves on your computer.
       </>
     ),
   },
@@ -133,8 +134,9 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         <strong>Where your prompts go:</strong> from your client straight to the provider you
         targeted, on your own API key. We are not in that request path.{' '}
         <strong>
-          BYOK is part of the CLI. The VS Code extension is coming soon. Desktop and web are
-          cloud-only and have no user-key path, so work on those surfaces is Cloud.
+          BYOK is part of the CLI. The VS Code extension is coming soon. Web and Desktop chat have
+          no user-key path, so that work is Cloud; a Desktop local coding session runs the CLI and
+          can use a provider key you set up there.
         </strong>
         <br />
         <strong>What we hold:</strong> not the provider key or prompt traffic. The CLI stores the
@@ -281,8 +283,23 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
           /agent-permissions
         </Link>
-        . The use of information the Chrome extension receives, including page text, addresses and
-        screenshots of the tabs you choose, will adhere to the{' '}
+        . When you attach a page in the Chrome extension, or run a page command on it, the extension
+        sends up to 30,000 characters taken from that page: its visible text and what is currently
+        in its visible form fields, such as a name, an address or a message you have typed but not
+        sent. Fields it recognizes as password, payment card, one-time code, PIN or Social Security
+        number fields are left out, and strings that look like keys, tokens, card numbers or
+        passwords are removed before it is sent. Each chat request from the extension also carries
+        your browser&rsquo;s time zone name, such as America/Chicago, so times in answers are local;
+        the extension reads no coordinates or street address. When you turn on Browsing history in
+        the Chrome extension and allow a search, it sends the titles, addresses and last visit times
+        of at most 20 matching pages for that answer, with sign-in details and secret-looking parts
+        of each address removed; during browser control on a site you have allowed, the assistant
+        can also read that tab&rsquo;s console messages and the address, method, status, type,
+        timing and size of its network requests, never their bodies or headers; and the extension
+        records in your account each action it takes, when it took it, whether it worked and the
+        website it acted on, but not the page. The use of information the Chrome extension receives,
+        including page text, form field contents, addresses and screenshots of the tabs you choose,
+        will adhere to the{' '}
         <a
           href="https://developer.chrome.com/docs/webstore/program-policies/policies"
           className="agi-ds-link"
@@ -426,10 +443,12 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
       <>
         <strong>Examples:</strong> push tokens for the mobile apps. For a desktop download: a hashed
         IP, the user-agent, the referring page and a coarse country in the download record, and
-        separately, your <em>unhashed</em> IP address in our server logs.
+        separately, your <em>unhashed</em> IP address in our server logs. When you pair a device for
+        Remote Control: a pairing record holding the pairing code, your account and the workspace it
+        was made in, the paired device identifiers and a rotating connection credential.
         <br />
-        <strong>Why, and how it is protected:</strong> delivering notifications you asked for, and
-        understanding which builds are being downloaded.{' '}
+        <strong>Why, and how it is protected:</strong> delivering notifications you asked for,
+        connecting the devices you paired, and understanding which builds are being downloaded.{' '}
         <strong>
           Two caveats. The hash in the download record uses a fixed salt, so it is pseudonymous
           rather than anonymous: anyone holding both the hash and a candidate address can confirm a
@@ -657,12 +676,14 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     label: 'Account and its content',
     value: (
       <>
-        <strong>Retention:</strong> kept while your account is active. Permanently erased 24 hours
-        after a deletion request.
+        <strong>Retention:</strong> kept while your account is active. A deletion request schedules
+        erasure 24 hours later, and a daily job then carries it out. If an active legal hold covers
+        your account, erasure waits until the hold is released.
         <br />
         <strong>Enforced by:</strong> the request records a deletion timestamp and schedules erasure
         24 hours out; a daily scheduled job then erases your user-scoped records and stored objects
-        and deletes your identity at our authentication provider.
+        and deletes your identity at our authentication provider. The job checks for a legal hold
+        first and erases nothing while one covers the account.
       </>
     ),
   },
@@ -765,6 +786,20 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         cap on every sandbox (matching the resume mapping&rsquo;s own 24-hour expiry) and reclaims
         it at that cap or as soon as the mapping no longer points to it, whichever comes first. A
         sandbox that is merely paused gives its slot up after two hours rather than twenty-four.
+      </>
+    ),
+  },
+  {
+    label: 'Remote Control pairings',
+    value: (
+      <>
+        <strong>Retention:</strong> while the pairing lasts, at most seven days from when it was
+        made, plus about an hour after it expires.
+        <br />
+        <strong>Enforced by:</strong> the signaling server deletes the pairing record when either
+        device ends the pairing; otherwise its sweep deletes it about an hour after the pairing
+        expires. Deleting your account deletes it too. It is left out of your data export because it
+        holds a live credential.
       </>
     ),
   },
@@ -872,7 +907,7 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Delete your account',
     value:
-      'Account settings. Erasure is scheduled 24 hours out, then performed by a daily job that also deletes your identity at our authentication provider. Read the survivors table in section 05 first. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up.',
+      'Account settings. Erasure is scheduled 24 hours out, then carried out by a daily job that also deletes your identity at our authentication provider. If an active legal hold covers your account, erasure waits until the hold is released. Read the survivors table in section 05 first. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up.',
   },
   {
     label: 'Withdraw a consent',
@@ -931,8 +966,9 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
         <Link href="/download" className="agi-ds-link">
           download page
         </Link>{' '}
-        shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop are
-        cloud-only.
+        shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop chat
+        use Cloud; Desktop local coding sessions run the CLI and can use a local model or your own
+        provider key.
       </>
     ),
   },
@@ -1431,7 +1467,7 @@ export default function PrivacyPage() {
                       {
                         label: 'Deletion',
                         value:
-                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
+                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then carried out by a daily job, unless an active legal hold covers your account, in which case it waits until the hold is released. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
                       },
                       {
                         label: 'Everything else',
@@ -1510,11 +1546,12 @@ export default function PrivacyPage() {
                     health, race or ethnic origin, religion, sexual orientation, immigration status,
                     precise location, government identity numbers and the contents of your private
                     messages. It reaches us only if you put it in a chat, a file or a profile field,
-                    or connect an account that holds it. When it does, we use it only to provide
-                    what you asked for, which includes memory if you turned memory on. We do not use
-                    it for advertising or to build a profile of you for any other purpose, and we do
-                    not sell or share it. Voice audio is not stored and no voiceprint is made, as
-                    section 01 says.
+                    connect an account that holds it, or let the Chrome extension read or act on a
+                    page that shows it, such as an email you attach or a chat you ask it to work in.
+                    When it does, we use it only to provide what you asked for, which includes
+                    memory if you turned memory on. We do not use it for advertising or to build a
+                    profile of you for any other purpose, and we do not sell or share it. Voice
+                    audio is not stored and no voiceprint is made, as section 01 says.
                   </Prose>
                   <Prose size="sm">
                     <strong>Health information.</strong> AGI is not a medical service. It is not

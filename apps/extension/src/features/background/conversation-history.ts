@@ -66,7 +66,7 @@ export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
 const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
-const MAX_HISTORY_ERROR_TEXT_CHARS = 1_000;
+export const MAX_HISTORY_ERROR_TEXT_CHARS = 1_000;
 const MAX_STORED_MESSAGE_ATTACHMENTS = 20;
 const MAX_STORED_MESSAGE_PAGES = 8;
 const MAX_STORED_MESSAGE_SOURCES = 40;
@@ -129,10 +129,11 @@ export interface ConversationCloudSyncState {
   totalMessageCount?: number;
   messagesOffset?: number;
   state: 'idle' | 'pending' | 'error' | 'blocked';
-  blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
+  blockedReason?: 'non-cloud-runtime' | 'auth' | 'policy' | 'not-found' | 'workspace';
   lastError?: string;
   lastAttemptAt?: number;
   retryAfter?: number;
+  retryAfterStatedByServer?: boolean;
 }
 
 export interface ConversationEntry {
@@ -675,6 +676,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
     raw['blockedReason'] === 'auth' ||
+    raw['blockedReason'] === 'policy' ||
     raw['blockedReason'] === 'not-found' ||
     raw['blockedReason'] === 'workspace'
   ) {
@@ -689,6 +691,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   }
   if (typeof raw['retryAfter'] === 'number' && Number.isFinite(raw['retryAfter'])) {
     normalized.retryAfter = raw['retryAfter'];
+    if (raw['retryAfterStatedByServer'] === true) normalized.retryAfterStatedByServer = true;
   }
   const isEmpty =
     normalized.state === 'idle' &&
@@ -1565,6 +1568,51 @@ export interface ManagedCloudHistoryImport {
   messagesOffset?: number;
 }
 
+function retainedFlag(
+  local: boolean | undefined,
+  synced: boolean | undefined,
+  remote: boolean,
+): boolean {
+  return local !== undefined && local !== (synced ?? false) ? local : remote;
+}
+
+function aliasWithRemoteFlags(
+  alias: ConversationEntry,
+  remote: ManagedCloudConversation,
+  organizationId: string | null,
+): ConversationEntry | null {
+  const sync = alias.cloudSync;
+  if (!sync) return null;
+  if (sync.organizationId !== undefined && sync.organizationId !== organizationId) return null;
+  if (sync.remoteUpdatedAt && Date.parse(sync.remoteUpdatedAt) > Date.parse(remote.updatedAt))
+    return null;
+  const pinned = retainedFlag(alias.pinned, sync.syncedPinned, remote.pinned);
+  const starred = retainedFlag(alias.starred, sync.syncedStarred, remote.starred);
+  const archived = retainedFlag(alias.archived, sync.syncedArchived, remote.archived);
+  if (
+    (alias.pinned === true) === pinned &&
+    (alias.starred === true) === starred &&
+    (alias.archived === true) === archived &&
+    (sync.syncedPinned === true) === remote.pinned &&
+    (sync.syncedStarred === true) === remote.starred &&
+    (sync.syncedArchived === true) === remote.archived
+  )
+    return null;
+  return {
+    ...alias,
+    pinned,
+    starred,
+    archived,
+    cloudSync: {
+      ...sync,
+      syncedPinned: remote.pinned,
+      syncedStarred: remote.starred,
+      syncedArchived: remote.archived,
+      remoteUpdatedAt: remote.updatedAt,
+    },
+  };
+}
+
 function retainDeviceActivity(
   message: HistoryMessage,
   previous: readonly HistoryMessage[],
@@ -1648,6 +1696,21 @@ export async function importManagedCloudConversationHistory(
           sameManagedCloudOwner(entry.owner, owner) &&
           (entry.cloudSync?.conversationId === remote.id || entry.id === remote.id),
       );
+      conversations = conversations.map((candidate) => {
+        if (
+          candidate === existing ||
+          candidate.cloudSync?.conversationId !== remote.id ||
+          !sameManagedCloudOwner(candidate.owner, owner) ||
+          protectedEntries.includes(candidate) ||
+          protectsConversation(candidate.id)
+        )
+          return candidate;
+        const reconciled = aliasWithRemoteFlags(candidate, remote, organizationId);
+        if (!reconciled) return candidate;
+        imported += 1;
+        changedIds.add(reconciled.id);
+        return reconciled;
+      });
       if (
         existing?.cloudSync?.organizationId !== undefined &&
         existing.cloudSync.organizationId !== organizationId
@@ -1723,18 +1786,9 @@ export async function importManagedCloudConversationHistory(
           normalizeRoutingState({
             selectedModel: remote.selectedRouteId ?? remote.model ?? 'auto',
           }),
-        pinned:
-          existing?.pinned !== undefined && existing.pinned !== (sync?.syncedPinned ?? false)
-            ? existing.pinned
-            : remote.pinned,
-        starred:
-          existing?.starred !== undefined && existing.starred !== (sync?.syncedStarred ?? false)
-            ? existing.starred
-            : remote.starred,
-        archived:
-          existing?.archived !== undefined && existing.archived !== (sync?.syncedArchived ?? false)
-            ? existing.archived
-            : remote.archived,
+        pinned: retainedFlag(existing?.pinned, sync?.syncedPinned, remote.pinned),
+        starred: retainedFlag(existing?.starred, sync?.syncedStarred, remote.starred),
+        archived: retainedFlag(existing?.archived, sync?.syncedArchived, remote.archived),
         cloudSync: {
           conversationId: remote.id,
           organizationId,
@@ -1875,7 +1929,9 @@ export function isCloudMetadataPersistenceEligible(entry: ConversationEntry): bo
     UUID_PATTERN.test(sync.conversationId) &&
     sync.organizationId !== undefined &&
     sync.createAcknowledged === true &&
-    (sync.blockedReason === undefined || sync.blockedReason === 'auth')
+    (sync.blockedReason === undefined ||
+      sync.blockedReason === 'auth' ||
+      sync.blockedReason === 'policy')
   );
 }
 
@@ -1891,6 +1947,7 @@ export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
     generatedFiles: message.generatedFiles,
     interactiveCards: message.interactiveCards,
     ...(message.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
+    ...(message.error ? { error: true, errorText: message.errorText } : {}),
   });
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;
@@ -1911,6 +1968,14 @@ export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[]
       (message.cloudSyncedAt === undefined ||
         message.cloudSyncedChars !== message.content.length ||
         message.cloudSyncedFingerprint !== cloudMessageSyncFingerprint(message)),
+  );
+}
+
+export function conversationHasUnsavedCloudChanges(entry: ConversationEntry): boolean {
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    entry.cloudSync?.state === 'pending' ||
+    entry.cloudSync?.state === 'error'
   );
 }
 
@@ -1948,29 +2013,51 @@ export function conversationMetadataNeedsSync(entry: ConversationEntry): boolean
   );
 }
 
+function owesCloudSync(entry: ConversationEntry, owner: ManagedCloudOwner): boolean {
+  if (!sameManagedCloudOwner(entry.owner, owner)) return false;
+  if (!isCloudMetadataPersistenceEligible(entry)) return false;
+  if (
+    entry.cloudSync?.blockedReason === 'not-found' ||
+    entry.cloudSync?.blockedReason === 'workspace'
+  ) {
+    return false;
+  }
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    (entry.cloudSync?.conversationId !== undefined &&
+      (conversationMetadataNeedsSync(entry) ||
+        entry.cloudSync.organizationId === undefined ||
+        entry.cloudSync.createAcknowledged !== true))
+  );
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
   assertManagedCloudOwner(owner);
   const now = Date.now();
-  return (await readAfterMutations()).conversations.filter((entry) => {
-    if (!sameManagedCloudOwner(entry.owner, owner)) return false;
-    if (!isCloudMetadataPersistenceEligible(entry)) return false;
-    if (entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) return false;
-    if (
-      entry.cloudSync?.blockedReason === 'not-found' ||
-      entry.cloudSync?.blockedReason === 'workspace'
-    ) {
-      return false;
+  return (await readAfterMutations()).conversations.filter(
+    (entry) =>
+      !(entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) &&
+      owesCloudSync(entry, owner),
+  );
+}
+
+export async function earliestCloudSyncRetryAt(
+  owner: ManagedCloudOwner,
+): Promise<number | undefined> {
+  assertManagedCloudOwner(owner);
+  const now = Date.now();
+  let earliest: number | undefined;
+  for (const entry of (await readAfterMutations()).conversations) {
+    const retryAfter = entry.cloudSync?.retryAfter;
+    if (entry.cloudSync?.state === 'blocked' || retryAfter === undefined || retryAfter <= now) {
+      continue;
     }
-    return (
-      pendingCloudMessages(entry).length > 0 ||
-      (entry.cloudSync?.conversationId !== undefined &&
-        (conversationMetadataNeedsSync(entry) ||
-          entry.cloudSync.organizationId === undefined ||
-          entry.cloudSync.createAcknowledged !== true))
-    );
-  });
+    if (earliest !== undefined && retryAfter >= earliest) continue;
+    if (owesCloudSync(entry, owner)) earliest = retryAfter;
+  }
+  return earliest;
 }
 
 export async function claimCloudConversationBinding(
@@ -2058,7 +2145,10 @@ export async function recordCloudMessagesSynced(
     } else {
       delete cloudSync.lastError;
       delete cloudSync.retryAfter;
-      if (cloudSync.blockedReason === 'auth') delete cloudSync.blockedReason;
+      delete cloudSync.retryAfterStatedByServer;
+      if (cloudSync.blockedReason === 'auth' || cloudSync.blockedReason === 'policy') {
+        delete cloudSync.blockedReason;
+      }
     }
     store.conversations = store.conversations.map((candidate, candidateIndex) =>
       candidateIndex === index ? { ...existing, messages, cloudSync } : candidate,

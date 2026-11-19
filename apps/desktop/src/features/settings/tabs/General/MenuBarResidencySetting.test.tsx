@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { window as desktopWindow } from '@agiworkforce/desktop-command-client';
@@ -40,7 +41,7 @@ describe('MenuBarResidencySetting', () => {
     expect(toggle).toBeChecked();
     expect(
       screen.getByText(
-        'Keep AGI Desktop in the macOS menu bar or system tray when the main window is closed.',
+        `Keep ${PRODUCT_NAMES.desktop} in the macOS menu bar or system tray when the main window is closed.`,
       ),
     ).toBeVisible();
   });

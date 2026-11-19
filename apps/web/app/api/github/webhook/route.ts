@@ -8,7 +8,8 @@ import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
   verifyGitHubWebhookSignature,
   getInstallationAccessToken,
-  getPrDiff,
+  getPrHeadSha,
+  getPrReviewSnapshot,
   listPrReviewCommentBodies,
   postIssueComment,
   postPrReview,
@@ -17,10 +18,12 @@ import {
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { assertWorkspaceCodeAccess } from '@/lib/services/organization-policy-code-gate';
+import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
+  reviewCoverageIsPartial,
   reviewLineComments,
   reviewPullRequestDiff,
   reviewSummaryBody,
@@ -34,7 +37,7 @@ import {
   type GitHubCodeTaskRequest,
 } from '@/lib/services/cloud-code-github-task';
 import { routeGitHubWebhookEvent } from './webhook-router';
-import { recordDeliveryOnce } from './delivery-dedup';
+import { recordDeliveryOnce, releaseDelivery } from './delivery-dedup';
 import { escapeUntrustedPrDiff } from './pr-diff-prompt';
 
 export const maxDuration = 800;
@@ -104,10 +107,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true, event: 'ping' });
   }
 
+  const deliveryId = request.headers.get('x-github-delivery');
+  let claimedDeliveryId: string | null = null;
   {
     const payloadRecord = rawPayload as Record<string, unknown>;
     const dedupOutcome = await recordDeliveryOnce(getNeonDb(), {
-      deliveryId: request.headers.get('x-github-delivery'),
+      deliveryId,
       event: event ?? 'unknown',
       action: typeof payloadRecord['action'] === 'string' ? payloadRecord['action'] : null,
       installationId:
@@ -123,6 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
       return NextResponse.json({ received: true, duplicate: true });
     }
+    if (dedupOutcome === 'first') claimedDeliveryId = deliveryId;
   }
 
   if (routedEvent.kind === 'automation-event') {
@@ -149,6 +155,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     try {
       const outcomes = await ingestTriggerEvent(getNeonDb(), triggerEvent);
+      if (outcomes.some((outcome) => outcome.outcome === 'failed')) {
+        throw new Error('An event trigger could not queue its run');
+      }
       return NextResponse.json({
         received: true,
         event: triggerEvent.type,
@@ -161,6 +170,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error, event: triggerEvent.type },
         'GitHub automation event could not be ingested',
       );
+      await releaseDelivery(getNeonDb(), claimedDeliveryId);
       return NextResponse.json(
         { error: 'Webhook processing failed' },
         { status: 500, headers: { 'Retry-After': '10' } },
@@ -184,6 +194,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error, installationId: routedEvent.installationId },
         'Failed to remove deleted GitHub installation',
       );
+      await releaseDelivery(getNeonDb(), claimedDeliveryId);
       return NextResponse.json(
         { error: 'Webhook processing failed' },
         { status: 500, headers: { 'Retry-After': '10' } },
@@ -276,6 +287,7 @@ interface ReviewTarget {
   repo: string;
   prNumber: number;
   trigger: 'mention' | 'pull-request';
+  followsMovedHead?: boolean;
 }
 
 /**
@@ -437,6 +449,13 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
   const { installationId, owner, repo, prNumber } = target;
   const db = getNeonDb();
   let attemptId: string | null = null;
+  let attemptSettled = false;
+  const settle = async (status: 'completed' | 'failed', tokensUsed: number): Promise<void> => {
+    if (!attemptId) return;
+    attemptSettled = true;
+    await settleAttempt(db, attemptId, status, tokensUsed);
+  };
+  let supersededByNewerHead = false;
 
   try {
     const installation = await readReviewInstallation(db, installationId);
@@ -446,6 +465,14 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
     });
     if (!codeGate.allowed) {
       logger.info({ owner, repo, prNumber, code: codeGate.code }, codeGate.reason);
+      return;
+    }
+    const computeGate = await evaluateActiveWorkspacePolicy(db, installation.user_id, {
+      resource: 'managed_compute',
+      surface: 'api',
+    });
+    if (!computeGate.allowed) {
+      logger.info({ owner, repo, prNumber, code: computeGate.code }, computeGate.reason);
       return;
     }
     if (!isManagedComputePrivateBetaEnabled()) {
@@ -472,7 +499,8 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       );
     }
 
-    const rawDiff = await getPrDiff(token, owner, repo, prNumber);
+    const snapshot = await getPrReviewSnapshot(token, owner, repo, prNumber);
+    const rawDiff = snapshot.diff;
     if (rawDiff.includes('\x00')) {
       logger.warn({ owner, repo, prNumber }, 'Binary diff rejected');
       if (target.trigger === 'mention') {
@@ -534,6 +562,7 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
 
     const outcome = await reviewPullRequestDiff({
       diff: rawDiff,
+      diffTruncated: snapshot.truncated,
       prNumber,
       planTier,
       postedCommentBodies,
@@ -559,22 +588,30 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
         { owner, repo, prNumber, status: outcome.status, reason: outcome.reason },
         '[code-review] no review posted',
       );
-      if (attemptId) await settleAttempt(db, attemptId, 'failed', outcome.outputTokens);
+      await settle('failed', outcome.outputTokens);
       return;
     }
 
-    // A re-review that found nothing new says nothing: the findings it would
-    // have repeated are already on the pull request as line comments.
-    const silent = outcome.status === 'no-findings' && target.trigger !== 'mention';
+    const currentHeadSha = await getPrHeadSha(token, owner, repo, prNumber).catch(() => null);
+    supersededByNewerHead = currentHeadSha !== null && currentHeadSha !== snapshot.headSha;
+
+    // A re-review that found nothing new, and covered everything, says nothing:
+    // the findings it would have repeated are already on the pull request as
+    // line comments.
+    const silent =
+      outcome.status === 'no-findings' &&
+      target.trigger !== 'mention' &&
+      !reviewCoverageIsPartial(outcome.coverage);
     if (!silent) {
       await postPrReview(
         token,
         owner,
         repo,
         prNumber,
-        reviewSummaryBody(outcome),
+        reviewSummaryBody(outcome, { reviewedSha: snapshot.headSha, currentSha: currentHeadSha }),
         'COMMENT',
         reviewLineComments(outcome.posted),
+        snapshot.headSha,
       );
     }
 
@@ -591,10 +628,16 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       },
       '[code-review] review settled',
     );
-    if (attemptId) await settleAttempt(db, attemptId, 'completed', outcome.outputTokens);
+    await settle('completed', outcome.outputTokens);
   } catch (error) {
     logger.error({ error, owner, repo, prNumber }, 'PR review processing error');
-    if (attemptId) await settleAttempt(db, attemptId, 'failed', 0);
+    await settle('failed', 0);
+  } finally {
+    if (attemptId && !attemptSettled) await settleAttempt(db, attemptId, 'failed', 0);
+  }
+
+  if (supersededByNewerHead && target.trigger === 'pull-request' && !target.followsMovedHead) {
+    await runAutomatedReview({ ...target, followsMovedHead: true });
   }
 }
 

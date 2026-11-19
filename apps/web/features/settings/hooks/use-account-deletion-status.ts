@@ -119,10 +119,11 @@ export function fenceAccountDeletionCancellation(snapshot: OwnedAccountDeletionS
 export function createAccountDeletionRequest(
   snapshot: OwnedAccountDeletionSnapshot,
   lifetime: () => boolean,
-  onDispatch: () => void,
+  onDispatch?: () => void,
+  action: 'schedule' | 'cancel' = 'cancel',
 ): RequestAuthority | null {
   const record = snapshots.get(snapshot);
-  if (!record || !permitsAccountDeletionAction(snapshot, 'cancel')) return null;
+  if (!record || !permitsAccountDeletionAction(snapshot, action)) return null;
   const authority = createRequestAuthority(
     record.owner.session,
     () => record.current() && lifetime(),

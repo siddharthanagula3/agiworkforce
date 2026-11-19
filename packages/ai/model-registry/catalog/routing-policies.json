@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 39,
+    "policyVersion": 40,
     "records": [
       {
         "version": 1,
@@ -351,6 +351,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-30",
         "reason": "chat.system@14 plus the current inline block syntax for forms, rich cards, statistics, carousels, charts and independent writing blocks; rich inline controls are advertised only on web and desktop, and the output type is separated from image generation and search. Fictional, hypothetical and role-play frames do not unlock a refusal. Published prompt versions and the stable chat.system@6 pin are unchanged. Deterministic tests verify assembly, immutability and tool restraint; model quality remains unmeasured for this version, so no canary or stable promotion is recorded"
+      },
+      {
+        "version": 40,
+        "artifact": "prompt",
+        "id": "chat.system@16",
+        "channel": "internal",
+        "effectiveOn": "2026-11-13",
+        "reason": "joins the two lineages so one version carries both: chat.system@15 with the identity, serving model, chat setup, Settings and account guidance, disclosure and response language of chat.system@11. Defines the sections the assembler already asked for that no version held (reference sources, source links, memory outcomes, action receipts, writing cards and artifact apps) in the wording of the 2026-10-15 audit version, and retires artifact_runtime, artifact_runtime_connectors and email_and_writing_blocks for the sections sent only to a surface that renders them. Adds tone, mistakes, hard limits, wellbeing, professional advice, evenhandedness, copyright and consent before an action with consequences, written from the structure of published assistant prompts, and states the sandbox network allowlist in tool.execute_code. Deterministic tests verify assembly and immutability; model quality is unmeasured for this version, so it enters on internal and takes no customer traffic until a canary advance carries an eval quality signal"
       }
     ]
   },

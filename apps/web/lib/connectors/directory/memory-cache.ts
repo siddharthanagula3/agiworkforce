@@ -31,11 +31,13 @@ interface CachedSnapshot {
   readonly stamp: number;
   readonly records: readonly DirectoryRecord[];
   readonly counts: DirectoryCounts;
+  readonly stored: boolean;
 }
 
 const EMPTY_SNAPSHOT: Omit<CachedSnapshot, 'stamp'> = {
   records: [],
   counts: computeDirectoryCounts([]),
+  stored: false,
 };
 
 let cached: CachedSnapshot | null = null;
@@ -58,7 +60,7 @@ async function loadSnapshot(): Promise<Omit<CachedSnapshot, 'stamp'>> {
   const encoded = await readStoredSnapshot(stamp);
   const stored = encoded ? ((await decodeStoredJson(encoded)) as DirectoryRecord[]) : [];
   const records = orderDirectoryRecords(stored.map(withDefaultBadge));
-  cached = { stamp, records, counts: computeDirectoryCounts(records) };
+  cached = { stamp, records, counts: computeDirectoryCounts(records), stored: encoded !== null };
   return cached;
 }
 
@@ -78,7 +80,7 @@ export async function getSnapshotView(): Promise<DirectorySnapshotView> {
   return {
     records: snapshot.records,
     counts: snapshot.counts,
-    bootstrapComplete: syncState.bootstrapComplete,
+    bootstrapComplete: snapshot.stored && syncState.bootstrapComplete,
     lastSyncAt: syncState.lastSyncAt,
   };
 }

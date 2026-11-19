@@ -154,6 +154,65 @@ describe('SSOPanel for an entitled organization', () => {
     expect(screen.queryByRole('button', { name: 'Verify domain' })).toBeNull();
   });
 
+  it('asks for the OIDC client secret at activation and sends it with that request only', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        connections: [
+          connection({
+            providerType: 'oidc',
+            metadataUrl: null,
+            oidcDiscoveryUrl: 'https://idp.example.com/.well-known/openid-configuration',
+            oidcClientId: 'client-1',
+            domainVerifiedAt: '2026-08-04T01:00:00.000Z',
+            domainVerification: null,
+            status: 'awaiting_provider_configuration',
+          }),
+        ],
+      }),
+    );
+
+    render(<SSOPanel organizationId={ORG_ID} isOwner />);
+
+    const activate = await screen.findByRole('button', { name: 'Activate' });
+    expect(activate).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('OIDC client secret'), {
+      target: { value: 'idp-secret' },
+    });
+    expect(activate).toBeEnabled();
+    fireEvent.click(activate);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/admin/sso/${CONNECTION_ID}`,
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ is_active: true, oidc_client_secret: 'idp-secret' }),
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByLabelText('OIDC client secret')).toHaveValue(''));
+  });
+
+  it('does not ask a SAML connection for a client secret', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        connections: [
+          connection({
+            domainVerifiedAt: '2026-08-04T01:00:00.000Z',
+            domainVerification: null,
+            status: 'awaiting_provider_configuration',
+          }),
+        ],
+      }),
+    );
+
+    render(<SSOPanel organizationId={ORG_ID} isOwner />);
+
+    expect(await screen.findByRole('button', { name: 'Activate' })).toBeEnabled();
+    expect(screen.queryByLabelText('OIDC client secret')).toBeNull();
+  });
+
   it('shows the service provider values an IdP requires once provisioned', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({

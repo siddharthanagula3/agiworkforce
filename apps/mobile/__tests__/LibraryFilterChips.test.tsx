@@ -125,7 +125,7 @@ describe('Library filter chips', () => {
     expect(row.props.contentContainerStyle).toMatchObject({ paddingHorizontal: 16, gap: 8 });
 
     const chips = within(screen.getByTestId('library-filter-row'));
-    for (const label of ['All', 'Images', 'Documents', 'Artifacts']) {
+    for (const label of ['All', 'Images', 'Documents', 'Artifacts', 'Code', 'Charts', 'Research']) {
       expect(chips.getByLabelText(`${label} filter`)).toBeTruthy();
     }
   });

@@ -26,6 +26,11 @@ const ITEM_TYPE = {
   reasoning: 'reasoning',
 } as const;
 
+export const CODEX_TOOL_ITEM_TYPE = {
+  commandExecution: 'command_execution',
+  fileChange: 'file_change',
+} as const;
+
 const FAILED_ITEM_STATUS = 'failed';
 
 const ItemSchema = z.looseObject({

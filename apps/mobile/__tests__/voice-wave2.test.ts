@@ -12,6 +12,7 @@ jest.mock('expo-speech-recognition', () => {
       }),
       abort: jest.fn(),
       requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+      requestMicrophonePermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
       getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
       supportsOnDeviceRecognition: jest.fn().mockReturnValue(true),
       isRecognitionAvailable: jest.fn().mockReturnValue(true),
@@ -56,6 +57,7 @@ jest.mock('expo-speech', () => ({
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
+import * as TTS from '@/src/features/voice/services/tts';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
 const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
@@ -87,6 +89,19 @@ describe('voiceInput service', () => {
   it('requestMicPermission delegates to expo-speech-recognition', async () => {
     const result = await VoiceInput.requestMicPermission();
     expect(result).toBe(true);
+  });
+
+  it('asks live voice for the microphone alone, not speech recognition', async () => {
+    const module = speechRecognitionMock.ExpoSpeechRecognitionModule as unknown as {
+      requestMicrophonePermissionsAsync: jest.Mock;
+      requestPermissionsAsync: jest.Mock;
+    };
+    module.requestPermissionsAsync.mockClear();
+
+    await expect(VoiceInput.requestMicrophoneOnlyPermission()).resolves.toBe(true);
+
+    expect(module.requestMicrophonePermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(module.requestPermissionsAsync).not.toHaveBeenCalled();
   });
 
   it('transcribeAudioFile reads the given recording instead of the microphone', async () => {
@@ -162,6 +177,15 @@ describe('voiceOutput service', () => {
   it('getAvailableVoices returns an array', async () => {
     const voices = await VoiceOutput.getAvailableVoices();
     expect(Array.isArray(voices)).toBe(true);
+  });
+
+  it('reports a failed voice inventory to the picker instead of an empty one', async () => {
+    const speech = jest.requireMock('expo-speech') as { getAvailableVoicesAsync: jest.Mock };
+    speech.getAvailableVoicesAsync.mockRejectedValueOnce(new Error('inventory unavailable'));
+    await expect(TTS.getVoicesForLanguage('fr')).rejects.toThrow('inventory unavailable');
+
+    speech.getAvailableVoicesAsync.mockRejectedValueOnce(new Error('inventory unavailable'));
+    await expect(TTS.getAvailableVoices()).resolves.toEqual([]);
   });
 
   it('stop does not throw', async () => {

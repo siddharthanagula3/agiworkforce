@@ -13,6 +13,12 @@ vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn(async () => 't'),
 }));
 
+type TypesModule = typeof import('@agiworkforce/types');
+vi.mock('@agiworkforce/types', async (importOriginal) => ({
+  ...(await importOriginal<TypesModule>()),
+  connectorsReleased: () => true,
+}));
+
 const { ArtifactPreview } = await import('./ArtifactPreview');
 const { useArtifactsStore } = await import('../../stores/artifacts-store');
 

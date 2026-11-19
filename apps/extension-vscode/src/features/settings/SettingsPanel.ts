@@ -10,10 +10,15 @@ import {
   type TierInfo,
   type UsageHistoryResult,
 } from '../../utils/api';
-import { clearAccountTierCache, refreshAccountTierCache } from '../../integrations/tierResolver';
+import {
+  cachedAccountTier,
+  clearAccountTierCache,
+  refreshAccountTierCache,
+} from '../../integrations/tierResolver';
 import { getNonce } from '../sidebar-webview/webviewContent';
 import {
   isSettingsSection,
+  isRejectedSettingsUpdate,
   parseSettingsWebviewMessage,
   type SettingsCommand,
   type SettingsLocalCapabilities,
@@ -162,7 +167,7 @@ export class SettingsPanel {
   ) {
     const storedInstructions = getStoredCustomInstructions(this.context);
     const initialState: SettingsPanelState = {
-      ...Config.settingsSnapshot(),
+      ...Config.settingsSnapshot(cachedAccountTier(this.context) ?? 'unknown'),
       accountConnected: null,
       accountStatus: 'loading',
       agentConfigPath: agentConfigPath(),
@@ -186,6 +191,14 @@ export class SettingsPanel {
         const message = parseSettingsWebviewMessage(input);
         if (message === undefined) {
           console.warn(`[${PRODUCT_NAMES.code}] dropped malformed settings webview message`);
+          if (isRejectedSettingsUpdate(input)) {
+            await this.refresh();
+            await this.post({
+              type: 'settings.error',
+              message:
+                'That value is not valid for this setting. Your previous value is unchanged.',
+            });
+          }
           return;
         }
 
@@ -246,7 +259,7 @@ export class SettingsPanel {
       : accountAuth;
     const currentlyConnected = currentAccountAuth.status === 'signed-in';
     return {
-      ...Config.settingsSnapshot(),
+      ...Config.settingsSnapshot(cachedAccountTier(this.context) ?? 'unknown'),
       accountConnected: currentlyConnected,
       accountStatus: currentAccountAuth.status,
       ...(currentlyConnected && accountIdentity !== undefined ? { accountIdentity } : {}),
@@ -275,7 +288,10 @@ export class SettingsPanel {
       if (sequence !== this.refreshSequence) return;
       await this.post({
         type: 'settings.snapshot',
-        state: { ...fetchedState, ...Config.settingsSnapshot() },
+        state: {
+          ...fetchedState,
+          ...Config.settingsSnapshot(cachedAccountTier(this.context) ?? 'unknown'),
+        },
       });
     } catch (error) {
       if (sequence !== this.refreshSequence) return;

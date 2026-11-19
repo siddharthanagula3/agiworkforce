@@ -57,6 +57,15 @@ export const CREDENTIAL_AGE_BOUNDS = [
     calledFromGate: /assertSessionWithinAbsoluteLifetime\(/,
   },
   {
+    verifier: 'verifyNativeSessionToken',
+    credential:
+      'a native app provider session token presented as a bearer beside its surface proof',
+    boundedIn: 'apps/web/lib/auth/session-age.ts',
+    proves: /hasOutlivedAbsoluteLifetime\(/,
+    why: 'it is the same provider session, admitted only when it names its session id, and that session start is measured against the absolute lifetime',
+    calledFromGate: /assertSessionWithinAbsoluteLifetime\(/,
+  },
+  {
     verifier: 'getRequestIdentity',
     credential: 'the browser session cookie',
     boundedIn: 'apps/web/lib/auth/session-age.ts',

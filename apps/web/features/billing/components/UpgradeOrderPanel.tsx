@@ -22,10 +22,16 @@ import {
   type SavedPaymentMethod,
   type UpgradeChargeBreakdown,
   type UpgradePromotionSummary,
+  type UpgradeRecurringTerms,
 } from '../services/stripe-payments';
 import { getBillingPlanDisplay, formatCatalogPrice } from '../lib/plan-display';
 import { UpgradePromotionCode } from './UpgradePromotionCode';
-import { formatBillingDate, formatBillingMoney, formatRecurringMoney } from '../lib/billing-format';
+import {
+  formatBillingDate,
+  formatBillingMoney,
+  formatRecurringMoney,
+  formatRenewalTerms,
+} from '../lib/billing-format';
 import type { LocalizedPriceEntry } from '@agiworkforce/cloud-contracts';
 import { readLocalizedPricing } from '../services/localized-pricing';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -102,6 +108,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
     currency: string;
     previewToken: string;
     charge: UpgradeChargeBreakdown | null;
+    recurring: UpgradeRecurringTerms;
   } | null>(null);
   const [previewing, setPreviewing] = useState(true);
   const [confirming, setConfirming] = useState(false);
@@ -172,6 +179,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
           currency: r.currency,
           previewToken: r.previewToken,
           charge: r.charge,
+          recurring: r.recurring,
         });
         setReplacesScheduledChange(r.replacesScheduledChange);
         setGrandfatheredNotice(r.grandfatheredNotice);
@@ -253,6 +261,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
         currency: result.currency,
         previewToken: result.previewToken,
         charge: result.charge,
+        recurring: result.recurring,
       });
       setReplacesScheduledChange(result.replacesScheduledChange);
       setPromotion(result.promotion);
@@ -294,6 +303,9 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
 
   const charge = amountDue?.charge ?? null;
   const currency = amountDue?.currency ?? 'usd';
+  const renewalPrice = amountDue
+    ? formatRenewalTerms(amountDue.recurring, 'monthly')
+    : `${formatCatalogPrice(recurringUsd)}/month + tax`;
   const waitingForSession = !authInitialized;
 
   return (
@@ -476,8 +488,8 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
               {checkoutRequired?.trial
                 ? `Your free trial ends on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}. You will then be charged ${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/month + tax until you cancel. Cancel before ${formatRenewalDate(checkoutRequired.trial.convertsAt)} in Settings > Billing and you won't be charged.`
                 : charge?.renewsAt
-                  ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/month + tax.`
-                  : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/month + tax.`}
+                  ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${renewalPrice}.`
+                  : `Your subscription will auto renew at ${renewalPrice}.`}
             </p>
           ) : null}
 

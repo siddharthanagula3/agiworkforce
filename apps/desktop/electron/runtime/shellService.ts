@@ -75,7 +75,11 @@ export interface RunShellCommandInput {
   command: string;
   timeoutMs?: number;
   policy: ShellPolicy;
-  sandbox: ShellSandbox;
+  /**
+   * May still be resolving: the run is claimed before it is awaited, so a stop
+   * that arrives while it resolves is remembered rather than lost.
+   */
+  sandbox: ShellSandbox | Promise<ShellSandbox>;
   /**
    * Host paths the sandbox keeps read-only even when the approved folder
    * contains them, and never lets a command read, such as the app's own
@@ -170,6 +174,7 @@ export function listShellRuns(): BackgroundCommandRun[] {
  * cancelled or stopped with its folder until it had already started.
  */
 const claims = new Map<string, RunClaim>();
+const CANCELLED_BEFORE_START = 'That command was cancelled before it started.';
 
 /**
  * The PATH a login shell would have.
@@ -550,7 +555,10 @@ async function prepareShellCommand(
     );
   }
 
-  const sandbox = input.sandbox;
+  const sandbox = await input.sandbox;
+  if (claim.cancelled) {
+    throw new ShellCommandRefused('not-listed', CANCELLED_BEFORE_START);
+  }
   const sandboxed = sandbox.backend !== 'none';
   const project = sandboxed ? await pinnedRootPath(input.root) : null;
   const cwd = await resolveWorkingDirectory(input.root, input.relativePath);
@@ -622,7 +630,7 @@ async function prepareShellCommand(
   }
   if (claim.cancelled) {
     removeScratch(scratchDirectory);
-    throw new ShellCommandRefused('not-listed', 'That command was cancelled before it started.');
+    throw new ShellCommandRefused('not-listed', CANCELLED_BEFORE_START);
   }
   return {
     command,

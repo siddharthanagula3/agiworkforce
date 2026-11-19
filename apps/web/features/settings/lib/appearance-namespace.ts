@@ -194,6 +194,21 @@ export function appearanceDelta(
   return Object.keys(delta).length > 0 ? (delta as AppearanceNamespace) : null;
 }
 
+export function acknowledgedAppearance(
+  stored: AppearanceNamespace | null,
+  local: Required<AppearanceNamespace>,
+): AppearanceNamespace | null {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return stored;
+  const acknowledged: Record<string, unknown> = { ...stored };
+  const localValues = local as Record<string, unknown>;
+  for (const [key, value] of Object.entries(stored)) {
+    if (!(key in localValues)) continue;
+    if (Object.keys(fromAppearanceNamespace({ [key]: value })).length > 0) continue;
+    acknowledged[key] = localValues[key];
+  }
+  return acknowledged as AppearanceNamespace;
+}
+
 export function readStoredLocale(stored: unknown, supported: readonly string[]): string | null {
   if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
   const locale = (stored as Record<string, unknown>)['locale'];

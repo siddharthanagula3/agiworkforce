@@ -13,7 +13,7 @@ import {
 } from '../../test/modelCatalogFixtures';
 import type { ChatRuntime, StreamCallback } from '../../lib/runtime';
 import type { ModelInfo } from '../../lib/types';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, PRODUCT_NAMES } from '@agiworkforce/types';
 
 const localModel: ModelInfo = {
   id: 'fixture-local-model',
@@ -752,7 +752,7 @@ describe('useChat, registry-backed Auto routing', () => {
       entries: [
         expect.objectContaining({
           kind: 'progress',
-          summary: 'Starting AGI Work',
+          summary: `Starting ${PRODUCT_NAMES.work}`,
           status: 'running',
         }),
       ],

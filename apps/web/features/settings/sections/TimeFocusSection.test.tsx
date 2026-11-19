@@ -100,6 +100,52 @@ describe('TimeFocusSection', () => {
     expect(preferenceMocks.save).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['start', 'Quiet hours start'],
+    ['end', 'Quiet hours end'],
+  ])('rejects a cleared %s time instead of saving a disabled schedule', async (_name, label) => {
+    render(<TimeFocusSection />);
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(label), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save time and focus settings' }));
+
+    expect(await screen.findByText('Enter both a start and an end time.')).toBeInTheDocument();
+    expect(preferenceMocks.save).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Enable quiet hours' })).toBeChecked();
+
+    fireEvent.change(screen.getByLabelText(label), {
+      target: { value: label.endsWith('start') ? '21:00' : '07:00' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save time and focus settings' }));
+
+    await waitFor(() =>
+      expect(preferenceMocks.save).toHaveBeenCalledWith(
+        'time-focus',
+        expect.objectContaining({
+          quietHours: expect.objectContaining({ enabled: true }),
+        }),
+      ),
+    );
+  });
+
+  it('still saves an intentional switch-off', async () => {
+    render(<TimeFocusSection />);
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable quiet hours' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save time and focus settings' }));
+
+    await waitFor(() =>
+      expect(preferenceMocks.save).toHaveBeenCalledWith(
+        'time-focus',
+        expect.objectContaining({
+          quietHours: expect.objectContaining({ enabled: false, days: [1] }),
+        }),
+      ),
+    );
+  });
+
   it('surfaces persistence failures without claiming the settings synced', async () => {
     preferenceMocks.save.mockRejectedValue(new Error('storage unavailable'));
     render(<TimeFocusSection />);

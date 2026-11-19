@@ -1,5 +1,5 @@
 import { scheduleLocalNotification } from './notifications';
-import { useNotificationPrefsStore } from '@/stores/notificationPrefsStore';
+import { notificationAllowedOnceReadable } from './notificationGate';
 import type { NotificationEventType, NotificationPriority } from './notifications';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -85,8 +85,7 @@ export async function dispatchCompanionNotification(payload: ControlPayload): Pr
   const spec = ACTION_MAP[payload.action];
   if (!spec) return;
 
-  const prefs = useNotificationPrefsStore.getState();
-  if (!prefs.shouldNotify(spec.type)) return;
+  if (!(await notificationAllowedOnceReadable(spec.type))) return;
 
   await scheduleLocalNotification({
     title: spec.title(payload),

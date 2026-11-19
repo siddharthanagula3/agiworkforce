@@ -52,8 +52,8 @@ export function MemoryControlsCard({
           label="Memory"
           description={
             isCloud
-              ? 'Let AGI remember details from your Cloud chats and use them later.'
-              : 'Let AGI remember details from your chats on this device and use them later.'
+              ? 'Remember details from your Cloud chats to use later.'
+              : 'Remember details from chats on this device to use later.'
           }
           icon={Brain}
           value={memoryEnabled}
@@ -63,8 +63,8 @@ export function MemoryControlsCard({
           label="Search and reference chats"
           description={
             isCloud
-              ? 'Let AGI search your other Cloud chats for relevant details when answering.'
-              : 'Let AGI search your other chats on this device for relevant details when answering.'
+              ? 'Search your other Cloud chats when answering.'
+              : 'Search your other chats on this device when answering.'
           }
           icon={MessageSquareText}
           value={referencePastChats}
@@ -72,7 +72,7 @@ export function MemoryControlsCard({
         />
         <SettingsSwitchRow
           label="Generate memory from chat history"
-          description="Learn durable details from eligible, non-temporary chat turns."
+          description="Learn lasting details from chats, except temporary ones."
           icon={Sparkles}
           value={memoryEnabled && generateMemoryFromHistory}
           onValueChange={onGenerateMemoryFromHistoryChange}

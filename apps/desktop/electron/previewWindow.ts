@@ -1,5 +1,9 @@
 import { BrowserWindow, session, shell } from 'electron';
-import { localPreviewUrl, type PreviewConsoleReport } from '@agiworkforce/local-runtime-contract';
+import {
+  localPreviewOrigin,
+  localPreviewUrl,
+  type PreviewConsoleReport,
+} from '@agiworkforce/local-runtime-contract';
 import { PreviewConsoleBuffer } from './previewConsole';
 
 const PREVIEW_PARTITION = 'agi-local-preview';
@@ -115,8 +119,12 @@ export function closeLocalPreview(): void {
  * The errors the open preview page logged since they were last cleared, so
  * the agent can see what a page it built does when it runs.
  */
-export function readPreviewConsoleErrors(clear: boolean): PreviewConsoleReport {
+export function readPreviewConsoleErrors(clear: boolean, origin?: string): PreviewConsoleReport {
   const open = preview && !preview.isDestroyed() ? preview : null;
+  const url = open ? localPreviewUrl(open.webContents.getURL()) : null;
+  if (origin !== undefined && localPreviewOrigin(url) !== origin) {
+    return { url, errors: [], dropped: 0 };
+  }
   const { errors, dropped } = consoleErrors.read(clear);
-  return { url: open ? localPreviewUrl(open.webContents.getURL()) : null, errors, dropped };
+  return { url, errors, dropped };
 }

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { quietHoursEndFor, heldByQuietHours } from '../quiet-hours-service';
+import {
+  QuietHoursUnreadableError,
+  quietHoursEndFor,
+  heldByQuietHours,
+} from '../quiet-hours-service';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -46,6 +50,75 @@ describe('quiet-hours delivery boundary', () => {
       await heldByQuietHours(db, 'owner', 'task_completed', new Date('2026-03-08T06:30Z')),
     ).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('never delays an urgent notice and does not read preferences for it', async () => {
+    const { db, query } = database();
+    expect(
+      await quietHoursEndFor(
+        db,
+        'owner',
+        new Date('2026-03-08T06:30:00Z'),
+        'agent_approval_needed',
+      ),
+    ).toBeNull();
+    expect(
+      await quietHoursEndFor(db, 'owner', new Date('2026-03-08T06:30:00Z'), 'agent_failed'),
+    ).toBeNull();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('says so when the saved preferences cannot be read, instead of behaving as if quiet hours were off', async () => {
+    const query = vi.fn().mockRejectedValue(new Error('connection reset'));
+    const db = { query } as Pick<DatabaseAdapter, 'query'>;
+
+    await expect(
+      heldByQuietHours(db, 'owner', 'task_completed', new Date('2026-03-08T06:30Z')),
+    ).rejects.toBeInstanceOf(QuietHoursUnreadableError);
+    await expect(
+      quietHoursEndFor(db, 'owner', new Date('2026-03-08T06:30Z'), 'task_completed'),
+    ).rejects.toBeInstanceOf(QuietHoursUnreadableError);
+  });
+
+  it('says so when quiet hours were switched on but the saved schedule is not usable', async () => {
+    const query = vi.fn().mockResolvedValue([
+      {
+        preferences: {
+          quietHours: {
+            enabled: true,
+            days: [],
+            startTime: '22:00',
+            endTime: '08:00',
+            timezone: 'America/Chicago',
+          },
+        },
+      },
+    ]);
+    const db = { query } as Pick<DatabaseAdapter, 'query'>;
+
+    await expect(
+      heldByQuietHours(db, 'owner', 'task_completed', new Date('2026-03-08T06:30Z')),
+    ).rejects.toBeInstanceOf(QuietHoursUnreadableError);
+  });
+
+  it('treats an account that never saved quiet hours, or turned them off, as open', async () => {
+    const now = new Date('2026-03-08T06:30Z');
+    const none = { query: vi.fn().mockResolvedValue([]) } as Pick<DatabaseAdapter, 'query'>;
+    const off = {
+      query: vi.fn().mockResolvedValue([{ preferences: { quietHours: { enabled: false } } }]),
+    } as Pick<DatabaseAdapter, 'query'>;
+
+    expect(await heldByQuietHours(none, 'owner', 'task_completed', now)).toBe(false);
+    expect(await heldByQuietHours(off, 'owner', 'task_completed', now)).toBe(false);
+  });
+
+  it('never fails an urgent notice for an unreadable setting', async () => {
+    const query = vi.fn().mockRejectedValue(new Error('connection reset'));
+    const db = { query } as Pick<DatabaseAdapter, 'query'>;
+
+    expect(await heldByQuietHours(db, 'owner', 'agent_failed')).toBe(false);
+    expect(await quietHoursEndFor(db, 'owner', new Date(), 'agent_approval_needed')).toBeNull();
+    expect(query).not.toHaveBeenCalled();
   });
 
   it('keeps urgent failures exempt without reading preferences', async () => {

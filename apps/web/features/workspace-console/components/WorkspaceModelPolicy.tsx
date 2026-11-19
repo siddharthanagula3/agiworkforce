@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Ban, Check, CircleSlash } from 'lucide-react';
 
 import {
@@ -9,6 +9,7 @@ import {
   type CatalogModel,
   type ModelPolicyLists,
 } from '../hooks/use-model-policy';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useUnsavedChangesGuard } from '@agiworkforce/ui';
 
@@ -73,6 +74,29 @@ function toggle(list: string[], value: string): string[] {
     : [...list, lower];
 }
 
+function listsOf(source: ModelPolicyLists): ModelPolicyLists {
+  return {
+    allowedProviders: [...source.allowedProviders],
+    blockedProviders: [...source.blockedProviders],
+    allowedModels: [...source.allowedModels],
+    blockedModels: [...source.blockedModels],
+  };
+}
+
+function normalizedLists(lists: ModelPolicyLists): string {
+  const sorted = (list: string[]) => list.map((entry) => entry.toLowerCase()).sort();
+  return JSON.stringify({
+    allowedProviders: sorted(lists.allowedProviders),
+    blockedProviders: sorted(lists.blockedProviders),
+    allowedModels: sorted(lists.allowedModels),
+    blockedModels: sorted(lists.blockedModels),
+  });
+}
+
+function sameLists(a: ModelPolicyLists, b: ModelPolicyLists): boolean {
+  return normalizedLists(a) === normalizedLists(b);
+}
+
 export function WorkspaceModelPolicy() {
   const { data, isPending, isError, error, refetch } = useModelPolicy();
   const update = useUpdateModelPolicy();
@@ -80,34 +104,15 @@ export function WorkspaceModelPolicy() {
   const [draft, setDraft] = useState<ModelPolicyLists | null>(null);
   const [filter, setFilter] = useState('');
 
-  useEffect(() => {
-    if (!data) return;
-    setDraft({
-      allowedProviders: [...data.policy.allowedProviders],
-      blockedProviders: [...data.policy.blockedProviders],
-      allowedModels: [...data.policy.allowedModels],
-      blockedModels: [...data.policy.blockedModels],
-    });
-  }, [data]);
+  useServerDraftSync(
+    data?.policy,
+    (acknowledged) => draft === null || sameLists(draft, acknowledged),
+    (policy) => setDraft(listsOf(policy)),
+  );
 
   const dirty = useMemo(() => {
     if (!data || !draft) return false;
-    const saved: ModelPolicyLists = {
-      allowedProviders: data.policy.allowedProviders,
-      blockedProviders: data.policy.blockedProviders,
-      allowedModels: data.policy.allowedModels,
-      blockedModels: data.policy.blockedModels,
-    };
-    const norm = (l: ModelPolicyLists) =>
-      JSON.stringify(
-        Object.fromEntries(
-          Object.entries(l).map(([k, v]) => [
-            k,
-            [...(v as string[])].map((s) => s.toLowerCase()).sort(),
-          ]),
-        ),
-      );
-    return norm(saved) !== norm(draft);
+    return !sameLists(data.policy, draft);
   }, [data, draft]);
 
   const { dialog: discardDialog } = useUnsavedChangesGuard({
@@ -188,9 +193,8 @@ export function WorkspaceModelPolicy() {
             Providers
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Blocking a provider blocks every model it serves, unless you approve a specific model
-            below. Approving no providers at all leaves them all available, restriction is something
-            you say, not something an empty list implies.
+            Blocking a provider blocks its models unless you approve one below. None approved leaves
+            all available.
           </p>
         </div>
         <ul className="divide-y" style={{ borderColor: 'var(--settings-border)' }}>
@@ -379,7 +383,7 @@ export function WorkspaceModelPolicy() {
         >
           <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             {restricted
-              ? 'This workspace restricts models. The rule is checked after auto-routing resolves, so a blocked model cannot be reached by asking for Auto.'
+              ? 'Models are restricted. Auto never reaches a blocked model.'
               : 'No restriction is in force. Every model in the catalog is available to members.'}
           </p>
           <div className="flex items-center gap-3">

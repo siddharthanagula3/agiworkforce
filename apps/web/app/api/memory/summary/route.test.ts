@@ -6,6 +6,7 @@ type RateLimitModule = typeof import('@/lib/rate-limit');
 type RlsDbModule = typeof import('@/lib/server/rls-db');
 type EntitlementModule = typeof import('@/lib/services/entitlement-resolution');
 type MemorySummaryModule = typeof import('@/lib/services/memory-summary-service');
+type ManagedComputeAccessModule = typeof import('@/lib/services/managed-compute-access');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   planTier: vi.fn(),
   readCached: vi.fn(),
   generate: vi.fn(),
+  access: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -36,6 +38,10 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<EntitlementModule>()),
   resolveEntitledPlanTier: mocks.planTier,
+}));
+vi.mock('@/lib/services/managed-compute-access', async (importOriginal) => ({
+  ...(await importOriginal<ManagedComputeAccessModule>()),
+  evaluateManagedComputeWorkspaceAccess: mocks.access,
 }));
 vi.mock('@/lib/services/memory-summary-service', async (importOriginal) => ({
   ...(await importOriginal<MemorySummaryModule>()),
@@ -65,6 +71,12 @@ describe('/api/memory/summary', () => {
     mocks.planTier.mockResolvedValue('plus');
     mocks.readCached.mockResolvedValue(null);
     mocks.generate.mockResolvedValue({ summary: SUMMARY, generatedAt: '2026-10-19T00:00:00.000Z' });
+    mocks.access.mockResolvedValue({
+      allowed: true,
+      code: 'allowed',
+      reason: 'allowed',
+      organizationId: null,
+    });
   });
 
   it('GET answers with the cached summary for the current memories', async () => {
@@ -116,6 +128,36 @@ describe('/api/memory/summary', () => {
       memoryCount: 2,
       generatedAt: '2026-10-19T00:00:00.000Z',
     });
+  });
+
+  it.each([
+    ['managed_compute_disabled', 403],
+    ['privacy_mode_not_allowed', 403],
+    ['workspace_policy_unavailable', 503],
+  ])('POST refuses with %s before any memory leaves for a provider', async (code, status) => {
+    mocks.access.mockResolvedValue({
+      allowed: false,
+      code,
+      reason: 'Your workspace administrator has not allowed this.',
+      organizationId: 'org-1',
+    });
+    const response = await POST(request('POST'));
+
+    expect(response.status).toBe(status);
+    expect(JSON.stringify(await response.json())).toContain(code);
+    expect(mocks.access).toHaveBeenCalledWith(expect.anything(), 'user-1', 'web', {
+      organizationId: null,
+    });
+    expect(mocks.planTier).not.toHaveBeenCalled();
+    expect(mocks.generate).not.toHaveBeenCalled();
+  });
+
+  it('POST skips the workspace check when there are no memories to send', async () => {
+    mocks.query.mockResolvedValue([]);
+    const response = await POST(request('POST'));
+
+    expect(response.status).toBe(200);
+    expect(mocks.access).not.toHaveBeenCalled();
   });
 
   it('POST says the summary could not be written when generation fails', async () => {

@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { MessageSquare, RotateCcw, X, type LucideIcon } from 'lucide-react-native';
 import type { MediaJobEntry } from '@agiworkforce/cloud-contracts';
@@ -72,20 +72,30 @@ function JobAction({
 
 export function MediaJobsSection({
   onOpenConversation,
+  onJobsCompleted,
 }: {
   onOpenConversation: (conversationId: string) => void;
+  onJobsCompleted?: () => void;
 }) {
   const c = useThemeColors();
   const [jobs, setJobs] = useState<MediaJobEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const inFlightIds = useRef<ReadonlySet<string>>(new Set());
+  const onJobsCompletedRef = useRef(onJobsCompleted);
+  onJobsCompletedRef.current = onJobsCompleted;
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
       const next = await listMediaJobs(signal);
       if (signal?.aborted) return;
+      const completed = next.some(
+        (job) => job.status === 'done' && inFlightIds.current.has(job.id),
+      );
+      inFlightIds.current = new Set(next.filter(inFlight).map((job) => job.id));
       setJobs(next);
       setError(null);
+      if (completed) onJobsCompletedRef.current?.();
     } catch (loadError) {
       if (signal?.aborted) return;
       setError(toUserMessage(loadError, 'Your generations could not be loaded.'));

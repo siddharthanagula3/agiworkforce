@@ -56,7 +56,8 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: vi.fn(),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   appReturnOwner: (...a: unknown[]) => mocks.appReturnOwner(...a),
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: (...a: unknown[]) => mocks.upsertGrant(...a),
@@ -102,6 +103,7 @@ function configureLinear(): void {
 
 function pending(overrides: Record<string, unknown> = {}) {
   return {
+    authorizationId: 'authorization-1',
     userId: 'user-1',
     connectorId: 'linear',
     codeVerifier: 'verifier-value',
@@ -123,7 +125,7 @@ function location(response: Response): URL {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.authUser.mockResolvedValue({ userId: 'user-1' });
-  mocks.upsertGrant.mockResolvedValue(undefined);
+  mocks.upsertGrant.mockResolvedValue(true);
   mocks.audit.mockResolvedValue(undefined);
   for (const key of ENV_KEYS) delete process.env[key];
   process.env['CONNECTOR_OAUTH_REDIRECT_BASE_URL'] = 'https://app.example.com';
@@ -180,11 +182,30 @@ describe('GET /api/connectors/oauth/callback', () => {
         tokenEndpoint: 'https://auth.example.com/token',
       }),
       { accountLabel: null },
+      'authorization-1',
     );
     const target = location(response);
     expect(target.pathname).toBe('/connectors');
     expect(target.searchParams.get('status')).toBe('connected');
     expect(target.searchParams.get('connector')).toBe('linear');
+  });
+
+  it('reports nothing connected when a newer reconnect or a disconnect took its authorization first', async () => {
+    mocks.consumePending.mockResolvedValue(pending());
+    mocks.exchange.mockResolvedValue({
+      accessToken: 'access-token-value',
+      refreshToken: null,
+      tokenType: 'Bearer',
+      accessTokenExpiresAt: null,
+      grantedScopes: ['read'],
+      accountLabel: null,
+    });
+    mocks.upsertGrant.mockResolvedValue(false);
+
+    const response = await GET(request(`?state=${STATE}&code=auth-code`));
+
+    expect(location(response).searchParams.get('status')).toBe('invalid_state');
+    expect(mocks.audit).not.toHaveBeenCalled();
   });
 
   it('never reflects a token, code, or state into the response', async () => {
@@ -361,3 +382,5 @@ vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<ConnectorPolicyGateModule>()),
   evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
 }));
+
+type ImportedModule0 = typeof import('@/lib/connectors/oauth-store');

@@ -10,6 +10,7 @@ import {
   type ResearchDomainPolicy,
 } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
 import { resolvePromptText } from '@/lib/prompts/prompt-registry';
+import { decodeResponseText } from '@/lib/url-fetch/decode-response-text';
 import {
   createDeadline,
   guardedFetch,
@@ -608,8 +609,18 @@ export async function executeUrlFetch(
       );
     }
 
-    const raw = documentReader ? '' : new TextDecoder('utf-8', { fatal: false }).decode(bytes);
     const isHtml = mime === 'text/html' || mime === 'application/xhtml+xml';
+    let raw = '';
+    if (!documentReader) {
+      const decoded = decodeResponseText(bytes, contentTypeHeader, { html: isHtml });
+      if (!decoded.ok) {
+        return err(
+          'unsupported_content_type',
+          `The page at ${current.href} declares the character encoding "${decoded.charset}", which this reader cannot decode.`,
+        );
+      }
+      raw = decoded.text;
+    }
     let extracted: string;
     if (documentReader) {
       try {

@@ -78,24 +78,19 @@ jest.mock('@clerk/expo', () => ({
   }),
 }));
 
-jest.mock('@/src/features/auth/store', () => ({
-  useAuthStore: (
-    selector: (s: {
-      user: null;
-      signOut: jest.Mock;
-      isClerkLoaded: boolean;
-      isClerkSignedIn: boolean;
-      clerkUserId: string;
-    }) => unknown,
-  ) =>
-    selector({
-      user: null,
-      signOut: jest.fn(),
-      isClerkLoaded: true,
-      isClerkSignedIn: true,
-      clerkUserId: 'user_test',
-    }),
-}));
+jest.mock('@/src/features/auth/store', () => {
+  const state = {
+    user: null,
+    signOut: jest.fn(),
+    isClerkLoaded: true,
+    isClerkSignedIn: true,
+    clerkUserId: 'user_test',
+  };
+  const useAuthStore = (selector: (s: typeof state) => unknown) => selector(state);
+  useAuthStore.getState = () => state;
+  useAuthStore.subscribe = () => () => undefined;
+  return { useAuthStore };
+});
 
 jest.mock('@/src/features/waitlist/store', () => ({
   useWaitlistStore: (selector: (s: { cloudUnlocked: boolean }) => unknown) =>
@@ -104,7 +99,16 @@ jest.mock('@/src/features/waitlist/store', () => ({
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: (selector: (s: { appMode: string }) => unknown) =>
-    selector({ appMode: 'local' }),
+    selector({ appMode: 'cloud' }),
+}));
+
+jest.mock('@/src/features/chat/hooks/useAppModeSwitch', () => ({
+  useAppModeSwitch: () => ({
+    appMode: 'cloud',
+    cloudUnlocked: true,
+    switchToLocal: jest.fn(() => true),
+    switchToCloud: jest.fn(() => true),
+  }),
 }));
 
 import SettingsTabScreen from '@/src/features/settings';

@@ -17,6 +17,73 @@ pub fn spec_blocks_entire_tool_for_schema(spec: &str, tool_name: &str) -> bool {
         && spec_argument_filter(spec).is_none_or(|pattern| wildcard_matches(pattern, ""))
 }
 
+/// The allow rules that admit only what both lists admit, per tool. Where both
+/// lists narrow the same tool by argument, a pattern survives only when the
+/// other list holds it too or it is a literal the other list's pattern covers,
+/// so an overlap this cannot prove is dropped rather than widened.
+pub fn intersect_allowlists(caller: &[String], requested: &[String]) -> Vec<String> {
+    let mut tools: Vec<String> = Vec::new();
+    for spec in caller.iter().chain(requested) {
+        for tool in crate::runtime::tool_catalog::policy_alias_tools(spec_alias(spec)) {
+            if !tools.iter().any(|known| known.eq_ignore_ascii_case(&tool)) {
+                tools.push(tool);
+            }
+        }
+    }
+
+    let mut kept: Vec<String> = Vec::new();
+    for tool in &tools {
+        let caller_filters = argument_filters_for_tool(caller, tool);
+        let requested_filters = argument_filters_for_tool(requested, tool);
+        if caller_filters.is_empty() || requested_filters.is_empty() {
+            continue;
+        }
+        let filters: Vec<Option<&str>> = if caller_filters.contains(&None) {
+            requested_filters
+        } else if requested_filters.contains(&None) {
+            caller_filters
+        } else {
+            let caller_patterns: Vec<&str> = caller_filters.into_iter().flatten().collect();
+            let requested_patterns: Vec<&str> = requested_filters.into_iter().flatten().collect();
+            caller_patterns
+                .iter()
+                .filter(|pattern| pattern_within(pattern, &requested_patterns))
+                .chain(
+                    requested_patterns
+                        .iter()
+                        .filter(|pattern| pattern_within(pattern, &caller_patterns)),
+                )
+                .map(|pattern| Some(*pattern))
+                .collect()
+        };
+        for filter in filters {
+            let spec = match filter {
+                Some(pattern) => format!("{tool}({pattern})"),
+                None => tool.clone(),
+            };
+            if !kept.contains(&spec) {
+                kept.push(spec);
+            }
+        }
+    }
+    kept
+}
+
+fn argument_filters_for_tool<'a>(specs: &'a [String], tool_name: &str) -> Vec<Option<&'a str>> {
+    specs
+        .iter()
+        .filter(|spec| spec_matches_tool_for_schema(spec, tool_name))
+        .map(|spec| spec_argument_filter(spec))
+        .collect()
+}
+
+fn pattern_within(pattern: &str, others: &[&str]) -> bool {
+    others.iter().any(|other| {
+        other.trim() == pattern.trim()
+            || (!pattern.contains(['*', '?']) && wildcard_matches(other, pattern))
+    })
+}
+
 pub fn ensure_tool_call_allowed(
     tool_name: &str,
     args: &HashMap<String, String>,
@@ -266,6 +333,47 @@ mod tests {
         assert!(spec_matches_tool_for_schema("Bash(cargo *)", "run_command"));
         assert!(spec_matches_tool_for_schema("Edit", "apply_patch"));
         assert!(!spec_matches_tool_for_schema("Write", "read_file"));
+    }
+
+    fn specs(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
+    #[test]
+    fn intersected_allowlists_admit_only_what_both_admit() {
+        assert!(intersect_allowlists(&specs(&["read_file"]), &specs(&["write_file"])).is_empty());
+
+        let read_only =
+            intersect_allowlists(&specs(&["Read"]), &specs(&["read_file", "write_file"]));
+        assert_eq!(read_only, specs(&["read_file", "read_many_files"]));
+        let write = args(&[("path", "notes.txt")]);
+        let read_only = Some(read_only.as_slice());
+        assert!(ensure_tool_call_allowed("write_file", &write, read_only, &[]).is_err());
+        assert!(ensure_tool_call_allowed("read_file", &write, read_only, &[]).is_ok());
+
+        let git = intersect_allowlists(&specs(&["Bash(git *)"]), &specs(&["Bash"]));
+        assert_eq!(git, specs(&["run_command(git *)"]));
+        let status = args(&[("command", "git status")]);
+        let remove = args(&[("command", "rm -rf .")]);
+        let git = Some(git.as_slice());
+        assert!(ensure_tool_call_allowed("run_command", &status, git, &[]).is_ok());
+        assert!(ensure_tool_call_allowed("run_command", &remove, git, &[]).is_err());
+
+        assert_eq!(
+            intersect_allowlists(&specs(&["Bash"]), &specs(&["Bash(git status)"])),
+            specs(&["run_command(git status)"])
+        );
+        assert_eq!(
+            intersect_allowlists(
+                &specs(&["Bash(git *)"]),
+                &specs(&["Bash(git status)", "Bash(rm *)"])
+            ),
+            specs(&["run_command(git status)"])
+        );
+        assert_eq!(
+            intersect_allowlists(&specs(&["Edit(src/*)"]), &specs(&["MultiEdit"])),
+            specs(&["multiedit(src/*)"])
+        );
     }
 
     #[test]

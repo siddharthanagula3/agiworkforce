@@ -74,20 +74,35 @@ export function repliesPendingMute(source) {
   return /this\.pendingMuted\s*=\s*muted/.test(setMuted) && /pendingMuted/.test(started);
 }
 
-export function readDisposingEndings(source) {
-  function disposes(name, seen = new Set()) {
-    if (seen.has(name)) return false;
+/**
+ * Whether a body calls dispose() itself or hands off, through any chain of sibling
+ * methods, to one that does. Another ending method or the message handler is not a
+ * hand-off: each guards its own early return, so naming one proves nothing about the
+ * session being disposed.
+ */
+function reachesDispose(source, body, seen = new Set()) {
+  if (/this\.dispose\(\)/.test(body)) return true;
+  for (const call of body.matchAll(/\bthis\.(\w+)\s*\(/g)) {
+    const name = call[1];
+    if (
+      name === 'dispose' ||
+      name === 'handleMessage' ||
+      ENDING_METHODS.includes(name) ||
+      seen.has(name)
+    )
+      continue;
     seen.add(name);
-    const body = methodBody(source, name);
-    if (body === null) return false;
-    if (/this\.dispose\(\)/.test(body)) return true;
-    return [...body.matchAll(/\bthis\.(\w+)\s*\(/g)].some((match) =>
-      disposes(match[1], new Set(seen)),
-    );
+    const delegate = methodBody(source, name);
+    if (delegate !== null && reachesDispose(source, delegate, seen)) return true;
   }
+  return false;
+}
+
+export function readDisposingEndings(source) {
   const disposing = [];
   for (const name of ENDING_METHODS) {
-    if (disposes(name)) disposing.push(name);
+    const body = methodBody(source, name);
+    if (body !== null && reachesDispose(source, body)) disposing.push(name);
   }
   const handler = methodBody(source, 'handleMessage');
   if (handler !== null) {

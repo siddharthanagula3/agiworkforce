@@ -4,6 +4,7 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { FileMentionPalette } from '@/src/features/chat/components/FileMentionPalette';
+import { ownerHandler } from '@/test-utils/ownerProps';
 
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -67,7 +68,7 @@ describe('FileMentionPalette', () => {
       <FileMentionPalette destinationKey="first" query="old" onSelect={onSelect} />,
     );
     const row = await screen.findByLabelText('Mention old.pdf');
-    const stalePress = row.props.onPress;
+    const stalePress = ownerHandler(row, 'onPress');
     view.rerender(<FileMentionPalette destinationKey="second" query="new" onSelect={onSelect} />);
     expect(screen.queryByLabelText('Mention old.pdf')).toBeNull();
     act(() => stalePress());
@@ -91,7 +92,7 @@ describe('FileMentionPalette', () => {
     const onSelect = jest.fn();
     render(<FileMentionPalette destinationKey="new-chat" query="old" onSelect={onSelect} />);
     const row = await screen.findByLabelText('Mention old.pdf');
-    const stalePress = row.props.onPress;
+    const stalePress = ownerHandler(row, 'onPress');
     act(() => {
       invalidateCloudAccount();
       activateCloudAccount('picker-owner');

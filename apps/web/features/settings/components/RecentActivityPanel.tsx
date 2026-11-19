@@ -6,7 +6,7 @@ import { useUserActivity, type UserActivity } from '@features/settings/hooks/use
 const ACTIVITY_LIMIT = 50;
 const PANEL_TITLE = 'Recent activity';
 const PANEL_EXPLANATION =
-  'What has happened on your account recently, newest first. Anything you do not recognise is worth revoking a session for above.';
+  'Recent account events, newest first. Revoke a session above if something looks unfamiliar.';
 
 interface ActivityGroup {
   id: string;

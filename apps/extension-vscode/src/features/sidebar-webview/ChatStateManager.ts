@@ -1,4 +1,5 @@
-import { settingsWithholdReason } from '../../data/contextExclusion';
+import { ContextResolutionCache, settingsWithholdReason } from '../../data/contextExclusion';
+import { codeBlockTargetRefusal } from '../../platform/codeBlockTarget';
 import * as path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { resolveContained } from '@agiworkforce/utils/path-containment';
@@ -15,6 +16,7 @@ import { formatSessionAge } from '../surfaces/sessionRows';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
 import {
   normalizeConfiguredModelId,
+  normalizeSelectableConfiguredModelId,
   getModelProviderInfo,
   supportedEffort,
   buildGroupedQuickPickItems,
@@ -28,6 +30,8 @@ import {
   UNKNOWN_PROVIDER_BRAND_COLOR,
   type ModelRoute,
 } from '../model-picker/modelConstants';
+import { localModelNotRunningMessage } from '../../core/cloudModelBoundary';
+import { workingTextEditor } from '../../platform/lastTextEditor';
 import {
   PROVIDER_DISPLAY,
   canUseBillingPlanCapability,
@@ -79,7 +83,10 @@ import {
   cliAcquisitionHint,
   CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
+  MANAGE_WORKSPACE_TRUST_COMMAND,
   readMcpAuthRequired,
+  readNotificationLag,
+  WorkspaceNotTrustedError,
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
@@ -157,12 +164,15 @@ import {
   type EditorContextSnapshot,
 } from '../../data/composerContext';
 import { searchMentionTargets } from '../../data/mentionSearch';
-import type {
-  ApprovalDecision,
-  ComposerBinding,
-  ContextAttachmentKind,
+import {
+  MAX_SEND_MESSAGE_CHARS,
+  MAX_SEND_MESSAGE_REFERENCES,
+  type ApprovalDecision,
+  type ComposerBinding,
+  type ContextAttachmentKind,
 } from '../../protocol/webviewMessages';
 import {
+  approvalAllowsSessionScope,
   approvalFilePath,
   approvalToolIdentity,
   approvalToolLabel,
@@ -208,8 +218,7 @@ import {
   planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
-import { getTokenCounter } from '../../data/tokenCounter';
-import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePresentation';
+import { recordCompletedTurnUsage } from '../../data/turnUsage';
 import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
@@ -232,6 +241,7 @@ const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
 const RECENT_CONVERSATION_LIMIT = 5;
 const TEXT_ATTACHMENT_CHAR_LIMIT = 40_000;
 const MAX_QUEUED_SENDS = 20;
+const EDITOR_CONTEXT_DEBOUNCE_MS = 150;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const WEB_SEARCH_LOGIN_LABELS: Readonly<Record<string, string>> = {
   brave: 'Brave Search',
@@ -252,6 +262,7 @@ const RUNTIME_SETUP_REFUSAL: ChatErrorHint = { category: 'runtime', action: 'ope
 const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade-plan' };
 const SIGN_IN_REFUSAL: ChatErrorHint = { category: 'sign-in', action: 'sign-in-account' };
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
+const RUNTIME_NOT_FOUND_CODE = -32004;
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
 const REWIND = 'Rewind';
@@ -293,6 +304,7 @@ export type WebviewToExtMessage =
         references?: WorkspaceFileReference[];
         followUpBehavior?: ComposerFollowUpBehavior;
         clientMessageId?: string;
+        standalone?: boolean;
       };
     }
   | { type: 'ready' }
@@ -333,7 +345,6 @@ export type WebviewToExtMessage =
   | { type: 'dismissEditorContext'; payload: { id: string } }
   | { type: 'openToolDiff'; payload: { path: string } }
   | { type: 'reviewTurnChanges'; payload: { turnId: string } }
-  | { type: 'undoTurn'; payload: { turnId: string } }
   | {
       type: 'resolveTurnFailure';
       payload: {
@@ -416,12 +427,12 @@ export type ExtToWebviewMessage =
     }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
+  | { type: 'streamReplaced'; payload: { text: string } }
   | { type: 'sideQuestionDelta'; payload: { requestId: string; delta: string } }
   | {
       type: 'sideQuestionAnswer';
       payload: { requestId: string; answer: string } | { requestId: string; error: string };
     }
-  | { type: 'turnChangesUndone'; payload: { turnId: string } }
   | {
       type: 'conversationBoundaryChanged';
       payload: { message: string; clientMessageId: string; text: string };
@@ -438,7 +449,7 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'fileSearchResults';
-      payload: { files: Array<WorkspaceFileReference & { label: string }> };
+      payload: { query: string; files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
   | { type: 'sessionBinding'; payload: { epoch: number } }
@@ -611,6 +622,7 @@ export type ExtToWebviewMessage =
         summary: string;
         detail: string;
         sessionApproved: boolean;
+        sessionScopeOffered?: false;
         riskLevel?: AgentEventApprovalRiskLevel;
         reversible?: boolean;
         reviewable?: true;
@@ -844,6 +856,11 @@ interface DeveloperThreadState {
   provider?: string;
   runtime: LocalRuntimeClient;
   updatedAt: string;
+  disconnected?: boolean;
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function manualModelUnlockText(): string {
@@ -910,6 +927,10 @@ export class ChatStateManager {
   private _lastMeterBoundary: string | undefined;
   private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
+  private readonly _pendingWritesByToolCall = new Map<
+    string,
+    { turnId: string; filePath: string }
+  >();
   private _lastChangedTurn:
     { threadId: string; turnId: string; files: readonly string[] } | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
@@ -942,11 +963,17 @@ export class ChatStateManager {
       runtime: LocalRuntimeClient;
       identity: string;
       label: string;
+      sessionScope: boolean;
       resolving?: boolean;
       proposed?: { filePath: string; content: string };
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private _editorContextTracking?: {
+    cache: ContextResolutionCache;
+    listeners: vscode.Disposable[];
+    timer?: ReturnType<typeof setTimeout>;
+  };
   private _editorContextSequence = 0;
   private _answerRatings: Promise<void> = Promise.resolve();
   private readonly _activeModelChanged = new vscode.EventEmitter<string>();
@@ -964,11 +991,21 @@ export class ChatStateManager {
     this._activeModel = Config.model();
     this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
     this._editorContextListeners.push(
-      vscode.window.onDidChangeActiveTextEditor(() => void this.pushEditorContext()),
-      vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
-      vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('agiWorkforce.agent.effort')) {
+          this._syncEffortFromConfiguration();
+        }
+      }),
     );
+    const threadRemoved = this._conversationTreeProvider?.onDidRemoveThread;
+    if (threadRemoved !== undefined) {
+      this._editorContextListeners.push(
+        threadRemoved((threadId) => {
+          if (this._thread?.id === threadId) this.resetConversation();
+        }),
+      );
+    }
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
         'agiWorkforce.usageMeterCollapsed',
@@ -1019,11 +1056,13 @@ export class ChatStateManager {
     });
   }
 
-  private _followDefaultModel(): void {
+  private async _followDefaultModel(): Promise<void> {
     const model = this._normalizeModelSelection(Config.model());
-    if (model === this._activeModel) return;
-    this._setActiveModel(model);
-    this._showModel(model);
+    if (model !== this._activeModel) {
+      this._setActiveModel(model);
+      this._showModel(model);
+    }
+    await this._refuseUnlistedLocalModel(model, true);
   }
 
   get mode(): AgentMode | undefined {
@@ -1072,6 +1111,8 @@ export class ChatStateManager {
   }
 
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
+    this._rebindThreadRuntime();
+    this.setEditorContextTracking(true);
     switch (msg.type) {
       case 'composerState': {
         this._composerBinding = msg.payload;
@@ -1103,6 +1144,7 @@ export class ChatStateManager {
             efforts: this.modelEffortLevels(model),
           },
         });
+        if (this._thread === undefined) await this._refuseUnlistedLocalModel(model, false);
 
         await this.refreshAccountPresentation();
         await this.pushRecentConversations();
@@ -1118,6 +1160,8 @@ export class ChatStateManager {
           );
           this._postSessionBoundary(this._thread.trustMode, this._thread.provider);
           void this.syncStoredTranscript();
+        } else {
+          await this._restoreOpenThread();
         }
         break;
       }
@@ -1161,7 +1205,7 @@ export class ChatStateManager {
       }
 
       case 'manageWorkspaceTrust': {
-        await vscode.commands.executeCommand('workbench.trust.manage');
+        await vscode.commands.executeCommand(MANAGE_WORKSPACE_TRUST_COMMAND);
         break;
       }
 
@@ -1178,6 +1222,7 @@ export class ChatStateManager {
           this._setActiveModel(model);
           this._post({ type: 'model', payload: { model } });
           this._postProviderBadge(model);
+          if (this._thread === undefined) await this._refuseUnlistedLocalModel(model, false);
         }
         break;
       }
@@ -1190,6 +1235,7 @@ export class ChatStateManager {
           msg.payload.references,
           msg.payload.followUpBehavior,
           msg.payload.clientMessageId,
+          msg.payload.standalone === true,
         );
         break;
       }
@@ -1198,6 +1244,10 @@ export class ChatStateManager {
         this._resumeAttemptSeq++;
         this._dropSteeringSends('Steer cancelled by Stop.');
         trackProductEvent('generation_stopped', this._thread?.trustMode);
+        if (!this._turnLifecycleActive && this._activeTurn === undefined) {
+          this._post({ type: 'done' });
+          break;
+        }
         await this._interruptActiveTurn();
         break;
       }
@@ -1207,19 +1257,16 @@ export class ChatStateManager {
         try {
           this._post({
             type: 'fileSearchResults',
-            payload: { files: await searchMentionTargets(query) },
+            payload: { query, files: await searchMentionTargets(query) },
           });
         } catch {
-          this._post({ type: 'fileSearchResults', payload: { files: [] } });
+          this._post({ type: 'fileSearchResults', payload: { query, files: [] } });
         }
         break;
       }
 
       case 'openRecentConversation': {
-        await vscode.commands.executeCommand(
-          'agi-workforce.openConversation',
-          msg.payload.threadId,
-        );
+        await this.resumeConversation(msg.payload.threadId);
         break;
       }
 
@@ -1240,7 +1287,8 @@ export class ChatStateManager {
         this._clearPendingApprovals();
         void this.pushEditorContext();
         this._post({ type: 'conversationCleared' });
-        this._followDefaultModel();
+        this._rememberOpenThread();
+        await this._followDefaultModel();
         await this._pushUsageMeterOnBoundaryChange();
         break;
       }
@@ -1320,16 +1368,21 @@ export class ChatStateManager {
 
       case 'openSessionRow': {
         if (msg.payload.source === 'local') {
-          await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
+          await this.resumeConversation(msg.payload.id);
           break;
         }
         if (msg.payload.source === 'cloud-code') {
           await vscode.commands.executeCommand(OPEN_CLOUD_CODE_SESSION_COMMAND, msg.payload.id);
           break;
         }
-        if (await this._continueAccountConversationHere(msg.payload.id)) break;
+        const continued = await this._continueAccountConversationHere(msg.payload.id);
+        if (continued === 'opened') break;
         void vscode.window.showInformationMessage(
-          `${PRODUCT_NAMES.code}: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.`,
+          continued === 'no-workspace'
+            ? `${PRODUCT_NAMES.code}: open a folder to continue this chat in VS Code, so the chat opened on the web.`
+            : continued === 'untrusted'
+              ? `${PRODUCT_NAMES.code}: trust this workspace to continue this chat in VS Code, so the chat opened on the web.`
+              : `${PRODUCT_NAMES.code}: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.`,
         );
         await vscode.env.openExternal(
           vscode.Uri.parse(`${getCloudWebOrigin()}/chat/${msg.payload.id}?from=vscode-extension`),
@@ -1477,13 +1530,13 @@ export class ChatStateManager {
 
       case 'reviewTurnChanges': {
         const changed = this._lastChangedTurn;
-        if (changed?.turnId !== msg.payload.turnId) break;
+        if (changed?.turnId !== msg.payload.turnId) {
+          void vscode.window.showInformationMessage(
+            `${PRODUCT_NAMES.code}: only the latest reply's changes can be reviewed here. Use Checkpoints to go back further.`,
+          );
+          break;
+        }
         await openTurnChanges(changed.files);
-        break;
-      }
-
-      case 'undoTurn': {
-        await this._undoTurn(msg.payload.turnId);
         break;
       }
 
@@ -1715,6 +1768,10 @@ export class ChatStateManager {
         const { modelId } = (msg as { type: 'selectModel'; payload: { modelId: string } }).payload;
         if (modelId.startsWith('__local_setup__')) break;
         const normalized = this._normalizeModelSelection(modelId);
+        if (this._isUnlistedLocalModel(normalized)) {
+          this._postError(localModelNotRunningMessage(normalized), MODEL_UNAVAILABLE);
+          break;
+        }
         const tier = await resolveTier(this._context);
         if (
           !this._localModelProviders.has(normalized) &&
@@ -1820,7 +1877,7 @@ export class ChatStateManager {
         const { code, language } = (
           msg as { type: 'proposeDiff'; payload: { code: string; language: string } }
         ).payload;
-        const editor = vscode.window.activeTextEditor;
+        const editor = workingTextEditor();
         if (editor === undefined) {
           const message = t('chatNotice.openFileForDiff');
           void vscode.window.showWarningMessage(message);
@@ -1833,12 +1890,17 @@ export class ChatStateManager {
           this._post({ type: 'diffProposalFailed', payload: { message } });
           break;
         }
+        const refusal = codeBlockTargetRefusal(editor.document, language, this._thread?.cwd);
+        if (refusal !== undefined) {
+          void vscode.window.showWarningMessage(refusal);
+          this._post({ type: 'diffProposalFailed', payload: { message: refusal } });
+          break;
+        }
         const selection = editor.selection;
         const range = selection.isEmpty
           ? new vscode.Range(editor.selection.active, editor.selection.active)
           : selection;
         const originalText = selection.isEmpty ? '' : editor.document.getText(selection);
-        void language;
 
         try {
           const filePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -2058,9 +2120,12 @@ export class ChatStateManager {
 
   private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
-      const threads = ((await this._conversationTreeProvider?.getThreads()) ?? []).filter(
-        (thread) => !isCloudThread(thread),
-      );
+      const listing = (await this._conversationTreeProvider?.listThreads()) ?? {
+        items: [],
+        failures: [],
+      };
+      const threads = listing.items.filter((thread) => !isCloudThread(thread));
+      const [failure] = listing.failures;
       const inputs: SessionRowInput[] = threads.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -2069,7 +2134,20 @@ export class ChatStateManager {
         ...(thread.createdBy === undefined ? {} : { origin: thread.createdBy }),
         ...(thread.gitBranch === undefined ? {} : { branch: thread.gitBranch }),
       }));
-      this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
+      this._post({
+        type: 'sessionsList',
+        payload: {
+          source,
+          rows: mergeSessionRows(inputs),
+          ...(failure === undefined
+            ? {}
+            : {
+                unavailable: failure.restricted
+                  ? t('chatNotice.trustBeforeStart')
+                  : `Sessions in ${failure.folderName} could not be listed: ${failure.reason}`,
+              }),
+        },
+      });
       return;
     }
 
@@ -2089,11 +2167,27 @@ export class ChatStateManager {
       return;
     }
     try {
-      const [page, codeSessions, workspaceRepositories] = await Promise.all([
-        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }),
-        code.status === 'ready' ? code.api.list('open') : null,
+      const [pageResult, codeResult, workspaceRepositories] = await Promise.all([
+        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }).then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        ),
+        code.status === 'ready'
+          ? code.api.list('open').then(
+              (value) => ({ ok: true as const, value }),
+              (error: unknown) => ({ ok: false as const, error }),
+            )
+          : { ok: true as const, value: null },
         workspaceGitHubRepositories(),
       ]);
+      if (!pageResult.ok && !codeResult.ok) throw pageResult.error;
+      const page = pageResult.ok ? pageResult.value : { conversations: [] };
+      const codeSessions = codeResult.ok ? codeResult.value : null;
+      const partialFailure = !pageResult.ok
+        ? `Cloud chats could not be loaded: ${describeError(pageResult.error)}`
+        : !codeResult.ok
+          ? `AGI Code sessions could not be loaded: ${describeError(codeResult.error)}`
+          : undefined;
       const inWorkspaceRepository = (repositoryUrl: string | null): boolean => {
         if (workspaceRepositories.length === 0) return true;
         const name = repositoryUrl ? githubRepositoryName(repositoryUrl) : null;
@@ -2116,7 +2210,14 @@ export class ChatStateManager {
             ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
           })),
       ];
-      this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
+      this._post({
+        type: 'sessionsList',
+        payload: {
+          source,
+          rows: mergeSessionRows(inputs),
+          ...(partialFailure === undefined ? {} : { unavailable: partialFailure }),
+        },
+      });
     } catch (error) {
       this._post({
         type: 'sessionsList',
@@ -2218,6 +2319,7 @@ export class ChatStateManager {
     const bare = normalized.slice(1);
     switch (entry.action.kind) {
       case 'command':
+        if (await this._runConversationCommandHere(entry.action.command)) return;
         await vscode.commands.executeCommand(entry.action.command);
         return;
       case 'prompt':
@@ -2251,6 +2353,36 @@ export class ChatStateManager {
         enterBehavior: Config.composerEnterBehavior(),
       },
     });
+  }
+
+  private _restoreKey: string | undefined;
+
+  bindRestoreKey(key: string, restore: boolean): void {
+    this._restoreKey = key;
+    if (!restore) this._rememberOpenThread();
+  }
+
+  private _restoreStorageKey(): string | undefined {
+    return this._restoreKey === undefined
+      ? undefined
+      : `agiWorkforce.openThread.${this._restoreKey}`;
+  }
+
+  private _rememberOpenThread(): void {
+    const key = this._restoreStorageKey();
+    if (key === undefined || this._workspaceState === undefined) return;
+    void this._workspaceState.update(key, this._thread?.id);
+  }
+
+  private async _restoreOpenThread(): Promise<void> {
+    const key = this._restoreStorageKey();
+    if (key === undefined || this._workspaceState === undefined) return;
+    if (this._thread !== undefined || !vscode.workspace.isTrusted) return;
+    const threadId = this._workspaceState.get<string>(key);
+    if (threadId === undefined || threadId === '') return;
+    if (!(await this.resumeConversation(threadId)) && this._thread === undefined) {
+      await this._workspaceState.update(key, undefined);
+    }
   }
 
   public async resumeConversation(threadId: string): Promise<boolean> {
@@ -2358,7 +2490,7 @@ export class ChatStateManager {
       const model =
         resumed.trustMode === 'local' && persistedModel !== undefined
           ? persistedModel
-          : this._normalizeModelSelection(persistedModel ?? Config.model());
+          : this._normalizeSessionModel(persistedModel ?? Config.model());
       if (
         navigation !== undefined &&
         (model !== navigation.source.model ||
@@ -2393,6 +2525,7 @@ export class ChatStateManager {
         runtime: resolved.runtime,
         updatedAt: resolved.response.thread.updatedAt,
       };
+      this._rememberOpenThread();
       void this._syncEffortLadder(resolved.runtime).catch((error: unknown) => {
         console.warn(`[${PRODUCT_NAMES.code}] could not read the CLI's effort levels`, error);
       });
@@ -2465,10 +2598,13 @@ export class ChatStateManager {
       ) {
         return;
       }
-      void this._handleRuntimeEvent(runtime, event, complete);
+      this._deliverTurnEvent(runtime, event, epoch, complete);
     };
     const subscription = runtime.onEvent((event) => {
       if (event.type === 'runtime_disconnected') {
+        if (this._thread?.id === threadId && this._thread.runtime === runtime) {
+          this._thread.disconnected = true;
+        }
         if (attached) void this._handleRuntimeEvent(runtime, event, complete);
         return;
       }
@@ -2547,7 +2683,7 @@ export class ChatStateManager {
     if (hint?.category === 'permission' && !vscode.workspace.isTrusted) {
       void vscode.window.showWarningMessage(warning, MANAGE_TRUST_LABEL).then((choice) => {
         if (choice !== MANAGE_TRUST_LABEL) return;
-        void vscode.commands.executeCommand('workbench.trust.manage');
+        void vscode.commands.executeCommand(MANAGE_WORKSPACE_TRUST_COMMAND);
       });
       return false;
     }
@@ -2601,9 +2737,22 @@ export class ChatStateManager {
     });
   }
 
+  private _syncEffortFromConfiguration(): void {
+    this._effort = undefined;
+    const model = this._activeModel;
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._shownEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
   public syncActiveModelFromConfiguration(): void {
     if (this._thread !== undefined) return;
-    this._followDefaultModel();
+    void this._followDefaultModel();
   }
 
   /**
@@ -2614,46 +2763,51 @@ export class ChatStateManager {
    * classification that decides when a thread must be restarted on a boundary
    * change, and never from a fixed literal.
    */
-  private _noteWrittenFile(turnId: string, toolName: string, input: unknown): void {
+  private _noteWriteAttempt(
+    turnId: string,
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+  ): void {
     const filePath = writtenFilePath(toolName, input);
     const cwd = this._thread?.cwd;
     if (filePath === undefined || cwd === undefined) return;
-    const written = this._writtenFilesByTurn.get(turnId) ?? new Set<string>();
-    written.add(path.resolve(cwd, filePath));
-    this._writtenFilesByTurn.set(turnId, written);
+    this._pendingWritesByToolCall.set(toolCallId, {
+      turnId,
+      filePath: path.resolve(cwd, filePath),
+    });
   }
 
-  private async _undoTurn(turnId: string): Promise<void> {
-    const thread = this._thread;
-    const changed = this._lastChangedTurn;
-    if (thread === undefined || changed?.turnId !== turnId || changed.threadId !== thread.id) {
-      void vscode.window.showInformationMessage(
-        `${PRODUCT_NAMES.code}: only the latest reply in this session can be undone here. Use Checkpoints to go back further.`,
-      );
-      return;
-    }
-    if (this._activeTurn?.threadId === thread.id) {
-      void vscode.window.showWarningMessage(
-        `${PRODUCT_NAMES.code}: stop the current response before undoing a reply.`,
-      );
-      return;
-    }
-    // Legacy checkpoints have no turn identity, so the newest entry cannot authorize Undo.
-    void vscode.window.showWarningMessage(
-      `${PRODUCT_NAMES.code}: this runtime cannot verify which checkpoint belongs to that reply. No files were changed. Use Checkpoints to choose a restore point explicitly.`,
-    );
+  private _confirmWrite(toolCallId: string, failed: boolean): void {
+    const attempt = this._pendingWritesByToolCall.get(toolCallId);
+    if (attempt === undefined) return;
+    this._pendingWritesByToolCall.delete(toolCallId);
+    if (failed) return;
+    const written = this._writtenFilesByTurn.get(attempt.turnId) ?? new Set<string>();
+    written.add(attempt.filePath);
+    this._writtenFilesByTurn.set(attempt.turnId, written);
   }
 
-  private async _continueAccountConversationHere(conversationId: string): Promise<boolean> {
+  private _clearTurnWrites(turnId: string): void {
+    this._writtenFilesByTurn.delete(turnId);
+    for (const [toolCallId, attempt] of this._pendingWritesByToolCall) {
+      if (attempt.turnId === turnId) this._pendingWritesByToolCall.delete(toolCallId);
+    }
+  }
+
+  private async _continueAccountConversationHere(
+    conversationId: string,
+  ): Promise<'opened' | 'no-workspace' | 'untrusted' | 'not-imported'> {
     const workspace = await getActiveWorkspaceFolder();
-    if (workspace === undefined || !vscode.workspace.isTrusted) return false;
+    if (workspace === undefined) return 'no-workspace';
+    if (!vscode.workspace.isTrusted) return 'untrusted';
     const provider = this._conversationTreeProvider;
-    if (provider === undefined) return false;
+    if (provider === undefined) return 'not-imported';
     if (!(await provider.adoptAccountConversation(conversationId, workspace.uri.fsPath))) {
-      return false;
+      return 'not-imported';
     }
-    await vscode.commands.executeCommand('agi-workforce.openConversation', conversationId);
-    return true;
+    await this.resumeConversation(conversationId);
+    return 'opened';
   }
 
   /**
@@ -2732,6 +2886,9 @@ export class ChatStateManager {
       thread.runtime === pending.runtime &&
       this._conversationEpoch === epoch;
     if (!ownsTurn()) return false;
+    if (decision === 'session' && !pending.sessionScope) {
+      return this._resolveApproval(requestId, 'once', automatic, note);
+    }
     pending.resolving = true;
     try {
       const allowing = decision === 'once' || decision === 'session' || decision === 'always';
@@ -2780,6 +2937,9 @@ export class ChatStateManager {
     } catch (error) {
       if (!ownsTurn() || this._pendingApprovals.get(requestId) !== pending) return false;
       this._post({ type: 'approvalResolved', payload: { requestId, outcome: 'expired' } });
+      if (error instanceof LocalRuntimeProtocolError && error.code === RUNTIME_NOT_FOUND_CODE) {
+        return false;
+      }
       this._postError(
         error instanceof Error ? error.message : t('chatNotice.approvalFailed'),
         RUNTIME_FAILURE,
@@ -2793,19 +2953,28 @@ export class ChatStateManager {
     }
   }
 
-  private async _reportBilledTurn(requestIds: readonly string[]): Promise<void> {
-    const settled = await getTokenCounter().settleBillingRequests(this._secrets, requestIds);
-    const billed = settled.filter((credits): credits is number => credits !== null);
-    if (billed.length === 0) return;
-    const total = billed.reduce((sum, credits) => sum + credits, 0);
-    const open = settled.length - billed.length;
-    const credits = formatCreditAmount(total);
-    vscode.window.setStatusBarMessage(
-      open === 0
-        ? t('billing.turnBilled', { credits })
-        : t('billing.turnBilledSoFar', { credits, unsettled: formatUnsettledRequests(open) }),
-      10_000,
-    );
+  private _approvalResolvedByRuntime(
+    requestId: string,
+    decision: 'approved' | 'approved-for-session' | 'denied' | 'cancelled',
+  ): void {
+    const pending = this._pendingApprovals.get(requestId);
+    if (pending === undefined || pending.resolving === true) return;
+    this._pendingApprovals.delete(requestId);
+    if (pending.proposed !== undefined) void discardProposedChange(requestId);
+    this._post({
+      type: 'approvalResolved',
+      payload: {
+        requestId,
+        outcome:
+          decision === 'cancelled'
+            ? 'expired'
+            : decision === 'denied'
+              ? 'deny'
+              : decision === 'approved-for-session'
+                ? 'session'
+                : 'once',
+      },
+    });
   }
 
   private _approvalAnsweredOnPhone(answer: ApprovalAnswer): void {
@@ -2848,14 +3017,82 @@ export class ChatStateManager {
     };
   }
 
+  setEditorContextTracking(active: boolean): void {
+    const tracking = this._editorContextTracking;
+    if (!active) {
+      if (tracking === undefined) return;
+      if (tracking.timer !== undefined) clearTimeout(tracking.timer);
+      for (const listener of tracking.listeners) listener.dispose();
+      delete this._editorContextTracking;
+      this._editorContextSequence++;
+      return;
+    }
+    if (tracking !== undefined) return;
+    const cache = new ContextResolutionCache();
+    const schedule = (): void => this._scheduleEditorContext();
+    this._editorContextTracking = {
+      cache,
+      listeners: [
+        cache,
+        vscode.window.onDidChangeActiveTextEditor(schedule),
+        vscode.window.onDidChangeTextEditorSelection(schedule),
+        vscode.languages.onDidChangeDiagnostics((event) => {
+          const shown = workingTextEditor()?.document.uri.toString();
+          if (shown !== undefined && event.uris.some((uri) => uri.toString() === shown)) {
+            schedule();
+          }
+        }),
+      ],
+    };
+  }
+
+  private _scheduleEditorContext(): void {
+    const tracking = this._editorContextTracking;
+    if (tracking === undefined) return;
+    if (tracking.timer !== undefined) clearTimeout(tracking.timer);
+    tracking.timer = setTimeout(() => {
+      tracking.timer = undefined;
+      void this.pushEditorContext();
+    }, EDITOR_CONTEXT_DEBOUNCE_MS);
+  }
+
   async pushEditorContext(): Promise<void> {
+    const tracking = this._editorContextTracking;
+    if (tracking === undefined) return;
     const sequence = ++this._editorContextSequence;
-    const snapshot = await captureEditorContext(new Set(this._dismissedEditorContext));
+    const snapshot = await captureEditorContext(
+      new Set(this._dismissedEditorContext),
+      tracking.cache.resolve,
+    );
     if (sequence !== this._editorContextSequence) return;
     this._post({ type: 'editorContext', payload: { chips: snapshot.chips } });
   }
 
+  rejectUnreadableSend(clientMessageId: string | undefined): void {
+    const message = `This message could not be sent. A message can hold up to ${MAX_SEND_MESSAGE_CHARS.toLocaleString('en-US')} characters and ${MAX_SEND_MESSAGE_REFERENCES} file references; shorten it, or attach long text as a file.`;
+    if (this._turnLifecycleActive && clientMessageId !== undefined) {
+      this._post({
+        type: 'followUpStatus',
+        payload: {
+          kind: 'error',
+          message,
+          queueDepth: this._sendQueue.size(),
+          attachmentIds: [],
+          clientMessageId,
+        },
+      });
+      return;
+    }
+    if (!this._turnLifecycleActive) this._postError(message);
+  }
+
+  refreshEditorContext(): void {
+    this._editorContextTracking?.cache.clear();
+    void this.pushEditorContext();
+  }
+
   dispose(): void {
+    this.setEditorContextTracking(false);
     for (const listener of this._editorContextListeners) listener.dispose();
     this._editorContextListeners.length = 0;
     this._planDocumentListener?.dispose();
@@ -2874,6 +3111,28 @@ export class ChatStateManager {
       return await thread.runtime.offers('checkpoints');
     } catch {
       return false;
+    }
+  }
+
+  private async _runConversationCommandHere(command: string): Promise<boolean> {
+    switch (command) {
+      case 'agi-workforce.showCheckpoints':
+        await this.showCheckpoints();
+        return true;
+      case 'agi-workforce.compactConversation':
+        await this.compactConversation();
+        return true;
+      case 'agi-workforce.showSessionStatus':
+        await this.showSessionStatus();
+        return true;
+      case 'agi-workforce.exportConversation':
+        await this.exportConversation();
+        return true;
+      case 'agi-workforce.selectModel':
+        await this.handleMessage({ type: 'openModelPopover' });
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -3037,6 +3296,11 @@ export class ChatStateManager {
     });
   }
 
+  private _forgetContextUsage(threadId: string): void {
+    if (this._contextUsage?.threadId === threadId) this._contextUsage = undefined;
+    this._post({ type: 'contextUsage', payload: { usedTokens: 0 } });
+  }
+
   async compactConversation(): Promise<void> {
     const thread = this._thread;
     if (thread === undefined) {
@@ -3131,7 +3395,9 @@ export class ChatStateManager {
   }
 
   async attachContext(kind: ContextAttachmentKind): Promise<boolean> {
+    const epoch = this._conversationEpoch;
     const attachment = await buildContextAttachment(kind);
+    if (this._conversationEpoch !== epoch) return true;
     if (attachment === undefined) {
       this._post({
         type: 'contextMenuState',
@@ -3313,6 +3579,7 @@ export class ChatStateManager {
     void this._interruptActiveTurn();
     delete this._thread;
     delete this._loadedConversation;
+    this._rememberOpenThread();
     this._pendingAttachments.splice(0);
     this._mode = undefined;
     this._effort = undefined;
@@ -3321,6 +3588,7 @@ export class ChatStateManager {
     this._post({ type: 'modeChanged', payload: { mode: Config.agentMode() } });
     this._setActiveModel(this._normalizeModelSelection(Config.model()));
     this._showModel(this._activeModel);
+    void this._refuseUnlistedLocalModel(this._activeModel, true);
     void this._pushUsageMeterOnBoundaryChange();
   }
 
@@ -3404,11 +3672,38 @@ export class ChatStateManager {
     if (index !== -1) request.attachments.splice(index, 1);
   }
 
-  private _normalizeModelSelection(modelId: string | null | undefined): string {
+  private _normalizeSessionModel(modelId: string | null | undefined): string {
     if (modelId !== null && modelId !== undefined && this._localModelProviders.has(modelId)) {
       return modelId;
     }
     return normalizeConfiguredModelId(modelId);
+  }
+
+  private _normalizeModelSelection(modelId: string | null | undefined): string {
+    if (modelId === null || modelId === undefined || modelId.trim() === '') {
+      return normalizeConfiguredModelId(undefined);
+    }
+    if (this._localModelProviders.has(modelId)) return modelId;
+    return normalizeSelectableConfiguredModelId(modelId) ?? modelId;
+  }
+
+  private _isUnlistedLocalModel(modelId: string): boolean {
+    return (
+      normalizeSelectableConfiguredModelId(modelId) === null &&
+      !this._localModelProviders.has(modelId)
+    );
+  }
+
+  private async _refuseUnlistedLocalModel(model: string, rediscover: boolean): Promise<void> {
+    if (!this._isUnlistedLocalModel(model)) return;
+    if (rediscover) await this._discoverLocalModels(this._thread?.runtime);
+    if (this._activeModel !== model) return;
+    if (!this._isUnlistedLocalModel(model)) {
+      this._showModel(model);
+      return;
+    }
+    if (!this._runtimeReady) return;
+    this._postError(localModelNotRunningMessage(model), MODEL_UNAVAILABLE);
   }
 
   private _describeLocalRuntimeSetupError(error: unknown): string {
@@ -3427,7 +3722,42 @@ export class ChatStateManager {
   }
 
   async refreshRuntimeStatus(): Promise<void> {
+    this._rebindThreadRuntime();
     await this._discoverLocalModels(this._thread?.runtime);
+  }
+
+  private _rebindThreadRuntime(): void {
+    const thread = this._thread;
+    const pool = this._localRuntimes;
+    if (thread === undefined || pool === undefined || this._activeTurn !== undefined) return;
+    const folderOpen = vscode.workspace.workspaceFolders?.some(
+      (folder) => folder.uri.fsPath === thread.cwd,
+    );
+    if (folderOpen !== true) return;
+    let current: LocalRuntimeClient;
+    try {
+      current = pool.forWorkspace(thread.cwd);
+    } catch {
+      return;
+    }
+    if (current === thread.runtime) return;
+    this._expirePendingApprovals(thread.runtime);
+    thread.runtime = current;
+    thread.disconnected = true;
+  }
+
+  private async _threadSurvivedDisconnect(thread: DeveloperThreadState): Promise<boolean> {
+    if (thread.disconnected !== true) return true;
+    try {
+      await thread.runtime.readThread(thread.id);
+    } catch (error) {
+      if (error instanceof LocalRuntimeProtocolError && error.code === RUNTIME_NOT_FOUND_CODE) {
+        return false;
+      }
+      return true;
+    }
+    delete thread.disconnected;
+    return true;
   }
 
   private async _discoverLocalModels(runtime?: LocalRuntimeClient): Promise<LocalModelSummary[]> {
@@ -3448,16 +3778,7 @@ export class ChatStateManager {
           return [];
         }
         if (!vscode.workspace.isTrusted) {
-          this._runtimeReady = false;
-          this._localModelProviders.clear();
-          this._post({
-            type: 'runtimeStatus',
-            payload: {
-              status: 'workspace-untrusted',
-              message:
-                'Review and trust this workspace before AGI reads files, runs commands, or starts a local runtime.',
-            },
-          });
+          this._postWorkspaceUntrusted();
           return [];
         }
         if (this._localRuntimes === undefined) {
@@ -3488,6 +3809,10 @@ export class ChatStateManager {
       }
       return response.models;
     } catch (error) {
+      if (error instanceof WorkspaceNotTrustedError) {
+        this._postWorkspaceUntrusted();
+        return [];
+      }
       this._runtimeReady = false;
       this._post({
         type: 'runtimeStatus',
@@ -3501,6 +3826,19 @@ export class ChatStateManager {
       });
       return [];
     }
+  }
+
+  private _postWorkspaceUntrusted(): void {
+    this._runtimeReady = false;
+    this._localModelProviders.clear();
+    this._post({
+      type: 'runtimeStatus',
+      payload: {
+        status: 'workspace-untrusted',
+        message:
+          'Review and trust this workspace before AGI reads files, runs commands, or starts a local runtime.',
+      },
+    });
   }
 
   private _postProviderBadge(modelId: string): void {
@@ -3520,6 +3858,16 @@ export class ChatStateManager {
       this._post({
         type: 'providerBadge',
         payload: { providerLabel: display.label, brandColor: display.brandColor },
+      });
+      return;
+    }
+    if (this._isUnlistedLocalModel(modelId)) {
+      this._post({
+        type: 'providerBadge',
+        payload: {
+          providerLabel: 'Local model not running',
+          brandColor: UNKNOWN_PROVIDER_BRAND_COLOR,
+        },
       });
       return;
     }
@@ -3578,6 +3926,7 @@ export class ChatStateManager {
     references: unknown = [],
     followUpBehavior: ComposerFollowUpBehavior = Config.composerFollowUpBehavior(),
     clientMessageId = `host-${++this._clientMessageSeq}`,
+    standalone = false,
   ): Promise<void> {
     this._resumeAttemptSeq++;
     const request: PendingChatSend = {
@@ -3587,7 +3936,7 @@ export class ChatStateManager {
       ...(model === undefined ? {} : { model }),
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
-      attachments: this._pendingAttachments.splice(0),
+      attachments: standalone ? [] : this._pendingAttachments.splice(0),
       editorContext: captureEditorContext(new Set(this._dismissedEditorContext)),
     };
     this._dismissedEditorContext.clear();
@@ -3825,8 +4174,18 @@ export class ChatStateManager {
     ];
   }
 
-  private async _attachmentInputs(entries: readonly PendingAttachment[]): Promise<UserInput[]> {
-    const inputs: UserInput[] = [];
+  private _unremovedAttachmentInputs(
+    owner: PendingChatSend,
+    admitted: readonly PendingAttachment[],
+  ): UserInput[] {
+    const owned = new Set(owner.attachments.map((entry) => entry.id));
+    return admitted.filter((entry) => owned.has(entry.id)).map((entry) => entry.input);
+  }
+
+  private async _admittedAttachments(
+    entries: readonly PendingAttachment[],
+  ): Promise<PendingAttachment[]> {
+    const admitted: PendingAttachment[] = [];
     for (const entry of entries) {
       if (entry.source !== undefined) {
         if (entry.source.untitled === true) {
@@ -3838,9 +4197,9 @@ export class ChatStateManager {
           if (!resolved.ok || resolved.uri.fsPath !== entry.source.filePath) continue;
         }
       }
-      inputs.push(entry.input);
+      admitted.push(entry);
     }
-    return inputs;
+    return admitted;
   }
 
   private async _buildFollowUpInputs(
@@ -3851,10 +4210,11 @@ export class ChatStateManager {
       hasVisibleReferenceToken(request.text, reference),
     );
     const mentionInputs = await buildWorkspaceReferenceInputs(workspaceUri, visibleReferences);
+    const admittedAttachments = await this._admittedAttachments(request.attachments);
     return [
       ...this._typedTextInputs(request.text, request.browseWeb),
       ...mentionInputs,
-      ...(await this._attachmentInputs(request.attachments)),
+      ...this._unremovedAttachmentInputs(request, admittedAttachments),
     ];
   }
 
@@ -3888,6 +4248,7 @@ export class ChatStateManager {
       return false;
     }
     const workspaceUri = vscode.Uri.file(cwd);
+    this._rebindThreadRuntime();
     const runtime = this._thread?.runtime ?? this._localRuntimes.forWorkspace(cwd);
     await this._discoverLocalModels(runtime);
     if (conversationEpoch !== this._conversationEpoch) return false;
@@ -3899,6 +4260,21 @@ export class ChatStateManager {
       ? (this._thread?.model ?? rawRequestedModel)
       : this._normalizeModelSelection(rawRequestedModel);
     const requestedLocalProvider = this._localModelProviders.get(requestedModel);
+    if (!samePersistedLocalModel && this._isUnlistedLocalModel(requestedModel)) {
+      const message = localModelNotRunningMessage(requestedModel);
+      this._postError(message, MODEL_UNAVAILABLE);
+      this._post({
+        type: 'followUpStatus',
+        payload: {
+          kind: 'error',
+          message,
+          queueDepth: this._sendQueue.size(),
+          attachmentIds: [],
+          clientMessageId: request.clientMessageId,
+        },
+      });
+      return false;
+    }
     if (
       this._thread?.trustMode === 'local' &&
       !samePersistedLocalModel &&
@@ -3943,6 +4319,22 @@ export class ChatStateManager {
     if (this._cancelBeforeTurnStart()) return false;
 
     try {
+      const lostThread = this._thread;
+      const continuable =
+        lostThread === undefined || (await this._threadSurvivedDisconnect(lostThread));
+      if (conversationEpoch !== this._conversationEpoch) return false;
+      if (!continuable && this._thread === lostThread) {
+        delete this._thread;
+        this._post({
+          type: 'conversationBoundaryChanged',
+          payload: {
+            message:
+              'The local runtime stopped and this developer session could not be continued. AGI is starting a new session; earlier transcript context is not forwarded.',
+            clientMessageId: request.clientMessageId,
+            text: request.text,
+          },
+        });
+      }
       const providerBoundaryChanged =
         this._thread !== undefined && this._thread.providerBoundary !== requestedProviderBoundary;
       const samePersistedModel = this._thread?.model === requestedModel;
@@ -3988,6 +4380,7 @@ export class ChatStateManager {
           updatedAt: thread.updatedAt,
         };
         threadCreated = true;
+        this._rememberOpenThread();
         delete this._loadedConversation;
         this._postSessionBoundary(thread.trustMode, thread.provider);
         this._postProviderBadgeForSession(thread, requestedModel);
@@ -4025,7 +4418,7 @@ export class ChatStateManager {
         resolveCompletion = resolve;
       });
       const deliverTurnEvent = (event: LocalRuntimeEvent): void => {
-        void this._handleRuntimeEvent(runtime, event, () => {
+        this._deliverTurnEvent(runtime, event, conversationEpoch, () => {
           uiSettled = true;
           if (!terminal) {
             terminal = true;
@@ -4034,10 +4427,65 @@ export class ChatStateManager {
         });
       };
       let reloadedFromDisk = false;
+      let heldDuringRecovery: LocalRuntimeEvent[] | undefined;
+      let deltaFloor: number | undefined;
+      const deliverLive = (event: LocalRuntimeEvent): void => {
+        if (heldDuringRecovery !== undefined) {
+          heldDuringRecovery.push(event);
+          return;
+        }
+        if (
+          event.type === 'output_delta' &&
+          event.index !== undefined &&
+          deltaFloor !== undefined &&
+          event.index < deltaFloor
+        ) {
+          return;
+        }
+        deliverTurnEvent(event);
+      };
+      const recoverLaggedTurn = async (turnId: string): Promise<void> => {
+        if (heldDuringRecovery !== undefined) return;
+        heldDuringRecovery = [];
+        let snapshot: Awaited<ReturnType<LocalRuntimeClient['reconnectThread']>> = null;
+        try {
+          snapshot = await runtime.reconnectThread(thread.id);
+        } catch {
+          snapshot = null;
+        }
+        const held = heldDuringRecovery;
+        heldDuringRecovery = undefined;
+        if (conversationEpoch === this._conversationEpoch && !uiSettled) {
+          if (snapshot?.turnId === turnId && snapshot.nextDeltaIndex !== undefined) {
+            deltaFloor = snapshot.nextDeltaIndex;
+            this._post({ type: 'streamReplaced', payload: { text: snapshot.partialResponse } });
+            this._post({
+              type: 'sessionNotice',
+              payload: {
+                message:
+                  'Some live output was missed, so this answer was reloaded from the local runtime.',
+              },
+            });
+          } else {
+            this._post({
+              type: 'sessionNotice',
+              payload: {
+                message:
+                  'Some live output from this turn was missed and could not be reloaded. Reopen the session from Session History to see all of it.',
+              },
+            });
+          }
+        }
+        for (const event of held) deliverLive(event);
+      };
       const notificationSubscription = runtime.onNotification((notification) => {
+        if (readNotificationLag(notification) !== undefined) {
+          if (activeTurnId !== undefined && !terminal) void recoverLaggedTurn(activeTurnId);
+          return;
+        }
         if (notification.method === 'mcp/authRequired') {
           const required = readMcpAuthRequired(notification.params);
-          if (required?.threadId === thread.id) {
+          if (required?.threadId === thread.id && conversationEpoch === this._conversationEpoch) {
             this._post({ type: 'mcpAuthRequired', payload: { server: required.server } });
           }
           return;
@@ -4048,7 +4496,7 @@ export class ChatStateManager {
       });
       const eventSubscription = runtime.onEvent((event) => {
         if (event.type === 'runtime_disconnected') {
-          if (this._thread?.runtime === runtime) delete this._thread;
+          if (this._thread?.runtime === runtime) this._thread.disconnected = true;
           void this._handleRuntimeEvent(runtime, event, () => {
             uiSettled = true;
             if (!terminal) {
@@ -4060,7 +4508,7 @@ export class ChatStateManager {
         }
         if (event.threadId !== thread.id) return;
         if (event.type === 'mcp_status') {
-          void this._handleRuntimeEvent(runtime, event, () => undefined);
+          this._deliverTurnEvent(runtime, event, conversationEpoch, () => undefined);
           return;
         }
         if (activeTurnId === undefined) {
@@ -4092,17 +4540,20 @@ export class ChatStateManager {
           return;
         }
         if (event.turnId !== activeTurnId) return;
-        deliverTurnEvent(event);
+        deliverLive(event);
       });
 
       try {
         const attachmentEntries = [...request.attachments];
-        const attachmentInputs = await this._attachmentInputs(attachmentEntries);
+        const admittedAttachments = await this._admittedAttachments(attachmentEntries);
         const activeProject = getActiveCloudProject(this._context.workspaceState);
         const customInstructionInput = buildCustomInstructionInput(this._context, {
+          project: activeProject ?? null,
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
-        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
+        const memoryInput = buildMemoryContextInput(
+          (await getAccountMemoryStore()?.turnFacts()) ?? [],
+        );
         const editorContext = await withholdGitIgnoredContext(await request.editorContext);
         const contextFiles = await contextFilesForWorkspace(cwd, editorContext.contextFiles);
         const editorContextInputs: UserInput[] = editorContext.texts.map((text) => ({
@@ -4118,6 +4569,12 @@ export class ChatStateManager {
         const disallowedTools = this._disallowedTools.get(thread.id);
         const filtersTools =
           disallowedTools !== undefined && (await runtime.offers('turnToolFilters'));
+        const reasoningEffort = supportedEffort(
+          requestedModel,
+          this._effort ?? Config.agentEffort(),
+          await this._syncEffortLadder(thread.runtime),
+        );
+        const attachmentInputs = this._unremovedAttachmentInputs(request, admittedAttachments);
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
@@ -4130,11 +4587,7 @@ export class ChatStateManager {
             ...attachmentInputs,
           ],
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
-          reasoningEffort: supportedEffort(
-            requestedModel,
-            this._effort ?? Config.agentEffort(),
-            await this._syncEffortLadder(thread.runtime),
-          ),
+          reasoningEffort,
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(filtersTools ? { disallowedTools: [...disallowedTools] } : {}),
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
@@ -4196,7 +4649,7 @@ export class ChatStateManager {
           });
         }
         const attachmentIds = attachmentEntries.map((entry) => entry.id);
-        request.attachments.splice(0, attachmentEntries.length);
+        for (const id of attachmentIds) this._removeOwnedAttachment(request, id);
         if (attachmentIds.length > 0) {
           this._post({ type: 'attachmentsConsumed', payload: { ids: attachmentIds } });
         }
@@ -4780,6 +5233,40 @@ export class ChatStateManager {
     );
   }
 
+  private _deliverTurnEvent(
+    runtime: LocalRuntimeClient,
+    event: LocalRuntimeEvent,
+    epoch: number,
+    complete: () => void,
+  ): void {
+    if (epoch === this._conversationEpoch) {
+      void this._handleRuntimeEvent(runtime, event, complete);
+      return;
+    }
+    if (
+      event.type !== 'turn_completed' &&
+      event.type !== 'turn_failed' &&
+      event.type !== 'turn_interrupted'
+    ) {
+      return;
+    }
+    this._expirePendingApprovals(event.turnId);
+    const servedModel = this._servedModelByTurn.get(event.turnId);
+    this._servedModelByTurn.delete(event.turnId);
+    this._clearTurnWrites(event.turnId);
+    if (event.type === 'turn_completed') {
+      recordCompletedTurnUsage(this._secrets, {
+        model: servedModel ?? Config.model(),
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.managedRequestIds === undefined
+          ? {}
+          : { managedRequestIds: event.managedRequestIds }),
+      });
+    }
+    complete();
+  }
+
   private async _handleRuntimeEvent(
     runtime: LocalRuntimeClient,
     event: LocalRuntimeEvent,
@@ -4811,6 +5298,12 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'agent_event') {
+      if (event.envelope.event.type === 'approval-resolved') {
+        this._approvalResolvedByRuntime(
+          event.envelope.event.approvalId,
+          event.envelope.event.decision,
+        );
+      }
       this._foldAgentEvent(event.envelope);
       return;
     }
@@ -4843,7 +5336,7 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
-      this._noteWrittenFile(event.turnId, event.name, event.input);
+      this._noteWriteAttempt(event.turnId, event.toolCallId, event.name, event.input);
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
         this._latestPlan = { threadId: event.threadId, plan };
@@ -4866,12 +5359,14 @@ export class ChatStateManager {
     if (event.type === 'tool_execution_end') {
       const entry = this._activityEntry('tool', event.toolCallId);
       const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
+      const failed = entry === undefined ? event.isError : entry.status === 'failed';
+      this._confirmWrite(event.toolCallId, failed);
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
           output: entry?.output ?? event.output,
-          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          isError: failed,
           ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
@@ -4894,6 +5389,7 @@ export class ChatStateManager {
       }
       const identity = approvalToolIdentity(event.kind);
       const label = approvalToolLabel(event.kind);
+      const sessionScope = approvalAllowsSessionScope(event.kind);
       const filePath = approvalFilePath(event.kind);
       const proposed =
         event.editable === true &&
@@ -4925,9 +5421,10 @@ export class ChatStateManager {
         runtime,
         identity,
         label,
+        sessionScope,
         ...(proposed === undefined ? {} : { proposed }),
       });
-      const sessionApproval = this._sessionApprovals.get(identity);
+      const sessionApproval = sessionScope ? this._sessionApprovals.get(identity) : undefined;
       if (
         question === undefined &&
         sessionApproval?.thread === approvalThread &&
@@ -4944,6 +5441,7 @@ export class ChatStateManager {
           summary: event.summary,
           detail: event.detail,
           sessionApproved: false,
+          ...(sessionScope ? {} : { sessionScopeOffered: false as const }),
           ...(event.riskLevel === undefined ? {} : { riskLevel: event.riskLevel }),
           ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
           ...(proposed === undefined ? {} : { reviewable: true as const }),
@@ -4958,7 +5456,7 @@ export class ChatStateManager {
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._clearTurnWrites(event.turnId);
       if (writtenFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
@@ -4994,15 +5492,23 @@ export class ChatStateManager {
             : {}),
         },
       });
-      this._postContextUsage(
-        event.threadId,
-        event.inputTokens + event.outputTokens,
-        catalogContextWindow(resolvedModel),
-      );
-      getTokenCounter().addMeasuredUsage(resolvedModel, event.inputTokens, event.outputTokens);
-      if (event.managedRequestIds !== undefined && event.managedRequestIds.length > 0) {
-        void this._reportBilledTurn(event.managedRequestIds);
+      if (event.contextTokens === undefined) {
+        this._forgetContextUsage(event.threadId);
+      } else {
+        this._postContextUsage(
+          event.threadId,
+          event.contextTokens,
+          catalogContextWindow(resolvedModel),
+        );
       }
+      recordCompletedTurnUsage(this._secrets, {
+        model: resolvedModel,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.managedRequestIds === undefined
+          ? {}
+          : { managedRequestIds: event.managedRequestIds }),
+      });
       this._conversationTreeProvider?.refresh();
       complete();
       return;
@@ -5010,14 +5516,14 @@ export class ChatStateManager {
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._clearTurnWrites(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
     this._servedModelByTurn.delete(event.turnId);
-    this._writtenFilesByTurn.delete(event.turnId);
+    this._clearTurnWrites(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

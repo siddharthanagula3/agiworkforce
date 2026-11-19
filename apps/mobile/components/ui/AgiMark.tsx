@@ -1,4 +1,4 @@
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, useId, type ComponentClass, type ReactNode } from 'react';
 import { Image } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -16,6 +16,8 @@ import Svg, {
   Image as SvgImage,
   Mask,
   Path,
+  type ColumnMajorTransformMatrix,
+  type PathProps,
 } from 'react-native-svg';
 import {
   agiMotion,
@@ -26,7 +28,13 @@ import {
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 import symbol from '../../assets/agi-symbol.png';
 
-const AnimatedRibbon = Animated.createAnimatedComponent(Path);
+// `matrix` is the transform the native SVG renderer reads. The JavaScript
+// component derives it from `transform` on render, which an animation that runs
+// on the UI thread never triggers, so the animation writes it directly.
+type RibbonProps = PathProps & { matrix?: ColumnMajorTransformMatrix };
+const AnimatedRibbon = Animated.createAnimatedComponent(
+  Path as unknown as ComponentClass<RibbonProps>,
+);
 
 interface AgiMarkProps {
   size?: number;
@@ -59,9 +67,15 @@ function FlowingMark({
   const reduceMotion = useReduceMotion();
   const id = useId().replace(/:/g, '');
   const progress = useSharedValue(0);
-  const animatedProps = useAnimatedProps(() => {
+  // Reanimated parses a `transform` string as CSS and throws on the UI thread
+  // for SVG syntax, so the band is placed as translate(x, y) rotate(r) in matrix form.
+  const animatedProps = useAnimatedProps<RibbonProps>(() => {
     const point = symbolShinePoint(progress.value);
-    return { transform: `translate(${point.x}, ${point.y}) rotate(${point.rotation})` };
+    const radians = (point.rotation * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const matrix: ColumnMajorTransformMatrix = [cos, sin, -sin, cos, point.x, point.y];
+    return { matrix };
   });
 
   useEffect(() => {

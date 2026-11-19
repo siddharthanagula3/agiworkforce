@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUIStore } from '@shared/stores/layout-store';
 import {
@@ -7,6 +8,7 @@ import {
 } from './sidebar-session-actions';
 import { WebAppShell } from './WebAppShell';
 import { ProductNoticeStack } from '@shared/components/ProductNotice';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 /**
  * WEB-APPSHELL-MOBILE-SIDEBAR-01, at narrow viewports the shell must not
@@ -422,16 +424,24 @@ vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
   getWorstUsagePercent: (usage: { percent: number } | null) => usage?.percent ?? 0,
 }));
 
+const temporaryChatState = vi.hoisted(() => ({
+  setPendingTemporaryChat: vi.fn(),
+  setActiveProject: vi.fn(),
+}));
+
 vi.mock('@shared/stores/web-chat-store', () => {
   const state = {
     updateConversation: vi.fn(),
     loadingConversationIds: [],
     streamingConversationIds: [],
     workModeByConversation: {},
+    setPendingTemporaryChat: temporaryChatState.setPendingTemporaryChat,
   };
   return {
     AGI_WORK_MODE: 'agiwork',
-    useChatStore: (selector: (value: typeof state) => unknown) => selector(state),
+    useChatStore: Object.assign((selector: (value: typeof state) => unknown) => selector(state), {
+      getState: () => state,
+    }),
   };
 });
 
@@ -457,8 +467,11 @@ vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
 
 vi.mock('@/features/projects', () => ({
   useManagedCloudProjects: () => ({ projects: shellState.projects }),
-  useProjectStore: (selector: (state: Record<string, () => void>) => unknown) =>
-    selector({ toggleStar: vi.fn(), removeProject: vi.fn() }),
+  useProjectStore: Object.assign(
+    (selector: (state: Record<string, () => void>) => unknown) =>
+      selector({ toggleStar: vi.fn(), removeProject: vi.fn() }),
+    { getState: () => ({ setActiveProject: temporaryChatState.setActiveProject }) },
+  ),
 }));
 
 vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
@@ -742,7 +755,7 @@ describe('WebAppShell responsive navigation', () => {
       </WebAppShell>,
     );
 
-    const download = screen.getByRole('link', { name: 'Get AGI Desktop' });
+    const download = screen.getByRole('link', { name: `Get ${PRODUCT_NAMES.desktop}` });
     expect(download).toHaveAttribute('href', '/download#desktop-downloads');
     const account = screen.getByRole('button', { name: /^Account menu for/ });
     expect(account.parentElement).toBe(download.parentElement);
@@ -1327,5 +1340,29 @@ describe('WebAppShell answers a row action the server refused', () => {
 
     await waitFor(() => expect(shellState.updateConversation).toHaveBeenCalled());
     expect(toastState.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('WebAppShell and the desktop menu', () => {
+  it('starts a temporary chat outside any project from New Temporary Chat', () => {
+    temporaryChatState.setActiveProject.mockClear();
+    temporaryChatState.setPendingTemporaryChat.mockClear();
+    routerState.push.mockClear();
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    act(() => {
+      emitAppCommand('new-temporary-chat');
+    });
+
+    expect(temporaryChatState.setActiveProject).toHaveBeenCalledWith(null);
+    expect(temporaryChatState.setPendingTemporaryChat).toHaveBeenCalledWith(true);
+    expect(routerState.push).toHaveBeenCalledWith('/chat');
+    expect(temporaryChatState.setActiveProject.mock.invocationCallOrder[0]!).toBeLessThan(
+      routerState.push.mock.invocationCallOrder[0]!,
+    );
   });
 });

@@ -60,6 +60,7 @@ export const RESULT_INPUT = {
 export const EVAL_RESULT: DeveloperEvalResult = {
   ...RESULT_INPUT,
   id: RESULT_ID,
+  expectedOutput: 'It shipped.',
   passed: true,
   grade: null,
 };

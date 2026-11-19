@@ -20,10 +20,32 @@ export const OPEN_ARTIFACT_ON_WEB_COMMAND = 'agi-workforce.openArtifactOnWeb';
 export const COPY_ARTIFACT_COMMAND = 'agi-workforce.copyArtifact';
 
 const MESSAGE_PAGE_LIMIT = 500;
+const MESSAGE_PAGE_MAX_COUNT = 100;
 
 export function artifactUri(artifact: ManagedCloudArtifactIndexEntry): vscode.Uri {
   return vscode.Uri.parse(
     `${ARTIFACT_SCHEME}:/${encodeURIComponent(artifactFileName(artifact))}?id=${encodeURIComponent(artifact.id)}`,
+  );
+}
+
+async function findSourceMessage(
+  workspace: ArtifactsWorkspace,
+  artifact: ManagedCloudArtifactIndexEntry,
+): Promise<{ content: string } | undefined> {
+  let offset = 0;
+  for (let page = 0; page < MESSAGE_PAGE_MAX_COUNT; page += 1) {
+    const detail = await workspace.chat.getConversation(artifact.conversationId, {
+      limit: MESSAGE_PAGE_LIMIT,
+      offset,
+    });
+    const message = detail.messages.find((entry) => entry.id === artifact.messageId);
+    if (message !== undefined) return message;
+    if (!detail.hasMore) return undefined;
+    if (detail.messages.length === 0) break;
+    offset += detail.messages.length;
+  }
+  throw new Error(
+    'the conversation history could not be searched to its end for the source message',
   );
 }
 
@@ -36,10 +58,7 @@ export async function readArtifactContent(
   workspace: ArtifactsWorkspace,
   artifact: ManagedCloudArtifactIndexEntry,
 ): Promise<string | undefined> {
-  const detail = await workspace.chat.getConversation(artifact.conversationId, {
-    limit: MESSAGE_PAGE_LIMIT,
-  });
-  const message = detail.messages.find((entry) => entry.id === artifact.messageId);
+  const message = await findSourceMessage(workspace, artifact);
   if (message === undefined) return undefined;
   const derived = deriveArtifacts(message.content, {
     conversationId: artifact.conversationId,
@@ -53,16 +72,23 @@ export class ArtifactContentProvider
 {
   private readonly _onDidChange = new vscode.EventEmitter<vscode.Uri>();
   readonly onDidChange = this._onDidChange.event;
-  private readonly contents = new Map<string, string>();
+  private readonly contents = new Map<string, { uri: vscode.Uri; text: string }>();
 
   set(artifact: ManagedCloudArtifactIndexEntry, content: string): void {
-    this.contents.set(artifact.id, content);
-    this._onDidChange.fire(artifactUri(artifact));
+    const uri = artifactUri(artifact);
+    this.contents.set(artifact.id, { uri, text: content });
+    this._onDidChange.fire(uri);
+  }
+
+  clear(): void {
+    const uris = [...this.contents.values()].map((entry) => entry.uri);
+    this.contents.clear();
+    for (const uri of uris) this._onDidChange.fire(uri);
   }
 
   provideTextDocumentContent(uri: vscode.Uri): string {
     const artifactId = new URLSearchParams(uri.query).get('id') ?? '';
-    return this.contents.get(artifactId) ?? '';
+    return this.contents.get(artifactId)?.text ?? '';
   }
 
   dispose(): void {

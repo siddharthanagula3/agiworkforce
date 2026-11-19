@@ -7,7 +7,10 @@ import { openEnvelope, sealEnvelope } from '@/lib/crypto/envelope';
 import { logger } from '@/lib/logger';
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { getKeyValueStore } from '@/lib/server/key-value';
-import { organizationKeyRing } from '@/lib/server/organization-encryption-keys';
+import {
+  organizationKeyRing,
+  withOrganizationKeyFence,
+} from '@/lib/server/organization-encryption-keys';
 import { buildBoundedDeliveryBody, deliverAuditBatch } from '@/lib/services/audit-streaming-proxy';
 
 export const AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY = 'agi-audit-stream:active-organizations';
@@ -194,30 +197,32 @@ export async function upsertAuditDestination(
   await assertResolvedPublicHostname(input.endpointUrl);
 
   const minted = generateSigningSecret();
-  const ciphertext = await sealAuditSigningSecret(db, organizationId, minted.secret);
-  const [row] = await db.query<DestinationRow>(
-    `insert into public.organization_audit_destinations
-       (organization_id, endpoint_url, secret_hash, secret_ciphertext, secret_prefix, enabled,
-        created_by_user_id)
-     values ($1, $2, $3, $4, $5, $6, $7)
-     on conflict (organization_id) do update set
-       endpoint_url         = excluded.endpoint_url,
-       secret_hash          = excluded.secret_hash,
-       secret_ciphertext    = excluded.secret_ciphertext,
-       secret_prefix        = excluded.secret_prefix,
-       enabled              = excluded.enabled,
-       consecutive_failures = 0
-     returning ${PUBLIC_COLUMNS}`,
-    [
-      organizationId,
-      input.endpointUrl,
-      minted.hash,
-      ciphertext,
-      minted.prefix,
-      input.enabled,
-      input.createdByUserId,
-    ],
-  );
+  const [row] = await withOrganizationKeyFence(db, organizationId, 'sealing', async (tx) => {
+    const ciphertext = await sealAuditSigningSecret(tx, organizationId, minted.secret);
+    return tx.query<DestinationRow>(
+      `insert into public.organization_audit_destinations
+         (organization_id, endpoint_url, secret_hash, secret_ciphertext, secret_prefix, enabled,
+          created_by_user_id)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       on conflict (organization_id) do update set
+         endpoint_url         = excluded.endpoint_url,
+         secret_hash          = excluded.secret_hash,
+         secret_ciphertext    = excluded.secret_ciphertext,
+         secret_prefix        = excluded.secret_prefix,
+         enabled              = excluded.enabled,
+         consecutive_failures = 0
+       returning ${PUBLIC_COLUMNS}`,
+      [
+        organizationId,
+        input.endpointUrl,
+        minted.hash,
+        ciphertext,
+        minted.prefix,
+        input.enabled,
+        input.createdByUserId,
+      ],
+    );
+  });
   if (!row) {
     throw new Error(`organization_audit_destinations upsert returned no row for ${organizationId}`);
   }
@@ -366,6 +371,7 @@ export async function auditStreamContinuity(
 
 interface CursorRow {
   endpoint_url: string;
+  secret_hash: string;
   secret_ciphertext: string | null;
   last_delivered_at: string | Date | null;
   last_delivered_id: string | null;
@@ -385,6 +391,11 @@ interface CursorRow {
  * transient error is worse than one that repeats them, because a receiver can
  * deduplicate on the event id and cannot recover what never arrived.
  *
+ * Every read and write of a delivery is fenced by `secret_hash`, which each save
+ * re-mints. A delivery that outlived its destination, because an administrator
+ * removed it and added another meanwhile, therefore cannot move the
+ * replacement's cursor or health past events it never received.
+ *
  * The signing key is opened only for a delivery. The one-way hash is retained
  * for identification and integrity checks, but cannot sign a payload the
  * receiver can verify with the secret it was shown.
@@ -397,7 +408,7 @@ export async function drainAuditDestination(
   const now = options.now ?? new Date();
 
   const [row] = await db.query<CursorRow>(
-    `select endpoint_url, secret_ciphertext, last_delivered_at, last_delivered_id,
+    `select endpoint_url, secret_hash, secret_ciphertext, last_delivered_at, last_delivered_id,
             consecutive_failures
        from public.organization_audit_destinations
       where organization_id = $1 and enabled = true
@@ -431,6 +442,7 @@ export async function drainAuditDestination(
        cross join public.organization_audit_destinations d
       where e.organization_id = $1
         and d.organization_id = $1
+        and d.secret_hash = $3
         and (
           d.last_delivered_at is null
           or d.last_delivered_id is null
@@ -438,7 +450,7 @@ export async function drainAuditDestination(
         )
       order by e.created_at asc, e.id asc
       limit $2`,
-    [organizationId, AUDIT_STREAM_BATCH],
+    [organizationId, AUDIT_STREAM_BATCH, row.secret_hash],
   );
 
   if (events.length === 0) {
@@ -450,8 +462,8 @@ export async function drainAuditDestination(
     await db.query(
       `update public.organization_audit_destinations
           set last_attempt_at = now()
-        where organization_id = $1`,
-      [organizationId],
+        where organization_id = $1 and secret_hash = $2`,
+      [organizationId, row.secret_hash],
     );
     return { organizationId, delivered: 0, status: 'nothing_due', error: null };
   }
@@ -481,8 +493,8 @@ export async function drainAuditDestination(
       `update public.organization_audit_destinations
           set last_attempt_at = now(), last_status = $2,
               consecutive_failures = consecutive_failures + 1
-        where organization_id = $1`,
-      [organizationId, error.slice(0, 300)],
+        where organization_id = $1 and secret_hash = $3`,
+      [organizationId, error.slice(0, 300), row.secret_hash],
     );
     return { organizationId, delivered: 0, status: 'failed', error };
   }
@@ -507,8 +519,8 @@ export async function drainAuditDestination(
                 last_delivered_at),
               last_delivered_id = $2,
               last_attempt_at = now(), last_status = $3, consecutive_failures = 0
-        where organization_id = $1`,
-      [organizationId, last.id, `HTTP ${status}`],
+        where organization_id = $1 and secret_hash = $4`,
+      [organizationId, last.id, `HTTP ${status}`, row.secret_hash],
     );
     return { organizationId, delivered: sent.length, status: 'delivered', error: null };
   }
@@ -520,8 +532,8 @@ export async function drainAuditDestination(
     `update public.organization_audit_destinations
         set last_attempt_at = now(), last_status = $2,
             consecutive_failures = consecutive_failures + 1
-      where organization_id = $1`,
-    [organizationId, (error ?? 'Delivery failed').slice(0, 300)],
+      where organization_id = $1 and secret_hash = $3`,
+    [organizationId, (error ?? 'Delivery failed').slice(0, 300), row.secret_hash],
   );
 
   logger.warn(

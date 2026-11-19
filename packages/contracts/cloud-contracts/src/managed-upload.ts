@@ -12,6 +12,32 @@ export interface ManagedUploadRequestOptions {
   redirect?: RequestRedirect;
 }
 
+const SIGNED_HEADERS_PARAM = 'x-amz-signedheaders';
+const HEADERS_THE_TRANSPORT_SETS = new Set(['host', 'content-length']);
+
+function signedHeaderNames(uploadUrl: string): string[] {
+  const names: string[] = [];
+  new URL(uploadUrl).searchParams.forEach((value, name) => {
+    if (name.toLowerCase() === SIGNED_HEADERS_PARAM) names.push(...value.split(';'));
+  });
+  return names.map((name) => name.trim().toLowerCase()).filter(Boolean);
+}
+
+export function assertUploadSendsSignedHeaders(
+  uploadUrl: string,
+  uploadHeaders: HeadersInit,
+): void {
+  const sent = new Headers(uploadHeaders);
+  const missing = signedHeaderNames(uploadUrl).filter(
+    (name) => !HEADERS_THE_TRANSPORT_SETS.has(name) && !sent.has(name),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Refusing an upload that storage would reject: it does not send ${missing.join(', ')}.`,
+    );
+  }
+}
+
 export async function managedUploadRequestOptions(
   uploadUrl: string,
   uploadHeaders: HeadersInit,
@@ -41,6 +67,7 @@ export async function managedUploadRequestOptions(
       !(target.protocol === 'http:' && (sameBrowserOrigin || configuredLoopback)))
   )
     throw new Error('Refusing an insecure upload destination.');
+  assertUploadSendsSignedHeaders(uploadUrl, headers);
   if (target.origin !== apiOrigin) return { headers: Object.fromEntries(headers.entries()) };
   const currentHeaders = new Headers(await auth.getHeaders?.());
   currentHeaders.delete('Content-Type');

@@ -50,8 +50,12 @@ const COMPLIANCE_MARKERS: readonly RegExp[] = [
 
 const TYPOGRAPHIC_APOSTROPHES = /[\u2018\u2019\u02bc]/g;
 
+function foldApostrophes(text: string): string {
+  return text.replace(TYPOGRAPHIC_APOSTROPHES, "'");
+}
+
 function normalise(text: string): string {
-  return text.replace(TYPOGRAPHIC_APOSTROPHES, "'").replace(/\s+/g, ' ').trim();
+  return foldApostrophes(text).replace(/\s+/g, ' ').trim();
 }
 
 function wordCount(text: string): number {
@@ -72,8 +76,8 @@ export function isRefusal(response: ModelResponse): boolean {
 }
 
 function found(values: readonly string[], haystack: string): string[] {
-  const lowered = haystack.toLowerCase();
-  return values.filter((value) => lowered.includes(value.toLowerCase()));
+  const lowered = foldApostrophes(haystack).toLowerCase();
+  return values.filter((value) => lowered.includes(foldApostrophes(value).toLowerCase()));
 }
 
 const ANSWER_LINE = /(?:final\s+answer|answer)\s*(?:is)?\s*[:=]\s*(.+)$/gimu;
@@ -179,7 +183,7 @@ export function gradeCheck(check: Check, response: ModelResponse): CheckResult {
       );
     }
     case 'matches': {
-      const matched = new RegExp(check.pattern, 'i').test(text);
+      const matched = new RegExp(check.pattern, 'i').test(foldApostrophes(text));
       return result(
         check,
         matched,

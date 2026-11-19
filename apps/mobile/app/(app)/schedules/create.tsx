@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import {
   CloudSchedulesGate,
   ScheduleForm,
@@ -20,6 +21,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 
 export default function CreateScheduleScreen() {
@@ -95,7 +97,9 @@ export default function CreateScheduleScreen() {
   const handleSubmit = useCallback(
     async (data: Partial<CreateScheduleInput>) => {
       if (!isEditing && !canCreateSchedule) {
-        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        if (NATIVE_PURCHASES_AVAILABLE) {
+          router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        }
         return;
       }
       try {
@@ -187,21 +191,26 @@ export default function CreateScheduleScreen() {
         </View>
         <View className="flex-1 items-center justify-center px-8">
           <Text variant="heading" className="text-center">
-            Scheduled tasks require Basic
+            {NATIVE_PURCHASES_AVAILABLE
+              ? 'Scheduled tasks require Basic'
+              : "Scheduled tasks aren't included in your plan"}
           </Text>
           <Text className="mt-2 text-center text-sm leading-5 text-white/50">
-            Upgrade to create unattended tasks in the daily AGI Cloud scheduling window.
+            {NATIVE_PURCHASES_AVAILABLE
+              ? 'Upgrade to create unattended tasks in the daily AGI Cloud scheduling window.'
+              : 'Free Cloud chat remains available.'}
           </Text>
-          <PressableBox
-            onPress={() =>
-              router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
-            }
-            className="mt-6 min-h-[52px] min-w-[220px] items-center justify-center rounded-2xl bg-white"
-            accessibilityRole="button"
-            accessibilityLabel="View plans for scheduled tasks"
-          >
-            <Text className="font-semibold text-black">View Plans</Text>
-          </PressableBox>
+          {NATIVE_PURCHASES_AVAILABLE ? (
+            <Button
+              title="View Plans"
+              size="lg"
+              onPress={() =>
+                router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
+              }
+              className="mt-6 min-w-[220px]"
+              accessibilityLabel="View plans for scheduled tasks"
+            />
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -236,14 +245,12 @@ export default function CreateScheduleScreen() {
               : 'It may have been deleted, or this account may not have access to it.'}
           </Text>
           {error ? (
-            <PressableBox
+            <Button
+              title="Try Again"
               onPress={handleRetryLoad}
-              className="mt-6 min-h-[48px] min-w-[180px] items-center justify-center rounded-xl bg-white"
-              accessibilityRole="button"
+              className="mt-6 min-w-[180px]"
               accessibilityLabel="Retry loading schedule"
-            >
-              <Text className="font-semibold text-black">Try Again</Text>
-            </PressableBox>
+            />
           ) : null}
         </View>
       </SafeAreaView>

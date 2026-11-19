@@ -3,6 +3,7 @@ import {
   BILLING_PLAN_CAPABILITY_LABELS,
   CONNECTORS_COMING_SOON_MESSAGE,
   billingPlanCapabilityPlanLabels,
+  PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { AVAILABLE_NOW_LABEL, SURFACE_STATUS, type SurfaceStatusMap } from '@/lib/surface-status';
 import {
@@ -14,6 +15,7 @@ import {
   type ProductReleaseState,
 } from './plan-capability-release';
 import { getBillingPlanDisplay, summarizePlanChange } from './plan-display';
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const EVERYTHING_RELEASED: ProductReleaseState = {
   surfaces: Object.fromEntries(
@@ -25,7 +27,7 @@ const EVERYTHING_RELEASED: ProductReleaseState = {
 describe('plan capability copy follows the release state', () => {
   it('describes the launch: web chat only, skills without connectors, no developer surfaces', () => {
     expect(CURRENT_RELEASE_STATE.connectors).toBe('coming_soon');
-    expect(planCapabilityLabel('managed_chat')).toBe('Managed Cloud chat on the web');
+    expect(planCapabilityLabel('managed_chat')).toBe(`${CLOUD} chat on the web`);
     expect(planCapabilityLabel('skills')).toBe('Skills');
     expect(planCapabilityReleased('developer_surfaces')).toBe(false);
     expect(planCapabilityReleased('connectors')).toBe(false);
@@ -41,10 +43,10 @@ describe('plan capability copy follows the release state', () => {
       surfaces: { ...SURFACE_STATUS, desktop: AVAILABLE_NOW_LABEL },
     };
     expect(planCapabilityLabel('managed_chat', desktop)).toBe(
-      'Managed Cloud chat on the web and desktop',
+      `${CLOUD} chat on the web and desktop`,
     );
     expect(planCapabilityLabel('managed_chat', EVERYTHING_RELEASED)).toBe(
-      'Managed Cloud chat on the web, desktop, mobile and Chrome',
+      `${CLOUD} chat on the web, desktop, mobile and Chrome`,
     );
     expect(planCapabilityLabel('connectors', EVERYTHING_RELEASED)).toBe(
       BILLING_PLAN_CAPABILITY_LABELS.connectors,

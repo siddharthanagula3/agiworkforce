@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -171,7 +171,8 @@ exists, a route compiles, or a typecheck passes. A feature is complete only when
 
 This baseline was re-verified on 2026-09-21. The source-backed chronology for
 changes since July lives in
-`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`; older dated
+`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`; the latest vendor
+comparison is `docs/research/assistant-comparison-2026-11-11.md`. Older dated
 research is historical evidence, not the current product target.
 
 The reference products are:
@@ -806,8 +807,11 @@ Mobile v1 must include:
 - Attachment-ready controls with honest unavailable states.
 - Mic/dictation-ready control with honest unavailable states if not fully live.
 - Cloud sign-in entry (Free public alpha; no waitlist for Free access).
-- Paid upgrade entry through store in-app purchase, with no waitlist or access code
-  (owner decision 2026-10-19).
+- No purchase, upgrade, top-up or restore control: Mobile v1 sells nothing in the
+  app (`nativePurchases: false` in
+  `apps/mobile/src/features/billing/storePurchases.json`, owner deferral
+  2026-11-10). When store purchase is turned on it carries no waitlist or access
+  code (owner decision 2026-10-19).
 - Profile/settings/privacy basics.
 - Support, privacy policy, and delete/export/account paths as required for
   release.
@@ -826,8 +830,8 @@ Mobile v1 should not publicly promise:
 Mobile BYOK is not part of Mobile v1. The public Mobile path is small on-device
 Local LLM chat plus public-alpha Cloud sign-in. Free Cloud requires a signed-in
 Free entitlement before any hosted request; paid-only capabilities additionally
-require a paid entitlement, which Mobile obtains through store in-app purchase
-with no waitlist or access code (owner decision 2026-10-19).
+require a paid entitlement. Mobile v1 cannot sell one; an entitlement bought on
+the Web resolves on Mobile.
 
 ### 10.3 Mobile V1 Non-Goals
 

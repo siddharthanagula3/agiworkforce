@@ -57,17 +57,27 @@ describe('buildSandboxedArtifactHtml', () => {
 });
 
 describe('buildMermaidPreviewHtml', () => {
-  it('limits script-src to the single pinned mermaid CDN and renders in strict mode', () => {
-    const html = buildMermaidPreviewHtml('graph TD; A-->B');
-    expect(html).toContain('script-src https://cdn.jsdelivr.net');
-    expect(html).not.toMatch(/script-src[^;"]*\*/);
+  const RUNTIME = 'window.mermaid = {};';
+
+  it('runs the bundled renderer inline, in strict mode, with no network source allowed', () => {
+    const html = buildMermaidPreviewHtml('graph TD; A-->B', RUNTIME);
+    expect(html).toContain(`<script>${RUNTIME}</script>`);
+    expect(html).toContain("script-src 'unsafe-inline';");
+    expect(html).not.toMatch(/https?:\/\//);
+    expect(html).not.toContain('<script src=');
     expect(html).toContain("securityLevel: 'strict'");
-    expect(html).toContain('cdn.jsdelivr.net/npm/mermaid@11');
+  });
+
+  it('reports the drawn height from the body box, which never grows to fill the frame', () => {
+    const html = buildMermaidPreviewHtml('graph TD; A-->B', RUNTIME);
+    expect(html).toContain('document.body.getBoundingClientRect().height');
+    expect(html).not.toContain('scrollHeight');
+    expect(html).toContain('html{margin:0;padding:0;');
   });
 
   it('injects the untrusted diagram source as a data literal with < escaped (no script-tag break-out)', () => {
     const evil = 'a"; fetch("https://evil.example"); //</script><script>alert(1)</script>';
-    const html = buildMermaidPreviewHtml(evil);
+    const html = buildMermaidPreviewHtml(evil, RUNTIME);
     expect(html).toContain('\\u003c/script>');
     expect(html).not.toContain('//</script><script>alert');
     expect(html).toContain('\\"; fetch(');

@@ -223,4 +223,61 @@ describe('OnboardingWizard', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Finish' })).not.toBeDisabled();
   });
+
+  it('admits one completion while a prompt choice is still saving', async () => {
+    let resolveComplete: () => void = () => {};
+    mocks.complete.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveComplete = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    const nameInput = await screen.findByLabelText('Preferred name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Priya');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: 'What do you want to do first?' });
+
+    const useCase = ONBOARDING_USE_CASES[0]!;
+    await user.click(screen.getByRole('radio', { name: new RegExp(useCase.label) }));
+    const firstPrompt = useCase.starterPrompts[0]!;
+    const secondPrompt = useCase.starterPrompts[1]!;
+    await user.click(screen.getByRole('button', { name: firstPrompt }));
+    await user.click(screen.getByRole('button', { name: secondPrompt }));
+    await user.click(screen.getByRole('button', { name: 'Skip for now' }));
+
+    expect(screen.getByRole('button', { name: secondPrompt })).toBeDisabled();
+    expect(mocks.complete).toHaveBeenCalledTimes(1);
+    expect(mocks.skip).not.toHaveBeenCalled();
+
+    resolveComplete();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledTimes(1));
+    expect(mocks.replace).toHaveBeenCalledWith(
+      `/chat?starterPrompt=${encodeURIComponent(firstPrompt)}`,
+    );
+  });
+
+  it('accepts a new completion after a rejected one', async () => {
+    mocks.complete.mockRejectedValueOnce(new Error('network down'));
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    const nameInput = await screen.findByLabelText('Preferred name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Priya');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: 'What do you want to do first?' });
+
+    const useCase = ONBOARDING_USE_CASES[0]!;
+    await user.click(screen.getByRole('radio', { name: new RegExp(useCase.label) }));
+    const prompt = useCase.starterPrompts[0]!;
+    await user.click(screen.getByRole('button', { name: prompt }));
+    await screen.findByRole('alert');
+    await user.click(screen.getByRole('button', { name: prompt }));
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledTimes(1));
+    expect(mocks.complete).toHaveBeenCalledTimes(2);
+  });
 });

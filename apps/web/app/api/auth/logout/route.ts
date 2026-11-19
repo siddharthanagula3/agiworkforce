@@ -38,7 +38,7 @@ async function revokeByRefreshToken(
     );
   }
 
-  const revoked = await revokeDeveloperSessionFamily(family.family_id);
+  const revoked = await revokeDeveloperSessionFamily(family.family_id, family.user_id);
   await recordAuditEvent({
     userId: family.user_id,
     eventType: 'logout',
@@ -71,7 +71,7 @@ async function handleDeveloperLogout(request: NextRequest): Promise<NextResponse
   const [inserted, familyRevoked] = await Promise.all([
     revokeDeveloperToken(verified),
     verified.sessionFamilyId
-      ? revokeDeveloperSessionFamily(verified.sessionFamilyId)
+      ? revokeDeveloperSessionFamily(verified.sessionFamilyId, verified.userId)
       : Promise.resolve(false),
   ]);
 

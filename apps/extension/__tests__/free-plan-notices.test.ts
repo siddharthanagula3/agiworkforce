@@ -240,6 +240,151 @@ describe('the Free plan training notice', () => {
   });
 });
 
+describe('retiring notices while a promotion request is pending', () => {
+  function pendingPanel() {
+    const requests: Array<{
+      token: string;
+      settle: (offer: FreeModelPromotionOffer | null) => void;
+      fail: () => void;
+    }> = [];
+    const fetchPromotion = vi.fn(
+      (token: string) =>
+        new Promise<FreeModelPromotionOffer | null>((settle, reject) => {
+          requests.push({ token, settle, fail: () => reject(new Error('offline')) });
+        }),
+    );
+    const notices = buildFreePlanNotices({ fetchPromotion, now: () => NOW });
+    document.body.replaceChildren(notices.element);
+    const visible = (testId: string) =>
+      notices.element.querySelector(`[data-testid="${testId}"]`)!.classList.contains('visible');
+    return {
+      notices,
+      requests,
+      training: () => visible('free-plan-training-notice'),
+      promotion: () => visible('free-model-promotion-notice'),
+    };
+  }
+
+  async function settleStorage() {
+    for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+  }
+
+  it('hides the training notice at once on sign-out and does not bring it back', async () => {
+    const visit = pendingPanel();
+    const pendingA = visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    expect(visit.training()).toBe(true);
+
+    await visit.notices.update(null);
+    expect(visit.training()).toBe(false);
+
+    visit.requests[0]!.settle(RUNNING_OFFER);
+    await pendingA;
+    expect(visit.training()).toBe(false);
+    expect(visit.promotion()).toBe(false);
+  });
+
+  it('hides it at once for a paid account', async () => {
+    const visit = pendingPanel();
+    void visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    expect(visit.training()).toBe(true);
+
+    await visit.notices.update(freeAccount('user_b', 'pro'));
+    expect(visit.training()).toBe(false);
+    expect(visit.requests).toHaveLength(1);
+  });
+
+  it('shows the next Free account its notices without waiting for the earlier request', async () => {
+    const visit = pendingPanel();
+    const pendingA = visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    expect(visit.training()).toBe(true);
+
+    const pendingB = visit.notices.update(freeAccount('user_b'));
+    await settleStorage();
+    expect(visit.training()).toBe(true);
+    expect(visit.requests.map((request) => request.token)).toEqual([
+      'token-user_a',
+      'token-user_b',
+    ]);
+
+    visit.requests[1]!.settle(RUNNING_OFFER);
+    await pendingB;
+    expect(visit.promotion()).toBe(true);
+
+    const lateEndsAt = '2026-11-25T00:00:00.000Z';
+    visit.requests[0]!.settle({ ...RUNNING_OFFER, endsAt: lateEndsAt });
+    await pendingA;
+    expect(visit.promotion()).toBe(true);
+    expect(
+      local[`${FREE_MODEL_PROMOTION_NOTICE_STORAGE_PREFIX}.${PROMOTED}.${lateEndsAt}`],
+    ).toBeUndefined();
+  });
+
+  it('does not publish a late offer for an account that has signed out', async () => {
+    const visit = pendingPanel();
+    const pendingA = visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    await visit.notices.update(null);
+
+    visit.requests[0]!.settle(RUNNING_OFFER);
+    await pendingA;
+    expect(visit.promotion()).toBe(false);
+    expect(
+      Object.keys(local).some((key) => key.startsWith(FREE_MODEL_PROMOTION_NOTICE_STORAGE_PREFIX)),
+    ).toBe(false);
+  });
+
+  it('ignores a late failure of the earlier account request', async () => {
+    const visit = pendingPanel();
+    const pendingA = visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    const pendingB = visit.notices.update(freeAccount('user_b'));
+    await settleStorage();
+
+    visit.requests[0]!.fail();
+    await pendingA;
+    const refreshedB = visit.notices.update(freeAccount('user_b'));
+    await settleStorage();
+    expect(visit.requests).toHaveLength(2);
+
+    visit.requests[1]!.settle(RUNNING_OFFER);
+    await Promise.all([pendingB, refreshedB]);
+    expect(visit.promotion()).toBe(true);
+  });
+
+  it('keeps a dismissal when the same account refreshes', async () => {
+    const visit = pendingPanel();
+    void visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    notice(visit.notices.element, 'free-plan-training-notice').querySelector('button')!.click();
+    expect(visit.training()).toBe(false);
+
+    const refreshed = visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    visit.requests[0]!.settle(RUNNING_OFFER);
+    await refreshed;
+    expect(visit.training()).toBe(false);
+    expect(visit.promotion()).toBe(true);
+  });
+
+  it('still shows the notice once when the claim finishes after a same-account refresh', async () => {
+    const visit = pendingPanel();
+    const first = visit.notices.update(freeAccount('user_a'));
+    const second = visit.notices.update(freeAccount('user_a'));
+    await settleStorage();
+    visit.requests[0]!.settle(null);
+    await Promise.all([first, second]);
+    expect(visit.training()).toBe(true);
+    expect(local[FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY]).toHaveLength(1);
+  });
+
+  function notice(root: HTMLElement, testId: string): HTMLElement {
+    return root.querySelector<HTMLElement>(`[data-testid="${testId}"]`)!;
+  }
+});
+
 describe('the free model promotion notice', () => {
   it('names the promoted model from the catalog, once per account', async () => {
     const first = panel(RUNNING_OFFER);

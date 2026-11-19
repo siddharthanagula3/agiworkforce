@@ -59,8 +59,13 @@ jest.mock('expo-router', () => ({
 
 const mockSignOut = jest.fn();
 jest.mock('../src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: { signOut: typeof mockSignOut }) => unknown) =>
-    selector({ signOut: mockSignOut }),
+  useAuthStore: (
+    selector: (state: {
+      signOut: typeof mockSignOut;
+      isClerkLoaded: boolean;
+      isClerkSignedIn: boolean;
+    }) => unknown,
+  ) => selector({ signOut: mockSignOut, isClerkLoaded: true, isClerkSignedIn: true }),
 }));
 
 let mockUseRealStepUp = false;
@@ -96,8 +101,11 @@ jest.mock('../services/api', () => ({
 }));
 
 const mockExportCloudUserData = jest.fn();
+const mockShareCloudDataExport = jest.fn();
 jest.mock('../services/cloudDataExport', () => ({
+  ...jest.requireActual('../services/cloudDataExport'),
   exportCloudUserData: (...args: unknown[]) => mockExportCloudUserData(...args),
+  shareCloudDataExport: (...args: unknown[]) => mockShareCloudDataExport(...args),
 }));
 
 const mockSyncNow = jest.fn().mockResolvedValue(undefined);
@@ -200,6 +208,7 @@ import { router } from 'expo-router';
 import CloudAccountScreen from '../src/features/settings/cloud-account';
 import { useCloudProfileStore } from '../src/features/settings/cloud-account/cloudProfileStore';
 import { ApiHttpError, httpErrorFrom } from '../services/apiErrors';
+import { ownerHandler } from '../test-utils/ownerProps';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -358,6 +367,57 @@ describe('Cloud Account destructive action ownership', () => {
         ownerId: 'account-a',
         epoch: 1,
       }),
+    );
+  });
+
+  it('explains a partial export and saves it only when asked, never as a connection retry', async () => {
+    const { PartialCloudDataExportError } = jest.requireActual('../services/cloudDataExport');
+    const completeness = {
+      status: 'partial',
+      unavailable_sections: [],
+      skipped_rows: [],
+      truncated_sections: [{ section: 'security_audit_logs', limit: 1000 }],
+      retry: 'repeating this bounded export does not retrieve the omitted rows',
+    };
+    const document = { export_metadata: { completeness } };
+    mockExportCloudUserData.mockRejectedValueOnce(
+      new PartialCloudDataExportError(completeness, document),
+    );
+    mockShareCloudDataExport.mockResolvedValue(undefined);
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Export Cloud Data'));
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Your export is incomplete',
+        expect.stringContaining('security audit logs'),
+        expect.any(Array),
+      ),
+    );
+    expect(Alert.alert).not.toHaveBeenCalledWith('Export failed', expect.anything());
+    expect(mockShareCloudDataExport).not.toHaveBeenCalled();
+
+    const call = (Alert.alert as jest.Mock).mock.calls.findLast(
+      ([title]) => title === 'Your export is incomplete',
+    );
+    const buttons = call?.[2] as Array<{ text: string; onPress?: () => void }>;
+    expect(buttons.map((button) => button.text)).toEqual([
+      'Cancel',
+      'Get help',
+      'Save what’s included',
+    ]);
+    await act(async () => {
+      buttons.find((button) => button.text === 'Save what’s included')?.onPress?.();
+    });
+
+    expect(mockShareCloudDataExport).toHaveBeenCalledWith(
+      { ownerId: 'account-a', epoch: 1 },
+      document,
+      'partial',
     );
   });
 
@@ -561,10 +621,40 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
   });
 
-  it('shows why a paid plan blocks deletion and offers Billing', async () => {
+  it('offers the store subscription page when a store plan keeps billing after scheduling', async () => {
+    const manageUrl = 'https://apps.apple.com/account/subscriptions';
+    const message =
+      'Account deletion scheduled. Your Premium plan is billed by Apple, and deleting your account ' +
+      `does not cancel it. Apple keeps charging you until you cancel it there: ${manageUrl}`;
+    mockDeleteAccount.mockResolvedValueOnce({
+      ...scheduledReceipt,
+      message,
+      storeBilling: { store: 'apple', manageUrl },
+    });
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenLastCalledWith('Account deletion scheduled', message, [
+      { text: 'OK', style: 'cancel' },
+      { text: 'Open subscriptions', onPress: expect.any(Function) },
+    ]);
+    const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Open subscriptions')?.onPress?.();
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(manageUrl);
+  });
+
+  it('shows why a paid plan blocks deletion and offers the plan view', async () => {
     const refusal =
-      'Cancel your pro plan before deleting your account. Nothing was deleted, and billing ' +
-      'continues until you cancel in Settings > Billing. Email support@agiworkforce.com if you need help.';
+      'A payment for your Premium plan is still being collected, so nothing was deleted. ' +
+      'Delete your account once it is settled, or email support for help.';
     mockDeleteAccount.mockRejectedValueOnce(
       httpErrorFrom(
         409,
@@ -572,7 +662,7 @@ describe('Cloud Account destructive action ownership', () => {
           error: refusal,
           reason: 'active_subscription',
           planTier: 'pro',
-          status: 'active',
+          status: 'past_due',
           cancelAtPeriodEnd: false,
         }),
       ),
@@ -589,13 +679,13 @@ describe('Cloud Account destructive action ownership', () => {
 
     expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, [
       { text: 'OK', style: 'cancel' },
-      { text: 'Open Billing', onPress: expect.any(Function) },
+      { text: 'View plan', onPress: expect.any(Function) },
     ]);
     const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
       text?: string;
       onPress?: () => void;
     }>;
-    buttons.find((button) => button.text === 'Open Billing')?.onPress?.();
+    buttons.find((button) => button.text === 'View plan')?.onPress?.();
     expect(router.push).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
     expect(mockSignOut).not.toHaveBeenCalled();
   });
@@ -686,8 +776,34 @@ describe('Cloud Account destructive action ownership', () => {
     );
     expect(mockLegacyPost).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Account deletion cancelled',
+      'Your account deletion was cancelled.',
+    );
     expect(mockSignOut).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['restored', 'Account deletion cancelled. Your plan renews again.'],
+    [
+      'not_restored',
+      "Account deletion cancelled. If deleting turned off your plan's renewal, turn it back on in Settings > Billing.",
+    ],
+  ])(
+    'says what happened to the plan renewal when undoing a deletion: %s',
+    async (planRenewal, message) => {
+      mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
+      mockCancelDeletion.mockResolvedValueOnce({ message, cancelled: true, planRenewal });
+      render(<CloudAccountScreen />);
+      await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+      await act(async () => {
+        deletionAlert('Cancel account deletion?').confirm();
+      });
+
+      expect(Alert.alert).toHaveBeenLastCalledWith('Account deletion cancelled', message);
+    },
+  );
 
   it.each([null, '2026-11-04T18:00:00.123456Z'])(
     'captures a frozen lossless pair with requestedAt %p (UNRUN)',
@@ -862,7 +978,7 @@ describe('Cloud Account destructive action ownership', () => {
   it('retires a retained cancellation confirmation when a refresh returns an invalid date', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
     const old = deletionAlert('Cancel account deletion?');
@@ -1137,7 +1253,7 @@ describe('Cloud Account destructive action ownership', () => {
     mockDeleteAccount.mockReturnValueOnce(pending.promise);
     render(<CloudAccountScreen />);
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    const open = screen.getByLabelText('Delete Account').props.onPress as () => void;
+    const open = ownerHandler(screen.getByLabelText('Delete Account'), 'onPress');
     act(() => {
       open();
       open();
@@ -1273,7 +1389,7 @@ describe('Cloud Account destructive action ownership', () => {
   it('invalidates a cancellation confirmation when its ready schedule is refreshed', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
     const old = deletionAlert('Cancel account deletion?');
@@ -1340,7 +1456,7 @@ describe('Cloud Account destructive action ownership', () => {
     const pending = deferred<unknown>();
     mockDeleteAccount.mockReturnValueOnce(pending.promise);
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Delete Account'));
     act(() => {
@@ -1516,9 +1632,9 @@ describe('Cloud Account destructive action ownership', () => {
 
   it('does not let a saved row adopt a replaced ready status snapshot', async () => {
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    const oldOpen = screen.getByLabelText('Delete Account').props.onPress as () => void;
+    const oldOpen = ownerHandler(screen.getByLabelText('Delete Account'), 'onPress');
     act(() => {
       oldOpen();
       deletionAlert().cancel();
@@ -1539,9 +1655,9 @@ describe('Cloud Account destructive action ownership', () => {
 
   it('does not let an old focus refresh or row release or adopt a new confirmation', async () => {
     render(<CloudAccountScreen />);
-    const oldRefresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const oldRefresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    const oldOpen = screen.getByLabelText('Delete Account').props.onPress as () => void;
+    const oldOpen = ownerHandler(screen.getByLabelText('Delete Account'), 'onPress');
     act(() => {
       mockBlur?.();
       mockFocus?.();

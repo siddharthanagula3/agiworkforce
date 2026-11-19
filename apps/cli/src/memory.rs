@@ -282,21 +282,8 @@ Move the file to {} (or run `agi migrate`) to keep using it going forward.",
     ///
     /// Returns `(tier, path, exists)` tuples for all three tiers.
     pub fn list(&self) -> Vec<(MemoryTier, PathBuf, bool)> {
-        // Prefer the documented path; fall back to reporting the legacy path
-        // if only that one exists, so `agi memory list` doesn't claim global
-        // memory is missing when it's actually loaded from the legacy file.
-        let global_entry = if self.global_path.exists() {
-            (MemoryTier::Global, self.global_path.clone(), true)
-        } else if let Some(legacy) = self
-            .legacy_global_path
-            .as_ref()
-            .filter(|path| path.exists())
-        {
-            (MemoryTier::Global, legacy.clone(), true)
-        } else {
-            (MemoryTier::Global, self.global_path.clone(), false)
-        };
-        let mut result = vec![global_entry];
+        let (global_path, global_exists) = self.effective_global_file();
+        let mut result = vec![(MemoryTier::Global, global_path, global_exists)];
 
         if let Some(ref pp) = self.project_path {
             result.push((MemoryTier::Project, pp.clone(), pp.exists()));
@@ -319,6 +306,27 @@ Move the file to {} (or run `agi migrate`) to keep using it going forward.",
         }
 
         result
+    }
+
+    /// The Global file `load_all` reads from: the boundary's file when it has
+    /// content, else the Local legacy file when that has content. With no
+    /// content anywhere, the file that exists, so listings never call an
+    /// existing empty file missing.
+    fn effective_global_file(&self) -> (PathBuf, bool) {
+        let legacy = self.legacy_global_path.as_ref();
+        if read_if_exists(&self.global_path).is_some() {
+            return (self.global_path.clone(), true);
+        }
+        if let Some(legacy) = legacy.filter(|path| read_if_exists(path).is_some()) {
+            return (legacy.clone(), true);
+        }
+        if self.global_path.exists() {
+            return (self.global_path.clone(), true);
+        }
+        match legacy.filter(|path| path.exists()) {
+            Some(legacy) => (legacy.clone(), true),
+            None => (self.global_path.clone(), false),
+        }
     }
 
     /// Get the path for a specific tier.
@@ -1193,6 +1201,48 @@ mod tests {
                 "{prompt}"
             );
             assert_eq!(listed(boundary), boundary == PrivacyMode::Local);
+        }
+    }
+
+    #[test]
+    fn the_listed_global_file_is_the_one_whose_content_is_loaded() {
+        let legacy_line = "- Prefer concise answers";
+        for (current, legacy, expect_legacy) in [
+            (None, Some(legacy_line), true),
+            (Some("  \n"), Some(legacy_line), true),
+            (Some("- current rule"), Some(legacy_line), false),
+            (Some("  \n"), None, false),
+            (None, Some("  \n"), true),
+        ] {
+            let (_config_dir, config) = tmp_dir();
+            let (_home_dir, home) = tmp_dir();
+            let (_project_dir, project) = tmp_dir();
+            let current_path = config.join(global_instructions_file(PrivacyMode::Local));
+            let legacy_path = home.join(".agi").join("CLAUDE.md");
+            if let Some(text) = current {
+                fs::write(&current_path, text).unwrap();
+            }
+            if let Some(text) = legacy {
+                fs::create_dir_all(home.join(".agi")).unwrap();
+                fs::write(&legacy_path, text).unwrap();
+            }
+            let manager = MemoryManager::in_dirs(&project, PrivacyMode::Local, &config, &home);
+            let (tier, listed, exists) = manager.list().remove(0);
+            assert_eq!(tier, MemoryTier::Global);
+            assert!(exists, "{current:?} {legacy:?}");
+            let expected = if expect_legacy {
+                &legacy_path
+            } else {
+                &current_path
+            };
+            assert_eq!(&listed, expected, "{current:?} {legacy:?}");
+            if let Some(loaded) = manager
+                .load_all()
+                .into_iter()
+                .find(|entry| entry.source == MemoryTier::Global)
+            {
+                assert_eq!(loaded.file_path, listed, "{current:?} {legacy:?}");
+            }
         }
     }
 

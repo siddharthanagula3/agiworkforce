@@ -8,6 +8,7 @@ import {
   applyBrowserActivityEvent,
   hydrateStoredChatMessage,
   reconcileManagedRunActivity,
+  settleBrowserActivity,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 import {
@@ -20,7 +21,12 @@ const source = readFileSync(
   'utf8',
 );
 const program = ts.createSourceFile('side_panel.ts', source, ts.ScriptTarget.Latest, true);
-const names = ['finishVisibleChatTurn', 'completeVerifiedProfileFill', 'recordBrowserActivity'];
+const names = [
+  'finishVisibleChatTurn',
+  'completeVerifiedProfileFill',
+  'recordBrowserActivity',
+  'settleChatToolActivity',
+];
 const code = program.statements
   .filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? ''))
   .map((node) => node.getText(program));
@@ -89,6 +95,8 @@ function harness() {
     browserActivityEnvelope,
     applyBrowserActivityEvent,
     reconcileManagedRunActivity,
+    settleBrowserActivity,
+    composerBrowserRun: null,
     taskSiteGrants: { releaseTask: vi.fn(async () => undefined) },
     quotaWarnedStreamIds: new Set<string>(),
     refreshCloudAccountUI: vi.fn(),

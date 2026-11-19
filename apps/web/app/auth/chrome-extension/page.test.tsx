@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type React from 'react';
 import ChromeExtensionAuthCompletePage from './page';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const authState = vi.hoisted(() => ({
   isLoaded: true,
@@ -61,7 +64,7 @@ describe('/auth/chrome-extension page', () => {
     render(<ChromeExtensionAuthCompletePage />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('OAuth');
-    expect(screen.getByRole('link', { name: 'Sign in to AGI Cloud' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: `Sign in to ${CLOUD}` })).toHaveAttribute(
       'href',
       '/login?redirectTo=%2Fauth%2Fchrome-extension',
     );
@@ -82,6 +85,6 @@ describe('/auth/chrome-extension page', () => {
     authState.isSignedIn = false;
     render(<ChromeExtensionAuthCompletePage />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Checking your AGI Cloud session');
+    expect(screen.getByRole('status')).toHaveTextContent(`Checking your ${CLOUD} session`);
   });
 });

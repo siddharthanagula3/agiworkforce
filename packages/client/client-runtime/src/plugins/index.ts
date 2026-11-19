@@ -23,6 +23,7 @@ export {
   isPluginSha256,
   isPluginShippedWithProduct,
   isPluginSignatureAlgorithm,
+  isUnambiguousPluginSignatureClaim,
   pluginIntegrityVerdict,
   pluginSignaturePayload,
 } from './signature';

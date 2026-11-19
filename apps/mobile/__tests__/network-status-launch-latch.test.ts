@@ -80,7 +80,7 @@ it('consumes launch replay on a listener-first attempt without retrying on a lat
     finishBackoff();
     await mockProcessQueue.mock.results[0]?.value;
   });
-  await original.unmount();
+  await original.unmountAsync();
 
   mockFetch.mockResolvedValue({ isConnected: true, isInternetReachable: true });
   await renderHookAsync(useNetworkStatus);

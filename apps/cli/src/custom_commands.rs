@@ -89,19 +89,52 @@ pub(crate) fn expand_custom_slash_invocation(input: &str) -> Option<String> {
 }
 
 pub(crate) fn expand_custom_command(command: &CustomSlashCommand, args: &str) -> String {
+    expand_command_body(&command.content, args)
+}
+
+pub(crate) fn expand_command_file(path: &Path, args: &str) -> Option<String> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    Some(expand_command_body(
+        &parse_command_markdown(&raw).content,
+        args,
+    ))
+}
+
+fn expand_command_body(content: &str, args: &str) -> String {
+    const ALL_ARGUMENTS: &str = "$ARGUMENTS";
     let positional = split_positional_args(args);
-    let mut out = command.content.clone();
+    let mut out = String::with_capacity(content.len() + args.len());
+    let mut substituted = false;
+    let mut rest = content;
 
-    if out.contains("$ARGUMENTS") {
-        out = out.replace("$ARGUMENTS", args);
+    while let Some(offset) = rest.find('$') {
+        out.push_str(&rest[..offset]);
+        let tail = &rest[offset..];
+        if let Some(after_all_arguments) = tail.strip_prefix(ALL_ARGUMENTS) {
+            out.push_str(args);
+            substituted = true;
+            rest = after_all_arguments;
+            continue;
+        }
+        let digit = tail[1..]
+            .chars()
+            .next()
+            .and_then(|ch| ch.to_digit(10))
+            .filter(|digit| (1..=9).contains(digit));
+        if let Some(digit) = digit {
+            if let Some(value) = positional.get(digit as usize - 1) {
+                out.push_str(value);
+            }
+            substituted = true;
+            rest = &tail[2..];
+            continue;
+        }
+        out.push('$');
+        rest = &tail[1..];
     }
-    for index in 1..=9 {
-        let placeholder = format!("${index}");
-        let replacement = positional.get(index - 1).map(String::as_str).unwrap_or("");
-        out = out.replace(&placeholder, replacement);
-    }
+    out.push_str(rest);
 
-    if out == command.content && !args.trim().is_empty() {
+    if !substituted && !args.trim().is_empty() {
         out.push_str("\n\n");
         out.push_str(args.trim());
     }
@@ -169,10 +202,23 @@ fn discover_custom_slash_commands_from_roots(
                 }
                 continue;
             }
-            seen.insert(name.clone(), (path.clone(), root.source));
-            let Ok(raw) = std::fs::read_to_string(&path) else {
+            let raw = if root.source.is_project() {
+                root.path
+                    .parent()
+                    .and_then(Path::parent)
+                    .and_then(|project| {
+                        crate::project_text::try_read_within(project, &path).unwrap_or_else(|why| {
+                            report_refused_project_command(&name, &path, why);
+                            None
+                        })
+                    })
+            } else {
+                std::fs::read_to_string(&path).ok()
+            };
+            let Some(raw) = raw else {
                 continue;
             };
+            seen.insert(name.clone(), (path.clone(), root.source));
             let parsed = parse_command_markdown(&raw);
             commands.push(CustomSlashCommand {
                 name,
@@ -187,6 +233,26 @@ fn discover_custom_slash_commands_from_roots(
 
     commands.sort_by(|left, right| left.name.cmp(&right.name));
     (commands, shadowed)
+}
+
+fn report_refused_project_command(name: &str, path: &Path, why: &str) {
+    use std::io::Write as _;
+    static REPORTED: std::sync::Mutex<Option<std::collections::HashSet<PathBuf>>> =
+        std::sync::Mutex::new(None);
+    let first = REPORTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(std::collections::HashSet::new)
+        .insert(path.to_path_buf());
+    if first {
+        let mut sink = crate::output::DiagnosticWriter;
+        let _ = writeln!(
+            sink,
+            "note: the project command /{} was not loaded because {why}: {}",
+            crate::terminal_text::sanitize_terminal_text(name),
+            crate::terminal_text::sanitize_terminal_text(&path.display().to_string())
+        );
+    }
 }
 
 fn markdown_files_recursive(root: &Path) -> Vec<PathBuf> {
@@ -308,7 +374,7 @@ fn first_content_description(content: &str) -> Option<String> {
         .filter(|line| !line.is_empty())
 }
 
-fn parse_custom_invocation(input: &str) -> Option<(&str, &str)> {
+pub(crate) fn parse_custom_invocation(input: &str) -> Option<(&str, &str)> {
     let trimmed = input.trim();
     let without_slash = trimmed.strip_prefix('/')?;
     let (name, args) = without_slash
@@ -361,6 +427,43 @@ mod tests {
         assert_eq!(
             expand_custom_command(&command, "main release"),
             "Review main then main release"
+        );
+    }
+
+    #[test]
+    fn argument_text_is_never_read_back_as_a_placeholder() {
+        assert_eq!(
+            expand_command_body("Explain this amount: $ARGUMENTS", "$5"),
+            "Explain this amount: $5"
+        );
+        assert_eq!(
+            expand_command_body("Compare $1 with $2", "$2 beta"),
+            "Compare $2 with beta"
+        );
+        assert_eq!(
+            expand_command_body("Echo $ARGUMENTS then $1", "$ARGUMENTS"),
+            "Echo $ARGUMENTS then $ARGUMENTS"
+        );
+    }
+
+    #[test]
+    fn missing_positional_arguments_expand_to_nothing_and_stray_dollars_stay() {
+        assert_eq!(
+            expand_command_body("Cost $1 or $9 in $USD, $0 and $", "only"),
+            "Cost only or  in $USD, $0 and $"
+        );
+        assert_eq!(expand_command_body("Review $1", ""), "Review ");
+    }
+
+    #[test]
+    fn arguments_are_appended_when_the_body_names_no_placeholder() {
+        assert_eq!(
+            expand_command_body("Review the diff", " main "),
+            "Review the diff\n\nmain"
+        );
+        assert_eq!(
+            expand_command_body("Review the diff", "  "),
+            "Review the diff"
         );
     }
 
@@ -480,6 +583,33 @@ mod tests {
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].name, "bench");
         assert_eq!(commands[0].content, "Project bench");
+        assert_eq!(commands[0].source, CustomCommandSource::ProjectClaude);
+        assert!(shadowed.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_project_command_refused_by_containment_does_not_claim_its_name() {
+        let home = tempfile::tempdir().unwrap();
+        let cwd = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("ship.md"), "Shared ship").unwrap();
+        let agi_dir = cwd.path().join(".agiworkforce").join("commands");
+        let claude_dir = cwd.path().join(".claude").join("commands");
+        std::fs::create_dir_all(&agi_dir).unwrap();
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::os::unix::fs::symlink(outside.path().join("ship.md"), agi_dir.join("ship.md"))
+            .unwrap();
+        std::fs::write(claude_dir.join("ship.md"), "Project ship").unwrap();
+
+        let (commands, shadowed) = discover_custom_slash_commands_from_roots(roots_for(
+            Some(cwd.path().to_path_buf()),
+            Some(home.path().to_path_buf()),
+        ));
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "ship");
+        assert_eq!(commands[0].content, "Project ship");
         assert_eq!(commands[0].source, CustomCommandSource::ProjectClaude);
         assert!(shadowed.is_empty());
     }

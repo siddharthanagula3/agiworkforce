@@ -167,7 +167,7 @@
     },
     {
       "doc": "voice",
-      "sha256": "ac1a896d88b238077b3f6cbabec163c61ad1e0a192282f32f09f527f8035694b"
+      "indexed": true
     },
     {
       "doc": "vscode-extension",
@@ -493,12 +493,17 @@
       "doc": "memory",
       "section": "Memory switches",
       "kind": "prose",
-      "sentence": "**Persistent memory**: \"Allow AGI to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
+      "sentence": "**Persistent memory**: \"Allow the assistant to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
       "implementation": [
         "apps/web/lib/services/managed-memory-context-service.ts",
         "apps/web/lib/services/turn-context-service.ts"
       ],
       "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/MemorySection.tsx",
+          "text": "Allow the assistant to remember details across conversations"
+        },
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
@@ -754,7 +759,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "name": "hard-deletes the files a temporary chat received on the same clock as the chat"
         }
       ]
     },
@@ -1108,7 +1113,7 @@
       "doc": "workspace-policy",
       "section": "What policy controls",
       "kind": "prose",
-      "sentence": "All are on by default.",
+      "sentence": "All are on by default except Fast mode, which stays off until an administrator turns it on.",
       "implementation": [
         "packages/contracts/types/src/enterprise/workspace-controls.ts#DEFAULT_WORKSPACE_FEATURE_ACCESS"
       ],
@@ -1117,6 +1122,11 @@
           "kind": "test",
           "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
           "name": "returns the workspace defaults when nothing overrides them"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "holds fast mode off until the workspace turns it on"
         }
       ]
     },
@@ -1260,7 +1270,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
-          "name": "states that no training opt-in exists"
+          "name": "states that customer content is not used to improve AGI-owned models"
         }
       ]
     },
@@ -1272,6 +1282,11 @@
       "sentence": "They are disabled by default and can be turned on or off in Settings, Privacy.",
       "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
       "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
+          "name": "blocks changes before a strict account read and supports legitimate first use"
+        },
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
@@ -1305,7 +1320,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "name": "hard-deletes the files a temporary chat received on the same clock as the chat"
         }
       ]
     },
@@ -1407,13 +1422,53 @@
       "doc": "delete-your-account",
       "section": "How deletion works",
       "kind": "prose",
-      "sentence": "The dialog states what happens: your account and all associated data are permanently deleted, you are signed out now, and erasure runs 24 hours after you confirm.",
+      "sentence": "The dialog states what happens: your account and its Cloud data are scheduled for permanent deletion, and erasure starts after a cancellation deadline 24 hours later.",
       "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
           "name": "schedules deletion when the update touches the profile row"
+        }
+      ]
+    },
+    {
+      "id": "delete-dialog-says-what-is-kept",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "It also says that anything the law or an active legal hold requires us to keep is kept.",
+      "implementation": ["apps/web/features/settings/sections/AccountSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/AccountSection.tsx",
+          "text": "an active legal hold requires us to keep is kept"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/AccountSection.delete.test.tsx",
+          "name": "says before confirming that what the law or a legal hold requires is kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-waits-for-legal-hold",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "If an active legal hold covers your account, for example one your workspace has placed, nothing is erased until the hold is released.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases nothing and never seals the profile fence while a legal hold is active"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "applies the same organization-scoped hold semantics as retention"
         }
       ]
     },
@@ -1471,6 +1526,24 @@
       ]
     },
     {
+      "id": "delete-cancel-restores-renewal",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "If deleting the account stops your web plan from renewing, cancelling the deletion turns its renewal back on.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/cancel/route.ts",
+        "apps/web/lib/server/account-deletion-plan-renewal.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "turns renewal back on after the cancellation commits and says so"
+        }
+      ]
+    },
+    {
       "id": "delete-sole-owner-is-refused",
       "doc": "delete-your-account",
       "section": "Before you confirm",
@@ -1482,6 +1555,77 @@
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
           "name": "refuses while the account is the only owner of a workspace, and deletes nothing"
+        }
+      ]
+    },
+    {
+      "id": "delete-stops-web-renewal",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If your plan is billed on the web and still renews, deleting your account turns its renewal off, so you are not charged again.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/route.ts",
+        "apps/web/lib/server/account-deletion-plan-renewal.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion and sets the plan to end at period end, tagged with the deadline"
+        }
+      ]
+    },
+    {
+      "id": "delete-store-plan-keeps-billing",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If you bought the plan from Apple or Google, deleting your account does not cancel it: the confirmation says so and links to the page where you cancel it with the store.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion for a renewing %s plan and says billing continues there"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancelled-plan-ends-at-erasure",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "A plan you have already cancelled does not block deletion: it ends when erasure runs, and its unused time is not refunded.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/route.ts",
+        "apps/web/lib/server/scheduled-account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion at once for a %s plan that is already cancelled, and says what ends"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "cancels the live Stripe subscription before any row is touched"
+        }
+      ]
+    },
+    {
+      "id": "delete-refused-while-payment-collected",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "While a payment on the plan is still being collected, the request is refused and nothing is scheduled.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "still refuses a renewing past-due %s plan while its payment is collected"
         }
       ]
     },
@@ -1512,6 +1656,16 @@
           "kind": "copy",
           "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
           "text": "Delete all chats in this workspace?"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
+          "text": "Archive all chats in this workspace?"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/BulkConversationControls.test.tsx",
+          "name": "reserves one count and exact confirmation, including repeated confirm and cancel callbacks"
         }
       ]
     },
@@ -2420,7 +2574,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/billing/components/UpgradeConfirmDialog.test.tsx",
-          "name": "quotes the published catalog amount for the requested interval"
+          "name": "quotes the renewal the preview returned for the requested interval"
         }
       ]
     },
@@ -2524,7 +2678,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
-          "name": "keeps a yearly Pro subscriber on what they bought and says nothing changes"
+          "name": "subscriber on what they bought and says nothing changes"
         }
       ]
     },
@@ -2565,7 +2719,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
-          "name": "switches a yearly Pro subscriber to monthly billing at renewal after confirming"
+          "name": "subscriber to monthly billing at renewal after confirming"
         },
         {
           "kind": "test",
@@ -3074,17 +3228,80 @@
       ]
     },
     {
+      "id": "voice-no-microphone-names-the-cause",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "\"No microphone is available in this browser.\" No input device was found.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "No microphone is available in this browser."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (name === 'NotFoundError' || name === 'OverconstrainedError') {"
+        }
+      ]
+    },
+    {
+      "id": "voice-unsupported-browser-names-the-cause",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "\"This browser cannot open a voice connection.\" The browser does not support the connection voice mode needs.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "This browser cannot open a voice connection."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {"
+        }
+      ]
+    },
+    {
+      "id": "voice-blocked-capture-is-unavailable-up-front",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "Some embedded surfaces cannot record audio at all because the host blocks microphone access, so dictation and voice mode are unavailable there rather than failing mid-session.",
+      "implementation": [
+        "apps/web/features/chat/components/Composer/VoiceInputButton.tsx#detectVoiceInputSupport",
+        "apps/web/features/chat/lib/live-voice-session.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/VoiceInputButton.test.tsx",
+          "name": "explains itself instead of opening when capture is unsupported"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {"
+        }
+      ]
+    },
+    {
       "id": "troubleshooting-conversation-search-failure",
       "doc": "troubleshooting",
       "section": "Search did not run",
       "kind": "prose",
-      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search failed. Please try again.\" If the search window itself cannot open, it shows \"Search unavailable\" instead; close it and open it again.",
+      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search could not be completed\" with a Retry button and never as no matches; if the search window itself cannot open, it shows \"Search unavailable\" instead, so close it and open it again.",
       "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-          "text": "toast.error('Search failed. Please try again.')"
+          "text": "<p className=\"text-sm text-muted-foreground\">Search could not be completed</p>"
         },
         {
           "kind": "copy",
@@ -3121,13 +3338,13 @@
       "doc": "troubleshooting",
       "section": "The CLI will not sign in",
       "kind": "prose",
-      "sentence": "If the wait stops with \"Device code expired. Please run /login again.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
+      "sentence": "If the wait stops with \"The sign-in code expired.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
       "implementation": ["apps/cli/src/oauth.rs#device_code_login"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/cli/src/oauth.rs",
-          "text": "Device code expired. Please run /login again."
+          "text": "The sign-in code expired."
         },
         {
           "kind": "copy",
@@ -3294,7 +3511,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "Extension \u00b7 {SURFACE_STATUS.chrome}"
+          "text": "Extension · {SURFACE_STATUS.chrome}"
         },
         {
           "kind": "copy",
@@ -3304,7 +3521,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"Extension\""
+          "text": "\"name\": \"AGI Extension\""
         },
         {
           "kind": "test",
@@ -3449,6 +3666,29 @@
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "states the same contract on the Desktop, Local, and BYOK pages"
+        }
+      ]
+    },
+    {
+      "id": "glossary-desktop-windows-linux-not-published",
+      "doc": "glossary",
+      "section": "Platform and surface names",
+      "kind": "prose",
+      "sentence": "Windows and Linux installers have not been published.",
+      "implementation": [
+        "apps/web/lib/surface-status.ts#SURFACE_PLATFORMS",
+        "apps/web/app/download/DesktopDownloadAvailability.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/download/__tests__/DesktopDownloadSurface.test.tsx",
+          "name": "names Windows and Linux as unavailable rather than leaving them out"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/surface-status.test.ts",
+          "name": "adds a platform only when a surface that runs on it is released"
         }
       ]
     },
@@ -4057,6 +4297,11 @@
           "kind": "copy",
           "file": "apps/web/app/api/settings/organization/policy/route.ts",
           "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
+          "name": "keeps unavailable enrollment controls disabled for enabled=%s"
         }
       ]
     },
@@ -4184,6 +4429,11 @@
       "implementation": ["apps/web/app/api/settings/password/route.ts"],
       "proof": [
         {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/password/route.ts",
+          "text": "const signOut = await revokeEveryOtherSession("
+        },
+        {
           "kind": "test",
           "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
           "name": "changes the password, ends other sessions and announces it"
@@ -4205,7 +4455,7 @@
       "doc": "account-security",
       "section": "Email address",
       "kind": "prose",
-      "sentence": "The previous address is removed unless a sign-in method still uses it.",
+      "sentence": "The previous address is removed from the account; if the sign-in service keeps it, Settings says so and asks you to check your sign-in methods before removing it yourself.",
       "implementation": [
         "apps/web/app/api/settings/email/route.ts",
         "apps/web/features/settings/components/EmailAddressChange.tsx"
@@ -4217,9 +4467,19 @@
           "text": "await identity.removeEmailAddress(previousId);"
         },
         {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/email/__tests__/route.test.ts",
+          "name": "updates native identity and product profile, %s auth"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/email/__tests__/route.test.ts",
+          "name": "does not upgrade a repeat request to confirmed completion after %s"
+        },
+        {
           "kind": "copy",
           "file": "apps/web/features/settings/components/EmailAddressChange.tsx",
-          "text": "The server reported that your previous address was kept."
+          "text": "The server reported that your previous address was kept. Check your sign-in"
         }
       ]
     },
@@ -4291,6 +4551,11 @@
           "kind": "copy",
           "file": "apps/web/lib/server/step-up/actions.ts",
           "text": "freshnessSeconds: 300"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/hooks/useStepUp.tsx",
+          "text": ": requestStepUpGrant(challenge.action, challenge.resourceId)"
         },
         {
           "kind": "copy",
@@ -5082,6 +5347,26 @@
       ]
     },
     {
+      "id": "config-repository-layer-only-narrows",
+      "doc": "configuration",
+      "section": "Which setting wins",
+      "kind": "prose",
+      "sentence": "The repository's file can only narrow your own privacy mode, permission mode and model route: a looser value is ignored and the session says so when it starts.",
+      "implementation": ["apps/cli/src/config.rs#fn narrow_repository_layer"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_layer_can_only_narrow_privacy_and_permissions"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_model_that_leaves_a_local_boundary_is_not_applied"
+        }
+      ]
+    },
+    {
       "id": "config-repository-mcp-trusted",
       "doc": "configuration",
       "section": "MCP servers and hooks",
@@ -5408,17 +5693,19 @@
       "doc": "desktop-and-cli",
       "section": "The desktop app",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5427,17 +5714,19 @@
       "doc": "getting-started",
       "section": "Choose a model route",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5482,17 +5771,19 @@
       "doc": "install-desktop-and-mobile",
       "section": "What desktop provides",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5501,17 +5792,19 @@
       "doc": "local-mode",
       "section": "Running a local model",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5595,17 +5888,19 @@
       "doc": "providers-and-models",
       "section": "Choose a product surface first",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5687,21 +5982,21 @@
       "section": "Add sources",
       "kind": "prose",
       "sentence": "You may see **Indexing for search**, **Keyword search only** or **Not indexed** beside a file.",
-      "implementation": ["apps/web/features/projects/components/KnowledgeFilesPanel.tsx"],
+      "implementation": ["apps/web/features/projects/components/KnowledgeIndexStatus.tsx"],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Indexing for search"
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Keyword search only"
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Not indexed"
         },
         {
@@ -5933,7 +6228,54 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
-          "name": "states that no training opt-in exists"
+          "name": "states that customer content is not used to improve AGI-owned models"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-uses-seatbelt-or-bubblewrap",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "`agi review` reviews changes, `agi apply` applies the latest diff as a git patch, and `agi sandbox` runs a command under the operating system's sandbox: Seatbelt on macOS, and bubblewrap on Linux, where the `bubblewrap` package must be installed.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#SandboxType::MacosSeatbelt",
+        "apps/cli/src/sandbox.rs#SandboxType::LinuxBubblewrap",
+        "apps/cli/src/sandbox.rs#missing_sandbox_message"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "missing_linux_sandbox_message_names_bubblewrap_and_how_to_install_it"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/sandbox.rs",
+          "text": "Sandboxed exec is unsupported on Windows"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-refuses-without-a-backend",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "Without that sandbox it refuses to run the command, and `agi doctor` says what to install.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#missing_sandbox_message",
+        "apps/cli/src/doctor.rs#crate::sandbox::missing_sandbox_message(std::env::consts::OS)"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "exec_without_a_detected_sandbox_tells_the_user_what_to_install"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "a_wrapped_program_refuses_an_unavailable_backend"
         }
       ]
     },
@@ -5964,6 +6306,56 @@
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "reads the provenance gate install.sh actually enforces"
+        }
+      ]
+    },
+    {
+      "id": "cli-installer-glibc-floor",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "The installer refuses an older glibc or a musl-based Linux such as Alpine before it downloads anything.",
+      "implementation": ["apps/web/public/install.sh#MIN_GLIBC_VERSION"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "a glibc below the floor is refused before anything is downloaded"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "musl Linux is refused before anything is downloaded, even though its ldd exits 1"
+        }
+      ]
+    },
+    {
+      "id": "cli-installer-adds-install-dir-to-path",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "When `~/.agi/bin` is not already on your `PATH`, the installer adds it to your shell's startup file (`~/.zshrc` for zsh, `~/.bashrc` for bash on Linux, your existing `~/.bash_profile`, `~/.bash_login` or `~/.profile` for bash on macOS, `config.fish` for fish) and names the file.",
+      "implementation": ["apps/web/public/install.sh#profile_for_shell"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "stock macOS zsh with no .zshrc gets one that puts agi on PATH, once"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "Debian or Ubuntu bash appends to the existing .bashrc and says how to use agi now"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "macOS bash with only a .profile writes there instead of hiding it behind a new .bash_profile"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "fish gets a config.fish line in its own syntax"
         }
       ]
     },

@@ -8,6 +8,7 @@ import { FileCode, FileDown, FileText, X, type LucideIcon } from 'lucide-react-n
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { shareFile } from '@/services/fileCreation';
+import { preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import {
   artifactExportOptions,
   exportArtifact,
@@ -50,7 +51,7 @@ export function ArtifactExportSheet({
       try {
         const uri = await exportArtifact(content, artifact.title, option);
         await shareFile(uri);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
         onClose();
       } catch {
         Alert.alert('Download failed', `Could not save this as ${option.label}. Try again.`);

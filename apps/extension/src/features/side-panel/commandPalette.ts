@@ -1,3 +1,4 @@
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
 import { el } from './dom';
 
@@ -268,6 +269,7 @@ export function buildCommandPalette(load: () => Promise<PaletteCommand[]>): Comm
     render();
   });
   input.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (isImeComposingKey(event)) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       if (visible.length === 0) return;

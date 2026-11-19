@@ -158,7 +158,7 @@ export function PasswordPanel({
               )}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Your account signs in without a password. You confirm it is you before one is set.
             </p>
           )}
@@ -185,7 +185,7 @@ export function PasswordPanel({
                       onClick={onToggleShowNewPassword}
                       aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
                       aria-pressed={showNewPassword}
-                      className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground pointer-coarse:end-0 pointer-coarse:h-11 pointer-coarse:w-11"
                     >
                       {showNewPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -227,7 +227,7 @@ export function PasswordPanel({
                         showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'
                       }
                       aria-pressed={showConfirmPassword}
-                      className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground pointer-coarse:end-0 pointer-coarse:h-11 pointer-coarse:w-11"
                     >
                       {showConfirmPassword ? (
                         <EyeOff className="h-4 w-4" />

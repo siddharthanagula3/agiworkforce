@@ -121,6 +121,27 @@ describe('the study mode indicator in a chat', () => {
     expect(screen.getByText('Studying: Eigenvalues')).toBeVisible();
   });
 
+  it('shows study mode as off when leaving was saved but its reply was lost', async () => {
+    const user = userEvent.setup();
+    const ended = session({ endedAt: '2026-09-18T02:00:00.000Z' });
+    const studyApi = api({
+      forConversation: vi
+        .fn<StudyApi['forConversation']>()
+        .mockResolvedValueOnce(session())
+        .mockResolvedValueOnce(ended),
+      end: vi.fn(async () => {
+        throw new Error('network lost');
+      }),
+    });
+    render(<Harness conversationId={CONVERSATION} studyApi={studyApi} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Leave study mode' }));
+
+    expect(await screen.findByText(/Study mode is off/)).toBeVisible();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Turn study mode back on' })).toBeVisible();
+  });
+
   it('drops the previous chat session when the chat changes', async () => {
     const other = '22222222-2222-4222-8222-222222222222';
     const studyApi = api({

@@ -26,12 +26,6 @@
       "fix": "delete the key field from the six log calls; where the bucket matters, log policyName instead"
     },
     {
-      "file": "apps/web/lib/server/account-erasure.ts",
-      "field": "key",
-      "reason": "a failed backup deletion during an erasure leaves a copy of erased data, and the only field naming the copy is a bare key, which the redactor throws away",
-      "fix": "rename to objectKey, which the field policy classifies as an identifier"
-    },
-    {
       "file": "apps/web/lib/server/google-embeddings.ts",
       "field": "body",
       "reason": "the embedding provider's error body can echo the text it was given, so redaction is right and the field is dead weight",

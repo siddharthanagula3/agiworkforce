@@ -9,6 +9,10 @@ const spinner = readFileSync(
   resolve(webRoot, '../../packages/ui/ui/src/primitives/Spinner.tsx'),
   'utf8',
 );
+const markStyles = readFileSync(
+  resolve(webRoot, '../../packages/ui/design-tokens/src/foundation.css'),
+  'utf8',
+);
 
 /**
  * Route-level loading screens rendered a bare spinning div: no role, no label,
@@ -43,11 +47,17 @@ describe('route loading screens announce themselves', () => {
   });
 
   it('every spinner honours reduced motion', () => {
-    expect(spinner).toContain('animate-spin motion-reduce:animate-none');
+    expect(spinner).toContain('<AgiMark spinning');
+    const reducedMotion = markStyles.slice(
+      markStyles.indexOf('@media (prefers-reduced-motion: reduce)'),
+    );
+    expect(reducedMotion).toMatch(/\.agi-mark-ribbon\s*\{\s*display: none;/u);
+    expect(reducedMotion).toMatch(/\.agi-mark-shine\s*\{\s*animation: none;/u);
   });
 
   it('no spinner pins a colour outside the theme', () => {
     expect(routeLoading).not.toMatch(/border-(?:zinc|blue)-/u);
-    expect(spinner).toContain('border-current');
+    expect(spinner).not.toMatch(/border-(?:zinc|blue)-|#[0-9a-f]{3,8}\b|rgb\(/iu);
+    expect(markStyles).toContain('fill: var(--symbol-ribbon-shine);');
   });
 });

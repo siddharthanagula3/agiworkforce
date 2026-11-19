@@ -2,10 +2,7 @@
  * Floating launcher button for the in-page chat overlay.
  *
  * Renders a 48px circular FAB anchored bottom-right. Hides on scroll-down,
- * reappears on scroll-up (Headroom-style). Persists its bottom/right offset
- * in chrome.storage.local under "agi_panel_launcher_pos" so custom positions
- * survive page reloads. The position is currently locked to bottom-right
- * (future: drag support).
+ * reappears on scroll-up (Headroom-style).
  *
  * Uses Shadow DOM (`mode:'open'`) so page CSS cannot leak into the launcher.
  *
@@ -14,12 +11,11 @@
 
 import { getExtensionTokensCssAuto } from '../../../tokens';
 
-export interface LauncherPosition {
+interface LauncherPosition {
   bottom: number;
   right: number;
 }
 
-const STORAGE_KEY = 'agi_panel_launcher_pos';
 const DEFAULT_POS: LauncherPosition = { bottom: 24, right: 24 };
 
 export function buildLauncherStyles(): string {
@@ -72,41 +68,10 @@ export function buildLauncherStyles(): string {
   `;
 }
 
-export async function savePosition(pos: LauncherPosition): Promise<void> {
-  try {
-    await chrome.storage.local.set({ [STORAGE_KEY]: pos });
-  } catch {
-    // Non-fatal: extension context may be invalidated during hot-reload.
-  }
-}
-
-export async function loadPosition(): Promise<LauncherPosition> {
-  try {
-    const result = await chrome.storage.local.get(STORAGE_KEY);
-    const stored = result[STORAGE_KEY] as Partial<LauncherPosition> | undefined;
-    if (
-      stored &&
-      typeof stored.bottom === 'number' &&
-      typeof stored.right === 'number' &&
-      stored.bottom >= 0 &&
-      stored.right >= 0
-    ) {
-      return { bottom: stored.bottom, right: stored.right };
-    }
-  } catch {
-    // Fall through to default.
-  }
-  return { ...DEFAULT_POS };
-}
-
 export function setImportantStyles(host: HTMLElement, styles: Record<string, string>): void {
   for (const [property, value] of Object.entries(styles)) {
     host.style.setProperty(property, value, 'important');
   }
-}
-
-export function applyPosition(host: HTMLElement, pos: LauncherPosition): void {
-  setImportantStyles(host, { bottom: `${pos.bottom}px`, right: `${pos.right}px` });
 }
 
 /**

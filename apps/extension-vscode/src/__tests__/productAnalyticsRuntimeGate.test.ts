@@ -7,14 +7,22 @@ import {
 type ScanModule0 = typeof import('../utils/api');
 type ScanModule1 = typeof import('../platform/config');
 
+const telemetry = vi.hoisted(() => ({
+  enabled: true,
+  tokenGate: undefined as Promise<void> | undefined,
+}));
+
 vi.mock('../utils/api', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  getAccountToken: async () => 'token',
+  getAccountToken: async () => {
+    await telemetry.tokenGate;
+    return 'token';
+  },
   getCloudWebOrigin: () => 'https://agiworkforce.test',
 }));
 vi.mock('../platform/config', async (importOriginal) => {
   const actual = await importOriginal<ScanModule1>();
-  return { ...actual, Config: { ...actual.Config, telemetryEnabled: () => true } };
+  return { ...actual, Config: { ...actual.Config, telemetryEnabled: () => telemetry.enabled } };
 });
 vi.mock('../platform/platformHeaders', () => ({ platformRequestHeaders: () => ({}) }));
 
@@ -46,6 +54,8 @@ function context(): vscode.ExtensionContext {
 describe('VS Code product analytics runtime gate', () => {
   beforeEach(() => {
     fetchMock.mockClear();
+    telemetry.enabled = true;
+    telemetry.tokenGate = undefined;
     vi.stubGlobal('fetch', fetchMock);
   });
 
@@ -70,5 +80,49 @@ describe('VS Code product analytics runtime gate', () => {
         fetchMock.mock.calls.filter(([url]) => url.endsWith(PRODUCT_ANALYTICS_INGEST_PATH)),
       ).toHaveLength(1),
     );
+  });
+
+  it('sends nothing when telemetry is switched off while the consent lookup is pending', async () => {
+    let release!: () => void;
+    telemetry.tokenGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const disposable = activateProductAnalytics(context());
+    trackProductEvent('response_regenerated', 'managed');
+    disposable.dispose();
+    telemetry.enabled = false;
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url.endsWith(PRODUCT_ANALYTICS_INGEST_PATH)),
+    ).toHaveLength(0);
+  });
+
+  it('sends nothing when telemetry is switched off while the credential lookup is pending', async () => {
+    vi.useFakeTimers();
+    try {
+      const disposable = activateProductAnalytics(context());
+      trackProductEvent('response_regenerated', 'managed');
+      await vi.advanceTimersByTimeAsync(5_000);
+      const ingestCalls = () =>
+        fetchMock.mock.calls.filter(([url]) => url.endsWith(PRODUCT_ANALYTICS_INGEST_PATH));
+      expect(ingestCalls()).toHaveLength(1);
+
+      let release!: () => void;
+      telemetry.tokenGate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      trackProductEvent('response_regenerated', 'managed');
+      await vi.advanceTimersByTimeAsync(5_000);
+      telemetry.enabled = false;
+      release();
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(ingestCalls()).toHaveLength(1);
+      disposable.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -35,11 +35,29 @@ export interface ProviderCostReportClient {
   fetchDay(window: DayWindow, fetchImpl?: typeof fetch): Promise<ProviderCostReport>;
 }
 
-export function yesterdayWindow(now: Date): DayWindow {
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+export const CATCH_UP_DAYS = 6;
+
+function windowEndingAt(end: Date): DayWindow {
   const start = new Date(end.getTime());
   start.setUTCDate(start.getUTCDate() - 1);
   return { day: start.toISOString().slice(0, 10), start, end };
+}
+
+export function yesterdayWindow(now: Date): DayWindow {
+  return windowEndingAt(
+    new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())),
+  );
+}
+
+export function catchUpWindows(now: Date, days: number = CATCH_UP_DAYS): DayWindow[] {
+  const windows: DayWindow[] = [];
+  let end = yesterdayWindow(now).start;
+  for (let offset = 0; offset < days; offset += 1) {
+    const window = windowEndingAt(end);
+    windows.push(window);
+    end = window.start;
+  }
+  return windows.reverse();
 }
 
 function reason(error: unknown): string {
@@ -70,15 +88,31 @@ function numeric(value: unknown): number | null {
 }
 
 function buckets(payload: unknown): unknown[] {
-  if (!payload || typeof payload !== 'object') return [];
-  const data = (payload as { data?: unknown }).data;
-  return Array.isArray(data) ? data : [];
+  const data = payload && typeof payload === 'object' ? (payload as { data?: unknown }).data : null;
+  if (!Array.isArray(data)) throw new Error('The cost report has no data array');
+  return data;
 }
 
 function bucketResults(bucket: unknown): unknown[] {
-  if (!bucket || typeof bucket !== 'object') return [];
-  const results = (bucket as { results?: unknown }).results;
-  return Array.isArray(results) ? results : [];
+  const results =
+    bucket && typeof bucket === 'object' ? (bucket as { results?: unknown }).results : null;
+  if (!Array.isArray(results)) throw new Error('A cost report bucket has no results array');
+  return results;
+}
+
+function summedAmounts(payload: unknown, amountOf: (result: object) => unknown): number {
+  let total = 0;
+  for (const bucket of buckets(payload)) {
+    for (const result of bucketResults(bucket)) {
+      if (!result || typeof result !== 'object') {
+        throw new Error('A cost report result is not an object');
+      }
+      const amount = numeric(amountOf(result));
+      if (amount === null) throw new Error('A cost report result carries no readable amount');
+      total += amount;
+    }
+  }
+  return total;
 }
 
 const openaiClient: ProviderCostReportClient = {
@@ -103,13 +137,10 @@ const openaiClient: ProviderCostReportClient = {
 
     try {
       const payload = await readJson(url.toString(), { Authorization: `Bearer ${key}` }, fetchImpl);
-      let usd = 0;
-      for (const bucket of buckets(payload)) {
-        for (const result of bucketResults(bucket)) {
-          const amount = (result as { amount?: { value?: unknown } }).amount;
-          usd += numeric(amount?.value) ?? 0;
-        }
-      }
+      const usd = summedAmounts(
+        payload,
+        (result) => (result as { amount?: { value?: unknown } }).amount?.value,
+      );
       return {
         status: 'reported',
         provider: this.provider,
@@ -153,12 +184,7 @@ const anthropicClient: ProviderCostReportClient = {
         { 'x-api-key': key, 'anthropic-version': ANTHROPIC_VERSION },
         fetchImpl,
       );
-      let cents = 0;
-      for (const bucket of buckets(payload)) {
-        for (const result of bucketResults(bucket)) {
-          cents += numeric((result as { amount?: unknown }).amount) ?? 0;
-        }
-      }
+      const cents = summedAmounts(payload, (result) => (result as { amount?: unknown }).amount);
       return {
         status: 'reported',
         provider: this.provider,

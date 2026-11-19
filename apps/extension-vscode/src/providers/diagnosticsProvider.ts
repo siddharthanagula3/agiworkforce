@@ -11,8 +11,12 @@ import {
 } from '@agiworkforce/ide-runtime';
 import type { DeveloperReasoningEffort } from '@agiworkforce/local-runtime-contract';
 import { describeOutboundRefusal } from '../core/outboundContentGuard';
+import { cloudUtilityModel, LocalModelSelectedError } from '../core/cloudModelBoundary';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { reviewDepthInstruction } from './reviewEffort';
+
+const STALE_REVIEW_REASON =
+  'The file changed while the review ran, so its findings no longer line up. Run Code Review again.';
 
 export function toCodeSelection(editor: vscode.TextEditor): CodeSelection {
   const selection = editor.selection;
@@ -58,9 +62,62 @@ export class AgiDiagnosticsProvider
    * file: URI, so recovering one from the path would name a document that is not open.
    */
   private readonly _reviewedUris = new Map<string, vscode.Uri>();
+  private readonly _reviewGenerations = new Map<string, number>();
+  private readonly _disposables: vscode.Disposable[] = [];
 
   constructor() {
     this._diagnosticCollection = vscode.languages.createDiagnosticCollection('agiWorkforce');
+    this._disposables.push(
+      vscode.workspace.onDidChangeTextDocument((event) => {
+        if (event.contentChanges.length > 0)
+          this._followEdit(event.document.uri, event.contentChanges);
+      }),
+      vscode.workspace.onDidCloseTextDocument((document) => this._forgetFindings(document.uri)),
+    );
+  }
+
+  private _followEdit(
+    uri: vscode.Uri,
+    changes: readonly vscode.TextDocumentContentChangeEvent[],
+  ): void {
+    const findings = this._diagnosticCollection.get(uri);
+    if (findings === undefined || findings.length === 0) return;
+    const [change] = changes;
+    if (changes.length !== 1 || change === undefined) {
+      this._forgetFindings(uri);
+      return;
+    }
+    const lineDelta =
+      change.text.split('\n').length - 1 - (change.range.end.line - change.range.start.line);
+    const kept: vscode.Diagnostic[] = [];
+    for (const finding of findings) {
+      if (finding.range.end.line < change.range.start.line) {
+        kept.push(finding);
+      } else if (finding.range.start.line > change.range.end.line) {
+        const moved = new vscode.Diagnostic(
+          new vscode.Range(
+            finding.range.start.line + lineDelta,
+            finding.range.start.character,
+            finding.range.end.line + lineDelta,
+            finding.range.end.character,
+          ),
+          finding.message,
+          finding.severity,
+        );
+        moved.source = finding.source;
+        kept.push(moved);
+      }
+    }
+    if (kept.length === 0) this._forgetFindings(uri);
+    else this._diagnosticCollection.set(uri, kept);
+  }
+
+  private _forgetFindings(uri: vscode.Uri): void {
+    if (this._diagnosticCollection.get(uri) === undefined) return;
+    this._diagnosticCollection.delete(uri);
+    for (const [path, reviewed] of this._reviewedUris) {
+      if (reviewed.toString() === uri.toString()) this._reviewedUris.delete(path);
+    }
   }
 
   get collection(): vscode.DiagnosticCollection {
@@ -116,6 +173,9 @@ export class AgiDiagnosticsProvider
     cancellationToken: vscode.CancellationToken,
     effort: DeveloperReasoningEffort,
   ): Promise<ReviewResult> {
+    const selected = cloudUtilityModel();
+    if (selected.route === 'local')
+      throw new LocalModelSelectedError(selected.model, 'Code Review');
     const refusal = describeOutboundRefusal(editor.document);
     if (refusal !== null) {
       return { status: 'not-reviewed', reason: refusal };
@@ -126,6 +186,12 @@ export class AgiDiagnosticsProvider
       return { status: 'not-reviewed', reason: 'No code to review.' };
     }
 
+    const reviewedDocument = editor.document;
+    const reviewedVersion = reviewedDocument.version;
+    const reviewKey = reviewedDocument.uri.toString();
+    const generation = (this._reviewGenerations.get(reviewKey) ?? 0) + 1;
+    this._reviewGenerations.set(reviewKey, generation);
+
     const prompt = buildCodeReviewPrompt(selection);
     const depth = reviewDepthInstruction(effort);
     const messages: LlmChatMessage[] = [
@@ -134,6 +200,14 @@ export class AgiDiagnosticsProvider
     ];
 
     const response = await chatCompletion(secrets, messages, cancellationToken);
+    if (
+      reviewedDocument.isClosed ||
+      reviewedDocument.version !== reviewedVersion ||
+      this._reviewGenerations.get(reviewKey) !== generation
+    ) {
+      return { status: 'not-reviewed', reason: STALE_REVIEW_REASON };
+    }
+
     const { diagnostics, summary } = parseCodeReview(response, selection);
 
     this._reviewedUris.set(selection.document.path, editor.document.uri);
@@ -152,6 +226,7 @@ export class AgiDiagnosticsProvider
   }
 
   dispose(): void {
+    for (const disposable of this._disposables) disposable.dispose();
     this._diagnosticCollection.dispose();
   }
 }

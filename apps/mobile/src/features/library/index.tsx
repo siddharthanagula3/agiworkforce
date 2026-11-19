@@ -3,8 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation, useRouter } from 'expo-router';
-import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
-import { setDraft } from '@/src/features/chat/draftStore';
+import { stageComposerAttachments, stageComposerText } from '@/src/features/chat/composerHandoff';
 import { enterMediaMode, listMediaModels } from '@/src/features/chat/actions/mediaMode';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,7 +36,7 @@ import {
   accentColorForKind,
   mergeMobileArtifactsForGallery,
 } from '@/src/features/artifacts/store';
-import type { MobileArtifact } from '@/src/features/artifacts/types';
+import type { MobileArtifact, MobileArtifactKind } from '@/src/features/artifacts/types';
 import { ImageFullScreen } from '@/src/features/chat/components/ImageFullScreen';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -83,8 +82,29 @@ const SORT_LABELS: Record<LibrarySort, string> = {
   size: 'Size',
 };
 
+type ArtifactKindFilter = 'code' | 'charts' | 'research';
+
 type LibraryFilter =
-  'all' | 'images' | 'videos' | 'documents' | 'uploads' | 'generated' | 'artifacts';
+  | 'all'
+  | 'images'
+  | 'videos'
+  | 'documents'
+  | 'uploads'
+  | 'generated'
+  | 'artifacts'
+  | ArtifactKindFilter;
+
+const ARTIFACT_KIND_FOR_FILTER: Record<ArtifactKindFilter, MobileArtifactKind> = {
+  code: 'code',
+  charts: 'chart',
+  research: 'research',
+};
+
+function artifactKindForFilter(filter: LibraryFilter): MobileArtifactKind | null {
+  return filter in ARTIFACT_KIND_FOR_FILTER
+    ? ARTIFACT_KIND_FOR_FILTER[filter as ArtifactKindFilter]
+    : null;
+}
 
 const GENERATION_FILTERS: ReadonlySet<LibraryFilter> = new Set(['all', 'images', 'videos']);
 
@@ -139,6 +159,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     reportTarget?: ReturnType<typeof libraryReportTarget>;
   } | null>(null);
   const videoLoadingRef = useRef(false);
+  const videoScopeRef = useRef<AccountScopedUiState | null>(null);
   const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -219,6 +240,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, [clerkUserId, previewImage]);
 
   useLayoutEffect(() => {
+    if (!videoPlayer) return;
+    if (isAccountScopedUiStateOwned(videoScopeRef.current)) return;
+    videoScopeRef.current = null;
+    setVideoPlayer(null);
+  }, [clerkUserId, videoPlayer]);
+
+  useLayoutEffect(() => {
     if (selectedIds === null || isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
     endSelection();
   }, [clerkUserId, endSelection, selectedIds]);
@@ -234,8 +262,9 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
   const rows = useMemo<LibraryRow[]>(() => {
     const normalizedQuery = search.trim().toLocaleLowerCase();
+    const artifactKind = artifactKindForFilter(filter);
     const assetRows: LibraryRow[] =
-      filter === 'artifacts' && !showDeleted
+      (filter === 'artifacts' || artifactKind) && !showDeleted
         ? []
         : library.assets
             .filter((asset) => {
@@ -255,6 +284,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       filter === 'generated'
         ? []
         : artifacts
+            .filter((artifact) => !artifactKind || artifact.kind === artifactKind)
             .filter(
               (artifact) =>
                 !normalizedQuery ||
@@ -333,10 +363,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, [handleCloseImage, library, previewImage]);
 
   const handleShareAsset = useCallback(async (asset: LibraryAsset) => {
+    const scope = captureAccountScopedUiState('cloud');
+    if (!scope) return;
+    const isCurrent = () => isAccountScopedUiStateOwned(scope);
     try {
       const localUri = await downloadGeneratedFile(absoluteAssetUrl(asset.uri), asset.fileName);
-      await shareFile(localUri);
+      await shareFile(localUri, { isCurrent });
     } catch {
+      if (!isCurrent()) return;
       Alert.alert('Could not open this file', 'The file could not be downloaded. Try again.');
     }
   }, []);
@@ -344,15 +378,20 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const handlePlayVideo = useCallback(
     async (asset: LibraryAsset) => {
       if (videoLoadingRef.current) return;
+      const scope = captureAccountScopedUiState('cloud');
+      if (!scope) return;
       videoLoadingRef.current = true;
       try {
         const player = await prepareLocalVideoPlayer(absoluteAssetUrl(asset.uri), c.black);
+        if (!isAccountScopedUiStateOwned(scope)) return;
+        videoScopeRef.current = scope;
         setVideoPlayer({
           player,
           label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName,
           reportTarget: isGeneratedMedia(asset) ? libraryReportTarget(asset) : undefined,
         });
       } catch {
+        if (!isAccountScopedUiStateOwned(scope)) return;
         Alert.alert('Could not play the video', 'Check your connection and try again.');
       } finally {
         videoLoadingRef.current = false;
@@ -361,9 +400,18 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     [c.black],
   );
 
-  const handleCloseVideo = useCallback(() => setVideoPlayer(null), []);
+  const handleCloseVideo = useCallback(() => {
+    videoScopeRef.current = null;
+    setVideoPlayer(null);
+  }, []);
 
   const router = useRouter();
+  const handleOpenArtifact = useCallback(
+    (artifact: MobileArtifact) => {
+      router.push({ pathname: '/(app)/artifacts', params: { artifactId: artifact.id } });
+    },
+    [router],
+  );
   const handleAddToChat = useCallback(
     (asset: LibraryAsset) => {
       stageComposerAttachments('new-chat', [
@@ -391,7 +439,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         return;
       }
       if (asset.prompt?.trim() && clerkUserId) {
-        setDraft('new-chat', asset.prompt, { scope: 'cloud', ownerId: clerkUserId });
+        stageComposerText('new-chat', asset.prompt);
       }
       handleAddToChat(asset);
     },
@@ -566,7 +614,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     ({ item, index }: { item: LibraryRow; index: number }) => {
       const style = index % gridColumns !== 0 ? { marginLeft: CARD_GAP } : undefined;
       if (item.row === 'artifact') {
-        return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
+        return (
+          <LibraryArtifactCard
+            artifact={item.artifact}
+            width={cardWidth}
+            style={style}
+            onPress={handleOpenArtifact}
+          />
+        );
       }
       const asset = item.asset;
       const onLongPress = () =>
@@ -620,6 +675,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       cardWidth,
       gridColumns,
       handleAssetActions,
+      handleOpenArtifact,
       handleOpenImage,
       handlePlayVideo,
       handleShareAsset,
@@ -681,7 +737,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             paddingBottom: 12,
           }}
         >
-          Recently deleted. Files are erased 30 days after you delete them. Long press to restore.
+          Recently deleted. Erased after 30 days. Long press to restore.
         </Text>
       ) : null}
 
@@ -723,6 +779,17 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             label="Artifacts"
             active={filter === 'artifacts'}
             onPress={() => setFilter('artifacts')}
+          />
+          <FilterChip label="Code" active={filter === 'code'} onPress={() => setFilter('code')} />
+          <FilterChip
+            label="Charts"
+            active={filter === 'charts'}
+            onPress={() => setFilter('charts')}
+          />
+          <FilterChip
+            label="Research"
+            active={filter === 'research'}
+            onPress={() => setFilter('research')}
           />
         </ScrollView>
       ) : null}
@@ -778,6 +845,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             !library.signedOut &&
             GENERATION_FILTERS.has(filter) ? (
               <MediaJobsSection
+                onJobsCompleted={library.refresh}
                 onOpenConversation={(conversationId) =>
                   router.push({ pathname: '/(app)/chat/[id]', params: { id: conversationId } })
                 }
@@ -803,6 +871,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
               query={search}
               signedOut={library.signedOut}
               showDeleted={showDeleted}
+              failed={Boolean(library.error)}
+              onRetry={library.refresh}
             />
           )
         }
@@ -973,13 +1043,50 @@ function LibraryEmptyState({
   query,
   signedOut,
   showDeleted,
+  failed,
+  onRetry,
 }: {
   filter: LibraryFilter;
   query: string;
   signedOut: boolean;
   showDeleted: boolean;
+  failed: boolean;
+  onRetry: () => void;
 }) {
   const c = useThemeColors();
+  if (failed && !signedOut) {
+    return (
+      <View testID="library-load-failed" className="flex-1 items-center justify-center py-20 px-8">
+        <View
+          className="w-16 h-16 rounded-full items-center justify-center mb-5"
+          style={{ backgroundColor: c.surfaceElevated }}
+        >
+          <BookImage size={28} color={c.textSecondary} />
+        </View>
+        <Text
+          className="text-[18px] font-semibold text-center mb-2"
+          style={{ color: c.textPrimary }}
+        >
+          {query.trim() ? 'Search could not be completed' : 'Library could not be loaded'}
+        </Text>
+        <Text
+          className="text-[14px] text-center leading-[20px] mb-4"
+          style={{ color: c.textMuted }}
+        >
+          Check your connection and try again.
+        </Text>
+        <Pressable
+          testID="library-retry"
+          accessibilityRole="button"
+          accessibilityLabel="Retry"
+          onPress={onRetry}
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 }}
+        >
+          <Text style={{ color: c.teal, fontWeight: '600' }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
   const copy = signedOut
     ? 'Sign in to see the images, videos, and files saved to your account.'
     : showDeleted
@@ -998,7 +1105,13 @@ function LibraryEmptyState({
                   ? 'Files you attach or generate will appear here for reuse'
                   : filter === 'artifacts'
                     ? 'Artifacts you create in conversations will appear here'
-                    : 'Images, videos, files, and artifacts from your account will appear here';
+                    : filter === 'code'
+                      ? 'Code you create in conversations will appear here'
+                      : filter === 'charts'
+                        ? 'Charts you create in conversations will appear here'
+                        : filter === 'research'
+                          ? 'Research you create in conversations will appear here'
+                          : 'Your images, videos, files and artifacts will appear here';
   return (
     <View testID="library-empty-state" className="flex-1 items-center justify-center py-20 px-8">
       <View
@@ -1249,18 +1362,23 @@ function LibraryArtifactCard({
   artifact,
   width,
   style,
+  onPress,
 }: {
   artifact: MobileArtifact;
   width: number;
   style?: object;
+  onPress: (artifact: MobileArtifact) => void;
 }) {
   const c = useThemeColors();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
   return (
-    <View
+    <Pressable
       testID={`library-artifact-card-${artifact.id}`}
+      onPress={() => onPress(artifact)}
+      className="active:opacity-80"
       style={[{ width, marginBottom: 20 }, style]}
-      accessibilityLabel={`Artifact ${artifact.title}`}
+      accessibilityLabel={`Open artifact ${artifact.title}, ${artifact.ageLabel}`}
+      accessibilityRole="button"
     >
       <View
         className="rounded-2xl border overflow-hidden justify-end px-3 pb-3 pt-10"
@@ -1294,7 +1412,7 @@ function LibraryArtifactCard({
       <Text className="text-sm mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

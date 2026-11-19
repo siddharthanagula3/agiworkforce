@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { decodeResponseText } from '@/lib/url-fetch/decode-response-text';
 import { createDeadline, guardedFetch, readBodyTruncated } from '@/lib/url-fetch/guarded-fetch';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
@@ -683,7 +684,11 @@ async function fetchPageMetadata(
       return {};
     }
     const bytes = await readBodyTruncated(response, maxResponseBytes);
-    const html = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    const decoded = decodeResponseText(bytes, response.headers.get('content-type') ?? '', {
+      html: true,
+    });
+    if (!decoded.ok) return {};
+    const html = decoded.text;
     const title = extractPageTitle(html);
     const description = extractPageDescription(html);
     const publishedDate = extractPagePublishedDate(html);

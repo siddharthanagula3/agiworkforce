@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { billingPlanCapabilityPlanLabels, canUseBillingPlanCapability } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityPlanLabels,
+  canUseBillingPlanCapability,
+  getBillingPlanPricing,
+} from '@agiworkforce/types';
 
 const WEB_ROOT = join(__dirname, '..');
 
@@ -18,7 +22,7 @@ describe('Deep Research tier claims', () => {
     expect(FEATURES).toContain('web search from the first day');
   });
 
-  it('names the Pro tier on both feature pages and never calls the gate a free trial', () => {
+  it('names the entry tier on both feature pages and never calls the gate a free trial', () => {
     for (const source of [FEATURES, DEEP_RESEARCH]) {
       expect(source).toContain("billingPlanCapabilityPlanLabels('deep_research')");
       expect(source).not.toContain('Pro plans and above');
@@ -27,7 +31,9 @@ describe('Deep Research tier claims', () => {
       '`Included on ${RESEARCH_PLANS} plans; web search is on every plan`',
     );
     expect(DEEP_RESEARCH).toMatch(/Deep Research is included on \{RESEARCH_PLANS\} plans/);
-    expect(billingPlanCapabilityPlanLabels('deep_research')).toMatch(/^Pro\b/);
+    expect(billingPlanCapabilityPlanLabels('deep_research')).toMatch(
+      new RegExp(`^${getBillingPlanPricing('pro').label}\\b`),
+    );
     for (const source of [FEATURES, DEEP_RESEARCH]) {
       expect(source).not.toMatch(/free trial/i);
     }

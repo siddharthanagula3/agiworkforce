@@ -7,8 +7,40 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 import {
   isDeveloperTokenRevoked,
   issueDeveloperToken,
+  revokeDeveloperSessionFamily,
   verifyDeveloperTokenSignature,
 } from './developer-token';
+
+describe('revokeDeveloperSessionFamily', () => {
+  beforeEach(() => {
+    db.query.mockReset();
+    db.execute.mockReset();
+  });
+
+  it('ends the family for its own account before revoking the token rows', async () => {
+    db.execute.mockResolvedValueOnce(1);
+    db.query.mockResolvedValueOnce([{ id: 'rt_1' }]);
+
+    await expect(revokeDeveloperSessionFamily('family_1', 'user_1')).resolves.toBe(true);
+
+    const [fence, fenceParams] = db.execute.mock.calls[0]!;
+    expect(String(fence)).toContain('insert into public.device_refresh_token_families');
+    expect(fenceParams?.slice(0, 2)).toEqual(['family_1', 'user_1']);
+    const [revoke, revokeParams] = db.query.mock.calls[0]!;
+    expect(String(revoke)).toContain('update device_refresh_tokens');
+    expect(String(revoke)).toContain('and user_id = $2');
+    expect(revokeParams?.slice(0, 2)).toEqual(['family_1', 'user_1']);
+    expect(db.execute.mock.invocationCallOrder[0]).toBeLessThan(
+      db.query.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('reports nothing revoked for a family that was already ended', async () => {
+    db.execute.mockResolvedValueOnce(0);
+    db.query.mockResolvedValueOnce([]);
+    await expect(revokeDeveloperSessionFamily('family_1', 'user_1')).resolves.toBe(false);
+  });
+});
 
 describe('isDeveloperTokenRevoked', () => {
   beforeEach(() => {
@@ -43,6 +75,15 @@ describe('isDeveloperTokenRevoked', () => {
     expect(String(sql)).toContain('device_refresh_tokens');
     expect(String(sql)).toContain('revoked_at IS NULL');
     expect(params).toEqual(['family_1', 'user_1']);
+  });
+
+  it('treats a family an unlink ended as revoked even if a successor row escaped revocation', async () => {
+    db.query.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    await expect(isDeveloperTokenRevoked(verified('family_1'))).resolves.toBe(true);
+    const [sql] = db.query.mock.calls[1]!;
+    expect(String(sql)).toContain('FROM public.device_refresh_token_families f');
+    expect(String(sql)).toContain('f.family_id = t.family_id');
+    expect(String(sql)).toContain('f.revoked_at IS NOT NULL');
   });
 
   it('accepts an access token while its family still has a live refresh token', async () => {

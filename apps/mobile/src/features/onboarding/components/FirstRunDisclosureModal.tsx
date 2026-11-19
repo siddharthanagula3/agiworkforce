@@ -6,16 +6,20 @@ import { Switch } from '@/components/ui/Switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { API_URL } from '@/lib/constants';
 import type { ChineseHqProviderId, ShortDisclosureCopy } from '@agiworkforce/compliance';
 
 export const PRIVACY_POLICY_URL = 'https://agiworkforce.com/privacy';
 export const INDIA_DPDP_NOTICE_URL = 'https://agiworkforce.com/privacy/india';
+export const TERMS_OF_USE_URL = new URL('/terms', API_URL).toString();
+
+const CHECK_ANSWERS_NOTE = 'AI can make mistakes. Check important answers.';
 
 export const PROVIDER_TOGGLE_TEST_ID_PREFIX = 'disclosure-provider-toggle-';
 
 const PROVIDER_SECTION_TITLE = 'China-headquartered providers';
 const PROVIDER_SECTION_BODY =
-  'Each stays off until you turn it on, here or later in Settings, Privacy.';
+  'Used only in AGI Cloud. Each stays off until you turn it on, here or later in Settings, Privacy.';
 
 const PRIVACY_NOTICE_TITLE = 'What we collect';
 const PRIVACY_NOTICE_BODY = [
@@ -98,19 +102,32 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               <Text style={[styles.privacyBody, { color: colors.textSecondary }]}>
                 {PRIVACY_NOTICE_BODY}
               </Text>
-              <PressableBox
-                testID="disclosure-privacy-policy-link"
-                onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
-                accessibilityRole="link"
-                accessibilityLabel="Read the AGI privacy policy"
-              >
-                <Text style={[styles.privacyLink, { color: colors.teal }]}>Privacy Policy</Text>
-              </PressableBox>
+              <View style={styles.legalLinks}>
+                <PressableBox
+                  testID="disclosure-privacy-policy-link"
+                  onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}
+                  accessibilityRole="link"
+                  accessibilityLabel="Read the AGI privacy policy"
+                  style={styles.legalLink}
+                >
+                  <Text style={[styles.privacyLink, { color: colors.teal }]}>Privacy Policy</Text>
+                </PressableBox>
+                <PressableBox
+                  testID="disclosure-terms-link"
+                  onPress={() => void openInAppBrowser(TERMS_OF_USE_URL)}
+                  accessibilityRole="link"
+                  accessibilityLabel="Read the AGI terms of use"
+                  style={styles.legalLink}
+                >
+                  <Text style={[styles.privacyLink, { color: colors.teal }]}>Terms of Use</Text>
+                </PressableBox>
+              </View>
               <PressableBox
                 testID="disclosure-dpdp-notice-link"
                 onPress={() => void openInAppBrowser(INDIA_DPDP_NOTICE_URL)}
                 accessibilityRole="link"
                 accessibilityLabel="Read the India DPDP notice"
+                style={styles.legalLink}
               >
                 <Text style={[styles.privacyLink, { color: colors.teal }]}>India DPDP notice</Text>
               </PressableBox>
@@ -178,6 +195,12 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
           </ScrollView>
 
           <View style={[styles.actions, { borderTopColor: colors.border }]}>
+            <Text
+              testID="disclosure-check-answers-note"
+              style={[styles.checkAnswersNote, { color: colors.textSecondary }]}
+            >
+              {CHECK_ANSWERS_NOTE}
+            </Text>
             <PressableBox
               testID="disclosure-accept-btn"
               onPress={handleAccept}
@@ -262,6 +285,20 @@ const styles = StyleSheet.create({
   privacyLink: {
     fontSize: typeScale.footnote,
     fontWeight: '500',
+  },
+  legalLinks: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 20,
+  },
+  legalLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  checkAnswersNote: {
+    fontSize: typeScale.caption,
+    lineHeight: 17,
+    textAlign: 'center',
   },
   providerRow: {
     flexDirection: 'row',

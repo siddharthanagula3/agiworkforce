@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_TERMINAL_PREFERENCES,
+  TERMINAL_SCROLLBACK_LINES,
+  normalizeTerminalPreferences,
   HOST_IN_WINDOW_SIGN_IN_HOSTS,
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
@@ -10,6 +13,8 @@ import {
   describeHostPlatform,
   desktopDeepLink,
   hostKeepsSignInInWindow,
+  isAutoArchiveIdleDays,
+  isWorktreeBranchPrefix,
   parseDesktopDeepLink,
 } from '../host-bridge';
 
@@ -119,5 +124,52 @@ describe('hostKeepsSignInInWindow', () => {
     ]) {
       expect(hostKeepsSignInInWindow(new URL(url)), url).toBe(false);
     }
+  });
+});
+
+describe('worktree branch prefixes', () => {
+  it('accepts an empty prefix and the usual shapes', () => {
+    for (const prefix of ['', 'agi/', 'team/feature-', 'me.work/', 'a']) {
+      expect(isWorktreeBranchPrefix(prefix)).toBe(true);
+    }
+  });
+
+  it('refuses what git or a path would misread', () => {
+    for (const prefix of [
+      '/agi',
+      '-x',
+      'a..b',
+      'a//b',
+      'a/.hidden',
+      'ends.',
+      'has space',
+      'x'.repeat(41),
+    ]) {
+      expect(isWorktreeBranchPrefix(prefix)).toBe(false);
+    }
+  });
+});
+
+describe('auto-archive day counts', () => {
+  it('accepts only the listed counts', () => {
+    expect([0, 7, 14, 30].every(isAutoArchiveIdleDays)).toBe(true);
+    expect(isAutoArchiveIdleDays(5)).toBe(false);
+    expect(isAutoArchiveIdleDays('7')).toBe(false);
+  });
+});
+
+describe('terminal preferences', () => {
+  it('merges a partial change onto what was saved, dropping anything unlisted', () => {
+    const saved = { ...DEFAULT_TERMINAL_PREFERENCES, cursorStyle: 'underline' as const };
+    expect(normalizeTerminalPreferences({ copyOnSelect: true, scrollback: 7 }, saved)).toEqual({
+      ...saved,
+      copyOnSelect: true,
+    });
+    expect(normalizeTerminalPreferences(null)).toEqual(DEFAULT_TERMINAL_PREFERENCES);
+  });
+
+  it('offers only scrollback sizes a shell can hold', () => {
+    expect(TERMINAL_SCROLLBACK_LINES).toContain(DEFAULT_TERMINAL_PREFERENCES.scrollback);
+    expect(Math.max(...TERMINAL_SCROLLBACK_LINES)).toBeLessThanOrEqual(50_000);
   });
 });

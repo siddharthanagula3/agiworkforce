@@ -22,7 +22,8 @@ const { testKeyRing, mockOrganizationKeyRing } = vi.hoisted(() => {
     })),
   };
 });
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   organizationKeyRing: mockOrganizationKeyRing,
 }));
 
@@ -165,3 +166,5 @@ describe('audit streaming at volume', () => {
     expect(sent.length).toBeLessThan(events.length);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

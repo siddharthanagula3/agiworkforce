@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -142,7 +143,7 @@ describe('Mobile cross-device continuity onboarding', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const { getByText, getByLabelText } = render(<ContinuityOnboardingScreen />);
 
-    expect(getByText('AGI Work')).toBeTruthy();
+    expect(getByText(PRODUCT_NAMES.work)).toBeTruthy();
     expect(getByText('Beta')).toBeTruthy();
     expect(getByText("Keep Cloud work going when you're on the go")).toBeTruthy();
     expect(getByText('Start and steer tasks from your phone')).toBeTruthy();

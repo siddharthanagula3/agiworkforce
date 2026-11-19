@@ -20,7 +20,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: vi.fn(async () => null),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOperatorMappedConnectorIds: () => new Set(['slack']),
   getUserGithubInstallations: vi.fn(async () => []),
   getUserCustomConnectorSummaries: vi.fn(async () => []),
@@ -149,3 +150,5 @@ describe('support actions, confirmation tokens are single use', () => {
     expect(mocks.db!.proposals[0]!.token_hash).not.toBe(confirmationToken);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/user-connector-tools');

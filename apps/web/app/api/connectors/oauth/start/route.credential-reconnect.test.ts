@@ -1,4 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  evaluateWorkspaceAccess: vi.fn(async () => ({
+    allowed: true,
+    code: 'allowed',
+    reason: 'Allowed by workspace policy.',
+    obligations: [],
+    organizationId: null,
+  })),
+}));
 import { NextRequest } from 'next/server';
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({

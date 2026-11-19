@@ -22,6 +22,7 @@ const resolveView = vi.fn(async () => ({
       longitude: -97.7431,
     },
   ],
+  unresolvedStops: [] as string[],
 }));
 
 describe('map search tool service', () => {
@@ -56,6 +57,47 @@ describe('map search tool service', () => {
     expect(outcome.card.body.view).toBeUndefined();
     expect(outcome.card.body.places).toBeUndefined();
     expect(outcome.card.body.actions).toHaveLength(2);
+  });
+
+  it('keeps an unresolved stop on the card and tells the model it is missing', async () => {
+    const outcome = await executeMapSearchTool(
+      { query: 'Chicago to Indianapolis to Cincinnati' },
+      {
+        toolCallId: 'fixture-partial',
+        now: NOW,
+        resolveView: async () => ({
+          view: {
+            latitude: 40.5,
+            longitude: -86,
+            zoom: 6,
+            attribution: '© OpenStreetMap contributors',
+          },
+          places: [
+            { label: 'Chicago, Illinois', latitude: 41.8781, longitude: -87.6298, confident: true },
+            { label: 'Cincinnati, Ohio', latitude: 39.1031, longitude: -84.512, confident: true },
+          ],
+          unresolvedStops: ['Indianapolis'],
+        }),
+      },
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok || !outcome.card.recognized || outcome.card.kind !== 'map-search.v1') return;
+    expect(outcome.card.body.unresolvedStops).toEqual(['Indianapolis']);
+    expect(outcome.content).toContain('Only 2 of 3 stops were located');
+    expect(outcome.content).toContain('"Indianapolis"');
+  });
+
+  it('carries no unresolved-stop receipt when every stop resolved', async () => {
+    const outcome = await executeMapSearchTool(
+      { query: 'coffee shops near Austin, Texas' },
+      { toolCallId: 'fixture-complete', now: NOW, resolveView },
+    );
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok || !outcome.card.recognized || outcome.card.kind !== 'map-search.v1') return;
+    expect(outcome.card.body.unresolvedStops).toBeUndefined();
+    expect(outcome.content).not.toContain('stops were located');
   });
 
   it('rejects unbounded or shape-smuggled input', async () => {

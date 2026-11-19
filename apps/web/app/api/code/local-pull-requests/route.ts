@@ -27,7 +27,10 @@ function assertGitHubConnectable(): void {
 }
 
 function rethrow(error: unknown): never {
-  if (error instanceof LocalPullRequestError) throw createError.validation(error.message);
+  if (error instanceof LocalPullRequestError) {
+    if (error.reason) throw createError.validation(error.message, { reason: error.reason });
+    throw createError.validation(error.message);
+  }
   throw error;
 }
 

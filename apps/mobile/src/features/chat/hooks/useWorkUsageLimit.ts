@@ -9,6 +9,7 @@ import {
   type ManagedUsageWarning,
   type WorkUsageRecovery,
 } from '@agiworkforce/types';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import {
@@ -126,7 +127,8 @@ export function useWorkUsageLimit({
     snapshot,
     warning: warningKey !== null && warningKey !== dismissedKey ? liveWarning : null,
     exhaustedRecovery,
-    actionLabel: recovery ? workUsageRecoveryActionLabel(recovery) : null,
+    actionLabel:
+      NATIVE_PURCHASES_AVAILABLE && recovery ? workUsageRecoveryActionLabel(recovery) : null,
     openRecovery,
     dismissWarning,
   };

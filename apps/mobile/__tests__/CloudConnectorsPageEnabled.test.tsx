@@ -42,6 +42,7 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('react-native-svg', () => {
   const { View } = require('react-native');
   return {
+    ...jest.requireActual('react-native-svg'),
     __esModule: true,
     default: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
     Path: () => null,
@@ -167,6 +168,27 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     expect(queryByText('Connectors, AGI Cloud')).toBeNull();
     expect(mockFetchDirectory).toHaveBeenCalledTimes(1);
     expect(mockBrowseListings).toHaveBeenCalledWith({ search: '', category: null, cursor: null });
+  });
+
+  it('says the directory is still being indexed instead of only No connectors found', async () => {
+    mockFetchDirectory.mockResolvedValue({ connectors: [], available: [] });
+    mockBrowseListings.mockResolvedValue({
+      ...page([]),
+      stats: { bootstrapComplete: false },
+    });
+    const { findByText, getByText } = render(<CloudConnectorsScreen />);
+
+    expect(await findByText('No connectors found')).toBeTruthy();
+    expect(getByText(/still being indexed/)).toBeTruthy();
+  });
+
+  it('shows only No connectors found once the directory is indexed', async () => {
+    mockFetchDirectory.mockResolvedValue({ connectors: [], available: [] });
+    mockBrowseListings.mockResolvedValue({ ...page([]), stats: { bootstrapComplete: true } });
+    const { findByText, queryByText } = render(<CloudConnectorsScreen />);
+
+    expect(await findByText('No connectors found')).toBeTruthy();
+    expect(queryByText(/still being indexed/)).toBeNull();
   });
 
   it('shows the approval policy where connectors are managed and opens its controls', async () => {

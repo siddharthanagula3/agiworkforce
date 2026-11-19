@@ -60,8 +60,8 @@ pub enum TurnPhase {
 
 /// How a tool is being dispatched. Drives the CLI's sequential-vs-parallel
 /// asymmetry: the sequential path applies `PostToolUse` output transforms and
-/// accrues `additional_context`; the parallel read-only path runs post-hooks for
-/// side-effects only and forwards the raw tool output.
+/// accrues `additional_context`; the parallel read-only path runs `PostToolUse`
+/// for side-effects only. Both apply the `ToolResultPersist` storage transform.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DispatchMode {
@@ -315,8 +315,9 @@ pub trait TurnHost: Send {
     /// tool. Must capture owned data only.
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture;
 
-    /// Finish a parallel tool: post-hooks for side-effects only (NO output
-    /// transforms), returning the raw-output result block.
+    /// Finish a parallel tool: `PostToolUse` for side-effects only (NO output
+    /// transforms), then `ToolResultPersist`, whose storage transform is the
+    /// only one applied to the returned result block.
     async fn finish_parallel_tool(
         &mut self,
         prepared: PreparedCall,

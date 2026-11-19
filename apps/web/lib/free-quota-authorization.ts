@@ -457,10 +457,15 @@ export async function reserveFreeQuotaAllowance(
   const endsAtMs = input.expiresOn
     ? Date.parse(`${input.expiresOn}T00:00:00Z`) + SECONDS_PER_DAY * MS_PER_SECOND
     : input.nowMs + HOLD_RETENTION_SECONDS * MS_PER_SECOND;
-  await store.expire(
-    key,
-    Math.max(SECONDS_PER_DAY, Math.ceil((endsAtMs - input.nowMs) / MS_PER_SECOND)),
-  );
+  try {
+    await store.expire(
+      key,
+      Math.max(SECONDS_PER_DAY, Math.ceil((endsAtMs - input.nowMs) / MS_PER_SECOND)),
+    );
+  } catch (error) {
+    await store.increment(key, -units).catch(() => undefined);
+    throw error;
+  }
   if (total > input.usable) {
     await store.increment(key, -units);
     return null;

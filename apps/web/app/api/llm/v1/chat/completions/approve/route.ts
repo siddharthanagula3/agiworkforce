@@ -64,6 +64,7 @@ import {
   scopeConnectorPermissionsToTurn,
   saveScopedConnectorToolApprovals,
   ConnectorToolPermissionChangedError,
+  ConnectorToolPermissionStaleError,
 } from '../lib/connector-tool-permissions';
 import {
   managedConversationGrantScope,
@@ -367,6 +368,9 @@ async function handleToolApproval(
     return jsonError(message, status, 'tool_approval_scope_refused');
   }
   if (!scopedPlan.ok) return rejectScopedDecision(scopedPlan.message, 400);
+  const reviewedApprovals: Array<
+    (typeof scopedPlan.scoped)[number] & { reviewedGeneration: string }
+  > = [];
   for (const approval of scopedPlan.scoped) {
     const call = claim.checkpoint.pendingToolCalls.find(
       (pending) => pending.id === approval.toolCallId,
@@ -384,6 +388,10 @@ async function handleToolApproval(
         400,
       );
     }
+    if (call.permissionGeneration === undefined) {
+      return rejectScopedDecision(new ConnectorToolPermissionStaleError().message, 409);
+    }
+    reviewedApprovals.push({ ...approval, reviewedGeneration: call.permissionGeneration });
   }
   if (scopedPlan.scoped.length > 0) {
     if (!conversationScope)
@@ -393,7 +401,7 @@ async function handleToolApproval(
         ...conversationScope,
         userId,
         organizationId: processed.organizationId ?? null,
-        approvals: scopedPlan.scoped,
+        approvals: reviewedApprovals,
         annotationsFor: (connectorId, toolName) =>
           mcpTools.find((tool) => tool.serverId === connectorId && tool.toolName === toolName)
             ?.annotations,
@@ -403,7 +411,10 @@ async function handleToolApproval(
         { error, userId, runId: claim.checkpoint.runId },
         'Scoped tool permission could not be saved',
       );
-      if (error instanceof ConnectorToolPermissionChangedError)
+      if (
+        error instanceof ConnectorToolPermissionChangedError ||
+        error instanceof ConnectorToolPermissionStaleError
+      )
         return rejectScopedDecision(error.message, 409);
       return rejectScopedDecision(
         'This conversation permission could not be saved. Approve this call once instead.',

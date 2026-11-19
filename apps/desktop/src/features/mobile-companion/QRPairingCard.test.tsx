@@ -1,4 +1,8 @@
-import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import {
+  MOBILE_ADD_DEVICE_LABEL,
+  MOBILE_CODE_SCREEN_LABEL,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toDataURL } from 'qrcode';
@@ -78,10 +82,10 @@ describe('QRPairingCard', () => {
   it('names the real Mobile path and copies the full pairing link, not the bare code', async () => {
     render(<QRPairingCard />);
 
-    expect(screen.getByText(/AGI Mobile/)).toHaveTextContent(
-      `AGI Mobile → ${MOBILE_REMOTE_SCREEN_LABEL}`,
+    expect(screen.getByText(new RegExp(PRODUCT_NAMES.mobile))).toHaveTextContent(
+      `${PRODUCT_NAMES.mobile} → ${MOBILE_CODE_SCREEN_LABEL}`,
     );
-    expect(screen.getByText('Select Scan QR Code')).toBeInTheDocument();
+    expect(screen.getByText(`Select ${MOBILE_ADD_DEVICE_LABEL}`)).toBeInTheDocument();
     expect(screen.getByText(/Pairing needs the full link/)).toBeInTheDocument();
     expect(screen.getByText('ABCD 1234 WXYZ')).toBeInTheDocument();
 

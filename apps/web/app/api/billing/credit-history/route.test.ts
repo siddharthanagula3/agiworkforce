@@ -125,7 +125,7 @@ describe('GET /api/billing/credit-history', () => {
       {
         id: 'tx-2',
         transaction_type: 'deduction',
-        amount_cents: -3,
+        amount_cents: 3,
         description: `Managed usage reservation: openai/${model.id}`,
         metadata: {
           quotaFeature: 'chat',
@@ -157,5 +157,52 @@ describe('GET /api/billing/credit-history', () => {
     expect(body.transactions[1]?.feature).toBeNull();
     expect(JSON.stringify(body)).not.toContain('a-gateway');
     expect(JSON.stringify(body)).not.toContain('a-route-model');
+  });
+
+  it('projects each row as its effect on the balance, so a released reservation reads as credit back', async () => {
+    const row = (id: string, transaction_type: string, amount_cents: number) => ({
+      id,
+      transaction_type,
+      amount_cents,
+      description: null,
+      metadata: null,
+      created_at: '2026-11-10T00:00:00.000Z',
+    });
+    mockQuery.mockResolvedValue([
+      row('reserve', 'deduction', 10),
+      row('release', 'deduction', -10),
+      row('settled-even', 'deduction', 0),
+      row('purchase', 'purchase', 500),
+      row('bonus', 'bonus', 50),
+      row('revoked', 'refund', -200),
+      row('correction', 'adjustment', -7),
+    ]);
+
+    const response = await GET(req());
+    const body = (await response.json()) as {
+      transactions: {
+        id: string;
+        amount_cents: number;
+        balance_effect_cents: number;
+        credits: number;
+      }[];
+    };
+
+    expect(
+      body.transactions.map(({ id, amount_cents, balance_effect_cents, credits }) => ({
+        id,
+        amount_cents,
+        balance_effect_cents,
+        credits,
+      })),
+    ).toEqual([
+      { id: 'reserve', amount_cents: 10, balance_effect_cents: -10, credits: -20 },
+      { id: 'release', amount_cents: -10, balance_effect_cents: 10, credits: 20 },
+      { id: 'settled-even', amount_cents: 0, balance_effect_cents: 0, credits: 0 },
+      { id: 'purchase', amount_cents: 500, balance_effect_cents: 500, credits: 1_000 },
+      { id: 'bonus', amount_cents: 50, balance_effect_cents: 50, credits: 100 },
+      { id: 'revoked', amount_cents: -200, balance_effect_cents: -200, credits: -400 },
+      { id: 'correction', amount_cents: -7, balance_effect_cents: -7, credits: -14 },
+    ]);
   });
 });

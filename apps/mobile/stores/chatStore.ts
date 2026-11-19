@@ -153,6 +153,7 @@ export interface CombinedChatState {
   ) => Promise<boolean>;
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string, modelOverride?: string) => void;
+  continueCloudAnswer: (conversationId: string, assistantMessageId: string) => Promise<boolean>;
   resumeResearch: (
     conversationId: string,
     assistantMessageId: string,
@@ -160,7 +161,7 @@ export interface CombinedChatState {
     steps?: ResearchStep[],
     choices?: ResearchPlanChoices,
   ) => Promise<void>;
-  editMessage: (conversationId: string, messageId: string, newContent: string) => void;
+  editMessage: (conversationId: string, messageId: string, newContent: string) => boolean;
   resolveToolApproval: (
     conversationId: string,
     assistantMessageId: string,
@@ -244,6 +245,7 @@ function buildCombinedState(
     sendMessage: exec.sendMessage,
     stopStreaming: exec.stopStreaming,
     retryMessage: exec.retryMessage,
+    continueCloudAnswer: exec.continueCloudAnswer,
     resumeResearch: exec.resumeResearch,
     editMessage: exec.editMessage,
     resolveToolApproval: exec.resolveToolApproval,

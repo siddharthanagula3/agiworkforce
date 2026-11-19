@@ -162,6 +162,11 @@ describe('evaluateManagedComputeSubscriptionAccess', () => {
 });
 
 describe('evaluateManagedComputeWorkspaceAccess', () => {
+  beforeEach(() => {
+    dbQuery.mockReset();
+    dbQuery.mockResolvedValue([]);
+  });
+
   it('passes an allowed policy decision through when spend is within limit', async () => {
     mocks.evaluateActiveWorkspacePolicy.mockResolvedValue({
       allowed: true,
@@ -177,7 +182,7 @@ describe('evaluateManagedComputeWorkspaceAccess', () => {
     });
 
     expect(decision.allowed).toBe(true);
-    expect(mocks.evaluateSpendLimit).toHaveBeenCalledWith(db, 'org-1');
+    expect(mocks.evaluateSpendLimit).toHaveBeenCalledExactlyOnceWith('org-1');
   });
 
   it('refuses when the workspace policy denies, without consulting spend', async () => {
@@ -257,6 +262,87 @@ describe('evaluateManagedComputeWorkspaceAccess', () => {
       { resource: 'managed_compute', surface: 'cli' },
       fakeRequest,
     );
+  });
+
+  describe('funding organization budget', () => {
+    const personalPolicy = {
+      allowed: true,
+      code: 'unscoped',
+      reason: 'ok',
+      obligations: [],
+      organizationId: null,
+    };
+
+    it('refuses a personal-scope request when the funding workspace is over its limit', async () => {
+      mocks.evaluateActiveWorkspacePolicy.mockResolvedValue(personalPolicy);
+      dbQuery.mockResolvedValue([{ organization_id: 'org-funding' }]);
+      mocks.evaluateSpendLimit.mockImplementation(async (organizationId: string | null) =>
+        organizationId === 'org-funding'
+          ? { allowed: false, code: 'over_cap', reason: 'over the monthly cap' }
+          : { allowed: true, code: 'ungoverned', reason: 'ok' },
+      );
+
+      const decision = await evaluateManagedComputeWorkspaceAccess(db, 'user-1', 'api', {
+        organizationId: null,
+      });
+
+      expect(mocks.evaluateSpendLimit).toHaveBeenCalledExactlyOnceWith('org-funding');
+      expect(decision).toMatchObject({ allowed: false, code: 'over_cap', organizationId: null });
+    });
+
+    it('checks the funding workspace as well as the selected one', async () => {
+      mocks.evaluateActiveWorkspacePolicy.mockResolvedValue({
+        ...personalPolicy,
+        code: 'allowed',
+        organizationId: 'org-selected',
+      });
+      dbQuery.mockResolvedValue([{ organization_id: 'org-funding' }]);
+      mocks.evaluateSpendLimit.mockResolvedValue({ allowed: true, code: 'allowed', reason: 'ok' });
+
+      await evaluateManagedComputeWorkspaceAccess(db, 'user-1', 'api', {
+        organizationId: 'org-selected',
+      });
+
+      expect(mocks.evaluateSpendLimit.mock.calls.map((call) => call[0])).toEqual([
+        'org-selected',
+        'org-funding',
+      ]);
+    });
+
+    it('evaluates a workspace once when it is both selected and funding', async () => {
+      mocks.evaluateActiveWorkspacePolicy.mockResolvedValue({
+        ...personalPolicy,
+        code: 'allowed',
+        organizationId: 'org-1',
+      });
+      dbQuery.mockResolvedValue([{ organization_id: 'org-1' }]);
+      mocks.evaluateSpendLimit.mockResolvedValue({ allowed: true, code: 'allowed', reason: 'ok' });
+
+      await evaluateManagedComputeWorkspaceAccess(db, 'user-1', 'api', { organizationId: 'org-1' });
+
+      expect(mocks.evaluateSpendLimit).toHaveBeenCalledExactlyOnceWith('org-1');
+    });
+
+    it('still enforces the selected workspace when the funding lookup fails', async () => {
+      mocks.evaluateActiveWorkspacePolicy.mockResolvedValue({
+        ...personalPolicy,
+        code: 'allowed',
+        organizationId: 'org-selected',
+      });
+      dbQuery.mockRejectedValue(new Error('lookup down'));
+      mocks.evaluateSpendLimit.mockResolvedValue({
+        allowed: false,
+        code: 'over_cap',
+        reason: 'over the monthly cap',
+      });
+
+      const decision = await evaluateManagedComputeWorkspaceAccess(db, 'user-1', 'api', {
+        organizationId: 'org-selected',
+      });
+
+      expect(decision).toMatchObject({ allowed: false, code: 'over_cap' });
+      expect(mocks.loggerError).toHaveBeenCalled();
+    });
   });
 });
 

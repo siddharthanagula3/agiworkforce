@@ -76,7 +76,7 @@ const SOURCES: ReadonlyArray<{
     accountLabel: 'Mailbox address',
     accountPlaceholder: 'you@example.com',
     eventTypes: GMAIL_TRIGGER_EVENT_TYPES,
-    note: 'Runs once for each new email in this inbox. Use the address of the Gmail account connected in Connectors.',
+    note: 'Runs for each new email. Use the Gmail address connected in Connectors.',
   },
   {
     value: 'google_calendar',
@@ -386,7 +386,7 @@ export default function ScheduleTriggersPanel({
       {dialog}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
-          An event from one of these sources starts this task, with the event attached to the run.
+          An event from these sources starts this task.
         </p>
         <Button
           type="button"

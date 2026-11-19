@@ -9,6 +9,8 @@ import {
 import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 
+const HIDDEN_OK = { includeHiddenElements: true } as const;
+
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
@@ -19,7 +21,7 @@ function renderBar(props: Partial<React.ComponentProps<typeof VoiceInlineBar>> =
     <SafeAreaProvider initialMetrics={METRICS}>
       <VoiceInlineBar
         visible
-        phase={'idle' as VoiceInlinePhase}
+        phase={'listening' as VoiceInlinePhase}
         onToggleMic={jest.fn()}
         onExit={jest.fn()}
         {...props}
@@ -53,6 +55,16 @@ describe('VoiceInlineBar', () => {
     const { getByLabelText } = renderBar();
     getByLabelText('Mute microphone');
     getByLabelText('Exit voice mode');
+  });
+
+  it('offers to start listening when the mic is idle and not muted', () => {
+    const onToggleMic = jest.fn();
+    const { getByLabelText, queryByLabelText } = renderBar({ phase: 'idle', onToggleMic });
+
+    expect(queryByLabelText('Mute microphone')).toBeNull();
+    fireEvent.press(getByLabelText('Start listening'));
+
+    expect(onToggleMic).toHaveBeenCalledTimes(1);
   });
 
   it('exits without toggling the mic', () => {
@@ -146,5 +158,85 @@ describe('VoiceInlineBar', () => {
   it('omits attachment entirely when the host provides no handler', () => {
     const { queryByLabelText } = renderBar();
     expect(queryByLabelText('Add attachment')).toBeNull();
+  });
+
+  describe('adding a photo or file without leaving voice', () => {
+    const photo = {
+      id: 'photo-1',
+      uri: 'file:///photo-1.jpg',
+      mimeType: 'image/jpeg',
+      fileName: 'photo-1.jpg',
+    };
+    const notes = {
+      id: 'doc-1',
+      uri: 'file:///notes.pdf',
+      mimeType: 'application/pdf',
+      fileName: 'notes.pdf',
+    };
+
+    it('keeps the bar up when the plus is pressed', () => {
+      const onExit = jest.fn();
+      const onAttach = jest.fn();
+      const { getByLabelText, getByTestId } = renderBar({ onAttach, onExit });
+
+      fireEvent.press(getByLabelText('Add attachment'));
+
+      expect(onAttach).toHaveBeenCalledTimes(1);
+      expect(onExit).not.toHaveBeenCalled();
+      expect(getByTestId('voice-inline-bar')).toBeTruthy();
+    });
+
+    it('shows what is waiting to go out with the next thing the user says', () => {
+      const { getByTestId, getByLabelText } = renderBar({
+        attachments: [photo, notes],
+        onRemoveAttachment: jest.fn(),
+      });
+
+      expect(getByTestId('voice-inline-attachments')).toBeTruthy();
+      getByLabelText('Remove photo-1.jpg');
+      getByLabelText('Remove notes.pdf');
+    });
+
+    it('lets the user take one back out', () => {
+      const onRemoveAttachment = jest.fn();
+      const { getByLabelText } = renderBar({ attachments: [photo], onRemoveAttachment });
+
+      fireEvent.press(getByLabelText('Remove photo-1.jpg'));
+
+      expect(onRemoveAttachment).toHaveBeenCalledWith('photo-1');
+    });
+
+    it('shows no strip when nothing is attached', () => {
+      const { queryByTestId } = renderBar({ attachments: [], onRemoveAttachment: jest.fn() });
+      expect(queryByTestId('voice-inline-attachments')).toBeNull();
+    });
+  });
+
+  describe('the glow shows whether the assistant is listening or speaking', () => {
+    it('glows in the listening colour while listening', () => {
+      const { queryByTestId } = renderBar({ phase: 'listening' });
+      expect(queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeTruthy();
+      expect(queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeNull();
+    });
+
+    it('glows in a different colour while speaking', () => {
+      const { queryByTestId } = renderBar({ phase: 'speaking' });
+      expect(queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeTruthy();
+      expect(queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+    });
+
+    it('does not glow when idle or muted', () => {
+      const idle = renderBar({ phase: 'idle' });
+      expect(idle.queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+      expect(idle.queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeNull();
+
+      const muted = renderBar({ phase: 'listening', muted: true });
+      expect(muted.queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+    });
+
+    it('is gone with the bar', () => {
+      const { queryByTestId } = renderBar({ phase: 'listening', visible: false });
+      expect(queryByTestId('voice-state-glow', HIDDEN_OK)).toBeNull();
+    });
   });
 });

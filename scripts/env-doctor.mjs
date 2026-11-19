@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { URL, fileURLToPath, pathToFileURL } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -192,6 +193,7 @@ export const contracts = {
         'SIGNALING_INTERNAL_SECRET',
         'SIGNALING_HTTP_URL',
         'SIGNALING_WS_URL',
+        'SIGNALING_STANDING_URL',
         'ALLOWED_ORIGINS',
       ],
       development: ['SIGNALING_INTERNAL_SECRET'],
@@ -200,7 +202,7 @@ export const contracts = {
       production: [['NEON_DATABASE_URL', 'DATABASE_URL']],
       development: [['NEON_DATABASE_URL', 'DATABASE_URL']],
     },
-    urlKeys: ['SIGNALING_HTTP_URL', 'SIGNALING_WS_URL'],
+    urlKeys: ['SIGNALING_HTTP_URL', 'SIGNALING_WS_URL', 'SIGNALING_STANDING_URL'],
   },
   scanner: {
     productionExample: 'services/upload-scanner/.env.example',
@@ -213,6 +215,7 @@ export const contracts = {
 };
 
 const platformProvidedKeys = new Set([
+  'CARGO_HOME',
   'CARGO_PKG_NAME',
   'CARGO_PKG_VERSION',
   'CI',
@@ -442,6 +445,7 @@ function checkExampleContracts() {
   const parsed = new Map();
   const documentedByScope = new Map();
   const tracked = execFileSync('git', ['ls-files'], {
+    maxBuffer: GIT_MAX_BUFFER,
     cwd: REPO_ROOT,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
@@ -451,7 +455,7 @@ function checkExampleContracts() {
   const scannable = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard'],
-    { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+    { maxBuffer: GIT_MAX_BUFFER, cwd: REPO_ROOT, encoding: 'utf8' },
   )
     .split(/\r?\n/)
     .filter(Boolean);

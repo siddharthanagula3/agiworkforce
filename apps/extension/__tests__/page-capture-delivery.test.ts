@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  captureAdmittedTab,
   deliverPageCapture,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from '../src/features/background/page-capture';
@@ -24,6 +25,7 @@ function harness(send: () => Promise<{ success?: boolean; error?: string } | und
           store.actionCount = count;
         },
         notify,
+        sent: { title: 'Sent title', message: 'Sent message' },
       }),
   };
 }
@@ -55,13 +57,26 @@ describe('capture_page only counts a capture the desktop actually received', () 
     );
   });
 
-  it('counts the capture and stays silent once the desktop confirms delivery', async () => {
+  it('counts the capture and confirms it once the desktop confirms delivery', async () => {
     const h = harness(async () => ({ success: true }));
 
     await expect(h.run()).resolves.toBe(true);
 
     expect(h.store.actionCount).toBe(8);
-    expect(h.notify).not.toHaveBeenCalled();
+    expect(h.notify).toHaveBeenCalledOnce();
+    expect(h.notify).toHaveBeenCalledWith('Sent title', 'Sent message');
+  });
+
+  it('tells the user in the catalog that the shortcut sends a screenshot to Desktop', () => {
+    const catalog = JSON.parse(
+      readFileSync(resolve(here, '..', '_locales/en/messages.json'), 'utf8'),
+    ) as Record<string, { message: string }>;
+    for (const key of ['obTourShortcutsText', 'optShortcutCapturePage', 'commandCapturePage']) {
+      const words = catalog[key]!.message.replace(/\$[A-Z]+\$/g, '');
+      expect(words, key).toMatch(/Desktop/);
+      expect(words, key).not.toMatch(/attach|capture/i);
+    }
+    expect(catalog['pageCaptureSentMessage']!.message).toMatch(/Desktop/);
   });
 
   it('routes the capture_page command through the delivery gate, not fire-and-forget', () => {
@@ -74,6 +89,87 @@ describe('capture_page only counts a capture the desktop actually received', () 
     expect(captureFn).toContain('deliverPageCapture(');
     expect(captureFn).not.toContain('sendNativeMessage(');
     expect(captureFn).not.toMatch(/actionCount: actionCount \+ 1/);
+  });
+});
+
+describe('capture_page photographs only the tab it admitted', () => {
+  const source = { id: 11, windowId: 2, url: 'https://approved.example/page' };
+  const admitted = { id: 11, url: 'https://approved.example/page' };
+
+  it('returns the pixels while the admitted tab stays showing', async () => {
+    const capture = vi.fn(async () => 'data:image/png;base64,AAAA');
+
+    await expect(
+      captureAdmittedTab(source, { visibleTab: async () => admitted, capture }),
+    ).resolves.toBe('data:image/png;base64,AAAA');
+    expect(capture).toHaveBeenCalledWith(2);
+  });
+
+  it('does not capture when another tab took over during authorization', async () => {
+    const capture = vi.fn(async () => 'data:image/png;base64,BBBB');
+
+    await expect(
+      captureAdmittedTab(source, {
+        visibleTab: async () => ({ id: 12, url: 'https://other.example/' }),
+        capture,
+      }),
+    ).resolves.toBeNull();
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('withholds the pixels when another tab took over while capturing', async () => {
+    const showing = [admitted, { id: 12, url: 'https://other.example/' }];
+    const capture = vi.fn(async () => 'data:image/png;base64,CCCC');
+
+    await expect(
+      captureAdmittedTab(source, { visibleTab: async () => showing.shift(), capture }),
+    ).resolves.toBeNull();
+    expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  it('withholds the pixels when the admitted tab navigated elsewhere', async () => {
+    const showing = [admitted, { id: 11, url: 'https://other.example/' }];
+
+    await expect(
+      captureAdmittedTab(source, {
+        visibleTab: async () => showing.shift(),
+        capture: async () => 'data:image/png;base64,DDDD',
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('does not capture when the window has no showing tab', async () => {
+    const capture = vi.fn(async () => 'data:image/png;base64,EEEE');
+
+    await expect(
+      captureAdmittedTab(source, { visibleTab: async () => undefined, capture }),
+    ).resolves.toBeNull();
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('lets a Chrome capture rejection through to the failure notice', async () => {
+    await expect(
+      captureAdmittedTab(source, {
+        visibleTab: async () => admitted,
+        capture: async () => {
+          throw new Error('denied');
+        },
+      }),
+    ).rejects.toThrow('denied');
+  });
+
+  it('routes the shortcut through the admitted-tab capture and tells the user when it is withheld', () => {
+    const background = readFileSync(resolve(here, '..', 'src/background.ts'), 'utf8');
+    const captureFn = background.slice(
+      background.indexOf('async function captureCurrentPage('),
+      background.indexOf('async function handleChatMessage('),
+    );
+
+    expect(captureFn).toContain('captureAdmittedTab(');
+    expect(captureFn).toContain('PAGE_CAPTURE_TAB_CHANGED_MESSAGE');
+    expect(captureFn.indexOf('captureAdmittedTab(')).toBeLessThan(
+      captureFn.indexOf('deliverPageCapture('),
+    );
   });
 });
 

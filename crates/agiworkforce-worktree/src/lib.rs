@@ -27,9 +27,10 @@ pub use basic::{
 pub use git::{
     add_sandbox_writable_roots, host_git, host_git_async, host_git_config_dir, host_git_hardening,
     host_git_keeping_hooks_async, host_git_output_blocking, host_git_path, host_path,
-    register_workspace_root, set_host_state_dir, user_config_value,
+    register_workspace_root, set_host_git_config_dir, set_host_state_dir, user_config_value,
     HOST_GIT_HARDENING_KEEPING_HOOKS,
 };
+pub use include::{copy_included_files, IncludeOutcome};
 pub use named::{
     create_or_resume_named_worktree, list_named_worktrees, remove_named_worktree,
     validate_worktree_slug, NamedWorktree,

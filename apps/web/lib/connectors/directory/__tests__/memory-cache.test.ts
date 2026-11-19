@@ -158,6 +158,54 @@ describe('getSnapshotView', () => {
     expect(view.counts.totalRecords).toBe(0);
     expect(view.bootstrapComplete).toBe(false);
   });
+
+  it('does not report a completed bootstrap while the snapshot it describes is missing', async () => {
+    mocks.readSyncState.mockResolvedValue({
+      nextIngestCursor: null,
+      bootstrapComplete: true,
+      bootstrapStartedAt: null,
+      lastSyncAt: '2026-09-05T06:15:00.000Z',
+      authProbeCursor: null,
+    });
+    mocks.readSnapshotStamp.mockResolvedValue(null);
+
+    const view = await getSnapshotView();
+
+    expect(view.records).toEqual([]);
+    expect(view.bootstrapComplete).toBe(false);
+  });
+
+  it('does not report a completed bootstrap while the stored snapshot cannot be read', async () => {
+    mocks.readSyncState.mockResolvedValue({
+      nextIngestCursor: null,
+      bootstrapComplete: true,
+      bootstrapStartedAt: null,
+      lastSyncAt: '2026-09-05T06:15:00.000Z',
+      authProbeCursor: null,
+    });
+    mocks.readSnapshotStamp.mockResolvedValue(1);
+    mocks.readSnapshotRecords.mockResolvedValueOnce(null);
+
+    const view = await getSnapshotView();
+
+    expect(view.bootstrapComplete).toBe(false);
+  });
+
+  it('reports a completed bootstrap when the snapshot is stored', async () => {
+    mocks.readSyncState.mockResolvedValue({
+      nextIngestCursor: null,
+      bootstrapComplete: true,
+      bootstrapStartedAt: null,
+      lastSyncAt: '2026-09-05T06:15:00.000Z',
+      authProbeCursor: null,
+    });
+    mocks.readSnapshotStamp.mockResolvedValue(1);
+    mocks.readSnapshotRecords.mockResolvedValueOnce([notion]);
+
+    const view = await getSnapshotView();
+
+    expect(view.bootstrapComplete).toBe(true);
+  });
 });
 
 describe('getDirectoryIconUrl', () => {

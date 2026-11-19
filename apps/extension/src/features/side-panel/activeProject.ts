@@ -23,3 +23,27 @@ export function readStoredActiveProject(
   const name = record['name'];
   return typeof id === 'string' && id && typeof name === 'string' && name ? { id, name } : null;
 }
+
+export interface OwnedProjectCatalog {
+  set(owner: ManagedCloudOwner | null, projects: readonly ActiveProjectSelection[]): void;
+  read(owner: ManagedCloudOwner | null): readonly ActiveProjectSelection[];
+  clear(): void;
+}
+
+export function createOwnedProjectCatalog(): OwnedProjectCatalog {
+  let catalogOwner: ManagedCloudOwner | null = null;
+  let projects: readonly ActiveProjectSelection[] = [];
+  return {
+    set(owner, next) {
+      catalogOwner = owner ? { ...owner } : null;
+      projects = catalogOwner ? next : [];
+    },
+    read(owner) {
+      return sameManagedCloudOwner(catalogOwner, owner) ? projects : [];
+    },
+    clear() {
+      catalogOwner = null;
+      projects = [];
+    },
+  };
+}

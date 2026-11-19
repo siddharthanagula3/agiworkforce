@@ -184,6 +184,10 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
 /// (e.g. the command for `run_command`, the path for file tools). Carries no
 /// full output, capped to one line of <=80 chars.
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
+    let shown_path = args
+        .get("path")
+        .and_then(|value| value.as_str())
+        .map(|value| crate::path_security::display_path(std::path::Path::new(value)));
     let raw = crate::runtime::tool_catalog::tool_status_line(name, |key| {
         args.get(key).and_then(|value| value.as_str()).map(|value| {
             if key == "path" {
@@ -195,9 +199,15 @@ fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     })
     .unwrap_or_default();
     let one_line = raw.replace('\n', " ");
+    let length = one_line.chars().count();
     if one_line.trim().is_empty() {
         format!("Running {}", name.replace(['_', '-'], " "))
-    } else if one_line.chars().count() > 80 {
+    } else if length > 80 && shown_path.as_deref() == Some(raw.as_str()) {
+        format!(
+            "…{}",
+            one_line.chars().skip(length - 79).collect::<String>()
+        )
+    } else if length > 80 {
         format!("{}…", one_line.chars().take(79).collect::<String>())
     } else {
         one_line
@@ -298,7 +308,7 @@ async fn run_pre_tool_use_hooks(
         },
     )
     .await;
-    let pre_t = hooks::aggregate_transformers(&pre_results);
+    let pre_t = hooks::aggregate_transformers_for(&pre_results, &tool_call.arguments);
     let effective_args = pre_t
         .updated_input
         .clone()
@@ -346,6 +356,9 @@ pub(crate) fn judge_generation(outcome: &agiworkforce_llm::ChatOutcome) -> Gener
         }
         Some(stop) if stop.is_output_limit() => {
             GenerationVerdict::Failed(IncompleteTurnCause::OutputLimitReached)
+        }
+        None if has_answer => {
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::StreamEndedEarly)
         }
         _ if has_answer => GenerationVerdict::Delivered,
         _ => GenerationVerdict::Failed(IncompleteTurnCause::NoResponse),
@@ -437,6 +450,18 @@ impl AgentSession {
 
     /// Build a streaming chunk callback for the target above.
     pub(crate) fn continuation_sink(&self) -> StreamCallback {
+        if matches!(
+            self.continuation_target(),
+            ContinuationTarget::Transcript | ContinuationTarget::OffProtocolChannel
+        ) {
+            if let Some(renderer) = self.transcript_renderer.clone() {
+                return Box::new(move |chunk: &str| {
+                    if let Ok(mut renderer) = renderer.lock() {
+                        crate::output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                    }
+                });
+            }
+        }
         match (
             self.continuation_target(),
             self.on_continuation_chunk.clone(),
@@ -464,6 +489,14 @@ impl AgentSession {
             // `output` is also what keeps it off a protocol stdout, so it is
             // the safe landing for any target whose channel went missing.
             _ => Box::new(|chunk: &str| crate::output::print_assistant_chunk(chunk)),
+        }
+    }
+
+    pub(crate) fn drain_transcript_renderer(&self) {
+        if let Some(renderer) = &self.transcript_renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                crate::output::flush_markdown(&mut renderer);
+            }
         }
     }
 
@@ -1034,6 +1067,20 @@ impl AgentSession {
         result
     }
 
+    pub(crate) fn settle_team_spend(&mut self) {
+        let Some(team) = self
+            .team_manager
+            .clone()
+            .filter(|_| self.team_identity.is_none())
+        else {
+            return;
+        };
+        team.settle_spend_into(&mut self.cost_ledger);
+        team.set_budget_headroom(self.max_budget_usd.map(|cap| {
+            crate::cost_ledger::CostBudget::new(cap, self.cost_ledger.total_usd).remaining_usd()
+        }));
+    }
+
     /// Send a user message and run the full agentic loop.
     ///
     /// Consent and the privacy boundary, context compaction, plan-mode
@@ -1047,6 +1094,7 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        self.settle_team_spend();
         #[cfg(unix)]
         let browser = if self.privacy_mode != super::PrivacyMode::Local
             && !matches!(
@@ -1171,7 +1219,7 @@ impl AgentSession {
             )
             .await;
 
-            self.compact_history(config, &compaction_config).await;
+            let compaction = self.compact_history(config, &compaction_config).await;
 
             let new_usage = context_budget(
                 &self.messages,
@@ -1179,10 +1227,15 @@ impl AgentSession {
                 compaction_config.reserved_output_tokens,
                 None,
             );
+            let outcome = if compaction.compacted {
+                "Context compacted"
+            } else {
+                "Context unchanged, nothing earlier could be summarized"
+            };
             narrate!(
                 "  {}",
                 format!(
-                    "Context compacted: {}/{} tokens ({}%)",
+                    "{outcome}: {}/{} tokens ({}%)",
                     new_usage.used_tokens,
                     new_usage.usable_input_tokens,
                     (new_usage.used_fraction * 100.0) as u32
@@ -1398,7 +1451,7 @@ message -- revise and call `update_plan` again.\n\n",
             require_confirmation: !self.skips_approval(),
         };
         let project_conversation = self.project_conversation().await;
-        let (run_result, completion_usage, managed_request_ids, incomplete, sources) = {
+        let (run_result, completion_usage, managed_request_ids, superseded, incomplete, sources) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -1412,20 +1465,28 @@ message -- revise and call `update_plan` again.\n\n",
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
+                superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
                 incomplete: None,
             };
-            let (result, sources) = crate::sources::collect(crate::cloud::bound_to(
-                project_conversation,
-                models::managed_approvals::with_managed_tool_approval(
-                    managed_tool_approval,
-                    run_turn(&mut adapter, params, &mut tracker),
-                ),
-            ))
-            .await;
+            let ((result, side_requests), sources) =
+                crate::sources::collect(crate::cloud::bound_to(
+                    project_conversation,
+                    models::managed_approvals::with_managed_tool_approval(
+                        managed_tool_approval,
+                        crate::cost_ledger::collect_side_requests(run_turn(
+                            &mut adapter,
+                            params,
+                            &mut tracker,
+                        )),
+                    ),
+                ))
+                .await;
+            adapter.completion_usage.extend(side_requests);
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
                 std::mem::take(&mut adapter.managed_request_ids),
+                adapter.superseded_usage,
                 adapter.incomplete,
                 sources,
             )
@@ -1453,11 +1514,12 @@ message -- revise and call `update_plan` again.\n\n",
             }
         };
 
-        let total_input = outcome.totals.input_tokens;
-        let total_output = outcome.totals.output_tokens;
-        let total_cache_read = outcome.totals.cache_read_tokens;
-        let total_cache_creation = outcome.totals.cache_creation_tokens;
-        let result_reasoning = outcome.totals.reasoning_tokens;
+        let total_input = outcome.totals.input_tokens + superseded.input_tokens;
+        let total_output = outcome.totals.output_tokens + superseded.output_tokens;
+        let total_cache_read = outcome.totals.cache_read_tokens + superseded.cache_read_tokens;
+        let total_cache_creation =
+            outcome.totals.cache_creation_tokens + superseded.cache_creation_tokens;
+        let result_reasoning = outcome.totals.reasoning_tokens + superseded.reasoning_tokens;
         let last_input_tokens = outcome.last_input_tokens;
         // The presentation flag means the whole logical turn was included.
         // Mixed subscription/metered tool loops must display their exact paid
@@ -1597,7 +1659,15 @@ message -- revise and call `update_plan` again.\n\n",
         if std::time::Instant::now() < self.memory_window_due_at {
             return;
         }
-        let start = self.memory_extracted_through.min(self.messages.len());
+        let unsaved_from = self.memory_unsaved_from.clone();
+        let mut unsaved = unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let start = unsaved
+            .map_or(self.memory_extracted_through, |failed| {
+                failed.min(self.memory_extracted_through)
+            })
+            .min(self.messages.len());
         let window = self.messages[start..].to_vec();
         if !window
             .iter()
@@ -1605,16 +1675,20 @@ message -- revise and call `update_plan` again.\n\n",
         {
             return;
         }
+        *unsaved = None;
+        drop(unsaved);
         let window_id = format!("{}.{start}", self.runtime_session_id);
         self.memory_extracted_through = self.messages.len();
         self.memory_window_due_at =
             std::time::Instant::now() + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL;
         let home = home.to_path_buf();
+        let project = self.system_prompt_parts.memory_cwd.clone();
         let config = config.clone();
         let route = crate::subagent::InheritedRoute::off_device(self);
         let task = tokio::spawn(async move {
             if let Err(error) = crate::memory_pipeline::MemoryPipeline::extract_session_summary(
                 &home,
+                project.as_deref(),
                 &window_id,
                 &window,
                 &config,
@@ -1623,6 +1697,11 @@ message -- revise and call `update_plan` again.\n\n",
             .await
             {
                 narrate!("[memory_pipeline] extraction error: {}", error);
+                let mut unsaved = unsaved_from
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let retry_from = unsaved.map_or(start, |earlier| earlier.min(start));
+                *unsaved = Some(retry_from);
             }
         });
         self.track_memory_consolidation(task);
@@ -1732,6 +1811,10 @@ struct TurnHostAdapter<'a> {
     /// enforcement must not treat several tool-loop completions as one request.
     completion_usage: Vec<crate::cost_ledger::CompletionUsage>,
     managed_request_ids: Vec<String>,
+    /// Usage of completions an empty-reply retry replaced. They were paid for
+    /// and belong in the turn's token receipt, but not in the final request's
+    /// context anchor.
+    superseded_usage: agiworkforce_agent_core::UsageTotals,
     /// Set when the answer this turn delivers is real but was cut short, so
     /// every surface can say so beside the text instead of presenting a
     /// truncated reply as a whole one.
@@ -1739,6 +1822,45 @@ struct TurnHostAdapter<'a> {
 }
 
 impl TurnHostAdapter<'_> {
+    async fn persisted_tool_output(
+        &mut self,
+        hcfg: &hooks::HooksConfig,
+        tool_name: String,
+        tool_args: serde_json::Value,
+        output: String,
+    ) -> String {
+        let persist_results = hooks::run_hooks(
+            hcfg,
+            hooks::HookEvent::ToolResultPersist,
+            &hooks::HookInput {
+                event: "ToolResultPersist".to_string(),
+                session_id: Some(self.session.runtime_session_id.clone()),
+                model: Some(self.session.model.clone()),
+                tool_name: Some(tool_name),
+                tool_args: Some(tool_args.clone()),
+                tool_output: Some(output.clone()),
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
+        hooks::aggregate_transformers_for(&persist_results, &tool_args)
+            .updated_mcp_tool_output
+            .unwrap_or(output)
+    }
+
+    fn tool_search_catalog_for(
+        &self,
+        tool_name: &str,
+    ) -> Option<std::sync::Arc<Vec<models::ToolDefinition>>> {
+        if tool_name != "tool_search" {
+            return None;
+        }
+        let mut catalog = self.session.callable_tool_definitions(&self.tool_defs);
+        catalog.retain(|definition| self.available_tool_names.contains(&definition.name));
+        Some(std::sync::Arc::new(catalog))
+    }
+
     async fn spawn_teammate(
         &mut self,
         args: &std::collections::HashMap<String, String>,
@@ -1773,6 +1895,7 @@ impl TurnHostAdapter<'_> {
             },
             None => None,
         };
+        self.session.settle_team_spend();
         let max_budget_usd = match self.session.max_budget_usd {
             Some(cap) => {
                 let left =
@@ -1973,7 +2096,7 @@ impl TurnHostAdapter<'_> {
                             .downcast_ref::<CliError>()
                             .map(|c| (c.kind(), chain.should_rotate(c)));
                         if let Some((kind, true)) = cli_err_kind {
-                            for fallback_model in chain.tail() {
+                            for fallback_model in chain.rotation_after(&self.session.model) {
                                 let prev_model = self.session.model.clone();
                                 let prev_provider = self.session.provider.clone();
                                 // Privacy-boundary guard: mutate provider/model and then
@@ -2149,6 +2272,7 @@ impl TurnHostAdapter<'_> {
                     "  {}",
                     ts::warning(format!("{} Sending it once more.", cause.summary()))
                 );
+                self.superseded_usage.add(&completion.outcome.usage);
                 let retried = models::stream_completion(
                     self.config,
                     &self.session.provider,
@@ -2449,7 +2573,7 @@ impl TurnHostAdapter<'_> {
         } else {
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: self.session.additional_context_dirs(),
-                mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
+                tool_search_catalog: self.tool_search_catalog_for(&call.name),
                 require_confirmation: !self.session.skips_approval(),
                 auto_approve_safe: self.session.auto_approve_safe,
                 auto_approve_edits: self
@@ -2462,7 +2586,12 @@ impl TurnHostAdapter<'_> {
                 privacy_mode: self.session.privacy_mode,
                 workspace_root: self.session.workspace_root(),
             };
-            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
+            match crate::terminals::scope_owner(
+                self.session.runtime_session_id.clone(),
+                crate::tools::execute_tool_with_opts(&legacy, &opts),
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(e) => crate::tools::ToolResult {
                     tool_name: call.name.clone(),
@@ -2475,6 +2604,83 @@ impl TurnHostAdapter<'_> {
         ExecResult {
             ok: tool_result.success,
             output: tool_result.output,
+        }
+    }
+
+    async fn run_captured_tool(
+        &mut self,
+        call: &ToolCallResponse,
+        args: serde_json::Value,
+    ) -> ExecResult {
+        let workspace_root = self.session.workspace_root();
+        self.session
+            .note_file_edit_started(&call.id, &call.name, &args, workspace_root.as_deref())
+            .await;
+        self.run_sequential_tool(call, args).await
+    }
+
+    async fn run_batch(&mut self, call: &ToolCallResponse, args: &serde_json::Value) -> ExecResult {
+        let legacy_args = value_to_legacy_args(args);
+        let workspace_root = self.session.workspace_root();
+        let approval_callback = self.session.recorded_approval_callback();
+        match crate::tools::workspace_policy_gate(
+            &call.name,
+            &legacy_args,
+            workspace_root.as_deref(),
+            approval_callback.as_ref(),
+        )
+        .await
+        {
+            Ok(crate::tools::WorkspacePolicyGate::Refused(refusal)) => {
+                return ExecResult {
+                    ok: false,
+                    output: refusal.output,
+                }
+            }
+            Err(error) => {
+                return ExecResult {
+                    ok: false,
+                    output: format!("tool error: {error:#}"),
+                }
+            }
+            Ok(
+                crate::tools::WorkspacePolicyGate::Unruled
+                | crate::tools::WorkspacePolicyGate::Allowed
+                | crate::tools::WorkspacePolicyGate::Approved,
+            ) => {}
+        }
+        let inner_calls = match crate::tools::batch_calls(&legacy_args) {
+            Ok(inner_calls) => inner_calls,
+            Err(output) => return ExecResult { ok: false, output },
+        };
+        let mut results = Vec::with_capacity(inner_calls.len());
+        for (position, inner) in inner_calls.into_iter().enumerate() {
+            let inner = ToolCallResponse {
+                id: format!("{}#{}", call.id, position + 1),
+                name: inner.name,
+                arguments: serde_json::Value::Object(inner.args),
+            };
+            let block = match self
+                .prepare_tool_inner(&inner, DispatchMode::Sequential)
+                .await
+            {
+                Prepared::Proceed { args } => {
+                    let executed = self.run_captured_tool(&inner, args.clone()).await;
+                    self.session.note_file_edit_finished(&inner.id, executed.ok);
+                    self.finish_sequential_tool(&inner, args, executed).await
+                }
+                Prepared::PreEmpted { block } => block,
+            };
+            results.push(Ok(crate::tools::ToolResult {
+                tool_name: inner.name,
+                success: !block.is_error,
+                output: block.content,
+            }));
+        }
+        let summary = crate::tools::batch_result(results);
+        ExecResult {
+            ok: summary.success,
+            output: summary.output,
         }
     }
 }
@@ -2538,6 +2744,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 models::routed(routing_profile, self.complete_continuation()).await
             }
         };
+        self.session.drain_transcript_renderer();
         if let Ok(completion) = &completion {
             self.record_completion_usage(completion);
         }
@@ -2885,22 +3092,17 @@ impl TurnHost for TurnHostAdapter<'_> {
             let mut tool_result = match id_result {
                 Ok(ref id) => {
                     if let Some(ref mgr) = self.session.subagent_manager {
+                        if let Some(spent) = mgr.get_spent(id).await {
+                            self.session
+                                .cost_ledger
+                                .record_subagent_run(&spent.model, spent.cost_usd);
+                            self.managed_request_ids.extend(spent.managed_request_ids);
+                        }
                         if let Some(sa_result) = mgr.get_result(id).await {
-                            self.session.cost_ledger.record_subagent_run(
-                                &sa_result.usage.model,
-                                sa_result.usage.cost_usd,
-                            );
-                            let mut output = format!("Child task: {id}\n\n{}", sa_result.output);
-                            if !sa_result.files_modified.is_empty() {
-                                output.push_str("\n\nFiles modified:\n");
-                                for f in &sa_result.files_modified {
-                                    output.push_str(&format!("  - {}\n", f));
-                                }
-                            }
                             crate::tools::ToolResult {
                                 tool_name: tool_name.clone(),
                                 success: true,
-                                output,
+                                output: sa_result.tool_output(),
                             }
                         } else if let Some(sa_status) = mgr.get_status(id).await {
                             crate::tools::ToolResult {
@@ -2974,25 +3176,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             )
             .await;
 
-            hooks::run_hooks(
-                &hcfg,
-                hooks::HookEvent::ToolResultPersist,
-                &hooks::HookInput {
-                    event: "ToolResultPersist".to_string(),
-                    session_id: Some(self.session.runtime_session_id.clone()),
-                    model: Some(self.session.model.clone()),
-                    tool_name: Some(tool_name),
-                    tool_args: Some(tool_args),
-                    tool_output: Some(tool_result.output.clone()),
-                    message: None,
-                    tool_execution: None,
-                },
-            )
-            .await;
+            let content = self
+                .persisted_tool_output(&hcfg, tool_name, tool_args, tool_result.output)
+                .await;
 
             result_blocks.push(ResultBlock {
                 tool_use_id,
-                content: tool_result.output,
+                content,
                 is_error: !tool_result.success,
             });
         }
@@ -3007,7 +3197,7 @@ impl TurnHost for TurnHostAdapter<'_> {
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
             additional_workspace_roots: self.session.additional_context_dirs(),
-            mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
+            tool_search_catalog: self.tool_search_catalog_for(&prepared.name),
             require_confirmation: !self.session.skips_approval(),
             auto_approve_safe: self.session.auto_approve_safe,
             auto_approve_edits: self
@@ -3024,11 +3214,14 @@ impl TurnHost for TurnHostAdapter<'_> {
             name: prepared.name.clone(),
             args: value_to_legacy_args(&prepared.args),
         };
+        let command_owner = self.session.runtime_session_id.clone();
         Box::pin(async move {
-            let (result, notes) = crate::tools::collect_approval_notes(
-                crate::tools::execute_tool_with_opts(&legacy, &opts),
-            )
-            .await;
+            let (result, notes) =
+                crate::tools::collect_approval_notes(crate::terminals::scope_owner(
+                    command_owner,
+                    crate::tools::execute_tool_with_opts(&legacy, &opts),
+                ))
+                .await;
             match result {
                 Ok(r) => ExecResult {
                     ok: r.success,
@@ -3068,25 +3261,13 @@ impl TurnHost for TurnHostAdapter<'_> {
         )
         .await;
 
-        hooks::run_hooks(
-            &hcfg,
-            hooks::HookEvent::ToolResultPersist,
-            &hooks::HookInput {
-                event: "ToolResultPersist".to_string(),
-                session_id: Some(self.session.runtime_session_id.clone()),
-                model: Some(self.session.model.clone()),
-                tool_name: Some(prepared.name),
-                tool_args: Some(prepared.args),
-                tool_output: Some(result.output.clone()),
-                message: None,
-                tool_execution: None,
-            },
-        )
-        .await;
+        let content = self
+            .persisted_tool_output(&hcfg, prepared.name, prepared.args, result.output)
+            .await;
 
         ResultBlock {
             tool_use_id: prepared.id,
-            content: result.output,
+            content,
             is_error: !result.ok,
         }
     }
@@ -3096,8 +3277,14 @@ impl TurnHost for TurnHostAdapter<'_> {
         call: &ToolCallResponse,
         args: serde_json::Value,
     ) -> ExecResult {
-        let (result, notes) =
-            crate::tools::collect_approval_notes(self.run_sequential_tool(call, args)).await;
+        let (result, notes) = crate::tools::collect_approval_notes(async {
+            if call.name == "batch" {
+                self.run_batch(call, &args).await
+            } else {
+                self.run_captured_tool(call, args).await
+            }
+        })
+        .await;
         ExecResult {
             ok: result.ok,
             output: crate::tools::with_approval_notes(result.output, &notes),
@@ -3127,31 +3314,19 @@ impl TurnHost for TurnHostAdapter<'_> {
         )
         .await;
 
-        let post_t = hooks::aggregate_transformers(&post_results);
+        let post_t = hooks::aggregate_transformers_for(&post_results, &args);
         let final_output = post_t.updated_mcp_tool_output.unwrap_or(result.output);
         if let Some(ctx) = post_t.additional_context {
             self.hook_additional_contexts.push(ctx);
         }
 
-        hooks::run_hooks(
-            &hcfg,
-            hooks::HookEvent::ToolResultPersist,
-            &hooks::HookInput {
-                event: "ToolResultPersist".to_string(),
-                session_id: Some(self.session.runtime_session_id.clone()),
-                model: Some(self.session.model.clone()),
-                tool_name: Some(call.name.clone()),
-                tool_args: Some(args.clone()),
-                tool_output: Some(final_output.clone()),
-                message: None,
-                tool_execution: None,
-            },
-        )
-        .await;
+        let content = self
+            .persisted_tool_output(&hcfg, call.name.clone(), args, final_output)
+            .await;
 
         ResultBlock {
             tool_use_id: call.id.clone(),
-            content: final_output,
+            content,
             is_error: !result.ok,
         }
     }
@@ -3340,6 +3515,7 @@ impl TurnHost for TurnHostAdapter<'_> {
 
     fn turn_cost_usd(&self, _totals: &agiworkforce_agent_core::UsageTotals) -> f64 {
         crate::cost_ledger::dollars_for_completions(&self.completion_usage)
+            + crate::cost_ledger::side_request_dollars_so_far()
     }
 
     fn on_event(&mut self, event: &TurnEvent) {
@@ -3391,8 +3567,6 @@ impl TurnHost for TurnHostAdapter<'_> {
                 if let Ok(mut activity) = self.session.session_activity.lock() {
                     activity.tool_started(id, name, args, workspace_root.as_deref());
                 }
-                self.session
-                    .note_file_edit_started(id, name, args, workspace_root.as_deref());
                 let raw_input = args.to_string();
                 let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
@@ -3607,6 +3781,96 @@ async fn settle_document(
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    fn renderer_session() -> (
+        AgentSession,
+        std::sync::Arc<Mutex<crate::markdown::MarkdownRenderer>>,
+    ) {
+        let context = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let model = crate::model_catalog::fast_completion_model("anthropic");
+        let mut session = AgentSession::new(&model, &context, None);
+        let renderer = std::sync::Arc::new(Mutex::new(crate::markdown::MarkdownRenderer::new()));
+        session.transcript_renderer = Some(std::sync::Arc::clone(&renderer));
+        (session, renderer)
+    }
+
+    #[test]
+    fn a_continuation_streams_through_the_renderer_that_owns_the_first_completion() {
+        let (session, renderer) = renderer_session();
+
+        (session.continuation_sink())("after the tool call");
+
+        let pending = renderer.lock().expect("lock").flush();
+        assert!(
+            pending.contains("after the tool call"),
+            "the continuation bypassed the turn's renderer and printed raw, so a partial line the renderer still held would surface after it: {pending:?}"
+        );
+    }
+
+    #[test]
+    fn a_completion_boundary_drains_the_partial_line_the_renderer_still_holds() {
+        let (session, renderer) = renderer_session();
+        renderer
+            .lock()
+            .expect("lock")
+            .process_chunk("before the tool call");
+
+        session.drain_transcript_renderer();
+
+        assert_eq!(
+            renderer.lock().expect("lock").flush(),
+            "",
+            "the first completion's partial line stayed buffered past the boundary"
+        );
+    }
+
+    #[test]
+    fn an_installed_sink_outranks_the_renderer() {
+        let (mut session, renderer) = renderer_session();
+        let captured = std::sync::Arc::new(Mutex::new(String::new()));
+        let sink_buf = std::sync::Arc::clone(&captured);
+        session.on_continuation_chunk = Some(crate::agent::ContinuationSink(std::sync::Arc::new(
+            move |chunk: &str| {
+                sink_buf.lock().expect("lock").push_str(chunk);
+            },
+        )));
+
+        (session.continuation_sink())("to the installed sink");
+
+        assert_eq!(
+            captured.lock().expect("lock").as_str(),
+            "to the installed sink"
+        );
+        assert_eq!(renderer.lock().expect("lock").flush(), "");
+    }
+
+    #[test]
+    fn a_protocol_stdout_keeps_the_renderer_and_its_off_protocol_writer() {
+        let (session, renderer) = renderer_session();
+        let _claim = crate::output::ProtocolStdoutTestClaim::hold();
+
+        (session.continuation_sink())("off the protocol channel");
+
+        assert!(renderer
+            .lock()
+            .expect("lock")
+            .flush()
+            .contains("off the protocol channel"));
+    }
 
     #[test]
     fn a_compaction_that_summarizes_twice_is_charged_for_both_calls() {
@@ -3842,6 +4106,21 @@ mod tests {
     }
 
     #[test]
+    fn a_long_path_summary_keeps_the_file_name_and_a_long_command_keeps_its_start() {
+        let path = format!("{}/é/the_file_name.rs", "deep/nested".repeat(9));
+        let summary = tool_event_summary("write_file", &serde_json::json!({ "path": path }));
+        assert_eq!(summary.chars().count(), 80);
+        assert!(summary.starts_with('…'), "{summary}");
+        assert!(summary.ends_with("é/the_file_name.rs"), "{summary}");
+
+        let command = format!("cargo test {}", "--flag ".repeat(20));
+        let summary = tool_event_summary("run_command", &serde_json::json!({ "command": command }));
+        assert_eq!(summary.chars().count(), 80);
+        assert!(summary.starts_with("cargo test --flag"), "{summary}");
+        assert!(summary.ends_with('…'), "{summary}");
+    }
+
+    #[test]
     fn tool_event_summary_falls_back_for_dynamic_tools() {
         assert_eq!(
             tool_event_summary("custom_connector", &serde_json::json!({})),
@@ -4028,6 +4307,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
 
@@ -4042,6 +4322,57 @@ mod tests {
             adapter.classify(&tool_call("agent", serde_json::json!({"action":"list"}))),
             ToolClass::Other
         );
+    }
+
+    #[test]
+    fn tool_search_searches_only_what_the_turn_can_call() {
+        let config = CliConfig::default();
+        let restrictions: [(&[&str], &[&str]); 2] =
+            [(&["tool_search", "read_file"], &[]), (&[], &["write_file"])];
+        for (allowed, disallowed) in restrictions {
+            let mut session = make_local_session();
+            let to_strings = |names: &[&str]| {
+                names
+                    .iter()
+                    .map(|name| name.to_string())
+                    .collect::<Vec<_>>()
+            };
+            session.apply_tool_filters(&to_strings(allowed), &to_strings(disallowed));
+            let tool_defs = session.effective_tool_definitions();
+            let available_tool_names = session
+                .callable_tool_definitions(&tool_defs)
+                .into_iter()
+                .map(|definition| definition.name)
+                .collect::<HashSet<_>>();
+            assert!(available_tool_names.contains("tool_search"));
+            assert!(!available_tool_names.contains("write_file"));
+            let adapter = TurnHostAdapter {
+                session: &mut session,
+                config: &config,
+                tool_defs,
+                available_tool_names,
+                concurrency_safe_names: HashSet::new(),
+                plan_mode_mutating_names: HashSet::new(),
+                max_tokens: 1_024,
+                first_on_chunk: None,
+                search_turn: false,
+                hook_additional_contexts: Vec::new(),
+                completion_usage: Vec::new(),
+                managed_request_ids: Vec::new(),
+                superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
+                incomplete: None,
+            };
+
+            let catalog = adapter
+                .tool_search_catalog_for("tool_search")
+                .expect("tool_search gets the turn's catalog");
+            assert!(catalog.iter().any(|tool| tool.name == "read_file"));
+            assert!(
+                !catalog.iter().any(|tool| tool.name == "write_file"),
+                "allowed {allowed:?}, disallowed {disallowed:?}"
+            );
+            assert!(adapter.tool_search_catalog_for("read_file").is_none());
+        }
     }
 
     #[test]
@@ -4061,6 +4392,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let completion = |request_id: Option<&str>| models::CompletionResult {
@@ -4279,6 +4611,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
 
@@ -4674,6 +5007,7 @@ mod tests {
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
+                superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
                 incomplete: None,
             },
             scripted: completions.into(),
@@ -4994,6 +5328,155 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn live_turn_runs_each_batched_call_through_its_own_hooks_and_rewind_capture() {
+        let scratch = workspace_scratch();
+        let refused = scratch.path().join("refused.txt");
+        let created = scratch.path().join("created.txt");
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[(
+            "PreToolUse",
+            "input=$(cat); case \"$input\" in *refused.txt*) printf '%s' '{\"decision\":\"block\",\"reason\":\"guarded path\"}';; esac"
+                .to_string(),
+        )]);
+        for hook in session.hooks_config.hooks.values_mut().flatten() {
+            hook.matcher = Some("^write_file$".to_string());
+        }
+        session.save_checkpoint();
+
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["batch", "write_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "writing",
+                    vec![live_call(
+                        "batch-1",
+                        "batch",
+                        serde_json::json!({"calls": [
+                            {"name": "write_file", "args": {"path": refused, "content": "guarded"}},
+                            {"name": "write_file", "args": {"path": created, "content": "written"}}
+                        ]}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        assert!(
+            !refused.exists(),
+            "a blocking hook must stop the call inside the batch"
+        );
+        assert_eq!(std::fs::read_to_string(&created).unwrap(), "written");
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(
+            content.contains("blocked by hook: guarded path"),
+            "{content}"
+        );
+        assert!(is_error);
+
+        session
+            .rewind_to(0, crate::agent::RewindMode::Code)
+            .unwrap();
+        assert!(
+            !created.exists(),
+            "rewind must undo a write made inside the batch"
+        );
+    }
+
+    fn batch_policy_session(decision: &str) -> (tempfile::TempDir, AgentSession) {
+        let scratch = workspace_scratch();
+        let policy_dir = scratch.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).unwrap();
+        std::fs::write(
+            policy_dir.join("policy.toml"),
+            format!("[[rules]]\ntool = \"batch\"\ndecision = \"{decision}\"\n"),
+        )
+        .unwrap();
+        let mut session = live_session();
+        session.install_workspace_file_authority(
+            crate::path_security::WorkspaceFileAuthority::new(scratch.path()).expect("authority"),
+        );
+        (scratch, session)
+    }
+
+    async fn run_one_batched_write(session: &mut AgentSession, path: &std::path::Path) {
+        run_live_turn(
+            session,
+            LiveTurnTools {
+                available: &["batch", "write_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "writing",
+                    vec![live_call(
+                        "batch-1",
+                        "batch",
+                        serde_json::json!({"calls": [
+                            {"name": "write_file", "args": {"path": path, "content": "written"}}
+                        ]}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn live_turn_stops_a_batch_the_policy_denies_before_any_call_in_it_runs() {
+        let (scratch, mut session) = batch_policy_session("deny");
+        let written = scratch.path().join("written.txt");
+
+        run_one_batched_write(&mut session, &written).await;
+
+        assert!(!written.exists(), "a denied batch must not run its calls");
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(content.contains("Tool `batch` is denied by"), "{content}");
+        assert!(content.contains(".agiworkforce/policy.toml"), "{content}");
+        assert!(is_error);
+    }
+
+    #[tokio::test]
+    async fn live_turn_asks_once_for_a_batch_the_policy_asks_about() {
+        let (scratch, mut session) = batch_policy_session("ask");
+        let written = scratch.path().join("written.txt");
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = asked.clone();
+        let callback: crate::tools::ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen = seen.clone();
+            Box::pin(async move {
+                seen.lock().expect("asked").push(request.kind);
+                crate::tui::approval_broker::ApprovalDecision::Deny
+            })
+        });
+        session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
+
+        run_one_batched_write(&mut session, &written).await;
+
+        assert!(!written.exists(), "a refused batch must not run its calls");
+        assert!(matches!(
+            asked.lock().expect("asked").as_slice(),
+            [crate::tui::approval_broker::ApprovalRequestKind::WorkspacePolicy { tool_name, .. }]
+                if tool_name == "batch"
+        ));
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(
+            content.contains("was not approved under the workspace policy"),
+            "{content}"
+        );
+        assert!(is_error);
+    }
+
     #[tokio::test]
     async fn live_turn_parallel_batch_forwards_raw_output_without_hook_transforms() {
         let scratch = workspace_scratch();
@@ -5043,6 +5526,97 @@ mod tests {
                 .iter()
                 .any(|message| message.text_content().contains("hook-note")),
             "the parallel path runs post-hooks for side effects only"
+        );
+    }
+
+    #[tokio::test]
+    async fn live_turn_commits_the_tool_result_persist_transform_on_every_dispatch_path() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "persist-marker-body").unwrap();
+
+        for concurrency_safe in [&["read_file"][..], &[][..]] {
+            let mut session = live_session();
+            session.hooks_config = hook_config(&[(
+                "ToolResultPersist",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"[redacted]\"}'".to_string(),
+            )]);
+
+            run_live_turn(
+                &mut session,
+                LiveTurnTools {
+                    available: &["read_file"],
+                    concurrency_safe,
+                    plan_mode_mutating: &[],
+                },
+                vec![
+                    live_completion(
+                        "reading",
+                        vec![live_call(
+                            "read-1",
+                            "read_file",
+                            serde_json::json!({"path": readable.to_string_lossy()}),
+                        )],
+                    ),
+                    live_completion("done", vec![]),
+                ],
+            )
+            .await;
+
+            let (content, is_error) = committed_result(&session, "read-1");
+            assert_eq!(
+                content,
+                "[redacted]",
+                "the ToolResultPersist transform must replace the committed output (parallel={})",
+                !concurrency_safe.is_empty()
+            );
+            assert!(!is_error);
+        }
+    }
+
+    #[tokio::test]
+    async fn live_turn_tool_result_persist_runs_after_the_post_tool_use_transform() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "ordering-body").unwrap();
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[
+            (
+                "PostToolUse",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"post-scrubbed\"}'".to_string(),
+            ),
+            (
+                "ToolResultPersist",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"persist-scrubbed\"}'".to_string(),
+            ),
+        ]);
+
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["read_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "reading",
+                    vec![live_call(
+                        "read-1",
+                        "read_file",
+                        serde_json::json!({"path": readable.to_string_lossy()}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        let (content, _) = committed_result(&session, "read-1");
+        assert_eq!(
+            content, "persist-scrubbed",
+            "the storage transform is the last word before the result enters history"
         );
     }
 
@@ -5184,6 +5758,18 @@ mod tests {
                 GenerationVerdict::Continues,
             );
         }
+    }
+
+    #[test]
+    fn an_answer_whose_stream_closed_before_a_stop_is_kept_and_named() {
+        assert_eq!(
+            judge_generation(&outcome("Half an ans", None, vec![])),
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::StreamEndedEarly),
+        );
+        assert_eq!(
+            IncompleteTurnCause::StreamEndedEarly.code(),
+            agiworkforce_protocol::developer_session::TurnFailureCode::StreamInterrupted,
+        );
     }
 
     #[test]
@@ -5354,6 +5940,63 @@ mod tests {
         assert!(written[0].contains("origin: local"), "{}", written[0]);
     }
 
+    #[tokio::test]
+    async fn a_memory_window_whose_summary_failed_to_save_is_retried_not_skipped() {
+        let home = tempfile::tempdir().expect("memory home");
+        let blocked = home.path().join("memories");
+        std::fs::write(&blocked, "a file where the memory directory belongs").unwrap();
+
+        let mut session = make_local_session();
+        session.messages.push(Message::text(
+            "user",
+            "I always prefer tabs for indentation.",
+        ));
+        session
+            .messages
+            .push(Message::text("assistant", "Noted, tabs it is."));
+        session.memory_window_due_at = std::time::Instant::now();
+
+        session.extract_memory_window(home.path(), &CliConfig::default());
+        for task in session.take_memory_consolidation_tasks() {
+            task.await.expect("extraction task");
+        }
+        assert!(
+            session
+                .unsummarized_messages()
+                .iter()
+                .any(|message| message.text_content().contains("prefer tabs")),
+            "a window whose summary was never written must stay pending for session end"
+        );
+
+        std::fs::remove_file(&blocked).unwrap();
+        session.messages.push(Message::text(
+            "user",
+            "We decided the rule is to never skip rustfmt.",
+        ));
+        session
+            .messages
+            .push(Message::text("assistant", "Understood."));
+        session.memory_window_due_at = std::time::Instant::now();
+
+        session.extract_memory_window(home.path(), &CliConfig::default());
+        for task in session.take_memory_consolidation_tasks() {
+            task.await.expect("extraction task");
+        }
+
+        let summaries = home.path().join("memories").join("session_summaries");
+        let written = std::fs::read_dir(&summaries)
+            .expect("summary dir")
+            .map(|entry| std::fs::read_to_string(entry.expect("entry").path()).expect("summary"))
+            .collect::<Vec<_>>();
+        assert_eq!(written.len(), 1, "{written:?}");
+        assert!(
+            written[0].contains("prefer tabs") && written[0].contains("rustfmt"),
+            "the retried window must cover the failed interval and the new one: {}",
+            written[0]
+        );
+        assert!(session.unsummarized_messages().is_empty());
+    }
+
     fn fixture_config(base_url: &str) -> CliConfig {
         let mut config = CliConfig::default();
         config.providers.insert(
@@ -5381,6 +6024,16 @@ mod tests {
         config: &CliConfig,
         first: models::CompletionResult,
     ) -> Result<Completion> {
+        settle_keeping_superseded_usage(session, config, first)
+            .await
+            .0
+    }
+
+    async fn settle_keeping_superseded_usage(
+        session: &mut AgentSession,
+        config: &CliConfig,
+        first: models::CompletionResult,
+    ) -> (Result<Completion>, agiworkforce_agent_core::UsageTotals) {
         let mut adapter = TurnHostAdapter {
             session,
             config,
@@ -5394,6 +6047,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let settled = adapter
@@ -5405,7 +6059,76 @@ mod tests {
                 "a provider request that was paid for stays on the turn's ledger"
             );
         }
-        settled
+        (settled, adapter.superseded_usage)
+    }
+
+    #[tokio::test]
+    async fn an_empty_generation_that_was_retried_stays_in_the_turn_receipt() {
+        let (base_url, _hits) = local_completion_fixture(vec![ANSWERED_STREAM]).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+
+        let (settled, superseded) =
+            settle_keeping_superseded_usage(&mut session, &config, empty_generation()).await;
+
+        let settled = settled.expect("the second attempt answered");
+        assert_eq!(superseded.input_tokens, 7);
+        assert_eq!(
+            settled.outcome.usage.input_tokens, 0,
+            "the replaced request is not folded into the final request's context size"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_side_request_made_by_a_tool_counts_toward_the_turn_budget() {
+        let priced = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0)
+            .expect("the catalog has a priced model")
+            .id
+            .clone();
+        let advisor = crate::cost_ledger::CompletionUsage {
+            model: priced,
+            input_tokens: 40_000,
+            output_tokens: 1_024,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            included_in_subscription: false,
+        };
+        let config = CliConfig::default();
+        let mut session = live_session();
+        let adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::new(),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 64,
+            first_on_chunk: None,
+            search_turn: false,
+            hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
+            incomplete: None,
+        };
+        let totals = agiworkforce_agent_core::UsageTotals::default();
+        assert_eq!(adapter.turn_cost_usd(&totals), 0.0);
+
+        let recorded = advisor.clone();
+        let (during, side_requests) = crate::cost_ledger::collect_side_requests(async {
+            crate::cost_ledger::record_side_request(recorded);
+            adapter.turn_cost_usd(&totals)
+        })
+        .await;
+        assert!(
+            (during - advisor.dollars()).abs() < 1e-12,
+            "the budget check sees the advisor's spend before the next completion"
+        );
+        assert_eq!(side_requests, vec![advisor]);
     }
 
     fn empty_generation() -> models::CompletionResult {
@@ -5530,6 +6253,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let settled = adapter
@@ -5577,6 +6301,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
 
@@ -5595,5 +6320,45 @@ mod tests {
                 .any(|notice| notice == &IncompleteTurnCause::OutputLimitReached.notice()),
             "the TUI must be told the answer was cut; queued: {queued:?}"
         );
+    }
+
+    fn teammate_turn(cost_usd: f64) -> crate::subagent::SubagentUsage {
+        crate::subagent::SubagentUsage {
+            model: "teammate-model".to_string(),
+            output_tokens: 10,
+            cost_usd,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_lead_counts_teammate_spend_and_shares_only_what_its_cap_leaves() {
+        let context = crate::context::gather_system_context();
+        let team = crate::teams::TeamManager::new();
+        let mut lead = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        lead.team_manager = Some(team.clone());
+        lead.max_budget_usd = Some(2.0);
+        lead.cost_ledger.total_usd = 0.5;
+        let mut teammate = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        teammate.team_manager = Some(team.clone());
+        teammate.team_identity = Some("researcher".to_string());
+
+        team.record_teammate_spend(teammate_turn(0.75));
+        teammate.settle_team_spend();
+        assert!(teammate.cost_ledger.total_usd.abs() < 1e-12);
+
+        lead.settle_team_spend();
+        assert!((lead.cost_ledger.total_usd - 1.25).abs() < 1e-12);
+        assert!((lead.cost_ledger.subagent_usd - 0.75).abs() < 1e-12);
+        let share = team
+            .turn_budget_usd(1)
+            .expect("the cap leaves headroom")
+            .expect("a capped lead caps its team");
+        assert!((share - 0.75).abs() < 1e-12);
+
+        team.record_teammate_spend(teammate_turn(0.75));
+        assert!(team.turn_budget_usd(1).is_err());
+        lead.settle_team_spend();
+        assert!((lead.cost_ledger.total_usd - 2.0).abs() < 1e-12);
     }
 }

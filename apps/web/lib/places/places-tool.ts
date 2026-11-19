@@ -222,7 +222,10 @@ function formatPlaceLine(place: PlaceRecord, index: number): string {
 
   const detail: string[] = [];
   if (place.address) detail.push(place.address);
-  if (place.hours?.length) detail.push(`Hours: ${place.hours.join('; ')}`);
+  if (place.hours?.length) {
+    const hoursLabel = place.hoursKind === 'regular' ? 'Regular hours' : 'Hours';
+    detail.push(`${hoursLabel}: ${place.hours.join('; ')}`);
+  }
   if (place.phone) detail.push(place.phone);
   if (place.website) detail.push(place.website);
   if (place.mapsUrl) detail.push(place.mapsUrl);

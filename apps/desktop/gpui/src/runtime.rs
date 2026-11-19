@@ -9,7 +9,8 @@ use agiworkforce_app_server::{
 };
 use agiworkforce_protocol::developer_session::{
     method, AcknowledgedResponse, AppServerCapabilities, AppServerClientInfo, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadSearchParams,
+    ThreadSearchResponse,
 };
 use anyhow::{Context, Result};
 use tokio::process::{Child, Command};
@@ -215,6 +216,29 @@ impl RuntimeSession {
                     cwd: Some(workspace.to_string_lossy().into_owned()),
                     include_archived,
                     include_cloud: false,
+                },
+            )
+            .await?;
+        Ok(response)
+    }
+
+    pub async fn search_sessions(
+        &mut self,
+        query: String,
+        include_archived: bool,
+    ) -> Result<ThreadSearchResponse> {
+        anyhow::ensure!(
+            self.workspace.is_some(),
+            "This connection has no coding workspace"
+        );
+        let response = self
+            .client
+            .request(
+                method::THREAD_SEARCH,
+                ThreadSearchParams {
+                    query,
+                    limit: Some(self.settings.session_page_size),
+                    include_archived,
                 },
             )
             .await?;

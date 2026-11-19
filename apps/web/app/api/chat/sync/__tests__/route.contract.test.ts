@@ -1,4 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+const { mockChatSyncGate } = vi.hoisted(() => ({
+  mockChatSyncGate: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+}));
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildChatSyncGateResponse: mockChatSyncGate,
+}));
 import {
   ChatSyncPullResponseSchema,
   ChatSyncPushResponseSchema,
@@ -260,6 +271,57 @@ describe('GET /api/chat/sync, shared cloud contract', () => {
   });
 });
 
+describe('/api/chat/sync, the workspace decides which clients may sync', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const refusal = () =>
+    new Response(
+      JSON.stringify({
+        error: { type: 'organization_policy', code: 'surface_sync_disabled', message: 'Off.' },
+      }),
+      { status: 403 },
+    );
+
+  it('asks about the client the credential is bound to and pulls nothing when it is refused', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user_contract_1',
+      organizationId: ORGANIZATION_ID,
+      surface: 'chrome',
+    } as never);
+    mockChatSyncGate.mockResolvedValueOnce(refusal());
+
+    const res = await GET(makeGet('0'));
+
+    expect(res.status).toBe(403);
+    expect(mockChatSyncGate).toHaveBeenCalledWith('user_contract_1', expect.anything(), 'chrome');
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing from a client whose cloud sync the administrator turned off', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user_contract_1',
+      organizationId: ORGANIZATION_ID,
+      surface: 'vscode',
+    } as never);
+    mockChatSyncGate.mockResolvedValueOnce(refusal());
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, title: 'Quarterly plan', baseVersion: '0' }],
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    expect(mockChatSyncGate).toHaveBeenCalledWith('user_contract_1', expect.anything(), 'vscode');
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/chat/sync, shared cloud contract', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -341,6 +403,41 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(statements.some((sql) => sql.includes('delete from public.shared_sessions'))).toBe(
       false,
     );
+  });
+
+  it('keeps the stored title when an update push carries none', async () => {
+    mockQuery.mockResolvedValue([]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, baseVersion: '45', pinned: true }],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const call = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_conversations'),
+    );
+    expect(String(call?.[0])).toContain(
+      'set title = case when incoming.has_title then incoming.title else existing.title end',
+    );
+    const pushed = JSON.parse(String((call?.[1] as unknown[])[1])) as Array<
+      Record<string, unknown>
+    >;
+    expect(pushed[0]).not.toHaveProperty('title');
+  });
+
+  it('rejects a push that creates a conversation without a title', async () => {
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, baseVersion: '0' }],
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('counts only new conversations and messages against the Free daily caps', async () => {

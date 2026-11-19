@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { IdentityProvider } from '@agiworkforce/identity';
 import { createError } from '@agiworkforce/utils';
@@ -68,7 +69,7 @@ export async function emitIdentitySecurityEvent(
     await notifyIdentitySecurityEvent(db, {
       userId: input.userId,
       event: input.event,
-      subjectRef: input.noticeRef ?? input.subjectRef ?? null,
+      subjectRef: input.noticeRef ?? input.subjectRef ?? randomUUID(),
       context: input.context ?? null,
     });
   } catch (error) {

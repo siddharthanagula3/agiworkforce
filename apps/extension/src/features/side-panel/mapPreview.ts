@@ -31,7 +31,9 @@ function loadMapTileConfig(access: AnswerFileAccess): Promise<MapTileConfig | nu
     .then((blob) => blob.text())
     .then((text) => {
       const value: unknown = JSON.parse(text);
-      return parseMapTileConfig(value);
+      const config = parseMapTileConfig(value);
+      if (!config) configRequest = null;
+      return config;
     })
     .catch(() => {
       configRequest = null;

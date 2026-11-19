@@ -4,7 +4,7 @@ title: Run a task with AGI Work
 path: /agi-work
 category: work
 tags: agi work, work, agent, task, autonomous, session dock, outputs, progress, sources, approvals, work history, deliverables
-updated: 2026-10-12
+updated: 2026-11-11
 description: How AGI Work runs a multi-step task, shows progress, asks for approvals and keeps past sessions.
 scope: public
 ---
@@ -14,7 +14,7 @@ scope: public
 AGI Work is the mode for a task rather than a question: you describe a
 multi-step job and what it should deliver, and the session plans, works and
 produces files. The composer switches between **Chat**, for quick questions and
-conversation, and **AGI Work**, where the placeholder asks you to describe a
+conversation, and **Work**, where the placeholder asks you to describe a
 multi-step task and what it should deliver.
 
 ## Watching a session

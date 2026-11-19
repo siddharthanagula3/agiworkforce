@@ -1,12 +1,7 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import {
-  getModelReasoning,
-  isRoutingProfileChoice,
-  normalizeModelId,
-  type RoutingProfileChoice,
-} from '@agiworkforce/types';
+import { getModelReasoning, normalizeModelId } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
   DEFAULT_LOCAL_MODEL_ID,
@@ -25,7 +20,6 @@ import { startFavouritesSync, type FavouriteChanges } from './useFavouritesSync'
 
 const MAX_RECENT = 5;
 const CLOUD_PROVIDER_ID = 'cloud_managed';
-const DEFAULT_ROUTING_PROFILE: RoutingProfileChoice = 'auto';
 
 function isCloudUnlocked(): boolean {
   return useWaitlistStore.getState().cloudUnlocked;
@@ -82,7 +76,6 @@ function modelRequiresThinking(modelId: string): boolean {
 interface ModelState {
   selectedModel: string;
   selectedProvider: string;
-  routingProfile: RoutingProfileChoice;
   favorites: string[];
   favoriteChanges: FavouriteChanges;
   favoritesSyncedAccountId: string | null;
@@ -91,7 +84,6 @@ interface ModelState {
   thinkingEnabledPerModel: Record<string, boolean>;
 
   setModel: (modelId: string) => void;
-  setRoutingProfile: (profile: RoutingProfileChoice) => void;
   toggleFavorite: (modelId: string) => void;
   setThinkingMode: (enabled: boolean) => void;
   toggleThinkingForModel: (modelId: string) => void;
@@ -103,7 +95,6 @@ export const useModelStore = create<ModelState>()(
     (set, get) => ({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
       selectedProvider: 'local',
-      routingProfile: DEFAULT_ROUTING_PROFILE,
       favorites: [],
       favoriteChanges: {},
       favoritesSyncedAccountId: null,
@@ -132,10 +123,6 @@ export const useModelStore = create<ModelState>()(
           thinkingModeEnabled,
           thinkingEnabledPerModel,
         });
-      },
-
-      setRoutingProfile: (profile: RoutingProfileChoice) => {
-        set({ routingProfile: profile });
       },
 
       toggleFavorite: (modelId: string) => {
@@ -241,9 +228,6 @@ export const useModelStore = create<ModelState>()(
           ...persistedState,
           selectedModel,
           selectedProvider,
-          routingProfile: isRoutingProfileChoice(persistedState.routingProfile)
-            ? persistedState.routingProfile
-            : DEFAULT_ROUTING_PROFILE,
           favorites: filterSelectableModelIds(persistedState.favorites ?? []),
           favoriteChanges: filterFavouriteChanges(persistedState.favoriteChanges),
           favoritesSyncedAccountId:

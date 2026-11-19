@@ -1,8 +1,10 @@
 import 'server-only';
 
 import type { AgentEvent, AgentEventStopReason, JsonValue } from '@agiworkforce/types/protocol';
+import { WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import {
+  CODEX_TOOL_ITEM_TYPE,
   HARNESS_MAX_TURNS,
   createExecutorProcessPort,
   harnessRunDeadlineMs,
@@ -21,9 +23,12 @@ import type {
   CloudCodeAgentResult,
   CloudCodeAgentStopReason,
 } from './cloud-code-agent-loop';
+import { CLOUD_CODE_RUN_COMMAND_TOOL } from './cloud-code-agent-tools';
+import { CLOUD_CODE_DELETE_FILE_TOOL, formatStepExitMarker } from './cloud-code-result';
 
 const HARNESS_UNAVAILABLE_MESSAGE = 'This sandbox cannot run the selected coding harness.';
 const MAX_TOOL_NAME_LENGTH = 64;
+const FILE_CHANGE_DELETE_KIND = 'delete';
 
 function mapStopReason(reason: AgentEventStopReason): CloudCodeAgentStopReason {
   if (reason === 'end-turn') return 'done';
@@ -54,38 +59,106 @@ function asText(value: JsonValue): string {
   return value === null ? '' : JSON.stringify(value);
 }
 
-export function createHarnessStepProjector(): (event: AgentEvent) => CloudCodeAgentEvent | null {
+function relativeToWorkspace(path: string, workspacePath: string | undefined): string {
+  if (!workspacePath) return path;
+  const prefix = workspacePath.endsWith('/') ? workspacePath : `${workspacePath}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+}
+
+function projectedToolName(nativeName: string): string {
+  const name =
+    nativeName === CODEX_TOOL_ITEM_TYPE.commandExecution ? CLOUD_CODE_RUN_COMMAND_TOOL : nativeName;
+  return name.slice(0, MAX_TOOL_NAME_LENGTH);
+}
+
+function projectCommandEnd(
+  event: Extract<AgentEvent, { type: 'tool-execution-end' }>,
+  args: Record<string, unknown>,
+  stepIndex: number,
+): CloudCodeAgentEvent {
+  const item = asRecord(event.output);
+  const command = typeof args['command'] === 'string' ? args['command'] : item['command'];
+  const exitCode = Number.isInteger(item['exit_code']) ? (item['exit_code'] as number) : null;
+  const aggregated = typeof item['aggregated_output'] === 'string' ? item['aggregated_output'] : '';
+  const marker = formatStepExitMarker(exitCode);
+  return {
+    type: 'tool-end',
+    stepIndex,
+    toolName: projectedToolName(event.name),
+    toolArgs: typeof command === 'string' ? { ...args, command } : args,
+    output: aggregated ? `${aggregated.trimEnd()}\n${marker}` : marker,
+    isError: event.isError,
+  };
+}
+
+function projectFileChangeEnds(
+  event: Extract<AgentEvent, { type: 'tool-execution-end' }>,
+  stepIndex: number,
+  workspacePath: string | undefined,
+): CloudCodeAgentEvent[] {
+  const changes = asRecord(event.output)['changes'];
+  const ends: CloudCodeAgentEvent[] = [];
+  for (const change of Array.isArray(changes) ? changes : []) {
+    const { path, kind } = asRecord(change as JsonValue);
+    if (typeof path !== 'string' || !path.trim()) continue;
+    const deleted = kind === FILE_CHANGE_DELETE_KIND;
+    ends.push({
+      type: 'tool-end',
+      stepIndex,
+      toolName: deleted ? CLOUD_CODE_DELETE_FILE_TOOL : WRITE_FILE_TOOL,
+      toolArgs: { path: relativeToWorkspace(path.trim(), workspacePath) },
+      output: typeof kind === 'string' ? kind : '',
+      isError: event.isError,
+    });
+  }
+  return ends;
+}
+
+export function createHarnessStepProjector(
+  workspacePath?: string,
+): (event: AgentEvent) => CloudCodeAgentEvent[] {
   const argsByToolCall = new Map<string, Record<string, unknown>>();
   let stepIndex = 0;
 
   return (event) => {
     if (event.type === 'text-delta') {
-      return { type: 'assistant-text', stepIndex, text: event.delta };
+      return [{ type: 'assistant-text', stepIndex, text: event.delta }];
     }
     if (event.type === 'tool-execution-start') {
       const args = asRecord(event.input);
       argsByToolCall.set(event.toolCallId, args);
       stepIndex += 1;
-      return {
-        type: 'tool-start',
-        stepIndex,
-        toolName: event.name.slice(0, MAX_TOOL_NAME_LENGTH),
-        toolArgs: args,
-      };
+      return [
+        {
+          type: 'tool-start',
+          stepIndex,
+          toolName: projectedToolName(event.name),
+          toolArgs: args,
+        },
+      ];
     }
     if (event.type === 'tool-execution-end') {
       const args = argsByToolCall.get(event.toolCallId) ?? {};
       argsByToolCall.delete(event.toolCallId);
-      return {
-        type: 'tool-end',
-        stepIndex,
-        toolName: event.name.slice(0, MAX_TOOL_NAME_LENGTH),
-        toolArgs: args,
-        output: asText(event.output),
-        isError: event.isError,
-      };
+      if (event.name === CODEX_TOOL_ITEM_TYPE.commandExecution) {
+        return [projectCommandEnd(event, args, stepIndex)];
+      }
+      if (event.name === CODEX_TOOL_ITEM_TYPE.fileChange) {
+        const ends = projectFileChangeEnds(event, stepIndex, workspacePath);
+        if (ends.length > 0) return ends;
+      }
+      return [
+        {
+          type: 'tool-end',
+          stepIndex,
+          toolName: projectedToolName(event.name),
+          toolArgs: args,
+          output: asText(event.output),
+          isError: event.isError,
+        },
+      ];
     }
-    return null;
+    return [];
   };
 }
 

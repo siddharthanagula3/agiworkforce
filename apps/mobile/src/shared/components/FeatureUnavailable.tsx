@@ -6,6 +6,7 @@ import { Sparkles, ArrowLeft, Lock, CreditCard, ShieldOff } from 'lucide-react-n
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 export type UnavailableReason = 'unsupported' | 'permission' | 'entitlement' | 'policy';
 
@@ -34,7 +35,7 @@ function bodyFor(reason: UnavailableReason): string {
     return 'Your role in this workspace does not include it. A workspace admin can grant it.';
   }
   if (reason === 'entitlement') {
-    return 'It is available on a higher plan. Nothing you have already made is affected.';
+    return `${NATIVE_PURCHASES_AVAILABLE ? 'It is available on a higher plan.' : 'It isn’t included in your plan.'} Nothing you have already made is affected.`;
   }
   if (reason === 'policy') {
     return 'An administrator turned it off for everyone here. Nothing you have already made is affected.';

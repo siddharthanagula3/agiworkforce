@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, X } from '@agiworkforce/icons';
 import { Button } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { cn } from '@shared/lib/utils';
 
 export interface EditableMessageProps {
@@ -59,6 +60,7 @@ export function EditableMessage({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (isImeComposingKey(e.nativeEvent)) return;
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         handleSave();

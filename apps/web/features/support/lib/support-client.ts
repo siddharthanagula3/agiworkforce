@@ -15,6 +15,10 @@ import {
   type SupportAvailableAction,
   type SupportHandoffView,
   type SupportPresenceView,
+  type HandoffAccountContext,
+  type HandoffAttemptedAction,
+  type HandoffTranscriptTurn,
+  type SupportHandoffClaimedView,
   type SupportHandoffMessageView,
   type SupportHandoffQueueEntryView,
   type SupportHandoffSendResult,
@@ -27,6 +31,7 @@ import {
   SUPPORT_ACTIONS_AVAILABLE_PATH,
   SUPPORT_ACTIONS_CONFIRM_PATH,
   SUPPORT_ACTIONS_PROPOSE_PATH,
+  SUPPORT_AGENT_ACTIVE_PATH,
   SUPPORT_AGENT_QUEUE_PATH,
   SUPPORT_ASK_PATH,
   SUPPORT_HANDOFF_AVAILABILITY_PATH,
@@ -851,9 +856,88 @@ export async function fetchAgentQueue(): Promise<SupportHandoffQueueEntryView[] 
     .filter((entry): entry is SupportHandoffQueueEntryView => entry !== null);
 }
 
+const TRANSCRIPT_ROLES: ReadonlySet<string> = new Set(['user', 'assistant', 'system']);
+const ACTION_OUTCOMES: ReadonlySet<string> = new Set([
+  'succeeded',
+  'failed',
+  'refused',
+  'confirmation_pending',
+]);
+
+function listOf(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function toTranscriptTurn(value: unknown): HandoffTranscriptTurn | null {
+  if (!isRecord(value)) return null;
+  const role = str(value['role']);
+  const content = typeof value['content'] === 'string' ? value['content'] : null;
+  if (!role || !TRANSCRIPT_ROLES.has(role) || !content) return null;
+  return { role: role as HandoffTranscriptTurn['role'], content, at: str(value['at']) ?? '' };
+}
+
+function toAttemptedAction(value: unknown): HandoffAttemptedAction | null {
+  if (!isRecord(value)) return null;
+  const action = str(value['action']);
+  const outcome = str(value['outcome']);
+  if (!action || !outcome || !ACTION_OUTCOMES.has(outcome)) return null;
+  const detail = str(value['detail']);
+  return {
+    action,
+    outcome: outcome as HandoffAttemptedAction['outcome'],
+    ...(detail ? { detail } : {}),
+    at: str(value['at']) ?? '',
+  };
+}
+
+function toAccountContext(value: unknown): HandoffAccountContext | null {
+  if (!isRecord(value)) return null;
+  const percentage = value['usagePercentage'];
+  const remaining = value['hasUsageRemaining'];
+  return {
+    signedIn: value['signedIn'] === true,
+    userId: str(value['userId']),
+    planTier: str(value['planTier']),
+    subscriptionStatus: str(value['subscriptionStatus']),
+    currentPeriodEnd: str(value['currentPeriodEnd']),
+    usagePercentage:
+      typeof percentage === 'number' && Number.isFinite(percentage) ? percentage : null,
+    usageResetAt: str(value['usageResetAt']),
+    hasUsageRemaining: typeof remaining === 'boolean' ? remaining : null,
+  };
+}
+
+function toClaimedView(
+  value: unknown,
+  fallbackSessionId: string | null,
+): SupportHandoffClaimedView | null {
+  if (!isRecord(value)) return null;
+  const sessionId = str(value['sessionId']) ?? fallbackSessionId;
+  if (!sessionId) return null;
+  return {
+    sessionId,
+    referenceId: str(value['referenceId']) ?? sessionId,
+    summary: str(value['summary']) ?? '',
+    contactEmail: str(value['contactEmail']) ?? '',
+    pollIntervalMs: Math.max(1000, num(value['pollIntervalMs'], 3000)),
+    transcript: listOf(value['transcript'])
+      .map(toTranscriptTurn)
+      .filter((turn): turn is HandoffTranscriptTurn => turn !== null),
+    attemptedActions: listOf(value['attemptedActions'])
+      .map(toAttemptedAction)
+      .filter((action): action is HandoffAttemptedAction => action !== null),
+    citations: listOf(value['citations']).flatMap((citation) => {
+      if (!isRecord(citation)) return [];
+      const title = str(citation['title']);
+      const url = str(citation['url']);
+      return title !== null && url !== null ? [{ title, url }] : [];
+    }),
+    accountContext: toAccountContext(value['accountContext']),
+  };
+}
+
 export type SupportHandoffClaimResult =
-  | { ok: true; sessionId: string; summary: string; contactEmail: string; pollIntervalMs: number }
-  | { ok: false; message: string };
+  { ok: true; session: SupportHandoffClaimedView } | { ok: false; message: string };
 
 export async function claimHandoffSession(sessionId: string): Promise<SupportHandoffClaimResult> {
   let response: Response;
@@ -876,13 +960,28 @@ export async function claimHandoffSession(sessionId: string): Promise<SupportHan
     return { ok: false, message: message ?? 'Could not take that request.' };
   }
 
-  return {
-    ok: true,
-    sessionId: str(payload['sessionId']) ?? sessionId,
-    summary: str(payload['summary']) ?? '',
-    contactEmail: str(payload['contactEmail']) ?? '',
-    pollIntervalMs: Math.max(1000, num(payload['pollIntervalMs'], 3000)),
-  };
+  const session = toClaimedView(payload, sessionId);
+  if (!session) return { ok: false, message: 'Could not take that request.' };
+  return { ok: true, session };
+}
+
+export async function fetchAgentActiveSessions(): Promise<SupportHandoffClaimedView[] | null> {
+  let response: Response;
+  try {
+    response = await fetch(SUPPORT_AGENT_ACTIVE_PATH, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const body = await readJson(response);
+  if (!isRecord(body) || !Array.isArray(body['sessions'])) return null;
+  return body['sessions']
+    .map((entry) => toClaimedView(entry, null))
+    .filter((entry): entry is SupportHandoffClaimedView => entry !== null);
 }
 
 /** Re-exported so tests and components share one citation normalizer. */

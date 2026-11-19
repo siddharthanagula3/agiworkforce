@@ -685,7 +685,7 @@ describe('TwoFactorEnrollmentPanel owned lifetime (source-authored, unrun fixtur
         expect(screen.getByRole('button', { name: /turn off two-factor/i })).toBeEnabled();
       else
         expect(
-          screen.getByText(/Authenticator apps and backup codes are temporarily unavailable/i),
+          screen.getByText(/Authenticator apps are temporarily unavailable/i),
         ).toBeInTheDocument();
       fireEvent.click(control);
       expect(mutationCalls()).toHaveLength(0);

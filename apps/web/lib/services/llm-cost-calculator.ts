@@ -190,7 +190,7 @@ function resolveUnpricedFallback(provider: string, model: string): ModelPricing 
 }
 const DEFAULT_ESTIMATED_COMPLETION_TOKENS = 1000;
 
-const PROVIDER_ALIASES: Record<string, string> = {
+export const PROVIDER_ALIASES: Readonly<Record<string, string>> = {
   grok: 'xai',
   x_ai: 'xai',
   zhipuai: 'zhipu',
@@ -208,6 +208,13 @@ export function normalizeProviderId(provider: string | null | undefined): string
 
   const normalizedProvider = provider.trim().toLowerCase();
   return PROVIDER_ALIASES[normalizedProvider] ?? normalizedProvider;
+}
+
+export function normalizeRouteId(routeId: string): string {
+  const separator = routeId.indexOf('/');
+  if (separator <= 0) return routeId;
+  const provider = normalizeProviderId(routeId.slice(0, separator)) ?? '';
+  return `${provider}${routeId.slice(separator)}`;
 }
 
 export class LLMCostCalculator {

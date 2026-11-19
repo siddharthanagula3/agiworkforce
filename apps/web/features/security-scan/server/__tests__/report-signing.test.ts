@@ -51,6 +51,21 @@ describe('security scan report signing', () => {
     ).toEqual(REPORT);
   });
 
+  it('keeps an approved finding delivery outcome through sealing', () => {
+    const delivered: SecurityScanReport = {
+      ...REPORT,
+      findings: REPORT.findings.map((finding) => ({
+        ...finding,
+        state: 'approved' as const,
+        decidedAt: '2026-10-22T10:03:00.000Z',
+        delivery: { status: 'failed' as const, pullRequestUrl: null, error: 'Push it yourself.' },
+      })),
+    };
+    expect(
+      openSecurityScanReport(BINDING, sealSecurityScanReport(BINDING, delivered))?.report,
+    ).toEqual(delivered);
+  });
+
   it('refuses a report written for another user or session', () => {
     const sealed = sealSecurityScanReport(BINDING, REPORT);
     expect(openSecurityScanReport({ ...BINDING, userId: 'user-2' }, sealed)).toBeNull();

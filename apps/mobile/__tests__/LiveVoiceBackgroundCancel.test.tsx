@@ -69,6 +69,7 @@ jest.mock('@/src/features/voice/services/liveVoiceAvailability', () => ({
 
 jest.mock('@/src/features/voice/services/voiceInput', () => ({
   requestMicPermission: async () => true,
+  requestMicrophoneOnlyPermission: async () => true,
 }));
 
 jest.mock('@/stores/chatStore', () => ({
@@ -242,5 +243,49 @@ describe('live voice session backgrounded mid-connect', () => {
       capturedCallbacks['onInterrupted']?.();
     });
     expect(getByTestId('status').props.children).toBe('idle');
+  });
+
+  it('hands a mute chosen before the session exists to the session being built', async () => {
+    let startOptions!: { isMuted: () => boolean };
+    let resolveStart: (session: unknown) => void = () => undefined;
+    mockStart.mockImplementation((options: typeof startOptions) => {
+      startOptions = options;
+      return new Promise((resolve) => {
+        resolveStart = resolve;
+      });
+    });
+    let toggle: () => void = () => undefined;
+    function MuteHarness() {
+      const controller = useLiveVoiceSession({
+        active: true,
+        executionMode: 'cloud',
+        conversationId: 'conv-1',
+        model: 'test-model',
+        ensureConversation: async () => 'conv-1',
+        onEnded: jest.fn(),
+      });
+      toggle = controller.toggleMute;
+      return <Text testID="muted">{String(controller.muted)}</Text>;
+    }
+    const view = render(<MuteHarness />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalled());
+    expect(startOptions.isMuted()).toBe(false);
+
+    await act(async () => {
+      toggle();
+    });
+    expect(view.getByTestId('muted').props.children).toBe('true');
+    expect(startOptions.isMuted()).toBe(true);
+
+    await act(async () => {
+      toggle();
+    });
+    expect(startOptions.isMuted()).toBe(false);
+
+    await act(async () => {
+      toggle();
+      resolveStart(fakeSession('s-mute'));
+    });
+    expect(startOptions.isMuted()).toBe(true);
   });
 });

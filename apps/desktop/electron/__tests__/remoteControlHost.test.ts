@@ -7,6 +7,7 @@ import {
   deriveDispatchKey,
   signDispatchEnvelope,
   verifyDispatchEnvelope,
+  type DispatchTaskPages,
   type RemoteApprovalOutcome,
   type RemotePairingDisplay,
   type RemotePhoneToConfirm,
@@ -22,6 +23,7 @@ let clientOptions: SignalingClientOptions | null;
 let signals: Array<{ kind: string; payload: Record<string, unknown> }>;
 const close = vi.fn();
 let pairings: Array<RemotePairingDisplay | null>;
+let relayRefuses: (payload: Record<string, unknown>) => boolean;
 const confirmPhone = vi.fn<(phone: RemotePhoneToConfirm) => Promise<boolean>>();
 
 const code = {
@@ -33,10 +35,15 @@ const code = {
   readDiff: vi.fn(async () => null),
 };
 
-function makeHost(allowInsecureLoopback = false, allowRelayUrl?: (wsUrl: string) => boolean) {
+function makeHost(
+  allowInsecureLoopback = false,
+  allowRelayUrl?: (wsUrl: string) => boolean,
+  dispatchPages?: DispatchTaskPages,
+) {
   return createRemoteControlHost({
     allowInsecureLoopback,
     allowRelayUrl,
+    dispatchPages,
     code,
     deviceName: () => 'Studio Mac',
     appVersion: () => '1.8.0',
@@ -50,6 +57,7 @@ function makeHost(allowInsecureLoopback = false, allowRelayUrl?: (wsUrl: string)
       clientOptions = options;
       return {
         sendSignal: (kind, payload) => {
+          if (relayRefuses(payload as Record<string, unknown>)) return false;
           signals.push({ kind, payload: payload as Record<string, unknown> });
           return true;
         },
@@ -87,6 +95,7 @@ beforeEach(() => {
   clientOptions = null;
   signals = [];
   pairings = [];
+  relayRefuses = () => false;
   vi.clearAllMocks();
   confirmPhone.mockResolvedValue(true);
 });
@@ -856,5 +865,102 @@ describe('remote control host in the desktop main process', () => {
     await flush();
     clientOptions?.onEvent({ type: 'error', role: 'mobile' });
     expect(connected.state().status).toBe('connected');
+  });
+
+  describe('a dispatched task whose report is queued behind a later one', () => {
+    const SECOND_SALT = '0f1e2d3c4b5a6978';
+
+    async function dispatchTaskToPage() {
+      const deliver = vi.fn(() => true);
+      const host = makeHost(false, undefined, { current: () => 7, deliver });
+      host.start(startRequest());
+      const secret = presentedSecret();
+      const phoneMetadata = {
+        dispatchSalt: SALT,
+        deviceType: 'mobile',
+        app: 'agiworkforce-mobile',
+      };
+      clientOptions?.onEvent({ type: 'peer_ready', role: 'mobile', metadata: phoneMetadata });
+      await flush();
+      const phone = createDispatchSession(deriveDispatchKey(CODE, SALT, secret));
+      const envelope = signDispatchEnvelope(phone, 'dispatch.task.create', {
+        action: 'dispatch.task.create',
+        version: 1,
+        requestId: 'task-1',
+        prompt: 'summarise the quarter',
+        sentAt: new Date().toISOString(),
+      });
+      clientOptions?.onEvent({
+        type: 'signal',
+        from: 'mobile',
+        kind: 'control',
+        payload: { action: 'dispatch.task.create', data: envelope },
+      });
+      await flush();
+      expect(deliver).toHaveBeenCalledTimes(1);
+      return { host, secret, phoneMetadata };
+    }
+
+    async function reconnectAndProve(secret: string, phoneMetadata: Record<string, unknown>) {
+      clientOptions?.onEvent({ type: 'peer_left', role: 'mobile' });
+      clientOptions?.onEvent({
+        type: 'peer_ready',
+        role: 'mobile',
+        metadata: { ...phoneMetadata, dispatchSalt: SECOND_SALT },
+      });
+      await flush();
+      signals = [];
+      const { phone } = await signAsPhone(secret, SECOND_SALT);
+      await flush();
+      return phone;
+    }
+
+    it('keeps the task until the terminal report itself has been delivered', async () => {
+      const { host, secret, phoneMetadata } = await dispatchTaskToPage();
+      let statusSends = 0;
+      relayRefuses = (payload) => {
+        if (payload['action'] !== 'dispatch.task.status') return false;
+        statusSends += 1;
+        return statusSends === 2;
+      };
+
+      expect(host.reportDispatchTask(7, { requestId: 'task-1', status: 'running' })).toBe(true);
+      expect(
+        host.reportDispatchTask(7, {
+          requestId: 'task-1',
+          status: 'completed',
+          result: 'the quarter went well',
+        }),
+      ).toBe(true);
+      await flush();
+      expect(statusSends).toBe(2);
+
+      const phone = await reconnectAndProve(secret, phoneMetadata);
+      const statuses = signals.filter(
+        (signal) => signal.payload['action'] === 'dispatch.task.status',
+      );
+      expect(statuses).toHaveLength(1);
+      const verified = verifyDispatchEnvelope(phone, statuses[0]?.payload['data']);
+      expect(verified).toMatchObject({ ok: true });
+      expect(verified.ok && verified.envelope.payload).toMatchObject({
+        requestId: 'task-1',
+        status: 'completed',
+        result: 'the quarter went well',
+      });
+    });
+
+    it('forgets the task once its terminal report has been delivered', async () => {
+      const { host, secret, phoneMetadata } = await dispatchTaskToPage();
+
+      host.reportDispatchTask(7, { requestId: 'task-1', status: 'running' });
+      host.reportDispatchTask(7, { requestId: 'task-1', status: 'completed', result: 'done' });
+      await flush();
+
+      await reconnectAndProve(secret, phoneMetadata);
+      expect(
+        signals.filter((signal) => signal.payload['action'] === 'dispatch.task.status'),
+      ).toEqual([]);
+      expect(host.reportDispatchTask(7, { requestId: 'task-1', status: 'running' })).toBe(false);
+    });
   });
 });

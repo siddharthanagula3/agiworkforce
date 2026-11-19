@@ -29,6 +29,7 @@ describe('generated-image Library projection', () => {
     expect(collectGeneratedImages([conversation], { [conversation.id]: [message] })).toEqual([
       expect.objectContaining({
         id: 'message-1',
+        assetId: '22222222-2222-4222-8222-222222222222',
         imageUrl: '/api/files/22222222-2222-4222-8222-222222222222',
         prompt: 'A polished enterprise launch',
         sourceLabel: 'Enterprise launch',
@@ -57,5 +58,24 @@ describe('generated-image Library projection', () => {
         ],
       }),
     ).toEqual([]);
+  });
+
+  it('targets the media asset behind the durable path, never the message identity', () => {
+    const message: ChatMessage = {
+      id: 'message-1',
+      conversationId: conversation.id,
+      role: 'assistant',
+      content: 'Generated image',
+      createdAt: '2026-07-26T10:04:00.000Z',
+      type: 'image',
+      imageUrl: '/api/files/AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+      imageGenPersisted: true,
+      imageGenStatus: 'completed',
+    };
+
+    const [image] = collectGeneratedImages([conversation], { [conversation.id]: [message] });
+
+    expect(image.id).toBe('message-1');
+    expect(image.assetId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
   });
 });

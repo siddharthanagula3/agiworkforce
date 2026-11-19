@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { AgiCodeLensProvider } from '../features/code-lens/codeLensProvider';
 
 const token = { isCancellationRequested: false } as vscode.CancellationToken;
@@ -151,7 +152,7 @@ describe('code lenses, the lens set on a declaration', () => {
 
   it('gives every lens a tooltip naming the product', () => {
     for (const lens of lensesFor(lines, 'typescript')) {
-      expect(lens.command?.tooltip, lens.command?.command).toMatch(/AGI Code/);
+      expect(lens.command?.tooltip, lens.command?.command).toContain(PRODUCT_NAMES.code);
     }
   });
 

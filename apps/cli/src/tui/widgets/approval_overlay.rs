@@ -15,8 +15,8 @@
 //! │    @@ -1,3 +1,5 @@                                                           │
 //! │    +fn added() {}                                                            │
 //! │  lines 1-2 of 212 · scroll to the end before allowing                        │
-//! │  [ Yes ]  [ No ]  [ Allow Session ]  [ Always Allow ]  [ Deny All ]          │
-//! │  [ Allow All ]                                                               │
+//! │  [ y Yes ]  [ n No ]  [ s Allow Session ]  [ a Always allow ]                │
+//! │  [ d Deny All ]  [ t Allow All ]                                             │
 //! │  Run it this once. Tab adds a note for the agent.                            │
 //! │  ↑/↓ PgUp/PgDn Home/End scroll   ←/→ move   Enter confirm   Esc = No         │
 //! └──────────────────────────────────────────────────────────────────────────────┘
@@ -89,7 +89,7 @@ impl ApprovalChoice {
             Self::Yes => " Yes ",
             Self::No => " No ",
             Self::AllowSession => " Allow Session ",
-            Self::AlwaysAllow => " Always Allow ",
+            Self::AlwaysAllow => " Always allow ",
             Self::DenyAll => " Deny All ",
             Self::AllowAll => " Allow All ",
         }
@@ -102,7 +102,9 @@ impl ApprovalChoice {
                 "Skip this call; the agent carries on. Tab adds a note saying what to do instead."
             }
             Self::AllowSession => "Allow it without asking again until this session ends.",
-            Self::AlwaysAllow => "Save a rule so it is always allowed.",
+            Self::AlwaysAllow => {
+                "Save a permanent rule: it runs without asking, now and in later sessions."
+            }
             Self::DenyAll => "Refuse this and everything else the agent asks this turn.",
             Self::AllowAll => {
                 "Allow this and the rest of this turn's requests, except high-risk ones."
@@ -110,9 +112,42 @@ impl ApprovalChoice {
         }
     }
 
+    pub fn key(self) -> char {
+        match self {
+            Self::Yes => 'y',
+            Self::No => 'n',
+            Self::AllowSession => 's',
+            Self::AlwaysAllow => 'a',
+            Self::DenyAll => 'd',
+            Self::AllowAll => 't',
+        }
+    }
+
+    fn button(self) -> String {
+        format!("[ {} {}]", self.key(), self.label().trim_start())
+    }
+
     fn takes_note(self) -> bool {
         matches!(self, Self::Yes | Self::No)
     }
+}
+
+pub(crate) fn approval_key_help() -> String {
+    let mut help = String::from("\nTool approval keys:\n");
+    for choice in CHOICES {
+        help.push_str(&format!(
+            "  {:<14} {}: {}\n",
+            choice.key(),
+            choice.label().trim(),
+            choice.description()
+        ));
+    }
+    help.push_str(&format!("  {:<14} No, the same as n\n", "Esc"));
+    help.push_str(&format!(
+        "  {:<14} Stop the turn; the call does not run\n",
+        "Ctrl-C"
+    ));
+    help
 }
 
 const CHOICES: [ApprovalChoice; 6] = [
@@ -215,6 +250,7 @@ pub struct ApprovalOverlayState {
     pub note_choice: Option<ApprovalChoice>,
     pub editing_note: bool,
     pub always_allow_unavailable: bool,
+    pub allow_session_unavailable: bool,
     /// What the request acts on. Drawn above the detail and never scrolled away.
     targets: Vec<String>,
     scroll: ScrollGate,
@@ -234,6 +270,7 @@ impl Default for ApprovalOverlayState {
             note_choice: None,
             editing_note: false,
             always_allow_unavailable: false,
+            allow_session_unavailable: false,
             targets: Vec::new(),
             scroll: ScrollGate::default(),
             refused_unread: false,
@@ -260,6 +297,7 @@ impl ApprovalOverlayState {
         self.note_choice = None;
         self.editing_note = false;
         self.always_allow_unavailable = false;
+        self.allow_session_unavailable = false;
         self.targets = Vec::new();
         self.scroll.reset();
         self.refused_unread = false;
@@ -290,7 +328,11 @@ impl ApprovalOverlayState {
     }
 
     fn offered(&self, index: usize) -> bool {
-        !(self.always_allow_unavailable && CHOICES[index] == ApprovalChoice::AlwaysAllow)
+        match CHOICES[index] {
+            ApprovalChoice::AlwaysAllow => !self.always_allow_unavailable,
+            ApprovalChoice::AllowSession => !self.allow_session_unavailable,
+            _ => true,
+        }
     }
 
     fn step(&mut self, forward: bool, wrap: bool) {
@@ -356,7 +398,7 @@ impl ApprovalOverlayState {
             .enumerate()
             .filter(|(index, _)| self.offered(*index))
         {
-            let cell = display_width(choice.label()) + 4;
+            let cell = display_width(&choice.button()) + 2;
             let row_is_empty = rows.last().is_none_or(Vec::is_empty);
             if width + cell > max_cols && !row_is_empty {
                 rows.push(Vec::new());
@@ -608,7 +650,7 @@ impl ApprovalOverlayState {
                     (false, false) if choice.approves() && !allowing_is_open => muted,
                     (false, false) => Style::default(),
                 };
-                spans.push(Span::styled(format!("[{}]", choice.label()), style));
+                spans.push(Span::styled(choice.button(), style));
                 spans.push(Span::raw("  "));
             }
             lines.push(Line::from(spans));
@@ -672,7 +714,7 @@ impl ApprovalOverlayState {
         for row in self.button_rows(78) {
             let mut buttons = String::from("  ");
             for index in row {
-                let label = CHOICES[index].label().trim();
+                let label = format!("{} {}", CHOICES[index].key(), CHOICES[index].label().trim());
                 if index == self.cursor {
                     buttons.push_str(&format!("[{label}]"));
                 } else {
@@ -766,7 +808,7 @@ impl InteractiveView for ApprovalOverlayState {
             // y/n/s/a/d shortcuts
             KeyAction::Char('y') | KeyAction::Char('Y') => self.submit(ApprovalChoice::Yes),
             KeyAction::Char('n') | KeyAction::Char('N') => self.submit(ApprovalChoice::No),
-            KeyAction::Char('s') | KeyAction::Char('S') => {
+            KeyAction::Char('s') | KeyAction::Char('S') if !self.allow_session_unavailable => {
                 self.submit(ApprovalChoice::AllowSession)
             }
             KeyAction::Char('a') | KeyAction::Char('A') if !self.always_allow_unavailable => {
@@ -955,7 +997,7 @@ mod tests {
         assert!(s.result.is_none());
         assert!(!s.is_done());
         assert!(
-            s.render_text().contains("[Yes]"),
+            s.render_text().contains("[y Yes]"),
             "the highlighted button must render as the selected one"
         );
     }
@@ -1121,7 +1163,7 @@ mod tests {
         assert!(text.contains("Yes"));
         assert!(text.contains("No"));
         assert!(text.contains("Allow Session"));
-        assert!(text.contains("Always Allow"));
+        assert!(text.contains("Always allow"));
         assert!(text.contains("Deny All"));
         assert!(text.contains("Allow All"));
     }
@@ -1188,7 +1230,7 @@ mod tests {
         s.always_allow_unavailable = true;
 
         let text = s.render_text();
-        assert!(!text.contains("Always Allow"), "{text}");
+        assert!(!text.contains("Always allow"), "{text}");
         assert!(text.contains("Deny All"));
 
         assert_eq!(s.handle_key(KeyAction::Char('a')), ViewAction::Continue);
@@ -1215,7 +1257,7 @@ mod tests {
 
         s.open("Allow this command?", Vec::new());
         assert!(
-            s.render_text().contains("Always Allow"),
+            s.render_text().contains("Always allow"),
             "a new prompt offers it again"
         );
     }
@@ -1239,12 +1281,12 @@ mod tests {
         assert!(text.contains("Tool Approval"), "{text}");
         assert!(text.contains("Apply this patch?"), "{text}");
         for label in [
-            "[ Yes ]",
-            "[ No ]",
-            "[ Allow Session ]",
-            "[ Always Allow ]",
-            "[ Deny All ]",
-            "[ Allow All ]",
+            "[ y Yes ]",
+            "[ n No ]",
+            "[ s Allow Session ]",
+            "[ a Always allow ]",
+            "[ d Deny All ]",
+            "[ t Allow All ]",
         ] {
             assert!(text.contains(label), "{label} is not drawn: {text}");
         }
@@ -1370,7 +1412,7 @@ mod tests {
             assert!(text.contains("src/main.rs"), "{key:?}: {text}");
             assert!(text.contains("src/lib.rs"), "{key:?}: {text}");
             assert!(text.contains("Apply this patch?"), "{key:?}: {text}");
-            assert!(text.contains("[ Yes ]"), "{key:?}: {text}");
+            assert!(text.contains("[ y Yes ]"), "{key:?}: {text}");
         }
     }
 
@@ -1440,16 +1482,16 @@ mod tests {
         let state = open_overlay();
         let text = painted(&state, 44, 20);
         for label in [
-            "[ Yes ]",
-            "[ No ]",
-            "[ Allow Session ]",
-            "[ Always Allow ]",
-            "[ Deny All ]",
-            "[ Allow All ]",
+            "[ y Yes ]",
+            "[ n No ]",
+            "[ s Allow Session ]",
+            "[ a Always allow ]",
+            "[ d Deny All ]",
+            "[ t Allow All ]",
         ] {
             assert!(text.contains(label), "{label} is not drawn: {text}");
         }
-        assert_eq!(state.button_rows(40).len(), 3);
+        assert_eq!(state.button_rows(40).len(), 4);
         assert_eq!(state.button_rows(78).len(), 2);
     }
 
@@ -1493,6 +1535,27 @@ mod tests {
             command: "ls".to_string(),
         })
         .is_empty());
+    }
+
+    #[test]
+    fn every_button_names_the_letter_that_answers_with_it() {
+        let painted_text = painted(&open_overlay(), 88, 20);
+        for choice in CHOICES {
+            let button = format!("[ {} {} ]", choice.key(), choice.label().trim());
+            assert!(painted_text.contains(&button), "{button}: {painted_text}");
+
+            let mut s = open_overlay();
+            assert_eq!(
+                s.handle_key(KeyAction::Char(choice.key())),
+                ViewAction::Submit(choice.index()),
+                "{button}"
+            );
+            assert_eq!(s.result, Some(choice));
+        }
+        assert!(
+            painted_text.contains("[ a Always allow ]"),
+            "{painted_text}"
+        );
     }
 
     #[test]

@@ -250,7 +250,7 @@
     "temporaryChatRetentionNote": "Won't be saved to your history and skips memory for this turn.",
     "temporaryChatPersonalized": "Personalized",
     "temporaryChatUnpersonalized": "Unpersonalized",
-    "temporaryChatPersonalizationHint": "Personalized uses your profile, instructions and response style. Unpersonalized leaves them out.",
+    "temporaryChatPersonalizationHint": "Personalized uses your profile, instructions and response style.",
     "toggleArtifacts": "Toggle artifacts panel",
     "toggleArtifactsCount": "Toggle artifacts panel ({{count}})",
     "toggleStats": "Stats",
@@ -302,7 +302,7 @@
     "noneReported": "The provider reported no token counts for this conversation.",
     "outputTokens": "Output tokens",
     "panelLabel": "Conversation token usage",
-    "partialCoverage": "{{reported}} of {{total}} replies reported usage. The rest predate usage capture or came from a provider that reports none, so this total is a floor.",
+    "partialCoverage": "{{reported}} of {{total}} replies reported usage, so this total is a minimum.",
     "reasoningTokens": "Reasoning tokens"
   },
   "stream": {

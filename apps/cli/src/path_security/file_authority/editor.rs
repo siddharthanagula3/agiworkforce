@@ -85,6 +85,7 @@ impl WorkspaceFileAuthority {
         Ok(())
     }
 
+    #[cfg(unix)]
     pub(crate) fn read_scoped_file(&self, path: &str, limit: u64) -> Result<Option<ReadFile>> {
         self.identity()?;
         let (directory, relative) = self.editor_file(path)?;

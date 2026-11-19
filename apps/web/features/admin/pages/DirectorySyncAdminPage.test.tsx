@@ -342,4 +342,129 @@ describe('DirectorySyncAdminPage', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('already exists');
   });
+
+  describe('connection removal receipt', () => {
+    async function removeConnection(deleteResponse: () => Response) {
+      let removed = false;
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (init?.method === 'DELETE') {
+          removed = true;
+          return deleteResponse();
+        }
+        if (String(url).includes('/tokens')) return jsonResponse({ tokens: [] });
+        if (String(url).includes('/groups')) return jsonResponse(groupsPayload({ groups: [] }));
+        return jsonResponse(connectionsPayload(removed ? { connections: [] } : {}));
+      });
+      render(<DirectorySyncAdminPage />);
+      fireEvent.click(await screen.findByRole('button', { name: /^Remove$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Remove connection' }));
+    }
+
+    it('keeps the partial-cleanup warning after the refreshed list omits the connection', async () => {
+      await removeConnection(() =>
+        jsonResponse({
+          success: true,
+          revoked: { memberships: 201, credentials: 200 },
+          ownersRetained: 1,
+          warnings: ['1 member(s) lost their membership but keep live sessions and keys'],
+        }),
+      );
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain('Memberships removed: 201');
+      expect(alert.textContent).toContain('Credential cleanup attempted for: 200');
+      expect(alert.textContent).toContain('Some credential cleanup could not be confirmed');
+      expect(alert.textContent).not.toContain('live sessions and keys');
+      await waitFor(() => expect(screen.queryByText(/Okta production/)).toBeNull());
+      expect(screen.getByRole('alert')).toBeTruthy();
+    });
+
+    it('reports a clean removal without a warning', async () => {
+      await removeConnection(() =>
+        jsonResponse({
+          success: true,
+          revoked: { memberships: 2, credentials: 2 },
+          ownersRetained: 0,
+          warnings: [],
+        }),
+      );
+
+      const status = await screen.findByRole('status');
+      expect(status.textContent).toContain('No cleanup problems were reported');
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('labels an unreadable success body as unconfirmed instead of clean', async () => {
+      await removeConnection(
+        () =>
+          ({
+            ok: true,
+            status: 200,
+            json: async () => {
+              throw new Error('bad body');
+            },
+          }) as unknown as Response,
+      );
+
+      const alert = await screen.findByRole('alert');
+      expect(alert.textContent).toContain('cleanup report could not be read');
+      expect(alert.textContent).not.toContain('No cleanup problems');
+    });
+
+    it('can be dismissed', async () => {
+      await removeConnection(() =>
+        jsonResponse({
+          success: true,
+          revoked: { memberships: 0, credentials: 0 },
+          ownersRetained: 0,
+          warnings: ['x'],
+        }),
+      );
+
+      await screen.findByRole('alert');
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
+
+  it('marks recent activity whose payload records incomplete credential cleanup', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/tokens')) return jsonResponse({ tokens: [] });
+      if (String(url).includes('/groups')) return jsonResponse(groupsPayload({ groups: [] }));
+      return jsonResponse(
+        connectionsPayload({
+          events: [
+            {
+              id: 'event-2',
+              connection_id: CONNECTION_ID,
+              event_type: 'group.deprovisioned',
+              user_email: null,
+              error: null,
+              raw_payload: {
+                membershipsRevoked: 3,
+                credentialsRevoked: false,
+                revocationWarnings: ['u1: credentials were not revoked: boom'],
+              },
+              created_at: '2026-08-01T10:00:00.000Z',
+            },
+            {
+              id: 'event-3',
+              connection_id: CONNECTION_ID,
+              event_type: 'user.provisioned',
+              user_email: 'ada@example.com',
+              error: null,
+              raw_payload: { revocationWarnings: [] },
+              created_at: '2026-08-01T10:00:00.000Z',
+            },
+          ],
+        }),
+      );
+    });
+
+    render(<DirectorySyncAdminPage />);
+
+    await screen.findByText(/group\.deprovisioned/);
+    expect(screen.getAllByText(/credential cleanup incomplete/)).toHaveLength(1);
+    expect(screen.queryByText(/boom/)).toBeNull();
+  });
 });

@@ -14,7 +14,11 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 }));
 vi.mock('@/lib/identity/client', () => ({ useCurrentUser: useCurrentUserMock }));
 
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import {
   pluginConnectorWiringNote,
   pluginModelHeading,
@@ -178,7 +182,9 @@ describe('PluginsPage closing call to action', () => {
 
     render(await PluginsPage());
 
-    const explainer = screen.getByText(/prints its AGI CLI install command on its own page/);
+    const explainer = screen.getByText(
+      new RegExp(`prints its ${PRODUCT_NAMES.cli} install command on its own page`),
+    );
     expect(explainer).not.toHaveTextContent(/desktop and CLI install command/i);
     expect(explainer).toHaveTextContent(
       /prints none, because there is nothing published to install yet/,

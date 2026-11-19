@@ -37,7 +37,7 @@ const SHORTEST_REASON = 20;
 const INCIDENT_MARK = 'incident ';
 
 export function versionDisableRuleId(incident: string): string {
-  return `disabled-${incident.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`.slice(0, 64);
+  return `disabled-${incident.toLowerCase()}`;
 }
 
 /**

@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { GITHUB_RECONNECT_REQUIRED_REASON } from '@/lib/github-installation-access';
 
 export const LOCAL_PULL_REQUESTS_PATH = '/api/code/local-pull-requests';
 
@@ -21,15 +22,37 @@ const LocalPullRequestLookupSchema = z.object({
 export type LocalPullRequestState = z.infer<typeof LocalPullRequestStateSchema>;
 export type LocalPullRequestLookup = z.infer<typeof LocalPullRequestLookupSchema>;
 
+export class LocalPullRequestRequestError extends Error {
+  constructor(
+    message: string,
+    readonly reconnectGitHub: boolean,
+  ) {
+    super(message);
+    this.name = 'LocalPullRequestRequestError';
+  }
+}
+
 async function readBody<T>(response: Response, schema: z.ZodType<T>): Promise<T> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const parsed = z
-      .object({ error: z.object({ message: z.string() }).partial().or(z.string()).optional() })
+      .object({
+        error: z
+          .object({
+            message: z.string(),
+            details: z.object({ reason: z.string() }).partial(),
+          })
+          .partial()
+          .or(z.string())
+          .optional(),
+      })
       .safeParse(body);
     const error = parsed.success ? parsed.data.error : undefined;
     const message = typeof error === 'string' ? error : error?.message;
-    throw new Error(message ?? `Request failed (${response.status}).`);
+    throw new LocalPullRequestRequestError(
+      message ?? `Request failed (${response.status}).`,
+      typeof error === 'object' && error.details?.reason === GITHUB_RECONNECT_REQUIRED_REASON,
+    );
   }
   return schema.parse(body);
 }

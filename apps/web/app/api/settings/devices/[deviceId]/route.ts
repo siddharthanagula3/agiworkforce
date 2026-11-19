@@ -13,7 +13,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getIdentityProvider } from '@/lib/server/identity';
 import { notifyDeviceDisconnected } from '@/lib/services/account-activity-notifications';
-import { revokeDeviceRefreshCredentials } from '@/lib/server/refresh-token-family';
+import {
+  revokeDeviceRefreshCredentials,
+  revokeEveryDeviceRefreshFamily,
+} from '@/lib/server/refresh-token-family';
 import { revokeMobileIntentTokens } from '@/lib/server/mobile-intent-tokens';
 import { revokeEveryOtherSession } from '@/lib/server/session-revocation';
 import {
@@ -403,13 +406,7 @@ async function endEverySession(
   currentSessionId: string | null,
 ): Promise<LogoutEverywhere> {
   const sweep = await revokeEveryOtherSession(getIdentityProvider(), userId, currentSessionId);
-  await db.execute(
-    `update device_refresh_tokens
-        set revoked_at = coalesce(revoked_at, now())
-      where user_id = $1
-        and revoked_at is null`,
-    [userId],
-  );
+  await revokeEveryDeviceRefreshFamily(db, userId);
 
   return {
     ended: sweep.ended.length + sweep.alreadyGone.length,

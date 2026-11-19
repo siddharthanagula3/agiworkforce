@@ -14,8 +14,10 @@ const {
   recordWorkspaceAuditEventMock,
   pluginPolicyMock,
   listRegistryDependentsMock,
+  listUnmetRegistryDependenciesMock,
 } = vi.hoisted(() => ({
   listRegistryDependentsMock: vi.fn(),
+  listUnmetRegistryDependenciesMock: vi.fn(),
   pluginPolicyMock: vi.fn(),
   authUserMock: vi.fn(),
   csrfMock: vi.fn(),
@@ -70,6 +72,7 @@ type DependentsModule = typeof import('@/features/plugins/server/directory/insta
 vi.mock('@/features/plugins/server/directory/installed-dependents', async (importOriginal) => ({
   ...(await importOriginal<DependentsModule>()),
   listRegistryDependents: listRegistryDependentsMock,
+  listUnmetRegistryDependencies: listUnmetRegistryDependenciesMock,
 }));
 vi.mock('@/lib/services/plugin-installation-service', async () => ({
   ...(await vi.importActual<PluginInstallationServiceModule>(
@@ -138,6 +141,7 @@ function params(id: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   listRegistryDependentsMock.mockResolvedValue([]);
+  listUnmetRegistryDependenciesMock.mockResolvedValue([]);
   authUserMock.mockResolvedValue({ userId: 'user-1' });
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
@@ -392,5 +396,44 @@ describe('plugins that another installed plugin needs', () => {
       'review-pack',
       'research-pack',
     ]);
+  });
+});
+
+describe('turning a plugin on when the plugins it needs are not ready', () => {
+  const UNMET = [{ name: 'Research Pack', problem: 'is turned off' }];
+
+  it('refuses, names the plugin and what is wrong with it, and changes nothing', async () => {
+    listUnmetRegistryDependenciesMock.mockResolvedValue(UNMET);
+    const response = await PATCH(patch({ enabled: true }), params('review-pack'));
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('PLUGIN_DEPENDENCIES_UNAVAILABLE');
+    expect(error.message).toContain('Research Pack, which is turned off');
+    expect(error.dependencies).toEqual(UNMET);
+    expect(listUnmetRegistryDependenciesMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'review-pack',
+    );
+    expect(setWebPluginEnabledMock).not.toHaveBeenCalled();
+    expect(recordWorkspaceAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it('turns it on when every plugin it needs is ready', async () => {
+    setWebPluginEnabledMock.mockResolvedValue(INSTALLATION);
+    const response = await PATCH(patch({ enabled: true }), params('research-pack'));
+    expect(response.status).toBe(200);
+    expect(setWebPluginEnabledMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      'research-pack',
+      true,
+    );
+  });
+
+  it('does not check dependencies when turning a plugin off', async () => {
+    setWebPluginEnabledMock.mockResolvedValue({ ...INSTALLATION, enabled: false });
+    await PATCH(patch({ enabled: false }), params('research-pack'));
+    expect(listUnmetRegistryDependenciesMock).not.toHaveBeenCalled();
   });
 });

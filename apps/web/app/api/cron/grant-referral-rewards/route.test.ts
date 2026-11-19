@@ -41,6 +41,7 @@ beforeEach(() => {
     capped: 1,
     blocked: 1,
     failed: 0,
+    resetsFailed: 0,
     remaining: false,
   });
 });
@@ -64,6 +65,7 @@ describe('GET /api/cron/grant-referral-rewards', () => {
       capped: 1,
       blocked: 1,
       failed: 0,
+      resetsFailed: 0,
       remaining: false,
     });
     expect(mocks.grantDueReferralRewards).toHaveBeenCalledWith(DB, 500);
@@ -76,6 +78,7 @@ describe('GET /api/cron/grant-referral-rewards', () => {
       capped: 0,
       blocked: 0,
       failed: 10,
+      resetsFailed: 0,
       remaining: true,
     });
 

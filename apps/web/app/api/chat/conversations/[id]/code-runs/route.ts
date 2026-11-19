@@ -37,6 +37,13 @@ import {
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
+/**
+ * A rerun leaves the conversation's sandbox running for a turn or another rerun
+ * still using it, so the sandbox times out, and is held, only until this
+ * function could no longer be running the code it was asked to run.
+ */
+const CODE_RUN_FUNCTION_LIMIT_MS = maxDuration * 1_000;
+
 type RouteContext = { params: Promise<{ id: string }> };
 
 async function handleCodeRun(request: NextRequest, context: RouteContext) {
@@ -107,7 +114,10 @@ async function handleCodeRun(request: NextRequest, context: RouteContext) {
   const accessGate = buildManagedComputeAccessGateResponse(access);
   if (accessGate) return accessGate;
 
-  const scope = managedCloudE2BSessionScope(userId, id);
+  const scope = {
+    ...managedCloudE2BSessionScope(userId, id),
+    releaseByMs: Date.now() + CODE_RUN_FUNCTION_LIMIT_MS,
+  };
   let cause: E2BUnavailableCause | null = null;
   let budgetRefusal: ManagedUsageRequestError | undefined;
   const executor = await getE2BExecutor(scope, (unavailable, refusal) => {

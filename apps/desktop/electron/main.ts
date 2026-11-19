@@ -9,6 +9,7 @@ import {
   app,
   clipboard,
   desktopCapturer,
+  dialog,
   ipcMain,
   nativeTheme,
   net,
@@ -63,6 +64,10 @@ import {
   type HostPreferences,
   type HostPreferencesState,
   type HostRestartOutcome,
+  MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
+  isAutoArchiveIdleDays,
+  normalizeTerminalPreferences,
+  isWorktreeBranchPrefix,
 } from '@agiworkforce/local-runtime-contract';
 import {
   BrowserBridgeError,
@@ -79,6 +84,7 @@ import {
 import { activeShellRunCount, cancelAllShellRuns } from './runtime/shellService';
 import {
   answerDeveloperApproval,
+  applyWorktreesRootChange,
   configureDeveloperSessions,
   interruptDeveloperTurn,
   killAllDeveloperRuntimes,
@@ -88,15 +94,18 @@ import {
 } from './runtime/developerSessionService';
 import {
   configureRemoteControl,
+  phoneWatchesSession,
   relayDeveloperSessionEvent,
   remoteControlActive,
   remoteControlState,
   stopRemoteControl,
 } from './remote/remoteControlService';
 import { getRoot, listRoots } from './runtime/workspaceStore';
+import { configurePreviousVersions } from './runtime/filesystemService';
+import { configureBrowserPane } from './browserPane';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { openOpenSourceNotices, openSourceNoticesPath } from './openSourceNoticesFile';
-import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
+import { NOT_THIS_APP, shownValue, visibleInDialog } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { askNativeQuestion, NOT_ASKED_MESSAGES } from './runtime/nativeQuestions';
 import { getPermissionState } from './runtime/permissionManager';
@@ -173,7 +182,7 @@ import { guardFirstLoad } from './firstLoadGuard';
 import { showLoadingOverlay } from './loadingOverlay';
 import { createScreenRetry } from './screenRetry';
 import { hideWindow, shouldHideOnClose } from './windowLifecycle';
-import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
+import { isLaunchAtLoginEnabled, setLaunchAtLogin, syncLaunchAtLogin } from './launchAtLogin';
 import { CLOUD_APP_ORIGIN, DEEP_LINK_SCHEME, REMOTE_SESSION_PARTITION } from './config';
 import {
   MIN_WINDOW_HEIGHT,
@@ -204,7 +213,6 @@ import {
   normalizeAgentNotifications,
   pickableCaptureSources,
   pageMayWriteShortcut,
-  shortcutMayBeOff,
   type ShortcutKey,
   type WindowFrame,
 } from './garnishCore';
@@ -226,12 +234,14 @@ import {
 import { configureDictationBarBridge, openDictationBar } from './dictationBar';
 import { createDictationElsewhere } from './dictationElsewhere';
 import { closeLocalPreview } from './previewWindow';
-import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
+import { configureSimulator, shutDownSimulator } from './runtime/simulatorService';
+import { getPreferences, getShortcuts, saveSettings, saveSettingsDurably } from './settingsStore';
 import {
+  changeGarnishShortcuts,
   registerGarnishShortcuts,
   shortcutRegistrations,
-  shortcutStatusDetail,
   unregisterGarnishShortcuts,
+  type GarnishShortcutHandlers,
 } from './shortcuts';
 import { createTray, destroyTray, hasTray, refreshTrayMenu, type TrayActivity } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
@@ -264,8 +274,10 @@ import {
   broadcastRuntimeEvent,
   cascadeBounds,
   conversationIdFromRoute,
+  frontShellEntry,
   planSignOut,
   resolveNavigationConflict,
+  routeAfterConflict,
   type OpenWindow,
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
@@ -320,8 +332,13 @@ async function appReachable(): Promise<boolean> {
   }
 }
 
-async function reloadOnceReachable(win: BrowserWindow, url: string): Promise<void> {
-  if (win.isDestroyed() || !(await appReachable()) || win.isDestroyed()) return;
+async function reloadOnceReachable(
+  win: BrowserWindow,
+  url: string,
+  isCurrent: () => boolean,
+): Promise<void> {
+  if (win.isDestroyed() || !isCurrent() || !(await appReachable())) return;
+  if (win.isDestroyed() || !isCurrent()) return;
   await win.loadURL(url).catch(() => undefined);
 }
 
@@ -600,6 +617,12 @@ function registerIpcHandlers(): void {
     return cloudUpdateAvailability();
   });
 
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.pendingUpdate, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    const version = downloadedUpdate();
+    return version === null ? null : { version };
+  });
+
   ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
@@ -690,7 +713,7 @@ function deliverDeepLink(url: string): void {
   }
 
   deepLinkQueue = enqueueDeepLink(deepLinkQueue, url, Date.now());
-  if (rendererReady()) {
+  if (deepLinkReceiverReady()) {
     focusMainWindow();
     flushDeepLinks();
     return;
@@ -789,12 +812,22 @@ function rendererReady(): boolean {
 }
 
 /**
+ * The sign-in completion page is trusted but has no receiver and is replaced
+ * by a full navigation once it finishes, so a link sent to it is lost. Only
+ * the signed-in product holds one.
+ */
+function deepLinkReceiverReady(): boolean {
+  if (!mainWindow || !rendererReady()) return false;
+  return isSignedInProductPage(mainWindow.webContents.getURL(), CLOUD_APP_ORIGIN);
+}
+
+/**
  * Hands the page every link that arrived while it could not take one, oldest
  * first. A link held across a relaunch is only replayed while it is still
  * recent: an approval link from yesterday is not something to act on now.
  */
 function flushDeepLinks(): void {
-  if (!mainWindow || !rendererReady()) return;
+  if (!mainWindow || !deepLinkReceiverReady()) return;
   const due = freshDeepLinks(deepLinkQueue, Date.now());
   deepLinkQueue = [];
   saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);
@@ -834,10 +867,7 @@ function configureSession(targetSession: Electron.Session): void {
             message: `Choose what to share with ${PRODUCT_NAMES.desktop}`,
             detail:
               'A window shares only that window, even when something else is in front of it. Sharing stops when you end screen capture in the chat.',
-            buttons: [
-              ...offered.map((source) => shownValue(source.name, CAPTURE_SOURCE_SHOWN)),
-              'Cancel',
-            ],
+            buttons: [...offered.map((source) => visibleInDialog(source.name)), 'Cancel'],
             defaultId: cancelId,
             cancelId,
             noLink: true,
@@ -1154,7 +1184,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
   const showUnreachable = (errorCode: number, failedUrl: string): void => {
     const retryUrl = retryUrlAfterFailedLoad(failedUrl, entryUrl);
     void win.loadURL(shellScreenUrl(offlineScreen(errorCode), retryUrl)).catch(() => undefined);
-    screenRetry.watch(win.id, () => reloadOnceReachable(win, retryUrl));
+    screenRetry.watch(win.id, (isCurrent) => reloadOnceReachable(win, retryUrl, isCurrent));
   };
 
   let removeLoadingOverlay: (() => void) | null = null;
@@ -1203,9 +1233,11 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     const clash = resolveNavigationConflict(openWindows(), win.id, route);
     if (clash) {
       const previous = entry.route;
-      entry.returningTo = previous;
+      const returnTo = routeAfterConflict(previous, route);
+      entry.returningTo = returnTo;
+      entry.route = returnTo;
       focusWindow(clash.focus);
-      void win.loadURL(windowUrlFor(previous));
+      void win.loadURL(windowUrlFor(returnTo));
       return;
     }
 
@@ -1326,17 +1358,33 @@ function showMainWindow(): void {
 }
 
 /** The conversation the front window is on, or null when it is not on one. */
+function focusedConversationEntry(): ShellWindowEntry | null {
+  const entry = frontShellEntry(
+    shellWindows,
+    BrowserWindow.getFocusedWindow()?.id ?? null,
+    mainWindow?.id ?? null,
+  );
+  return entry && conversationIdFromRoute(entry.route) !== null ? entry : null;
+}
+
 function focusedConversationRoute(): string | null {
-  const focused = BrowserWindow.getFocusedWindow();
-  const entry =
-    (focused ? shellWindows.get(focused.id) : null) ?? shellWindows.get(mainWindow?.id ?? -1);
-  if (!entry) return null;
-  return conversationIdFromRoute(entry.route) === null ? null : entry.route;
+  return focusedConversationEntry()?.route ?? null;
+}
+
+/**
+ * The window a menu command acts on: the shell window in front, or the main
+ * window brought forward when the command came from the tray, the Dock or a
+ * shortcut pressed in another app.
+ */
+function commandWindow(): BrowserWindow | null {
+  const front = frontShellWindow();
+  if (front) return front;
+  showMainWindow();
+  return mainWindow;
 }
 
 function openNewChat(): void {
-  showMainWindow();
-  void mainWindow?.loadURL(windowUrlFor(null));
+  void commandWindow()?.loadURL(windowUrlFor(null));
 }
 
 const NEW_CHAT_COMPOSER_WAIT_MS = 5000;
@@ -1402,14 +1450,11 @@ function openCurrentChatInNewWindow(): void {
 }
 
 function openFocusedConversationInNewWindow(): void {
-  const route = focusedConversationRoute();
-  if (route === null) return;
-  const focused = BrowserWindow.getFocusedWindow();
-  const entry = focused ? shellWindows.get(focused.id) : null;
-  if (entry) {
-    entry.route = NEW_CHAT_ROUTE;
-    void entry.win.loadURL(windowUrlFor(null));
-  }
+  const entry = focusedConversationEntry();
+  if (!entry) return;
+  const route = entry.route;
+  entry.route = NEW_CHAT_ROUTE;
+  void entry.win.loadURL(windowUrlFor(null));
   createShellWindow({ primary: false, route });
 }
 
@@ -1551,8 +1596,7 @@ function removeFrontWindowFromSet(): void {
 }
 
 function openSettings(): void {
-  showMainWindow();
-  void mainWindow?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
+  void commandWindow()?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
 }
 
 function openLogsFolder(): void {
@@ -1881,16 +1925,18 @@ const garnishHandlers = {
   activity: trayActivity,
 };
 
+const garnishShortcutHandlers: GarnishShortcutHandlers = {
+  onQuickAsk: garnishHandlers.onQuickAsk,
+  onNewChat: garnishHandlers.onNewChatWindow,
+  onScreenshot: garnishHandlers.onScreenshot,
+  onWindowShot: garnishHandlers.onWindowShot,
+  onVoice: garnishHandlers.onVoice,
+  onStop: garnishHandlers.onStopAgents,
+};
+
 function applyGarnishShortcuts(): void {
   unregisterGarnishShortcuts();
-  registerGarnishShortcuts({
-    onQuickAsk: garnishHandlers.onQuickAsk,
-    onNewChat: garnishHandlers.onNewChatWindow,
-    onScreenshot: garnishHandlers.onScreenshot,
-    onWindowShot: garnishHandlers.onWindowShot,
-    onVoice: garnishHandlers.onVoice,
-    onStop: garnishHandlers.onStopAgents,
-  });
+  registerGarnishShortcuts(garnishShortcutHandlers);
 }
 
 /**
@@ -1907,7 +1953,7 @@ function hostPreferencesState(): HostPreferencesState {
 
   return {
     preferences: {
-      launchAtLogin: preferences.launchAtLogin,
+      launchAtLogin: isLaunchAtLoginEnabled(),
       showInMenuBar: preferences.showInMenuBar,
       cliPath: preferences.cliPath,
       sessionCompletionAlerts: preferences.sessionCompletionAlerts,
@@ -1923,6 +1969,10 @@ function hostPreferencesState(): HostPreferencesState {
         ? { dictateIntoFocusedApp: preferences.dictateIntoFocusedApp }
         : {}),
       preventSleepWhileRunning: preferences.preventSleepWhileRunning,
+      worktreeBranchPrefix: preferences.worktreeBranchPrefix,
+      worktreeLocation: preferences.worktreeLocation,
+      autoArchiveIdleDays: preferences.autoArchiveIdleDays,
+      terminal: preferences.terminal,
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -1943,7 +1993,6 @@ function hostPreferencesState(): HostPreferencesState {
  */
 const PROGRAM_PATH_SHOWN = { head: 400, tail: 200 };
 const PAIRING_CODE_SHOWN = { head: 40, tail: 0 };
-const CAPTURE_SOURCE_SHOWN = { head: 60, tail: 0 };
 
 /**
  * A yes or no this window asks because a page changed a preference. The
@@ -2055,6 +2104,28 @@ async function confirmCliPath(
   return (await confirmPreference(window, `cli-path ${resolved}`, options)) ? resolved : null;
 }
 
+async function chooseWorktreeLocation(
+  window: BrowserWindow | null,
+  current: string,
+): Promise<string | null> {
+  const options = {
+    title: 'Choose where new worktrees go',
+    buttonLabel: 'Use This Folder',
+    properties: ['openDirectory' as const, 'createDirectory' as const],
+    ...(current === '' ? {} : { defaultPath: current }),
+  };
+  const result = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  const selected = result.filePaths[0];
+  if (result.canceled || !selected) return null;
+  try {
+    return realpathSync(selected);
+  } catch {
+    return selected;
+  }
+}
+
 const STOP_SHORTCUT_REQUIRED =
   'Stop Agents keeps a shortcut: it is how you stop an agent that is controlling the screen, from whatever app is in front. Choose one of the listed shortcuts instead.';
 
@@ -2062,22 +2133,6 @@ function shortcutWriteRefusal(key: ShortcutKey, requested: string): string {
   return requested === NO_HOST_SHORTCUT
     ? STOP_SHORTCUT_REQUIRED
     : `${SHORTCUT_LABELS[key]} takes only one of the listed shortcuts. A shortcut is registered for every app on this computer, so this app does not take one a page names.`;
-}
-
-/**
- * A shortcut that is never off has to end a write still registered. A chord
- * another app holds is saved like any other and reports `taken`, which for
- * Stop Agents would leave no shortcut at all. Answers with what to tell the
- * page when the shortcut did not take; the caller puts the old chords back.
- */
-function lostAlwaysOnShortcut(): string | null {
-  const lost = shortcutRegistrations().find(
-    (registration) => !shortcutMayBeOff(registration.key) && registration.status !== 'registered',
-  );
-  if (!lost) return null;
-  return `${SHORTCUT_LABELS[lost.key]} could not take that shortcut: it ${
-    shortcutStatusDetail(lost.status) ?? 'was not registered'
-  }. The shortcut it had is kept. Choose another one.`;
 }
 
 async function writeHostPreferences(
@@ -2100,51 +2155,74 @@ async function writeHostPreferences(
     SHORTCUT_KEYS.filter((key) => typeof patch[key] === 'string').map((key) => [key, patch[key]]),
   );
   if (Object.keys(shortcutPatch).length > 0) {
-    const previous = getShortcuts();
-    saveSettings(shortcutPatch);
-    applyGarnishShortcuts();
-    const lost = lostAlwaysOnShortcut();
-    if (lost) {
-      saveSettings(previous);
-      applyGarnishShortcuts();
-      refreshTrayMenu(garnishHandlers);
-      throw new Error(lost);
-    }
+    const refusal = changeGarnishShortcuts(shortcutPatch, garnishShortcutHandlers);
     refreshTrayMenu(garnishHandlers);
+    if (refusal) throw new Error(refusal);
   }
 
   if (
     typeof patch.launchAtLogin === 'boolean' &&
-    patch.launchAtLogin !== before.launchAtLogin &&
+    patch.launchAtLogin !== isLaunchAtLoginEnabled() &&
     (!patch.launchAtLogin || (await confirmLaunchAtLogin(window)))
   ) {
     setLaunchAtLogin(patch.launchAtLogin);
   }
 
   if (patch.agentNotifications && typeof patch.agentNotifications === 'object') {
-    saveSettings({ agentNotifications: normalizeAgentNotifications(patch.agentNotifications) });
+    saveSettingsDurably({
+      agentNotifications: normalizeAgentNotifications(patch.agentNotifications),
+    });
   }
 
   if (typeof patch.cliPath === 'string' && patch.cliPath.trim() !== before.cliPath) {
     const confirmed = await confirmCliPath(window, patch.cliPath.trim(), before.cliPath);
-    if (confirmed !== null) saveSettings({ cliPath: confirmed });
+    if (confirmed !== null) saveSettingsDurably({ cliPath: confirmed });
   }
 
   if (typeof patch.showInMenuBar === 'boolean' && patch.showInMenuBar !== before.showInMenuBar) {
-    saveSettings({ showInMenuBar: patch.showInMenuBar });
+    saveSettingsDurably({ showInMenuBar: patch.showInMenuBar });
     syncTray();
   }
 
   if (isSessionCompletionAlerts(patch.sessionCompletionAlerts)) {
-    saveSettings({ sessionCompletionAlerts: patch.sessionCompletionAlerts });
+    saveSettingsDurably({ sessionCompletionAlerts: patch.sessionCompletionAlerts });
   }
 
   if (typeof patch.sessionApprovalAlerts === 'boolean') {
-    saveSettings({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+    saveSettingsDurably({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+  }
+
+  if (typeof patch.worktreeBranchPrefix === 'string') {
+    const prefix = patch.worktreeBranchPrefix.trim();
+    if (!isWorktreeBranchPrefix(prefix)) {
+      throw new Error(
+        `Use letters, numbers, dots, dashes and slashes, up to ${MAX_WORKTREE_BRANCH_PREFIX_LENGTH} characters, starting with a letter or number.`,
+      );
+    }
+    saveSettingsDurably({ worktreeBranchPrefix: prefix });
+  }
+
+  if (typeof patch.worktreeLocation === 'string') {
+    if (patch.worktreeLocation === '') saveSettingsDurably({ worktreeLocation: '' });
+    else {
+      const chosen = await chooseWorktreeLocation(window, before.worktreeLocation);
+      if (chosen !== null) saveSettingsDurably({ worktreeLocation: chosen });
+    }
+    if (getPreferences().worktreeLocation !== before.worktreeLocation) applyWorktreesRootChange();
+  }
+
+  if (isAutoArchiveIdleDays(patch.autoArchiveIdleDays)) {
+    saveSettingsDurably({ autoArchiveIdleDays: patch.autoArchiveIdleDays });
+  }
+
+  if (typeof patch.terminal === 'object' && patch.terminal !== null) {
+    saveSettingsDurably({
+      terminal: normalizeTerminalPreferences(patch.terminal, before.terminal),
+    });
   }
 
   if (typeof patch.preventSleepWhileRunning === 'boolean') {
-    saveSettings({ preventSleepWhileRunning: patch.preventSleepWhileRunning });
+    saveSettingsDurably({ preventSleepWhileRunning: patch.preventSleepWhileRunning });
     syncWorkKeeper();
   }
 
@@ -2153,7 +2231,7 @@ async function writeHostPreferences(
     patch.dictateIntoFocusedApp !== before.dictateIntoFocusedApp &&
     (!patch.dictateIntoFocusedApp || (await confirmDictateIntoApps(window)))
   ) {
-    saveSettings({ dictateIntoFocusedApp: patch.dictateIntoFocusedApp });
+    saveSettingsDurably({ dictateIntoFocusedApp: patch.dictateIntoFocusedApp });
     if (patch.dictateIntoFocusedApp) systemPreferences.isTrustedAccessibilityClient(true);
     else dictationElsewhere.closeAll();
   }
@@ -2171,6 +2249,55 @@ function openWhatsNew(): void {
 
 function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
+}
+
+/**
+ * Help > Troubleshooting > Clear Cache and Restart. It drops what the app
+ * downloaded and keeps what the person owns: cookies (the sign-in), local
+ * storage, IndexedDB and service workers (which hold the push subscription)
+ * are left alone, as are settings and folder permissions, which live outside
+ * the session.
+ */
+async function clearCacheAndRestart(): Promise<void> {
+  const choice = await showNativeMessage(frontShellWindow() ?? mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Clear and Restart'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Clear the cache and restart?',
+    message: `${PRODUCT_NAMES.desktop} deletes the files it downloaded, then restarts.`,
+    detail:
+      'You stay signed in, and your chats, settings and folder permissions are kept. The first load after the restart is slower while the app downloads its files again.',
+    noLink: true,
+  });
+  if (choice.response !== 1) return;
+  const prompt = quitPrompt(liveWork());
+  if (prompt && !(await askGuardPrompt(prompt))) return;
+
+  const cloudSession = session.fromPartition(REMOTE_SESSION_PARTITION);
+  try {
+    await Promise.all([
+      cloudSession.clearCache(),
+      cloudSession.clearCodeCaches({}),
+      cloudSession.clearStorageData({ storages: ['shadercache', 'cachestorage'] }),
+    ]);
+  } catch (error) {
+    console.warn('[troubleshooting] clearing the cache failed:', error);
+    await showNativeMessage(frontShellWindow() ?? mainWindow, {
+      type: 'warning',
+      buttons: ['OK'],
+      title: 'Cache not cleared',
+      message: `${PRODUCT_NAMES.desktop} could not clear its cache, so it did not restart.`,
+      noLink: true,
+    }).catch(() => undefined);
+    return;
+  }
+  quitConfirmed = true;
+  setTimeout(() => {
+    quitConfirmed = false;
+  }, UPDATE_RESTART_TIMEOUT_MS).unref?.();
+  app.relaunch();
+  app.quit();
 }
 
 async function showOpenSourceNotices(): Promise<void> {
@@ -2368,6 +2495,7 @@ function installMenu(): void {
       openSettings,
       openLogs: openLogsFolder,
       copyDiagnostics,
+      clearCacheAndRestart: () => void clearCacheAndRestart(),
       openProductHelp,
       openWhatsNew,
       openSupport,
@@ -2475,8 +2603,12 @@ if (!hasSingleInstanceLock) {
     // is rebuilt when the front window changes rather than once at launch.
     app.on('browser-window-focus', installMenu);
     app.on('browser-window-blur', installMenu);
-    applyLaunchAtLogin();
+    syncLaunchAtLogin();
     applyGarnishShortcuts();
+
+    configureSimulator({
+      onChange: (status) => sendRuntimeEvent({ kind: 'simulator-changed', status }),
+    });
 
     configureRemoteControl(
       (state) => {
@@ -2514,6 +2646,8 @@ if (!hasSingleInstanceLock) {
       mayReportRoot: (rootId) => agentAllowedIn(rootId),
       report: reportCodeSessionActivity,
     });
+    configurePreviousVersions((copy) => shell.trashItem(copy));
+    configureBrowserPane({ emit: (state) => sendRuntimeEvent({ kind: 'browser-pane', state }) });
     configureDeveloperSessions({
       emit: (rootId, event) => {
         noteBackgroundSessionEvent(rootId, event);
@@ -2530,11 +2664,14 @@ if (!hasSingleInstanceLock) {
       workspaceConsentAtMs: (root) => agentConsentAt(root.id),
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
-      answersUserInput: windowAnswersUserInput,
+      answersUserInput: (rootId, threadId) =>
+        windowAnswersUserInput() || phoneWatchesSession(rootId, threadId),
+      worktreesRoot: () => getPreferences().worktreeLocation,
+      onTerminalEvent: (event) => sendRuntimeEvent({ kind: 'developer-terminal', ...event }),
     });
 
-    void startLocalRoutines().catch((error: unknown) =>
-      console.warn('[local-routines] unavailable:', error),
+    void startLocalRoutines((rootId, event) => agentNotifier.handle(rootId, event)).catch(
+      (error: unknown) => console.warn('[local-routines] unavailable:', error),
     );
 
     configureQuickAskBridge({
@@ -2593,6 +2730,7 @@ if (!hasSingleInstanceLock) {
 
   app.on('will-quit', () => {
     closeLocalPreview();
+    shutDownSimulator();
     dictationElsewhere.closeAll();
     workKeeper.release();
     stopLocalRoutines();

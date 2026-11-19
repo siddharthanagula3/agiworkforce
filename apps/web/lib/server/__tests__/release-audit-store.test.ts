@@ -11,6 +11,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 import {
   GENESIS_HASH,
   RELEASE_AUDIT_RETENTION_DAYS,
+  readLatestReleaseEvent,
   readReleaseEvents,
   verifyReleaseChain,
   type ReleaseEvent,
@@ -102,6 +103,30 @@ describe('reading the trail', () => {
     const [, values] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(values[0]).toBe('web');
     expect(values[1]).toBeNull();
+  });
+});
+
+describe('reading the latest event of a kind', () => {
+  it('asks for the newest matching row on its own, not from a window of the trail', async () => {
+    mocks.query.mockResolvedValue([row({ id: 9, event: 'rollback_drill' })]);
+
+    const latest = await readLatestReleaseEvent({ event: 'rollback_drill', outcome: 'succeeded' });
+
+    const [sql, values] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('order by recorded_at desc, id desc');
+    expect(sql).toContain('limit 1');
+    expect(values).toEqual(['rollback_drill', 'succeeded']);
+    expect(latest?.id).toBe(9);
+  });
+
+  it('leaves the outcome open when none is asked for', async () => {
+    mocks.query.mockResolvedValue([]);
+
+    const latest = await readLatestReleaseEvent({ event: 'rolled_back' });
+
+    const [, values] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(values).toEqual(['rolled_back', null]);
+    expect(latest).toBeNull();
   });
 });
 

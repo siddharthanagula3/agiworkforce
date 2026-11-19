@@ -322,7 +322,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
           }
         }
       >
-        Managed
+        Cloud
       </Text>
     </View>
   </View>
@@ -345,7 +345,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
       }
     }
   >
-    Managed turn. The request, attachments, and system prompt go through agiworkforce.com subject to the managed-mode retention and access controls.
+    Cloud turn. The request, attachments, and system prompt go through agiworkforce.com subject to the Cloud retention and access controls.
   </Text>
 </View>
 `;

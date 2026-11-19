@@ -58,6 +58,11 @@ vi.mock('../services/stripe-payments', () => {
 
 import { CheckoutRequiredError } from '../services/stripe-payments';
 import { UpgradeConfirmDialog } from './UpgradeConfirmDialog';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  max_15x: getBillingPlanPricing('max_15x').label,
+} as const;
 
 describe('UpgradeConfirmDialog', () => {
   it('discloses the full price when there is no paid Stripe charge to prorate', async () => {
@@ -75,7 +80,7 @@ describe('UpgradeConfirmDialog', () => {
     );
 
     const continueButton = await screen.findByRole('button', {
-      name: 'Start Max 20x · pay $200.00',
+      name: `Start ${PLAN_LABEL.max_15x} · pay $200.00`,
     });
     expect(screen.getByText(/no paid Stripe charge to credit/i)).toBeTruthy();
     expect(screen.getByText(/\$200\.00 today/i)).toBeTruthy();
@@ -97,6 +102,7 @@ describe('UpgradeConfirmDialog', () => {
       amountDueNowCents: 1_234,
       currency: 'usd',
       previewToken: 'tok_seat',
+      recurring: { amountCents: 7_500, currency: 'usd', taxBehavior: 'exclusive' },
     });
 
     render(
@@ -112,11 +118,12 @@ describe('UpgradeConfirmDialog', () => {
     ).toBeTruthy();
   });
 
-  it('quotes the published catalog amount for the requested interval', async () => {
+  it('quotes the renewal the preview returned for the requested interval', async () => {
     paymentMocks.previewUpgrade.mockResolvedValueOnce({
       amountDueNowCents: 500,
       currency: 'usd',
       previewToken: 'tok_team_yearly',
+      recurring: { amountCents: 72_000, currency: 'usd', taxBehavior: 'exclusive' },
     });
 
     render(
@@ -130,5 +137,27 @@ describe('UpgradeConfirmDialog', () => {
     expect(
       await screen.findByText(/After that, Team renews at \$720\/year plus tax/i),
     ).toBeTruthy();
+  });
+
+  it('renews in the subscription currency with its included tax instead of the USD catalog', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValueOnce({
+      amountDueNowCents: 12_345,
+      currency: 'inr',
+      previewToken: 'tok_team_inr',
+      recurring: { amountCents: 2_399_700, currency: 'inr', taxBehavior: 'inclusive' },
+    });
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'team', billingInterval: 'monthly', seats: 3 }}
+        onCancel={vi.fn()}
+        onConfirmed={vi.fn()}
+      />,
+    );
+
+    const description = await screen.findByText(/After that, Team renews at/i);
+    expect(description).toHaveTextContent(/23,997\/month including GST/);
+    expect(description).not.toHaveTextContent('$');
+    expect(description).not.toHaveTextContent('plus tax');
   });
 });

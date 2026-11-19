@@ -44,11 +44,34 @@ function put(body: unknown): NextRequest {
   });
 }
 
+const mockGeneration = vi.fn();
+let inTransaction = false;
+let generationAdvancedInTransaction = false;
+
 describe('/api/connectors/account-state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    const query = (sql: string, params: unknown[]) =>
+      sql.includes('connector_permission_generations')
+        ? mockGeneration(sql, params)
+        : mockQuery(sql, params);
+    const db = {
+      query,
+      transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => {
+        inTransaction = true;
+        try {
+          return await run({ query });
+        } finally {
+          inTransaction = false;
+        }
+      }),
+    };
+    mockGeneration.mockImplementation(async () => {
+      generationAdvancedInTransaction = inTransaction;
+      return [{ generation: '1' }];
+    });
     mockGetUserScopedDb.mockResolvedValue({
-      db: { query: mockQuery },
+      db,
       userId: 'user-owner',
       organizationId: null,
     });
@@ -88,6 +111,13 @@ describe('/api/connectors/account-state', () => {
     expect(sql).toContain('insert into public.connector_account_states');
     expect(sql).toContain('on conflict (user_id, connector_id)');
     expect(params).toEqual(['user-owner', 'notion', false, CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES]);
+    const [generationSql, generationParams] = mockGeneration.mock.calls[0] as [string, unknown[]];
+    expect(generationSql).toContain('generation + 1');
+    expect(generationParams).toEqual(['user-owner', 'notion']);
+    expect(generationAdvancedInTransaction).toBe(true);
+    expect(mockGeneration.mock.invocationCallOrder[0]).toBeLessThan(
+      mockQuery.mock.invocationCallOrder[0]!,
+    );
     expect(mockAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-owner',

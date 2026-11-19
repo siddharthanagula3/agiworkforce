@@ -61,10 +61,54 @@ const AUTHORIZATION_CALLS = [
   'assertAccountActive',
   'createClaimedUserScopedDb',
   'runAuthGate',
-  'requirePlatformAdmin',
 ];
 
 const CRON_AUTHORIZATION_CALLS = ['verifyCronRequest'];
+
+// A shared gate counts only while its own body still makes one of the calls
+// above; the module is read on every run, so a gate that stops authenticating
+// stops authorizing the routes behind it.
+const DELEGATED_AUTHORIZATION = {
+  requirePlatformAdmin: 'apps/web/lib/auth-guards.ts',
+};
+
+function functionBody(source, name) {
+  const start = source.search(new RegExp(`function\\s+${name}\\s*\\(`));
+  if (start < 0) return null;
+  const open = source.indexOf('{', source.indexOf(')', start));
+  if (open < 0) return null;
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, index + 1);
+    }
+  }
+  return null;
+}
+
+const delegatedFindings = [];
+
+function delegatedAuthorizationCalls(file, source) {
+  const accepted = [];
+  for (const [gate, modulePath] of Object.entries(DELEGATED_AUTHORIZATION)) {
+    if (calls(source, [gate]).length === 0) continue;
+    const absolute = path.join(scanRoot, modulePath);
+    const body = fs.existsSync(absolute)
+      ? functionBody(stripComments(fs.readFileSync(absolute, 'utf8')), gate)
+      : null;
+    if (body && calls(body, AUTHORIZATION_CALLS).length > 0) {
+      accepted.push(gate);
+      continue;
+    }
+    delegatedFindings.push(
+      `${file}: relies on ${gate}, but ${modulePath} no longer defines it with one of ` +
+        AUTHORIZATION_CALLS.join(', '),
+    );
+  }
+  return accepted;
+}
 
 function routeFiles(dir) {
   const abs = path.join(scanRoot, dir);
@@ -149,6 +193,7 @@ for (const file of routeFiles(API_ROOT)) {
   const isCron = file.startsWith(CRON_PREFIX);
   const expected = isCron ? CRON_AUTHORIZATION_CALLS : AUTHORIZATION_CALLS;
   if (calls(source, expected).length > 0) continue;
+  if (!isCron && delegatedAuthorizationCalls(file, source).length > 0) continue;
 
   findings.push(
     `${file}: serves object-storage bytes (${used.join(', ')}) without calling one of ` +
@@ -160,6 +205,8 @@ if (blobRoutes === 0) {
   console.error('check-blob-route-authz: found no object-storage routes; the module list is stale');
   process.exit(1);
 }
+
+findings.push(...delegatedFindings);
 
 if (findings.length > 0) {
   console.error('Object-storage routes missing the shared authorization call:');

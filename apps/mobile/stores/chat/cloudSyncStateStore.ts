@@ -12,11 +12,13 @@ interface CloudSyncState {
   lastSyncAt: number | null;
   status: CloudSyncStatus;
   lastError: string | null;
+  chatSyncOffReason: string | null;
   dirtyConversationIds: string[];
   dirtyMessages: DirtyMessageRef[];
 
   setCursor: (cursor: string) => void;
   setStatus: (status: CloudSyncStatus, error?: string | null) => void;
+  setChatSyncOffReason: (reason: string | null) => void;
   markConversationDirty: (id: string) => void;
   markMessageDirty: (conversationId: string, messageId: string) => void;
   clearDirty: (conversationIds: string[], messages: DirtyMessageRef[]) => void;
@@ -30,12 +32,14 @@ export const useCloudSyncStateStore = create<CloudSyncState>()(
       lastSyncAt: null,
       status: 'idle',
       lastError: null,
+      chatSyncOffReason: null,
       dirtyConversationIds: [],
       dirtyMessages: [],
 
       setCursor: (cursor) => set({ cursor }),
       setStatus: (status, error = null) =>
         set({ status, lastError: status === 'error' ? error : null }),
+      setChatSyncOffReason: (reason) => set({ chatSyncOffReason: reason }),
       markConversationDirty: (id) =>
         set((s) =>
           s.dirtyConversationIds.includes(id)
@@ -63,6 +67,7 @@ export const useCloudSyncStateStore = create<CloudSyncState>()(
           lastSyncAt: null,
           status: 'idle',
           lastError: null,
+          chatSyncOffReason: null,
           dirtyConversationIds: [],
           dirtyMessages: [],
         }),

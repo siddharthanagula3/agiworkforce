@@ -18,6 +18,7 @@ export type SendEmailResult =
       reason: SendEmailFailureReason;
       detail: string;
       status?: number;
+      retryable?: boolean;
     };
 
 export interface SendEmailInput {
@@ -177,6 +178,7 @@ async function postTransactionalEmail(input: TransactionalEmailInput): Promise<S
     reason,
     detail: last.detail.slice(0, 500),
     ...(last.status === undefined ? {} : { status: last.status }),
+    retryable: last.retryable,
   };
 }
 

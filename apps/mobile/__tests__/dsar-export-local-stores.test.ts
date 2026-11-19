@@ -261,6 +261,73 @@ describe('DSAR export local stores', () => {
       expect.objectContaining({ mimeType: 'application/json' }),
     );
   });
+
+  it('exports every stored memory fact and message past one page', async () => {
+    const { listMemoryFacts } = jest.requireMock('../storage/memory');
+    const { getMessagesForConversation } = jest.requireMock('../storage/messages');
+    const { listConversations } = jest.requireMock('../storage/conversations');
+    const TOTAL = 2_345;
+    const fact = (index: number) => ({
+      id: `fact-${index}`,
+      fact: `fact ${index}`,
+      source_conversation_id: null,
+      pinned: false,
+      created_at: 1_700_000_000_000 + index,
+    });
+    const message = (index: number) => ({
+      id: `message-${index}`,
+      role: 'user',
+      content: `message ${index}`,
+      mode: 'chat',
+      provider: null,
+      model: null,
+      tokens_in: null,
+      tokens_out: null,
+      duration_ms: null,
+      created_at: 1_700_000_000_000 + index,
+    });
+    const slice = <T>(rows: T[], opts: { limit?: number; offset?: number }) =>
+      rows.slice(opts.offset ?? 0, (opts.offset ?? 0) + (opts.limit ?? 100));
+    const facts = Array.from({ length: TOTAL }, (_, index) => fact(index));
+    const messages = Array.from({ length: TOTAL }, (_, index) => message(index));
+    listMemoryFacts.mockImplementation(async (opts: { limit?: number; offset?: number }) =>
+      slice(facts, opts),
+    );
+    getMessagesForConversation.mockImplementation(
+      async (_id: string, opts: { limit?: number; offset?: number }) => slice(messages, opts),
+    );
+    listConversations.mockImplementation(async (opts: { archived?: boolean }) =>
+      opts.archived
+        ? []
+        : [
+            {
+              id: 'stored-conv',
+              title: 'Stored',
+              default_mode: 'chat',
+              default_provider: null,
+              default_model: null,
+              created_at: 1_700_000_000_000,
+              updated_at: 1_700_000_000_000,
+              archived_at: null,
+              pinned: false,
+            },
+          ],
+    );
+
+    try {
+      await exportAllUserData(undefined, {});
+
+      const payload = JSON.parse(mockWriteAsStringAsync.mock.calls[0][1] as string);
+      expect(payload.memory_facts).toHaveLength(TOTAL);
+      expect(payload.memory_facts[TOTAL - 1].id).toBe(`fact-${TOTAL - 1}`);
+      expect(payload.conversations[0].messages).toHaveLength(TOTAL);
+      expect(payload.conversations[0].messages[TOTAL - 1].id).toBe(`message-${TOTAL - 1}`);
+    } finally {
+      listMemoryFacts.mockReset().mockResolvedValue([]);
+      getMessagesForConversation.mockReset().mockResolvedValue([]);
+      listConversations.mockReset().mockResolvedValue([]);
+    }
+  });
 });
 
 /**

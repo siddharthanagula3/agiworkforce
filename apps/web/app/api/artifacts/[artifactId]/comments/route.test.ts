@@ -5,20 +5,30 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
-  scopedDb: vi.fn(async (..._args: unknown[]) => ({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
-    userId: 'user-1',
-    organizationId: null,
-  })),
+  scopedDb: vi.fn(async (..._args: unknown[]) => {
+    const db = {
+      query: (...args: unknown[]) => mocks.query(...args),
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => work(db),
+    };
+    return { db, userId: 'user-1', organizationId: null };
+  }),
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a) }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a),
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -41,6 +51,12 @@ function row(overrides: Record<string, unknown> = {}) {
     updated_at: '2026-10-19T00:00:00.000Z',
     ...overrides,
   };
+}
+
+function admitted() {
+  return mocks.query
+    .mockResolvedValueOnce([{ isolation: 'read committed' }])
+    .mockResolvedValueOnce([{ locked: true }]);
 }
 
 function request(method: string, body?: unknown, path = `/api/artifacts/${ARTIFACT}/comments`) {
@@ -73,7 +89,9 @@ describe('/api/artifacts/[artifactId]/comments', () => {
   });
 
   it('creates an anchored comment behind the CSRF check', async () => {
-    mocks.query.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([row()]);
+    admitted()
+      .mockResolvedValueOnce([{ total: 0 }])
+      .mockResolvedValueOnce([row()]);
     const response = await POST(
       request('POST', {
         body: 'Is March firm?',
@@ -83,7 +101,7 @@ describe('/api/artifacts/[artifactId]/comments', () => {
     );
     expect(response.status).toBe(201);
     expect(mocks.csrf).toHaveBeenCalledTimes(1);
-    const [sql, params] = mocks.query.mock.calls[1] as [string, unknown[]];
+    const [sql, params] = mocks.query.mock.calls[3] as [string, unknown[]];
     expect(sql).toContain('insert into public.artifact_comments');
     expect(params[0]).toBe('user-1');
     expect(JSON.parse(params[3] as string)).toMatchObject({ kind: 'text', quote: 'ship in March' });
@@ -98,7 +116,7 @@ describe('/api/artifacts/[artifactId]/comments', () => {
   });
 
   it('threads a reply onto the top comment of its thread', async () => {
-    mocks.query
+    admitted()
       .mockResolvedValueOnce([{ total: 1 }])
       .mockResolvedValueOnce([{ id: 'reply-parent', parent_id: COMMENT }])
       .mockResolvedValueOnce([row({ id: 'r2', parent_id: COMMENT, body: 'Yes' })]);
@@ -107,12 +125,12 @@ describe('/api/artifacts/[artifactId]/comments', () => {
       context,
     );
     expect(response.status).toBe(201);
-    const [, params] = mocks.query.mock.calls[2] as [string, unknown[]];
+    const [, params] = mocks.query.mock.calls[4] as [string, unknown[]];
     expect(params[2]).toBe(COMMENT);
   });
 
   it('caps the comments on one artifact', async () => {
-    mocks.query.mockResolvedValueOnce([{ total: 500 }]);
+    admitted().mockResolvedValueOnce([{ total: 500 }]);
     const response = await POST(request('POST', { body: 'One more' }), context);
     expect(response.status).toBe(409);
   });
@@ -133,3 +151,8 @@ describe('/api/artifacts/[artifactId]/comments', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/csrf');
+type ImportedModule2 = typeof import('@/lib/rate-limit');
+type ImportedModule1 = typeof import('@/lib/server/rls-db');
+type ImportedModule0 = typeof import('@/lib/logger');

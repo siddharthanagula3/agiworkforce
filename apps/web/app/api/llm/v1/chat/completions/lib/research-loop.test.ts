@@ -1391,6 +1391,42 @@ describe('durable report persistence', () => {
     expect(run.doneCount).toBe(1);
   });
 
+  it('retries a failed report write and still announces a saved report once it lands', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream([]))
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report body'), finishEvent()]));
+
+    const persistReport = vi
+      .fn<(report: ResearchRunReport) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('neon blip'))
+      .mockResolvedValue(undefined);
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING, { persistReport }));
+
+    expect(persistReport).toHaveBeenCalledTimes(2);
+    expect(persistReport.mock.calls[1]?.[0].status).toBe('completed');
+    const labels = researchStatuses(run).map((s) => s['label']);
+    expect(labels[labels.length - 1]).toBe('Research complete');
+  });
+
+  it('says the report could not be saved and does not overwrite it with an interrupted row', async () => {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream([]))
+      .mockResolvedValueOnce(sseStream([contentEvent(READY_MARKER), finishEvent()]))
+      .mockResolvedValueOnce(sseStream([contentEvent('report body'), finishEvent()]));
+
+    const persistReport = vi
+      .fn<(report: ResearchRunReport) => Promise<void>>()
+      .mockRejectedValue(new Error('neon is down'));
+    const run = await collectRun(runResearchLoop(makeProcessed(), BILLING, { persistReport }));
+
+    expect(persistReport).toHaveBeenCalledTimes(3);
+    expect(persistReport.mock.calls.every(([report]) => report.status === 'completed')).toBe(true);
+    const labels = researchStatuses(run).map((s) => s['label']);
+    expect(labels[labels.length - 1]).toBe('Research complete, but the report could not be saved');
+    expect(forwardedContent(run)).toBe('report body');
+  });
+
   it('writes the report exactly once per run', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream())

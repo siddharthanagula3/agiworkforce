@@ -33,17 +33,29 @@ export function AgentKnowledgePanel({
   const [uploading, setUploading] = useState(false);
   const { confirm, dialog } = useConfirmAction();
 
+  const latestLoad = useRef(0);
+
   const load = useCallback(() => {
+    const request = ++latestLoad.current;
     setError(null);
     api
       .files(agentId)
-      .then(setFiles)
-      .catch((reason: unknown) =>
-        setError(toUserMessage(reason, 'The agent’s files could not be loaded.')),
-      );
+      .then((loaded) => {
+        if (request === latestLoad.current) setFiles(loaded);
+      })
+      .catch((reason: unknown) => {
+        if (request === latestLoad.current) {
+          setError(toUserMessage(reason, 'The agent’s files could not be loaded.'));
+        }
+      });
   }, [api, agentId]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    load();
+    return () => {
+      latestLoad.current += 1;
+    };
+  }, [load]);
 
   const upload = async (picked: FileList | null) => {
     if (!picked || picked.length === 0) return;
@@ -114,7 +126,7 @@ export function AgentKnowledgePanel({
               variant="outline"
               size="sm"
               className="pointer-coarse:min-h-11"
-              disabled={uploading || full}
+              disabled={uploading || files === null || full}
               aria-busy={uploading}
               onClick={() => input.current?.click()}
             >

@@ -1,7 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { AppState } from 'react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
 
 const themeColors = {
   textPrimary: '#fff',
@@ -188,5 +189,31 @@ describe('MOBILE-011, the permission control cannot contradict the OS', () => {
 
     const { findByText } = render(<PermissionDetailScreen />);
     expect(await findByText('Access Denied')).toBeTruthy();
+  });
+
+  it('re-reads the grant when the app returns to the foreground from device Settings', async () => {
+    let onChange: (state: string) => void = () => undefined;
+    const remove = jest.fn();
+    const subscribe = jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((_type, listener) => {
+        onChange = listener as (state: string) => void;
+        return { remove } as never;
+      });
+    setCameraOsStatus('denied', false);
+
+    const { findByText, queryByText, unmount } = render(<PermissionDetailScreen />);
+    expect(await findByText('Access Denied')).toBeTruthy();
+
+    setCameraOsStatus('granted');
+    await act(async () => {
+      onChange('active');
+    });
+
+    expect(await findByText('Access Granted')).toBeTruthy();
+    expect(queryByText('Access Denied')).toBeNull();
+    unmount();
+    expect(remove).toHaveBeenCalled();
+    subscribe.mockRestore();
   });
 });

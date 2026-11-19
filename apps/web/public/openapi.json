@@ -117,7 +117,14 @@
           },
           "recurringAmountCents": {
             "type": "integer",
-            "description": "What renews each period after the upgrade, before tax."
+            "description": "What renews each period after the upgrade, in recurringCurrency. Tax is added on top when recurringTaxBehavior is exclusive and already included when it is inclusive."
+          },
+          "recurringCurrency": {
+            "type": "string"
+          },
+          "recurringTaxBehavior": {
+            "type": "string",
+            "enum": ["inclusive", "exclusive"]
           },
           "seats": {
             "type": "integer"

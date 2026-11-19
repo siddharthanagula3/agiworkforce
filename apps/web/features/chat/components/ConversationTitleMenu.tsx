@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   Archive,
   ArchiveRestore,
@@ -124,6 +125,7 @@ export function ConversationTitleMenu({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => {
+            if (isImeComposingKey(e.nativeEvent)) return;
             if (e.key === 'Enter') {
               e.preventDefault();
               commitRename();

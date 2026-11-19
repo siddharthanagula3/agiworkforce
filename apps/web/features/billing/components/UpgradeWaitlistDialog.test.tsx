@@ -70,6 +70,11 @@ vi.mock('@features/billing/hooks/use-upgrade-waitlist', () => ({
 }));
 
 import { UpgradeWaitlistDialog, UpgradeWaitlistPanel } from './UpgradeWaitlistDialog';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  pro: getBillingPlanPricing('pro').label,
+} as const;
 
 const request = { plan: 'pro' as const, billingInterval: 'monthly' as const };
 
@@ -96,15 +101,19 @@ describe('UpgradeWaitlistDialog', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: 'Join the Pro upgrade waitlist' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: `Join the ${PLAN_LABEL.pro} upgrade waitlist` }),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Join upgrade waitlist' }));
 
     const confirmation = await screen.findByRole('status');
     expect(confirmation).toHaveTextContent(
-      'We’ll email ada@example.com when you can upgrade to Pro.',
+      `We’ll email ada@example.com when you can upgrade to ${PLAN_LABEL.pro}.`,
     );
     await waitFor(() => expect(confirmation).toHaveFocus());
-    expect(screen.getByRole('heading', { name: 'You’re on the Pro waitlist' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: `You’re on the ${PLAN_LABEL.pro} waitlist` }),
+    ).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Join upgrade waitlist' })).toBeNull();
     expect(waitlistMocks.join).toHaveBeenCalledWith(request);
     expect(statusMocks.recordJoined).toHaveBeenCalledWith('pro');
@@ -125,10 +134,12 @@ describe('UpgradeWaitlistDialog', () => {
 
     const confirmation = await screen.findByRole('status');
     expect(confirmation).toHaveTextContent(
-      'We’ll email ada@example.com when you can upgrade to Pro.',
+      `We’ll email ada@example.com when you can upgrade to ${PLAN_LABEL.pro}.`,
     );
     await waitFor(() => expect(confirmation).toHaveFocus());
-    expect(screen.getByRole('heading', { name: 'You’re on the Pro waitlist' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: `You’re on the ${PLAN_LABEL.pro} waitlist` }),
+    ).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Join upgrade waitlist' })).toBeNull();
     expect(screen.getByLabelText('Access code')).toBeEnabled();
     expect(waitlistMocks.join.mock.calls).toEqual([[request]]);
@@ -218,9 +229,11 @@ describe('UpgradeWaitlistDialog', () => {
 
     render(<UpgradeWaitlistDialog request={request} onClose={vi.fn()} onAccessGranted={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: 'You’re on the Pro waitlist' })).toBeVisible();
+    expect(
+      screen.getByRole('heading', { name: `You’re on the ${PLAN_LABEL.pro} waitlist` }),
+    ).toBeVisible();
     expect(screen.getByRole('status')).toHaveTextContent(
-      'We’ll email ada@example.com when you can upgrade to Pro.',
+      `We’ll email ada@example.com when you can upgrade to ${PLAN_LABEL.pro}.`,
     );
     expect(screen.queryByRole('button', { name: 'Join upgrade waitlist' })).toBeNull();
     expect(screen.getByLabelText('Access code')).toBeEnabled();
@@ -240,7 +253,7 @@ describe('UpgradeWaitlistDialog', () => {
 
     const confirmation = await screen.findByRole('status');
     expect(confirmation).toHaveTextContent(
-      'We’ll let you know in Notifications when you can upgrade to Pro.',
+      `We’ll let you know in Notifications when you can upgrade to ${PLAN_LABEL.pro}.`,
     );
     expect(confirmation).not.toHaveTextContent(/email/i);
   });
@@ -252,7 +265,7 @@ describe('UpgradeWaitlistDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join upgrade waitlist' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'We’ll let you know in Notifications when you can upgrade to Pro.',
+      `We’ll let you know in Notifications when you can upgrade to ${PLAN_LABEL.pro}.`,
     );
   });
 
@@ -363,10 +376,14 @@ describe('UpgradeWaitlistPanel', () => {
   it('offers the same waitlist inline, named by its own heading', async () => {
     render(<UpgradeWaitlistPanel request={request} onAccessGranted={vi.fn()} />);
 
-    expect(screen.getByRole('region', { name: 'Join the Pro upgrade waitlist' })).toBeVisible();
+    expect(
+      screen.getByRole('region', { name: `Join the ${PLAN_LABEL.pro} upgrade waitlist` }),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Join upgrade waitlist' }));
 
-    expect(await screen.findByRole('region', { name: 'You’re on the Pro waitlist' })).toBeVisible();
+    expect(
+      await screen.findByRole('region', { name: `You’re on the ${PLAN_LABEL.pro} waitlist` }),
+    ).toBeVisible();
     expect(waitlistMocks.join).toHaveBeenCalledWith(request);
   });
 });

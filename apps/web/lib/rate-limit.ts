@@ -274,6 +274,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'page-read-account-day': {
+    limit: 500,
+    window: '1 d',
+    failClosed: true,
+  },
   'chat-conversation': {
     limit: 60,
     window: '1 m', // 60 conversation operations per minute
@@ -300,6 +305,14 @@ export const rateLimitConfigs = {
     // shared bucket a dozen other reads also spend from. A read is cheap and
     // refusing it empties the sidebar, so it gets its own generous budget.
     limit: 600,
+    window: '1 m',
+    failClosed: false,
+  },
+  'skills-catalog-read': {
+    // The skills page and every CLI or desktop skills mirror read the catalogue,
+    // each skill's body, its file list and its files. Spending that from
+    // `chat-conversation` let one mirror's first sync refuse /api/chat/sync.
+    limit: 300,
     window: '1 m',
     failClosed: false,
   },
@@ -407,6 +420,11 @@ export const rateLimitConfigs = {
     limit: 5,
     window: '1 m', // 5 share creations per minute (prevents share spam)
     failClosed: false,
+  },
+  'share-create-account-day': {
+    limit: 50,
+    window: '1 d',
+    failClosed: true,
   },
   'share-view': {
     limit: 60,
@@ -1016,8 +1034,8 @@ async function resolveVerifiedUserBucket(request: NextRequest): Promise<string |
     if (!token || token.startsWith('sk_live_') || token.startsWith('sk_test_')) return null;
 
     try {
-      const { verifyIdentitySessionToken } = await import('./server/identity');
-      const claims = await verifyIdentitySessionToken(token);
+      const { verifyRequestSessionToken } = await import('./server/native-session-token');
+      const claims = await verifyRequestSessionToken(request, token);
       return claims ? `user:${claims.subject}` : null;
     } catch {
       return null;

@@ -51,12 +51,7 @@ export interface ConversationActionOptions {
 }
 
 export interface ConversationActions {
-  openActions: (
-    conversationId: string,
-    title: string,
-    pinned: boolean,
-    options?: ConversationActionOptions,
-  ) => void;
+  openActions: (conversationId: string, title: string, options?: ConversationActionOptions) => void;
   rename: ConversationRenameState;
 }
 
@@ -107,12 +102,7 @@ export function useConversationActions(): ConversationActions {
   const [openMenu, setOpenMenu] = useState<OpenMenu | null>(null);
 
   const openActions = useCallback(
-    (
-      conversationId: string,
-      title: string,
-      pinned: boolean,
-      options: ConversationActionOptions = {},
-    ) => {
+    (conversationId: string, title: string, options: ConversationActionOptions = {}) => {
       const conversation = findConversation(conversationId, conversations, cloudConversations);
       if (!conversation) return;
       // `archived` is a column on web_conversations, so archiving only exists
@@ -266,7 +256,7 @@ export function useConversationActions(): ConversationActions {
         },
         {
           key: 'pin',
-          label: pinned ? 'Unpin' : 'Pin',
+          label: conversation.pinned === true ? 'Unpin' : 'Pin',
           run: guard(() => void pinConversation(conversationId)),
         },
         ...(options.extraActions ?? []),

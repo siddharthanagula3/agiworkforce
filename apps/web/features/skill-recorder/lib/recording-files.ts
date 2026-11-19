@@ -22,23 +22,38 @@ function frameBytes(frame: SkillCaptureFrame): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-export function recordingFiles(
+export interface RecordingEntry {
+  frame: SkillCaptureFrame;
+  file: File;
+}
+
+export function recordingEntries(
   recording: SkillCaptureRecording,
   indexes: readonly number[],
-): File[] {
+): RecordingEntry[] {
   return [...indexes]
     .sort((left, right) => left - right)
     .flatMap((index) => {
       const frame = recording.frames[index];
       if (!frame) return [];
       return [
-        new File(
-          [frameBytes(frame)],
-          `${FILE_PREFIX}-${recording.startedAt}-${index + 1}.${FILE_EXTENSION}`,
-          { type: frame.mimeType, lastModified: recording.startedAt + frame.offsetMs },
-        ),
+        {
+          frame,
+          file: new File(
+            [frameBytes(frame)],
+            `${FILE_PREFIX}-${recording.startedAt}-${index + 1}.${FILE_EXTENSION}`,
+            { type: frame.mimeType, lastModified: recording.startedAt + frame.offsetMs },
+          ),
+        },
       ];
     });
+}
+
+export function recordingFiles(
+  recording: SkillCaptureRecording,
+  indexes: readonly number[],
+): File[] {
+  return recordingEntries(recording, indexes).map((entry) => entry.file);
 }
 
 /** Evenly spaced picks that always keep the first and the last screenshot. */

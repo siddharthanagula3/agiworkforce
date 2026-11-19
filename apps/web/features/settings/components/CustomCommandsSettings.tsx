@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, Terminal } from 'lucide-react';
-import { useSettingsStore, type CustomCommand } from '@shared/stores/web-settings-store';
+import {
+  isCustomCommandNameTaken,
+  useSettingsStore,
+  type CustomCommand,
+} from '@shared/stores/web-settings-store';
 import {
   Label,
   Button,
@@ -32,7 +36,7 @@ function validate(
   name: string,
   description: string,
   template: string,
-  existingNames: string[],
+  commands: readonly CustomCommand[],
   editingId?: string,
 ): FormErrors {
   const errors: FormErrors = {};
@@ -40,7 +44,7 @@ function validate(
   if (!NAME_RE.test(name)) {
     errors.name =
       'Name must be 2-32 characters: lowercase letters, numbers, and hyphens only. No spaces.';
-  } else if (existingNames.includes(name) && editingId === undefined) {
+  } else if (isCustomCommandNameTaken(commands, name, editingId)) {
     errors.name = 'A command with this name already exists.';
   }
 
@@ -59,10 +63,10 @@ interface CommandFormModalProps {
   open: boolean;
   onClose: () => void;
   initial?: CustomCommand;
-  existingNames: string[];
+  commands: readonly CustomCommand[];
 }
 
-function CommandFormModal({ open, onClose, initial, existingNames }: CommandFormModalProps) {
+function CommandFormModal({ open, onClose, initial, commands }: CommandFormModalProps) {
   const { addCustomCommand, updateCustomCommand } = useSettingsStore();
 
   const isEditing = !!initial;
@@ -73,15 +77,13 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState(false);
 
-  const namesForCheck = isEditing ? existingNames.filter((n) => n !== initial.name) : existingNames;
-
   function handleSubmit() {
     setTouched(true);
     const errs = validate(
       name,
       description,
       template,
-      namesForCheck,
+      commands,
       isEditing ? initial.id : undefined,
     );
     setErrors(errs);
@@ -106,7 +108,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
 
   function revalidate(n: string, d: string, t: string) {
     if (!touched) return;
-    setErrors(validate(n, d, t, namesForCheck, isEditing ? initial.id : undefined));
+    setErrors(validate(n, d, t, commands, isEditing ? initial.id : undefined));
   }
 
   return (
@@ -269,7 +271,11 @@ export function CustomCommandsSettings() {
   const [editingCmd, setEditingCmd] = useState<CustomCommand | null>(null);
   const [deletingCmd, setDeletingCmd] = useState<CustomCommand | null>(null);
 
-  const existingNames = customCommands.map((c) => c.name);
+  const duplicateNames = new Set(
+    customCommands
+      .filter((c) => isCustomCommandNameTaken(customCommands, c.name, c.id))
+      .map((c) => c.name),
+  );
 
   return (
     <div className="space-y-4">
@@ -306,6 +312,11 @@ export function CustomCommandsSettings() {
                   <span className="text-muted-foreground">/</span>
                   {cmd.name}
                 </p>
+                {duplicateNames.has(cmd.name) && (
+                  <p className="text-xs text-danger">
+                    Another command uses this name. Edit one of them to give it a unique name.
+                  </p>
+                )}
                 {cmd.description && (
                   <p className="text-xs text-muted-foreground truncate">{cmd.description}</p>
                 )}
@@ -340,7 +351,7 @@ export function CustomCommandsSettings() {
       <CommandFormModal
         open={isCreating}
         onClose={() => setIsCreating(false)}
-        existingNames={existingNames}
+        commands={customCommands}
       />
 
       {/* Edit modal */}
@@ -349,7 +360,7 @@ export function CustomCommandsSettings() {
           open={true}
           onClose={() => setEditingCmd(null)}
           initial={editingCmd}
-          existingNames={existingNames}
+          commands={customCommands}
         />
       )}
 

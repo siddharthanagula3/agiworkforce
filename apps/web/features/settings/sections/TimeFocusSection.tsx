@@ -5,6 +5,7 @@ import { Button, Switch, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   BREAK_REMINDER_MINUTES,
   TIME_FOCUS_PREFERENCES_NAMESPACE,
+  clockTimeToMinutes,
   defaultTimeFocusPreferences,
   normalizeTimeFocusPreferences,
   type TimeFocusPreferences,
@@ -93,6 +94,14 @@ export function TimeFocusSection() {
       setMessage({ text: 'Choose at least one quiet-hours day.', prefix: null });
       return;
     }
+    if (
+      draft.quietHours.enabled &&
+      (clockTimeToMinutes(draft.quietHours.startTime) === null ||
+        clockTimeToMinutes(draft.quietHours.endTime) === null)
+    ) {
+      setMessage({ text: 'Enter both a start and an end time.', prefix: null });
+      return;
+    }
     if (draft.quietHours.enabled && draft.quietHours.startTime === draft.quietHours.endTime) {
       setMessage({ text: 'Choose different start and end times.', prefix: null });
       return;
@@ -146,7 +155,7 @@ export function TimeFocusSection() {
         >
           Time and focus
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Optional boundaries you choose for yourself. Reminders never lock you out of AGI.
         </p>
         <SaveStatusLine
@@ -170,7 +179,7 @@ export function TimeFocusSection() {
       >
         <div>
           <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Break reminder</div>
-          <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+          <div className="text-xs" style={{ color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
             Get one gentle nudge after this much visible time in AGI each day.
           </div>
         </div>
@@ -223,9 +232,11 @@ export function TimeFocusSection() {
             <div id="quiet-hours-heading" style={{ fontSize: 14, color: 'var(--text-1)' }}>
               Quiet hours
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Hold notifications, and add light friction when you open AGI, during time you set
-              aside. Approval requests and failures still come through.
+            <div
+              className="text-xs"
+              style={{ color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
+            >
+              Hold notifications and slow down opening AGI. Approvals and failures still arrive.
             </div>
           </div>
           <Switch
@@ -253,9 +264,9 @@ export function TimeFocusSection() {
             style={{ border: 0, margin: 0, padding: 0 }}
           >
             <legend
+              className="text-xs max-md:text-sm"
               style={{
                 marginBottom: 'var(--space-2)',
-                fontSize: 12,
                 fontWeight: 500,
                 color: 'var(--text-2)',
               }}
@@ -272,6 +283,7 @@ export function TimeFocusSection() {
                     aria-label={day.label}
                     aria-pressed={selected}
                     onClick={() => toggleDay(day.value)}
+                    className="min-h-0 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
                     style={{
                       width: 36,
                       height: 36,
@@ -297,10 +309,10 @@ export function TimeFocusSection() {
             }}
           >
             <label
+              className="text-xs max-md:text-sm"
               style={{
                 display: 'grid',
                 gap: 'var(--space-2)',
-                fontSize: 12,
                 color: 'var(--text-2)',
               }}
             >
@@ -316,6 +328,7 @@ export function TimeFocusSection() {
                     quietHours: { ...draft.quietHours, startTime: event.target.value },
                   })
                 }
+                className="pointer-coarse:min-h-11"
                 style={{
                   height: 38,
                   borderRadius: 'var(--corner-field)',
@@ -327,10 +340,10 @@ export function TimeFocusSection() {
               />
             </label>
             <label
+              className="text-xs max-md:text-sm"
               style={{
                 display: 'grid',
                 gap: 'var(--space-2)',
-                fontSize: 12,
                 color: 'var(--text-2)',
               }}
             >
@@ -346,6 +359,7 @@ export function TimeFocusSection() {
                     quietHours: { ...draft.quietHours, endTime: event.target.value },
                   })
                 }
+                className="pointer-coarse:min-h-11"
                 style={{
                   height: 38,
                   borderRadius: 'var(--corner-field)',
@@ -357,7 +371,7 @@ export function TimeFocusSection() {
               />
             </label>
           </div>
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
+          <p className="text-xs" style={{ margin: 0, color: 'var(--text-3)' }}>
             Times use {draft.quietHours.timezone}. These reminders currently apply on the Website.
           </p>
         </div>

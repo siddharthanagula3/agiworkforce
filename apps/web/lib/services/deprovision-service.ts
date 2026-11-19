@@ -13,6 +13,7 @@ import {
   revokeMobileIntentTokens,
   revokeOrganizationMobileIntentTokens,
 } from '@/lib/server/mobile-intent-tokens';
+import { revokeWorkspaceDeviceRefreshFamilies } from '@/lib/server/refresh-token-family';
 
 /**
  * Cuts off a member's live access when they leave a workspace.
@@ -188,14 +189,10 @@ export async function deprovisionMember(
 
   let deviceTokensRevoked = 0;
   try {
-    const rows = await db.query<{ id: string }>(
-      `update public.device_refresh_tokens
-          set revoked_at = now()
-        where user_id = $1 and organization_id = $2 and revoked_at is null
-        returning id`,
-      [userId, organizationId],
-    );
-    deviceTokensRevoked = rows.length;
+    deviceTokensRevoked = await revokeWorkspaceDeviceRefreshFamilies(db, {
+      userId,
+      organizationId,
+    });
   } catch (error) {
     errors.push(
       `Device tokens were not revoked: ${error instanceof Error ? error.message : String(error)}`,

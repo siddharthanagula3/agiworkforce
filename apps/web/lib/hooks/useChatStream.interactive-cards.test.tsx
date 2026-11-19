@@ -193,6 +193,7 @@ describe('useChatStream, interactive cards', () => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body['x_interactive_cards']).toEqual({
       supported: [
+        'answer-ui.v1',
         'clarify.v1',
         'image.v1',
         'itinerary.v1',
@@ -205,6 +206,33 @@ describe('useChatStream, interactive cards', () => {
     });
   });
 
+  it('carries an answer UI card onto the assistant message so it replays from metadata', async () => {
+    const answerUi = {
+      schemaVersion: 1,
+      cardId: 'answer-ui-toolu_9',
+      kind: 'answer-ui.v1',
+      createdAt: '2026-10-25T10:00:00.000Z',
+      fallback: { headline: 'Checklist', text: '- [ ] Check links' },
+      producedBy: { toolCallId: 'toolu_9', toolName: 'render_answer_ui' },
+      body: {
+        blocks: [
+          {
+            type: 'checklist',
+            id: 'qa',
+            items: [{ id: 'links', label: 'Check links', checked: false }],
+          },
+        ],
+      },
+    };
+    mockSseStream([textEvent('Here is a checklist.'), cardEvent(answerUi)]);
+    await send();
+
+    const [card] = assistantMessage()?.metadata?.interactiveCards ?? [];
+    expect(card?.recognized).toBe(true);
+    expect(card?.kind).toBe('answer-ui.v1');
+    expect(card?.fallback.text).toBe('- [ ] Check links');
+  });
+
   it('keeps the prose of the same turn intact', async () => {
     mockSseStream([textEvent('Happy to help. '), cardEvent(CARD), textEvent('Tap through these:')]);
     await send();
@@ -212,6 +240,22 @@ describe('useChatStream, interactive cards', () => {
     expect(assistantMessage()?.content).toContain('Happy to help.');
     expect(assistantMessage()?.content).toContain('Tap through these:');
     expect(assistantMessage()?.metadata?.interactiveCards).toHaveLength(1);
+  });
+
+  it('records where in the prose each card arrived, so it renders in stream order', async () => {
+    const leading = clone(CARD);
+    leading.cardId = 'toolu_lead';
+    mockSseStream([
+      cardEvent(leading),
+      textEvent('Here is the image you asked for. '),
+      cardEvent(CARD),
+    ]);
+    await send();
+
+    expect(assistantMessage()?.metadata?.interactiveCardTextOffsets).toEqual({
+      toolu_lead: 0,
+      toolu_01abc: 'Here is the image you asked for. '.length,
+    });
   });
 
   it('keeps an unknown kind as a fallback-bearing card', async () => {
@@ -549,6 +593,105 @@ describe('useChatStream, interactive cards', () => {
       await runtime.current.respondToInteractiveCard(binding, { kind: 'dismiss' });
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  describe('continuing an answered card', () => {
+    const ANSWERED_CONVERSATION = '0190a000-0000-7000-8000-0000000000a1';
+    const OTHER_CONVERSATION = '0190a000-0000-7000-8000-0000000000a2';
+    const ANSWERED_MESSAGE = '0190a000-0000-7000-8000-0000000000a3';
+
+    function seedAnsweredCard() {
+      const card = parseInteractiveCardDelta({ card: answeredCardResponse().card });
+      if (!card) throw new Error('expected a valid card');
+      const savedConversation = (id: string) => ({
+        id,
+        title: 'Saved chat',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:00:00.000Z',
+      });
+      useChatStore.setState({
+        conversations: [
+          savedConversation(ANSWERED_CONVERSATION),
+          savedConversation(OTHER_CONVERSATION),
+        ],
+      });
+      useChatStore.getState().setActiveConversationWithMessages(OTHER_CONVERSATION, [
+        {
+          id: '0190a000-0000-7000-8000-0000000000a4',
+          role: 'user',
+          content: 'An unrelated chat',
+          createdAt: '2026-08-05T09:00:00.000Z',
+        },
+      ]);
+      useChatStore.getState().setActiveConversationWithMessages(ANSWERED_CONVERSATION, [
+        {
+          id: '0190a000-0000-7000-8000-0000000000a5',
+          role: 'user',
+          content: 'plan me a day',
+          createdAt: '2026-08-05T09:59:00.000Z',
+        },
+        {
+          id: ANSWERED_MESSAGE,
+          role: 'assistant',
+          content: 'A few questions',
+          createdAt: '2026-08-05T10:00:00.000Z',
+          metadata: { interactiveCards: [card] },
+        },
+      ]);
+    }
+
+    function chatRequestBodies(): Array<Record<string, unknown>> {
+      return vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => String(url).includes('/chat/completions'))
+        .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>);
+    }
+
+    it('continues the conversation the card was answered in after the user switches away', async () => {
+      seedAnsweredCard();
+      const saved = deferred<Response>();
+      vi.mocked(fetch).mockImplementationOnce(() => saved.promise);
+      mockSseStream([textEvent('Here is your day')]);
+      const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+
+      let resumed!: Promise<void>;
+      act(() => {
+        resumed = result.current.resumeInteractiveCardTurn(ANSWERED_MESSAGE);
+      });
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      act(() => {
+        useChatStore.getState().setActiveConversation(OTHER_CONVERSATION);
+      });
+      saved.resolve(
+        new Response(JSON.stringify({ message: { id: ANSWERED_MESSAGE } }), { status: 200 }),
+      );
+      await act(async () => {
+        await resumed;
+      });
+
+      const bodies = chatRequestBodies();
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toMatchObject({
+        conversation_id: ANSWERED_CONVERSATION,
+        assistant_message_id: ANSWERED_MESSAGE,
+      });
+    });
+
+    it('continues a named conversation even when another one is displayed', async () => {
+      seedAnsweredCard();
+      useChatStore.getState().setActiveConversation(OTHER_CONVERSATION);
+      mockSseStream([textEvent('Here is your day')]);
+      const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+
+      await act(async () => {
+        await result.current.continueGeneration(ANSWERED_MESSAGE, {
+          conversationId: ANSWERED_CONVERSATION,
+        });
+      });
+
+      expect(chatRequestBodies()).toHaveLength(1);
+      expect(chatRequestBodies()[0]).toMatchObject({ conversation_id: ANSWERED_CONVERSATION });
+    });
   });
 
   it('keeps the original binding and payload while CSRF is pending', async () => {

@@ -138,8 +138,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
   });
 
   const db = getNeonDb();
-  const mint = async () => {
-    const servicePrincipal = await resolvePrincipalForKey(db, {
+  const mint = async (tx: DatabaseAdapter) => {
+    const servicePrincipal = await resolvePrincipalForKey(tx, {
       organizationId: membership.organizationId,
       name: body.name,
       scopes,
@@ -150,7 +150,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       body.expiresInDays === null
         ? null
         : new Date(Date.now() + body.expiresInDays * DAY_MS).toISOString();
-    const { key, record } = await createAdminApiKey(db, {
+    const { key, record } = await createAdminApiKey(tx, {
       organizationId: membership.organizationId,
       name: body.name,
       scopes,
@@ -159,7 +159,11 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       expiresAt,
     });
 
-    await recordAuditEvent({
+    return { replayed: false, status: 201, body: { key, record, servicePrincipal } };
+  };
+
+  const recordCreated = (created: CreatedKeyPayload) =>
+    recordAuditEvent({
       userId,
       eventType: 'admin_api_key_created',
       organizationId: membership.organizationId,
@@ -168,34 +172,35 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       severity: 'critical',
       detail: {
         resourceType: 'admin_api_key',
-        resourceId: record.id,
-        resourceName: record.name,
+        resourceId: created.record.id,
+        resourceName: created.record.name,
         scopes,
         role: membership.role,
-        status: expiresAt ? 'expiring' : 'no_expiry',
-        subjectRef: `service_principal:${servicePrincipal.id}`,
+        status: created.record.expiresAt ? 'expiring' : 'no_expiry',
+        subjectRef: `service_principal:${created.servicePrincipal.id}`,
       },
     });
 
-    return { replayed: false, status: 201, body: { key, record, servicePrincipal } };
-  };
-
   if (idempotencyKey === null) {
-    const minted = await mint();
+    const minted = await db.transaction(mint);
+    await recordCreated(minted.body);
     return NextResponse.json(minted.body, { status: minted.status });
   }
 
-  const result = await withIdempotentWrite<CreatedKeyPayload>(
-    db,
-    {
-      organizationId: membership.organizationId,
-      scope: 'admin-api-keys:create',
-      actorId: userId,
-      key: idempotencyKey,
-      requestBody: body,
-    },
-    mint,
+  const result = await db.transaction((tx) =>
+    withIdempotentWrite<CreatedKeyPayload>(
+      tx,
+      {
+        organizationId: membership.organizationId,
+        scope: 'admin-api-keys:create',
+        actorId: userId,
+        key: idempotencyKey,
+        requestBody: body,
+      },
+      () => mint(tx),
+    ),
   );
+  if (!result.replayed) await recordCreated(result.body);
   return NextResponse.json(result.body, {
     status: result.status,
     headers: { 'Idempotency-Replayed': result.replayed ? 'true' : 'false' },

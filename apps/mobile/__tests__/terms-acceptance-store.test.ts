@@ -1,4 +1,7 @@
-import { useTermsAcceptanceStore } from '../src/features/auth/store/termsAcceptanceStore';
+import {
+  isTermsAnswerPending,
+  useTermsAcceptanceStore,
+} from '../src/features/auth/store/termsAcceptanceStore';
 import { ApiHttpError, CloudCredentialUnavailableError } from '../services/apiErrors';
 
 const mockGet = jest.fn();
@@ -10,6 +13,39 @@ jest.mock('@/services/api', () => ({
     post: (...args: unknown[]) => mockPost(...args),
   },
 }));
+
+describe('whether the Terms answer for a signed-in account is still in flight', () => {
+  it('is pending before the check starts, for another account, and while it runs', () => {
+    expect(isTermsAnswerPending({ userId: null, status: 'idle' }, 'person-a')).toBe(true);
+    expect(isTermsAnswerPending({ userId: 'person-b', status: 'accepted' }, 'person-a')).toBe(true);
+    expect(isTermsAnswerPending({ userId: 'person-a', status: 'checking' }, 'person-a')).toBe(true);
+  });
+
+  it('is settled once the server answered or the check failed', () => {
+    for (const status of ['accepted', 'required', 'accepting', 'error'] as const) {
+      expect(isTermsAnswerPending({ userId: 'person-a', status }, 'person-a')).toBe(false);
+    }
+  });
+
+  it('follows the store through a check', async () => {
+    let answer: (value: unknown) => void = () => undefined;
+    mockGet.mockReset();
+    mockGet.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    useTermsAcceptanceStore.getState().reset();
+
+    const check = useTermsAcceptanceStore.getState().verify('person-a');
+    expect(isTermsAnswerPending(useTermsAcceptanceStore.getState(), 'person-a')).toBe(true);
+
+    answer({ currentVersion: 'current-policy', accepted: true });
+    await check;
+    expect(isTermsAnswerPending(useTermsAcceptanceStore.getState(), 'person-a')).toBe(false);
+  });
+});
 
 describe('native Terms acceptance', () => {
   beforeEach(() => {

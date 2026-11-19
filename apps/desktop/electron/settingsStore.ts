@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   type GarnishPreferences,
@@ -47,12 +47,37 @@ export function getPreferences(): GarnishPreferences {
   return normalizePreferences(getSettings());
 }
 
-export function saveSettings(patch: Partial<ShellSettings>): ShellSettings {
+function mergeSettings(patch: Partial<ShellSettings>): ShellSettings {
   const next = { ...getSettings(), ...patch };
-  const merged: ShellSettings = { ...normalizeShortcuts(next), ...normalizePreferences(next) };
+  return { ...normalizeShortcuts(next), ...normalizePreferences(next) };
+}
+
+function writeSettingsFile(settings: ShellSettings): void {
+  const file = settingsFilePath();
+  const staged = `${file}.tmp`;
+  writeFileSync(staged, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
+  renameSync(staged, file);
+}
+
+export function saveSettingsDurably(patch: Partial<ShellSettings>): ShellSettings {
+  const merged = mergeSettings(patch);
+  try {
+    writeSettingsFile(merged);
+  } catch (error) {
+    console.warn('[settings] could not persist settings.json:', error);
+    throw new Error('The setting could not be saved on this computer, so it was not changed.', {
+      cause: error,
+    });
+  }
+  cached = merged;
+  return merged;
+}
+
+export function saveSettings(patch: Partial<ShellSettings>): ShellSettings {
+  const merged = mergeSettings(patch);
   cached = merged;
   try {
-    writeFileSync(settingsFilePath(), `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
+    writeSettingsFile(merged);
   } catch (error) {
     console.warn('[settings] could not persist settings.json:', error);
   }

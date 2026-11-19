@@ -35,9 +35,11 @@ jest.mock('react-native-reanimated', () => {
   };
   return {
     __esModule: true,
-    default: {
-      View: RN.View,
-    },
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    withRepeat: <T,>(value: T) => value,
+    default: { createAnimatedComponent: (component: unknown) => component, View: RN.View },
     FadeInDown: fadeBuilder,
     useReducedMotion: () => false,
     useSharedValue: (initial: number) => ({ value: initial }),

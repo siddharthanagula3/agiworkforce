@@ -154,16 +154,26 @@ export function LocalFolderAttachDialog({ open, onClose, onAttach }: LocalFolder
   useEffect(() => {
     if (!open || !activeRoot) {
       setEntries([]);
-      return;
+      return undefined;
     }
+    let retired = false;
+    setEntries([]);
     setLoading(true);
     listWorkspaceFiles(activeRoot.id, path)
       .then((next) => {
+        if (retired) return;
         setEntries(next);
         setError(null);
       })
-      .catch((cause: unknown) => setError(messageFor(cause, LOAD_FAILED)))
-      .finally(() => setLoading(false));
+      .catch((cause: unknown) => {
+        if (!retired) setError(messageFor(cause, LOAD_FAILED));
+      })
+      .finally(() => {
+        if (!retired) setLoading(false);
+      });
+    return () => {
+      retired = true;
+    };
   }, [open, activeRoot, path]);
 
   const visible = useMemo(

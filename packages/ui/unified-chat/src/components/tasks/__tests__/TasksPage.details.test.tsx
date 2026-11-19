@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TasksPage, readTaskJournal } from '../TasksPage';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, PRODUCT_NAMES } from '@agiworkforce/types';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const ROOT_GRAPH_TEST_TIMEOUT_MS = 15_000;
@@ -92,7 +92,11 @@ describe('Tasks task-detail panel', () => {
         />,
       );
 
-      fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
+      fireEvent.click(
+        await screen.findByRole('button', {
+          name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+        }),
+      );
 
       expect(screen.getByText('Unavailable model')).toBeTruthy();
       expect(screen.queryByText(run.model)).toBeNull();
@@ -122,7 +126,9 @@ describe('Tasks task-detail panel', () => {
       />,
     );
 
-    const titleButton = await screen.findByRole('button', { name: /^View details for AGI Work,/ });
+    const titleButton = await screen.findByRole('button', {
+      name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+    });
     const card = titleButton.closest('div.rounded-lg');
     expect(card).toBeTruthy();
     expect(titleButton.getAttribute('aria-pressed')).toBe('false');
@@ -137,7 +143,9 @@ describe('Tasks task-detail panel', () => {
     const openConversation = vi.fn();
     render(<TasksPage transport={{ client: client(), openConversation, notifyError: vi.fn() }} />);
 
-    const titleButton = await screen.findByRole('button', { name: /^View details for AGI Work,/ });
+    const titleButton = await screen.findByRole('button', {
+      name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
 
     expect(openConversation).toHaveBeenCalledWith('conversation-1');
@@ -191,7 +199,11 @@ describe('Tasks task-detail panel', () => {
 
     expect(await screen.findByRole('heading', { name: 'Select a task' })).toBeTruthy();
     expect(screen.getByLabelText('Task details').className.split(' ')).toContain('lg:self-start');
-    fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+      }),
+    );
     await waitFor(() => expect(screen.getByLabelText('Task details')).toBeTruthy());
     expect(openConversation).not.toHaveBeenCalled();
 
@@ -210,7 +222,11 @@ describe('Tasks task-detail panel', () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+      }),
+    );
 
     const details = screen.getByLabelText('Task details');
     expect(details.className.split(' ')).toEqual(

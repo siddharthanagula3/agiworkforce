@@ -44,7 +44,7 @@ export function replaceImageInHtml(
   if (!target || target.tagName.toLowerCase() !== 'img') return null;
 
   const current = target.getAttribute('src');
-  if (current) {
+  if (current && !target.hasAttribute('srcset')) {
     for (const quote of ['"', "'"]) {
       const attribute = `src=${quote}${current}${quote}`;
       if (occurrences(source, attribute) === 1) {

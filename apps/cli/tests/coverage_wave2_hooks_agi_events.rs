@@ -12,8 +12,25 @@
 /// right HookEvent variant, the hook matcher accepts the input, and the
 /// executor fires the command.
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use agiworkforce_cli::hooks::{run_hooks, Hook, HookEvent, HookInput, HooksConfig};
+
+/// Run against an empty, signed-out config root with file-backed secrets.
+/// Without this the library reads the developer's own account from the OS
+/// keychain, which can block on an access prompt nobody answers and, signed
+/// in with no workspace policy cached, refuses every hook.
+fn signed_out_config_root() {
+    static ROOT: OnceLock<tempfile::TempDir> = OnceLock::new();
+    ROOT.get_or_init(|| {
+        let root = tempfile::tempdir().expect("temporary config root");
+        std::env::set_var("AGIWORKFORCE_HOME", root.path());
+        std::env::set_var("AGIWORKFORCE_NO_KEYRING", "1");
+        std::env::remove_var("AGIWORKFORCE_JWT");
+        std::env::remove_var("AGIWORKFORCE_API_BASE");
+        root
+    });
+}
 
 // ---------------------------------------------------------------------------
 // Helper, build a HooksConfig wired to a single no-op `true` hook.
@@ -59,6 +76,7 @@ macro_rules! agi_event_fires {
     ($test_name:ident, $variant:expr, $name_str:literal) => {
         #[tokio::test]
         async fn $test_name() {
+            signed_out_config_root();
             let config = config_for_event($name_str);
             let input = minimal_input($name_str);
             let results = run_hooks(&config, $variant, &input).await;

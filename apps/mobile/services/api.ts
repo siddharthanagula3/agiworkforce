@@ -1,8 +1,6 @@
 import { Alert, Linking } from 'react-native';
-import { router } from 'expo-router';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
-import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import {
@@ -51,9 +49,6 @@ let _refreshBackoffUntil = 0;
 let _accountGeneration = 0;
 const _activeAccountUploads = new Set<UploadTask>();
 const MAX_REFRESH_FAILURES = 3;
-// The account's own identity route. A 403 there is the server refusing the
-// account itself (deleted, suspended, locked), not one action being denied.
-const ACCOUNT_IDENTITY_PATH = '/api/me';
 const REFRESH_TIMEOUT_MS = 10_000;
 const PASSKEY_REQUIRED_CODE = 'PASSKEY_REQUIRED';
 const PASSKEY_REQUIRED_MESSAGE =
@@ -138,10 +133,6 @@ async function refusedForPasskey(response: Response): Promise<boolean> {
   }
 }
 
-function isAccountIdentityPath(path: string): boolean {
-  return path === ACCOUNT_IDENTITY_PATH || path.startsWith(`${ACCOUNT_IDENTITY_PATH}?`);
-}
-
 interface AccountUnavailableRefusal {
   message: string;
   recoveryPath: string | null;
@@ -219,39 +210,7 @@ export async function recoverStreamSession(account: CloudAccountEpoch): Promise<
   const refreshed = await tryRefreshToken();
   assertCloudAccountEpochCurrent(account);
   assertApiAccountGeneration(accountGeneration);
-  if (!refreshed) handleUnrecoverableAuth();
   return refreshed;
-}
-
-function handleUnrecoverableAuth(): void {
-  invalidateCloudAccount();
-  clearLocalCloudAccountState();
-
-  if (!FEATURES.auth) {
-    clearAuthSession().catch((err) => {
-      console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
-    });
-    return;
-  }
-
-  clearAuthSession().catch((err) => {
-    console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
-  });
-
-  Alert.alert('Session Expired', 'Your session has expired. Please sign in again to continue.', [
-    { text: 'Not now', style: 'cancel' },
-    {
-      text: 'Sign In',
-      style: 'default',
-      onPress: () => {
-        try {
-          router.push('/(auth)/login');
-        } catch (err) {
-          if (__DEV__) console.warn('[API] login navigation failed (non-blocking):', err);
-        }
-      },
-    },
-  ]);
 }
 
 interface RequestOptions {
@@ -327,6 +286,11 @@ async function sendRequest(
   ) {
     throw new CloudCredentialUnavailableError();
   }
+  const requestHeaders: Record<string, string> = {
+    ...headers,
+    ...(options.headers ?? {}),
+    ...(init.headers as Record<string, string>),
+  };
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
@@ -342,11 +306,7 @@ async function sendRequest(
       `${options.baseUrl ?? API_URL}${path}`,
       {
         ...init,
-        headers: {
-          ...headers,
-          ...(options.headers ?? {}),
-          ...(init.headers as Record<string, string>),
-        },
+        headers: requestHeaders,
         signal:
           callerSignals.length > 0
             ? combineAbortSignals([...callerSignals, controller.signal])
@@ -373,8 +333,7 @@ async function sendRequest(
         }
       }
       release();
-      handleUnrecoverableAuth();
-      throw new Error('HTTP 401: Session expired. Please sign in again.');
+      throw new CloudCredentialUnavailableError();
     }
 
     if (response.status === 403) {
@@ -395,12 +354,6 @@ async function sendRequest(
         handleAccountUnavailable(refusal);
         throw new Error(`HTTP 403: ${refusal.message}`);
       }
-    }
-
-    if (response.status === 403 && isAccountIdentityPath(path)) {
-      release();
-      handleUnrecoverableAuth();
-      throw new Error('HTTP 403: This account can no longer be used on this device.');
     }
 
     return { response, release };
@@ -665,11 +618,15 @@ export const api = {
           const refreshed = await tryRefreshToken();
           assertApiAccountGeneration(accountGeneration);
           if (refreshed) {
+            if (options?.signal?.aborted) {
+              const abortError = new Error('Attachment upload aborted');
+              abortError.name = 'AbortError';
+              throw abortError;
+            }
             return api.uploadFile(file, { ...options, _skipAuthRetry: true });
           }
         }
-        handleUnrecoverableAuth();
-        throw new Error('Upload failed: session expired. Please sign in again.');
+        throw new CloudCredentialUnavailableError();
       }
       if (!presignResponse.ok) {
         throw new ApiHttpError(
@@ -772,10 +729,7 @@ export const api = {
         });
       const completionToken = await getAuthToken();
       assertApiAccountGeneration(accountGeneration);
-      if (!completionToken) {
-        handleUnrecoverableAuth();
-        throw new Error('Upload failed: session expired. Please sign in again.');
-      }
+      if (!completionToken) throw new CloudCredentialUnavailableError();
       let completeResponse = await completeAttachment(completionToken);
       assertApiAccountGeneration(accountGeneration);
       if (completeResponse.status === 401) {
@@ -783,16 +737,10 @@ export const api = {
         assertApiAccountGeneration(accountGeneration);
         const refreshedToken = refreshed ? await getAuthToken() : null;
         assertApiAccountGeneration(accountGeneration);
-        if (!refreshedToken) {
-          handleUnrecoverableAuth();
-          throw new Error('Upload failed: session expired. Please sign in again.');
-        }
+        if (!refreshedToken) throw new CloudCredentialUnavailableError();
         completeResponse = await completeAttachment(refreshedToken);
         assertApiAccountGeneration(accountGeneration);
-        if (completeResponse.status === 401) {
-          handleUnrecoverableAuth();
-          throw new Error('Upload failed: session expired. Please sign in again.');
-        }
+        if (completeResponse.status === 401) throw new CloudCredentialUnavailableError();
       }
       if (!completeResponse.ok) {
         throw new ApiHttpError(

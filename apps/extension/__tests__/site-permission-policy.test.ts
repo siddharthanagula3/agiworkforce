@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import catalog from '../_locales/en/messages.json';
 import { ASK_BEFORE_ACTING_KEY } from '../src/features/computer-use/askBeforeActing';
 import {
   UNAPPROVED_SITE_DEFAULT_HINT,
@@ -12,13 +13,26 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (relativePath: string): string =>
   readFileSync(resolve(here, '..', relativePath), 'utf8');
 
+beforeAll(() => {
+  vi.stubGlobal('chrome', {
+    i18n: {
+      getMessage: (key: string) => (catalog as Record<string, { message: string }>)[key]!.message,
+    },
+  });
+});
+
 function fakeStorage(initial: Record<string, unknown> = {}) {
   const values = { ...initial };
   const writes: Array<Record<string, unknown>> = [];
+  const listeners: Array<(changes: Record<string, { newValue?: unknown }>) => void> = [];
   return {
     values,
     writes,
+    listeners,
     failNextSet: false,
+    onChanged(listener: (changes: Record<string, { newValue?: unknown }>) => void) {
+      listeners.push(listener);
+    },
     async get(key: string) {
       return key in values ? { [key]: values[key] } : {};
     },
@@ -57,6 +71,39 @@ describe('options default site permission', () => {
     expect(section.status.textContent).toBe(
       'AGI skips routine confirmations and still asks before protected actions.',
     );
+  });
+
+  it('labels the modes with the side panel wording, and no option claims to run without asking', () => {
+    const section = createSitePermissionPolicySection(fakeStorage());
+    expect([...section.select.options].map((o) => o.textContent)).toEqual([
+      'Auto',
+      'Ask first',
+      'Full access',
+    ]);
+    expect(section.element.textContent).not.toMatch(/without asking/i);
+  });
+
+  it('follows a mode changed elsewhere while Options stays open', async () => {
+    const storage = fakeStorage();
+    const section = createSitePermissionPolicySection(storage);
+    await section.loaded;
+    expect(section.select.value).toBe('auto');
+
+    for (const listener of storage.listeners)
+      listener({ [ASK_BEFORE_ACTING_KEY]: { newValue: false } });
+    expect(section.select.value).toBe('full');
+    expect(section.status.textContent).toBe(
+      'AGI skips routine confirmations and still asks before protected actions.',
+    );
+
+    for (const listener of storage.listeners)
+      listener({ [ASK_BEFORE_ACTING_KEY]: { newValue: true } });
+    expect(section.select.value).toBe('ask');
+  });
+
+  it('subscribes to local storage changes from the Options page', () => {
+    const options = read('src/options.ts');
+    expect(options).toMatch(/onChanged: \(listener\) =>\s*chrome\.storage\.onChanged\.addListener/);
   });
 
   it('persists a change to the preference the background enforces', async () => {

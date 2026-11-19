@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Badge,
@@ -105,6 +106,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
   const [results, setResults] = useState<SearchResult[]>([]);
   const [stats, setStats] = useState<SearchStats | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'assistant' | 'system'>('all');
@@ -188,6 +190,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     searchAbortRef.current = controller;
 
     setIsSearching(true);
+    setSearchFailed(false);
     setShowSuggestions(false);
 
     try {
@@ -209,7 +212,9 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     } catch (error) {
       if (controller.signal.aborted) return;
       console.error('[GlobalSearch] Search failed:', error);
-      toast.error('Search failed. Please try again.');
+      setResults([]);
+      setStats(null);
+      setSearchFailed(true);
     } finally {
       if (searchAbortRef.current === controller) setIsSearching(false);
     }
@@ -220,6 +225,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
       searchAbortRef.current?.abort();
       setResults([]);
       setStats(null);
+      setSearchFailed(false);
       return;
     }
 
@@ -271,6 +277,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
     setQuery('');
     setResults([]);
     setStats(null);
+    setSearchFailed(false);
     setShowSuggestions(true);
     handleClearFilters();
   };
@@ -393,7 +400,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
+                    if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
                       event.preventDefault();
                       void handleSearch();
                     }
@@ -624,6 +631,22 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                     <Spinner size="sm" aria-label="Loading search history…" />
                   </div>
                 )}
+              </div>
+            ) : searchFailed ? (
+              <div
+                role="alert"
+                className="flex flex-col items-center justify-center gap-3 py-12 text-center"
+              >
+                <Search className="h-12 w-12 text-muted-foreground opacity-30" />
+                <p className="text-sm text-muted-foreground">Search could not be completed</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleSearch()}
+                >
+                  Retry
+                </Button>
               </div>
             ) : results.length === 0 && query.trim() ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">

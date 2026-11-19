@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
-vi.mock('@/lib/server/health-check', () => ({ runHealthChecks: mocks.runHealthChecks }));
+vi.mock('@/lib/server/health-check', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  runHealthChecks: mocks.runHealthChecks,
+}));
 vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: mocks.sendSupportEmail,
 }));
@@ -129,6 +132,25 @@ describe('GET /api/cron/health-probe', () => {
     expect(mocks.sendSupportEmail).toHaveBeenCalledWith(
       expect.objectContaining({ subject: expect.stringContaining('WARNING') }),
     );
+  });
+
+  it('describes a WARNING by the checks that failed, not as a billing-only outage', async () => {
+    mocks.runHealthChecks.mockResolvedValue({
+      status: 'degraded',
+      timestamp: '2026-08-09T06:15:00.000Z',
+      checks: {
+        database: { status: 'healthy' },
+        stripe: { status: 'healthy' },
+        environment: { status: 'healthy' },
+        chat: { status: 'unhealthy', message: 'every route degraded' },
+      },
+    });
+
+    await GET(req());
+
+    const [{ text }] = mocks.sendSupportEmail.mock.calls[0] as [{ text: string }];
+    expect(text).toContain('WARNING means the core checks passed and these did not: chat.');
+    expect(text).not.toMatch(/billing is degraded|chat keeps working/);
   });
 
   it('fails the cron run when an owed alert could not be delivered', async () => {
@@ -296,3 +318,5 @@ describe('health probe consecutive-failure debounce', () => {
     expect(await response.json()).toMatchObject({ alerted: true, delivery: 'delivered' });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/health-check');

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { fetchTierInfo } from '../utils/api';
 import {
   formatBucketCreditsLeft,
@@ -9,6 +10,7 @@ import {
 
 vi.mock('../utils/api', () => ({
   fetchTierInfo: vi.fn(),
+  getAccountAuthState: vi.fn(),
 }));
 
 function setConfiguredModel(model: string): void {
@@ -192,6 +194,8 @@ describe('usageMeter', () => {
     expect(formatUsageMeterFallbackLabel('user-api-key')).toBe(
       'BYOK mode - no AGI-managed quota is active',
     );
-    expect(formatUsageMeterFallbackLabel('managed-plan')).toBe('Managed Cloud usage unavailable');
+    expect(formatUsageMeterFallbackLabel('managed-plan')).toBe(
+      `${formatPrivacyModeLabel('managed')} usage unavailable`,
+    );
   });
 });

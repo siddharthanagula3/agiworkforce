@@ -11,8 +11,10 @@ pub use provider_dispatch::{
     resolve_selected_provider, resolve_turn_route, select_turn_route, selection_provider_override,
     try_detect_provider, turn_can_start, AccountRoute, TurnRoute,
 };
-pub use streaming::{offering_search, parse_paywall_body, stream_completion, WEB_SEARCH_TOOL};
-pub(crate) use streaming::{routed, searching};
+pub use streaming::{
+    effort_reaches_model, offering_search, parse_paywall_body, stream_completion, WEB_SEARCH_TOOL,
+};
+pub(crate) use streaming::{forwarding_reasoning, routed, searching, ReasoningSink};
 
 // Chat wire types are shared with other surfaces through the extracted
 // `agiworkforce-llm` crate (Wave 5c1). Re-exported here so every existing

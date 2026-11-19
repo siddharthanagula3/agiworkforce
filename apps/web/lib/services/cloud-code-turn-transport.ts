@@ -14,8 +14,9 @@ import {
   type PreparedCloudCodeAgentTurn,
   type StartCloudCodeAgentTurnInput,
 } from './cloud-code-agent-service';
+import { findPendingCloudCodeApprovalRequest } from './cloud-code-agent-approval-service';
 import { openCloudCodeDurableRun } from './cloud-code-durable-run';
-import { listCloudCodeAgentTurns, type CloudCodeOwner } from './cloud-code-session-service';
+import { getCloudCodeAgentTurn, type CloudCodeOwner } from './cloud-code-session-service';
 
 const DURABLE_TURN_POLL_INTERVAL_MS = 1_500;
 
@@ -98,19 +99,25 @@ async function awaitDurableTurn(
 ): Promise<CloudCodeAgentTurnOutcome> {
   const deadlineAtMs = Date.now() + CLOUD_CODE_AGENT_TURN_BUDGET_MS;
   while (Date.now() < deadlineAtMs && !signal.aborted) {
-    const turns = await listCloudCodeAgentTurns(db, owner, sessionId);
-    const turn = turns.find((candidate) => candidate.turnId === turnId);
-    if (turn?.stopReason && turn.stopReason !== 'awaiting_approval') {
-      return {
-        turnId,
-        stopReason: turn.stopReason,
-        stepsUsed: turn.stepsUsed,
-        inputTokens: turn.inputTokens,
-        outputTokens: turn.outputTokens,
-        finalMessage: turn.finalMessage,
-        steps: turn.steps,
-        ...(turn.errorMessage ? { errorMessage: turn.errorMessage } : {}),
-      };
+    const turn = await getCloudCodeAgentTurn(db, owner, sessionId, turnId);
+    if (turn?.stopReason) {
+      const pendingApproval =
+        turn.stopReason === 'awaiting_approval'
+          ? await findPendingCloudCodeApprovalRequest(db, owner, sessionId, turnId)
+          : null;
+      if (turn.stopReason !== 'awaiting_approval' || pendingApproval) {
+        return {
+          turnId,
+          stopReason: turn.stopReason,
+          stepsUsed: turn.stepsUsed,
+          inputTokens: turn.inputTokens,
+          outputTokens: turn.outputTokens,
+          finalMessage: turn.finalMessage,
+          steps: turn.steps,
+          ...(pendingApproval ? { pendingApproval } : {}),
+          ...(turn.errorMessage ? { errorMessage: turn.errorMessage } : {}),
+        };
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, DURABLE_TURN_POLL_INTERVAL_MS));
   }

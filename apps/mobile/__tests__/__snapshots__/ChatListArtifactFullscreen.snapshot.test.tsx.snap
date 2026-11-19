@@ -301,6 +301,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
         }
       }
       horizontal={false}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
       style={
         {
@@ -323,6 +324,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
             }
           }
           horizontal={true}
+          keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={true}
           style={
             {
@@ -680,6 +682,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
         }
       }
       horizontal={false}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
       style={
         {
@@ -702,6 +705,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
             }
           }
           horizontal={true}
+          keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={true}
           style={
             {

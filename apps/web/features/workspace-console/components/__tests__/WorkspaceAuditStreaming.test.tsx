@@ -80,6 +80,9 @@ describe('WorkspaceAuditStreaming', () => {
       expect.anything(),
     );
     expect(screen.getByText(SECRET)).toBeInTheDocument();
+    const instructions = screen.getByRole('region', { name: 'Signing secret' }).textContent ?? '';
+    expect(instructions).toMatch(/keyed with this secret as the text shown below/);
+    expect(instructions).not.toMatch(/digest/i);
 
     await user.click(screen.getByRole('button', { name: 'I have stored it' }));
     expect(screen.queryByText(SECRET)).not.toBeInTheDocument();

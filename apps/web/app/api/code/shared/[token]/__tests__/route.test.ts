@@ -68,6 +68,7 @@ vi.mock('@/lib/services/cloud-code-session-service', () => ({
   mapCloudCodeTerminalEntry: vi.fn(),
   openCloudCodeSessionPullRequest: vi.fn(),
   parseGitPorcelainStatus: vi.fn(),
+  readCloudCodeAgentTurnWindow: vi.fn(),
   readCloudCodeNotebookFile: vi.fn(),
   readCloudCodeSessionChanges: vi.fn(),
   readCloudCodeSessionContinuation: vi.fn(),

@@ -46,7 +46,7 @@ describe('PLAN_CREDIT_ALLOWANCES', () => {
     expect(getPlanCreditAllowance('max_15x')).toEqual({
       monthly: 20_000,
       weekly: 5_000,
-      fiveHour: 1_000,
+      fiveHour: Infinity,
       flagshipWeekly: 1_500,
       unlimited: false,
     });

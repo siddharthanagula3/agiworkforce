@@ -6,6 +6,7 @@ import {
   fetchLockdownMode,
   saveLockdownMode,
   fetchAccountSessions,
+  fetchAuditLog,
   parseAccountSecurityStatus,
   parseAccountSessions,
   revokeAccountSession,
@@ -48,6 +49,23 @@ describe('Mobile account security service', () => {
       );
     },
   );
+
+  it.each([null, {}, { entries: 'none' }])(
+    'rejects malformed activity history %# instead of reporting no recorded activity',
+    async (payload) => {
+      apiMock.get.mockResolvedValueOnce(payload);
+
+      await expect(fetchAuditLog(20)).rejects.toThrow(
+        'Account security returned an invalid activity history',
+      );
+    },
+  );
+
+  it('returns an empty history only when the server sends an empty entries list', async () => {
+    apiMock.get.mockResolvedValueOnce({ entries: [] });
+
+    await expect(fetchAuditLog(20)).resolves.toEqual([]);
+  });
 
   it('reads the account device list from the server rather than the local session', async () => {
     apiMock.get.mockResolvedValueOnce({

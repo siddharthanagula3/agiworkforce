@@ -35,8 +35,15 @@ let pending: Promise<MapTileConfig | null> | null = null;
 export function loadMapTileConfig(): Promise<MapTileConfig | null> {
   pending ??= fetch(MAP_CONFIG_PATH, { credentials: 'same-origin' })
     .then((response) => (response.ok ? response.json() : null))
-    .then((value: unknown) => parseMapTileConfig(value))
-    .catch(() => null);
+    .then((value: unknown) => {
+      const config = parseMapTileConfig(value);
+      if (!config) pending = null;
+      return config;
+    })
+    .catch(() => {
+      pending = null;
+      return null;
+    });
   return pending;
 }
 

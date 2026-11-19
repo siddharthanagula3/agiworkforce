@@ -41,6 +41,33 @@ function baseReport(organizationId: string, overrides: Record<string, unknown> =
   };
 }
 
+type QueryCall = [string, unknown[]];
+
+function pageQueries(): QueryCall[] {
+  return (mocks.query.mock.calls as QueryCall[]).filter(([sql]) => !/^\s*update/i.test(sql));
+}
+
+function stampQueries(): QueryCall[] {
+  return (mocks.query.mock.calls as QueryCall[]).filter(([sql]) => /^\s*update/i.test(sql));
+}
+
+function queueOf(ids: string[], alreadyAttempted: string[] = []): void {
+  const stamped = new Set(alreadyAttempted);
+  mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+    if (/^\s*update/i.test(sql)) {
+      stamped.add(params[0] as string);
+      return [];
+    }
+    const attemptedThisRun = params[0] as string[];
+    return ids
+      .filter((id) => !attemptedThisRun.includes(id))
+      .map((id, index) => ({ id, index }))
+      .sort((a, b) => Number(stamped.has(a.id)) - Number(stamped.has(b.id)) || a.index - b.index)
+      .slice(0, 25)
+      .map(({ id }) => ({ id }));
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronRequest.mockReturnValue(true);
@@ -138,5 +165,82 @@ describe('GET /api/cron/purge-deleted-organizations', () => {
         detail: expect.objectContaining({ resourceId: 'org-next' }),
       }),
     );
+  });
+
+  it('reaches a healthy workspace queued behind a full page of held ones', async () => {
+    const heldIds = Array.from({ length: 25 }, (_, index) => `org-held-${index}`);
+    queueOf([...heldIds, 'org-healthy']);
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) =>
+      id.startsWith('org-held')
+        ? baseReport(id, { complete: false, organizationRetained: true, blockedByLegalHold: true })
+        : baseReport(id),
+    );
+
+    const res = await GET(request() as never);
+    const body = (await res.json()) as {
+      candidates: number;
+      purged: number;
+      held: number;
+      deferred: number;
+    };
+
+    expect(body).toMatchObject({ candidates: 26, purged: 1, held: 25, deferred: 0 });
+    expect(pageQueries()[0]?.[1]).toEqual([[]]);
+    expect(pageQueries()[1]?.[1]).toEqual([heldIds]);
+    expect(mocks.eraseOrganizationData).toHaveBeenLastCalledWith('org-healthy');
+  });
+
+  it('stamps each attempt before erasing and puts the least recently attempted first', async () => {
+    queueOf(['org-held-before', 'org-new'], ['org-held-before']);
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) =>
+      baseReport(id, { complete: false, organizationRetained: true, blockedByLegalHold: true }),
+    );
+
+    await GET(request() as never);
+
+    expect(pageQueries()[0]?.[0]).toMatch(
+      /order by deletion_last_attempt_at asc nulls first, deletion_scheduled_for asc, id asc/,
+    );
+    expect(mocks.eraseOrganizationData.mock.calls.map(([id]) => id)).toEqual([
+      'org-new',
+      'org-held-before',
+    ]);
+    const stampOrder = stampQueries().map(([, params]) => params[0]);
+    expect(stampOrder).toEqual(['org-new', 'org-held-before']);
+    const firstStamp =
+      mocks.query.mock.invocationCallOrder[mocks.query.mock.calls.indexOf(stampQueries()[0]!)];
+    expect(firstStamp).toBeLessThan(mocks.eraseOrganizationData.mock.invocationCallOrder[0]!);
+  });
+
+  it('still erases a workspace whose attempt stamp could not be written', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (/^\s*update/i.test(sql)) throw new Error('stamp refused');
+      return [{ id: 'org-1' }];
+    });
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) => baseReport(id));
+
+    const res = await GET(request() as never);
+    const body = (await res.json()) as { purged: number };
+
+    expect(body.purged).toBe(1);
+  });
+
+  it('stops paging and counts the rest as deferred once the sweep budget is spent', async () => {
+    const page = Array.from({ length: 25 }, (_, index) => ({ id: `org-${index}` }));
+    mocks.query.mockResolvedValue(page);
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) => baseReport(id));
+    const now = vi.spyOn(Date, 'now');
+    now
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(10 * 60_000);
+
+    const res = await GET(request() as never);
+    const body = (await res.json()) as { purged: number; deferred: number };
+    now.mockRestore();
+
+    expect(body.purged).toBe(1);
+    expect(body.deferred).toBe(24);
+    expect(pageQueries()).toHaveLength(1);
   });
 });

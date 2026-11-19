@@ -22,6 +22,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { buildChatSyncGateResponse } from '@/lib/managed-compute-gate';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
@@ -79,7 +80,10 @@ async function handlePull(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation-read');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, surface } = await getUserScopedDb(request);
+
+  const syncGate = await buildChatSyncGateResponse(userId, request, surface ?? 'unknown');
+  if (syncGate) return syncGate;
 
   const url = new URL(request.url);
   const sinceRaw = url.searchParams.get('since') ?? '0';
@@ -502,13 +506,16 @@ function countNewSyncItems(items: ReadonlyArray<{ baseVersion: string }>): numbe
 }
 
 async function handlePush(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const syncGate = await buildChatSyncGateResponse(userId, request, surface ?? 'unknown');
+  if (syncGate) return syncGate;
 
   let rawBody: unknown;
   try {
@@ -563,6 +570,7 @@ async function handlePush(request: NextRequest) {
           with input as materialized (
             select (item ->> 'id')::uuid as id,
                    item ->> 'title' as title,
+                   item ? 'title' as has_title,
                    item ->> 'model' as model,
                    item ? 'model' as has_model,
                    item ->> 'projectId' as project_id,
@@ -574,7 +582,7 @@ async function handlePush(request: NextRequest) {
               from jsonb_array_elements($2::jsonb) as source(item)
           ), updated as (
             update web_conversations as existing
-               set title = incoming.title,
+               set title = case when incoming.has_title then incoming.title else existing.title end,
                    model = case when incoming.has_model then incoming.model else existing.model end,
                    project_id = case when incoming.has_project_id then incoming.project_id else existing.project_id end,
                    pinned = case when incoming.has_pinned then incoming.pinned else existing.pinned end,

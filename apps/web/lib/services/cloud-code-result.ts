@@ -1,4 +1,5 @@
 import type { CloudCodeAgentStep, CloudCodeAgentStopReason } from '@agiworkforce/types';
+import { EDIT_FILE_TOOL, WRITE_FILE_TOOL } from '@/lib/e2b/execution-tools';
 
 const CLOUD_CODE_CHECK_KINDS = ['typecheck', 'lint', 'tests', 'build'] as const;
 export type CloudCodeCheckKind = (typeof CLOUD_CODE_CHECK_KINDS)[number];
@@ -35,10 +36,17 @@ export interface CloudCodeCompletionVerdict {
   blockers: string[];
 }
 
+export const CLOUD_CODE_DELETE_FILE_TOOL = 'delete_file';
+const UNKNOWN_EXIT_MARKER = '[exit unknown]';
+
 const RUN_COMMAND_TOOLS = new Set(['run_command', 'execute_code']);
-const FILE_WRITE_TOOLS = new Set(['write_file', 'edit_file']);
+const FILE_WRITE_TOOLS = new Set([WRITE_FILE_TOOL, EDIT_FILE_TOOL, CLOUD_CODE_DELETE_FILE_TOOL]);
 
 const EXIT_MARKER = /\[exit (-?\d+)\]\s*$/;
+
+export function formatStepExitMarker(exitCode: number | null): string {
+  return exitCode === null ? UNKNOWN_EXIT_MARKER : `[exit ${exitCode}]`;
+}
 
 const CHECK_PATTERNS: ReadonlyArray<{ kind: CloudCodeCheckKind; pattern: RegExp }> = [
   { kind: 'typecheck', pattern: /\btsc\b|\btypecheck\b|\btype-check\b|\bmypy\b|\bcargo\s+check\b/ },

@@ -304,24 +304,52 @@ describe('managed usage request service', () => {
     expect(reservation.fundedByUsageCredits).toBe(true);
   });
 
+  const STRIPE_BILLED = {
+    plan_tier: 'max_15x',
+    status: 'active',
+    stripe_customer_id: 'cus_fixture',
+    stripe_subscription_id: 'sub_fixture',
+  };
+  const MANUALLY_BILLED = { plan_tier: 'max_15x', status: 'active' };
+
   it.each([
     [
+      'stripe',
       true,
       0,
       'Your 5-hour usage limit is reached and your usage credits do not cover this message. Buy more credits to keep going, or wait for the limit to reset.',
     ],
     [
+      'stripe',
       false,
       5_000_000,
       'Your 5-hour usage limit is reached. Turn on usage credits in Settings > Billing to keep going with the credits you bought, or wait for the limit to reset.',
     ],
+    [
+      'manual',
+      true,
+      0,
+      'Your 5-hour usage limit is reached and your usage credits do not cover this message. Wait for the limit to reset, or ask whoever manages your plan to add credits.',
+    ],
+    [
+      'manual',
+      false,
+      5_000_000,
+      'Your 5-hour usage limit is reached. Whoever manages your plan can turn on your usage credits; until then, wait for the limit to reset.',
+    ],
   ] as const)(
-    'states what usage credits can do at a full 5-hour window (on: %s)',
-    async (overageEnabled, availableMicrousd, message) => {
+    'states what a %s-billed account can do with usage credits at a full 5-hour window (on: %s)',
+    async (billing, overageEnabled, availableMicrousd, message) => {
       const db = {
         query: vi.fn(async (sql: string) =>
           sql.includes('subscription.overage_enabled')
-            ? [{ overage_enabled: overageEnabled, available_microusd: availableMicrousd }]
+            ? [
+                {
+                  ...(billing === 'stripe' ? STRIPE_BILLED : MANUALLY_BILLED),
+                  overage_enabled: overageEnabled,
+                  available_microusd: availableMicrousd,
+                },
+              ]
             : [
                 {
                   reservation_decision: 'session_limit',
@@ -350,6 +378,113 @@ describe('managed usage request service', () => {
       expect(error).toMatchObject({
         status: 429,
         code: 'rolling_five_hour_limit_reached',
+        message,
+      });
+    },
+  );
+
+  it.each([
+    [
+      'stripe',
+      'Your monthly usage limit is reached. Turn on usage credits in Settings > Billing to keep going with the credits you bought, or wait for the limit to reset.',
+    ],
+    [
+      'manual',
+      'Your monthly usage limit is reached. Whoever manages your plan can turn on your usage credits; until then, wait for the limit to reset.',
+    ],
+  ] as const)(
+    'refuses a %s-billed account past its monthly plan allowance without spending switched-off credits',
+    async (billing, message) => {
+      const db = {
+        query: vi.fn(async (sql: string) =>
+          sql.includes('subscription.overage_enabled')
+            ? [
+                {
+                  ...(billing === 'stripe' ? STRIPE_BILLED : MANUALLY_BILLED),
+                  overage_enabled: false,
+                  available_microusd: 5_000_000,
+                },
+              ]
+            : [
+                {
+                  reservation_decision: 'declined',
+                  request_status: 'declined',
+                  lease_token: null,
+                  estimated_cost_microusd: 120_000,
+                  error_code: 'INSUFFICIENT_CREDITS',
+                },
+              ],
+        ),
+        execute: vi.fn(),
+      } as unknown as DatabaseAdapter;
+
+      const error = await reserveManagedUsageRequest({
+        db,
+        userId: 'user_1',
+        idempotencyKey: 'external-client:turn_month',
+        requestHash: '9'.repeat(64),
+        provider: 'anthropic',
+        model: 'fixture-model',
+        estimatedCostCents: 12,
+        leaseToken: 'lease-month',
+        planTier: 'max',
+        isFlagship: false,
+      }).catch((caught) => caught);
+
+      expect(error).toMatchObject({ status: 402, code: 'insufficient_credits', message });
+    },
+  );
+
+  it.each([
+    [
+      'stripe',
+      'Fast mode is billed to usage credits, and they do not cover this message. Turn on usage credits or add more in Settings > Billing, or turn fast mode off.',
+    ],
+    [
+      'manual',
+      'Fast mode is billed to usage credits, and they do not cover this message. Turn fast mode off, or ask whoever manages your plan to add usage credits.',
+    ],
+  ] as const)(
+    'points a %s-billed account refused fast mode at what it can change',
+    async (billing, message) => {
+      const db = {
+        query: vi.fn(async (sql: string) =>
+          sql.includes('subscription.overage_enabled')
+            ? [
+                {
+                  ...(billing === 'stripe' ? STRIPE_BILLED : MANUALLY_BILLED),
+                  overage_enabled: false,
+                  available_microusd: 0,
+                },
+              ]
+            : [
+                {
+                  reservation_decision: 'extra_usage_required',
+                  request_status: 'declined',
+                  lease_token: null,
+                  estimated_cost_microusd: 70000,
+                },
+              ],
+        ),
+        execute: vi.fn(),
+      } as unknown as DatabaseAdapter;
+
+      const error = await reserveManagedUsageRequest({
+        db,
+        userId: 'user_1',
+        idempotencyKey: 'external-client:turn_fast',
+        requestHash: 'f'.repeat(64),
+        provider: 'anthropic',
+        model: 'fixture-model',
+        estimatedCostCents: 7,
+        leaseToken: 'lease-fast',
+        planTier: 'max_15x',
+        isFlagship: false,
+      }).catch((caught) => caught);
+
+      expect(error).toMatchObject({
+        status: 402,
+        code: 'extra_usage_required',
         message,
       });
     },

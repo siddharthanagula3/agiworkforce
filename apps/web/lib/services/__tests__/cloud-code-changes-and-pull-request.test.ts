@@ -162,7 +162,12 @@ const gitExecutor = () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mockUserInstallations.mockResolvedValue([
-    { installationId: 11, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    {
+      installationId: 11,
+      login: 'acme',
+      verifiedRepositories: ['acme/widgets'],
+      writableRepositories: ['acme/widgets'],
+    },
   ]);
   mockInstallationToken.mockResolvedValue('installation-token');
   mockDefaultBranch.mockResolvedValue('main');
@@ -470,6 +475,47 @@ describe('openCloudCodeSessionPullRequest', () => {
         SESSION_ID,
       ),
     ).rejects.toThrow(CloudCodeConflictError);
+  });
+
+  it('asks to reconnect GitHub, minting nothing, when the link never recorded what it can push to', async () => {
+    mockUserInstallations.mockResolvedValue([
+      {
+        installationId: 11,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: null,
+      },
+    ]);
+
+    const failure = await openCloudCodeSessionPullRequest(
+      stubDb(sessionRow()) as never,
+      OWNER,
+      SESSION_ID,
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(CloudCodeValidationError);
+    expect(failure).toMatchObject({
+      reason: 'github_reconnect_required',
+      message: expect.stringMatching(/^Reconnect GitHub to push or open pull requests/),
+    });
+    expect(mockInstallationToken).not.toHaveBeenCalled();
+    expect(mockCreatePullRequest).not.toHaveBeenCalled();
+  });
+
+  it('refuses a repository the linking account can see but not push to', async () => {
+    mockUserInstallations.mockResolvedValue([
+      {
+        installationId: 11,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/other'],
+      },
+    ]);
+
+    await expect(
+      openCloudCodeSessionPullRequest(stubDb(sessionRow()) as never, OWNER, SESSION_ID),
+    ).rejects.toThrow(/Your GitHub account cannot push to acme\/widgets/);
+    expect(mockInstallationToken).not.toHaveBeenCalled();
   });
 
   it('refuses when no connected installation can reach the repository', async () => {

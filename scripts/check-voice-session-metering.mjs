@@ -60,9 +60,34 @@ export function readMeteredOperations(source) {
   for (const arm of arms) {
     const constant = new RegExp(`const ${arm[1]}\\s*=\\s*'([a-z_]+)'`).exec(source);
     if (!constant) continue;
-    operations.push({ operation: constant[1], field: arm[2] });
+    operations.push({ operation: constant[1], constant: arm[1], field: arm[2] });
   }
   return operations.length > 0 ? operations : null;
+}
+
+function balancedObject(source, open) {
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, index + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * A settlement that passes a usage object built beforehand is read through to
+ * that object, so the fields it writes are the ones the binding holds.
+ */
+function resolveUsageBinding(source, usage) {
+  const bound = /^usage:\s*([A-Za-z_$][\w$]*)\s*[,}\n]/.exec(usage);
+  if (!bound) return usage;
+  const declaration = new RegExp(`\\bconst\\s+${bound[1]}\\s*=\\s*\\{`).exec(source);
+  if (!declaration) return usage;
+  const object = balancedObject(source, declaration.index + declaration[0].length - 1);
+  return object === null ? usage : `usage: ${object}`;
 }
 
 /** Every finalize call in the app, with the outcome it settles and its usage body. */
@@ -85,9 +110,10 @@ export function readSettlements(source) {
     if (body === null) continue;
     const outcome = /outcome:\s*'([a-z_]+)'/.exec(body);
     const usageStart = body.indexOf('usage:');
+    const usage = usageStart === -1 ? '' : body.slice(usageStart);
     settlements.push({
       outcome: outcome ? outcome[1] : null,
-      usage: usageStart === -1 ? '' : body.slice(usageStart),
+      usage: resolveUsageBinding(source, usage),
     });
   }
   return settlements;
@@ -113,8 +139,9 @@ export function checkVoiceSessionMetering(repoRoot = REPO_ROOT) {
     const source = read(repoRoot, relative);
     if (source === null || !source.includes('finalizeManagedUsageRequest')) continue;
     for (const settlement of readSettlements(source)) {
-      for (const { operation, field } of metered) {
-        if (!new RegExp(`operation:\\s*'${operation}'`).test(settlement.usage)) continue;
+      for (const { operation, constant, field } of metered) {
+        const namesOperation = new RegExp(`operation:\\s*(?:'${operation}'|${constant}\\b)`);
+        if (!namesOperation.test(settlement.usage)) continue;
         seen.set(operation, (seen.get(operation) ?? 0) + 1);
         const carriesField = new RegExp(`\\b${field}\\b`).test(settlement.usage);
         if (settlement.outcome === 'completed' && !carriesField) {

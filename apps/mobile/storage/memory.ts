@@ -55,21 +55,23 @@ export async function insertMemoryFact(
 export async function listMemoryFacts(opts?: {
   pinned?: boolean;
   limit?: number;
+  offset?: number;
   includeReplaced?: boolean;
 }): Promise<MemoryFact[]> {
   const db = await getDb();
   const limit = opts?.limit ?? 100;
+  const offset = opts?.offset ?? 0;
   const active = opts?.includeReplaced ? '' : 'superseded_by IS NULL';
   if (opts?.pinned !== undefined) {
     const rows = await db.getAllAsync<Record<string, unknown>>(
-      `SELECT * FROM memory_facts WHERE pinned = ?${active ? ` AND ${active}` : ''} ORDER BY created_at DESC LIMIT ?;`,
-      [opts.pinned ? 1 : 0, limit],
+      `SELECT * FROM memory_facts WHERE pinned = ?${active ? ` AND ${active}` : ''} ORDER BY created_at DESC, rowid DESC LIMIT ? OFFSET ?;`,
+      [opts.pinned ? 1 : 0, limit, offset],
     );
     return rows.map(row2fact);
   }
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM memory_facts${active ? ` WHERE ${active}` : ''} ORDER BY pinned DESC, created_at DESC LIMIT ?;`,
-    [limit],
+    `SELECT * FROM memory_facts${active ? ` WHERE ${active}` : ''} ORDER BY pinned DESC, created_at DESC, rowid DESC LIMIT ? OFFSET ?;`,
+    [limit, offset],
   );
   return rows.map(row2fact);
 }

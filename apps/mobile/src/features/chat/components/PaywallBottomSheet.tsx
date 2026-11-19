@@ -6,7 +6,7 @@ import BottomSheet, {
   BottomSheetView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { ArrowUpCircle, X } from 'lucide-react-native';
+import { ArrowUpCircle, Lock, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,7 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, PAYWALL_FEATURE_COPY, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
@@ -34,6 +35,25 @@ const FEATURE_LABELS: Record<string, string> = {
 const UNKNOWN_FEATURE_LABEL = 'This feature';
 
 const UNKNOWN_TIER_LABEL = 'a higher';
+
+const PLAN_ALLOWANCE_FEATURES: ReadonlySet<string> = new Set([
+  'general_upgrade',
+  'token_cap',
+  'image_quota',
+]);
+
+function withoutPurchasesBody(
+  feature: string,
+  featureLabel: string,
+  recoveryAction: PaywallRecoveryAction,
+): string {
+  if (recoveryAction === 'manage_billing') {
+    return `${featureLabel} is unavailable until your subscription is active.`;
+  }
+  return PLAN_ALLOWANCE_FEATURES.has(feature)
+    ? 'You’ve used what your plan includes for now.'
+    : `${featureLabel} isn’t included in your plan.`;
+}
 
 function tierLabelFor(requiredTier: string): string {
   return isBillingPlanTier(requiredTier)
@@ -82,14 +102,16 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       recoveryAction === 'upgrade' && (requiredTier === 'team' || requiredTier === 'enterprise');
     const salesTier = requiresSales && webBillingLinksAllowed ? requiredTier : null;
     const salesUnavailableInApp = requiresSales && !webBillingLinksAllowed;
-    const title =
-      recoveryAction === 'manage_billing'
+    const title = !NATIVE_PURCHASES_AVAILABLE
+      ? 'Not included in your plan'
+      : recoveryAction === 'manage_billing'
         ? 'Update billing'
         : recoveryAction === 'subscribe'
           ? 'Choose a plan'
           : `Upgrade to ${tierLabel}`;
-    const body =
-      recoveryAction === 'manage_billing'
+    const body = !NATIVE_PURCHASES_AVAILABLE
+      ? withoutPurchasesBody(feature, featureLabel, recoveryAction)
+      : recoveryAction === 'manage_billing'
         ? `${featureLabel} is unavailable until your subscription is active.`
         : recoveryAction === 'subscribe'
           ? `${featureLabel} requires an active subscription.`
@@ -103,9 +125,15 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             ? 'Contact Sales'
             : 'View upgrade options';
     const hasPrimaryAction =
-      onPrimaryAction !== undefined ||
-      salesTier !== null ||
-      (!salesUnavailableInApp && !primaryActionUnavailableMessage);
+      NATIVE_PURCHASES_AVAILABLE &&
+      (onPrimaryAction !== undefined ||
+        salesTier !== null ||
+        (!salesUnavailableInApp && !primaryActionUnavailableMessage));
+    const primaryActionUnavailableText = !NATIVE_PURCHASES_AVAILABLE
+      ? null
+      : salesUnavailableInApp
+        ? `${tierLabel} isn’t available in the app.`
+        : (primaryActionUnavailableMessage ?? null);
 
     const handleSheetChange = useCallback(
       (index: number) => {
@@ -140,7 +168,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       onChooseStandardModel?.();
     }, [onChooseStandardModel]);
 
-    const showPlanComparison = recoveryAction === 'upgrade' || recoveryAction === 'subscribe';
+    const showPlanComparison =
+      NATIVE_PURCHASES_AVAILABLE &&
+      (recoveryAction === 'upgrade' || recoveryAction === 'subscribe');
     const handleComparePlans = useCallback(() => {
       sheetRef.current?.close();
       router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0]);
@@ -204,7 +234,11 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                   justifyContent: 'center',
                 }}
               >
-                <ArrowUpCircle size={20} color={colors.agentWarning} />
+                {NATIVE_PURCHASES_AVAILABLE ? (
+                  <ArrowUpCircle size={20} color={colors.agentWarning} />
+                ) : (
+                  <Lock size={20} color={colors.agentWarning} />
+                )}
               </View>
               <Text
                 style={{
@@ -272,7 +306,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               onPress={handlePrimaryAction}
               accessibilityLabel={salesTier ? `Contact Sales for ${tierLabel}` : primaryActionLabel}
             />
-          ) : (
+          ) : primaryActionUnavailableText ? (
             <Text
               style={{
                 fontSize: typeScale.footnote,
@@ -281,11 +315,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                 marginBottom: 4,
               }}
             >
-              {salesUnavailableInApp
-                ? `${tierLabel} isn’t available in the app.`
-                : primaryActionUnavailableMessage}
+              {primaryActionUnavailableText}
             </Text>
-          )}
+          ) : null}
           {onChooseStandardModel ? (
             <PressableBox
               onPress={handleChooseStandardModel}
@@ -340,10 +372,12 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               justifyContent: 'center',
               marginTop: 8,
             }}
-            accessibilityLabel="Try later"
+            accessibilityLabel={NATIVE_PURCHASES_AVAILABLE ? 'Try later' : 'Close'}
             accessibilityRole="button"
           >
-            <Text style={{ fontSize: typeScale.subhead, color: colors.textMuted }}>Try later</Text>
+            <Text style={{ fontSize: typeScale.subhead, color: colors.textMuted }}>
+              {NATIVE_PURCHASES_AVAILABLE ? 'Try later' : 'Close'}
+            </Text>
           </PressableBox>
         </BottomSheetView>
       </BottomSheet>

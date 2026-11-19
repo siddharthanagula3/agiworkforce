@@ -1,4 +1,5 @@
 import {
+  ANSWER_UI_TOOL_NAME,
   EDIT_IMAGE_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,
   ITINERARY_TOOL_NAME,
@@ -25,6 +26,7 @@ const LOOKING_UP_PLACE_LABEL = 'Looking up a place';
 const SEARCHING_FOR_PLACES_LABEL = 'Searching for places';
 const PLANNING_ITINERARY_LABEL = 'Planning the itinerary';
 const COMPARING_PRODUCTS_LABEL = 'Comparing products';
+const LAYING_OUT_ANSWER_LABEL = 'Laying out the answer';
 const CREATING_IMAGE_LABEL = 'Creating image';
 const EDITING_IMAGE_LABEL = 'Editing image';
 const READING_FILE_FALLBACK_LABEL = 'Reading a file';
@@ -56,6 +58,7 @@ function deriveToolLabel(
   if (PLACES_SEARCH_TOOL_NAMES.has(name)) return SEARCHING_FOR_PLACES_LABEL;
   if (name === ITINERARY_TOOL_NAME) return PLANNING_ITINERARY_LABEL;
   if (name === PRODUCT_COMPARISON_TOOL_NAME) return COMPARING_PRODUCTS_LABEL;
+  if (name === ANSWER_UI_TOOL_NAME) return LAYING_OUT_ANSWER_LABEL;
   if (name === GENERATE_IMAGE_TOOL_NAME) return CREATING_IMAGE_LABEL;
   if (name === EDIT_IMAGE_TOOL_NAME) return EDITING_IMAGE_LABEL;
   if (MAP_SEARCH_TOOL_NAMES.has(name)) return LOOKING_UP_PLACE_LABEL;

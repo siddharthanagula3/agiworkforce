@@ -39,6 +39,7 @@ import {
   type MobileIapProductKey,
 } from '@agiworkforce/types';
 import { useTierStore } from '@/src/features/billing/store';
+import { planCheckOf } from '@/src/features/billing/planCheck';
 import { fetchPortalSessionUrl } from '@/src/features/billing/service';
 import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
@@ -56,6 +57,7 @@ import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLink
 import { storeDisplayName } from '@/src/features/release-state';
 import { ApiHttpError } from '@/services/apiErrors';
 import { billingRequestMessage } from '@/src/features/billing/mobileIapService';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 const PURCHASE_HELP_URL = 'https://agiworkforce.com/help?q=purchase+billing+credits+refund';
 
@@ -121,6 +123,7 @@ export default function CloudBillingScreen() {
   const billingPeriodEnd = useTierStore((s) => s.billingPeriodEnd);
   const billingCancelsAtPeriodEnd = useTierStore((s) => s.billingCancelsAtPeriodEnd);
   const refreshTier = useTierStore((s) => s.refreshTier);
+  const planCheck = useTierStore(planCheckOf);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
@@ -129,18 +132,41 @@ export default function CloudBillingScreen() {
   });
   const webBillingLinksAllowed = useWebBillingLinksAllowed();
 
+  const [planCheckAttempted, setPlanCheckAttempted] = useState(false);
+  const checkPlan = useCallback(() => {
+    void refreshTier().finally(() => setPlanCheckAttempted(true));
+  }, [refreshTier]);
+
   useEffect(() => {
-    if (isClerkSignedIn && isCloudModeActive) void refreshTier();
-  }, [isClerkSignedIn, isCloudModeActive, refreshTier]);
+    if (isClerkSignedIn && isCloudModeActive) checkPlan();
+  }, [isClerkSignedIn, isCloudModeActive, checkPlan]);
 
   const [portalLoading, setPortalLoading] = useState(false);
   const paywallSheetRef = useRef<BottomSheet>(null);
 
+  const planUnconfirmed = planCheck !== 'confirmed';
+  const planChecking =
+    planCheck === 'checking' || (planUnconfirmed && isCloudModeActive && !planCheckAttempted);
+  const canRetryPlanCheck = planUnconfirmed && !planChecking && isCloudModeActive;
   const tierLabel = getBillingPlanPricing(billingTier).label;
   const isFreeTier = billingTier === 'free';
   const isEntitled = isEntitledSubscriptionStatus(billingStatus);
   const isTrialing = billingStatus === 'trialing';
   const statusLabel = billingStatus.replaceAll('_', ' ');
+  const planSummary = planUnconfirmed
+    ? planChecking
+      ? 'Checking your plan…'
+      : isCloudModeActive
+        ? 'We couldn’t read your plan just now. Your subscription has not changed.'
+        : 'Your plan is read from your account once chat is set to Cloud.'
+    : isFreeTier || isEntitled
+      ? `You are on the ${tierLabel} plan.`
+      : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`;
+  const planHeading = planUnconfirmed
+    ? planChecking
+      ? 'Checking your plan…'
+      : 'Plan not confirmed'
+    : `${tierLabel} plan`;
   const periodEndLabel =
     billingPeriodEnd === null
       ? null
@@ -184,6 +210,7 @@ export default function CloudBillingScreen() {
   const managedElsewhere = subscriptionGuard.blocked && billingSource !== nativeSubscriptionSource;
   const plansWithheldReason = nativeIap.catalog?.subscriptionsUnavailableReason ?? null;
   const canBuyNativeSubscription =
+    !planUnconfirmed &&
     nativeIap.catalog?.enabled === true &&
     !isWorkspacePlan &&
     plansWithheldReason === null &&
@@ -309,21 +336,89 @@ export default function CloudBillingScreen() {
     );
   }
 
+  if (!NATIVE_PURCHASES_AVAILABLE) {
+    return (
+      <SettingsScreenShell title="Plan">
+        <SettingsInfo title="Your plan" body={planSummary} icon={CreditCard} />
+        {!isCloudModeActive && (
+          <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+        )}
+        <SettingsGroup>
+          <SettingsRow
+            label="Current plan"
+            value={planUnconfirmed ? (planChecking ? 'Checking…' : 'Not confirmed') : tierLabel}
+            icon={CreditCard}
+          />
+          {canRetryPlanCheck ? (
+            <SettingsRow label="Try again" icon={RefreshCw} onPress={checkPlan} />
+          ) : null}
+          {!planUnconfirmed && !isFreeTier && isEntitled && periodEndLabel ? (
+            <SettingsRow
+              label={
+                billingCancelsAtPeriodEnd ? 'Access ends' : isTrialing ? 'Trial ends' : 'Renews'
+              }
+              value={periodEndLabel}
+              icon={Clock}
+            />
+          ) : null}
+          {!planUnconfirmed && !isFreeTier ? (
+            <SettingsRow
+              label="Billing"
+              value={
+                billingSource === 'manual'
+                  ? 'By your organization'
+                  : billingSource === 'stripe'
+                    ? 'Managed on the web'
+                    : 'Managed where you subscribed'
+              }
+              icon={CreditCard}
+            />
+          ) : null}
+          <SettingsRow
+            label="What your plan includes"
+            icon={ListChecks}
+            onPress={() =>
+              router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0])
+            }
+          />
+          <SettingsRow
+            label="Usage"
+            icon={Coins}
+            value={isCloudModeActive ? undefined : 'Available in AGI Cloud'}
+            onPress={
+              isCloudModeActive
+                ? () =>
+                    router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+                : undefined
+            }
+            isLast
+          />
+        </SettingsGroup>
+        <SettingsGroup>
+          <SettingsRow
+            label="Help with your plan"
+            icon={CircleHelp}
+            onPress={() => router.push('/(app)/support' as Parameters<typeof router.push>[0])}
+            isLast
+          />
+        </SettingsGroup>
+      </SettingsScreenShell>
+    );
+  }
+
   return (
     <SettingsScreenShell title="Billing">
       <SettingsInfo
         title="Your plan, usage, and payment details"
-        body={
-          isFreeTier
-            ? 'You are on the Free plan.'
-            : isEntitled
-              ? `You are on the ${tierLabel} plan.`
-              : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`
-        }
+        body={planSummary}
         icon={CreditCard}
       />
 
-      {nextUpgradeTier && !isWorkspacePlan && !canChangePlanInApp && !nativeIap.loading ? (
+      {!planUnconfirmed &&
+      nextUpgradeTier &&
+      !isWorkspacePlan &&
+      !canChangePlanInApp &&
+      !nativeIap.loading ? (
         <SettingsInfo
           title={
             isFreeTier
@@ -385,9 +480,9 @@ export default function CloudBillingScreen() {
             <Text
               style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
             >
-              {isFreeTier ? 'Free plan' : `${tierLabel} plan`}
+              {planHeading}
             </Text>
-            {isFreeTier && (
+            {!planUnconfirmed && isFreeTier && (
               <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
                 Try AGI Cloud
               </Text>
@@ -423,7 +518,10 @@ export default function CloudBillingScreen() {
             borderTopColor: colors.border,
           }}
         >
-          {nextUpgradeTier && !isWorkspacePlan ? (
+          {canRetryPlanCheck ? (
+            <SettingsRow label="Try again" icon={RefreshCw} onPress={checkPlan} />
+          ) : null}
+          {!planUnconfirmed && nextUpgradeTier && !isWorkspacePlan ? (
             <SettingsRow
               label={isFreeTier ? 'Upgrade plan' : isEntitled ? 'Adjust plan' : 'Choose plan'}
               icon={ShoppingBag}

@@ -39,7 +39,7 @@ const experientialKeys = chatKeys.filter((key) => offerings[key]!.provider === '
 const experientialKey = experientialKeys[0]!;
 const DATA_USE_NOTE = /providers have not said they keep prompts out of training/;
 const PROMOTION_DESCRIPTION =
-  'Free promotion · text chat · provider quota applies These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
+  'Free promotion · text chat · provider quota applies Only your messages are sent. These providers have not said they keep prompts out of training.';
 const imageKeys = Object.entries(offerings)
   .filter(
     ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',
@@ -109,7 +109,7 @@ function sources(
 
 function renderSection(
   value: FreeModelSources,
-  options: { selectedId?: string; onSelect?: (id: string) => void } = {},
+  options: { selectedId?: string; onSelect?: (id: string) => void; defaultExpanded?: boolean } = {},
 ) {
   const onSelect = options.onSelect ?? vi.fn();
   render(
@@ -117,6 +117,9 @@ function renderSection(
       sources={value}
       selectedId={options.selectedId ?? 'auto'}
       onSelect={onSelect}
+      {...(options.defaultExpanded !== undefined
+        ? { defaultExpanded: options.defaultExpanded }
+        : {})}
       fallback={{
         name: FALLBACK,
         row: (
@@ -280,6 +283,19 @@ describe('Free section in the composer', () => {
     );
   });
 
+  it('names the section for the models it lists and starts collapsed when the plan asks', () => {
+    renderSection(sources(source('ready', catalogue(chatKeys.map((key) => model(key, 'ready'))))), {
+      defaultExpanded: false,
+    });
+
+    const toggle = screen.getByRole('button', { name: 'Free models' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(FALLBACK)).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText(FALLBACK)).toBeInTheDocument();
+  });
+
   it('renders nothing for a pool with no ready model, and says nothing about it', () => {
     renderSection(
       sources(source('ready', catalogue(chatKeys.map((key) => model(key, 'unavailable'))))),
@@ -289,7 +305,7 @@ describe('Free section in the composer', () => {
     expect(screen.queryByText(/used up/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: `${ISSUER} free models` })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
-      'Free ',
+      'Free models',
       FALLBACK,
     ]);
   });
@@ -776,7 +792,7 @@ describe('Free section in the composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /More models/ }));
     const featured = within(screen.getByRole('group', { name: `${ISSUER} free models` }));
     const rows = [
-      screen.getByRole('button', { name: 'Free' }),
+      screen.getByRole('button', { name: 'Free models' }),
       featured.getAllByRole('button')[0]!,
       within(screen.getByRole('group', { name: 'More free models' })).getAllByRole('button')[0]!,
       screen.getByRole('button', { name: name(unavailable) }),

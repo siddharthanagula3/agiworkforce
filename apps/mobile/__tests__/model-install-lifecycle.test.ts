@@ -196,6 +196,113 @@ describe('a download in progress can be cancelled', () => {
   });
 });
 
+describe('a cancelled install cannot act on a newer attempt', () => {
+  const flush = async (): Promise<void> => {
+    for (let tick = 0; tick < 10; tick += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getInstalledModel as jest.Mock).mockResolvedValue(null);
+    resetStore();
+  });
+
+  it('keeps the retry job when the cancelled attempt settles afterwards', async () => {
+    let settleFirst: (error: unknown) => void = () => undefined;
+    let settleSecond: (value: unknown) => void = () => undefined;
+    (downloadModel as jest.Mock)
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            settleFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            settleSecond = resolve;
+          }),
+      );
+    const store = useModelInstallStore.getState();
+
+    const first = store.prepareModel(ggufModelDef());
+    const firstOutcome = first.catch((error: unknown) => error);
+    await flush();
+    store.cancelModelDownload(GGUF_MODEL.id);
+    const second = store.prepareModel(ggufModelDef());
+    await flush();
+
+    settleFirst(new ModelDownloadError('cancelled', 'Download was cancelled.'));
+    expect(await firstOutcome).toMatchObject({ kind: 'cancelled' });
+    expect(useModelInstallStore.getState().jobs[GGUF_MODEL.id]).toMatchObject({
+      status: 'downloading',
+      cancellable: true,
+    });
+
+    settleSecond({ id: GGUF_MODEL.id });
+    await second;
+    expect(useModelInstallStore.getState().jobs[GGUF_MODEL.id]).toEqual({
+      status: 'ready',
+      progress: 1,
+    });
+  });
+
+  it('never marks a cancelled attempt ready when it still finishes', async () => {
+    let finish: (value: unknown) => void = () => undefined;
+    (downloadModel as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const store = useModelInstallStore.getState();
+
+    const install = store.prepareModel(ggufModelDef());
+    const outcome = install.catch((error: unknown) => error);
+    await flush();
+    store.cancelModelDownload(GGUF_MODEL.id);
+    finish({ id: GGUF_MODEL.id });
+
+    expect(await outcome).toMatchObject({ kind: 'cancelled' });
+    const state = useModelInstallStore.getState();
+    expect(state.jobs[GGUF_MODEL.id]).toBeUndefined();
+    expect(state.installedModelIds).not.toContain(GGUF_MODEL.id);
+  });
+
+  it('ignores progress from a cancelled attempt', async () => {
+    let reportOld: ((downloaded: number, total: number, speed: number) => void) | undefined;
+    let settleSecond: (value: unknown) => void = () => undefined;
+    (downloadModel as jest.Mock)
+      .mockImplementationOnce(
+        (opts: { onProgress?: (downloaded: number, total: number, speed: number) => void }) => {
+          reportOld = opts.onProgress;
+          return new Promise(() => undefined);
+        },
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            settleSecond = resolve;
+          }),
+      );
+    const store = useModelInstallStore.getState();
+
+    void store.prepareModel(ggufModelDef());
+    await flush();
+    store.cancelModelDownload(GGUF_MODEL.id);
+    const second = store.prepareModel(ggufModelDef());
+    await flush();
+
+    reportOld?.(900, 1000, 1);
+    expect(useModelInstallStore.getState().jobs[GGUF_MODEL.id]?.progress).toBe(0.01);
+
+    settleSecond({ id: GGUF_MODEL.id });
+    await second;
+  });
+});
+
 describe('deleting an installed model clears its Ready state', () => {
   beforeEach(() => {
     jest.clearAllMocks();

@@ -15,8 +15,10 @@
     "./task-display": "./src/components/tasks/task-display.ts",
     "./assistant-fence": "./src/components/markdown/assistantFence.ts",
     "./assistant-fence-edits": "./src/components/markdown/assistantFenceEdits.ts",
+    "./continue-generation": "./src/lib/continue-generation.ts",
     "./continuation-seam": "./src/lib/continuation-seam.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
+    "./math-markup": "./src/lib/math-markup.ts",
     "./shiki-highlighter": "./src/components/markdown/shikiHighlighter.ts",
     "./composer-editor": "./src/composer-editor/index.ts",
     "./composer-editor.css": "./src/composer-editor/composer-editor.css",
@@ -72,7 +74,7 @@
   "devDependencies": {
     "@types/react": "^19.3.0",
     "jsdom": "30.1.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   },
   "peerDependencies": {
     "@radix-ui/react-dialog": "^1.1.23",

@@ -13,10 +13,11 @@ import {
   DATA_RIGHTS_REQUEST_LABELS,
   DATA_RIGHTS_REQUEST_TYPES,
   MAX_REQUEST_DETAILS_LENGTH,
+  DataRightsSubmissionConflictError,
   createDataRightsRequest,
   isDataRightsRequestType,
   readUserDataRightsRequests,
-  type DataRightsRequest,
+  type CreatedDataRightsRequest,
 } from '@/lib/server/data-rights-requests';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
@@ -27,10 +28,11 @@ const CreateRequestSchema = z.object({
   requestType: z.string().refine(isDataRightsRequestType, 'Unknown request type'),
   contactEmail: z.string().email().max(254),
   details: z.string().max(MAX_REQUEST_DETAILS_LENGTH).optional(),
+  submissionToken: z.string().uuid().optional(),
 });
 
 async function alertOperators(input: {
-  created: DataRightsRequest;
+  created: CreatedDataRightsRequest;
   contactEmail: string;
   details: string | null;
   userId: string | null;
@@ -93,15 +95,21 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const contactEmail = parsed.data.contactEmail.trim().toLowerCase();
   const details = parsed.data.details?.trim() || null;
 
-  let created: DataRightsRequest;
+  let created: CreatedDataRightsRequest;
   try {
     created = await createDataRightsRequest({
       userId,
       contactEmail,
       requestType: parsed.data.requestType,
       details,
+      submissionToken: parsed.data.submissionToken,
     });
   } catch (error) {
+    if (error instanceof DataRightsSubmissionConflictError) {
+      throw createError.conflict(
+        'This submission was already recorded with different details. Reload the form and submit again.',
+      );
+    }
     logger.error(
       { error, requestType: parsed.data.requestType },
       'Failed to record rights request',
@@ -122,16 +130,18 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     return false;
   });
 
-  await recordAuditEvent({
-    userId,
-    eventType: 'privacy_request_submitted',
-    request,
-    detail: {
-      resourceId: created.reference,
-      status: created.status,
-      variant: created.requestType,
-    },
-  });
+  if (!created.replayed) {
+    await recordAuditEvent({
+      userId,
+      eventType: 'privacy_request_submitted',
+      request,
+      detail: {
+        resourceId: created.reference,
+        status: created.status,
+        variant: created.requestType,
+      },
+    });
+  }
 
   return NextResponse.json({
     reference: created.reference,

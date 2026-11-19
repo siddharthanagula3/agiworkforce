@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
+  DOWNLOAD_COST_SHARE_CEILING_OF_PRICE,
   DOWNLOAD_COST_SHARE_OF_PRICE,
   FEATURE_RATE_CARD,
   FREE_DAILY_CAPS,
@@ -37,36 +38,69 @@ const db = {} as never;
 const usdPerGib = (feature: 'network_egress_gib' | 'object_storage_gib_month') =>
   (FEATURE_RATE_CARD[feature].providerCogsMicrousd as number) / 1_000_000;
 
-const PAID = ['basic', 'pro', 'max', 'max_15x', 'team', 'team_premium'] as const;
-
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.countUnits.mockResolvedValue(0);
 });
 
 describe('per-plan download and storage caps', () => {
-  it.each(PAID)('caps %s downloads at the download share of its price', (plan) => {
-    const cap = getBillingPlanProductLimits(plan)?.monthlyDownloadBytes;
-    expect(typeof cap).toBe('number');
-    const expected =
-      ((BILLING_PLAN_PRICING[plan].monthlyPriceUsd * DOWNLOAD_COST_SHARE_OF_PRICE) /
-        usdPerGib('network_egress_gib')) *
-      GIB;
-    expect(Math.abs((cap as number) - expected)).toBeLessThan(1);
-  });
+  it.each(['team', 'team_premium'] as const)(
+    'caps %s downloads at the download share of its price',
+    (plan) => {
+      const cap = getBillingPlanProductLimits(plan)?.monthlyDownloadBytes;
+      expect(typeof cap).toBe('number');
+      const expected =
+        ((BILLING_PLAN_PRICING[plan].monthlyPriceUsd * DOWNLOAD_COST_SHARE_OF_PRICE) /
+          usdPerGib('network_egress_gib')) *
+        GIB;
+      expect(Math.abs((cap as number) - expected)).toBeLessThan(1);
+    },
+  );
 
-  it.each([
-    ['max', 62],
-    ['max_15x', 124],
-    ['team_premium', 77],
-  ] as const)('gives %s a %i GiB storage quota instead of unlimited', (plan, gib) => {
-    expect(getBillingPlanProductLimits(plan)?.knowledgeStorageBytes).toBe(gib * GIB);
-    expect(gib).toBe(
-      Math.floor(
+  it.each(['basic', 'pro', 'max', 'max_15x'] as const)(
+    'gives %s a whole-GiB download allowance funded within the cost share ceiling',
+    (plan) => {
+      const cap = getBillingPlanProductLimits(plan)?.monthlyDownloadBytes;
+      expect(typeof cap).toBe('number');
+      const price = BILLING_PLAN_PRICING[plan].monthlyPriceUsd;
+      const rate = usdPerGib('network_egress_gib');
+      const allowanceGib = (cap as number) / GIB;
+      const fundedGib = Math.floor((price * DOWNLOAD_COST_SHARE_OF_PRICE) / rate);
+      expect(Number.isInteger(allowanceGib)).toBe(true);
+      expect(allowanceGib).toBeGreaterThanOrEqual(fundedGib);
+      expect(allowanceGib * rate).toBeLessThanOrEqual(price * DOWNLOAD_COST_SHARE_CEILING_OF_PRICE);
+    },
+  );
+
+  it.each(['max', 'max_15x', 'team_premium'] as const)(
+    'gives %s a finite storage quota no larger than its price funds',
+    (plan) => {
+      const quota = getBillingPlanProductLimits(plan)?.knowledgeStorageBytes;
+      expect(typeof quota).toBe('number');
+      const fundedGib = Math.floor(
         (BILLING_PLAN_PRICING[plan].monthlyPriceUsd * STORAGE_COST_SHARE_OF_PRICE) /
           usdPerGib('object_storage_gib_month'),
-      ),
+      );
+      expect(quota as number).toBeGreaterThan(0);
+      expect(quota as number).toBeLessThanOrEqual(fundedGib * GIB);
+    },
+  );
+
+  it('gives team_premium exactly the storage its price funds', () => {
+    const fundedGib = Math.floor(
+      (BILLING_PLAN_PRICING.team_premium.monthlyPriceUsd * STORAGE_COST_SHARE_OF_PRICE) /
+        usdPerGib('object_storage_gib_month'),
     );
+    expect(getBillingPlanProductLimits('team_premium')?.knowledgeStorageBytes).toBe(
+      fundedGib * GIB,
+    );
+  });
+
+  it('orders the finite storage quotas by plan from pro up to max_15x', () => {
+    const quota = (plan: 'pro' | 'max' | 'max_15x') =>
+      getBillingPlanProductLimits(plan)?.knowledgeStorageBytes as number;
+    expect(quota('pro')).toBeLessThan(quota('max'));
+    expect(quota('max')).toBeLessThan(quota('max_15x'));
   });
 
   it('leaves contract plans to their contract', () => {
@@ -96,7 +130,9 @@ describe('assertDownloadAllowance', () => {
 
     expect(refusal).toBeInstanceOf(PlanDownloadLimitError);
     expect((refusal as PlanDownloadLimitError).statusCode).toBe(429);
-    expect((refusal as PlanDownloadLimitError).message).toContain('Pro includes');
+    expect((refusal as PlanDownloadLimitError).message).toContain(
+      `${BILLING_PLAN_PRICING.pro.label} includes`,
+    );
     expect((refusal as PlanDownloadLimitError).details).toMatchObject({
       code: MONTHLY_DOWNLOAD_LIMIT_CODE,
       recovery: { action: 'upgrade', href: '/pricing' },

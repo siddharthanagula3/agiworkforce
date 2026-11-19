@@ -22,6 +22,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
 import { listStudySessions, startStudySession } from '@/src/features/study/service';
 import { useChatStore } from '@/stores/chatStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -100,12 +101,14 @@ export function StudyScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const { switchToCloud } = useAppModeSwitch();
   const createConversation = useChatStore((s) => s.createConversation);
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<StudyMode>('learn');
   const [level, setLevel] = useState<StudyLevel>('beginner');
   const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [historyStatus, setHistoryStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [historyAttempt, setHistoryAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isCloud = appMode === 'cloud';
@@ -113,13 +116,20 @@ export function StudyScreen() {
   useEffect(() => {
     if (!isCloud) return;
     const controller = new AbortController();
+    setHistoryStatus('loading');
     void listStudySessions(controller.signal)
       .then((loaded) => {
-        if (!controller.signal.aborted) setSessions(sortStudySessions(loaded));
+        if (controller.signal.aborted) return;
+        setSessions(sortStudySessions(loaded));
+        setHistoryStatus('ready');
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!controller.signal.aborted) setHistoryStatus('failed');
+      });
     return () => controller.abort();
-  }, [isCloud]);
+  }, [isCloud, historyAttempt]);
+
+  const retryHistory = useCallback(() => setHistoryAttempt((attempt) => attempt + 1), []);
 
   const normalizedTopic = normalizeStudyTopic(topic);
 
@@ -153,7 +163,7 @@ export function StudyScreen() {
           icon={BookOpen}
         />
         <Pressable
-          onPress={() => setAppMode('cloud')}
+          onPress={() => void switchToCloud()}
           accessibilityRole="button"
           accessibilityLabel="Switch to Cloud mode"
           style={{
@@ -267,6 +277,42 @@ export function StudyScreen() {
         >
           {error}
         </Text>
+      ) : null}
+
+      {historyStatus === 'loading' && sessions.length === 0 ? (
+        <View style={{ alignItems: 'center', minHeight: 52, justifyContent: 'center' }}>
+          <LoadingIndicator accessibilityLabel="Loading recent study sessions" />
+        </View>
+      ) : null}
+      {historyStatus === 'failed' ? (
+        <View testID="study-history-error" style={{ gap: 8 }}>
+          <Text
+            accessibilityRole="alert"
+            style={{ color: colors.agentError, fontSize: typeScale.footnote }}
+          >
+            Your recent study sessions could not be loaded.
+          </Text>
+          <Pressable
+            testID="study-history-retry"
+            onPress={retryHistory}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading recent study sessions"
+            style={{
+              minHeight: 44,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+            >
+              Try again
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
 
       {sessions.length > 0 ? (

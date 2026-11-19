@@ -28,6 +28,7 @@ describe('WebSocket offender retention', () => {
     expect(limiter.getStats()).toEqual({
       activeConnections: 0,
       activeMessages: 0,
+      activeParticipants: 0,
       blacklistedIps: 0,
       topOffenders: [],
     });

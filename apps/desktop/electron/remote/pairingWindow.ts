@@ -2,7 +2,11 @@ import { BrowserWindow, clipboard, nativeTheme } from 'electron';
 import QRCode from 'qrcode';
 import { REMOTE_SESSION_PARTITION } from '../config';
 import type { RemotePairingDisplay } from '@agiworkforce/utils/remote-control';
-import { PRODUCT_NAMES } from '@agiworkforce/types';
+import {
+  MOBILE_ADD_DEVICE_LABEL,
+  MOBILE_CODE_SCREEN_LABEL,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import { escapeHtml, shellDataUrl, shellPaletteCss } from '../shellPage';
 import { pageBackgroundColor } from '../windowChrome';
 
@@ -11,7 +15,7 @@ const WINDOW_HEIGHT = 520;
 const QR_SIZE = 240;
 
 const TITLE = 'Pair a phone';
-const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, choose Pair with Desktop, and scan this code. It works once and expires in a few minutes.`;
+const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, go to ${MOBILE_CODE_SCREEN_LABEL}, choose ${MOBILE_ADD_DEVICE_LABEL}, and scan this code. It works once and expires in a few minutes.`;
 const COPY_CODE = 'Copy code';
 const CODE_COPIED = 'Code copied';
 const REFRESH_CODE = 'Refresh code';

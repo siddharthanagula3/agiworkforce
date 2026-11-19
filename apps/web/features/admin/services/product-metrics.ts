@@ -150,9 +150,12 @@ const SUPPORT_COST_QUERY = `select coalesce(sum(amount_cents), 0) as amount_cent
 
 const SNAPSHOT_QUERY = `select numerator
   from public.product_metric_days
- where metric = $1 and scope = 'all' and metric_day <= $2::date
- order by metric_day desc
- limit 1`;
+ where metric = $1 and scope = 'all' and metric_day = $2::date`;
+
+const SUBSCRIBER_SNAPSHOT_INSERT = `insert into public.product_metric_days
+    (metric_day, metric, scope, numerator, denominator, value, computed_at)
+  values ($1::date, $2, 'all', $3, 0, $3, now())
+  on conflict (metric_day, metric, scope) do nothing`;
 
 const QUALITY_QUERY = `select
     event_name,
@@ -273,11 +276,11 @@ export function qualityMetrics(rows: readonly QualityRow[]): ProductMetricValue[
 async function readSnapshot(
   db: DatabaseAdapter,
   metric: string,
-  onOrBefore: Date,
+  observedOn: Date,
 ): Promise<number | null> {
   const rows = await db.query<{ numerator: string | number }>(SNAPSHOT_QUERY, [
     metric,
-    onOrBefore.toISOString(),
+    observedOn.toISOString(),
   ]);
   return rows.length === 0 ? null : toNumber(rows[0]?.numerator);
 }
@@ -404,6 +407,11 @@ export function resolveProductAnalyticsRetentionDays(
  * and overwrites it: without a snapshot, how many accounts were paying
  * yesterday is gone today, and churn has no denominator. It also lets the raw
  * event stream be purged on a short window without losing the series.
+ *
+ * The paid count is a live observation, so it is filed under the UTC day it was
+ * observed on, which is the opening of that day, and the first observation of a
+ * day is kept. Filing it under the day that had just closed would make it the
+ * closing count of that day, and a repeat run would replace it with a later one.
  */
 export async function rollUpProductMetrics(
   now: Date,
@@ -411,32 +419,27 @@ export async function rollUpProductMetrics(
 ): Promise<ProductMetricRollupResult> {
   const dayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const dayStart = new Date(dayEnd.getTime() - MS_PER_DAY);
-  const summary = await readProductMetrics({ from: dayStart, to: dayEnd, db });
   const day = dayStart.toISOString().slice(0, 10);
+  const observedDay = dayEnd.toISOString().slice(0, 10);
 
   const subscriberRows = await db.query<{ subscribers: string | number }>(PAID_SUBSCRIBERS_QUERY, [
     ACTIVE_SUBSCRIPTION_STATUSES,
   ]);
+  const paidSubscribers = toNumber(subscriberRows[0]?.subscribers);
+  const snapshotWritten = await db.execute(SUBSCRIBER_SNAPSHOT_INSERT, [
+    observedDay,
+    PAID_SUBSCRIBERS_METRIC,
+    paidSubscribers,
+  ]);
 
-  const rows: Array<{
-    metric: string;
-    numerator: number;
-    denominator: number;
-    value: number | null;
-  }> = [
-    ...summary.metrics.map((metric) => ({
-      metric: metric.metric as string,
-      numerator: metric.numerator,
-      denominator: metric.denominator,
-      value: metric.value,
-    })),
-    {
-      metric: PAID_SUBSCRIBERS_METRIC,
-      numerator: toNumber(subscriberRows[0]?.subscribers),
-      denominator: 0,
-      value: toNumber(subscriberRows[0]?.subscribers),
-    },
-  ];
+  const summary = await readProductMetrics({ from: dayStart, to: dayEnd, db });
+
+  const rows = summary.metrics.map((metric) => ({
+    metric: metric.metric as string,
+    numerator: metric.numerator,
+    denominator: metric.denominator,
+    value: metric.value,
+  }));
 
   for (const row of rows) {
     await db.execute(
@@ -460,5 +463,5 @@ export async function rollUpProductMetrics(
     [cutoff],
   );
 
-  return { day, written: rows.length, purged };
+  return { day, written: rows.length + (snapshotWritten > 0 ? 1 : 0), purged };
 }

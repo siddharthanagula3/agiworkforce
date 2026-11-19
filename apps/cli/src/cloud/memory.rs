@@ -109,10 +109,14 @@ pub struct MemoryPushResponse {
 /// The account's memory as this device last saw it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct MemoryCache {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
     #[serde(default)]
     pub entries: Vec<CachedMemory>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub account_memory_off: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced_through: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -135,6 +139,17 @@ pub struct CachedMemory {
 }
 
 impl MemoryCache {
+    pub fn owned_by(self, owner: &str) -> Self {
+        if self.owner.as_deref() == Some(owner) {
+            self
+        } else {
+            Self {
+                owner: Some(owner.to_string()),
+                ..Self::default()
+            }
+        }
+    }
+
     pub fn apply(&mut self, deltas: &[MemoryDelta]) {
         for delta in deltas {
             self.entries.retain(|entry| entry.id != delta.id);
@@ -158,6 +173,14 @@ impl MemoryCache {
                 .cmp(&a.pinned)
                 .then_with(|| b.updated_at.cmp(&a.updated_at))
         });
+    }
+
+    pub fn adopt(&mut self, response: &MemoryPullResponse) {
+        self.apply(&response.memories);
+        if let Some(enabled) = response.memory_enabled {
+            self.account_memory_off = !enabled;
+        }
+        self.synced_through = Some(response.cursor.clone());
     }
 
     pub fn contains(&self, content: &str) -> bool {
@@ -412,6 +435,33 @@ mod tests {
     }
 
     #[test]
+    fn another_accounts_cache_is_dropped_before_this_accounts_pull_merges_into_it() {
+        let mut cached = MemoryCache::default().owned_by("account-a");
+        cached.apply(&[delta("a1", "account a secret", "1", false)]);
+        cached.synced_through = Some("1".to_string());
+
+        let mut pulled = cached.clone().owned_by("account-b");
+        pulled.adopt(&MemoryPullResponse {
+            memories: vec![delta("b1", "account b fact", "1", false)],
+            cursor: "1".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        });
+        assert_eq!(pulled.owner.as_deref(), Some("account-b"));
+        assert_eq!(
+            pulled
+                .entries
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["b1"]
+        );
+
+        let kept = cached.clone().owned_by("account-a");
+        assert_eq!(kept, cached);
+    }
+
+    #[test]
     fn duplicate_content_is_recognised_regardless_of_spacing_and_case() {
         let mut cache = MemoryCache::default();
         cache.apply(&[delta("m1", "Prefers  tabs", "1", false)]);
@@ -597,5 +647,40 @@ mod tests {
         apply_pull_response(&response, &mut state);
         assert_eq!(state.memories.base_version("m1"), "8");
         assert_eq!(state.memories.cursor, "8");
+    }
+
+    #[test]
+    fn a_tombstone_the_cache_never_stored_is_pulled_again() {
+        let mut durable = MemoryCache::default();
+        durable.adopt(&MemoryPullResponse {
+            memories: vec![delta("m1", "live", "10", false)],
+            cursor: "10".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        });
+        let mut state = SyncState::default();
+        state.memories.advance("10");
+
+        let tombstone = MemoryPullResponse {
+            memories: vec![delta("m1", "live", "11", true)],
+            cursor: "11".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        };
+        let mut unsaved = durable.clone();
+        unsaved.adopt(&tombstone);
+        apply_pull_response(&tombstone, &mut state);
+        assert_eq!(state.memories.cursor, "11");
+
+        let since =
+            super::super::state::pull_frontier(&state.memories, durable.synced_through.as_deref());
+        assert_eq!(since, "10");
+        assert!(tombstone
+            .memories
+            .iter()
+            .any(|memory| super::super::state::version_greater(&memory.server_version, &since)));
+        durable.adopt(&tombstone);
+        assert!(durable.entries.is_empty());
+        assert_eq!(durable.synced_through.as_deref(), Some("11"));
     }
 }

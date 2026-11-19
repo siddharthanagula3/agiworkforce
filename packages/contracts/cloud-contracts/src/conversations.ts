@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import conversationContract from './conversation-contract.json';
+import conversationContract from './conversation-contract.json' with { type: 'json' };
 import {
   getDefaultAutoRoutingProfile,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
@@ -141,6 +141,7 @@ export type ManagedCloudCreateConversationRequest = z.input<
 
 export const ManagedCloudUpdateConversationRequestSchema = z.object({
   title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
+  expectedTitle: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
   model: z.string().min(1).optional(),
   selectedRouteId: z.string().min(1).max(256).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),

@@ -36,6 +36,11 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     description:
       'Renders the products a search found as a comparison card with prices, stores, buy links and specs. It keeps only links this turn retrieved, makes no request of its own and buys nothing.',
   },
+  render_answer_ui: {
+    label: 'Show an interactive answer',
+    description:
+      'Shows part of an answer as an interactive card in the conversation, such as a table, chart, checklist, sliders or a map. It makes no request of its own and changes nothing; a button in the card sends a message only when you press it.',
+  },
   url_fetch: {
     label: 'Fetch a page',
     description:
@@ -73,6 +78,11 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     label: 'Edit a file',
     description:
       'Edits a file already in that sandbox workspace. Classified as an irreversible write, so no account default runs it on its own.',
+  },
+  delete_file: {
+    label: 'Delete a file',
+    description:
+      'Deletes a file from that sandbox workspace. Classified as an irreversible delete, so no account default runs it on its own.',
   },
   create_office_file: {
     label: 'Create a document file',
@@ -366,6 +376,11 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     label: 'Go back or forward in Chrome',
     description:
       'Moves the active tab of your paired Chrome back or forward in its history, on sites you approved in the extension.',
+  },
+  browser_stop: {
+    label: 'Stop loading in Chrome',
+    description:
+      'Stops the active tab of your paired Chrome from loading the page it is on, on sites you approved in the extension.',
   },
 };
 

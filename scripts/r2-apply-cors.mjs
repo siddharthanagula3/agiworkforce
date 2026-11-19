@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const ALLOWED_ORIGINS = [
+export const ALLOWED_ORIGINS = [
   'https://agiworkforce.com',
   'https://www.agiworkforce.com',
   'https://chat.agiworkforce.com',
@@ -15,7 +15,7 @@ const ALLOWED_ORIGINS = [
   'http://127.0.0.1:3000',
 ];
 
-const CORS_RULES = [
+export const CORS_RULES = [
   {
     id: 'browser-direct-upload',
     allowed: {
@@ -26,6 +26,8 @@ const CORS_RULES = [
         'Content-Length',
         'x-amz-checksum-crc32',
         'x-amz-sdk-checksum-algorithm',
+        'x-amz-server-side-encryption',
+        'x-amz-server-side-encryption-aws-kms-key-id',
       ],
     },
     exposeHeaders: ['ETag'],
@@ -72,15 +74,27 @@ async function cloudflare(method, url, token, body) {
   return { status: res.status, ok: res.ok, json };
 }
 
-function matchesExpected(rules) {
+function sameNames(actual, expected) {
+  const normalized = new Set((actual ?? []).map((name) => String(name).toLowerCase()));
+  return (
+    normalized.size === expected.length &&
+    expected.every((name) => normalized.has(name.toLowerCase()))
+  );
+}
+
+export function matchesExpected(rules) {
   const rule = rules?.[0];
   if (!rule) return false;
+  const expected = CORS_RULES[0];
   const origins = rule.allowed?.origins ?? [];
   const methods = rule.allowed?.methods ?? [];
   return (
     origins.length === ALLOWED_ORIGINS.length &&
     ALLOWED_ORIGINS.every((origin) => origins.includes(origin)) &&
-    CORS_RULES[0].allowed.methods.every((method) => methods.includes(method))
+    expected.allowed.methods.every((method) => methods.includes(method)) &&
+    sameNames(rule.allowed?.headers, expected.allowed.headers) &&
+    sameNames(rule.exposeHeaders, expected.exposeHeaders) &&
+    rule.maxAgeSeconds === expected.maxAgeSeconds
   );
 }
 
@@ -147,7 +161,9 @@ async function main() {
   process.exit(failed ? 1 : 0);
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

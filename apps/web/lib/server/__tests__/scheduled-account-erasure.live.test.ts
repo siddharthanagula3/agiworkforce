@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { PostgresDatabaseAdapter } from '@agiworkforce/data-layer';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-const identity = vi.hoisted(() => ({ deleteUser: vi.fn(async () => undefined) }));
+const identity = vi.hoisted(() => ({ name: 'clerk', deleteUser: vi.fn(async () => undefined) }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('../identity', () => ({ getIdentityProvider: () => identity }));

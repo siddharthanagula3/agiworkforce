@@ -43,8 +43,8 @@ const SURFACE_FACTS = [
   },
   {
     meta: `Desktop · ${SURFACE_STATUS.desktop}`,
-    title: 'Cloud only',
-    body: 'The Electron Desktop contract does not accept local-inference commands or provider keys. Local mode belongs to the CLI.',
+    title: 'Through the CLI',
+    body: 'Desktop chat takes no local-inference commands or provider keys. A Desktop local coding session runs the CLI, so it can use Ollama or LM Studio the same way.',
   },
   {
     meta: `Mobile · ${SURFACE_STATUS.mobile}`,
@@ -206,8 +206,8 @@ export default function LocalPage() {
               </h2>
               <Prose size="lg">
                 The CLI answers from {CLI_LOCAL_RUNTIMES.label} on the machine you own. BYOK on the
-                CLI is the reviewed way out on the days a local model is not enough; Desktop is
-                cloud only. {CLI_AVAILABILITY_NOTE}
+                CLI is the reviewed way out on the days a local model is not enough; Desktop chat is
+                cloud only, and its local coding sessions run the CLI. {CLI_AVAILABILITY_NOTE}
               </Prose>
               <ButtonRow>
                 <Button href="/desktop" variant="secondary">

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-28
+Last updated: 2026-11-11
 
 Dead-export and dead-file detection for the TypeScript workspaces.
 
@@ -22,8 +22,11 @@ pnpm check:knip:production   # production-only graph (ignores test entry points)
 
 ## Status: discovery tool, NOT a blocking gate
 
-This is deliberately **not** wired into CI yet, and `check:knip` is not part of
-any aggregate check.
+This is deliberately **not** a CI gate: no required workflow runs it, and
+`check:knip` is not part of any aggregate check. The only automated run is the
+nightly Guardian deep lane (`.github/workflows/guardian.yml`), which runs
+`check:knip:production` as a report row
+(`packages/guardian/github/src/cli/checks-catalog.ts`).
 
 Measured 2026-08-28, after the unused-dependency sweep:
 

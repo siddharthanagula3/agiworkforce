@@ -225,6 +225,22 @@ describe('CloudTimeFocusSection', () => {
     expect(mocks.saveCloudPreferenceNamespace).not.toHaveBeenCalled();
   });
 
+  it.each(['Quiet hours start', 'Quiet hours end'])(
+    'refuses to save an enabled schedule with %s cleared',
+    async (label) => {
+      const user = userEvent.setup();
+
+      render(<CloudTimeFocusSection />);
+      await user.click(await screen.findByLabelText('Enable quiet hours'));
+      await user.click(screen.getByRole('button', { name: 'Monday' }));
+      await user.clear(screen.getByLabelText(label));
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/both a start and an end time/i);
+      expect(mocks.saveCloudPreferenceNamespace).not.toHaveBeenCalled();
+    },
+  );
+
   it('saves a valid schedule to the shared time-focus namespace', async () => {
     const user = userEvent.setup();
 

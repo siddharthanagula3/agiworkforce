@@ -1,3 +1,7 @@
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 const mockGet = jest.fn();
 const mockGetStorefront = jest.fn();
 

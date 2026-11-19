@@ -1,9 +1,12 @@
 import 'server-only';
 
+import { subjectIsStoredUserId } from '@agiworkforce/identity';
+
 import { logger } from '@/lib/logger';
 
 import {
   type AccountErasureReport,
+  advanceErasureTombstone,
   closeErasureTombstone,
   eraseProfileRow,
   eraseUserAccountData,
@@ -55,11 +58,21 @@ function incompleteStores(report: AccountErasureReport): string {
   return failures.join(', ').slice(0, 500);
 }
 
-async function deleteProviderIdentity(
-  userId: string,
+async function readProviderSubjects(userId: string, provider: string): Promise<string[]> {
+  const rows = await getNeonDb().query<{ subject: string }>(
+    `select subject from public.identities where user_id = $1 and provider = $2`,
+    [userId, provider],
+  );
+  const mapped = rows.map((row) => row.subject);
+  if (mapped.length > 0) return mapped;
+  return subjectIsStoredUserId(provider) ? [userId] : [];
+}
+
+async function deleteProviderSubject(
+  subject: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await getIdentityProvider().deleteUser(userId);
+    await getIdentityProvider().deleteUser(subject);
     return { ok: true };
   } catch (deleteError) {
     const message = deleteError instanceof Error ? deleteError.message : String(deleteError);
@@ -73,6 +86,23 @@ async function deleteProviderIdentity(
     }
     return { ok: false, error: message };
   }
+}
+
+async function deleteProviderIdentity(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let subjects: string[];
+  try {
+    subjects = await readProviderSubjects(userId, getIdentityProvider().name);
+  } catch (lookupError) {
+    const message = lookupError instanceof Error ? lookupError.message : String(lookupError);
+    return { ok: false, error: message };
+  }
+  for (const subject of subjects) {
+    const deleted = await deleteProviderSubject(subject);
+    if (!deleted.ok) return deleted;
+  }
+  return { ok: true };
 }
 
 async function isStillDue(userId: string): Promise<boolean> {
@@ -182,7 +212,7 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
     if (resurrected) {
       await erase(userId);
     } else {
-      const tombstone = await openErasureTombstone(userId);
+      const tombstone = await advanceErasureTombstone(userId);
       await invalidateAccountStatusCache(userId);
       if (!tombstone.recorded) {
         throw new ScheduledErasureError(
@@ -190,7 +220,10 @@ export async function reEraseTombstonedAccount(userId: string): Promise<Schedule
           tombstone.error ?? 'The erasure tombstone could not be advanced',
         );
       }
-      const report = await eraseUserAccountData(userId, { retainProfile: true });
+      const report = await eraseUserAccountData(userId, {
+        retainProfile: true,
+        scope: 'tombstone',
+      });
       if (!report.complete) {
         throw new ScheduledErasureError(
           'erasure',

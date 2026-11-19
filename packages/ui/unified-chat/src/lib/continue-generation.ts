@@ -29,17 +29,10 @@ export function isMessageContinuable(message: ContinuableMessageLike | undefined
   if (message.isStreaming) return false;
   if (message.error) return false;
   if (!hasVisibleContent(message.content)) return false;
-  if (
-    isContinuableFinishReason(
-      (message.metadata as { finishReason?: unknown } | undefined)?.finishReason,
-    )
-  ) {
-    return true;
+  const finishReason = (message.metadata as { finishReason?: unknown } | undefined)?.finishReason;
+  if (typeof finishReason === 'string' && finishReason.length > 0) {
+    return isContinuableFinishReason(finishReason);
   }
-  // The finish reason is not the only evidence a turn is unfinished, and it is
-  // not always honest. Continue only appends, so offering it on an answer that
-  // reads as cut off costs a redundant control; withholding it strands the
-  // reader with half an answer and no way to ask for the rest.
   return looksTruncated(message.content);
 }
 

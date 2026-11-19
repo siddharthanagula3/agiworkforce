@@ -4,7 +4,7 @@ title: Providers and models
 path: /providers
 category: providers
 tags: providers, models, switch model, model picker, anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, ollama, lm studio, routing
-updated: 2026-10-05
+updated: 2026-11-10
 description: How to choose a product surface, read the catalog counts, change the model route and use automatic routing.
 scope: public
 ---
@@ -16,8 +16,9 @@ installing the CLI or another client. Use the
 [provider directory](https://agiworkforce.com/providers) and the product's model
 picker when choosing a provider or model.
 
-The current Desktop application is managed-cloud-only and does not accept
-provider keys or run local models. For CLI local inference, see
+Desktop chat uses Cloud and Desktop does not accept provider keys; its local
+coding sessions run the CLI, which can use a local model or a provider key you set
+up there. For CLI local inference, see
 [Local mode](https://agiworkforce.com/help/local-mode). For provider-key login and
 custom endpoint configuration, see
 [BYOK](https://agiworkforce.com/help/byok-provider-keys).

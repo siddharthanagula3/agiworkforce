@@ -168,6 +168,33 @@ function interval(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe('admittedSandboxLifetimeMs', () => {
+  const NOW = 1_800_000_000_000;
+  const DAY_MS = 24 * 60 * 60_000;
+
+  it('keeps the plan lifetime for a sandbox no caller releases', async () => {
+    const mod = await loadModule();
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, undefined, NOW)).toBe(DAY_MS);
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, Number.POSITIVE_INFINITY, NOW)).toBe(DAY_MS);
+  });
+
+  it('holds a chat turn sandbox only until the turn releases it', async () => {
+    const mod = await loadModule();
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, NOW + 300_000, NOW)).toBe(300_000);
+  });
+
+  it('never admits less than the minimum funded run or more than the plan allows', async () => {
+    const mod = await loadModule();
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, NOW + 5_000, NOW)).toBe(
+      SANDBOX_MINIMUM_FUNDED_RUN_MS,
+    );
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, NOW - 60_000, NOW)).toBe(
+      SANDBOX_MINIMUM_FUNDED_RUN_MS,
+    );
+    expect(mod.admittedSandboxLifetimeMs(600_000, NOW + DAY_MS, NOW)).toBe(600_000);
+  });
+});
+
 describe('sandboxComputeIsPriceable, the provisioning gate', () => {
   beforeEach(() => {
     clearScopedEnv();
@@ -514,6 +541,43 @@ describe('reserveSandboxComputeInterval', () => {
       .leaseSeconds;
     expect(leaseSeconds).toBeGreaterThan(600);
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+  });
+
+  it('keeps a short hold reserved until the reclaim sweep can bill the interval its caller left open', async () => {
+    const mod = await loadModule();
+    const { PAUSED_SANDBOX_MAX_AGE_MS, RECLAIM_SWEEP_INTERVAL_MS } =
+      await import('../reclaim-schedule');
+    const rerunTtlMs = 300_000;
+    const reclaimedWithinMs = PAUSED_SANDBOX_MAX_AGE_MS + RECLAIM_SWEEP_INTERVAL_MS;
+
+    await mod.reserveSandboxComputeInterval({ ...reserveInput, ttlMs: rerunTtlMs });
+    const paid = reserveManagedUsageRequest.mock.calls[0]?.[0] as {
+      leaseSeconds: number;
+      estimatedCostMicrousd: number;
+    };
+    expect(paid.estimatedCostMicrousd).toBe(
+      chargeMicrousdForProviderCost(300 * DEFAULT_SHAPE_RATE),
+    );
+    expect(paid.leaseSeconds * 1_000).toBeGreaterThan(reclaimedWithinMs);
+
+    await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: rerunTtlMs,
+    });
+    const free = beginFreeTrialRequest.mock.calls[0]?.[0] as { leaseSeconds: number };
+    expect(free.leaseSeconds * 1_000).toBeGreaterThan(reclaimedWithinMs);
+  });
+
+  it('keeps a hold past the paused age cap reserved until the sweep after its sandbox times out', async () => {
+    const mod = await loadModule();
+    const { PAUSED_SANDBOX_MAX_AGE_MS, RECLAIM_SWEEP_INTERVAL_MS } =
+      await import('../reclaim-schedule');
+    const ttlMs = PAUSED_SANDBOX_MAX_AGE_MS + 3_600_000;
+
+    await mod.reserveSandboxComputeInterval({ ...reserveInput, ttlMs });
+    const held = reserveManagedUsageRequest.mock.calls[0]?.[0] as { leaseSeconds: number };
+    expect(held.leaseSeconds * 1_000).toBeGreaterThan(ttlMs + RECLAIM_SWEEP_INTERVAL_MS);
   });
 
   it('refuses Free compute the Free usage windows cannot fund, with the upgrade code', async () => {

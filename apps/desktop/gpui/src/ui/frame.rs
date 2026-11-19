@@ -361,23 +361,20 @@ impl Desktop {
             .flex_col()
             .gap_1();
         if mode == Surface::Code {
-            if self
-                .capabilities
-                .as_ref()
-                .is_some_and(|caps| caps.thread_search)
-                && !self.loading
-            {
-                recent = recent.child(
+            let interactive = !self.loading && !self.code_busy();
+            let searching = self.code_search.searching();
+            if self.workspace.is_some() {
+                sidebar = sidebar.child(
                     Input::new(&self.code_query)
                         .aria_label("Search coding sessions")
-                        .disabled(self.code_sessions.operation.is_some()),
+                        .disabled(!interactive || searching),
                 );
-                if self.code_sessions.operation.is_none() && !self.code_busy() {
-                    recent = recent
+                if interactive && !searching {
+                    sidebar = sidebar
                         .child(self.nav_button(
-                            "search-code-sessions",
+                            "search-sessions",
                             "Search",
-                            UiAction::SearchCode,
+                            UiAction::SearchSessions,
                             false,
                             palette,
                             cx,
@@ -394,66 +391,82 @@ impl Desktop {
                             palette,
                             cx,
                         ));
-                    if self.code_sessions.showing_search {
-                        recent = recent.child(self.nav_button(
-                            "clear-code-search",
-                            "Clear search",
-                            UiAction::ClearCodeSearch,
-                            false,
-                            palette,
-                            cx,
-                        ));
-                    }
                 }
             }
-            let sessions = if self.code_sessions.showing_search {
-                self.code_sessions
-                    .hits
+            let results = self.code_search.results();
+            let rows = match results {
+                Some((_, hits)) => hits
                     .iter()
-                    .map(|hit| hit.thread.clone())
-                    .collect::<Vec<_>>()
-            } else {
-                self.threads.clone()
+                    .map(|hit| {
+                        (
+                            hit.thread.id.clone(),
+                            crate::code_sessions::row_label(
+                                &hit.thread,
+                                crate::code_search::hit_label(hit),
+                            ),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                None => self
+                    .threads
+                    .iter()
+                    .map(|thread| {
+                        (
+                            thread.id.clone(),
+                            crate::code_sessions::row_label(thread, thread.title.clone()),
+                        )
+                    })
+                    .collect(),
             };
-            if self.code_sessions.showing_search && sessions.is_empty() && !self.loading {
+            if searching {
                 recent = recent.child(self.nav_label(
-                    SharedString::from("code-search-empty"),
-                    "No matching sessions".into(),
+                    "session-search-progress".into(),
+                    "Searching…".into(),
+                    false,
+                    palette,
+                ));
+            } else if results.is_some_and(|(_, hits)| hits.is_empty()) {
+                recent = recent.child(self.nav_label(
+                    "session-search-empty".into(),
+                    crate::code_search::NO_MATCHES.into(),
                     false,
                     palette,
                 ));
             }
-            for thread in &sessions {
+            for (id, label) in rows {
                 let current = self
                     .conversation
                     .as_ref()
-                    .is_some_and(|conversation| conversation.transcript.thread.id == thread.id);
-                let title = if thread.status
-                    == agiworkforce_protocol::developer_session::ThreadStatus::Archived
-                {
-                    format!("Archived: {}", thread.title)
-                } else {
-                    thread.title.clone()
-                };
-                if !self.loading && !self.code_busy() {
+                    .is_some_and(|conversation| conversation.transcript.thread.id == id);
+                if interactive && !searching {
                     recent = recent.child(self.nav_button(
-                        SharedString::from(format!("session:{}", thread.id)),
-                        title.clone(),
-                        UiAction::ReadSession(thread.id.clone()),
+                        SharedString::from(format!("session:{id}")),
+                        label,
+                        UiAction::ReadSession(id),
                         current,
                         palette,
                         cx,
                     ));
                 } else {
                     recent = recent.child(self.nav_label(
-                        SharedString::from(format!("session-label:{}", thread.id)),
-                        title,
+                        SharedString::from(format!("session-label:{id}")),
+                        label,
                         current,
                         palette,
                     ));
                 }
             }
-            if self.next_cursor.is_some() && !self.loading && !self.code_sessions.showing_search {
+            if results.is_some() && interactive && !searching {
+                recent = recent.child(self.nav_button(
+                    "clear-session-search",
+                    "Clear search",
+                    UiAction::ClearSessionSearch,
+                    false,
+                    palette,
+                    cx,
+                ));
+            }
+            if results.is_none() && self.next_cursor.is_some() && !self.loading {
                 recent = recent.child(self.nav_button(
                     "load-more",
                     "Load more",

@@ -11,8 +11,11 @@ export const TRACEPARENT_HEADER = 'traceparent';
 
 export const TRACE_CARRIER_KEY = 'traceparent';
 
-/** The traceparent header has no room for it, so the request id rides beside. */
-export const REQUEST_ID_CARRIER_KEY = 'requestId';
+/**
+ * The traceparent header has no room for it, so the request id rides beside. The
+ * key is reserved for tracing: a payload's own `requestId` is business data.
+ */
+export const REQUEST_ID_CARRIER_KEY = 'traceRequestId';
 
 export interface TraceCarrier {
   readonly [TRACE_CARRIER_KEY]: string;

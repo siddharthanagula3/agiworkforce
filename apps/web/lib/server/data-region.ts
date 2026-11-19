@@ -35,11 +35,10 @@ interface RegionRow {
   data_region_requested_at: string | Date | null;
 }
 
-export async function readOrganizationRegion(
+async function readRegionRow(
   db: DatabaseAdapter,
   organizationId: string,
-  env: Record<string, string | undefined> = process.env,
-): Promise<OrganizationRegionState> {
+): Promise<RegionRow | null> {
   const rows = await db.query<RegionRow>(
     `select data_region, data_region_requested, data_region_requested_at
        from public.organizations
@@ -47,8 +46,14 @@ export async function readOrganizationRegion(
       limit 1`,
     [organizationId],
   );
-  const row = rows[0] ?? null;
-  const effective = normaliseDataRegion(row?.data_region ?? null) ?? DEFAULT_DATA_REGION;
+  return rows[0] ?? null;
+}
+
+function regionState(
+  row: RegionRow | null,
+  effective: DataRegionId,
+  env: Record<string, string | undefined>,
+): OrganizationRegionState {
   const resolution = resolveDataRegion(effective, env);
   const requestedAt = row?.data_region_requested_at ?? null;
   return {
@@ -59,6 +64,33 @@ export async function readOrganizationRegion(
     provisioned: resolution.provisioned,
     missing: resolution.provisioned ? [] : resolution.missing,
   };
+}
+
+export async function readOrganizationRegion(
+  db: DatabaseAdapter,
+  organizationId: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<OrganizationRegionState> {
+  const row = await readRegionRow(db, organizationId);
+  const effective = normaliseDataRegion(row?.data_region ?? null) ?? DEFAULT_DATA_REGION;
+  return regionState(row, effective, env);
+}
+
+/**
+ * Null when the handle cannot see the workspace row or its stored pin names no
+ * known region, so a residency check can refuse instead of assuming the home region.
+ */
+export async function readStoredOrganizationRegion(
+  db: DatabaseAdapter,
+  organizationId: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<OrganizationRegionState | null> {
+  const row = await readRegionRow(db, organizationId);
+  if (!row) return null;
+  const effective =
+    row.data_region == null ? DEFAULT_DATA_REGION : normaliseDataRegion(row.data_region);
+  if (!effective) return null;
+  return regionState(row, effective, env);
 }
 
 export interface RegionMoveInput {
@@ -114,13 +146,15 @@ export async function cancelOrganizationRegionMove(
   const env = input.env ?? process.env;
   const current = await readOrganizationRegion(input.db, input.organizationId, env);
   if (!current.requested) return current;
-  await input.db.execute(
+  const cleared = await input.db.execute(
     `update public.organizations
         set data_region_requested = null,
             data_region_requested_at = null
-      where id = $1`,
-    [input.organizationId],
+      where id = $1
+        and data_region_requested = $2`,
+    [input.organizationId, current.requested],
   );
+  if (cleared === 0) return readOrganizationRegion(input.db, input.organizationId, env);
   await recordAuditEvent({
     eventType: 'data_region_change_cancelled',
     userId: input.actorUserId,
@@ -192,14 +226,18 @@ export async function completeOrganizationRegionMove(
   if (current.requested !== input.target) {
     throw new RegionMoveNotRequestedError(input.organizationId, input.target);
   }
-  await input.db.execute(
+  const applied = await input.db.execute(
     `update public.organizations
         set data_region = $2,
             data_region_requested = null,
             data_region_requested_at = null
-      where id = $1`,
+      where id = $1
+        and data_region_requested = $2`,
     [input.organizationId, input.target],
   );
+  if (applied === 0) {
+    throw new RegionMoveNotRequestedError(input.organizationId, input.target);
+  }
   await recordAuditEvent({
     eventType: 'data_region_changed',
     userId: input.actorUserId,

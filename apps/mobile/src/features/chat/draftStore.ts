@@ -91,15 +91,15 @@ export function setDraft(
       return;
     }
     const storageKey = scopedStorageKey(key, safeProvenance);
-    if (text.trim().length === 0) {
-      mmkvStorage.removeItem(storageKey);
-      return;
+    if (safeProvenance.scope === 'cloud') {
+      const currentAccount = captureCloudAccountEpoch();
+      if (!currentAccount) return;
+      if (currentAccount.ownerId !== safeProvenance.ownerId) {
+        mmkvStorage.removeItem(storageKey);
+        return;
+      }
     }
-
-    if (
-      safeProvenance.scope === 'cloud' &&
-      captureCloudAccountEpoch()?.ownerId !== safeProvenance.ownerId
-    ) {
+    if (text.trim().length === 0) {
       mmkvStorage.removeItem(storageKey);
       return;
     }

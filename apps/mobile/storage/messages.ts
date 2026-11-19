@@ -22,7 +22,7 @@ function row2msg(r: Record<string, unknown>): Message {
 
 export async function getMessagesForConversation(
   conversationId: string,
-  opts?: { limit?: number; before?: number },
+  opts?: { limit?: number; before?: number; offset?: number },
 ): Promise<Message[]> {
   const db = await getDb();
   const limit = opts?.limit ?? 100;
@@ -36,8 +36,8 @@ export async function getMessagesForConversation(
     return rows.map(row2msg);
   }
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT ?;',
-    [conversationId, limit],
+    'SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC LIMIT ? OFFSET ?;',
+    [conversationId, limit, opts?.offset ?? 0],
   );
   return rows.map(row2msg);
 }

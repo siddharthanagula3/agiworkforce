@@ -440,7 +440,10 @@ describe('buildAnthropicChatRequest -> translateChatRequest wire', () => {
     const chatRequest = buildAnthropicChatRequest(processed);
     const body = translateAnthropicChatRequest(chatRequest);
 
-    expect(body.thinking).toEqual({ type: 'adaptive' });
+    expect(body.thinking).toEqual({
+      type: 'adaptive',
+      display: ANTHROPIC_ADAPTIVE_MODEL.reasoning?.thinkingDisplay,
+    });
     expect(body.output_config).toEqual({ effort: 'max' });
     expect(body.temperature).toBeUndefined();
     expect(body.top_p).toBeUndefined();

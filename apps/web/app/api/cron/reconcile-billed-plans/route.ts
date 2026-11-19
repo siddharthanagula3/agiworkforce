@@ -8,14 +8,15 @@ import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import { reconcileBilledPlans } from '@/lib/services/billing-reconciliation';
+import {
+  reconcileBilledPlans,
+  requeueSubscriptionsForReview,
+} from '@/lib/services/billing-reconciliation';
 import { getHandoffConfig } from '@/lib/support/handoff/config';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
-
-const REPORTED_DRIFTS = 25;
 
 function buildReport(report: Awaited<ReturnType<typeof reconcileBilledPlans>>): {
   subject: string;
@@ -30,6 +31,7 @@ function buildReport(report: Awaited<ReturnType<typeof reconcileBilledPlans>>): 
     `Subscriptions compared: ${report.examined}`,
     `Priced differently from this deployment: ${report.diverged} (${percent}%)`,
     `Could not be read from Stripe: ${report.uncomparable}`,
+    `Compared only in part: ${report.incomplete.length}`,
     '',
     'A plan or amount that differs means an account is entitled on terms the',
     'payment provider is not charging, in one direction or the other. Nothing was',
@@ -37,12 +39,22 @@ function buildReport(report: Awaited<ReturnType<typeof reconcileBilledPlans>>): 
     '',
     'AFFECTED',
     report.drifts
-      .slice(0, REPORTED_DRIFTS)
+      .flatMap((drift) =>
+        drift.lines.map(
+          (line) =>
+            `${drift.stripeSubscriptionId} · user ${drift.userId} · ${line.fields.join(', ')}` +
+            ` · price ${line.priceId ?? 'none'}` +
+            ` · stored ${drift.storedPlanTier ?? 'none'} vs price ${line.stripePlanTier ?? 'unregistered'}` +
+            ` · charged ${line.stripeUnitAmount ?? 'unknown'} vs listed ${line.expectedUnitAmount ?? 'unpublished'}`,
+        ),
+      )
+      .join('\n'),
+    '',
+    'COMPARED ONLY IN PART',
+    report.incomplete
       .map(
-        (drift) =>
-          `${drift.stripeSubscriptionId} · user ${drift.userId} · ${drift.fields.join(', ')}` +
-          ` · stored ${drift.storedPlanTier ?? 'none'} vs price ${drift.stripePlanTier ?? 'unregistered'}` +
-          ` · charged ${drift.stripeUnitAmount ?? 'unknown'} vs listed ${drift.expectedUnitAmount ?? 'unpublished'}`,
+        (entry) =>
+          `${entry.stripeSubscriptionId} · user ${entry.userId} · not compared: ${entry.gaps.join(', ')}`,
       )
       .join('\n'),
     '',
@@ -88,7 +100,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         event: 'billed_plan_divergence',
         examined: report.examined,
         diverged: report.diverged,
+        incomplete: report.incomplete.length,
         fields: report.drifts.flatMap((drift) => drift.fields),
+        drifts: report.drifts.map((drift) => ({
+          stripeSubscriptionId: drift.stripeSubscriptionId,
+          userId: drift.userId,
+          lines: drift.lines,
+        })),
       },
       'Billed plan divergence detected',
     );
@@ -109,6 +127,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         { event: 'billed_plan_divergence', reason: sent.reason },
         'Billed plan divergence report could NOT be delivered · no human has been told',
       );
+      try {
+        await requeueSubscriptionsForReview(
+          getNeonDb(),
+          report.drifts.map((drift) => drift.stripeSubscriptionId),
+        );
+      } catch (error) {
+        logger.error(
+          {
+            event: 'billed_plan_requeue_failed',
+            error: error instanceof Error ? error.message : String(error),
+          },
+          'Subscriptions in an undelivered billed plan report could not be queued for review again',
+        );
+      }
     }
   }
 
@@ -120,7 +152,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       uncomparable: report.uncomparable,
       alert: report.alert,
       delivery,
-      drifts: report.drifts.slice(0, REPORTED_DRIFTS),
+      drifts: report.drifts,
+      incomplete: report.incomplete,
     },
     { status: delivery === 'undeliverable' ? 500 : 200 },
   );

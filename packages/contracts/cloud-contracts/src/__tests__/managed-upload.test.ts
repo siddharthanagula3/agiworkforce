@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { managedUploadRequestOptions } from '../managed-upload';
+import { assertUploadSendsSignedHeaders, managedUploadRequestOptions } from '../managed-upload';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -135,5 +135,55 @@ describe('managed upload credential boundary', () => {
         },
       ),
     ).rejects.toThrow('Account changed');
+  });
+});
+
+describe('signed upload header coverage', () => {
+  const SIGNED =
+    'https://storage.example/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption';
+
+  it('accepts an upload that sends every header the url was signed with', () => {
+    expect(() =>
+      assertUploadSendsSignedHeaders(SIGNED, {
+        'Content-Type': 'text/plain',
+        'X-Amz-Server-Side-Encryption': 'AES256',
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses an upload that omits a signed header, naming it', () => {
+    expect(() => assertUploadSendsSignedHeaders(SIGNED, { 'Content-Type': 'text/plain' })).toThrow(
+      'x-amz-server-side-encryption',
+    );
+  });
+
+  it('does not ask for headers the transport sets itself', () => {
+    expect(() =>
+      assertUploadSendsSignedHeaders(
+        'https://storage.example/object?X-Amz-SignedHeaders=content-length%3Bhost',
+        {},
+      ),
+    ).not.toThrow();
+  });
+
+  it('leaves an unsigned destination alone', () => {
+    expect(() =>
+      assertUploadSendsSignedHeaders('https://cloud.example/api/uploads/put?token=fixture', {}),
+    ).not.toThrow();
+  });
+
+  it('applies to every client that builds its request options here', async () => {
+    await expect(
+      managedUploadRequestOptions(SIGNED, { 'Content-Type': 'text/plain' }, {}),
+    ).rejects.toThrow('x-amz-server-side-encryption');
+    await expect(
+      managedUploadRequestOptions(
+        SIGNED,
+        { 'Content-Type': 'text/plain', 'x-amz-server-side-encryption': 'AES256' },
+        {},
+      ),
+    ).resolves.toEqual({
+      headers: { 'content-type': 'text/plain', 'x-amz-server-side-encryption': 'AES256' },
+    });
   });
 });

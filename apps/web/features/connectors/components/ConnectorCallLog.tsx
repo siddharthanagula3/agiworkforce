@@ -34,7 +34,7 @@ const EMPTY_COPY = 'This connector has not been called yet, so there is nothing 
 const FAILED_COPY = 'The call log could not be read.';
 const RETRY_LABEL = 'Retry';
 const EXPLANATION =
-  'What this connector was asked to do and whether it answered. A run of recent failures with no success between them is what marks it as not responding on the connectors list. Arguments and results are never recorded.';
+  'What it was asked and if it answered. Repeated failures mark it as not responding. Arguments and results are never recorded.';
 
 function formatDuration(durationMs: number | null): string | null {
   if (durationMs === null) return null;

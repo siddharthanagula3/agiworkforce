@@ -1,3 +1,6 @@
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import {
   getAutoRoutingProfiles,

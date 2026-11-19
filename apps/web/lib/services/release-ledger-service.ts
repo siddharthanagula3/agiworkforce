@@ -5,6 +5,7 @@ import { deployEnvironment, deploymentId, deployRegion, releaseSha } from '@/lib
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   RELEASE_AUDIT_RETENTION_DAYS,
+  readLatestReleaseEvent,
   readReleaseEvents,
   verifyReleaseChain,
   type ReleaseChainVerdict,
@@ -120,23 +121,32 @@ function ledgerAgreesWithServing(
 
 export async function readReleaseDashboard(nowMs: number = Date.now()): Promise<ReleaseDashboard> {
   const unreadable: string[] = [];
-  const [ledger, events] = await Promise.all([
+  const markEventsUnreadable = (error: unknown, message: string) => {
+    logger.warn({ error }, message);
+    if (!unreadable.includes('events')) unreadable.push('events');
+  };
+  const [ledger, events, lastRollback, lastDrill] = await Promise.all([
     readReleaseLedger().catch((error: unknown) => {
       logger.warn({ error }, '[releases] the migration ledger could not be read');
       unreadable.push('ledger');
       return [] as ReleaseLedgerEntry[];
     }),
     readReleaseEvents({ limit: EVENT_LIMIT }).catch((error: unknown) => {
-      logger.warn({ error }, '[releases] the release audit trail could not be read');
-      unreadable.push('events');
+      markEventsUnreadable(error, '[releases] the release audit trail could not be read');
       return [] as ReleaseEvent[];
     }),
+    readLatestReleaseEvent({ event: 'rolled_back' }).catch((error: unknown) => {
+      markEventsUnreadable(error, '[releases] the latest rollback could not be read');
+      return null;
+    }),
+    readLatestReleaseEvent({ event: 'rollback_drill', outcome: 'succeeded' }).catch(
+      (error: unknown) => {
+        markEventsUnreadable(error, '[releases] the latest rollback drill could not be read');
+        return null;
+      },
+    ),
   ]);
   const serving = servingVersion();
-  const lastRollback = events.find((event) => event.event === 'rolled_back') ?? null;
-  const lastDrill =
-    events.find((event) => event.event === 'rollback_drill' && event.outcome === 'succeeded') ??
-    null;
 
   return {
     serving,

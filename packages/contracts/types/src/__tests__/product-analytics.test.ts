@@ -178,4 +178,29 @@ describe('consent under the analytics notice', () => {
     expect(calls).toEqual([PRODUCT_ANALYTICS_CONSENT_PATH]);
     expect(calls).not.toContain(PRODUCT_ANALYTICS_INGEST_PATH);
   });
+
+  it('sends nothing when the surface is switched off while the consent lookup is pending', async () => {
+    let enabled = true;
+    const calls: string[] = [];
+    let grant!: (body: unknown) => void;
+    const consentReply = new Promise<unknown>((resolve) => {
+      grant = resolve;
+    });
+    const analytics = createAccountProductAnalytics({
+      surface: 'cli',
+      isEnabled: () => enabled,
+      request: async (path) => {
+        calls.push(path);
+        return path === PRODUCT_ANALYTICS_CONSENT_PATH ? consentReply : null;
+      },
+    });
+
+    analytics.track('first_chat');
+    const flushing = analytics.flush();
+    enabled = false;
+    grant(consents(PRODUCT_ANALYTICS_NOTICE_VERSION));
+    await flushing;
+
+    expect(calls).toEqual([PRODUCT_ANALYTICS_CONSENT_PATH]);
+  });
 });

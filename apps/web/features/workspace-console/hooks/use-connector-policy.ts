@@ -74,7 +74,8 @@ export function useUpdateConnectorPolicy() {
       if (!res.ok) throw new Error(await readApiError(res));
       return readPolicy(res);
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      queryClient.setQueryData(CONNECTOR_POLICY_QUERY_KEY, saved);
       void queryClient.invalidateQueries({ queryKey: CONNECTOR_POLICY_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: ['workspace', 'posture'] });
     },

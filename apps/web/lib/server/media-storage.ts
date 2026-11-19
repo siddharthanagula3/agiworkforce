@@ -544,6 +544,9 @@ export async function deleteStoredMedia(pathname: string): Promise<void> {
       throw new Error('Invalid private chat-attachment storage path.');
     }
     await deletePrivateObject(pathname);
+    if (pathname.endsWith(SEALED_CHAT_ATTACHMENT_SUFFIX)) {
+      await deletePrivateObject(pathname.slice(0, -SEALED_CHAT_ATTACHMENT_SUFFIX.length));
+    }
     if (isObjectStorageConfigured()) await deleteObject(pathname);
     return;
   }

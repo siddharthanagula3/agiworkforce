@@ -2,7 +2,7 @@
 
 Status: Draft. Nothing below has been exercised against a real App Store Connect or Play Console account; the code paths are covered by unit tests only.
 Owner: Founder / billing operator
-Last updated: 2026-10-12
+Last updated: 2026-11-11
 
 This runbook creates the in-app purchase products the mobile app sells, connects
 both stores' server notifications, and sets the server configuration that turns
@@ -17,6 +17,11 @@ decides it. Opening purchases to everyone is a server change (section 7) and
 needs no new build, provided the build that is in the stores was reviewed with
 in-app purchases declared (section 6).
 
+Version 1 of the app sells nothing: `apps/mobile/src/features/billing/storePurchases.json`
+holds `"nativePurchases": false` and both listings declare no in-app purchases
+(`mobile-store-first-release.md`). Nothing below applies until a build with that
+value `true` is submitted and reviewed.
+
 ## 1. What is sold
 
 Prices are the monthly prices in `packages/contracts/types/src/billing-catalog.ts`,
@@ -26,15 +31,15 @@ own localized price in each storefront; the app shows only the store's string.
 | Logical key                    | Buyer-facing name | Price (USD) | Kind                       |
 | ------------------------------ | ----------------- | ----------- | -------------------------- |
 | `subscription_basic_monthly`   | AGI Basic         | 7.00 / mo   | auto-renewing subscription |
-| `subscription_pro_monthly`     | AGI Pro           | 20.00 / mo  | auto-renewing subscription |
-| `subscription_max_monthly`     | AGI Max 5x        | 100.00 / mo | auto-renewing subscription |
-| `subscription_max_15x_monthly` | AGI Max 20x       | 200.00 / mo | auto-renewing subscription |
+| `subscription_pro_monthly`     | AGI Premium       | 20.00 / mo  | auto-renewing subscription |
+| `subscription_max_monthly`     | AGI Max           | 100.00 / mo | auto-renewing subscription |
+| `subscription_max_15x_monthly` | AGI Ultra         | 200.00 / mo | auto-renewing subscription |
 | `top_up_10`                    | 500 credits       | 10.00       | consumable                 |
 | `top_up_20`                    | 1,000 credits     | 20.00       | consumable                 |
 | `top_up_50`                    | 2,500 credits     | 50.00       | consumable                 |
 | `top_up_100`                   | 5,000 credits     | 100.00      | consumable                 |
 
-The 200 USD plan is named Max 20x everywhere a person reads it. `max_15x` is an
+The 200 USD plan is named Ultra everywhere a person reads it. `max_15x` is an
 internal id only and must not appear in a store display name or description.
 
 A top-up is sold only to an account that already holds an active paid plan; the
@@ -57,9 +62,9 @@ Order the levels from most to least:
 
 | Level | Product id                                | Reference name      | Duration | Price (USD) |
 | ----- | ----------------------------------------- | ------------------- | -------- | ----------- |
-| 1     | `com.agiworkforce.app.sub.max20x.monthly` | AGI Max 20x Monthly | 1 month  | 200.00      |
-| 2     | `com.agiworkforce.app.sub.max.monthly`    | AGI Max 5x Monthly  | 1 month  | 100.00      |
-| 3     | `com.agiworkforce.app.sub.pro.monthly`    | AGI Pro Monthly     | 1 month  | 20.00       |
+| 1     | `com.agiworkforce.app.sub.max20x.monthly` | AGI Ultra Monthly   | 1 month  | 200.00      |
+| 2     | `com.agiworkforce.app.sub.max.monthly`    | AGI Max Monthly     | 1 month  | 100.00      |
+| 3     | `com.agiworkforce.app.sub.pro.monthly`    | AGI Premium Monthly | 1 month  | 20.00       |
 | 4     | `com.agiworkforce.app.sub.basic.monthly`  | AGI Basic Monthly   | 1 month  | 7.00        |
 
 For each: Family Sharing off (the server refuses a family-shared transaction),
@@ -129,9 +134,9 @@ deferred for a downgrade.
 | Product id    | Base plan id | Name        | Price (USD) |
 | ------------- | ------------ | ----------- | ----------- |
 | `agi_basic`   | `monthly`    | AGI Basic   | 7.00        |
-| `agi_pro`     | `monthly`    | AGI Pro     | 20.00       |
-| `agi_max`     | `monthly`    | AGI Max 5x  | 100.00      |
-| `agi_max_20x` | `monthly`    | AGI Max 20x | 200.00      |
+| `agi_pro`     | `monthly`    | AGI Premium | 20.00       |
+| `agi_max`     | `monthly`    | AGI Max     | 100.00      |
+| `agi_max_20x` | `monthly`    | AGI Ultra   | 200.00      |
 
 Product ids cannot be changed or reused once created, and a base plan id cannot
 be changed once the base plan is activated. On each base plan set a grace
@@ -423,17 +428,56 @@ Google Play has no consent-withdrawal notification or API. Withdrawn approvals
 appear only as install ids in Play Console, Age signals, **Revoked app
 approvals**, as a CSV. Download it weekly and handle each install by hand.
 
+### 5.2 Top-up refunds that took back too much credit
+
+Before the fix in `apps/web/lib/server/mobile-iap-top-up-budget.ts`, a refund
+of a mobile top-up took back its retail price as credit budget, which is more
+than the top-up granted, and a reversed refund could put back a different amount
+from the one removed. Refunds handled since
+take back only the refunded share of the budget the top-up granted.
+
+To list the accounts that lost credit this way:
+
+```bash
+pnpm report:mobile-top-up-refunds
+pnpm report:mobile-top-up-refunds --json
+```
+
+It takes its connection the way the web app does (`AGI_DATABASE_URL`, or
+`DATABASE_URL`, and `AGI_DATABASE_PROVIDER`), so the development-runtime guard
+on shared databases applies (`AGI_ALLOW_REMOTE_DATABASE`). Use a read-only
+database role where one exists. The report opens one transaction, sets it read
+only and stops if the database does not confirm that, so it changes nothing; it
+has no write mode. Sandbox receipts are left out unless `--include-sandbox` is
+passed.
+
+Each row is one store transaction: the account, the credit it granted, what its
+refunds took off the balance, anything a reversal put back, what should have
+been taken back for the refunded share, and the difference owed, in credits and
+cents, with totals. Ledger entries named for a mobile refund that match no
+top-up receipt are listed underneath for review by hand. A refund that found
+the credits already spent is counted only for the balance it actually removed.
+
+Crediting an account back is a separate step, approved by the owner for each
+run of the report, through the operator dashboard's **Grant credit** action
+(`/operator`, Users), which records the reason and the operator in the security
+audit log. Put the store transaction id in the reason. That grant is a
+goodwill credit with its own expiry, not a restored purchase.
+
 ## 6. What the store submission has to match
 
 `apps/mobile/store-listing/LISTING-METADATA-IOS.json` and
-`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json` declare in-app
-purchases, and the two reviewer notes describe the purchase screens. Before
-submitting a build:
+`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json` declare no in-app
+purchases today, and the two reviewer notes describe a build without purchase
+screens. For a build with `nativePurchases` set to `true`, set both listings'
+purchase declarations to `true` and rewrite the reviewer notes' purchase
+sections first; `scripts/release/check-store-listing-claims.mjs` fails the
+release if the listings and the value disagree. Before submitting that build:
 
 - App Store Connect: attach all eight in-app purchases to the app version, with
   a review screenshot for each.
 - Give App Review and Play review a signed-in test account (email and password;
-  Clerk production has Device Trust off so sign-in needs no one-time code).
+  Clerk production has Client Trust off so sign-in needs no one-time code).
 - `apps/mobile/src/features/release-state/mobileReleaseState.json` records both
   stores as unpublished. While a store is unpublished the app does not name it
   and shows no link to its subscription settings, so a store subscriber is told
@@ -441,8 +485,8 @@ submitting a build:
   ships to a store, set that store's status to published together with the
   listing id, listing URL and subscription management URL of the live listing.
   This file is compiled into the app, so it is the one billing value that does
-  need a build. Its evidence text still describes a listing with no purchases
-  and should be rewritten in the same change.
+  need a build. Its evidence text describes a listing with no purchases; rewrite it in the
+  same change.
 
 ## 7. Opening purchases
 

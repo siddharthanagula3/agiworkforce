@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 // cases keep asserting storage behaviour against a mocked database only.
 vi.mock('./agent-notification-service', () => ({
   notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+  trackAgentRunOutcome: vi.fn(),
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -943,7 +944,7 @@ describe('cloud agent run service', () => {
           {
             role: 'assistant',
             content: '',
-            __canonicalThinking: [{ type: 'redacted_thinking', data: 'not-signed-thinking' }],
+            __canonicalThinking: [{ type: 'redacted_thinking', text: 'not-opaque-provider-data' }],
           },
         ],
         pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,

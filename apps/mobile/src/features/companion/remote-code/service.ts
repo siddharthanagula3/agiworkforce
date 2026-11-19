@@ -94,3 +94,23 @@ export function answerCodeApproval(
     approved,
   });
 }
+
+export function answerCodeQuestion(
+  rootId: string,
+  threadId: string,
+  turnId: string,
+  questionRequestId: string,
+  answer: string | null,
+): Promise<boolean> {
+  const text = answer === null ? null : answer.trim();
+  if (text !== null && (!text || text.length > REMOTE_CODE_LIMITS.answerLength)) {
+    return Promise.resolve(false);
+  }
+  return sendCodeRequest('code.question.respond', {
+    rootId,
+    threadId,
+    turnId,
+    questionRequestId,
+    answer: text,
+  });
+}

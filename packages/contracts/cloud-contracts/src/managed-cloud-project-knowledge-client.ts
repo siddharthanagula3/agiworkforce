@@ -32,9 +32,17 @@ export interface ManagedCloudProjectKnowledgeClientConfig {
   uploadFetchImpl?: typeof globalThis.fetch;
 }
 
+export interface ManagedCloudProjectKnowledgeUploadOptions {
+  onNotice?: (notice: string) => void;
+}
+
 export interface ManagedCloudProjectKnowledgeClient {
   list(projectId: string): Promise<ManagedCloudProjectKnowledgeFile[]>;
-  upload(projectId: string, file: File): Promise<ManagedCloudProjectKnowledgeFile>;
+  upload(
+    projectId: string,
+    file: File,
+    options?: ManagedCloudProjectKnowledgeUploadOptions,
+  ): Promise<ManagedCloudProjectKnowledgeFile>;
   remove(projectId: string, fileId: string): Promise<void>;
 }
 
@@ -179,7 +187,7 @@ export function createManagedCloudProjectKnowledgeClient(
       ).files;
     },
 
-    async upload(projectId, file) {
+    async upload(projectId, file, options) {
       const validation = validateAttachmentFile(file);
       if (!validation.ok) throw new Error(validation.message);
       const mimeType = file.type || 'application/octet-stream';
@@ -250,12 +258,14 @@ export function createManagedCloudProjectKnowledgeClient(
         }).catch(() => undefined);
         throw await responseError(registrationResponse, `Could not register ${file.name}.`);
       }
-      const registered = parseContract(
+      const registration = parseContract(
         ManagedCloudProjectKnowledgeRegisterResponseSchema,
         await registrationResponse.json(),
         'registration response',
-      ).file;
-      return assertRegisteredAsSent(registered, projectId, file, checksumSha256);
+      );
+      const registered = assertRegisteredAsSent(registration.file, projectId, file, checksumSha256);
+      if (registration.notice) options?.onNotice?.(registration.notice);
+      return registered;
     },
 
     async remove(projectId, fileId) {

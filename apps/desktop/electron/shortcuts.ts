@@ -1,5 +1,5 @@
 import { Notification, globalShortcut } from 'electron';
-import { getShortcuts } from './settingsStore';
+import { getShortcuts, saveSettings, saveSettingsDurably } from './settingsStore';
 import { createNativeNotification } from './runtime/nativeSurface';
 import type { HostShortcutStatus } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
@@ -9,6 +9,7 @@ import {
   duplicateShortcutKeys,
   isShortcutOff,
   isUsableAccelerator,
+  shortcutMayBeOff,
   type GarnishShortcuts,
   type ShortcutKey,
 } from './garnishCore';
@@ -124,4 +125,45 @@ export function unregisterGarnishShortcuts(): void {
   }
   registrations = [];
   warnedAboutConflict = false;
+}
+
+function lostAlwaysOnShortcut(): ShortcutRegistration | undefined {
+  return registrations.find(
+    (registration) => !shortcutMayBeOff(registration.key) && registration.status !== 'registered',
+  );
+}
+
+function lostShortcutMessage(lost: ShortcutRegistration, restored: boolean): string {
+  const reason = shortcutStatusDetail(lost.status) ?? 'was not registered';
+  const outcome = restored
+    ? 'The shortcut it had is kept.'
+    : 'The shortcut it had could not be restored either.';
+  return `${SHORTCUT_LABELS[lost.key]} could not take that shortcut: it ${reason}. ${outcome} Choose another one.`;
+}
+
+/**
+ * A shortcut that is never off has to end a change still registered. A chord
+ * another app holds is saved like any other and reports `taken`, which for
+ * Stop Agents would leave no shortcut at all. Answers with what to tell the
+ * person when the change did not take, after putting the old chords back.
+ */
+export function changeGarnishShortcuts(
+  patch: Partial<GarnishShortcuts>,
+  handlers: GarnishShortcutHandlers,
+): string | null {
+  const previous = getShortcuts();
+  try {
+    saveSettingsDurably(patch);
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+  unregisterGarnishShortcuts();
+  registerGarnishShortcuts(handlers);
+  const lost = lostAlwaysOnShortcut();
+  if (!lost) return null;
+
+  saveSettings(previous);
+  unregisterGarnishShortcuts();
+  registerGarnishShortcuts(handlers);
+  return lostShortcutMessage(lost, lostAlwaysOnShortcut() === undefined);
 }

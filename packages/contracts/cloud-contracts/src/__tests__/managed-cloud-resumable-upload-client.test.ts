@@ -76,7 +76,43 @@ describe('resumable upload completion recovery', () => {
     expect(f.uploadFetchImpl).not.toHaveBeenCalled();
   });
 
-  it.each([401, 403, 404, 409, 429, 500, 503])(
+  it('starts a fresh upload when the closed session has nothing left to complete', async () => {
+    const f = fixture();
+    const freshSession = {
+      uploadId: 'fresh-upload',
+      session: 'fresh-session-fixture',
+      partBytes: 1,
+      partCount: 1,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    f.fetchImpl
+      .mockResolvedValueOnce(Response.json({ error: 'Closed' }, { status: 404 }))
+      .mockResolvedValueOnce(Response.json({ error: 'Not found' }, { status: 404 }))
+      .mockResolvedValueOnce(Response.json(freshSession))
+      .mockResolvedValueOnce(
+        Response.json({
+          parts: [
+            {
+              partNumber: 1,
+              url: 'https://cloud.example/part',
+              method: 'PUT',
+              headers: {},
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json(completed));
+    f.uploadFetchImpl.mockResolvedValueOnce(Response.json({ success: true }));
+
+    await expect(f.upload()).resolves.toEqual(completed);
+
+    expect(f.sessions.remove).toHaveBeenCalledTimes(2);
+    expect(f.sessions.write).toHaveBeenCalledOnce();
+    expect(f.sessions.write).toHaveBeenCalledWith(expect.any(String), JSON.stringify(freshSession));
+    expect(f.uploadFetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it.each([401, 403, 409, 429, 500, 503])(
     'preserves the cached session when the completion probe returns %s',
     async (status) => {
       const f = fixture();

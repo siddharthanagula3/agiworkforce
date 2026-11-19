@@ -1400,7 +1400,14 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
               <Eyebrow>Gallery</Eyebrow>
               <h1 className="agi-ds-h1">Artifacts</h1>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 'var(--space-2)',
+              }}
+            >
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button

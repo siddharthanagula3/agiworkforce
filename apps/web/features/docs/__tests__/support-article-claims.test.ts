@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -329,12 +330,25 @@ describe('current CLI help articles distinguish implementation from release avai
     );
   });
 
-  it('retains the implemented Desktop cloud boundary in all touched surface explanations', () => {
+  it('states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation', () => {
     const dispatcher = repoText('apps', 'desktop', 'electron', 'runtime', 'dispatcher.ts');
     expect(dispatcher).toContain('localModels: false');
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
+    expect(dispatcher).not.toContain('providers/setKey');
+    const sessions = repoText(
+      'apps',
+      'desktop',
+      'electron',
+      'runtime',
+      'developerSessionService.ts',
+    );
+    expect(sessions).toContain("'app-server'");
+    expect(sessions).toMatch(/requestOrNull\(server, 'model\/list'/u);
+    const reachability = repoText('apps', 'cli', 'src', 'model_reachability.rs');
+    expect(reachability).toMatch(/"ollama" \| "lmstudio" => DeveloperSessionTrustMode::Local/u);
+    expect(reachability).toMatch(/_ => DeveloperSessionTrustMode::Byok/u);
     expect(repoText('apps', 'desktop', 'electron', 'config.ts')).toMatch(
       /export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin\(\);/u,
     );
@@ -349,7 +363,7 @@ describe('current CLI help articles distinguish implementation from release avai
       'install-desktop-and-mobile',
     ]) {
       expect(collapsed(`content/support/${id}.md`)).toContain(
-        'The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.',
+        'Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.',
       );
     }
   });
@@ -374,7 +388,8 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(review).toContain('let diff = gather_diff(options).await?;');
     expect(review).toContain('session.send(config, &prompt, Box::new(|_chunk| {})).await?;');
     expect(apply).toMatch(/pub async fn apply_from_file[\s\S]{0,180}apply_git_patch/u);
-    expect(apply).toMatch(/pub async fn apply_from_session[\s\S]{0,550}apply_git_patch/u);
+    expect(apply).toMatch(/pub async fn apply_from_session[\s\S]{0,220}apply_session_diff/u);
+    expect(apply).toMatch(/async fn apply_session_diff[\s\S]{0,900}apply_git_patch/u);
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain('`agi review` sends a Git diff to the selected model for review.');
     expect(article).toContain('`agi apply` applies a diff from a file or saved session.');
@@ -447,11 +462,13 @@ describe('current CLI help articles distinguish implementation from release avai
       ['fix', 'Fix Issue'],
       ['refactor', 'Refactor Code'],
       ['generateTests', 'Generate Tests'],
+      ['setApiKey', 'Set API Key'],
+      ['clearApiKey', 'Clear API Key'],
     ]) {
       expect(manifest.contributes.commands).toContainEqual(
         expect.objectContaining({
           command: `agi-workforce.${command}`,
-          title: `AGI Code: ${label}`,
+          title: `${PRODUCT_NAMES.code}: ${label}`,
         }),
       );
       expect(setup).toContain(`register('agi-workforce.${command}',`);
@@ -465,7 +482,9 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(credentials).toContain('await setApiKey(context.secrets, apiKey.trim());');
     expect(credentials).toContain('await clearApiKey(context.secrets);');
     expect(setup).toContain('const result = await localRuntimes.restartAll();');
-    expect(setup).toContain('const result = await probeCli(cliPath, runCliVersion);');
+    expect(setup).toContain(
+      'const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);',
+    );
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain(
       '**Set API Key** and **Clear API Key** manage the AGI account API key.',

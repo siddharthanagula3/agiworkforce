@@ -12,7 +12,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
              script-src 'nonce-NONCE' vscode-webview://mock;
              img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
-  <title>AGI Code</title>
+  <title>Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
   <style nonce="NONCE">
     :root {
@@ -42,6 +42,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 --agi-vscode-diff-added-gutter: var(--vscode-diffEditor-insertedTextBorder, #4caf50);
 --agi-vscode-diff-removed-gutter: var(--vscode-diffEditor-removedTextBorder, #f44336);
 --agi-vscode-diff-modified-gutter: #ff9800;
+--agi-vscode-qr-quiet-zone: #ffffff;
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
@@ -78,6 +79,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 --duration-quick: 160ms;
 --duration-moved: 260ms;
 --duration-reveal: 700ms;
+--duration-mark-flow: 4200ms;
 --curve-standard: cubic-bezier(0.2, 0, 0, 1);
 --curve-exit: cubic-bezier(0.4, 0, 1, 1);
       --duration-spin: 1000ms;
@@ -807,6 +809,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     @keyframes typing-mark-spin {
       to { transform: rotate(360deg); }
+    }
+
+    .codicon.codicon-loading::before {
+      content: '';
+      display: block;
+      width: 1em;
+      height: 1em;
+      background-image: url("https://mock///mock/extension/media/agi-symbol.png"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */
@@ -1740,8 +1750,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -1751,8 +1760,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -2637,7 +2645,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Code surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="Code surfaces">
           <button
             type="button"
             class="actions-menu-item"
@@ -3135,7 +3143,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Context after the last turn: {count} token. The context window for this model is not known here.","other":"Context after the last turn: {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -3869,6 +3877,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     let streaming = false;
     let mentionIndex = -1;
     let mentionStart = -1;
+    let mentionQuery = null;
     let pendingFileReferences = [];
     let activePlanCard = null;
     let currentAssistantEl = null;
@@ -4550,6 +4559,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     function showTyping() {
+      if (toolCallStack && toolCallStack.isConnected && toolCallStack.dataset.status === 'working') return;
       var existing = document.getElementById('typingIndicator');
       if (existing) {
         messagesEl.appendChild(existing);
@@ -4976,8 +4986,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           var text = codeEl.textContent || '';
           if (b.classList.contains('explain-btn')) {
             var language = getCodeLanguage(codeEl) || '';
-            prefillComposer('Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
-            sendMessage();
+            sendMessage(undefined, 'Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
             return;
           }
           if (b.classList.contains('apply-btn')) {
@@ -5013,8 +5022,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (typeof window.agiBindSurfaces === 'function') {
         window.agiBindSurfaces(rootEl, {
           onFollowUp: function(text) {
-            prefillComposer(text);
-            sendMessage();
+            sendMessage(undefined, text);
           },
           copy: function(text) {
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
@@ -5075,6 +5083,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       cancelIcon.setAttribute('aria-hidden', 'true');
       cancel.appendChild(cancelIcon);
       edit.addEventListener('click', function () {
+        if (userInput.value.trim() !== '') {
+          edit.title = 'Send or clear what you are typing first, then edit this message.';
+          edit.setAttribute('aria-label', edit.title);
+          userInput.focus();
+          return;
+        }
         vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
         prefillComposer(text);
       });
@@ -5132,8 +5146,33 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = 100000;
+    var MAX_SEND_MESSAGE_REFERENCES = 50;
+    var MAX_SIDE_QUESTION_CHARS = 20000;
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -5151,21 +5190,39 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       });
     }
 
-    function sendMessage(oneTurnBehavior) {
+    function sendMessage(oneTurnBehavior, generatedText) {
       if (runtimeBlock !== null) return;
+      const generated = typeof generatedText === 'string';
       const isFollowUp = streaming;
-      const typedText = userInput.value.trim();
-      var sideMatch = typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
+      const typedText = generated ? generatedText.trim() : userInput.value.trim();
+      var sideMatch = generated ? null : typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
       if (sideMatch) {
         askSideQuestion(sideMatch[1].trim());
         return;
       }
-      const text = typedText || (pendingAttachmentCount === 1
+      const text = generated ? typedText : typedText || (pendingAttachmentCount === 1
         ? 'Please analyze the attached file.'
         : pendingAttachmentCount > 1
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -5173,7 +5230,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
       prependAuthor(userMessageEl, 'You said:');
-      appendSentContext(userMessageEl);
+      if (!generated) appendSentContext(userMessageEl);
       appendUserActions(userMessageEl, text);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
@@ -5182,9 +5239,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         userMessageEl.setAttribute('data-delivery-state', 'sending');
         sendingClientMessageId = clientMessageId;
       }
-      userInput.value = '';
-      userInput.style.height = 'auto';
-      saveComposerDraft();
+      if (!generated) {
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        saveComposerDraft();
+      }
       syncSendState();
 
       if (!isFollowUp) {
@@ -5195,14 +5254,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         activePlanCard = null;
       }
 
-      var activeFileReferences = pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
-        browseWeb: browseWebEnabled,
+        browseWeb: generated ? false : browseWebEnabled,
         clientMessageId: clientMessageId
       };
+      if (generated) sendPayload.standalone = true;
       if (activeFileReferences.length > 0) sendPayload.references = activeFileReferences;
       if (isFollowUp) {
         sendPayload.followUpBehavior =
@@ -5212,6 +5269,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
       lastSendPayload = sendPayload;
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
+      if (generated) return;
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
     }
@@ -5260,6 +5318,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           closeSlashMenu();
           return;
         }
+      }
+      if (e.key === 'Escape' && mentionQuery !== null && !mentionDropdown.classList.contains('visible')) {
+        hideMentionDropdown();
       }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
@@ -5312,6 +5373,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();
@@ -5501,9 +5563,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       if (sessionsUnavailable) {
         var notice = document.createElement('div');
         notice.className = 'sessions-sheet-empty';
+        notice.setAttribute('role', 'status');
         notice.textContent = sessionsUnavailable;
         sessionsSheetList.appendChild(notice);
-        return;
+        if (visible.length === 0) return;
       }
       if (visible.length === 0) {
         var empty = document.createElement('div');
@@ -5912,7 +5975,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             event.stopPropagation();
             return;
           }
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
             event.preventDefault();
             var first = menuItemsOf(slashMenu)[0];
             if (first) first.click();
@@ -6313,6 +6376,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -6355,7 +6419,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
       guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
       guidance.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!guidance.value.trim()) return;
         event.preventDefault();
         vscode.postMessage({
           type: 'respondToApproval',
@@ -6441,7 +6506,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           : 'Type your answer, then press Enter';
       typed.setAttribute('aria-label', 'Your answer');
       typed.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!typed.value.trim()) return;
         event.preventDefault();
         answer(typed.value.trim());
       });
@@ -6862,6 +6928,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -6892,16 +6965,6 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -7157,7 +7220,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
 
       else if (msg.type === 'fileSearchResults') {
-        showMentionResults(msg.payload.files);
+        if (msg.payload.query === mentionQuery) showMentionResults(msg.payload.files);
       }
 
       else if (msg.type === 'composerDraft') {
@@ -7429,6 +7492,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         var query = val.substring(i + 1, pos);
         if (query.length > 0 && !/\\s/.test(query)) {
           mentionStart = i;
+          mentionQuery = query;
           vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
           return;
         }
@@ -7441,6 +7505,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
       mentionStart = -1;
+      mentionQuery = null;
       userInput.setAttribute('aria-expanded', 'false');
       userInput.removeAttribute('aria-activedescendant');
     }
@@ -7484,6 +7549,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     function insertMention(file) {
       var val = userInput.value;
+      if (mentionStart < 0 || mentionQuery === null
+        || val.substring(mentionStart, userInput.selectionStart) !== '@' + mentionQuery) {
+        hideMentionDropdown();
+        return;
+      }
       var before = val.substring(0, mentionStart);
       var after = val.substring(userInput.selectionStart);
       var referencedEndLine = file.range && file.range.endCharacter === 0 && file.range.endLine > file.range.startLine
@@ -7727,8 +7797,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
+      var earlier = messagesEl.querySelectorAll('.turn-changes__review');
+      for (var r = 0; r < earlier.length; r++) earlier[r].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -7740,20 +7810,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       review.type = 'button';
       review.className = 'turn-changes__review';
       review.textContent = 'Review changes';
-      review.title = 'Open every file this reply changed in a diff, where each change can be kept or reverted.';
+      review.title = 'Open every file this reply changed in a diff against the last commit, where each change can be kept or reverted. Other uncommitted edits in those files show too.';
       review.addEventListener('click', function () {
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 
@@ -7913,6 +7974,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     function ensureToolCallStack() {
+      removeTyping();
       if (toolCallStack && toolCallList) return toolCallList;
       toolCallStackHasError = false;
       var stackEl = document.createElement('section');
@@ -8349,7 +8411,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
              script-src 'nonce-NONCE' vscode-webview://mock;
              img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
-  <title>AGI Code</title>
+  <title>Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
   <style nonce="NONCE">
     :root {
@@ -8379,6 +8441,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 --agi-vscode-diff-added-gutter: var(--vscode-diffEditor-insertedTextBorder, #4caf50);
 --agi-vscode-diff-removed-gutter: var(--vscode-diffEditor-removedTextBorder, #f44336);
 --agi-vscode-diff-modified-gutter: #ff9800;
+--agi-vscode-qr-quiet-zone: #ffffff;
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
@@ -8415,6 +8478,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 --duration-quick: 160ms;
 --duration-moved: 260ms;
 --duration-reveal: 700ms;
+--duration-mark-flow: 4200ms;
 --curve-standard: cubic-bezier(0.2, 0, 0, 1);
 --curve-exit: cubic-bezier(0.4, 0, 1, 1);
       --duration-spin: 1000ms;
@@ -9144,6 +9208,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     @keyframes typing-mark-spin {
       to { transform: rotate(360deg); }
+    }
+
+    .codicon.codicon-loading::before {
+      content: '';
+      display: block;
+      width: 1em;
+      height: 1em;
+      background-image: url("https://mock///mock/extension/media/agi-symbol.png"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */
@@ -10077,8 +10149,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -10088,8 +10159,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -10974,7 +11044,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Code surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="Code surfaces">
           <button
             type="button"
             class="actions-menu-item"
@@ -11472,7 +11542,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Context after the last turn: {count} token. The context window for this model is not known here.","other":"Context after the last turn: {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -12206,6 +12276,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     let streaming = false;
     let mentionIndex = -1;
     let mentionStart = -1;
+    let mentionQuery = null;
     let pendingFileReferences = [];
     let activePlanCard = null;
     let currentAssistantEl = null;
@@ -12887,6 +12958,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     function showTyping() {
+      if (toolCallStack && toolCallStack.isConnected && toolCallStack.dataset.status === 'working') return;
       var existing = document.getElementById('typingIndicator');
       if (existing) {
         messagesEl.appendChild(existing);
@@ -13313,8 +13385,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           var text = codeEl.textContent || '';
           if (b.classList.contains('explain-btn')) {
             var language = getCodeLanguage(codeEl) || '';
-            prefillComposer('Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
-            sendMessage();
+            sendMessage(undefined, 'Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
             return;
           }
           if (b.classList.contains('apply-btn')) {
@@ -13350,8 +13421,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (typeof window.agiBindSurfaces === 'function') {
         window.agiBindSurfaces(rootEl, {
           onFollowUp: function(text) {
-            prefillComposer(text);
-            sendMessage();
+            sendMessage(undefined, text);
           },
           copy: function(text) {
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
@@ -13412,6 +13482,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       cancelIcon.setAttribute('aria-hidden', 'true');
       cancel.appendChild(cancelIcon);
       edit.addEventListener('click', function () {
+        if (userInput.value.trim() !== '') {
+          edit.title = 'Send or clear what you are typing first, then edit this message.';
+          edit.setAttribute('aria-label', edit.title);
+          userInput.focus();
+          return;
+        }
         vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
         prefillComposer(text);
       });
@@ -13469,8 +13545,33 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = 100000;
+    var MAX_SEND_MESSAGE_REFERENCES = 50;
+    var MAX_SIDE_QUESTION_CHARS = 20000;
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -13488,21 +13589,39 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       });
     }
 
-    function sendMessage(oneTurnBehavior) {
+    function sendMessage(oneTurnBehavior, generatedText) {
       if (runtimeBlock !== null) return;
+      const generated = typeof generatedText === 'string';
       const isFollowUp = streaming;
-      const typedText = userInput.value.trim();
-      var sideMatch = typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
+      const typedText = generated ? generatedText.trim() : userInput.value.trim();
+      var sideMatch = generated ? null : typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
       if (sideMatch) {
         askSideQuestion(sideMatch[1].trim());
         return;
       }
-      const text = typedText || (pendingAttachmentCount === 1
+      const text = generated ? typedText : typedText || (pendingAttachmentCount === 1
         ? 'Please analyze the attached file.'
         : pendingAttachmentCount > 1
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -13510,7 +13629,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
       prependAuthor(userMessageEl, 'You said:');
-      appendSentContext(userMessageEl);
+      if (!generated) appendSentContext(userMessageEl);
       appendUserActions(userMessageEl, text);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
@@ -13519,9 +13638,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         userMessageEl.setAttribute('data-delivery-state', 'sending');
         sendingClientMessageId = clientMessageId;
       }
-      userInput.value = '';
-      userInput.style.height = 'auto';
-      saveComposerDraft();
+      if (!generated) {
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        saveComposerDraft();
+      }
       syncSendState();
 
       if (!isFollowUp) {
@@ -13532,14 +13653,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         activePlanCard = null;
       }
 
-      var activeFileReferences = pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
-        browseWeb: browseWebEnabled,
+        browseWeb: generated ? false : browseWebEnabled,
         clientMessageId: clientMessageId
       };
+      if (generated) sendPayload.standalone = true;
       if (activeFileReferences.length > 0) sendPayload.references = activeFileReferences;
       if (isFollowUp) {
         sendPayload.followUpBehavior =
@@ -13549,6 +13668,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
       lastSendPayload = sendPayload;
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
+      if (generated) return;
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
     }
@@ -13597,6 +13717,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           closeSlashMenu();
           return;
         }
+      }
+      if (e.key === 'Escape' && mentionQuery !== null && !mentionDropdown.classList.contains('visible')) {
+        hideMentionDropdown();
       }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
@@ -13649,6 +13772,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();
@@ -13838,9 +13962,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       if (sessionsUnavailable) {
         var notice = document.createElement('div');
         notice.className = 'sessions-sheet-empty';
+        notice.setAttribute('role', 'status');
         notice.textContent = sessionsUnavailable;
         sessionsSheetList.appendChild(notice);
-        return;
+        if (visible.length === 0) return;
       }
       if (visible.length === 0) {
         var empty = document.createElement('div');
@@ -14249,7 +14374,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             event.stopPropagation();
             return;
           }
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
             event.preventDefault();
             var first = menuItemsOf(slashMenu)[0];
             if (first) first.click();
@@ -14650,6 +14775,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -14692,7 +14818,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
       guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
       guidance.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!guidance.value.trim()) return;
         event.preventDefault();
         vscode.postMessage({
           type: 'respondToApproval',
@@ -14778,7 +14905,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           : 'Type your answer, then press Enter';
       typed.setAttribute('aria-label', 'Your answer');
       typed.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!typed.value.trim()) return;
         event.preventDefault();
         answer(typed.value.trim());
       });
@@ -15199,6 +15327,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -15229,16 +15364,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -15494,7 +15619,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
 
       else if (msg.type === 'fileSearchResults') {
-        showMentionResults(msg.payload.files);
+        if (msg.payload.query === mentionQuery) showMentionResults(msg.payload.files);
       }
 
       else if (msg.type === 'composerDraft') {
@@ -15766,6 +15891,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         var query = val.substring(i + 1, pos);
         if (query.length > 0 && !/\\s/.test(query)) {
           mentionStart = i;
+          mentionQuery = query;
           vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
           return;
         }
@@ -15778,6 +15904,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
       mentionStart = -1;
+      mentionQuery = null;
       userInput.setAttribute('aria-expanded', 'false');
       userInput.removeAttribute('aria-activedescendant');
     }
@@ -15821,6 +15948,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     function insertMention(file) {
       var val = userInput.value;
+      if (mentionStart < 0 || mentionQuery === null
+        || val.substring(mentionStart, userInput.selectionStart) !== '@' + mentionQuery) {
+        hideMentionDropdown();
+        return;
+      }
       var before = val.substring(0, mentionStart);
       var after = val.substring(userInput.selectionStart);
       var referencedEndLine = file.range && file.range.endCharacter === 0 && file.range.endLine > file.range.startLine
@@ -16064,8 +16196,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
+      var earlier = messagesEl.querySelectorAll('.turn-changes__review');
+      for (var r = 0; r < earlier.length; r++) earlier[r].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -16077,20 +16209,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       review.type = 'button';
       review.className = 'turn-changes__review';
       review.textContent = 'Review changes';
-      review.title = 'Open every file this reply changed in a diff, where each change can be kept or reverted.';
+      review.title = 'Open every file this reply changed in a diff against the last commit, where each change can be kept or reverted. Other uncommitted edits in those files show too.';
       review.addEventListener('click', function () {
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 
@@ -16250,6 +16373,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     function ensureToolCallStack() {
+      removeTyping();
       if (toolCallStack && toolCallList) return toolCallList;
       toolCallStackHasError = false;
       var stackEl = document.createElement('section');
@@ -16686,7 +16810,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
              script-src 'nonce-NONCE' vscode-webview://mock;
              img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
-  <title>AGI Code</title>
+  <title>Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
   <style nonce="NONCE">
     :root {
@@ -16716,6 +16840,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 --agi-vscode-diff-added-gutter: var(--vscode-diffEditor-insertedTextBorder, #4caf50);
 --agi-vscode-diff-removed-gutter: var(--vscode-diffEditor-removedTextBorder, #f44336);
 --agi-vscode-diff-modified-gutter: #ff9800;
+--agi-vscode-qr-quiet-zone: #ffffff;
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
@@ -16752,6 +16877,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 --duration-quick: 160ms;
 --duration-moved: 260ms;
 --duration-reveal: 700ms;
+--duration-mark-flow: 4200ms;
 --curve-standard: cubic-bezier(0.2, 0, 0, 1);
 --curve-exit: cubic-bezier(0.4, 0, 1, 1);
       --duration-spin: 1000ms;
@@ -17481,6 +17607,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     @keyframes typing-mark-spin {
       to { transform: rotate(360deg); }
+    }
+
+    .codicon.codicon-loading::before {
+      content: '';
+      display: block;
+      width: 1em;
+      height: 1em;
+      background-image: url("https://mock///mock/extension/media/agi-symbol.png"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */
@@ -18414,8 +18548,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -18425,8 +18558,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -19311,7 +19443,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Code surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="Code surfaces">
           <button
             type="button"
             class="actions-menu-item"
@@ -19809,7 +19941,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Context after the last turn: {count} token. The context window for this model is not known here.","other":"Context after the last turn: {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -20543,6 +20675,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     let streaming = false;
     let mentionIndex = -1;
     let mentionStart = -1;
+    let mentionQuery = null;
     let pendingFileReferences = [];
     let activePlanCard = null;
     let currentAssistantEl = null;
@@ -21224,6 +21357,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     function showTyping() {
+      if (toolCallStack && toolCallStack.isConnected && toolCallStack.dataset.status === 'working') return;
       var existing = document.getElementById('typingIndicator');
       if (existing) {
         messagesEl.appendChild(existing);
@@ -21650,8 +21784,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           var text = codeEl.textContent || '';
           if (b.classList.contains('explain-btn')) {
             var language = getCodeLanguage(codeEl) || '';
-            prefillComposer('Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
-            sendMessage();
+            sendMessage(undefined, 'Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
             return;
           }
           if (b.classList.contains('apply-btn')) {
@@ -21687,8 +21820,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (typeof window.agiBindSurfaces === 'function') {
         window.agiBindSurfaces(rootEl, {
           onFollowUp: function(text) {
-            prefillComposer(text);
-            sendMessage();
+            sendMessage(undefined, text);
           },
           copy: function(text) {
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
@@ -21749,6 +21881,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       cancelIcon.setAttribute('aria-hidden', 'true');
       cancel.appendChild(cancelIcon);
       edit.addEventListener('click', function () {
+        if (userInput.value.trim() !== '') {
+          edit.title = 'Send or clear what you are typing first, then edit this message.';
+          edit.setAttribute('aria-label', edit.title);
+          userInput.focus();
+          return;
+        }
         vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
         prefillComposer(text);
       });
@@ -21806,8 +21944,33 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = 100000;
+    var MAX_SEND_MESSAGE_REFERENCES = 50;
+    var MAX_SIDE_QUESTION_CHARS = 20000;
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -21825,21 +21988,39 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       });
     }
 
-    function sendMessage(oneTurnBehavior) {
+    function sendMessage(oneTurnBehavior, generatedText) {
       if (runtimeBlock !== null) return;
+      const generated = typeof generatedText === 'string';
       const isFollowUp = streaming;
-      const typedText = userInput.value.trim();
-      var sideMatch = typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
+      const typedText = generated ? generatedText.trim() : userInput.value.trim();
+      var sideMatch = generated ? null : typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
       if (sideMatch) {
         askSideQuestion(sideMatch[1].trim());
         return;
       }
-      const text = typedText || (pendingAttachmentCount === 1
+      const text = generated ? typedText : typedText || (pendingAttachmentCount === 1
         ? 'Please analyze the attached file.'
         : pendingAttachmentCount > 1
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -21847,7 +22028,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
       prependAuthor(userMessageEl, 'You said:');
-      appendSentContext(userMessageEl);
+      if (!generated) appendSentContext(userMessageEl);
       appendUserActions(userMessageEl, text);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
@@ -21856,9 +22037,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         userMessageEl.setAttribute('data-delivery-state', 'sending');
         sendingClientMessageId = clientMessageId;
       }
-      userInput.value = '';
-      userInput.style.height = 'auto';
-      saveComposerDraft();
+      if (!generated) {
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        saveComposerDraft();
+      }
       syncSendState();
 
       if (!isFollowUp) {
@@ -21869,14 +22052,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         activePlanCard = null;
       }
 
-      var activeFileReferences = pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
-        browseWeb: browseWebEnabled,
+        browseWeb: generated ? false : browseWebEnabled,
         clientMessageId: clientMessageId
       };
+      if (generated) sendPayload.standalone = true;
       if (activeFileReferences.length > 0) sendPayload.references = activeFileReferences;
       if (isFollowUp) {
         sendPayload.followUpBehavior =
@@ -21886,6 +22067,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
       lastSendPayload = sendPayload;
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
+      if (generated) return;
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
     }
@@ -21934,6 +22116,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           closeSlashMenu();
           return;
         }
+      }
+      if (e.key === 'Escape' && mentionQuery !== null && !mentionDropdown.classList.contains('visible')) {
+        hideMentionDropdown();
       }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
@@ -21986,6 +22171,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();
@@ -22175,9 +22361,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       if (sessionsUnavailable) {
         var notice = document.createElement('div');
         notice.className = 'sessions-sheet-empty';
+        notice.setAttribute('role', 'status');
         notice.textContent = sessionsUnavailable;
         sessionsSheetList.appendChild(notice);
-        return;
+        if (visible.length === 0) return;
       }
       if (visible.length === 0) {
         var empty = document.createElement('div');
@@ -22586,7 +22773,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             event.stopPropagation();
             return;
           }
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
             event.preventDefault();
             var first = menuItemsOf(slashMenu)[0];
             if (first) first.click();
@@ -22987,6 +23174,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -23029,7 +23217,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
       guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
       guidance.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!guidance.value.trim()) return;
         event.preventDefault();
         vscode.postMessage({
           type: 'respondToApproval',
@@ -23115,7 +23304,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           : 'Type your answer, then press Enter';
       typed.setAttribute('aria-label', 'Your answer');
       typed.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!typed.value.trim()) return;
         event.preventDefault();
         answer(typed.value.trim());
       });
@@ -23536,6 +23726,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -23566,16 +23763,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -23831,7 +24018,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
 
       else if (msg.type === 'fileSearchResults') {
-        showMentionResults(msg.payload.files);
+        if (msg.payload.query === mentionQuery) showMentionResults(msg.payload.files);
       }
 
       else if (msg.type === 'composerDraft') {
@@ -24103,6 +24290,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         var query = val.substring(i + 1, pos);
         if (query.length > 0 && !/\\s/.test(query)) {
           mentionStart = i;
+          mentionQuery = query;
           vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
           return;
         }
@@ -24115,6 +24303,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
       mentionStart = -1;
+      mentionQuery = null;
       userInput.setAttribute('aria-expanded', 'false');
       userInput.removeAttribute('aria-activedescendant');
     }
@@ -24158,6 +24347,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     function insertMention(file) {
       var val = userInput.value;
+      if (mentionStart < 0 || mentionQuery === null
+        || val.substring(mentionStart, userInput.selectionStart) !== '@' + mentionQuery) {
+        hideMentionDropdown();
+        return;
+      }
       var before = val.substring(0, mentionStart);
       var after = val.substring(userInput.selectionStart);
       var referencedEndLine = file.range && file.range.endCharacter === 0 && file.range.endLine > file.range.startLine
@@ -24401,8 +24595,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
+      var earlier = messagesEl.querySelectorAll('.turn-changes__review');
+      for (var r = 0; r < earlier.length; r++) earlier[r].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -24414,20 +24608,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       review.type = 'button';
       review.className = 'turn-changes__review';
       review.textContent = 'Review changes';
-      review.title = 'Open every file this reply changed in a diff, where each change can be kept or reverted.';
+      review.title = 'Open every file this reply changed in a diff against the last commit, where each change can be kept or reverted. Other uncommitted edits in those files show too.';
       review.addEventListener('click', function () {
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 
@@ -24587,6 +24772,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     function ensureToolCallStack() {
+      removeTyping();
       if (toolCallStack && toolCallList) return toolCallList;
       toolCallStackHasError = false;
       var stackEl = document.createElement('section');

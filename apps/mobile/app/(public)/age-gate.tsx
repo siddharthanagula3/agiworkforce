@@ -42,7 +42,7 @@ export default function AgeGateScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refused, setRefused] = useState(isMinorMode);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
-  const signOut = useAuthStore((s) => s.signOut);
+  const signOutAllAccounts = useAuthStore((s) => s.signOutAllAccounts);
   const inputRef = useRef<TextInput>(null);
 
   const threshold = getAgeThreshold();
@@ -99,10 +99,10 @@ export default function AgeGateScreen() {
   }, [ageText, handleComplete]);
 
   const handleSignOut = useCallback(async () => {
-    await signOut().catch(() => {});
+    await signOutAllAccounts().catch(() => {});
     clearPostAuthIntent();
     router.replace(APP_PATH);
-  }, [router, signOut]);
+  }, [router, signOutAllAccounts]);
 
   const header = returnTo ? (
     <View style={styles.header}>
@@ -152,7 +152,8 @@ export default function AgeGateScreen() {
           </Text>
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            This device recorded an age under {threshold}, which only reinstalling AGI can reset.
+            This device recorded an age under {threshold}, which only erasing AGI’s data on this
+            device can reset.
           </Text>
 
           {isClerkSignedIn ? (

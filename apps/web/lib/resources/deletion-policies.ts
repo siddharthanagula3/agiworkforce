@@ -213,7 +213,7 @@ export const RESOURCE_DELETION_POLICIES: readonly ResourceDeletionPolicy[] = [
     ],
     derivedIndexes: [{ table: RETRIEVAL_DOCUMENTS, column: 'project_knowledge_file_id' }],
     derivedRecords: [],
-    externalObjects: { column: 'storage_uri', sweep: null },
+    externalObjects: { column: 'storage_uri', sweep: 'cron/purge-deleted-media' },
     retainedAfterPurge: [],
     basis:
       'Superseded is not deleted: only deleted_at starts the window, so a version history survives its own replacements.',

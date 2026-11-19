@@ -51,6 +51,8 @@ export function useHandoffThread(options: UseHandoffThreadOptions): HandoffThrea
 
   const cursor = useRef(0);
   const mounted = useRef(true);
+  const activeSession = useRef(sessionId);
+  activeSession.current = sessionId;
   const loadRef = useRef(load);
   loadRef.current = load;
   const sendRef = useRef(send);
@@ -67,18 +69,19 @@ export function useHandoffThread(options: UseHandoffThreadOptions): HandoffThrea
     cursor.current = 0;
     setMessages([]);
     setStatus(null);
+    setSending(false);
     setSendError(null);
     setLoadError(null);
   }, [sessionId]);
 
   const pull = useCallback(async (id: string) => {
     const page = await loadRef.current(id, cursor.current);
-    if (!mounted.current) return;
+    if (!mounted.current || activeSession.current !== id) return;
     if (!page) {
       setLoadError('The conversation could not be read just now. Still trying.');
       return;
     }
-    cursor.current = page.nextAfter;
+    cursor.current = Math.max(cursor.current, page.nextAfter);
     setStatus(page.status);
     setLoadError(null);
     setMessages((current) => mergeMessages(current, page.messages));
@@ -109,13 +112,12 @@ export function useHandoffThread(options: UseHandoffThreadOptions): HandoffThrea
       setSending(true);
       setSendError(null);
       void sendRef.current(sessionId, trimmed).then((result) => {
-        if (!mounted.current) return;
+        if (!mounted.current || activeSession.current !== sessionId) return;
         setSending(false);
         if (!result.ok) {
           setSendError(result.message);
           return;
         }
-        cursor.current = Math.max(cursor.current, result.message.seq);
         setMessages((current) => mergeMessages(current, [result.message]));
       });
     },

@@ -54,8 +54,7 @@ import {
 import { BANK_ACCOUNTS_CONNECTOR_ID } from '@agiworkforce/cloud-contracts';
 
 const BANK_LINK_LABEL = 'Link a bank account';
-const BANK_LINK_HINT =
-  'Read-only balances and transactions from US banks, linked through Plaid. Nothing can move money.';
+const BANK_LINK_HINT = 'Read-only US bank balances and transactions via Plaid. Can’t move money.';
 
 const ALL_FILTER = 'All';
 const CONNECTED_FILTER = 'Connected';
@@ -246,15 +245,16 @@ function WaitlistPlaceholder() {
           textAlign: 'center',
         }}
       >
-        Connect Gmail, GitHub, Notion, Slack, and 80+ services to AGI Cloud. Available with cloud
-        access.
+        Connect your apps and services. Needs AGI Cloud access.
       </Text>
     </View>
   );
 }
 
+const DIRECTORY_INDEXING_NOTE = 'The directory is still being indexed. Try again shortly.';
+
 export default function CloudConnectorsScreen({
-  backHref = '/(app)/(tabs)/settings',
+  backHref = '/(app)/settings',
 }: {
   backHref?: string;
 } = {}) {
@@ -293,6 +293,7 @@ export default function CloudConnectorsScreen({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState<string | null>(null);
+  const [directoryIndexing, setDirectoryIndexing] = useState(false);
   const listingRequestRef = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
@@ -414,6 +415,7 @@ export default function CloudConnectorsScreen({
         );
         setListingCategories(page.categories);
         setNextCursor(page.nextCursor);
+        if (!cursor) setDirectoryIndexing(page.stats?.bootstrapComplete === false);
       } catch {
         if (!isCurrent()) return;
         setListingsError('Could not load the connector directory. Retry.');
@@ -571,7 +573,7 @@ export default function CloudConnectorsScreen({
             <SettingsGroup>
               <SettingsSwitchRow
                 label="Connector discovery"
-                description="Suggest connectors you have not connected on a new chat."
+                description="Suggest connectors you haven’t connected in new chats."
                 icon={Compass}
                 value={connectorDiscoveryEnabled}
                 onValueChange={setConnectorDiscoveryEnabled}
@@ -780,6 +782,18 @@ export default function CloudConnectorsScreen({
                 <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
                   No connectors found
                 </Text>
+                {directoryIndexing ? (
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: typeScale.footnote,
+                      textAlign: 'center',
+                      paddingHorizontal: 24,
+                    }}
+                  >
+                    {DIRECTORY_INDEXING_NOTE}
+                  </Text>
+                ) : null}
               </View>
             ) : visibleRows.length > 0 ? (
               <View

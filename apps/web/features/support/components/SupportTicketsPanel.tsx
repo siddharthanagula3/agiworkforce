@@ -399,19 +399,44 @@ export function SupportTicketsPanel() {
   const [composing, setComposing] = useState<{ subject: string } | null>(null);
   const [created, setCreated] = useState<{ ticketId: string; staffNotified: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setMoreError(null);
     try {
-      setTickets(await listSupportTickets());
+      const page = await listSupportTickets();
+      setTickets(page.tickets);
+      setNextOffset(page.nextOffset);
     } catch (loadError) {
       setTickets(null);
+      setNextOffset(null);
       setError(toUserMessage(loadError, 'Your tickets could not be loaded.'));
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (nextOffset === null) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const page = await listSupportTickets(nextOffset);
+      setTickets((current) => {
+        const known = new Set((current ?? []).map((entry) => entry.id));
+        return [...(current ?? []), ...page.tickets.filter((entry) => !known.has(entry.id))];
+      });
+      setNextOffset(page.nextOffset);
+    } catch (loadError) {
+      setMoreError(toUserMessage(loadError, 'Your older tickets could not be loaded.'));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextOffset]);
 
   useEffect(() => {
     void load();
@@ -525,6 +550,23 @@ export function SupportTicketsPanel() {
                 </li>
               ))}
             </ul>
+          ) : null}
+
+          {moreError ? (
+            <p role="alert" className="text-xs text-danger-text">
+              {moreError}
+            </p>
+          ) : null}
+
+          {nextOffset !== null ? (
+            <button
+              type="button"
+              className={`${GHOST_BUTTON_CLASS} self-start`}
+              disabled={loadingMore}
+              onClick={() => void loadMore()}
+            >
+              {loadingMore ? 'Loading older tickets…' : 'Show older tickets'}
+            </button>
           ) : null}
 
           <div className="flex flex-wrap gap-2">

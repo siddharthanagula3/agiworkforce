@@ -83,6 +83,22 @@ pub fn parse_value(setting: &PluginSetting, raw: &str) -> Result<Value, String> 
             .filter(|item| !item.is_empty())
             .map(|item| Value::String(item.to_string()))
             .collect();
+        if items.is_empty() {
+            return Err(format!("{} needs a value", setting.title));
+        }
+        if let Some(Value::String(outside)) = items.iter().find(|item| {
+            !setting.options.is_empty()
+                && !setting
+                    .options
+                    .iter()
+                    .any(|option| item.as_str() == Some(option.as_str()))
+        }) {
+            return Err(format!(
+                "{} must only contain: {} ({outside} is not one of them)",
+                setting.title,
+                setting.options.join(", ")
+            ));
+        }
         return Ok(Value::Array(items));
     }
     match setting.kind {
@@ -201,13 +217,20 @@ pub fn current_values(plugin: &str, settings: &PluginSettings) -> HashMap<String
                     .filter(|secret| !secret.is_empty())
                     .map(Value::String)
             } else {
-                saved.get(key).cloned()
+                saved.get(key).cloned().and_then(holding_a_value)
             };
             stored
-                .or_else(|| setting.default.clone())
+                .or_else(|| setting.default.clone().and_then(holding_a_value))
                 .map(|value| (key.clone(), value_text(&value)))
         })
         .collect()
+}
+
+fn holding_a_value(value: Value) -> Option<Value> {
+    match &value {
+        Value::Array(items) if items.is_empty() => None,
+        _ => Some(value),
+    }
 }
 
 fn value_text(value: &Value) -> String {
@@ -378,6 +401,40 @@ mod tests {
             parse_value(&tags, "a, b").unwrap(),
             serde_json::json!(["a", "b"])
         );
+    }
+
+    #[test]
+    fn every_item_of_a_multiple_choice_setting_is_checked_against_its_options() {
+        let regions = setting(
+            r#"{"type": "string", "title": "Regions", "description": "D", "multiple": true, "required": true, "options": ["west", "east"]}"#,
+        );
+        assert_eq!(
+            parse_value(&regions, "west, east").unwrap(),
+            serde_json::json!(["west", "east"])
+        );
+        let refused = parse_value(&regions, "west,north").unwrap_err();
+        assert!(refused.contains("north"), "{refused}");
+        assert!(parse_value(&regions, "north").is_err());
+        assert!(parse_value(&regions, ",,").is_err());
+        assert!(parse_value(&regions, " , ").is_err());
+
+        let tags =
+            setting(r#"{"type": "string", "title": "Tags", "description": "D", "multiple": true}"#);
+        assert!(parse_value(&tags, ",").is_err());
+        assert_eq!(
+            parse_value(&tags, "anything,else").unwrap(),
+            serde_json::json!(["anything", "else"])
+        );
+    }
+
+    #[test]
+    fn an_empty_saved_list_counts_as_not_set() {
+        assert_eq!(holding_a_value(serde_json::json!([])), None);
+        assert_eq!(
+            holding_a_value(serde_json::json!(["west"])),
+            Some(serde_json::json!(["west"]))
+        );
+        assert_eq!(holding_a_value(Value::from("")), Some(Value::from("")));
     }
 
     #[test]

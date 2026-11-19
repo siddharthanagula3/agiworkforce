@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Button,
   Dialog,
@@ -48,37 +48,53 @@ export function ImageMaskDialog({ file, onClose, onDone }: ImageMaskDialogProps)
   const [mask, setMask] = useState<File | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const session = useRef(0);
 
   useEffect(() => {
     setMask(null);
     setError(null);
+    setPreparing(false);
     if (!file) {
       setImageUrl(null);
-      return;
+      return () => {
+        session.current += 1;
+      };
     }
     const url = URL.createObjectURL(file);
     setImageUrl(url);
-    return () => URL.revokeObjectURL(url);
+    return () => {
+      session.current += 1;
+      URL.revokeObjectURL(url);
+    };
   }, [file]);
+
+  const close = () => {
+    session.current += 1;
+    setPreparing(false);
+    onClose();
+  };
 
   const handleDone = async () => {
     if (!file || !mask) return;
+    const owner = session.current;
     setPreparing(true);
     setError(null);
     try {
       const bitmap = await createImageBitmap(mask);
       const { width, height } = bitmap;
       bitmap.close();
-      onDone({ mask, source: await uprightSource(file, width, height) });
+      const source = await uprightSource(file, width, height);
+      if (session.current !== owner) return;
+      onDone({ mask, source });
     } catch {
-      setError(PREPARE_FAILED);
+      if (session.current === owner) setError(PREPARE_FAILED);
     } finally {
-      setPreparing(false);
+      if (session.current === owner) setPreparing(false);
     }
   };
 
   return (
-    <Dialog open={file !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
+    <Dialog open={file !== null} onOpenChange={(open) => (open ? undefined : close())}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Select the area to change</DialogTitle>
@@ -96,7 +112,7 @@ export function ImageMaskDialog({ file, onClose, onDone }: ImageMaskDialogProps)
           </p>
         ) : null}
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
           <Button onClick={() => void handleDone()} disabled={!mask || preparing}>

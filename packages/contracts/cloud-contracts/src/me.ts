@@ -7,6 +7,8 @@ export const ME_CLIENT_VERSION_PARAM = 'client_version';
 
 export const MeSubscriptionSourceSchema = z.enum(['none', 'stripe', 'apple', 'google', 'manual']);
 
+export const MeBillingOwnerSchema = z.enum(['organization', 'personal']);
+
 export const MePlanSchema = z.object({
   tier: z.string(),
   display_name: z.string(),
@@ -14,6 +16,7 @@ export const MePlanSchema = z.object({
   current_period_end: z.number().nullable(),
   cancel_at_period_end: z.boolean().optional(),
   subscription_source: MeSubscriptionSourceSchema.optional(),
+  billing_owner: MeBillingOwnerSchema.optional(),
   effective_tier: z.string().optional(),
   seat_type: z.enum(TEAM_SEAT_TYPES).nullable().optional(),
 });
@@ -86,6 +89,7 @@ export const MeResponseSchema = z.object({
 
 export type MePlan = z.infer<typeof MePlanSchema>;
 export type MeSubscriptionSource = z.infer<typeof MeSubscriptionSourceSchema>;
+export type MeBillingOwner = z.infer<typeof MeBillingOwnerSchema>;
 export type MeProfile = z.infer<typeof MeProfileSchema>;
 export type MeDisabledFeature = z.infer<typeof MeDisabledFeatureSchema>;
 export type MeWorkspaceDataRegion = z.infer<typeof MeWorkspaceDataRegionSchema>;
@@ -93,4 +97,17 @@ export type MeResponse = z.infer<typeof MeResponseSchema>;
 
 export function parseMeResponse(data: unknown): MeResponse {
   return MeResponseSchema.parse(data);
+}
+
+/**
+ * How long a client may act on a plan it read from `/api/me` before reading it
+ * again. The server enforces every request regardless; this bounds how long a
+ * client shows or routes on a plan that changed on another device.
+ */
+export const ME_PLAN_MAX_AGE_MS = 5 * 60_000;
+
+export function isMePlanStale(readAtIso: string | null, nowMs: number = Date.now()): boolean {
+  if (readAtIso === null) return true;
+  const readAtMs = Date.parse(readAtIso);
+  return !Number.isFinite(readAtMs) || nowMs - readAtMs >= ME_PLAN_MAX_AGE_MS;
 }

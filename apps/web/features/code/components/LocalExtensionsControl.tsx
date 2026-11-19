@@ -20,6 +20,7 @@ const POPOVER_WIDTH = 360;
 
 interface Extensions {
   skills: SkillSummary[];
+  projectSkillsDigest?: string;
   plugins: PluginSummary[];
 }
 
@@ -32,11 +33,15 @@ export function LocalExtensionsControl({ rootId }: { rootId: string }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [skills, plugins] = await Promise.all([
+      const [{ skills, projectSkillsDigest }, plugins] = await Promise.all([
         listDeveloperSkills(rootId),
         listDeveloperPlugins(rootId),
       ]);
-      setExtensions({ skills, plugins });
+      setExtensions({
+        skills,
+        plugins,
+        ...(projectSkillsDigest === undefined ? {} : { projectSkillsDigest }),
+      });
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.extensionsFailed));
     }
@@ -46,13 +51,14 @@ export function LocalExtensionsControl({ rootId }: { rootId: string }) {
     if (open) void load();
   }, [open, load]);
 
-  const change = async (update: () => Promise<unknown>) => {
+  const change = async (update: () => Promise<unknown>, reloadOnFailure = false) => {
     setSaving(true);
     setError(null);
     try {
       await update();
       await load();
     } catch (cause: unknown) {
+      if (reloadOnFailure) await load();
       setError(toUserMessage(cause, LOCAL_CODE_COPY.extensionsUpdateFailed));
     } finally {
       setSaving(false);
@@ -104,7 +110,17 @@ export function LocalExtensionsControl({ rootId }: { rootId: string }) {
                 type="button"
                 className={styles['secondaryButton']}
                 disabled={saving}
-                onClick={() => void change(() => setDeveloperSkillConsent(rootId, !projectTrusted))}
+                onClick={() =>
+                  void change(
+                    () =>
+                      setDeveloperSkillConsent(
+                        rootId,
+                        !projectTrusted,
+                        extensions?.projectSkillsDigest,
+                      ),
+                    true,
+                  )
+                }
               >
                 {projectTrusted
                   ? LOCAL_CODE_COPY.revokeProjectSkills

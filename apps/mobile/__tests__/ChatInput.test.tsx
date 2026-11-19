@@ -1,13 +1,17 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import React from 'react';
 import { Keyboard, TextInput } from 'react-native';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, getModelReasoning } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { LARGE_PASTE_THRESHOLD, pastedTextFileName } from '@agiworkforce/utils/composer-paste';
 import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
-import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '../stores/chat/chatViewStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
@@ -19,6 +23,10 @@ const mockCapabilityModelId = requireMobileCloudModel((model) => {
   );
 }, 'Mobile Cloud model with research, search, and code execution').id;
 let mockSelectedModel = mockCapabilityModelId;
+const effortModelId = requireMobileCloudModel((model) => {
+  const reasoning = getModelReasoning(model.id);
+  return reasoning.control === 'effort_levels' && (reasoning.supportedEfforts ?? []).length > 1;
+}, 'Cloud model with more than one effort level').id;
 let mockAppMode: 'local' | 'cloud' = 'local';
 let mockIsClerkSignedIn = false;
 let mockChatFeatures = {
@@ -104,8 +112,25 @@ let capturedAttachmentPreviewProps:
         sendFailed?: boolean;
       }>;
       onExpandPastedText?: (id: string) => void;
+      onRetryUpload?: (id: string) => void;
     }
   | undefined;
+
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  ...jest.requireActual('../src/features/auth/services/cloudAccountSession'),
+  captureCloudAccountEpoch: () => ({ ownerId: 'account-a', epoch: 1 }),
+  isCloudAccountEpochCurrent: () => true,
+}));
+
+const mockUploadWithRetry = jest.fn();
+jest.mock('../src/features/chat/upload/uploadAttachment', () => ({
+  uploadWithRetry: (...args: unknown[]) => mockUploadWithRetry(...args),
+}));
+
+const mockResolveUploadContext = jest.fn();
+jest.mock('../src/features/chat/upload/uploadContext', () => ({
+  resolveUploadContext: (...args: unknown[]) => mockResolveUploadContext(...args),
+}));
 
 jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const React = require('react');
@@ -119,6 +144,7 @@ jest.mock('../src/features/chat/components/AttachmentPreview', () => {
         sendFailed?: boolean;
       }>;
       onExpandPastedText?: (id: string) => void;
+      onRetryUpload?: (id: string) => void;
     }) => {
       capturedAttachmentPreviewProps = props;
       return <View testID="attachment-preview" />;
@@ -277,6 +303,11 @@ jest.mock('../lib/constants', () => ({
 
 import { ChatInput, type ChatInputHandle } from '../src/features/chat/components/ChatInput';
 import { useUploadLifecycleStore } from '../src/features/chat/upload/uploadLifecycle';
+import {
+  adoptComposerHandoff,
+  stageComposerText,
+  takeComposerText,
+} from '../src/features/chat/composerHandoff';
 
 const defaultProps = {
   onSend: jest.fn(),
@@ -320,12 +351,16 @@ describe('ChatInput', () => {
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
     };
-    useChatViewStore.setState({ workMode: 'chat' });
+    useChatViewStore.setState({
+      workMode: 'chat',
+      styleConversationId: null,
+      runCodeByConversation: {},
+    });
     useLocalSettingsStore.setState({ autoCorrectEnabled: true });
     mockGetDraft.mockReturnValue('');
   });
 
-  it('gives compact composer controls separate physical touch targets', () => {
+  it('gives the composer controls separate physical touch targets', () => {
     const { getByRole, getByLabelText } = renderInput();
 
     expect(getByRole('button', { name: 'Add to chat' })).toHaveStyle({ width: 44, height: 44 });
@@ -333,7 +368,7 @@ describe('ChatInput', () => {
       width: 44,
       height: 44,
     });
-    expect(getByLabelText('Message input')).toHaveStyle({ fontSize: 16, minWidth: 0 });
+    expect(getByLabelText('Message input')).toHaveStyle({ fontSize: 16, alignSelf: 'stretch' });
   });
 
   it('reserves input space for the expanded-editor target above the control row', () => {
@@ -464,9 +499,9 @@ describe('ChatInput', () => {
       expect(queryByLabelText('Add to chat')).toBeNull();
     });
 
-    it('keeps the model label out of the compact pill', () => {
-      const { queryByTestId } = renderInput();
-      expect(queryByTestId('chat.composer.model')).toBeNull();
+    it('renders the model label before anything is typed', () => {
+      const { getByTestId } = renderInput();
+      expect(getByTestId('chat.composer.model')).toBeTruthy();
     });
 
     it('renders mic button', () => {
@@ -541,6 +576,39 @@ describe('ChatInput', () => {
     );
   });
 
+  describe('attachment Retry context', () => {
+    it('uploads a retried file under the receiving conversation, not the new-chat preference', async () => {
+      const context = { conversationId: 'conversation-1', temporary: false };
+      mockResolveUploadContext.mockReturnValue(context);
+      mockUploadWithRetry.mockResolvedValue(null);
+      const attachRef = React.createRef<ChatInputHandle>();
+      renderInput({ attachRef, conversationId: 'conversation-1' });
+
+      await act(async () => {
+        attachRef.current?.addAttachments([
+          {
+            id: 'a-1',
+            uri: 'file:///doc.pdf',
+            mimeType: 'application/pdf',
+            fileName: 'doc.pdf',
+            fileSize: 1024,
+          },
+        ]);
+      });
+      await act(async () => {
+        capturedAttachmentPreviewProps?.onRetryUpload?.('a-1');
+      });
+
+      expect(mockResolveUploadContext).toHaveBeenCalledWith('conversation-1');
+      expect(mockUploadWithRetry).toHaveBeenCalledWith(
+        { uri: 'file:///doc.pdf', name: 'doc.pdf', type: 'application/pdf' },
+        'doc.pdf',
+        'a-1',
+        context,
+      );
+    });
+  });
+
   describe('[+] button', () => {
     it('calls onOpenAddToChat when pressed', () => {
       const onOpenAddToChat = jest.fn();
@@ -577,7 +645,7 @@ describe('ChatInput', () => {
       expect(queryByLabelText('Web Search active')).toBeNull();
     });
 
-    it('keeps enabled Research and Code options visible after the sheet closes', () => {
+    it('keeps enabled Research and Run code options visible after the sheet closes', () => {
       mockAppMode = 'cloud';
       mockIsClerkSignedIn = true;
       mockChatFeatures = {
@@ -597,11 +665,13 @@ describe('ChatInput', () => {
         codeExecutionAvailable: true,
         genericWebSearchAvailable: true,
       };
+      useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, true);
 
       const { getByLabelText, queryByLabelText, rerender } = renderInput();
 
       expect(getByLabelText('Deep Research active')).toBeTruthy();
-      expect(getByLabelText('Code execution active')).toBeTruthy();
+      expect(getByLabelText('Run code on')).toBeTruthy();
+      expect(queryByLabelText('Code execution active')).toBeNull();
       expect(queryByLabelText('Image generation active')).toBeNull();
 
       mockChatFeatures = {
@@ -613,8 +683,26 @@ describe('ChatInput', () => {
       rerender(<ChatInput {...defaultProps} />);
 
       expect(queryByLabelText('Deep Research active')).toBeNull();
-      expect(queryByLabelText('Code execution active')).toBeNull();
+      expect(queryByLabelText('Run code on')).toBeNull();
       expect(queryByLabelText('Image generation active')).toBeNull();
+    });
+
+    it('shows no Run code chip while code execution is only permitted, not requested', () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockChatFeatures = { ...mockChatFeatures, codeExecution: true };
+      mockTierState = {
+        tier: 'pro',
+        grantedCapabilities: ['canUseCloudExecution'],
+        codeExecutionAvailable: true,
+        genericWebSearchAvailable: false,
+      };
+      useChatViewStore.getState().setRunCode('another-conversation', true);
+
+      const { queryByLabelText } = renderInput();
+
+      expect(queryByLabelText('Run code on')).toBeNull();
+      expect(queryByLabelText('Code execution active')).toBeNull();
     });
 
     it('dismisses the keyboard when opening the + sheet', () => {
@@ -646,6 +734,38 @@ describe('ChatInput', () => {
     });
   });
 
+  describe('reasoning effort', () => {
+    it('offers the effort button in Cloud for a model with effort levels, not on device', () => {
+      mockSelectedModel = effortModelId;
+      mockAppMode = 'cloud';
+      const cloud = renderInput();
+      expect(cloud.getByTestId('chat.composer.effort')).toBeTruthy();
+      cloud.unmount();
+
+      mockAppMode = 'local';
+      const local = renderInput();
+      expect(local.queryByTestId('chat.composer.effort')).toBeNull();
+    });
+
+    it('turns into the effort slider in place and back to the message on Done', () => {
+      mockSelectedModel = effortModelId;
+      mockAppMode = 'cloud';
+      const { getByTestId, queryByTestId, queryByLabelText } = renderInput();
+
+      fireEvent.press(getByTestId('chat.composer.effort'));
+
+      expect(getByTestId('chat.composer.effort-panel')).toBeTruthy();
+      expect(queryByLabelText('Message input')).toBeNull();
+      expect(queryByTestId('chat.composer.model')).toBeNull();
+
+      fireEvent.press(getByTestId('chat.composer.effort-done'));
+
+      expect(queryByTestId('chat.composer.effort-panel')).toBeNull();
+      expect(queryByLabelText('Message input')).toBeTruthy();
+      expect(getByTestId('chat.composer.model')).toBeTruthy();
+    });
+  });
+
   describe('streaming state', () => {
     it('labels an entitled Cloud Work composer without changing Local chat copy', () => {
       mockAppMode = 'cloud';
@@ -662,11 +782,11 @@ describe('ChatInput', () => {
       expect(local.getByLabelText('Message input').props.placeholder).toBe("What's on your mind?");
     });
 
-    it('shows "Reply to [model]..." placeholder during streaming', () => {
+    it('keeps the thread placeholder during streaming instead of naming the composer selection', () => {
       const { getByLabelText } = renderInput({ isStreaming: true });
 
       const input = getByLabelText('Message input');
-      expect(input.props.placeholder).toBe('Reply to Fixture Model...');
+      expect(input.props.placeholder).toBe('Reply to AGI');
     });
 
     it('shows stop button instead of send during streaming', () => {
@@ -905,7 +1025,7 @@ describe('ChatInput', () => {
       expect(queryByTestId('chat.composer.expand')).not.toBeNull();
     });
 
-    it('returns to the one-line pill once the composer is emptied', () => {
+    it('drops the expand control once the composer is emptied', () => {
       const { getByLabelText, queryByTestId } = renderInput();
 
       fireEvent.changeText(getByLabelText('Message input'), 'Create a video of an stylist anime');
@@ -921,12 +1041,12 @@ describe('ChatInput', () => {
   describe('expand to full-screen editor', () => {
     const LONG_PASTE = 'a'.repeat(800);
 
-    it('offers no expand control while the composer is a one-line pill', () => {
+    it('offers no expand control while the text fits on one line', () => {
       const { queryByTestId } = renderInput();
       expect(queryByTestId('chat.composer.expand')).toBeNull();
     });
 
-    it('reveals the expand control once a long paste stacks the card', () => {
+    it('reveals the expand control once a long paste wraps', () => {
       const { getByLabelText, queryByTestId } = renderInput();
 
       fireEvent.changeText(getByLabelText('Message input'), LONG_PASTE);
@@ -980,23 +1100,21 @@ describe('ChatInput', () => {
     });
 
     it('matches the composer snapshot in both layouts', () => {
-      const compact = renderInput();
-      expect(compact.toJSON()).toMatchSnapshot('compact (stacked=false)');
-      compact.unmount();
+      const resting = renderInput();
+      expect(resting.toJSON()).toMatchSnapshot('resting');
+      resting.unmount();
 
-      const stacked = renderInput();
-      fireEvent.changeText(stacked.getByLabelText('Message input'), LONG_PASTE);
-      stackComposer(stacked.getByLabelText);
-      expect(stacked.toJSON()).toMatchSnapshot('stacked (stacked=true)');
+      const wrapped = renderInput();
+      fireEvent.changeText(wrapped.getByLabelText('Message input'), LONG_PASTE);
+      stackComposer(wrapped.getByLabelText);
+      expect(wrapped.toJSON()).toMatchSnapshot('wrapped');
     });
   });
 
   describe('model label', () => {
     it('renders the display name on the control row and opens the picker', () => {
       const onOpenModelPicker = jest.fn();
-      const { getByLabelText, getByTestId, queryByText } = renderInput({ onOpenModelPicker });
-
-      stackComposer(getByLabelText);
+      const { getByTestId, queryByText } = renderInput({ onOpenModelPicker });
 
       const label = getByTestId('chat.composer.model');
       expect(within(label).getByText('Fixture Model')).toBeTruthy();
@@ -1008,28 +1126,58 @@ describe('ChatInput', () => {
     });
 
     it('renders no label when the host offers no way to change the model', () => {
-      const { getByLabelText, queryByTestId } = renderInput({ onOpenModelPicker: undefined });
-
-      stackComposer(getByLabelText);
+      const { queryByTestId } = renderInput({ onOpenModelPicker: undefined });
 
       expect(queryByTestId('chat.composer.model')).toBeNull();
     });
   });
 
   describe('composer handle', () => {
-    it('prefills an empty editable draft without sending or replacing existing text', () => {
+    it('restores returned text into an empty composer and after an existing draft', () => {
       const ref = React.createRef<ChatInputHandle>();
-      const onSend = jest.fn();
-      const screen = renderInput({ attachRef: ref, onSend });
+      const screen = renderInput({ attachRef: ref });
 
-      act(() => ref.current?.prefillText?.('Look up '));
-      expect(screen.getByLabelText('Message input').props.value).toBe('Look up ');
-      expect(onSend).not.toHaveBeenCalled();
+      act(() => ref.current?.restoreText?.('Also cover Q3'));
+      expect(screen.getByLabelText('Message input').props.value).toBe('Also cover Q3');
 
       fireEvent.changeText(screen.getByLabelText('Message input'), 'My existing draft');
-      act(() => ref.current?.prefillText?.('Help me write '));
-      expect(screen.getByLabelText('Message input').props.value).toBe('My existing draft');
-      expect(onSend).not.toHaveBeenCalled();
+      act(() => ref.current?.restoreText?.('Also cover Q3'));
+      expect(screen.getByLabelText('Message input').props.value).toBe(
+        'My existing draft\n\nAlso cover Q3',
+      );
+    });
+
+    it('adds shared text after a parked draft instead of replacing it', () => {
+      mockGetDraft.mockImplementation(() => 'My parked draft');
+      const ref = React.createRef<ChatInputHandle>();
+      const screen = renderInput({
+        attachRef: ref,
+        draftKey: 'new-chat',
+        draftProvenance: { scope: 'local' },
+      });
+
+      adoptComposerHandoff('new-chat', null);
+      stageComposerText('new-chat', 'Shared article text');
+      stageComposerText('new-chat', 'Shared article text');
+      act(() => adoptComposerHandoff('new-chat', ref.current));
+
+      expect(screen.getByLabelText('Message input').props.value).toBe(
+        'My parked draft\n\nShared article text',
+      );
+      expect(mockSetDraft).toHaveBeenLastCalledWith(
+        'new-chat',
+        'My parked draft\n\nShared article text',
+        { scope: 'local' },
+      );
+      expect(takeComposerText('new-chat')).toBe('');
+      mockGetDraft.mockImplementation(() => '');
+    });
+
+    it('leaves shared text staged until a composer can receive it', () => {
+      stageComposerText('conversation-9', 'Shared before mount');
+      adoptComposerHandoff('conversation-9', null);
+
+      expect(takeComposerText('conversation-9')).toBe('Shared before mount');
     });
 
     it('exposes focus() and drives the real text field with it', () => {
@@ -1102,16 +1250,9 @@ describe('ChatInput', () => {
 
     it('drops the safe-area padding while the keyboard is up and restores it on close', () => {
       const screen = renderInput();
-      const bar = screen.getByLabelText('Message input').parent;
-      const paddingOf = () => {
-        let node = bar;
-        while (node) {
-          const style = node.props?.style as { paddingBottom?: number } | undefined;
-          if (style && typeof style.paddingBottom === 'number') return style.paddingBottom;
-          node = node.parent;
-        }
-        return undefined;
-      };
+      const paddingOf = () =>
+        (screen.getByTestId('chat.composer').props.style as { paddingBottom?: number })
+          .paddingBottom;
 
       const resting = paddingOf();
       openKeyboard();
@@ -1145,7 +1286,6 @@ describe('ChatInput', () => {
       const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
       const onOpenModelPicker = jest.fn();
       const screen = renderInput({ onOpenModelPicker });
-      stackComposer(screen.getByLabelText);
       openKeyboard();
 
       fireEvent.press(screen.getByTestId('chat.composer.model'));
@@ -1416,18 +1556,18 @@ describe('ChatInput', () => {
     });
   });
 
-  describe('stacked layout signal', () => {
-    it('tells the host when the composer stacks and when it returns to one line', () => {
-      const onStackedChange = jest.fn();
-      const { getByLabelText } = renderInput({ onStackedChange });
-      expect(onStackedChange).toHaveBeenLastCalledWith(false);
+  describe('multiline signal', () => {
+    it('tells the host when the text wraps and when it returns to one line', () => {
+      const onMultilineChange = jest.fn();
+      const { getByLabelText } = renderInput({ onMultilineChange });
+      expect(onMultilineChange).toHaveBeenLastCalledWith(false);
 
       fireEvent.changeText(getByLabelText('Message input'), 'line one\nline two\nline three');
       stackComposer(getByLabelText);
-      expect(onStackedChange).toHaveBeenLastCalledWith(true);
+      expect(onMultilineChange).toHaveBeenLastCalledWith(true);
 
       fireEvent.changeText(getByLabelText('Message input'), '');
-      expect(onStackedChange).toHaveBeenLastCalledWith(false);
+      expect(onMultilineChange).toHaveBeenLastCalledWith(false);
     });
   });
 

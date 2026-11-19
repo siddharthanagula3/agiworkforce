@@ -498,9 +498,9 @@ export const agiModelPickerGeometry = {
 
 export const agiChatTypography = {
   body: { fontSize: 16, lineHeight: 26, fontWeight: '400' },
-  heading1: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
-  heading2: { fontSize: 18, lineHeight: 28, fontWeight: '600' },
-  heading3: { fontSize: 16, lineHeight: 26, fontWeight: '600' },
+  heading1: { fontSize: 24, lineHeight: 32, fontWeight: '600' },
+  heading2: { fontSize: 20, lineHeight: 28, fontWeight: '600' },
+  heading3: { fontSize: 17, lineHeight: 24, fontWeight: '600' },
   writingSubject: { fontSize: 16, lineHeight: 24, fontWeight: '400' },
 } as const;
 
@@ -945,7 +945,6 @@ export const agiMobileAccentSwatches = {
   blue: { light: '#1658ea', dark: '#64a8fa' },
   violet: { light: '#7a38ed', dark: '#af95fa' },
   rose: { light: '#c61a3f', dark: '#fb7e90' },
-  amber: { light: '#a44c08', dark: '#fbbf24' },
 } as const;
 
 export const agiMobileNotificationLedColors = {
@@ -1096,6 +1095,8 @@ export const agiVsCodeCssVars = {
   '--agi-vscode-diff-added-gutter': 'var(--vscode-diffEditor-insertedTextBorder, #4caf50)',
   '--agi-vscode-diff-removed-gutter': 'var(--vscode-diffEditor-removedTextBorder, #f44336)',
   '--agi-vscode-diff-modified-gutter': '#ff9800',
+  // A QR code scans only against a light quiet zone, whatever the editor theme.
+  '--agi-vscode-qr-quiet-zone': '#ffffff',
 } as const satisfies CssVariableMap;
 
 export function cssVarsToString(vars: CssVariableMap): string {

@@ -14,7 +14,7 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 }));
 vi.mock('@/lib/server/data-region', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readOrganizationRegion: mocks.readRegion,
+  readStoredOrganizationRegion: mocks.readRegion,
 }));
 vi.mock('@/lib/services/retrieval-embedding-service', async (importOriginal) => {
   class RetrievalEmbeddingError extends Error {
@@ -251,6 +251,25 @@ describe('createPostgresSearchProvider', () => {
 
     expect((refusal as SearchResidencyError).refusal).toBe('cross_region');
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('refuses a workspace whose region row the caller cannot read instead of assuming home', async () => {
+    mocks.readRegion.mockResolvedValue(null);
+    const { query, adapter } = scopedDb({ embeddingsPresent: true });
+
+    const refusal = await createPostgresSearchProvider({
+      db: adapter,
+      userId: 'user-1',
+      organizationId: 'org-hidden',
+      semantic: true,
+    })
+      .search({ text: 'pricing', limit: 5 })
+      .catch((error: unknown) => error);
+
+    expect(refusal).toBeInstanceOf(SearchResidencyError);
+    expect((refusal as SearchResidencyError).refusal).toBe('region_unverified');
+    expect(query).not.toHaveBeenCalled();
+    expect(mocks.embed).not.toHaveBeenCalled();
   });
 
   it('reads the region once when the caller already resolved it', async () => {

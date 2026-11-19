@@ -147,7 +147,7 @@ describe('observed managed usage uses the real precise cost owner', () => {
     const usage = createObservedProviderUsage();
     for (let index = 0; index < 8; index++)
       accumulateObservedProviderUsage(usage, { inputTokens: 12761, outputTokens: 110 }, pricing);
-    const cap = getPlanSessionUsageCapMicrousd('max_15x');
+    const cap = getPlanSessionUsageCapMicrousd('max');
     const next = LLMCostCalculator.estimateListCostMicrousd(model.id, 12761, 2048);
     expect(cap).not.toBeNull();
     expect(next).not.toBeNull();

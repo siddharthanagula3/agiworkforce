@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
@@ -152,6 +153,7 @@ describe('GET /api/me, shared cloud contract', () => {
         cancel_at_period_end: false,
         effective_tier: 'free',
         subscription_source: 'none',
+        billing_owner: 'personal',
       });
       expect(parsed.data.routing_preferences).toEqual({});
       expect(parsed.data.capability_handshake?.granted).toContain('canUseWebSearch');
@@ -181,6 +183,37 @@ describe('GET /api/me, shared cloud contract', () => {
     expect(parsed.plan.subscription_source).toBe(source);
   });
 
+  it('reports a plan granted by hand to a personal account as personally owned, not organization-managed', async () => {
+    mockGetSubscription.mockResolvedValue({
+      plan_tier: 'max',
+      status: 'active',
+      current_period_end: '2026-08-05T00:00:00.000Z',
+    });
+
+    const res = await GET(makeGetRequest());
+    const parsed = MeResponseSchema.parse(await res.json());
+
+    expect(parsed.plan.subscription_source).toBe('manual');
+    expect(parsed.plan.billing_owner).toBe('personal');
+  });
+
+  it.each(['team', 'enterprise'] as const)(
+    'reports the %s plan held without a seat as organization-owned',
+    async (planTier) => {
+      mockGetSubscription.mockResolvedValue({
+        plan_tier: planTier,
+        status: 'active',
+        current_period_end: '2026-08-05T00:00:00.000Z',
+      });
+
+      const res = await GET(makeGetRequest());
+      const parsed = MeResponseSchema.parse(await res.json());
+
+      expect(parsed.plan.subscription_source).toBe('manual');
+      expect(parsed.plan.billing_owner).toBe('organization');
+    },
+  );
+
   it('omits the owner when provider identifiers contradict each other', async () => {
     mockGetSubscription.mockResolvedValue({
       plan_tier: 'pro',
@@ -196,7 +229,7 @@ describe('GET /api/me, shared cloud contract', () => {
     expect(parsed.plan.subscription_source).toBeUndefined();
   });
 
-  it('names the plan by its catalog label, so max_15x reads as Max 20x', async () => {
+  it('names the plan by its catalog label, so max_15x reads by its registry label', async () => {
     mockGetSubscription.mockResolvedValue({
       plan_tier: 'max_15x',
       status: 'active',
@@ -208,7 +241,7 @@ describe('GET /api/me, shared cloud contract', () => {
     const parsed = MeResponseSchema.parse(await res.json());
 
     expect(parsed.plan.tier).toBe('max_15x');
-    expect(parsed.plan.display_name).toBe('Max 20x');
+    expect(parsed.plan.display_name).toBe(getBillingPlanPricing('max_15x').label);
   });
 
   it.each([
@@ -237,6 +270,7 @@ describe('GET /api/me, shared cloud contract', () => {
         effective_tier: orgTier,
         ...(orgTier === 'team' ? { seat_type: 'standard' } : {}),
         subscription_source: 'manual',
+        billing_owner: 'organization',
       });
       expect(parsed.capability_handshake?.sources.tier).toBe(tierPolicy);
       expect(parsed.feature_flags.advanced_model_access).toBe(true);

@@ -20,6 +20,7 @@ import {
 import { SLACK_APPROVE_ACTION_ID, SLACK_DENY_ACTION_ID, approvalMessage } from './slack-messages';
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000e1';
+const GENERATION = 'a1b2c3d4e5f60718293a4b5c';
 
 function payload(actionId: string, patch: Record<string, unknown> = {}) {
   return {
@@ -27,7 +28,7 @@ function payload(actionId: string, patch: Record<string, unknown> = {}) {
     team: { id: 'T123' },
     user: { id: 'U123' },
     response_url: 'https://hooks.slack.com/actions/T123/1/abc',
-    actions: [{ action_id: actionId, value: RUN_ID }],
+    actions: [{ action_id: actionId, value: `${RUN_ID}:${GENERATION}` }],
     ...patch,
   };
 }
@@ -57,12 +58,26 @@ describe('approving in Slack', () => {
       [{ id: 'call_1', name: 'send_email', summary: 'Send the weekly update' } as never],
       'https://agi.invalid/settings/slack',
       'task',
-      RUN_ID,
+      { runId: RUN_ID, generation: GENERATION },
     );
     const actions = JSON.stringify(message.blocks);
     expect(actions).toContain(SLACK_APPROVE_ACTION_ID);
     expect(actions).toContain(SLACK_DENY_ACTION_ID);
-    expect(actions).toContain(RUN_ID);
+    expect(actions).toContain(`${RUN_ID}:${GENERATION}`);
+  });
+
+  it('binds both buttons to the approval generation they were posted for', () => {
+    const message = approvalMessage(
+      [{ id: 'call_1', name: 'send_email', summary: 'Send the weekly update' } as never],
+      'https://agi.invalid/settings/slack',
+      'task',
+      { runId: RUN_ID, generation: GENERATION },
+    );
+    const values = JSON.stringify(message.blocks).match(/"value":"([^"]+)"/g);
+    expect(values).toEqual([
+      `"value":"${RUN_ID}:${GENERATION}"`,
+      `"value":"${RUN_ID}:${GENERATION}"`,
+    ]);
   });
 
   it('reads a click and keeps only Slack response URLs', () => {
@@ -70,6 +85,7 @@ describe('approving in Slack', () => {
       teamId: 'T123',
       slackUserId: 'U123',
       runId: RUN_ID,
+      generation: GENERATION,
       decision: 'approved',
       responseUrl: 'https://hooks.slack.com/actions/T123/1/abc',
     });
@@ -98,10 +114,36 @@ describe('approving in Slack', () => {
       expect.objectContaining({
         userId: 'user_1',
         runId: RUN_ID,
+        generation: GENERATION,
         approval: { decision: 'approved', toolCallIds: ['call_1'] },
       }),
     );
     expect(interactionReply(outcome)).toMatch(/^Approved/);
+  });
+
+  it('refuses a card posted before approval generations existed, without deciding', async () => {
+    const click = readSlackApprovalClick(
+      payload(SLACK_APPROVE_ACTION_ID, {
+        actions: [{ action_id: SLACK_APPROVE_ACTION_ID, value: RUN_ID }],
+      }),
+    )!;
+    expect(click.generation).toBeNull();
+    const outcome = await decideSlackApprovalFromSlack(db(pendingRow), click);
+    expect(outcome).toEqual({
+      kind: 'refused',
+      message: 'This approval card is out of date. Review the current request in AGI.',
+    });
+    expect(mocks.claimSlackApproval).not.toHaveBeenCalled();
+  });
+
+  it('refuses a click whose card value carries extra parts', () => {
+    expect(
+      readSlackApprovalClick(
+        payload(SLACK_APPROVE_ACTION_ID, {
+          actions: [{ action_id: SLACK_APPROVE_ACTION_ID, value: `${RUN_ID}:${GENERATION}:x` }],
+        }),
+      ),
+    ).toBeNull();
   });
 
   it('refuses a click from anyone else, or from an unlinked account, without deciding', async () => {

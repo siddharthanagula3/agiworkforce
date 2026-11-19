@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
+import { baseInitOptions, resources } from '@agiworkforce/i18n';
 import { getColors, typeScale } from '@/src/ui/theme/tokens';
 import { getTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell/drawerGestures';
@@ -11,13 +12,9 @@ const APP_CONFIG = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');
 const MINIMUM_TYPE_SIZE = 14;
 const SUB_FLOOR_TEXT_CLASS = /(?<![\w-])text-(?:xs|\[(\d+(?:\.\d+)?)px\])(?![\w-])/g;
 const LARGEST_BODY_TYPE_SIZE = 34;
-// The three surfaces that are a single piece of display type: the onboarding
-// wordmark, the not-found numeral and the crash screen's mark.
-const DISPLAY_TYPE_SURFACES = [
-  'app/(public)/onboarding.tsx',
-  'app/+not-found.tsx',
-  'app/error.tsx',
-];
+// The two surfaces that are a single piece of display type: the not-found
+// numeral and the crash screen's mark.
+const DISPLAY_TYPE_SURFACES = ['app/+not-found.tsx', 'app/error.tsx'];
 const FONT_SIZE = /\bfontSize:\s*(?:(\d+)|typeScale\.(\w+))\b/g;
 
 const SAFE_AREA = /SafeAreaView|useSafeAreaInsets|SettingsScreenShell|useFullScreenChrome/;
@@ -206,14 +203,10 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
     ).toMatchObject({ drawerType: 'permanent', swipeEnabled: false });
   });
 
-  it('keeps secondary controls in a sheet rather than a desktop menu', () => {
-    const sheet = readFileSync(
-      join(MOBILE_ROOT, 'src', 'features', 'shell', 'ShellSecondarySheet.tsx'),
-      'utf8',
-    );
+  it('returns Back from a settings page to the page that opened it, not to a new chat', () => {
+    const appLayout = readFileSync(join(MOBILE_ROOT, 'app', '(app)', '_layout.tsx'), 'utf8');
 
-    expect(sheet).toContain("from '@/components/ui/BottomSheet'");
-    expect(sheet).toContain('<BottomSheet');
+    expect(appLayout).toMatch(/<Drawer\s+backBehavior="history"/);
   });
 
   it('gives the phone header only the actions a thumb needs', () => {
@@ -221,12 +214,24 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
       join(MOBILE_ROOT, 'src', 'features', 'drawer', 'components', 'DrawerContent.tsx'),
       'utf8',
     );
+    const english = (resources as Record<string, Record<string, unknown>>).en[
+      baseInitOptions.defaultNS
+    ];
     const headerActions = Array.from(
-      drawer.matchAll(/<HeaderIconButton\s+label="([^"]+)"/g),
-      (match) => match[1],
+      drawer.matchAll(/<HeaderIconButton\s+label=\{t\('([^']+)'\)\}/g),
+      (match) =>
+        match[1]!
+          .split('.')
+          .reduce<unknown>(
+            (node, part) =>
+              node && typeof node === 'object'
+                ? (node as Record<string, unknown>)[part]
+                : undefined,
+            english,
+          ),
     );
 
-    expect(headerActions).toEqual(['Search', 'Organize chats', 'New chat', 'Open profile']);
+    expect(headerActions).toEqual(['Search']);
   });
 
   it('leaves the platform back gesture switched on for every pushed screen', () => {

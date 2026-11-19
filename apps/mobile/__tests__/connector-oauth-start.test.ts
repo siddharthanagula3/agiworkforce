@@ -1,3 +1,11 @@
+jest.mock('../lib/mmkv', () => ({
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 jest.mock('../services/api', () => ({
@@ -9,6 +17,11 @@ jest.mock('../services/api', () => ({
   },
 }));
 
+import {
+  StaleCloudAccountOperationError,
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 import {
   ConnectorPolicyError,
   connectConnector,
@@ -47,6 +60,8 @@ function gets(path: string): unknown[] {
 beforeEach(() => {
   jest.clearAllMocks();
   invalidateConnectorPolicy();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('account-a');
 });
 
 describe('connectConnector', () => {
@@ -228,5 +243,39 @@ describe('fetchConnectorDirectory with OAuth grants', () => {
       available: [],
     });
     await expect(fetchConnectorDirectory()).rejects.toThrow('Invalid connectors response');
+  });
+});
+
+describe('a connector authorization started by a retired account', () => {
+  it('starts no sign-in under the replacement account when the policy answer lands late', async () => {
+    let settle!: (value: unknown) => void;
+    mockGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const pending = startConnectorOAuth('slack');
+
+    activateCloudAccount('account-b');
+    settle({ organizationId: 'org-1', configured: false, policy: null });
+
+    await expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(gets('/api/connectors/oauth/start')).toEqual([]);
+  });
+
+  it('enables nothing under the replacement account when the policy answer lands late', async () => {
+    let settle!: (value: unknown) => void;
+    mockGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const pending = connectConnector('slack');
+
+    activateCloudAccount('account-b');
+    settle({ organizationId: 'org-1', configured: false, policy: null });
+
+    await expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });

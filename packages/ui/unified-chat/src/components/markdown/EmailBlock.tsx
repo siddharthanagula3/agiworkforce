@@ -1,6 +1,7 @@
 import React, { useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Copy, ExternalLink, SquarePen } from 'lucide-react';
 import { Button, Input, Textarea, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { cn } from '../../lib/utils';
 import {
   RICH_BLOCK_ACTION_CLASS,
@@ -217,7 +218,9 @@ export function EmailBlock({ parsed, streaming }: EmailBlockProps) {
                 ref={subjectRef}
                 rows={1}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.preventDefault();
+                  if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
+                    event.preventDefault();
+                  }
                 }}
                 className={cn(FIELD_INPUT_CLASS, 'resize-none overflow-hidden')}
               />

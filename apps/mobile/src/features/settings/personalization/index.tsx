@@ -301,7 +301,7 @@ export default function PersonalizationScreen() {
       router.back();
       return;
     }
-    router.navigate('/(app)/(tabs)/settings' as Parameters<typeof router.navigate>[0]);
+    router.navigate('/(app)/settings' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   const hasChanges = useMemo(() => {

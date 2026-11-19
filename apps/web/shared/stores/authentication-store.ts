@@ -391,7 +391,7 @@ export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   initialized: boolean;
-  logout: () => Promise<void>;
+  logout: (scope?: { sessionId: string }) => Promise<void>;
   fetchUser: () => Promise<void>;
   initialize: () => Promise<void>;
   resyncSession: () => Promise<void>;
@@ -528,7 +528,10 @@ export const useAuthStore = create<AuthState>()(
         return _initializingPromise;
       },
 
-      logout: async () => {
+      logout: async (scope) => {
+        const superseded = () =>
+          scope !== undefined && authService.isSessionSuperseded(scope.sessionId);
+        if (superseded()) return;
         set({ isLoading: true });
 
         // Before the session goes: the push subscription is bound to this
@@ -537,13 +540,24 @@ export const useAuthStore = create<AuthState>()(
         // The DELETE needs the session cookie, so it has to run first.
         try {
           const { disableWebPush } = await import('@/features/notifications/lib/web-push-client');
+          if (superseded()) {
+            set({ isLoading: false });
+            return;
+          }
           await disableWebPush();
         } catch (err) {
           console.warn('[Auth] Web Push revocation failed, proceeding with cleanup:', err);
         }
 
+        if (superseded()) {
+          set({ isLoading: false });
+          return;
+        }
+
         try {
-          const result = await authService.logout();
+          const result = await (scope
+            ? authService.logout({ sessionId: scope.sessionId })
+            : authService.logout());
           if (result?.error) {
             console.warn('[Auth] Clerk sign-out failed, proceeding with cleanup:', result.error);
           }
@@ -551,7 +565,17 @@ export const useAuthStore = create<AuthState>()(
           console.warn('[Auth] authService.logout() failed, proceeding with cleanup:', err);
         }
 
+        if (superseded()) {
+          set({ isLoading: false });
+          return;
+        }
+
         await cleanupAllStores();
+
+        if (superseded()) {
+          set({ isLoading: false });
+          return;
+        }
 
         clearSessionResolution();
 

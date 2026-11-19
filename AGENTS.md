@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-21
+Last updated: 2026-10-24
 
 The canonical, tool-neutral operating contract for every coding agent in this
 repository. `CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped
@@ -163,6 +163,12 @@ consequence (what stops working, who loses access, whether it can be
 recovered), not "are you sure". `useConfirmAction` in `@agiworkforce/ui` is that
 surface; a mutation fired straight from `onClick` is a defect however obvious
 the button's label seems.
+
+An agent never destroys a user's data on its own. A file it removes or
+overwrites goes to the operating system's Trash first (the desktop's
+`configurePreviousVersions`), a chat or session is archived or moved to
+Recently deleted, and code gets a checkpoint. Permanent removal happens only
+from an explicit user action that names what is lost.
 
 ## 10. Current-competitor product policy
 

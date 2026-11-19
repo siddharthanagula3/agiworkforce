@@ -4,17 +4,22 @@ import type { NextRequest } from 'next/server';
 
 import { createError } from '@/lib/errors';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
-import { getRequestIdentity, verifyIdentitySessionToken } from '@/lib/server/identity';
+import { getRequestIdentity } from '@/lib/server/identity';
+import { verifyRequestSessionToken } from '@/lib/server/native-session-token';
 
 export interface SessionsPrincipal extends UserScopedDb {
   currentSessionId: string | null;
 }
 
-async function sessionIdFromBearer(token: string, userId: string): Promise<string | null> {
+async function sessionIdFromBearer(
+  request: NextRequest,
+  token: string,
+  userId: string,
+): Promise<string | null> {
   if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) return null;
 
   try {
-    const claims = await verifyIdentitySessionToken(token);
+    const claims = await verifyRequestSessionToken(request, token);
     if (!claims || claims.subject !== userId) return null;
     return claims.sessionId;
   } catch {
@@ -30,7 +35,7 @@ export async function resolveSessionsPrincipal(request: NextRequest): Promise<Se
   if (authHeader?.startsWith('Bearer ')) {
     return {
       ...scoped,
-      currentSessionId: await sessionIdFromBearer(authHeader.slice(7), scoped.userId),
+      currentSessionId: await sessionIdFromBearer(request, authHeader.slice(7), scoped.userId),
     };
   }
 

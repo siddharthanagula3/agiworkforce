@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { buildWorkspaceAccessGateResponse } from '@/lib/managed-compute-gate';
 import { evaluateConnectorPolicyForUser } from '@/lib/services/connector-policy-gate';
 import {
   ConnectRequestSchema,
@@ -234,7 +234,10 @@ async function handleGetConnectors(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const rows = await db.query<UserConnectorRow>(
     `select id, connector_id, auth_type, connected_at, updated_at
@@ -525,13 +528,16 @@ async function connectDirectoryTarget(
 }
 
 async function handleCreateConnector(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   let raw: unknown;
   try {
@@ -560,7 +566,7 @@ async function handleCreateConnector(request: NextRequest) {
     connectorId: body.connectorId,
     ...(directoryTarget ? { isCustom: true, url: directoryTarget.mcpUrl } : {}),
     request,
-    surface: resolveCloudChatSurface(request),
+    surface: surface ?? 'unknown',
   });
   if (!policyDecision.allowed) {
     return NextResponse.json(
@@ -808,7 +814,9 @@ async function disconnectDirectoryTarget(
         mcpAuthorizationContext.userCustomConnector(userId, removed.id),
         mcpAuthorizationContext.userCustomUrl(userId, target.mcpUrl),
       ]);
-      await clearConnectorToolPermissions(db, userId, customConnectorId(removed.short_id));
+      if (!(await clearConnectorToolPermissions(db, userId, customConnectorId(removed.short_id)))) {
+        notices.push(PERMISSIONS_NOT_CLEARED_NOTICE);
+      }
       await recordAuditEvent({
         userId,
         eventType: 'connector_removed',
@@ -832,7 +840,9 @@ async function disconnectDirectoryTarget(
   if (disconnect.disconnected) {
     await evictConnectorOAuthCaches(userId, target.connectorId);
     await purgeMcpResponseCachePartitions(cacheContexts);
-    await clearConnectorToolPermissions(db, userId, target.serverId);
+    if (!(await clearConnectorToolPermissions(db, userId, target.serverId))) {
+      notices.push(PERMISSIONS_NOT_CLEARED_NOTICE);
+    }
     await recordAuditEvent({
       userId,
       eventType: 'connector_removed',
@@ -849,8 +859,18 @@ async function disconnectDirectoryTarget(
   return NextResponse.json(disconnectedResponse(notices.join(' ')));
 }
 
+const PERMISSIONS_NOT_CLEARED_NOTICE =
+  'Its saved tool permissions could not be cleared, so reconnecting may reuse them. Reset them under Settings → Connections.';
+
 function disconnectedResponse(vendorNotice: string | null): DisconnectResponse {
   return vendorNotice ? { success: true, vendorNotice } : { success: true };
+}
+
+function withPermissionsNotice(vendorNotice: string | null, cleared: boolean): string | null {
+  if (cleared) return vendorNotice;
+  return vendorNotice
+    ? `${vendorNotice} ${PERMISSIONS_NOT_CLEARED_NOTICE}`
+    : PERMISSIONS_NOT_CLEARED_NOTICE;
 }
 
 function oauthVendorNotice(connectorId: string, disconnect: ConnectorDisconnectOutcome) {
@@ -858,13 +878,16 @@ function oauthVendorNotice(connectorId: string, disconnect: ConnectorDisconnectO
 }
 
 async function handleDeleteConnector(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const url = new URL(request.url);
   const connectorId = url.searchParams.get('connectorId');
@@ -881,10 +904,11 @@ async function handleDeleteConnector(request: NextRequest) {
 
   const cacheContexts = await oauthCacheContexts(userId, connectorId);
   const oauthDisconnect = await disconnectConnectorOAuthGrant(userId, connectorId);
+  let permissionsCleared = true;
   if (oauthDisconnect.disconnected) {
     await evictConnectorOAuthCaches(userId, connectorId);
     await purgeMcpResponseCachePartitions(cacheContexts);
-    await clearConnectorToolPermissions(db, userId, connectorId);
+    permissionsCleared = await clearConnectorToolPermissions(db, userId, connectorId);
     await recordAuditEvent({
       userId,
       eventType: 'connector_removed',
@@ -898,7 +922,12 @@ async function handleDeleteConnector(request: NextRequest) {
     });
     if (connectorId !== GITHUB_CONNECTOR_ID && !getOperatorMappedConnectorIds().has(connectorId)) {
       return NextResponse.json(
-        disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)),
+        disconnectedResponse(
+          withPermissionsNotice(
+            oauthVendorNotice(connectorId, oauthDisconnect),
+            permissionsCleared,
+          ),
+        ),
       );
     }
   }
@@ -948,7 +977,8 @@ async function handleDeleteConnector(request: NextRequest) {
     }
 
     await db.execute(`delete from github_installations where user_id = $1`, [userId]);
-    await clearConnectorToolPermissions(db, userId, GITHUB_CONNECTOR_ID);
+    permissionsCleared =
+      (await clearConnectorToolPermissions(db, userId, GITHUB_CONNECTOR_ID)) && permissionsCleared;
     await recordAuditEvent({
       userId,
       eventType: 'connector_removed',
@@ -959,7 +989,11 @@ async function handleDeleteConnector(request: NextRequest) {
         source: 'github_installation',
       },
     });
-    return NextResponse.json(disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)));
+    return NextResponse.json(
+      disconnectedResponse(
+        withPermissionsNotice(oauthVendorNotice(connectorId, oauthDisconnect), permissionsCleared),
+      ),
+    );
   }
 
   await db.execute(
@@ -969,7 +1003,8 @@ async function handleDeleteConnector(request: NextRequest) {
     [new Date().toISOString(), userId, connectorId],
   );
 
-  await clearConnectorToolPermissions(db, userId, connectorId);
+  permissionsCleared =
+    (await clearConnectorToolPermissions(db, userId, connectorId)) && permissionsCleared;
 
   await recordAuditEvent({
     userId,
@@ -978,7 +1013,11 @@ async function handleDeleteConnector(request: NextRequest) {
     detail: { resourceType: 'connector', connectorId, source: 'catalog' },
   });
 
-  return NextResponse.json(disconnectedResponse(oauthVendorNotice(connectorId, oauthDisconnect)));
+  return NextResponse.json(
+    disconnectedResponse(
+      withPermissionsNotice(oauthVendorNotice(connectorId, oauthDisconnect), permissionsCleared),
+    ),
+  );
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGetConnectors));

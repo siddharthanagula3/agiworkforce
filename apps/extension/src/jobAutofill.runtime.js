@@ -1295,12 +1295,11 @@ async function advanceAndSubmit(
     }
 
     if (isSubmitButton(label)) {
-      const missingAfter = collectMissingRequiredFields(platform);
-      const allowMissingOnSubmit = options.allowSubmitWithMissingRequired === true;
       return {
-        submitted: missingAfter.length === 0 || allowMissingOnSubmit,
+        submitted: false,
+        submissionAttempted: true,
         stepsAdvanced,
-        missingRequiredFields: missingAfter,
+        missingRequiredFields: collectMissingRequiredFields(platform),
       };
     }
 
@@ -1344,6 +1343,7 @@ export async function runPlatformJobAutofill(profile = {}, options = {}, timeout
     details.errors.push(...firstPass.errors);
 
     let submitted = false;
+    let submissionAttempted = false;
     let stepsAdvanced = 0;
     let missingRequiredFields = firstPass.missingRequiredFields;
     let genericFlowStarted = false;
@@ -1378,14 +1378,16 @@ export async function runPlatformJobAutofill(profile = {}, options = {}, timeout
         deadlineEpochMs,
       );
       submitted = submission.submitted;
+      submissionAttempted = submission.submitted || submission.submissionAttempted === true;
       stepsAdvanced = submission.stepsAdvanced;
       missingRequiredFields = submission.missingRequiredFields;
 
-      if (platform === 'generic' && !submitted) {
+      if (platform === 'generic' && !submissionAttempted) {
         const delayMs = Math.max(Number(options.delayMs ?? DEFAULT_DELAY_MS), 150);
         const submitSweep = await runGenericSubmitSweep(delayMs, deadlineEpochMs);
         stepsAdvanced += submitSweep.clicks;
         submitted = submitSweep.submitted || looksSubmitted();
+        submissionAttempted = submitted || submitSweep.clicks > 0;
         missingRequiredFields = collectMissingRequiredFields(platform);
       }
     }
@@ -1397,6 +1399,7 @@ export async function runPlatformJobAutofill(profile = {}, options = {}, timeout
       skippedCount: details.skippedFields.length,
       missingRequiredFields,
       submitted,
+      submissionAttempted,
       stepsAdvanced,
       genericFlowStarted,
       details,

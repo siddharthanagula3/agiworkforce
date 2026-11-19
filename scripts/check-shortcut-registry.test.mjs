@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   APP_MENU_PATH,
   HOST_CONTRACT_PATH,
+  PLATFORM_LITERAL_ACCELERATORS,
   REPO_ROOT,
   RENDERER_HANDLERS_PATH,
   RENDERER_REGISTRY_PATH,
@@ -66,11 +67,15 @@ test('it reads the registries rather than a list of its own', () => {
   assert.equal(normalizeAccelerator('Shift+CommandOrControl+K'), 'commandorcontrol+k+shift');
 });
 
-test('tab navigation uses physical Control without admitting platform-bound primary chords', () => {
-  assert.equal(crossPlatformAccelerator('Ctrl+Tab'), true);
-  assert.equal(crossPlatformAccelerator('Control+Shift+Tab'), true);
-  assert.equal(crossPlatformAccelerator('Ctrl+K'), false);
-  assert.equal(crossPlatformAccelerator('Command+Tab'), false);
+test('tab navigation uses physical Control only through the platform-literal registry', () => {
+  for (const accelerator of ['Ctrl+Tab', 'Control+Shift+Tab', 'Ctrl+K', 'Command+Tab']) {
+    assert.equal(crossPlatformAccelerator(accelerator), false, accelerator);
+  }
+  assert.equal(crossPlatformAccelerator('CommandOrControl+K'), true);
+  assert.deepEqual(PLATFORM_LITERAL_ACCELERATORS.map((entry) => entry.accelerator).sort(), [
+    'Ctrl+Shift+Tab',
+    'Ctrl+Tab',
+  ]);
 });
 
 test('a second claim on one chord in the app menu fails', () => {
@@ -98,6 +103,104 @@ test('a menu chord bound to one platform only fails', () => {
     failures.some((entry) => /instead of CommandOrControl/.test(entry)),
     failures.join('\n'),
   );
+});
+
+test('the registered platform-literal tab chords pass on the real contract', () => {
+  assert.deepEqual(
+    PLATFORM_LITERAL_ACCELERATORS.map((entry) => [entry.id, entry.accelerator]),
+    [
+      ['host-previous-tab', 'Ctrl+Shift+Tab'],
+      ['host-next-tab', 'Ctrl+Tab'],
+    ],
+  );
+  assert.deepEqual(checkShortcutRegistry(REPO_ROOT), []);
+});
+
+test('an unregistered Ctrl chord in the app menu still fails', () => {
+  const root = fixture({
+    [HOST_CONTRACT_PATH]: (source) =>
+      source.replace(
+        "{ id: 'host-settings', description: 'Settings', accelerator: 'CommandOrControl+,' },",
+        "{ id: 'host-settings', description: 'Settings', accelerator: 'Ctrl+,' },",
+      ),
+  });
+  const failures = checkShortcutRegistry(root);
+  assert.ok(
+    failures.some((entry) =>
+      /host-settings claims Ctrl\+,, .*instead of CommandOrControl/.test(entry),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('a registered id bound to a different chord fails and leaves its entry stale', () => {
+  const root = fixture({
+    [HOST_CONTRACT_PATH]: (source) =>
+      source.replace("accelerator: 'Ctrl+Tab' }", "accelerator: 'Ctrl+Alt+Tab' }"),
+  });
+  const failures = checkShortcutRegistry(root);
+  assert.ok(
+    failures.some((entry) => /host-next-tab claims Ctrl\+Alt\+Tab/.test(entry)),
+    failures.join('\n'),
+  );
+  assert.ok(
+    failures.some((entry) =>
+      /host-next-tab is registered as platform-literal for Ctrl\+Tab/.test(entry),
+    ),
+    failures.join('\n'),
+  );
+});
+
+test('a platform-literal entry that matches no menu binding fails', () => {
+  const failures = checkShortcutRegistry(REPO_ROOT, {
+    platformLiteral: [
+      ...PLATFORM_LITERAL_ACCELERATORS,
+      { id: 'host-close-tab', accelerator: 'Ctrl+W', reason: 'x'.repeat(60) },
+    ],
+  });
+  assert.equal(failures.length, 1, failures.join('\n'));
+  assert.match(failures[0], /host-close-tab is registered as platform-literal for Ctrl\+W/);
+});
+
+test('a platform-literal entry for a chord that already names both platforms fails', () => {
+  const failures = checkShortcutRegistry(REPO_ROOT, {
+    platformLiteral: [
+      ...PLATFORM_LITERAL_ACCELERATORS,
+      { id: 'host-new-tab', accelerator: 'CommandOrControl+T', reason: 'x'.repeat(60) },
+    ],
+  });
+  assert.equal(failures.length, 1, failures.join('\n'));
+  assert.match(
+    failures[0],
+    /host-new-tab is registered as platform-literal but CommandOrControl\+T/,
+  );
+});
+
+test('a platform-literal entry without a real reason fails', () => {
+  const failures = checkShortcutRegistry(REPO_ROOT, {
+    platformLiteral: [
+      { id: 'host-previous-tab', accelerator: 'Ctrl+Shift+Tab', reason: 'needed' },
+      PLATFORM_LITERAL_ACCELERATORS[1],
+    ],
+  });
+  assert.deepEqual(failures, [
+    'app-menu: host-previous-tab is registered as platform-literal without a reason',
+  ]);
+});
+
+test('a duplicated platform-literal entry fails', () => {
+  const failures = checkShortcutRegistry(REPO_ROOT, {
+    platformLiteral: [...PLATFORM_LITERAL_ACCELERATORS, PLATFORM_LITERAL_ACCELERATORS[0]],
+  });
+  assert.deepEqual(failures, [
+    'app-menu: host-previous-tab is registered as platform-literal twice for Ctrl+Shift+Tab',
+  ]);
+});
+
+test('with no registry the tab chords fail as platform-specific', () => {
+  const failures = checkShortcutRegistry(REPO_ROOT, { platformLiteral: [] });
+  assert.equal(failures.length, 2, failures.join('\n'));
+  assert.ok(failures.every((entry) => /instead of CommandOrControl/.test(entry)));
 });
 
 test('a declared menu shortcut no item binds fails', () => {

@@ -165,50 +165,95 @@ pub fn save_cache(models: &[Model], now_rfc3339: &str) {
     if let Ok(json) = serde_json::to_string(&payload) {
         let _ = std::fs::write(&path, json);
     }
+    if let Ok(mut guard) = MEMO.lock() {
+        *guard = None;
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct CachedCatalog {
+    models: Vec<Model>,
+    fresh: bool,
 }
 
 /// In-memory memo of the parsed cache so the model picker (which reloads on
 /// every keystroke) doesn't re-read + re-parse the ~160KB cache file each time.
-static MEMO: std::sync::Mutex<Option<(i64, Vec<Model>)>> = std::sync::Mutex::new(None);
+static MEMO: std::sync::Mutex<Option<(i64, CachedCatalog)>> = std::sync::Mutex::new(None);
 const MEMO_TTL_SECS: i64 = 3;
 
-/// Load the cached OpenRouter models if the cache exists and is still fresh.
+static LAST_REFRESH_ATTEMPT: std::sync::atomic::AtomicI64 =
+    std::sync::atomic::AtomicI64::new(i64::MIN);
+const REFRESH_RETRY_SECS: i64 = 60;
+
+/// Load the last cached OpenRouter models, fresh or past their TTL, so a
+/// listed model keeps its picker row and its route while a refresh runs.
 /// Memoized in memory for a few seconds so hot paths (picker keystrokes) are
-/// cheap. Returns an empty vec when missing/stale/unreadable so callers can
-/// degrade gracefully (picker simply shows no OpenRouter rows until next fetch).
+/// cheap. Returns an empty vec when the cache is missing or unreadable.
 pub fn load_cached_models() -> Vec<Model> {
+    load_cached_catalog().models
+}
+
+/// Start one background fetch when the cache is missing or past its TTL.
+/// Attempts are spaced by `REFRESH_RETRY_SECS`, so a failing network is not
+/// retried on every picker keystroke. No-op outside a Tokio runtime.
+pub fn refresh_cache_if_stale() {
+    if load_cached_catalog().fresh {
+        return;
+    }
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    if !claim_refresh_attempt(chrono::Utc::now().timestamp()) {
+        return;
+    }
+    runtime.spawn(async {
+        if let Ok(models) = fetch_openrouter_models().await {
+            save_cache(&models, &chrono::Utc::now().to_rfc3339());
+        }
+    });
+}
+
+fn refresh_due(last_attempt: i64, now: i64) -> bool {
+    now.saturating_sub(last_attempt) >= REFRESH_RETRY_SECS
+}
+
+fn claim_refresh_attempt(now: i64) -> bool {
+    use std::sync::atomic::Ordering;
+    let last = LAST_REFRESH_ATTEMPT.load(Ordering::Acquire);
+    refresh_due(last, now)
+        && LAST_REFRESH_ATTEMPT
+            .compare_exchange(last, now, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+}
+
+fn load_cached_catalog() -> CachedCatalog {
     let now = chrono::Utc::now().timestamp();
     if let Ok(guard) = MEMO.lock() {
-        if let Some((loaded_at, models)) = guard.as_ref() {
+        if let Some((loaded_at, catalog)) = guard.as_ref() {
             if now - *loaded_at < MEMO_TTL_SECS {
-                return models.clone();
+                return catalog.clone();
             }
         }
     }
-    let models = load_cached_models_from_disk();
+    let catalog = cache_path()
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .and_then(|content| parse_cache(&content, chrono::Utc::now()))
+        .unwrap_or_default();
     if let Ok(mut guard) = MEMO.lock() {
-        *guard = Some((now, models.clone()));
+        *guard = Some((now, catalog.clone()));
     }
-    models
+    catalog
 }
 
-fn load_cached_models_from_disk() -> Vec<Model> {
-    let Some(path) = cache_path() else {
-        return Vec::new();
-    };
-    let Ok(content) = std::fs::read_to_string(&path) else {
-        return Vec::new();
-    };
-    let Ok(cache) = serde_json::from_str::<CacheFile>(&content) else {
-        return Vec::new();
-    };
-    if let Ok(fetched) = chrono::DateTime::parse_from_rfc3339(&cache.fetched_at) {
-        let age = chrono::Utc::now().signed_duration_since(fetched);
-        if age.num_seconds() < CACHE_TTL_SECS {
-            return cache.models;
-        }
-    }
-    Vec::new()
+fn parse_cache(content: &str, now: chrono::DateTime<chrono::Utc>) -> Option<CachedCatalog> {
+    let cache = serde_json::from_str::<CacheFile>(content).ok()?;
+    let fresh = chrono::DateTime::parse_from_rfc3339(&cache.fetched_at)
+        .map(|fetched| now.signed_duration_since(fetched).num_seconds() < CACHE_TTL_SECS)
+        .unwrap_or(false);
+    Some(CachedCatalog {
+        models: cache.models,
+        fresh,
+    })
 }
 
 #[cfg(test)]
@@ -240,6 +285,54 @@ mod tests {
         // 0.0000025 * 1e6 = 2.5 per 1M
         assert!((model.input_price_per_1m - 2.5).abs() < 1e-9);
         assert!((model.output_price_per_1m - 10.0).abs() < 1e-9);
+    }
+
+    fn cache_json(fetched_at: &str) -> String {
+        let model = map_entry(
+            &serde_json::json!({"id": "fixture-vendor/dynamic-model", "created": 0}),
+            0,
+        )
+        .expect("fixture model maps");
+        serde_json::to_string(&CacheFile {
+            fetched_at: fetched_at.to_string(),
+            models: vec![model],
+        })
+        .expect("cache serializes")
+    }
+
+    #[test]
+    fn expired_cache_keeps_its_models_and_reports_stale() {
+        let now = chrono::Utc::now();
+        let expired = (now - chrono::Duration::seconds(CACHE_TTL_SECS + 1)).to_rfc3339();
+        let catalog = parse_cache(&cache_json(&expired), now).expect("cache parses");
+        assert!(!catalog.fresh);
+        assert_eq!(catalog.models.len(), 1);
+        assert_eq!(catalog.models[0].id, "fixture-vendor/dynamic-model");
+    }
+
+    #[test]
+    fn cache_within_ttl_is_fresh() {
+        let now = chrono::Utc::now();
+        let recent = (now - chrono::Duration::seconds(CACHE_TTL_SECS - 60)).to_rfc3339();
+        let catalog = parse_cache(&cache_json(&recent), now).expect("cache parses");
+        assert!(catalog.fresh);
+        assert_eq!(catalog.models.len(), 1);
+    }
+
+    #[test]
+    fn unreadable_fetch_time_is_stale_and_malformed_cache_is_absent() {
+        let now = chrono::Utc::now();
+        let catalog = parse_cache(&cache_json("not-a-time"), now).expect("cache parses");
+        assert!(!catalog.fresh);
+        assert!(parse_cache("{", now).is_none());
+    }
+
+    #[test]
+    fn refresh_attempts_are_spaced() {
+        assert!(refresh_due(i64::MIN, 1_700_000_000));
+        let last = 1_700_000_000;
+        assert!(!refresh_due(last, last + REFRESH_RETRY_SECS - 1));
+        assert!(refresh_due(last, last + REFRESH_RETRY_SECS));
     }
 
     #[test]

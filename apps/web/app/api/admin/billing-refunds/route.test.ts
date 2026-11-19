@@ -113,7 +113,7 @@ beforeEach(() => {
   mocks.isStripeConfigured.mockReturnValue(true);
   mocks.listPendingRefundRequests.mockResolvedValue(PENDING);
   mocks.lookupAccountBilling.mockResolvedValue({ userId: 'user_1', charges: [] });
-  mocks.declineRefundRequest.mockResolvedValue(DECLINED);
+  mocks.declineRefundRequest.mockResolvedValue({ request: DECLINED, customerNotified: true });
   mocks.issueOperatorRefund.mockResolvedValue(REFUNDED);
 });
 
@@ -210,7 +210,7 @@ describe('POST /api/admin/billing-refunds', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ request: DECLINED });
+    expect(await response.json()).toEqual({ request: DECLINED, customerNotified: true });
     expect(mocks.declineRefundRequest).toHaveBeenCalledWith(DB, {
       operatorUserId: OPERATOR_ID,
       requestId: REQUEST_ID,
@@ -226,11 +226,14 @@ describe('POST /api/admin/billing-refunds', () => {
   it('records a store refund without Stripe or an idempotency key, and audits it', async () => {
     mocks.isStripeConfigured.mockReturnValue(false);
     mocks.recordStoreRefund.mockResolvedValue({
-      id: REQUEST_ID,
-      userId: 'user_1',
-      chargeId: 'mobile_iap:ios:2000000123',
-      status: 'refunded',
-      refundAmountCents: 2_000,
+      request: {
+        id: REQUEST_ID,
+        userId: 'user_1',
+        chargeId: 'mobile_iap:ios:2000000123',
+        status: 'refunded',
+        refundAmountCents: 2_000,
+      },
+      customerNotified: true,
     });
 
     const response = await POST(
@@ -260,6 +263,53 @@ describe('POST /api/admin/billing-refunds', () => {
           action: 'store_refund_recorded',
           chargeId: 'mobile_iap:ios:2000000123',
           amountCents: 2_000,
+        }),
+      }),
+    );
+  });
+
+  it('reports that the customer was not told when the decline notification was not saved', async () => {
+    mocks.declineRefundRequest.mockResolvedValueOnce({
+      request: DECLINED,
+      customerNotified: false,
+    });
+
+    const response = await POST(
+      post({ action: 'decline', requestId: REQUEST_ID, note: 'Outside the refund window' }, null),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ request: DECLINED, customerNotified: false });
+    expect(mocks.logSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          action: 'refund_request_declined',
+          customerNotified: false,
+        }),
+      }),
+    );
+  });
+
+  it('reports that the customer was not told when the store refund notification was not saved', async () => {
+    mocks.recordStoreRefund.mockResolvedValueOnce({
+      request: { ...DECLINED, status: 'refunded', refundAmountCents: 2_000 },
+      customerNotified: false,
+    });
+
+    const response = await POST(
+      post(
+        { action: 'store_refund', requestId: REQUEST_ID, amountCents: null, note: 'Done.' },
+        null,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ customerNotified: false });
+    expect(mocks.logSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({
+          action: 'store_refund_recorded',
+          customerNotified: false,
         }),
       }),
     );

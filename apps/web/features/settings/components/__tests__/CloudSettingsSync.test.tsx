@@ -220,6 +220,58 @@ describe('signing in', () => {
     );
   });
 
+  it('sends the language the user returned to while the first change was still being saved', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance' ? {} : { locale: 'en' },
+    );
+    const view = render(<CloudSettingsSync />);
+    await settle();
+
+    let finishFirst: () => void = () => {};
+    preferences.savePreferenceNamespace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = () => resolve({ version: null });
+        }),
+    );
+
+    language.code = 'es';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+    language.code = 'en';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+
+    finishFirst();
+    await settle();
+    await settle();
+
+    const languageWrites = preferences.savePreferenceNamespace.mock.calls
+      .filter(([namespace]) => namespace === 'language')
+      .map(([, patch]) => patch);
+    expect(languageWrites).toEqual([{ locale: 'es' }, { locale: 'en' }]);
+  });
+
+  it('sends nothing extra when the language was changed once and saved', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance' ? {} : { locale: 'en' },
+    );
+    const view = render(<CloudSettingsSync />);
+    await settle();
+
+    language.code = 'es';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+    await settle();
+
+    const languageWrites = preferences.savePreferenceNamespace.mock.calls.filter(
+      ([namespace]) => namespace === 'language',
+    );
+    expect(languageWrites).toHaveLength(1);
+  });
+
   it('writes nothing at all when the account could not be read', async () => {
     session.isSignedIn = true;
     preferences.fetchStoredPreferenceNamespace.mockRejectedValue(new Error('offline'));
@@ -264,6 +316,49 @@ describe('changing a control on web', () => {
 
     render(<CloudSettingsSync />);
     await settle();
+
+    act(() => {
+      useSettingsStore.getState().setAccentColor('blue');
+    });
+    await flushDebounce();
+
+    expect(preferences.savePreferenceNamespace).toHaveBeenCalledWith(
+      'appearance',
+      { accentColor: 'blue' },
+      { merge: true, keepalive: true },
+    );
+  });
+
+  it('leaves a value the phone holds and web cannot render untouched until web edits it', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance'
+        ? {
+            theme: 'system',
+            accentColor: 'neutral',
+            font: 'default',
+            textSize: 'default',
+            motion: 'system',
+            highContrast: false,
+            codeBlockWrap: false,
+            codeTheme: 'github',
+            sendWithEnter: true,
+            defaultWorkMode: 'chat',
+            followUpSuggestions: true,
+            followUpBehavior: 'queue',
+            dictationEnabled: true,
+            voiceSpeed: 'normal',
+            hiddenNavIds: [],
+          }
+        : { locale: 'en' },
+    );
+
+    render(<CloudSettingsSync />);
+    await settle();
+    await flushDebounce();
+
+    expect(preferences.savePreferenceNamespace).not.toHaveBeenCalled();
+    expect(useSettingsStore.getState().accentColor).toBe('default');
 
     act(() => {
       useSettingsStore.getState().setAccentColor('blue');

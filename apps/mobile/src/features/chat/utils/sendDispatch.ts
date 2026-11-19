@@ -11,3 +11,15 @@ export function resolveOnAcceptedSend(
       });
   });
 }
+
+export async function dispatchHandedOffSend(
+  text: string,
+  send: (text: string) => boolean | Promise<boolean>,
+  restore: (text: string) => void,
+): Promise<void> {
+  try {
+    if ((await send(text)) === false) restore(text);
+  } catch {
+    restore(text);
+  }
+}

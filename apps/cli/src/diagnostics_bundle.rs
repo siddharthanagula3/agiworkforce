@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud::{CloudClient, CloudError};
 use crate::doctor::{DoctorReport, DoctorStatus};
+use crate::platform::runtime::session::PrivacyMode;
 use crate::secret_redaction::redact_tool_output;
 
 pub const DIAGNOSTICS_PATH: &str = "/api/support/diagnostics";
@@ -55,8 +56,11 @@ pub struct DiagnosticsExport {
     pub filename: String,
 }
 
-pub async fn export(report: &DoctorReport) -> Result<DiagnosticsExport, CloudError> {
-    let client = CloudClient::connect_managed()?;
+pub async fn export(
+    report: &DoctorReport,
+    privacy: PrivacyMode,
+) -> Result<DiagnosticsExport, CloudError> {
+    let client = CloudClient::connect(privacy)?;
     let mut exported: DiagnosticsExport = client
         .post(
             DIAGNOSTICS_PATH,
@@ -181,6 +185,22 @@ mod tests {
             sent.contains("providers.base-url"),
             "the check that failed must still be identifiable"
         );
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_sends_the_export() {
+        let failing = report(vec![check(
+            "state.writable",
+            DoctorStatus::Fail,
+            "not writable at /Users/someone/private-project",
+        )]);
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let error = export(&failing, mode)
+                .await
+                .err()
+                .expect("a non-Managed session must be refused before any request");
+            assert!(matches!(error, CloudError::NotManaged(refused) if refused == mode));
+        }
     }
 
     #[test]

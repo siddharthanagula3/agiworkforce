@@ -12,7 +12,11 @@ const {
   mockGetNeonDb,
   mockOutsideQuery,
   mockCommitted,
+  mockGetSubscription,
+  stripeMocks,
 } = vi.hoisted(() => ({
+  mockGetSubscription: vi.fn(),
+  stripeMocks: { retrieve: vi.fn(), update: vi.fn() },
   mockOutsideQuery: vi.fn((..._args: unknown[]) => {
     throw new Error('Outside callback');
   }),
@@ -79,6 +83,20 @@ vi.mock('@/lib/server/pseudonymize', () => ({
   pseudonymizeIdentifier: vi.fn(() => 'subject-ref'),
 }));
 
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: {
+    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
+  },
+}));
+
+vi.mock('@/lib/server/stripe-client', () => {
+  const client = {
+    subscriptions: { retrieve: stripeMocks.retrieve, update: stripeMocks.update },
+  };
+  return { getStripeClient: () => client, getStripeClientOrNull: () => client };
+});
+
+import { ACCOUNT_DELETION_RENEWAL_METADATA_KEY } from '@/lib/server/payments/stripe-provider';
 import { POST } from '../route';
 import { PUT as PUT_SCHEDULE, OPTIONS } from '../../cancel-schedule/route';
 import * as protectedRoute from '../../cancel-schedule/route';
@@ -89,6 +107,9 @@ function cancelRequest() {
     method: 'POST',
   }) as never;
 }
+
+const SCHEDULED_FOR = '2026-11-13T09:30:00.250000Z';
+const TAGGED_DEADLINE = '2026-11-13T09:30:00.250Z';
 
 function pgError(code: string): Error {
   return Object.assign(new Error(`postgres error ${code}`), { code });
@@ -101,12 +122,15 @@ describe('POST /api/user/delete-account/cancel', () => {
     mockRequireCsrfToken.mockResolvedValue(null);
     mockWithRateLimit.mockResolvedValue(null);
     mockRecordAuditEvent.mockResolvedValue(undefined);
+    mockGetSubscription.mockResolvedValue(null);
   });
 
   it('cancels a deletion inside the grace window and records it symmetrically with scheduling', async () => {
     mockQuery
       .mockResolvedValueOnce([{ id: 'user_cancelling' }])
-      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: true, scheduled_for: SCHEDULED_FOR },
+      ])
       .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     const response = await POST(cancelRequest());
@@ -133,7 +157,9 @@ describe('POST /api/user/delete-account/cancel', () => {
   it('is a clean no-op when nothing is pending, not a 500', async () => {
     mockQuery
       .mockResolvedValueOnce([{ id: 'user_cancelling' }])
-      .mockResolvedValueOnce([{ has_schedule: false, pair_matches: true, eligible: false }]);
+      .mockResolvedValueOnce([
+        { has_schedule: false, pair_matches: true, eligible: false, scheduled_for: null },
+      ]);
 
     const response = await POST(cancelRequest());
     const body = await response.json();
@@ -146,9 +172,13 @@ describe('POST /api/user/delete-account/cancel', () => {
   it('refuses to cancel once the grace window has closed, and does not touch the columns', async () => {
     mockQuery
       .mockResolvedValueOnce([{ id: 'user_cancelling' }])
-      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: false }])
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: false, scheduled_for: SCHEDULED_FOR },
+      ])
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: false }]);
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: false, scheduled_for: SCHEDULED_FOR },
+      ]);
 
     const response = await POST(cancelRequest());
     const body = await response.json();
@@ -185,7 +215,9 @@ describe('POST /api/user/delete-account/cancel', () => {
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_other_caller' });
     mockQuery
       .mockResolvedValueOnce([{ id: 'user_other_caller' }])
-      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: true, scheduled_for: SCHEDULED_FOR },
+      ])
       .mockResolvedValueOnce([{ id: 'user_other_caller' }]);
 
     await POST(cancelRequest());
@@ -198,7 +230,9 @@ describe('POST /api/user/delete-account/cancel', () => {
   it('runs the cancellation update on the caller-scoped client, never the schema owner', async () => {
     mockQuery
       .mockResolvedValueOnce([{ id: 'user_cancelling' }])
-      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: true, scheduled_for: SCHEDULED_FOR },
+      ])
       .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     await POST(cancelRequest());
@@ -212,7 +246,9 @@ describe('POST /api/user/delete-account/cancel', () => {
   it('ignores an identity smuggled into the query string and cancels for the session user', async () => {
     mockQuery
       .mockResolvedValueOnce([{ id: 'user_cancelling' }])
-      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: true, scheduled_for: SCHEDULED_FOR },
+      ])
       .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     const response = await POST(
@@ -270,13 +306,140 @@ const expectedSchedule = {
   scheduledFor: '2026-11-08T00:00:00.123456Z',
   requestedAt: '2026-11-07T00:00:00.654321Z',
 };
-const state = { has_schedule: true, pair_matches: true, eligible: true };
+const state = {
+  has_schedule: true,
+  pair_matches: true,
+  eligible: true,
+  scheduled_for: expectedSchedule.scheduledFor,
+};
 function pairRequest(body: string | undefined = JSON.stringify({ expectedSchedule })) {
   return new Request('http://localhost:3000/api/user/delete-account/cancel-schedule', {
     method: 'PUT',
     body,
   }) as never;
 }
+
+describe('undoing a deletion that stopped a web plan renewal', () => {
+  function stripeSubscription(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'sub_live1',
+      status: 'active',
+      cancel_at_period_end: true,
+      cancel_at: null,
+      schedule: null,
+      metadata: { [ACCOUNT_DELETION_RENEWAL_METADATA_KEY]: TAGGED_DEADLINE },
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_cancelling' });
+    mockRequireCsrfToken.mockResolvedValue(null);
+    mockWithRateLimit.mockResolvedValue(null);
+    mockRecordAuditEvent.mockResolvedValue(undefined);
+    mockExecute.mockResolvedValue(1);
+    mockGetSubscription.mockResolvedValue({ stripe_subscription_id: 'sub_live1' });
+    stripeMocks.retrieve.mockResolvedValue(stripeSubscription());
+    stripeMocks.update.mockImplementation(async (id: string, params: Record<string, unknown>) =>
+      stripeSubscription({ id, ...params }),
+    );
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([
+        { has_schedule: true, pair_matches: true, eligible: true, scheduled_for: SCHEDULED_FOR },
+      ])
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+  });
+
+  it('turns renewal back on after the cancellation commits and says so', async () => {
+    stripeMocks.update.mockImplementation(async (id: string, params: Record<string, unknown>) => {
+      expect(mockCommitted).toHaveBeenCalledTimes(1);
+      return stripeSubscription({ id, ...params });
+    });
+
+    const response = await POST(cancelRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      cancelled: true,
+      planRenewal: 'restored',
+      message: 'Account deletion cancelled. Your plan renews again.',
+    });
+    expect(stripeMocks.update).toHaveBeenCalledWith(
+      'sub_live1',
+      {
+        cancel_at_period_end: false,
+        metadata: { [ACCOUNT_DELETION_RENEWAL_METADATA_KEY]: '' },
+      },
+      { idempotencyKey: `account-deletion-restore-renewal:sub_live1:${SCHEDULED_FOR}` },
+    );
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('update public.subscriptions'),
+      ['user_cancelling', 'sub_live1', false, null],
+    );
+  });
+
+  it('leaves a cancellation the person made alone', async () => {
+    stripeMocks.retrieve.mockResolvedValue(stripeSubscription({ metadata: {} }));
+
+    const body = await (await POST(cancelRequest())).json();
+
+    expect(body).toMatchObject({ cancelled: true, message: 'Account deletion cancelled.' });
+    expect(body.planRenewal).toBeUndefined();
+    expect(stripeMocks.update).not.toHaveBeenCalled();
+  });
+
+  it('leaves a renewal turned off by a different deletion alone', async () => {
+    stripeMocks.retrieve.mockResolvedValue(
+      stripeSubscription({
+        metadata: { [ACCOUNT_DELETION_RENEWAL_METADATA_KEY]: '2026-10-01T00:00:00.000Z' },
+      }),
+    );
+
+    const body = await (await POST(cancelRequest())).json();
+
+    expect(body.planRenewal).toBeUndefined();
+    expect(stripeMocks.update).not.toHaveBeenCalled();
+  });
+
+  it('clears the tag without turning renewal on when the person already resumed the plan', async () => {
+    stripeMocks.retrieve.mockResolvedValue(stripeSubscription({ cancel_at_period_end: false }));
+
+    const body = await (await POST(cancelRequest())).json();
+
+    expect(body.planRenewal).toBeUndefined();
+    expect(stripeMocks.update).toHaveBeenCalledWith(
+      'sub_live1',
+      { metadata: { [ACCOUNT_DELETION_RENEWAL_METADATA_KEY]: '' } },
+      expect.anything(),
+    );
+  });
+
+  it('keeps the account and says renewal may still be off when Stripe fails', async () => {
+    stripeMocks.update.mockRejectedValue(new Error('stripe unavailable'));
+
+    const response = await POST(cancelRequest());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ cancelled: true, planRenewal: 'not_restored' });
+    expect(body.message).toContain('turn it back on in Settings > Billing');
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'account_deletion_cancelled' }),
+    );
+  });
+
+  it('does not touch Stripe when there is no web subscription', async () => {
+    mockGetSubscription.mockResolvedValue({ stripe_subscription_id: null });
+
+    const body = await (await POST(cancelRequest())).json();
+
+    expect(body).toMatchObject({ cancelled: true, message: 'Account deletion cancelled.' });
+    expect(stripeMocks.retrieve).not.toHaveBeenCalled();
+  });
+});
 
 // Deterministic SQL mocks assert protocol shape, not database, clock, RLS or concurrency behavior.
 describe('required schedule pair cancellation', () => {

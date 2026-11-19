@@ -3,19 +3,8 @@ vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
   usePreferenceOwner: () => null,
 }));
 
-/**
- * Web privacy settings must not advertise a model-training opt-in.
- *
- * `improveModelTraining` was removed from TOGGLES because nothing consumed it,
- * and no training-data pipeline exists to gate. The explanatory copy in "How we
- * protect your data" still said data would not be used for training "without
- * your explicit opt-in", which points users at a control they cannot find and
- * contradicts the mobile Cloud Privacy screen. This test pins the honest
- * statement and fails if the opt-in promise comes back without the pipeline.
- */
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import React from 'react';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
@@ -34,8 +23,12 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
-  Switch: ({ checked }: { checked?: boolean }) =>
-    React.createElement('button', { role: 'switch', 'aria-checked': Boolean(checked) }),
+  Switch: ({ checked, 'aria-label': label }: { checked?: boolean; 'aria-label'?: string }) =>
+    React.createElement('button', {
+      role: 'switch',
+      'aria-checked': Boolean(checked),
+      'aria-label': label,
+    }),
   useConfirm: () => ({ confirm: vi.fn(async () => true), dialog: null }),
 }));
 
@@ -90,19 +83,36 @@ describe('PrivacySection model-training copy', () => {
     vi.restoreAllMocks();
   });
 
-  it('states that no training opt-in exists', () => {
+  it('states that customer content is not used to improve AGI-owned models', () => {
     openProtectionCopy();
 
     expect(
-      screen.getByText(/There is no training opt-in, because that data path does not exist\./i),
+      screen.getByText(
+        /we do not use your prompts, responses, files or voice recordings to train or improve AGI-owned models\./i,
+      ),
     ).toBeTruthy();
+    expect(screen.queryByText(/There is no training opt-in/i)).toBeNull();
   });
 
   it('never promises a training opt-in the product does not implement', () => {
     openProtectionCopy();
 
     expect(screen.queryByText(/without your explicit opt-in/i)).toBeNull();
-    expect(screen.queryByRole('switch', { name: /training/i })).toBeNull();
+  });
+
+  it('offers the chat and voice choices apart from the provider switch, both off', () => {
+    render(<PrivacySection />);
+
+    const heading = screen.getByRole('heading', { name: 'Help improve AGI models' });
+    const section = within(heading.closest('section')!);
+    expect(
+      section.getByRole('switch', { name: 'Use my chats to improve AGI models' }),
+    ).toHaveAttribute('aria-checked', 'false');
+    expect(
+      section.getByRole('switch', { name: 'Use my voice recordings to improve AGI models' }),
+    ).toHaveAttribute('aria-checked', 'false');
+    expect(section.queryByRole('switch', { name: /Only use models/i })).toBeNull();
+    expect(section.getByText(/Nothing is used for this today\./)).toBeTruthy();
   });
 });
 

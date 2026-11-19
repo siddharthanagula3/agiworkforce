@@ -5,6 +5,7 @@ import type {
   DispatchTaskReplyError,
   DispatchTaskStatusEvent,
 } from '@agiworkforce/types';
+import { isDispatchTaskFinished, keepUnfinishedAndRecentFinished } from './dispatchTaskLifecycle';
 
 export interface MobileDispatchTask {
   requestId: string;
@@ -37,19 +38,17 @@ interface DispatchTaskState {
 }
 
 const MAX_SESSION_TASKS = 25;
-const TERMINAL_STATUSES = new Set<DispatchTaskLifecycleStatus>([
-  'ready_for_review',
-  'completed',
-  'failed',
-  'cancelled',
-  'rejected',
-]);
+
+function boundSessionTasks(tasks: MobileDispatchTask[]): MobileDispatchTask[] {
+  const unfinished = tasks.filter((task) => !isDispatchTaskFinished(task.status)).length;
+  return keepUnfinishedAndRecentFinished(tasks, Math.max(0, MAX_SESSION_TASKS - unfinished));
+}
 
 export const useDispatchTaskStore = create<DispatchTaskState>((set) => ({
   tasks: [],
   addOutgoingTask: (task) =>
     set((state) => ({
-      tasks: [
+      tasks: boundSessionTasks([
         {
           requestId: task.requestId,
           prompt: task.prompt,
@@ -59,7 +58,7 @@ export const useDispatchTaskStore = create<DispatchTaskState>((set) => ({
           updatedAt: task.sentAt,
         },
         ...state.tasks.filter((item) => item.requestId !== task.requestId),
-      ].slice(0, MAX_SESSION_TASKS),
+      ]),
     })),
   applyStatus: (event) =>
     set((state) => ({
@@ -107,11 +106,7 @@ export const useDispatchTaskStore = create<DispatchTaskState>((set) => ({
     })),
   clearFinished: () =>
     set((state) => ({
-      tasks: state.tasks.filter(
-        (task) =>
-          task.status === 'sending' ||
-          !TERMINAL_STATUSES.has(task.status as DispatchTaskLifecycleStatus),
-      ),
+      tasks: state.tasks.filter((task) => !isDispatchTaskFinished(task.status)),
     })),
   reset: () => set({ tasks: [] }),
 }));

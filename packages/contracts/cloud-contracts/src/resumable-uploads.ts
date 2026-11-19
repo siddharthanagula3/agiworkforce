@@ -1,4 +1,4 @@
-import uploadContract from './upload-contract.json';
+import uploadContract from './upload-contract.json' with { type: 'json' };
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { z } from 'zod';
 import { MAX_CHAT_ATTACHMENT_BYTES, ManagedCloudChatAttachmentSchema } from './chat-attachments';

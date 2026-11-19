@@ -6,9 +6,19 @@ import { deploymentEnvironment } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
-import { notifyIncident } from '@/lib/server/incident/dispatch';
+import {
+  clearIncident,
+  notifyIncident,
+  type IncidentDispatchResult,
+} from '@/lib/server/incident/dispatch';
 import type { AlertSeverity } from '@/lib/server/incident/pager';
-import { describeAnomaly, evaluateAnomalies, type AnomalyAlert } from '@/lib/server/slo/anomaly';
+import {
+  ANOMALY_SERIES,
+  describeAnomaly,
+  evaluateAnomalies,
+  type AnomalyAlert,
+  type AnomalyEvaluation,
+} from '@/lib/server/slo/anomaly';
 import { evaluateBurnRates, type BurnRateAlert } from '@/lib/server/slo/attainment';
 
 export const runtime = 'nodejs';
@@ -71,33 +81,72 @@ function buildAnomalyPage(
   };
 }
 
+interface AnomalyReport {
+  evaluation: 'completed' | 'incomplete';
+  detected: number;
+  severity?: AlertSeverity;
+  paged?: string;
+  delivery?: IncidentDispatchResult['delivery'];
+  escalationLevel?: number;
+  series?: string[];
+  failedSeries?: string[];
+}
+
+const INCIDENT_SEVERITIES: readonly AlertSeverity[] = ['critical', 'warning'];
+
+async function retireRecoveredIncidents(
+  family: 'slo-burn' | 'slo-anomaly',
+  active: AlertSeverity | null,
+): Promise<void> {
+  for (const severity of INCIDENT_SEVERITIES) {
+    if (severity !== active) await clearIncident(`${family}:${severity}`);
+  }
+}
+
+function anomalyReportFailed(report: AnomalyReport): boolean {
+  return report.evaluation !== 'completed' || report.delivery === 'undeliverable';
+}
+
 /**
  * A deviation from the recent normal never reaches an error budget: every
  * request succeeded, so no objective burns. It is reported as its own incident
  * rather than folded into the burn page, because what an operator does about
  * doubled spend is not what they do about a failing objective.
  */
-async function reportAnomalies(): Promise<{
-  detected: number;
-  severity?: AlertSeverity;
-  paged?: string;
-  series?: string[];
-}> {
-  let anomalies: AnomalyAlert[];
+async function reportAnomalies(): Promise<AnomalyReport> {
+  let evaluation: AnomalyEvaluation;
   try {
-    anomalies = await evaluateAnomalies();
+    evaluation = await evaluateAnomalies();
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
       'Cost and latency anomaly evaluation failed',
     );
-    return { detected: 0 };
+    return {
+      evaluation: 'incomplete',
+      detected: 0,
+      failedSeries: ANOMALY_SERIES.map((series) => series.id),
+    };
   }
-  if (anomalies.length === 0) return { detected: 0 };
 
-  const severity: AlertSeverity = anomalies.some((anomaly) => anomaly.severity === 'critical')
-    ? 'critical'
-    : 'warning';
+  const { alerts: anomalies, failed } = evaluation;
+  const completeness: Pick<AnomalyReport, 'evaluation' | 'failedSeries'> =
+    failed.length === 0
+      ? { evaluation: 'completed' }
+      : { evaluation: 'incomplete', failedSeries: failed.map((entry) => entry.id) };
+  if (failed.length > 0) {
+    logger.error({ failed }, 'Cost and latency anomaly evaluation could not read every series');
+  }
+
+  const severity: AlertSeverity | null =
+    anomalies.length === 0
+      ? null
+      : anomalies.some((anomaly) => anomaly.severity === 'critical')
+        ? 'critical'
+        : 'warning';
+  if (failed.length === 0) await retireRecoveredIncidents('slo-anomaly', severity);
+  if (severity === null) return { ...completeness, detected: 0 };
+
   const { subject, text } = buildAnomalyPage(severity, anomalies);
   const dispatched = await notifyIncident({
     key: `slo-anomaly:${severity}`,
@@ -117,9 +166,12 @@ async function reportAnomalies(): Promise<{
     'Cost or latency anomaly alert dispatched',
   );
   return {
+    ...completeness,
     detected: anomalies.length,
     severity,
     paged: dispatched.paged,
+    delivery: dispatched.delivery,
+    escalationLevel: dispatched.level,
     series: anomalies.map((anomaly) => anomaly.id),
   };
 }
@@ -145,12 +197,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const anomalies = await reportAnomalies();
+  const anomaliesFailed = anomalyReportFailed(anomalies);
 
-  if (alerts.length === 0) {
-    return NextResponse.json({ burning: 0, paged: 'not_needed', anomalies });
+  const severity = alerts.length === 0 ? null : worstSeverity(alerts);
+  await retireRecoveredIncidents('slo-burn', severity);
+  if (severity === null) {
+    return NextResponse.json(
+      { burning: 0, paged: 'not_needed', anomalies },
+      { status: anomaliesFailed ? 500 : 200 },
+    );
   }
 
-  const severity = worstSeverity(alerts);
   const { subject, text } = buildPage(severity, alerts);
   const dispatched = await notifyIncident({
     key: `slo-burn:${severity}`,
@@ -187,6 +244,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         samples: alert.samples,
       })),
     },
-    { status: dispatched.delivery === 'delivered' || dispatched.paged === 'paged' ? 200 : 500 },
+    { status: dispatched.delivery === 'delivered' && !anomaliesFailed ? 200 : 500 },
   );
 }

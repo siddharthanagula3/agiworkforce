@@ -67,6 +67,7 @@ import {
 } from '@agiworkforce/types';
 import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
+import { describeCliResolutionFailure, type CliResolution } from '../platform/remoteEnvironment';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const MAX_REJECTED_LINE_CHARS = 400;
@@ -80,6 +81,7 @@ const MCP_PROBE_TIMEOUT_MS = 90_000;
 const INSTALL_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
+const STDIN_CLOSE_EXIT_TIMEOUT_MS = 3_000;
 // stdout closes a moment before the process reports its exit; waiting for the
 // exit keeps the CLI's own stderr explanation instead of a bare stream error.
 const STDOUT_END_EXIT_GRACE_MS = 1_500;
@@ -90,6 +92,32 @@ export const CLI_NOT_EXECUTABLE_MARKER = 'AGI_CLI_NOT_EXECUTABLE';
 
 export function cliAcquisitionHint(): string {
   return `Run "${PRODUCT_NAMES.code}: Install AGI CLI" to install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer, or set ${CLI_PATH_SETTING} to one you already have.`;
+}
+
+export const MANAGE_WORKSPACE_TRUST_COMMAND = 'workbench.trust.manage';
+
+export class WorkspaceNotTrustedError extends Error {
+  constructor(readonly cwd: string) {
+    super(
+      'This folder is in Restricted Mode, so the AGI CLI is not started here. Trust the folder to use AGI in it.',
+    );
+    this.name = 'WorkspaceNotTrustedError';
+  }
+}
+
+function describeUnresolvedCli(
+  resolution: Extract<CliResolution, { ok: false }>,
+  environmentLabel?: string,
+): Error {
+  if (resolution.reason === 'empty') {
+    return new Error(
+      `${CLI_NOT_FOUND_MARKER}: ${CLI_PATH_SETTING} is empty, so there is no binary to start. ${cliAcquisitionHint()}`,
+    );
+  }
+  const inside = environmentLabel === undefined ? '' : ` in ${environmentLabel}`;
+  return new Error(
+    `${CLI_NOT_FOUND_MARKER}: The AGI CLI could not be started. ${JSON.stringify(resolution.configured)} ${describeCliResolutionFailure(resolution.reason)}${inside}. ${cliAcquisitionHint()}`,
+  );
 }
 
 function describeSpawnFailure(cliPath: string, error: Error, environmentLabel?: string): Error {
@@ -722,6 +750,17 @@ export function readMcpAuthRequired(params: unknown): McpAuthRequired | undefine
   return parsed.success ? parsed.data : undefined;
 }
 
+const notificationLagSchema = z.object({
+  code: z.literal('notification_lag'),
+  skipped: z.number().int().nonnegative(),
+});
+
+export function readNotificationLag(notification: AppServerNotification): number | undefined {
+  if (notification.method !== 'server/warning') return undefined;
+  const parsed = notificationLagSchema.safeParse(notification.params);
+  return parsed.success ? parsed.data.skipped : undefined;
+}
+
 const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
   id: z.string().min(1).max(200),
   updated: z.boolean(),
@@ -937,6 +976,7 @@ const turnTerminalEventSchema = z.object({
   error: z.string().nullable().optional(),
   failure: turnFailureSchema.nullable().optional().catch(null),
   managedRequestIds: z.array(z.string().min(1).max(200)).max(500).optional().catch(undefined),
+  contextTokens: z.number().int().nonnegative().optional().catch(undefined),
 });
 const turnModelEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1426,7 +1466,8 @@ export type SpawnLocalRuntime = (
 export type TerminateLocalRuntimeTree = (child: ChildProcessWithoutNullStreams) => Promise<void>;
 
 export interface LocalRuntimeClientOptions {
-  cliPath: string | (() => string);
+  cliPath: string | (() => CliResolution);
+  workspaceTrusted: () => boolean;
   memoryEnabled?: () => boolean;
   bypassPermissionsAvailable?: () => boolean;
   /** When the user consented to AGI working in `cwd`; undefined withholds consent. */
@@ -2053,7 +2094,7 @@ export class LocalRuntimeClient {
   restart(): Promise<void> {
     if (this.restartPromise !== undefined) return this.restartPromise;
     const restart = (async () => {
-      await this.disposeProcess(true);
+      await this.disposeProcess(true, 'AGI local runtime process is restarting');
       this.disposed = false;
       delete this.disposePromise;
       await this.initialize();
@@ -2070,15 +2111,15 @@ export class LocalRuntimeClient {
     return restart;
   }
 
-  dispose(): Promise<void> {
-    return this.disposeProcess(false);
+  dispose(reason = 'The AGI local runtime for this folder stopped.'): Promise<void> {
+    return this.disposeProcess(false, reason);
   }
 
-  private disposeProcess(preserveListeners: boolean): Promise<void> {
+  private disposeProcess(preserveListeners: boolean, reason: string): Promise<void> {
     if (this.disposePromise !== undefined) return this.disposePromise;
     this.disposed = true;
     if (!preserveListeners) this.notificationListeners.clear();
-    const restartError = new Error('AGI local runtime process is restarting');
+    const restartError = new Error(reason);
     for (const listener of this.eventListeners) {
       listener({ type: 'runtime_disconnected', error: restartError.message });
     }
@@ -2113,6 +2154,10 @@ export class LocalRuntimeClient {
       );
       graceful = true;
     } catch {
+      if (await this.exitsAfterStdinClose(child, childExitPromise)) {
+        graceful = true;
+        return;
+      }
       const terminateProcessTree =
         this.options.terminateProcessTree ?? terminateLocalRuntimeProcessTree;
       await waitWithTimeout(
@@ -2129,6 +2174,28 @@ export class LocalRuntimeClient {
       if (this.connection === connection || this.child === child) {
         this.resetProcess(restartError, !graceful);
       }
+    }
+  }
+
+  /**
+   * The CLI's own shutdown runs when its stdin closes, and it reaps the command
+   * trees its turns started in their own process groups. A hard kill of the
+   * runtime's group cannot reach those, so the runtime gets that chance first.
+   */
+  private async exitsAfterStdinClose(
+    child: ChildProcessWithoutNullStreams,
+    childExitPromise: Promise<void>,
+  ): Promise<boolean> {
+    try {
+      child.stdin.end();
+      await waitWithTimeout(
+        childExitPromise,
+        STDIN_CLOSE_EXIT_TIMEOUT_MS,
+        'AGI local runtime did not exit after its input closed',
+      );
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -2200,15 +2267,19 @@ export class LocalRuntimeClient {
   private ensureProcess(): JsonlConnection {
     if (this.disposed) throw new Error('AGI local runtime client is disposed');
     if (this.connection !== undefined) return this.connection;
+    if (!this.options.workspaceTrusted()) throw new WorkspaceNotTrustedError(this.options.cwd);
     const spawnRuntime = this.options.spawn ?? (nodeSpawn as SpawnLocalRuntime);
-    const configuredCliPath =
-      typeof this.options.cliPath === 'function' ? this.options.cliPath() : this.options.cliPath;
-    const cliPath = configuredCliPath.trim();
-    if (cliPath === '') {
-      throw new Error(
-        `${CLI_NOT_FOUND_MARKER}: ${CLI_PATH_SETTING} is empty, so there is no binary to start. ${cliAcquisitionHint()}`,
+    const resolution =
+      typeof this.options.cliPath === 'function'
+        ? this.options.cliPath()
+        : { ok: true as const, path: this.options.cliPath.trim() };
+    if (!resolution.ok || resolution.path === '') {
+      throw describeUnresolvedCli(
+        resolution.ok ? { ok: false, configured: '', reason: 'empty' } : resolution,
+        this.options.environmentLabel,
       );
     }
+    const cliPath = resolution.path;
     let child: ChildProcessWithoutNullStreams;
     const bypassPermissionsAvailable = this.options.bypassPermissionsAvailable?.() === true;
     try {

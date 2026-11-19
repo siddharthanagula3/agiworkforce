@@ -71,6 +71,7 @@ interface InFlightShareRequest {
 }
 
 interface ShareScope {
+  conversationId: string | null | undefined;
   session: SessionAuthority | null;
   selector: string;
   isCurrent: () => boolean;
@@ -243,6 +244,7 @@ export function useShareConversation(
   const renderedScope = useRef<ShareScope | null>(null);
   const scope = useMemo(() => {
     const next: ShareScope = {
+      conversationId,
       session: owner?.session ?? null,
       selector:
         workspaceData?.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,

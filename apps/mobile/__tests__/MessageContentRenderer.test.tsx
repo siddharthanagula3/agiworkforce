@@ -1,4 +1,4 @@
-import { Alert, Linking, ScrollView, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('../src/features/chat/components/MathBlock', () => ({
@@ -175,6 +175,23 @@ describe('MessageContentRenderer', () => {
     expect(getByText('// note')).toHaveStyle({ color: syntaxTokenColor('comment', lightColors) });
   });
 
+  it('lets inline code inherit the line height of a list item it opens', () => {
+    const { getByText } = render(
+      <View>
+        {renderMarkdownContent(
+          '- `sorted()` returns a new list\n- `list.sort()` sorts in place\n- Both accept `key=`',
+          lightColors,
+        )}
+      </View>,
+    );
+
+    for (const code of ['sorted()', 'list.sort()', 'key=']) {
+      const style = StyleSheet.flatten(getByText(code).props.style);
+      expect(style).toMatchObject({ fontFamily: 'Menlo' });
+      expect(style.lineHeight).toBeUndefined();
+    }
+  });
+
   it('renders unknown-language code blocks as plain monospace text', () => {
     const { getByText } = render(
       <View>{renderMarkdownContent('```\nplain block content\n```', lightColors)}</View>,
@@ -212,6 +229,33 @@ describe('MessageContentRenderer', () => {
     ).toHaveLength(1);
   });
 
+  it('opens a www address over https', () => {
+    const { getByText } = render(
+      <View>{renderMarkdownContent('Visit www.example.com today.', lightColors)}</View>,
+    );
+
+    fireEvent.press(getByText('www.example.com'));
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith('https://www.example.com', expect.anything());
+  });
+
+  it('does not link a www fragment inside an email address', () => {
+    const { queryAllByRole } = render(
+      <View>{renderMarkdownContent('Write to ops@www.example.com', lightColors)}</View>,
+    );
+
+    expect(queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('leaves a bare address without a dotted host as text', () => {
+    const { getByText, queryAllByRole } = render(
+      <View>{renderMarkdownContent('Start it on http://localhost:3000 first', lightColors)}</View>,
+    );
+
+    expect(queryAllByRole('link')).toHaveLength(0);
+    expect(getByText(/http:\/\/localhost:3000/)).toBeTruthy();
+  });
+
   it('handles failed browser opens without throwing from the press handler', () => {
     mockOpenBrowserAsync.mockRejectedValue(new Error('No browser'));
     jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('No handler'));
@@ -232,9 +276,9 @@ describe('MessageContentRenderer', () => {
       <View>{renderMarkdownContent(tableContent, lightColors)}</View>,
     );
 
-    expect(getByText('Name')).toHaveStyle({ fontWeight: '500' });
-    expect(getByText('Age')).toHaveStyle({ fontWeight: '500' });
-    expect(getByText('City')).toHaveStyle({ fontWeight: '500' });
+    expect(getByText('Name')).toHaveStyle({ fontWeight: '600' });
+    expect(getByText('Age')).toHaveStyle({ fontWeight: '600' });
+    expect(getByText('City')).toHaveStyle({ fontWeight: '600' });
 
     expect(getByText('Alice')).toHaveStyle({ color: lightColors.textSecondary });
     expect(getByText('30')).toHaveStyle({ color: lightColors.textSecondary });

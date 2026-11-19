@@ -28,7 +28,8 @@ vi.mock('@/lib/server/neon-db', () => {
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
   issueCommentPostedSince: vi.fn(() => false),
   pullRequestReviewPostedSince: vi.fn(() => false),
@@ -45,7 +46,7 @@ vi.mock('@agiworkforce/mcp', () => ({
   connectMcpServer: vi.fn(),
 }));
 
-import { makeUserConnectorExecutor } from '../user-connector-tools';
+import { getUserGithubInstallations, makeUserConnectorExecutor } from '../user-connector-tools';
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -153,3 +154,33 @@ describe('GitHub connector tools stay inside the repositories the linking accoun
     expect(mocks.getInstallationAccessToken).toHaveBeenCalledWith(77);
   });
 });
+
+describe('GitHub installations carry the set the linking account can push to', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reads the writable set and leaves a link that predates it unproved', async () => {
+    linkInstallations([
+      { ...ACME_INSTALLATION, writable_repositories: ['acme/docs'] },
+      { installation_id: '77', account_login: 'beta', verified_repositories: ['beta/api'] },
+      {
+        installation_id: '78',
+        account_login: 'gamma',
+        verified_repositories: ['gamma/api'],
+        writable_repositories: null,
+      },
+    ]);
+
+    const installations = await getUserGithubInstallations('user-1');
+
+    expect(installations.map((installation) => installation.writableRepositories)).toEqual([
+      ['acme/docs'],
+      null,
+      null,
+    ]);
+    expect(String(mocks.neonQuery.mock.calls[0]?.[0])).toContain('writable_repositories');
+  });
+});
+
+type ImportedModule0 = typeof import('@/lib/github-app');

@@ -154,7 +154,14 @@ pub fn set_remote_control(active: bool) {
     REMOTE_CONTROL.store(active, std::sync::atomic::Ordering::Relaxed);
 }
 
-pub async fn send_heartbeat() -> bool {
+pub async fn send_heartbeat(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> Result<bool, crate::cloud::CloudError> {
+    crate::cloud::CloudClient::admit(privacy)?;
+    Ok(post_heartbeat().await)
+}
+
+async fn post_heartbeat() -> bool {
     let Some(jwt) = crate::tier_cache::load_jwt() else {
         return false;
     };
@@ -202,12 +209,16 @@ pub async fn send_heartbeat() -> bool {
     }
 }
 
-pub fn spawn_heartbeat_loop() -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async {
+pub fn spawn_heartbeat_loop(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
         let mut interval = tokio::time::interval(HEARTBEAT_INTERVAL);
         loop {
             interval.tick().await;
-            send_heartbeat().await;
+            if send_heartbeat(privacy).await.is_err() {
+                return;
+            }
         }
     })
 }
@@ -255,6 +266,22 @@ mod tests {
         assert_eq!(registry_architecture("aarch64"), "arm64");
         assert_eq!(registry_architecture("x86_64"), "x64");
         assert_eq!(registry_architecture("riscv64"), "other");
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_reports_this_device_to_the_account() {
+        use crate::platform::runtime::session::PrivacyMode;
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refused = send_heartbeat(mode)
+                .await
+                .expect_err("a heartbeat must be refused before it reads the device");
+            assert!(matches!(refused, crate::cloud::CloudError::NotManaged(seen) if seen == mode));
+            let heartbeat = spawn_heartbeat_loop(mode);
+            tokio::time::timeout(Duration::from_secs(5), heartbeat)
+                .await
+                .expect("the heartbeat loop must stop outside Cloud mode")
+                .expect("the heartbeat loop ended without panicking");
+        }
     }
 
     #[test]

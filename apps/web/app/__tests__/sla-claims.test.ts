@@ -10,9 +10,10 @@ import { retentionEnforcement } from '@/lib/server/retention/enforcement';
 
 const APP = path.resolve(__dirname, '..');
 const read = (relative: string) => readFileSync(path.join(APP, relative), 'utf8');
+const readProse = (relative: string) => read(relative).replace(/\s+/gu, ' ');
 
 const sla = read('sla/page.tsx');
-const enterprise = read('enterprise/page.tsx');
+const enterprise = readProse('enterprise/page.tsx');
 const ticketStore = readFileSync(path.resolve(APP, '../lib/support/tickets/store.ts'), 'utf8');
 
 /**

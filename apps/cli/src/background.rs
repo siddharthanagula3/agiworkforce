@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 const RUN_FILE: &str = "run.json";
 const LOG_FILE: &str = "output.log";
+const LAUNCH_GRACE_SECS: i64 = 60;
+const STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundRun {
@@ -86,24 +88,75 @@ fn create_private_dir(path: &Path) -> Result<()> {
 }
 
 fn save(run: &BackgroundRun) -> Result<()> {
-    let dir = run_dir(&run.id)?;
+    save_in(&root()?, run)
+}
+
+fn save_in(root: &Path, run: &BackgroundRun) -> Result<()> {
+    let dir = root.join(&run.id);
     create_private_dir(&dir)?;
     let path = dir.join(RUN_FILE);
-    let temp = dir.join(format!("{RUN_FILE}.tmp"));
+    let temp = dir.join(format!("{RUN_FILE}.{}.tmp", std::process::id()));
     std::fs::write(&temp, serde_json::to_vec_pretty(run)?)
         .with_context(|| format!("write {}", temp.display()))?;
     std::fs::rename(&temp, &path).with_context(|| format!("write {}", path.display()))
 }
 
-fn load(id: &str) -> Result<BackgroundRun> {
-    let path = run_dir(id)?.join(RUN_FILE);
+fn load_in(root: &Path, id: &str) -> Result<BackgroundRun> {
+    let path = root.join(id).join(RUN_FILE);
     let bytes = std::fs::read(&path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))
 }
 
+fn update_in(
+    root: &Path,
+    id: &str,
+    change: impl FnOnce(&mut BackgroundRun),
+) -> Result<BackgroundRun> {
+    let mut run = load_in(root, id)?;
+    change(&mut run);
+    save_in(root, &run)?;
+    Ok(run)
+}
+
+fn launch_in(
+    root: &Path,
+    mut run: BackgroundRun,
+    launch_supervisor: impl FnOnce(&BackgroundRun) -> Result<u32>,
+) -> Result<BackgroundRun> {
+    save_in(root, &run)?;
+    match launch_supervisor(&run) {
+        Ok(supervisor_pid) => {
+            if load_in(root, &run.id)?.supervisor_pid.is_none() {
+                update_in(root, &run.id, |stored| {
+                    if stored.supervisor_pid.is_none() {
+                        stored.supervisor_pid = Some(supervisor_pid);
+                    }
+                })
+                .context("the run started, but its supervisor could not be recorded")?;
+            }
+            run.supervisor_pid = Some(supervisor_pid);
+            Ok(run)
+        }
+        Err(error) => {
+            match update_in(root, &run.id, |stored| {
+                stored.finished_at = Some(Utc::now());
+                stored.exit_code = Some(-1);
+            }) {
+                Ok(_) => Err(error),
+                Err(record_error) => Err(error.context(format!(
+                    "the run could not be marked as failed to start: {record_error:#}"
+                ))),
+            }
+        }
+    }
+}
+
 pub fn list() -> Result<Vec<BackgroundRun>> {
-    let root = root()?;
-    let entries = match std::fs::read_dir(&root) {
+    list_in(&root()?)
+}
+
+fn list_in(root: &Path) -> Result<Vec<BackgroundRun>> {
+    let entries = match std::fs::read_dir(root) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(error).with_context(|| format!("read {}", root.display())),
@@ -111,18 +164,22 @@ pub fn list() -> Result<Vec<BackgroundRun>> {
     let mut runs: Vec<BackgroundRun> = entries
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| entry.file_name().to_str().map(str::to_string))
-        .filter_map(|id| load(&id).ok())
+        .filter_map(|id| load_in(root, &id).ok())
         .collect();
     runs.sort_by_key(|run| std::cmp::Reverse(run.started_at));
     Ok(runs)
 }
 
 pub fn find(reference: &str) -> Result<BackgroundRun> {
+    find_in(&root()?, reference)
+}
+
+fn find_in(root: &Path, reference: &str) -> Result<BackgroundRun> {
     let reference = reference.trim();
     if reference.is_empty() {
         bail!("Name a background run. `agi background list` shows them.");
     }
-    let matches: Vec<BackgroundRun> = list()?
+    let matches: Vec<BackgroundRun> = list_in(root)?
         .into_iter()
         .filter(|run| run.id.starts_with(reference))
         .collect();
@@ -133,7 +190,37 @@ pub fn find(reference: &str) -> Result<BackgroundRun> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunProcess {
+    Child(u32),
+    Supervisor(u32),
+}
+
+fn supervisor_marker(run: &BackgroundRun) -> String {
+    format!("background supervise {}", run.id)
+}
+
+fn live_process(run: &BackgroundRun, owns: &impl Fn(u32, &[&str]) -> bool) -> Option<RunProcess> {
+    if let Some(pid) = run.pid {
+        if owns(pid, &["--print", run.session_id.as_str()]) {
+            return Some(RunProcess::Child(pid));
+        }
+    }
+    let marker = supervisor_marker(run);
+    run.supervisor_pid
+        .filter(|pid| owns(*pid, &[marker.as_str()]))
+        .map(RunProcess::Supervisor)
+}
+
 pub fn state(run: &BackgroundRun) -> RunState {
+    state_at(run, Utc::now(), &process_runs)
+}
+
+fn state_at(
+    run: &BackgroundRun,
+    now: DateTime<Utc>,
+    owns: &impl Fn(u32, &[&str]) -> bool,
+) -> RunState {
     if run.finished_at.is_some() {
         return if run.stopped {
             RunState::Stopped
@@ -143,10 +230,16 @@ pub fn state(run: &BackgroundRun) -> RunState {
             RunState::Failed
         };
     }
-    match run.supervisor_pid {
-        Some(pid) if process_is_alive(pid) => RunState::Running,
-        None => RunState::Running,
-        Some(_) => RunState::Lost,
+    if live_process(run, owns).is_some() {
+        return RunState::Running;
+    }
+    let launching = run.supervisor_pid.is_none_or(process_is_alive)
+        && run.pid.is_none()
+        && now.signed_duration_since(run.started_at) < chrono::Duration::seconds(LAUNCH_GRACE_SECS);
+    if launching {
+        RunState::Running
+    } else {
+        RunState::Lost
     }
 }
 
@@ -177,7 +270,7 @@ pub fn start(request: StartRequest<'_>) -> Result<BackgroundRun> {
     }
     args.extend(["--".to_string(), prompt.to_string()]);
 
-    let mut run = BackgroundRun {
+    let run = BackgroundRun {
         id,
         prompt: prompt.to_string(),
         cwd: cwd.clone(),
@@ -192,21 +285,19 @@ pub fn start(request: StartRequest<'_>) -> Result<BackgroundRun> {
         parent_session: request.parent_session.map(str::to_string),
         gathered: false,
     };
-    save(&run)?;
-
-    let exe = std::env::current_exe().context("find the agi executable")?;
-    let mut command = std::process::Command::new(exe);
-    command
-        .args(["background", "supervise", &run.id])
-        .current_dir(&cwd)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    detach(&mut command);
-    let child = command.spawn().context("start the background supervisor")?;
-    run.supervisor_pid = Some(child.id());
-    save(&run)?;
-    Ok(run)
+    launch_in(&root()?, run, |run| {
+        let exe = std::env::current_exe().context("find the agi executable")?;
+        let mut command = std::process::Command::new(exe);
+        command
+            .args(["background", "supervise", &run.id])
+            .current_dir(&cwd)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        detach(&mut command);
+        let child = command.spawn().context("start the background supervisor")?;
+        Ok(child.id())
+    })
 }
 
 pub fn hand_off(
@@ -381,68 +472,135 @@ pub fn gather_prompt(session: &crate::agent::AgentSession) -> std::result::Resul
 }
 
 pub fn supervise(id: &str) -> Result<()> {
-    let mut run = load(id)?;
-    let log = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path(&run)?)
-        .context("open the background log")?;
-    let exe = std::env::current_exe().context("find the agi executable")?;
-    let mut command = std::process::Command::new(exe);
-    command
-        .args(&run.args)
-        .current_dir(&run.cwd)
-        .env("AGI_BACKGROUND_RUN", &run.id)
-        .stdin(std::process::Stdio::null())
-        .stdout(log.try_clone().context("share the background log")?)
-        .stderr(log);
-    let mut child = match command.spawn() {
+    let root = root()?;
+    supervise_in(&root, id, |run| {
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join(&run.id).join(LOG_FILE))
+            .context("open the background log")?;
+        let exe = std::env::current_exe().context("find the agi executable")?;
+        let mut command = std::process::Command::new(exe);
+        command
+            .args(&run.args)
+            .current_dir(&run.cwd)
+            .env("AGI_BACKGROUND_RUN", &run.id)
+            .stdin(std::process::Stdio::null())
+            .stdout(log.try_clone().context("share the background log")?)
+            .stderr(log);
+        command.spawn().context("start the background run")
+    })
+}
+
+fn supervise_in(
+    root: &Path,
+    id: &str,
+    start_child: impl FnOnce(&BackgroundRun) -> Result<std::process::Child>,
+) -> Result<()> {
+    let run = update_in(root, id, |run| {
+        run.supervisor_pid = Some(std::process::id());
+    })?;
+    let mut child = match start_child(&run) {
         Ok(child) => child,
         Err(error) => {
-            run.finished_at = Some(Utc::now());
-            run.exit_code = Some(-1);
-            save(&run)?;
-            return Err(error).context("start the background run");
+            update_in(root, id, |run| {
+                run.finished_at = Some(Utc::now());
+                run.exit_code = Some(-1);
+            })?;
+            return Err(error);
         }
     };
-    run.pid = Some(child.id());
-    save(&run)?;
+    let child_pid = child.id();
+    let recorded = update_in(root, id, |run| run.pid = Some(child_pid));
     let status = child.wait().context("wait for the background run")?;
-    let mut run = load(id).unwrap_or(run);
-    run.finished_at = Some(Utc::now());
-    run.exit_code = Some(status.code().unwrap_or(-1));
-    save(&run)
+    update_in(root, id, |run| {
+        run.finished_at = Some(Utc::now());
+        run.exit_code = Some(status.code().unwrap_or(-1));
+    })?;
+    recorded.map(|_| ())
 }
 
 pub fn stop(reference: &str) -> Result<BackgroundRun> {
-    let mut run = find(reference)?;
-    if state(&run) != RunState::Running {
+    let root = root()?;
+    let run = find_in(&root, reference)?;
+    stop_in(&root, run, &process_runs, STOP_WAIT)
+}
+
+fn stop_in(
+    root: &Path,
+    run: BackgroundRun,
+    owns: &impl Fn(u32, &[&str]) -> bool,
+    wait: std::time::Duration,
+) -> Result<BackgroundRun> {
+    let current = state_at(&run, Utc::now(), owns);
+    if current != RunState::Running {
         bail!(
-            "Background run {} is not running ({}).",
+            "Background run {} is not running ({}), so there was nothing to stop. `agi background rm {}` removes it.",
             run.id,
-            state(&run).label()
+            current.label(),
+            run.id
         );
     }
-    run.stopped = true;
-    save(&run)?;
-    if let Some(pid) = run.pid {
-        terminate(pid)?;
-    } else if let Some(pid) = run.supervisor_pid {
-        terminate(pid)?;
+    let Some(target) = live_process(&run, owns) else {
+        bail!(
+            "Background run {} is still starting and has no process to stop yet. Try again in a moment.",
+            run.id
+        );
+    };
+    update_in(root, &run.id, |stored| stored.stopped = true)?;
+    let signalled = match target {
+        RunProcess::Child(pid) => {
+            terminate(pid)?;
+            pid
+        }
+        RunProcess::Supervisor(pid) => {
+            terminate_group(pid)?;
+            pid
+        }
+    };
+    let deadline = std::time::Instant::now() + wait;
+    loop {
+        let stored = load_in(root, &run.id)?;
+        if stored.finished_at.is_some() {
+            return Ok(stored);
+        }
+        if live_process(&stored, owns).is_none() {
+            return update_in(root, &run.id, |stored| {
+                stored.stopped = true;
+                if stored.finished_at.is_none() {
+                    stored.finished_at = Some(Utc::now());
+                }
+            });
+        }
+        if std::time::Instant::now() >= deadline {
+            bail!(
+                "Sent a stop signal to background run {} (process {signalled}), but it is still running after {} seconds. `agi background list` shows when it ends.",
+                run.id,
+                wait.as_secs()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
-    Ok(run)
 }
 
 pub fn remove(reference: &str) -> Result<BackgroundRun> {
-    let run = find(reference)?;
-    if state(&run) == RunState::Running {
+    remove_in(&root()?, reference, &process_runs)
+}
+
+fn remove_in(
+    root: &Path,
+    reference: &str,
+    owns: &impl Fn(u32, &[&str]) -> bool,
+) -> Result<BackgroundRun> {
+    let run = find_in(root, reference)?;
+    if state_at(&run, Utc::now(), owns) == RunState::Running {
         bail!(
             "Background run {} is still running. Stop it first with `agi background stop {}`.",
             run.id,
             run.id
         );
     }
-    let dir = run_dir(&run.id)?;
+    let dir = root.join(&run.id);
     std::fs::remove_dir_all(&dir).with_context(|| format!("remove {}", dir.display()))?;
     Ok(run)
 }
@@ -498,7 +656,7 @@ fn detach(command: &mut std::process::Command) {
 fn detach(_command: &mut std::process::Command) {}
 
 #[cfg(unix)]
-fn process_is_alive(pid: u32) -> bool {
+pub(crate) fn process_is_alive(pid: u32) -> bool {
     use nix::errno::Errno;
     use nix::sys::signal::kill;
     use nix::unistd::Pid;
@@ -516,9 +674,89 @@ fn process_is_alive(pid: u32) -> bool {
     }
 }
 
-#[cfg(not(unix))]
-fn process_is_alive(pid: u32) -> bool {
+#[cfg(windows)]
+pub(crate) fn process_is_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    let filter = format!("PID eq {pid}");
+    std::process::Command::new("tasklist")
+        .args(["/FI", filter.as_str(), "/FO", "CSV", "/NH"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&format!(",\"{pid}\",")))
+        .unwrap_or(true)
+}
+
+#[cfg(not(any(unix, windows)))]
+pub(crate) fn process_is_alive(pid: u32) -> bool {
     pid != 0
+}
+
+fn process_runs(pid: u32, markers: &[&str]) -> bool {
+    process_is_alive(pid)
+        && command_line(pid).is_some_and(|line| markers.iter().all(|marker| line.contains(marker)))
+}
+
+#[cfg(target_os = "linux")]
+fn command_line(pid: u32) -> Option<String> {
+    let bytes = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    let line = bytes
+        .split(|byte| *byte == 0)
+        .filter(|part| !part.is_empty())
+        .map(String::from_utf8_lossy)
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!line.is_empty()).then_some(line)
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn command_line(pid: u32) -> Option<String> {
+    let pid = pid.to_string();
+    let output = std::process::Command::new("ps")
+        .args(["-ww", "-o", "command=", "-p", pid.as_str()])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let line = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (output.status.success() && !line.is_empty()).then_some(line)
+}
+
+#[cfg(windows)]
+fn command_line(pid: u32) -> Option<String> {
+    let query = format!("(Get-CimInstance Win32_Process -Filter 'ProcessId={pid}').CommandLine");
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", query.as_str()])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    let line = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (output.status.success() && !line.is_empty()).then_some(line)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn command_line(_pid: u32) -> Option<String> {
+    None
+}
+
+#[cfg(unix)]
+fn terminate_group(pid: u32) -> Result<()> {
+    use nix::sys::signal::{killpg, Signal};
+    use nix::unistd::Pid;
+
+    let pid = i32::try_from(pid).context("process id out of range")?;
+    match killpg(Pid::from_raw(pid), Signal::SIGTERM) {
+        Ok(()) | Err(nix::errno::Errno::ESRCH) => Ok(()),
+        Err(error) => Err(error).context("stop the background run"),
+    }
+}
+
+#[cfg(not(unix))]
+fn terminate_group(pid: u32) -> Result<()> {
+    terminate(pid)
 }
 
 #[cfg(unix)]
@@ -545,4 +783,166 @@ fn terminate(pid: u32) -> Result<()> {
         bail!("taskkill could not stop process {pid}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(id: &str) -> BackgroundRun {
+        BackgroundRun {
+            id: id.to_string(),
+            prompt: "fixture".to_string(),
+            cwd: std::env::temp_dir(),
+            session_id: "fixture-session".to_string(),
+            started_at: Utc::now(),
+            args: Vec::new(),
+            supervisor_pid: None,
+            pid: None,
+            finished_at: None,
+            exit_code: None,
+            stopped: false,
+            parent_session: None,
+            gathered: false,
+        }
+    }
+
+    #[test]
+    fn a_starter_that_returns_late_keeps_the_supervisors_pid_and_result() {
+        let root = tempfile::tempdir().expect("root");
+        let started = launch_in(root.path(), fixture("lateack"), |run| {
+            update_in(root.path(), &run.id, |stored| {
+                stored.supervisor_pid = Some(4_000_001);
+                stored.pid = Some(4_000_002);
+            })?;
+            update_in(root.path(), &run.id, |stored| {
+                stored.finished_at = Some(Utc::now());
+                stored.exit_code = Some(0);
+            })?;
+            Ok(4_000_001)
+        })
+        .expect("launch");
+        assert_eq!(started.supervisor_pid, Some(4_000_001));
+        let stored = load_in(root.path(), "lateack").expect("stored run");
+        assert_eq!(stored.pid, Some(4_000_002));
+        assert_eq!(stored.exit_code, Some(0));
+        assert_eq!(state(&stored), RunState::Finished);
+    }
+
+    fn never_ours(_pid: u32, _markers: &[&str]) -> bool {
+        false
+    }
+
+    #[test]
+    fn a_launcher_that_never_writes_the_record_still_leaves_its_pid_on_disk() {
+        let root = tempfile::tempdir().expect("root");
+        launch_in(root.path(), fixture("silent"), |_| Ok(4_000_001)).expect("launch");
+        let stored = load_in(root.path(), "silent").expect("stored run");
+        assert_eq!(stored.supervisor_pid, Some(4_000_001));
+        assert_eq!(state(&stored), RunState::Lost);
+    }
+
+    #[test]
+    fn a_run_whose_supervisor_never_reported_is_lost_after_the_grace_and_can_be_removed() {
+        let root = tempfile::tempdir().expect("root");
+        let mut run = fixture("neverup");
+        run.started_at = Utc::now() - chrono::Duration::seconds(LAUNCH_GRACE_SECS + 1);
+        save_in(root.path(), &run).expect("record");
+        assert_eq!(
+            state_at(&fixture("neverup"), Utc::now(), &never_ours),
+            RunState::Running
+        );
+        assert_eq!(state_at(&run, Utc::now(), &never_ours), RunState::Lost);
+        let error = stop_in(root.path(), run, &never_ours, std::time::Duration::ZERO)
+            .expect_err("nothing to stop");
+        assert!(error.to_string().contains("nothing to stop"));
+        remove_in(root.path(), "neverup", &never_ours).expect("remove a lost run");
+        assert!(!root.path().join("neverup").exists());
+    }
+
+    #[test]
+    fn a_live_process_that_is_not_this_run_is_never_signalled() {
+        let root = tempfile::tempdir().expect("root");
+        let mut run = fixture("reused");
+        run.session_id = "a8d3b0e2-reused-session-never-on-a-command-line".to_string();
+        run.supervisor_pid = Some(std::process::id());
+        run.pid = Some(std::process::id());
+        save_in(root.path(), &run).expect("record");
+        assert_eq!(state(&run), RunState::Lost);
+        let error = stop_in(root.path(), run, &process_runs, std::time::Duration::ZERO)
+            .expect_err("a reused pid is not this run");
+        assert!(error.to_string().contains("nothing to stop"));
+        assert!(!load_in(root.path(), "reused").expect("stored").stopped);
+        remove_in(root.path(), "reused", &process_runs).expect("remove");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stop_signals_its_own_supervisor_and_records_the_run_as_stopped() {
+        let root = tempfile::tempdir().expect("root");
+        let mut command = std::process::Command::new("/bin/sh");
+        command.args([
+            "-c",
+            "sleep 30; :",
+            "agi",
+            "background",
+            "supervise",
+            "ownedstop",
+        ]);
+        detach(&mut command);
+        let mut supervisor = command.spawn().expect("supervisor fixture");
+        let mut run = fixture("ownedstop");
+        run.supervisor_pid = Some(supervisor.id());
+        save_in(root.path(), &run).expect("record");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while state(&run) != RunState::Running && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert_eq!(state(&run), RunState::Running);
+
+        let stopped = stop_in(
+            root.path(),
+            run,
+            &process_runs,
+            std::time::Duration::from_secs(5),
+        )
+        .expect("stop");
+        let status = supervisor.wait().expect("reap the supervisor fixture");
+        assert!(!status.success());
+        assert!(stopped.stopped);
+        assert!(stopped.finished_at.is_some());
+        assert_eq!(state(&stopped), RunState::Stopped);
+    }
+
+    #[test]
+    fn a_supervisor_that_cannot_launch_leaves_a_failed_record() {
+        let root = tempfile::tempdir().expect("root");
+        let error = launch_in(root.path(), fixture("nolaunch"), |_| {
+            anyhow::bail!("supervisor fixture refused")
+        })
+        .expect_err("launch failure");
+        assert!(error.to_string().contains("supervisor fixture refused"));
+        let stored = load_in(root.path(), "nolaunch").expect("stored run");
+        assert_eq!(state(&stored), RunState::Failed);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_supervisor_owns_its_pid_and_keeps_a_stop_recorded_while_it_ran() {
+        let root = tempfile::tempdir().expect("root");
+        save_in(root.path(), &fixture("owned")).expect("initial record");
+        supervise_in(root.path(), "owned", |run| {
+            assert_eq!(run.supervisor_pid, Some(std::process::id()));
+            update_in(root.path(), &run.id, |stored| stored.stopped = true)?;
+            Ok(std::process::Command::new("/bin/sh")
+                .args(["-c", "exit 3"])
+                .spawn()?)
+        })
+        .expect("supervise");
+        let stored = load_in(root.path(), "owned").expect("stored run");
+        assert_eq!(stored.supervisor_pid, Some(std::process::id()));
+        assert!(stored.pid.is_some());
+        assert_eq!(stored.exit_code, Some(3));
+        assert_eq!(state(&stored), RunState::Stopped);
+    }
 }

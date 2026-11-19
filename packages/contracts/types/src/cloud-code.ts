@@ -134,6 +134,7 @@ export interface CloudCodeSharedSession {
   updatedAt: string;
   terminalEntries: CloudCodeTerminalEntry[];
   turns: CloudCodeAgentTurnRecord[];
+  turnsTruncated?: boolean;
 }
 
 export function cloudCodeSessionIsBusy(session: Pick<CloudCodeSession, 'state'>): boolean {
@@ -220,6 +221,7 @@ export const CLOUD_CODE_SESSION_COPY = Object.freeze({
   agentWorking: 'Working',
   unarchiveSession: 'Unarchive',
   archivedBanner: 'This session is archived. Unarchive it to keep working in this session.',
+  earlierTurnsNotShown: 'Earlier turns of this session are not shown here.',
 });
 
 export function cloudCodeCommandRanLabel(count: number): string {

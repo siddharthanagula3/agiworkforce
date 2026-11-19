@@ -4,6 +4,7 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Image } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { preferredImpactHaptic } from '@/src/shared/utils/haptics';
 import { Text } from '@/components/ui/Text';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useThemeColors, zIndex } from '@/src/ui/theme';
@@ -68,7 +69,7 @@ function GeneratedImageOwner({
     const operation = Symbol('image share');
     operationRef.current = operation;
     const isCurrent = () => lifetimeRef.current === lifetime && operationRef.current === operation;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    preferredImpactHaptic(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await shareGeneratedImage(imageUrl, undefined, { isCurrent });
     } catch {

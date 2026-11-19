@@ -38,6 +38,11 @@ const GALLERY_LIMIT = 50;
  */
 type GalleryReport = ResearchReport & { query?: string; model?: string; provider?: string };
 
+interface ReportsPage {
+  reports?: GalleryReport[];
+  nextCursor?: string | null;
+}
+
 /** Short absolute date; a research report is an artifact, not a live feed. */
 function formatCreatedAt(iso: string): string {
   const date = new Date(iso);
@@ -102,6 +107,33 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [openReport, setOpenReport] = useState<GalleryReport | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const response = await fetch(
+        `/api/research/reports?limit=${GALLERY_LIMIT}&cursor=${encodeURIComponent(nextCursor)}`,
+        { credentials: 'same-origin' },
+      );
+      if (!response.ok) throw new Error(`Could not load reports (${response.status})`);
+      const body = (await response.json()) as ReportsPage;
+      const older = body.reports ?? [];
+      setReports((current) => {
+        const known = new Set(current.map((report) => report.id));
+        return [...current, ...older.filter((report) => !known.has(report.id))];
+      });
+      setNextCursor(body.nextCursor ?? null);
+    } catch (fetchError) {
+      setMoreError(toUserMessage(fetchError, 'Could not load older reports'));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor]);
 
   const load = useCallback(async (signal: AbortSignal) => {
     setState('loading');
@@ -112,8 +144,9 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
         credentials: 'same-origin',
       });
       if (!response.ok) throw new Error(`Could not load reports (${response.status})`);
-      const body = (await response.json()) as { reports?: GalleryReport[] };
+      const body = (await response.json()) as ReportsPage;
       setReports(body.reports ?? []);
+      setNextCursor(body.nextCursor ?? null);
       setState('loaded');
     } catch (fetchError) {
       if (signal.aborted) return;
@@ -180,6 +213,23 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
       {reports.map((report) => (
         <ReportRow key={report.id} report={report} onOpen={() => setOpenReport(report)} />
       ))}
+      {moreError ? (
+        <li role="alert" className="px-1 py-2 text-center text-xs text-danger">
+          {moreError}
+        </li>
+      ) : null}
+      {nextCursor ? (
+        <li className="flex justify-center py-2">
+          <button
+            type="button"
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+            className="rounded-lg border border-border/30 px-3 py-1.5 text-caption text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+          >
+            {loadingMore ? 'Loading…' : 'Load older reports'}
+          </button>
+        </li>
+      ) : null}
     </ul>
   );
 }

@@ -11,6 +11,8 @@ import {
 import { Mic } from '@agiworkforce/icons';
 import { Button, Spinner, Textarea } from '@agiworkforce/ui';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
+import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { readBrowserPairing, type BrowserPairing } from '../lib/browser-pairing';
@@ -28,12 +30,12 @@ const DICTATE_LABEL = 'Start voice input';
 
 const HEADING = 'Your computer';
 const INTRO =
-  'Send a task to Desktop on your own computer. It runs there as a chat that can use the folders, apps and browser you allowed on that computer, and the answer comes back here.';
+  'Run a task in Desktop on your computer, with the folders, apps and browser you allowed there.';
 const COMPUTERS_HEADING = 'Computers on your account';
 const NO_COMPUTERS = 'No computer with Desktop is linked to this account yet.';
 const NEEDS_UPDATE = 'update Desktop on it to send tasks';
 const HOW_TO_CONNECT =
-  'On that computer, open Desktop and go to Settings, Capabilities, Remote Control. Choose Pair a phone, then Copy link for a browser, and open the link here or paste it below.';
+  'In Desktop, open Settings, Capabilities, Remote Control, Pair a phone, then Copy link for a browser. Paste it below.';
 const LINK_LABEL = 'Pairing link';
 const LINK_PLACEHOLDER = 'Paste the link copied on your computer';
 const LINK_INVALID = 'That is not a pairing link from Desktop. Copy it again on your computer.';
@@ -48,6 +50,11 @@ const SEND_FAILED = 'The task did not reach your computer. Check the connection 
 const CANCEL_LABEL = 'Cancel';
 const SEND_AGAIN_LABEL = 'Send again';
 const CONNECT_FAILED = 'This browser could not connect to your computer.';
+const CANCEL_FAILED =
+  'The cancel request did not reach your computer. Check the connection and try again.';
+const RESEND_FAILED = 'The task could not be sent again. Check the connection and try again.';
+const PREVIOUS_CONNECTION =
+  'Connection closed. This is the last status received; check the computer it was sent to.';
 
 const PRESENCE_COPY: Readonly<Record<DevicePresence, string>> = {
   online: 'online',
@@ -73,6 +80,7 @@ interface RemoteTask extends Partial<RemoteTaskStatus> {
   requestId: string;
   prompt: string;
   status: DispatchTaskLifecycleStatus;
+  connectionAttempt: number;
 }
 
 type ConnectionPhase = 'idle' | 'connecting' | 'waiting' | 'away' | 'connected';
@@ -139,9 +147,13 @@ export function RemoteComputerPage() {
     };
   }, []);
 
-  const applyStatus = useCallback((status: RemoteTaskStatus) => {
+  const applyStatus = useCallback((status: RemoteTaskStatus, connectionAttempt: number) => {
     setTasks((current) =>
-      current.map((task) => (task.requestId === status.requestId ? { ...task, ...status } : task)),
+      current.map((task) =>
+        task.requestId === status.requestId && task.connectionAttempt === connectionAttempt
+          ? { ...task, ...status }
+          : task,
+      ),
     );
   }, []);
 
@@ -169,7 +181,7 @@ export function RemoteComputerPage() {
             if (live()) setPhase('away');
           },
           onTaskStatus: (status) => {
-            if (live()) applyStatus(status);
+            if (live()) applyStatus(status, current);
           },
           onClosed: (message) => {
             if (!live()) return;
@@ -232,7 +244,24 @@ export function RemoteComputerPage() {
     }
     setError(null);
     setDraft((current) => (current.trim() === prompt ? '' : current));
-    setTasks((current) => [{ requestId, prompt, status: 'queued' }, ...current]);
+    setTasks((current) => [
+      { requestId, prompt, status: 'queued', connectionAttempt: targetAttempt },
+      ...current,
+    ]);
+  };
+
+  const cancelTask = async (task: RemoteTask) => {
+    const target = connection.current;
+    if (!target || task.connectionAttempt !== attempt.current) return;
+    const sent = await target.cancelTask(task.requestId, task.taskId);
+    if (mounted.current && connection.current === target && !sent) setError(CANCEL_FAILED);
+  };
+
+  const resendTask = async (task: RemoteTask) => {
+    const target = connection.current;
+    if (!target || task.connectionAttempt !== attempt.current) return;
+    const sent = await target.resendTask(task.requestId);
+    if (mounted.current && connection.current === target && !sent) setError(RESEND_FAILED);
   };
 
   const dictationConnection = connection.current;
@@ -256,12 +285,12 @@ export function RemoteComputerPage() {
   });
 
   return (
-    <main
-      id="main-content"
-      className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 text-foreground"
-    >
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 text-foreground">
       <header className="flex flex-col gap-2">
-        <Link href={CODE_PATH} className="text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href={CODE_PATH}
+          className="inline-flex items-center self-start text-sm text-muted-foreground hover:text-foreground pointer-coarse:min-h-11"
+        >
           Code
         </Link>
         <h1 className="text-2xl font-semibold">{HEADING}</h1>
@@ -337,6 +366,7 @@ export function RemoteComputerPage() {
                 type="button"
                 variant="outline"
                 size="icon"
+                className="pointer-coarse:h-11 pointer-coarse:w-11"
                 aria-label={DICTATE_LABEL}
                 onClick={dictation.start}
               >
@@ -392,51 +422,66 @@ export function RemoteComputerPage() {
       {tasks.length > 0 ? (
         <section className="flex flex-col gap-3" aria-label="Tasks sent to your computer">
           <ul className="flex flex-col gap-3">
-            {tasks.map((task) => (
-              <li
-                key={task.requestId}
-                className="flex flex-col gap-1 rounded-lg border border-border p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="line-clamp-2 text-sm">{task.prompt}</p>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {runStatusLabel(task.status)}
-                  </span>
-                </div>
-                {task.message ? (
-                  <p className="text-xs text-muted-foreground">{task.message}</p>
-                ) : null}
-                {task.result ? <p className="whitespace-pre-wrap text-sm">{task.result}</p> : null}
-                {task.error ? <p className="text-sm text-danger-text">{task.error}</p> : null}
-                {OPEN_STATUSES.has(task.status) && phase === 'connected' ? (
-                  <div className="flex gap-2">
-                    {task.unconfirmed ? (
+            {tasks.map((task) => {
+              const owned = task.connectionAttempt === attempt.current;
+              return (
+                <li
+                  key={task.requestId}
+                  className="flex flex-col gap-1 rounded-lg border border-border p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="line-clamp-2 text-sm">{task.prompt}</p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {runStatusLabel(task.status)}
+                    </span>
+                  </div>
+                  {task.message ? (
+                    <p className="text-xs text-muted-foreground">{task.message}</p>
+                  ) : null}
+                  {task.result ? (
+                    <p className="whitespace-pre-wrap text-sm">{task.result}</p>
+                  ) : null}
+                  {task.error ? <p className="text-sm text-danger-text">{task.error}</p> : null}
+                  {OPEN_STATUSES.has(task.status) && !owned ? (
+                    <p className="text-xs text-muted-foreground">{PREVIOUS_CONNECTION}</p>
+                  ) : null}
+                  {OPEN_STATUSES.has(task.status) && owned && phase === 'connected' ? (
+                    <div className="flex gap-2">
+                      {task.unconfirmed ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void resendTask(task)}
+                        >
+                          {SEND_AGAIN_LABEL}
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => void connection.current?.resendTask(task.requestId)}
+                        onClick={() => void cancelTask(task)}
                       >
-                        {SEND_AGAIN_LABEL}
+                        {CANCEL_LABEL}
                       </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        void connection.current?.cancelTask(task.requestId, task.taskId)
-                      }
-                    >
-                      {CANCEL_LABEL}
-                    </Button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
-    </main>
+    </div>
+  );
+}
+
+export function RemoteComputerScreen() {
+  const phone = useShellLayout().tier === 'compact';
+  return (
+    <WebAppShell rail={phone}>
+      <RemoteComputerPage />
+    </WebAppShell>
   );
 }

@@ -67,13 +67,10 @@ const ShareMessagesSchema = z
     'messages exceed the size limit',
   );
 
-const ShareSnapshotSchema = z.object({
-  title: z.string().min(1).max(200).default('Shared Session'),
-  model_id: z.string().nullish(),
-  provider: z.string().nullish(),
-});
+const DEFAULT_SHARE_TITLE = 'Shared Session';
+const SHARE_TITLE_MAX_CHARS = 200;
 
-const CreateShareSchema = ShareSnapshotSchema.extend({
+const CreateShareSchema = z.object({
   conversation_id: z.string().uuid().optional(),
   messages: ShareMessagesSchema.default([]),
   expires_in_days: z
@@ -81,7 +78,7 @@ const CreateShareSchema = ShareSnapshotSchema.extend({
     .default(DEFAULT_SHARE_EXPIRY_DAYS),
 });
 
-const RefreshSharesSchema = ShareSnapshotSchema.extend({
+const RefreshSharesSchema = z.object({
   tokens: z.array(z.string().min(1)).min(1).max(SHARE_LIST_LIMIT),
   messages: ShareMessagesSchema.min(1, 'A link cannot be updated to an empty chat.'),
 });
@@ -154,17 +151,25 @@ function requireConversationQuery(request: NextRequest, refusal: string): string
   return query.data.conversation_id;
 }
 
+interface ShareableConversation {
+  organizationId: string | null;
+  title: string | null;
+  model: string | null;
+}
+
 async function requireShareableConversation(
   db: DatabaseAdapter,
   request: NextRequest,
   conversationId: string,
   userId: string,
-): Promise<string | null> {
+): Promise<ShareableConversation> {
   const [conversation] = await db.query<{
     is_temporary: boolean;
     organization_id: string | null;
+    title: string | null;
+    model: string | null;
   }>(
-    `select is_temporary, organization_id
+    `select is_temporary, organization_id, title, model
        from web_conversations
       where id = $1 and user_id = $2 and deleted_at is null
       limit 1`,
@@ -184,7 +189,143 @@ async function requireShareableConversation(
     organizationId,
     SHARE_IN_OTHER_WORKSPACE_MESSAGE,
   );
-  return organizationId;
+  return {
+    organizationId,
+    title: typeof conversation.title === 'string' ? conversation.title : null,
+    model: typeof conversation.model === 'string' ? conversation.model : null,
+  };
+}
+
+const UNSAVED_CHAT_SHARE_REFUSAL =
+  'Only a chat saved to your account can be shared. Turn on sync for this chat, then share it again.';
+const SNAPSHOT_MISMATCH_REFUSAL =
+  'This chat has changes that are not saved to your account yet. Wait for them to save, then share again.';
+
+interface StoredTranscriptRow {
+  role: string | null;
+  content: string | null;
+  model: string | null;
+  provider: string | null;
+}
+
+interface VerifiedSnapshot {
+  title: string;
+  modelId: string | null;
+  provider: string | null;
+}
+
+function transcriptKey(role: unknown, content: unknown): string | null {
+  if (typeof role !== 'string' || typeof content !== 'string') return null;
+  return `${role}\u0000${content.trim()}`;
+}
+
+function snapshotArtifactContents(messages: Array<Record<string, unknown>>): string[] {
+  return messages.flatMap((message) => {
+    const artifacts = message['artifacts'];
+    if (!Array.isArray(artifacts)) return [];
+    return artifacts.map((artifact: unknown) => {
+      const content =
+        artifact && typeof artifact === 'object'
+          ? (artifact as Record<string, unknown>)['content']
+          : undefined;
+      return typeof content === 'string' ? content.trim() : '';
+    });
+  });
+}
+
+function messagesMatchStored(
+  messages: Array<Record<string, unknown>>,
+  stored: readonly StoredTranscriptRow[],
+): boolean {
+  const available = new Map<string, number>();
+  for (const row of stored) {
+    const key = transcriptKey(row.role, row.content ?? '');
+    if (key !== null) available.set(key, (available.get(key) ?? 0) + 1);
+  }
+  for (const message of messages) {
+    const key = transcriptKey(message['role'], message['content']);
+    const remaining = key === null ? 0 : (available.get(key) ?? 0);
+    if (key === null || remaining === 0) return false;
+    available.set(key, remaining - 1);
+  }
+  return true;
+}
+
+async function artifactsMatchStored(
+  db: DatabaseAdapter,
+  userId: string,
+  conversationId: string,
+  organizationId: string | null,
+  messages: Array<Record<string, unknown>>,
+  stored: readonly StoredTranscriptRow[],
+): Promise<boolean> {
+  const claimed = snapshotArtifactContents(messages);
+  if (claimed.length === 0) return true;
+  const storedArtifacts = await db.query<{ content: string | null }>(
+    `select artifact.content
+       from web_artifacts artifact
+      where artifact.conversation_id = $1
+        and artifact.user_id = $2
+        and artifact.organization_id is not distinct from $3::uuid
+        and artifact.deleted_at is null`,
+    [conversationId, userId, organizationId],
+  );
+  const artifactContents = new Set(
+    storedArtifacts.map((artifact) => (artifact.content ?? '').trim()),
+  );
+  const messageContents = stored.map((row) => row.content ?? '');
+  return claimed.every(
+    (content) =>
+      content.length > 0 &&
+      (artifactContents.has(content) || messageContents.some((text) => text.includes(content))),
+  );
+}
+
+async function verifySnapshotAgainstStored(
+  db: DatabaseAdapter,
+  userId: string,
+  conversationId: string,
+  conversation: ShareableConversation,
+  messages: Array<Record<string, unknown>>,
+): Promise<VerifiedSnapshot> {
+  const stored = await db.query<StoredTranscriptRow>(
+    `select message.role, message.content, message.model, message.provider
+       from web_messages message
+       join web_conversations conversation on conversation.id = message.conversation_id
+      where message.conversation_id = $1
+        and conversation.user_id = $2
+        and conversation.organization_id is not distinct from $3::uuid
+        and conversation.deleted_at is null
+        and message.deleted_at is null
+      order by message.created_at asc, message.id asc`,
+    [conversationId, userId, conversation.organizationId],
+  );
+  if (
+    !messagesMatchStored(messages, stored) ||
+    !(await artifactsMatchStored(
+      db,
+      userId,
+      conversationId,
+      conversation.organizationId,
+      messages,
+      stored,
+    ))
+  ) {
+    logger.warn(
+      { userId, conversationId, submitted: messages.length, stored: stored.length },
+      '[share] snapshot does not match the stored conversation; refusing to publish',
+    );
+    throw createError.conflict(SNAPSHOT_MISMATCH_REFUSAL);
+  }
+  const answeredBy = [...stored]
+    .reverse()
+    .find((row) => row.role === 'assistant' && typeof row.model === 'string' && row.model);
+  const title = conversation.title?.trim().slice(0, SHARE_TITLE_MAX_CHARS);
+  return {
+    title: title || DEFAULT_SHARE_TITLE,
+    modelId: answeredBy?.model ?? conversation.model,
+    provider: answeredBy?.provider ?? null,
+  };
 }
 
 type LiveLinkRow = { id: string; visibility: string; organization_id: string | null };
@@ -368,30 +509,36 @@ async function handleCreateShare(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
 
+  const accountLimitResponse = await withRateLimit(
+    request,
+    'share-create-account-day',
+    `user:${userId}`,
+  );
+  if (accountLimitResponse) return accountLimitResponse;
+
   const db = getNeonDb();
 
   const parsed = CreateShareSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error);
   }
-  const {
-    conversation_id: conversationId,
-    title,
-    model_id,
-    provider,
-    messages,
-    expires_in_days: expiresInDays,
-  } = parsed.data;
+  const { conversation_id: conversationId, messages, expires_in_days: expiresInDays } = parsed.data;
+  if (!conversationId) throw createError.validation(UNSAVED_CHAT_SHARE_REFUSAL);
 
-  const conversationOrganizationId = conversationId
-    ? await requireShareableConversation(db, request, conversationId, userId)
-    : null;
+  const conversation = await requireShareableConversation(db, request, conversationId, userId);
 
   const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
-    conversationOrganizationId,
+    conversation.organizationId,
   ]);
   if (sharingGateResponse) return sharingGateResponse;
 
+  const snapshot = await verifySnapshotAgainstStored(
+    db,
+    userId,
+    conversationId,
+    conversation,
+    messages,
+  );
   const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
@@ -404,12 +551,12 @@ async function handleCreateShare(request: NextRequest) {
     [
       randomBytes(18).toString('base64url'),
       userId,
-      title,
-      model_id ?? null,
-      provider ?? null,
+      snapshot.title,
+      snapshot.modelId,
+      snapshot.provider,
       JSON.stringify(sanitized.messages),
       sanitized.messages.length,
-      conversationId ?? null,
+      conversationId,
       shareExpiresAt(expiresInDays),
     ],
   );
@@ -451,6 +598,13 @@ async function handleRefreshConversationShares(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
 
+  const accountLimitResponse = await withRateLimit(
+    request,
+    'share-create-account-day',
+    `user:${userId}`,
+  );
+  if (accountLimitResponse) return accountLimitResponse;
+
   const conversationId = requireConversationQuery(
     request,
     'Name the conversation whose links to update',
@@ -459,26 +613,28 @@ async function handleRefreshConversationShares(request: NextRequest) {
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error);
   }
-  const { tokens, title, model_id, provider, messages } = parsed.data;
+  const { tokens, messages } = parsed.data;
 
   const db = getNeonDb();
 
-  const conversationOrganizationId = await requireShareableConversation(
-    db,
-    request,
-    conversationId,
-    userId,
-  );
+  const conversation = await requireShareableConversation(db, request, conversationId, userId);
   const links = await readLiveLinks(db, userId, conversationId, tokens);
   if (links.length === 0) throw nothingToUpdate();
   const audienceGateResponse = await buildLinkAudienceGateResponse(
     request,
     userId,
-    conversationOrganizationId,
+    conversation.organizationId,
     links,
   );
   if (audienceGateResponse) return audienceGateResponse;
 
+  const snapshot = await verifySnapshotAgainstStored(
+    db,
+    userId,
+    conversationId,
+    conversation,
+    messages,
+  );
   const sanitized = await inspectSnapshot(db, userId, conversationId, messages);
   const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
@@ -502,9 +658,9 @@ async function handleRefreshConversationShares(request: NextRequest) {
       userId,
       conversationId,
       tokens,
-      title,
-      model_id ?? null,
-      provider ?? null,
+      snapshot.title,
+      snapshot.modelId,
+      snapshot.provider,
       JSON.stringify(sanitized.messages),
       sanitized.messages.length,
       links.map((link) => link.id),
@@ -572,7 +728,7 @@ async function handleListShares(request: NextRequest) {
     complete: rows.length <= SHARE_LIST_LIMIT,
     shares: rows.slice(0, SHARE_LIST_LIMIT).map((row) => ({
       token: row.token,
-      title: row.title ?? 'Shared Session',
+      title: row.title ?? DEFAULT_SHARE_TITLE,
       shareUrl: `${SITE_URL}/share/${row.token}`,
       modelId: row.model_id,
       provider: row.provider,

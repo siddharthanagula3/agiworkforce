@@ -1,14 +1,10 @@
-import { Menu, Tray, app, nativeImage } from 'electron';
+import { Menu, Notification, Tray, app, nativeImage } from 'electron';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
-import { getShortcuts, saveSettings } from './settingsStore';
-import {
-  registerGarnishShortcuts,
-  shortcutRegistrations,
-  shortcutStatusDetail,
-  unregisterGarnishShortcuts,
-} from './shortcuts';
+import { getShortcuts } from './settingsStore';
+import { createNativeNotification } from './runtime/nativeSurface';
+import { changeGarnishShortcuts, shortcutRegistrations, shortcutStatusDetail } from './shortcuts';
 import {
   SHORTCUT_KEYS,
   SHORTCUT_LABELS,
@@ -48,6 +44,7 @@ export interface TrayHandlers {
 }
 
 const MENU_LABEL_LIMIT = 60;
+const SHORTCUT_REFUSED_TITLE = 'Shortcut not changed';
 
 let tray: Tray | null = null;
 
@@ -74,17 +71,21 @@ function trayImage(): Electron.NativeImage {
 }
 
 function applyShortcut(key: ShortcutKey, value: string, handlers: TrayHandlers): void {
-  saveSettings({ [key]: value });
-  unregisterGarnishShortcuts();
-  registerGarnishShortcuts({
-    onQuickAsk: handlers.onQuickAsk,
-    onNewChat: handlers.onNewChatWindow,
-    onScreenshot: handlers.onScreenshot,
-    onWindowShot: handlers.onWindowShot,
-    onVoice: handlers.onVoice,
-    onStop: handlers.onStopAgents,
-  });
+  const refusal = changeGarnishShortcuts(
+    { [key]: value },
+    {
+      onQuickAsk: handlers.onQuickAsk,
+      onNewChat: handlers.onNewChatWindow,
+      onScreenshot: handlers.onScreenshot,
+      onWindowShot: handlers.onWindowShot,
+      onVoice: handlers.onVoice,
+      onStop: handlers.onStopAgents,
+    },
+  );
   refreshTrayMenu(handlers);
+  if (refusal && Notification.isSupported()) {
+    createNativeNotification({ title: SHORTCUT_REFUSED_TITLE, body: refusal }).show();
+  }
 }
 
 function shortcutChoiceItems(

@@ -7,7 +7,7 @@ import {
   planSiteToolCall,
   type SiteToolEffect,
 } from './features/tools/siteToolRegistry';
-import { authorizeBrowserToolUrl } from './features/browser-tools/tabAuthority';
+import { authorizeSiteToolDestination } from './features/content/workerAccess';
 
 function escapeAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -313,6 +313,53 @@ async function callToolImperative(
   return null;
 }
 
+const nativeFormAction = Object.getOwnPropertyDescriptor(
+  typeof HTMLFormElement === 'undefined' ? {} : HTMLFormElement.prototype,
+  'action',
+)?.get;
+
+function resolveFormDestination(form: HTMLFormElement): string {
+  const resolved = nativeFormAction ? nativeFormAction.call(form) : null;
+  if (typeof resolved !== 'string' || !resolved)
+    throw new Error('The site-tool form destination could not be resolved.');
+  return new URL(resolved).href;
+}
+
+function applyToolArgument(
+  key: string,
+  value: unknown,
+  fields: ReadonlyArray<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null {
+  const first = fields[0];
+  if (!first) return null;
+  const text = String(value);
+  if (first instanceof HTMLInputElement && first.type === 'radio') {
+    const choice = fields.find(
+      (candidate): candidate is HTMLInputElement =>
+        candidate instanceof HTMLInputElement && candidate.value === text,
+    );
+    if (!choice) throw new Error(`"${key}" has no option "${text}".`);
+    choice.checked = true;
+    return choice;
+  }
+  if (first instanceof HTMLInputElement && first.type === 'checkbox') {
+    const checkbox =
+      typeof value === 'boolean'
+        ? first
+        : fields.find(
+            (candidate): candidate is HTMLInputElement =>
+              candidate instanceof HTMLInputElement && candidate.value === text,
+          );
+    if (!checkbox) throw new Error(`"${key}" has no option "${text}".`);
+    checkbox.checked = typeof value === 'boolean' ? value : true;
+    return checkbox;
+  }
+  first.value = text;
+  if (first instanceof HTMLSelectElement && first.value !== text)
+    throw new Error(`"${key}" has no option "${text}".`);
+  return first;
+}
+
 function callToolViaDom(
   name: string,
   args: Record<string, unknown>,
@@ -323,10 +370,13 @@ function callToolViaDom(
   try {
     for (const [key, value] of Object.entries(args)) {
       assertCurrent?.();
-      const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+      const fields = Array.from(
+        form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+          `[name="${escapeAttrValue(key)}"]`,
+        ),
+      );
+      const field = applyToolArgument(key, value, fields);
       if (field) {
-        field.value = String(value);
         assertCurrent?.();
         field.dispatchEvent(new Event('input', { bubbles: true }));
         assertCurrent?.();
@@ -416,18 +466,14 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
 
   let assertFormCurrent: (() => void) | undefined;
   if (request.assertCurrent) {
-    const destination = new URL(
-      fallbackForm.getAttribute('action') || window.location.href,
-      window.location.href,
-    ).href;
-    await authorizeBrowserToolUrl(destination);
+    const destination = resolveFormDestination(fallbackForm);
+    await authorizeSiteToolDestination(destination);
     assertFormCurrent = (): void => {
       request.assertCurrent!();
       if (
         !fallbackForm.isConnected ||
         findToolForm(name) !== fallbackForm ||
-        new URL(fallbackForm.getAttribute('action') || window.location.href, window.location.href)
-          .href !== destination
+        resolveFormDestination(fallbackForm) !== destination
       )
         throw new Error('The approved site-tool form destination changed.');
     };

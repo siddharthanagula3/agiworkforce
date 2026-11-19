@@ -133,6 +133,7 @@ vi.mock('@/lib/managed-compute-gate', async () => ({
   ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
 
   buildWorkspaceFeatureGateResponse: mockWorkspaceFeatureGate,
+  buildWorkspaceAccessGateResponse: vi.fn(async () => null),
 }));
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
@@ -241,7 +242,7 @@ describe('GET /api/projects · conversation counts', () => {
       .map((call) => String(call[0]))
       .find((sql) => sql.includes('from user_projects'));
     expect(projectSql).toContain('conversation_count');
-    expect(projectSql).toContain('c.organization_id is not distinct from $5::uuid');
+    expect(projectSql).toContain('c.organization_id is not distinct from $4::uuid');
   });
 });
 
@@ -501,7 +502,10 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     const organizationId = '11111111-1111-4111-8111-111111111111';
     mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
     mockNeonExecute.mockResolvedValue(1);
-    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]).mockResolvedValue([]);
+    mockNeonQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'proj-1' }])
+      .mockResolvedValue([]);
 
     const res = await DELETE(makeProjectRequest('proj-1', 'DELETE'), {
       params: Promise.resolve({ id: 'proj-1' }),
@@ -510,6 +514,11 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     expect(res.status).toBe(200);
     expect(mockNeonQuery).toHaveBeenNthCalledWith(
       1,
+      expect.stringContaining('pg_advisory_xact_lock_shared'),
+      [`agi:legal-hold-placement:${organizationId}`],
+    );
+    expect(mockNeonQuery).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('organization_id is not distinct from $3::uuid'),
       ['proj-1', 'user-abc', organizationId, 'project'],
     );
@@ -544,6 +553,31 @@ describe('POST /api/projects · round-10 fields', () => {
       expect.any(String),
     );
     expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('asks the workspace about the client the credential is bound to, not an unknown one', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+      userId: 'user-abc',
+      organizationId: null,
+      surface: 'vscode',
+    } as never);
+    mockWorkspaceFeatureGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'surface_not_allowed' } }), {
+        status: 403,
+      }) as unknown as null,
+    );
+
+    const res = await POST(makePostRequest({ name: 'Governed project' }));
+
+    expect(res.status).toBe(403);
+    expect(mockWorkspaceFeatureGate).toHaveBeenCalledWith(
+      'user-abc',
+      expect.anything(),
+      'projects',
+      'vscode',
+    );
   });
 
   it('POST accepts round-10 fields and maps them in the response', async () => {

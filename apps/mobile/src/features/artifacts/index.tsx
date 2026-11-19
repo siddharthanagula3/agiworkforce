@@ -402,6 +402,34 @@ function ArtifactsSkeletonGrid({ cardWidth, columns }: { cardWidth: number; colu
   );
 }
 
+type LibrarySaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
+
+interface LibrarySaveReceipt {
+  ownerId: string | null;
+  content: string;
+  status: LibrarySaveStatus;
+}
+
+function artifactOwnerId(artifact: MobileArtifact): string | null {
+  return artifact.provenance?.scope === 'cloud' ? artifact.provenance.ownerId : null;
+}
+
+function receiptFor(artifact: MobileArtifact, status: LibrarySaveStatus): LibrarySaveReceipt {
+  return { ownerId: artifactOwnerId(artifact), content: artifact.content, status };
+}
+
+function receiptMatches(receipt: LibrarySaveReceipt, artifact: MobileArtifact): boolean {
+  return receipt.ownerId === artifactOwnerId(artifact) && receipt.content === artifact.content;
+}
+
+function librarySaveStatusFor(
+  receipts: Readonly<Record<string, LibrarySaveReceipt>>,
+  artifact: MobileArtifact,
+): LibrarySaveStatus {
+  const receipt = receipts[artifact.id];
+  return receipt && receiptMatches(receipt, artifact) ? receipt.status : 'idle';
+}
+
 function ArtifactPreviewModal({
   artifact,
   onClose,
@@ -426,16 +454,27 @@ function ArtifactPreviewModal({
     });
   }, [artifact]);
 
-  const [librarySave, setLibrarySave] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const [librarySaveReceipts, setLibrarySaveReceipts] = useState<
+    Record<string, LibrarySaveReceipt>
+  >({});
+  const librarySave = artifact ? librarySaveStatusFor(librarySaveReceipts, artifact) : 'idle';
 
   const handleSaveToLibrary = useCallback(async () => {
     if (!artifact || librarySave === 'saving') return;
-    setLibrarySave('saving');
+    const record = (status: LibrarySaveStatus) =>
+      setLibrarySaveReceipts((receipts) => {
+        const current = receipts[artifact.id];
+        if (status !== 'saving' && (!current || !receiptMatches(current, artifact))) {
+          return receipts;
+        }
+        return { ...receipts, [artifact.id]: receiptFor(artifact, status) };
+      });
+    record('saving');
     try {
       await saveArtifactToLibrary(artifact);
-      setLibrarySave('saved');
+      record('saved');
     } catch {
-      setLibrarySave('failed');
+      record('failed');
     }
   }, [artifact, librarySave]);
 
@@ -549,8 +588,7 @@ function ArtifactPreviewModal({
               </Text>
             </View>
             <Text className="text-sm leading-[18px]" style={{ color: c.textMuted }}>
-              Mobile previews, copies, and shares artifacts. Regeneration and execution stay on AGI
-              Desktop or AGI Cloud environments.
+              Preview, copy and share here. Run or regenerate on AGI Desktop or AGI Cloud.
             </Text>
           </View>
 

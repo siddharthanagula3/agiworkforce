@@ -122,6 +122,7 @@ describe('every way a run can end has something that ends it', () => {
     'superseded',
     'tab_intent_changed',
     'tab_removed',
+    'takeover_expired',
     'user_cleared',
     'user_stopped',
   ] as const;

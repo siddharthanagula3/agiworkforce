@@ -28,6 +28,7 @@ import {
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
+import { reconcileLoadedCloudMessages } from './reconcileCloudMessages';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
@@ -55,7 +56,11 @@ import {
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import { resolveInterruptedGeneration } from '@/stores/chat/chatCloudMessageStore';
 import { getConversationMessageStore } from './conversationRepository';
-import { cancelVideoGeneration } from '@/src/features/video/services/videogen';
+import {
+  cancelVideoGeneration,
+  generatedVideoFromStatus,
+  getVideoStatus,
+} from '@/src/features/video/services/videogen';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from './chatViewStore';
 import {
@@ -232,6 +237,18 @@ function setConversationUnread(id: string, unread: boolean): void {
   } else {
     getCloudStore().getState().patchCloudConversation(id, { unread });
   }
+}
+
+function hasPartialAssistantText(message: ChatMessage): boolean {
+  return message.role === 'assistant' && message.content.trim().length > 0;
+}
+
+function stoppedByAppExit(message: ChatMessage): ChatMessage {
+  return {
+    ...message,
+    isStreaming: false,
+    metadata: { ...message.metadata, finishReason: 'stopped' },
+  };
 }
 
 export const useChatMessageStore = create<MessageState>()(
@@ -688,7 +705,7 @@ export const useChatMessageStore = create<MessageState>()(
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
-          cloudStore.getState().patchCloudConversation(id, { title });
+          cloudStore.getState().patchCloudConversation(id, { title, userTitlePending: true });
           if (
             shouldSyncConversationRemote(
               cloudStore.getState().conversations.find((c) => c.id === id),
@@ -1208,12 +1225,26 @@ export const useChatMessageStore = create<MessageState>()(
 
       stopImageGeneration: (conversationId, assistantMessageId) => {
         if (!isImageGenerationLive(conversationId, assistantMessageId)) return;
-        void cancelImageGeneration(assistantMessageId).catch(() =>
-          patchGenerationMessage(conversationId, assistantMessageId, {
-            imageGenError:
-              'Stopped on this phone, but AGI Cloud could not be reached to stop the job, so it may still finish.',
-          }),
-        );
+        void cancelImageGeneration(assistantMessageId)
+          .then((receipt) => {
+            const image = receipt?.status === 'completed' ? receipt.images?.[0] : undefined;
+            const imageUrl = getDurableGeneratedImagePath(image);
+            if (!imageUrl) return;
+            patchGenerationMessage(conversationId, assistantMessageId, {
+              isGeneratingImage: true,
+            });
+            get().completeImageGeneration(conversationId, assistantMessageId, {
+              imageUrl,
+              persisted: true,
+              model: receipt?.model,
+            });
+          })
+          .catch(() =>
+            patchGenerationMessage(conversationId, assistantMessageId, {
+              imageGenError:
+                'Stopped on this phone, but AGI Cloud could not be reached to stop the job, so it may still finish.',
+            }),
+          );
         patchGenerationMessage(conversationId, assistantMessageId, {
           content: 'Image generation stopped.',
           isGeneratingImage: false,
@@ -1434,6 +1465,39 @@ export const useChatMessageStore = create<MessageState>()(
 
         try {
           const outcome = await cancelVideoGeneration(target.videoTaskId);
+          if (
+            outcome.cancel_requested !== true &&
+            (outcome.status === 'completed' ||
+              outcome.status === 'failed' ||
+              outcome.status === 'timeout')
+          ) {
+            const finished = await getVideoStatus(target.videoTaskId);
+            if (
+              videoGenerationMessage(conversationId, assistantMessageId)?.isGeneratingVideo !== true
+            ) {
+              return;
+            }
+            if (finished.status === 'completed') {
+              const video = generatedVideoFromStatus(finished);
+              get().completeVideoGeneration(conversationId, assistantMessageId, {
+                videoUrl: video.videoUrl,
+                ...(video.thumbnailUrl ? { thumbnailUrl: video.thumbnailUrl } : {}),
+              });
+              return;
+            }
+            if (finished.status === 'failed' || finished.status === 'timeout') {
+              get().failVideoGeneration(
+                conversationId,
+                assistantMessageId,
+                finished.error || `Video generation ${finished.status}`,
+              );
+              return;
+            }
+            patchGenerationMessage(conversationId, assistantMessageId, {
+              videoGenCancelRequested: false,
+            });
+            return;
+          }
           patchGenerationMessage(conversationId, assistantMessageId, {
             content: outcome.message ?? 'Video generation stopped.',
             isGeneratingVideo: false,
@@ -1495,7 +1559,9 @@ export const useChatMessageStore = create<MessageState>()(
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
           if (conversationIds.has(id)) {
-            messages[id] = msgs.filter((m) => !m.isStreaming).map(resolveInterruptedGeneration);
+            messages[id] = msgs
+              .filter((m) => !m.isStreaming || hasPartialAssistantText(m))
+              .map((m) => resolveInterruptedGeneration(m.isStreaming ? stoppedByAppExit(m) : m));
           }
         }
         return { conversations, messages, currentConversationId: state.currentConversationId };
@@ -1680,42 +1746,6 @@ function shouldLoadRemoteMessages(conversation: ConversationSummary | undefined)
   return useChatAppModeStore.getState().appMode === 'cloud';
 }
 
-interface ReconcileLoadedCloudMessagesInput {
-  serverMessages: ChatMessage[];
-  requestStartMessages: ChatMessage[];
-  currentMessages: ChatMessage[];
-  dirtyMessageIds: Set<string>;
-}
-
-function reconcileLoadedCloudMessages({
-  serverMessages,
-  requestStartMessages,
-  currentMessages,
-  dirtyMessageIds,
-}: ReconcileLoadedCloudMessagesInput): ChatMessage[] {
-  const requestStartById = new Map(requestStartMessages.map((message) => [message.id, message]));
-  const currentById = new Map(currentMessages.map((message) => [message.id, message]));
-  const reconciled = new Map(serverMessages.map((message) => [message.id, message]));
-
-  for (const message of requestStartMessages) {
-    if (!currentById.has(message.id)) reconciled.delete(message.id);
-  }
-
-  for (const message of currentMessages) {
-    const requestStartMessage = requestStartById.get(message.id);
-    const changedDuringRequest =
-      requestStartMessage === undefined || requestStartMessage !== message;
-    if (changedDuringRequest || message.isStreaming || dirtyMessageIds.has(message.id)) {
-      reconciled.set(message.id, message);
-    }
-  }
-
-  return Array.from(reconciled.values()).sort((a, b) => {
-    const createdAtOrder = a.createdAt.localeCompare(b.createdAt);
-    return createdAtOrder === 0 ? a.id.localeCompare(b.id) : createdAtOrder;
-  });
-}
-
 async function createConversationForMode(
   set: (
     partial: Partial<MessageState> | ((state: MessageState) => Partial<MessageState>),
@@ -1744,6 +1774,7 @@ async function createConversationForMode(
       title: title ?? 'New Chat',
       projectId,
       isTemporary,
+      ...(model ? { model } : {}),
     });
     assertCloudAccountEpochCurrent(account);
     const conversation: ConversationSummary = {

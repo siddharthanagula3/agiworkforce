@@ -11,7 +11,7 @@ import type { AgiWorkPlanDecision, AgiWorkPlanStep } from '@/src/features/chat/u
 
 const LABEL = {
   heading: 'Plan',
-  explanation: 'Edit any step before the work starts. The agent follows the plan you start here.',
+  explanation: 'Edit any step before you start. The agent follows this plan.',
   addStep: 'Add a step',
   removeStep: 'Remove this step',
   start: 'Start work',

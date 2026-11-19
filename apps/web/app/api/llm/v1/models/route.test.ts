@@ -77,6 +77,7 @@ function everyRoutedProvider(): Set<string> {
 }
 
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { createError } from '@/lib/errors';
 import {
   listCanonicalModels,
   listChatModels,
@@ -135,6 +136,33 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
       },
     });
     expect(subscriptionMocks.getSubscription).not.toHaveBeenCalled();
+  });
+
+  it('answers a valid bearer whose account check timed out as 503, not as an invalid token', async () => {
+    authMocks.getClerkAuthUser.mockRejectedValueOnce(
+      createError.serviceUnavailable('Unable to verify account status. Please try again shortly.'),
+    );
+
+    const response = await GET(request({ Authorization: 'Bearer valid-token' }));
+
+    expect(response.status).toBe(503);
+    expect(Number(response.headers.get('retry-after'))).toBeGreaterThan(0);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'SERVICE_UNAVAILABLE' },
+    });
+  });
+
+  it('answers a locked-down workspace as 403, not as an invalid token', async () => {
+    authMocks.getClerkAuthUser.mockRejectedValueOnce(
+      createError.forbidden('This workspace is locked down.').asUserSafe(),
+    );
+
+    const response = await GET(request({ Authorization: 'Bearer valid-token' }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'FORBIDDEN', message: 'This workspace is locked down.' },
+    });
   });
 
   it('returns 403 when a valid API key lacks model-read scope', async () => {

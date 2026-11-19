@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -44,13 +44,23 @@ import {
   creditsFromCents,
   creditsFromMicrousd,
   formatCredits as formatCreditsShared,
+  COMPANY_SITE_NAME,
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { ServiceNotices } from '@shared/components/ServiceNotices';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import { EnterpriseCollectionBanner } from '../components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  STORE_SUBSCRIPTION_MANAGEMENT_URL,
+  isStoreBillingSource,
+} from '@/lib/billing/store-subscription-management';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import {
+  PERSONAL_GRANT_PLAN_SENTENCE,
+  PERSONAL_GRANT_SUPPORT_PATH,
+  isPersonalGrantPlan,
+} from '@/features/billing/lib/subscription-owner-presentation';
 
 interface PaymentMethod {
   id: string;
@@ -76,6 +86,7 @@ interface CreditHistoryEntry {
   id: string;
   transaction_type: CreditTransactionType | string;
   amount_cents: number;
+  balance_effect_cents: number;
   description: string | null;
   label?: string | null;
   credits?: number;
@@ -91,12 +102,6 @@ const CREDIT_TRANSACTION_LABELS: Record<string, string> = {
   bonus: 'Bonus credit',
   adjustment: 'Adjustment',
 };
-
-function signedCreditCents(entry: CreditHistoryEntry): number {
-  return entry.transaction_type === 'deduction'
-    ? -Math.abs(entry.amount_cents)
-    : entry.amount_cents;
-}
 
 const CREDIT_FRACTION_DIGITS = 2;
 
@@ -117,15 +122,10 @@ type BillingListState<T> =
   | { status: 'error'; items: T[]; message: string };
 
 const BILLING_SOURCE_LABEL: Record<string, string> = {
-  stripe: 'AGI Workforce (card on file)',
+  stripe: `${COMPANY_SITE_NAME} (card on file)`,
   apple: 'the Apple App Store',
   google: 'Google Play',
   manual: 'your organization',
-};
-
-const STORE_SUBSCRIPTION_URL: Record<string, string> = {
-  apple: 'https://apps.apple.com/account/subscriptions',
-  google: 'https://play.google.com/store/account/subscriptions',
 };
 
 const TERMINAL_BILLING_STATUSES = new Set([
@@ -282,6 +282,12 @@ export function BillingSection() {
   const [planActionError, setPlanActionError] = useState<string | null>(null);
   const [downgradeOpen, setDowngradeOpen] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const planStateRevision = useRef(0);
+
+  function adoptPlanState(state: PlanChangeState) {
+    planStateRevision.current += 1;
+    setPlanState(state);
+  }
 
   async function setOverage(next: boolean) {
     if (overagePending) return;
@@ -326,7 +332,7 @@ export function BillingSection() {
     setPlanActionPending(true);
     setPlanActionError(null);
     try {
-      setPlanState(await keepCurrentPlan());
+      adoptPlanState(await keepCurrentPlan());
     } catch (error) {
       setPlanActionError(
         toUserMessage(error, 'Your plan could not be resumed. Nothing was changed.'),
@@ -355,7 +361,7 @@ export function BillingSection() {
         setPlanActionPending(true);
         setPlanActionError(null);
         try {
-          setPlanState(await scheduleDowngrade(target.plan));
+          adoptPlanState(await scheduleDowngrade(target.plan));
         } catch (error) {
           setPlanActionError(
             toUserMessage(error, 'The switch to monthly billing could not be scheduled.'),
@@ -393,8 +399,16 @@ export function BillingSection() {
   const offersOnlyUpgradeWaitlist = isFreeTier && upgradeNeedsWaitlist(upgradeWaitlistStatus);
 
   const billingSource = subscription?.subscription_source ?? null;
-  const storeManagementUrl = billingSource ? (STORE_SUBSCRIPTION_URL[billingSource] ?? null) : null;
+  const storeManagementUrl = isStoreBillingSource(billingSource)
+    ? STORE_SUBSCRIPTION_MANAGEMENT_URL[billingSource]
+    : null;
   const isStoreBilled = storeManagementUrl !== null;
+  const personalGrant = isPersonalGrantPlan(subscription);
+  const billingSourceLabel = personalGrant
+    ? COMPANY_SITE_NAME
+    : billingSource
+      ? (BILLING_SOURCE_LABEL[billingSource] ?? billingSource)
+      : null;
 
   const isManagedPaid = !isFreeTier && ['active', 'trialing'].includes(subscription?.status ?? '');
   const billingStatus = (subscription?.status ?? 'none').trim().toLowerCase();
@@ -403,16 +417,28 @@ export function BillingSection() {
     isFreeTier ||
     billingOwnerTerminal ||
     (billingSource === 'stripe' && ['active', 'trialing'].includes(billingStatus));
-  const planChangeBlockedCopy =
-    billingSource === 'apple'
-      ? 'Change or cancel this subscription with Apple before starting web billing.'
-      : billingSource === 'google'
-        ? 'Change or cancel this subscription with Google Play before starting web billing.'
-        : billingSource === 'manual'
-          ? 'This plan is managed by your organization. Contact an administrator to change it.'
-          : billingSource === 'stripe'
-            ? 'Resolve the current billing status in Manage billing before changing plans.'
-            : 'Billing ownership is not verified. Refresh your account before changing plans.';
+  const planChangeBlockedCopy = personalGrant ? (
+    <>
+      {PERSONAL_GRANT_PLAN_SENTENCE}{' '}
+      <SettingsPageLink
+        href={PERSONAL_GRANT_SUPPORT_PATH}
+        style={{ color: 'inherit', textDecoration: 'underline' }}
+      >
+        Contact support
+      </SettingsPageLink>{' '}
+      to change it.
+    </>
+  ) : billingSource === 'apple' ? (
+    'Change or cancel this subscription with Apple before starting web billing.'
+  ) : billingSource === 'google' ? (
+    'Change or cancel this subscription with Google Play before starting web billing.'
+  ) : billingSource === 'manual' ? (
+    'This plan is managed by your organization. Contact an administrator to change it.'
+  ) : billingSource === 'stripe' ? (
+    'Resolve the current billing status in Manage billing before changing plans.'
+  ) : (
+    'Billing ownership is not verified. Refresh your account before changing plans.'
+  );
   const hasStripeBilling = billingInitialized && billingSource === 'stripe';
   const canBuyTopUps =
     isManagedPaid &&
@@ -509,6 +535,7 @@ export function BillingSection() {
 
   useEffect(() => {
     let cancelled = false;
+    const revision = ++planStateRevision.current;
     setPlanStateError(null);
     if (!readsPlanState || billingLoading) {
       setPlanState(null);
@@ -516,10 +543,10 @@ export function BillingSection() {
     }
     fetchPlanChangeState()
       .then((state) => {
-        if (!cancelled) setPlanState(state);
+        if (!cancelled && revision === planStateRevision.current) setPlanState(state);
       })
       .catch((error: unknown) => {
-        if (cancelled) return;
+        if (cancelled || revision !== planStateRevision.current) return;
         setPlanState(null);
         setPlanStateError(
           toUserMessage(error, 'Your trial, renewal and plan change details could not be loaded.'),
@@ -677,7 +704,7 @@ export function BillingSection() {
         >
           Billing
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Your plan, credits, and payment details.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
@@ -782,9 +809,7 @@ export function BillingSection() {
             </Row>
             {billingSource && billingSource !== 'none' && (
               <Row label="Billed through">
-                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-                  {BILLING_SOURCE_LABEL[billingSource] ?? billingSource}
-                </span>
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{billingSourceLabel}</span>
               </Row>
             )}
             {periodEndLabel && (
@@ -1137,11 +1162,13 @@ export function BillingSection() {
           <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
             {isStoreBilled
               ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
-              : billingSource === 'manual'
-                ? 'Invoices for this plan are provided by your organization and are not available here.'
-                : isFreeTier
-                  ? 'Invoices appear here once you are billed on a paid plan.'
-                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+              : personalGrant
+                ? 'Invoices for this plan are not available here.'
+                : billingSource === 'manual'
+                  ? 'Invoices for this plan are provided by your organization and are not available here.'
+                  : isFreeTier
+                    ? 'Invoices appear here once you are billed on a paid plan.'
+                    : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
           </p>
         )}
       </div>
@@ -1174,7 +1201,7 @@ export function BillingSection() {
             >
               Keep going after a usage limit
             </p>
-            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 14, color: 'var(--text-3)' }}>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
               {overageAvailableCredits > 0
                 ? `Spend your credits when a usage limit stops you. ${formatCreditsShared(overageAvailableCredits, { maximumFractionDigits: CREDIT_FRACTION_DIGITS })} available.`
                 : 'Spend your credits when a usage limit stops you. Buy credits above to use this.'}
@@ -1236,7 +1263,7 @@ export function BillingSection() {
               </thead>
               <tbody>
                 {creditHistory.items.map((entry, idx) => {
-                  const cents = signedCreditCents(entry);
+                  const cents = entry.balance_effect_cents;
                   return (
                     <tr
                       key={entry.id}
@@ -1312,7 +1339,7 @@ export function BillingSection() {
         open={downgradeOpen}
         onClose={() => setDowngradeOpen(false)}
         onScheduled={(state) => {
-          setPlanState(state);
+          adoptPlanState(state);
           setDowngradeOpen(false);
         }}
       />

@@ -131,6 +131,49 @@ export async function listCloudCodeAgentApprovals(
   }));
 }
 
+export async function findPendingCloudCodeApprovalRequest(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  turnId: string,
+): Promise<NonNullable<CloudCodeAgentTurnOutcome['pendingApproval']> | null> {
+  validateCloudCodeSessionId(sessionId);
+  await retireUndecidableApprovals(db, owner, sessionId);
+  const [row] = await db.query<{
+    step_index: number;
+    command: string;
+    reason: string;
+    tool_name: string;
+    tool_args: unknown;
+  }>(
+    `select a.step_index, a.command, a.reason, a.tool_name, a.tool_args
+       from cloud_code_agent_approvals a
+       join cloud_code_agent_turns t on t.id = a.turn_id
+      where a.turn_id = $1
+        and t.session_id = $2
+        and t.user_id = $3
+        and t.organization_id is not distinct from $4
+        and a.state = 'pending'
+        and t.state = 'awaiting_approval'
+      order by a.created_at asc
+      limit 1`,
+    [turnId, sessionId, owner.userId, owner.organizationId],
+  );
+  if (!row) return null;
+  const args =
+    row.tool_args && typeof row.tool_args === 'object' && !Array.isArray(row.tool_args)
+      ? (row.tool_args as Record<string, unknown>)
+      : {};
+  return {
+    stepIndex: row.step_index,
+    toolUseId: `step-${row.step_index}`,
+    toolName: row.tool_name,
+    args,
+    command: row.command,
+    reason: row.reason,
+  };
+}
+
 function rebuildTurnMessages(goal: string, steps: StepRow[]): ProviderMessage[] {
   const messages: ProviderMessage[] = [{ role: 'user', content: goal }];
   for (const step of steps) {

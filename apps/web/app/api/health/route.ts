@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getCachedHealthChecks,
+  readReadinessHealthChecks,
   NOT_CONFIGURED,
   type DependencyObservation,
   type HealthCheckResult,
@@ -90,12 +90,15 @@ export async function GET(request: NextRequest) {
   // traffic-proportional load generator against the exact dependencies an
   // incident is already straining. `timestamp` in the payload is the moment the
   // checks actually ran, so a cached answer never claims to be fresher than it
-  // is, and an external monitor still sees the real result.
-  const healthCheck = await getCachedHealthChecks();
+  // is, and an external monitor still sees the real result. A result past the
+  // freshness window is not evidence of readiness, so it answers 503 unless a
+  // bounded shared refresh replaces it.
+  const { result: healthCheck, current } = await readReadinessHealthChecks();
 
-  const statusCode = healthCheck.status === 'unhealthy' ? 503 : 200;
+  const statusCode = !current || healthCheck.status === 'unhealthy' ? 503 : 200;
+  const body = toPublicHealthCheck(healthCheck);
 
-  return NextResponse.json(toPublicHealthCheck(healthCheck), {
+  return NextResponse.json(current ? body : { ...body, stale: true }, {
     status: statusCode,
     headers: {
       ...getCorsHeaders(request),

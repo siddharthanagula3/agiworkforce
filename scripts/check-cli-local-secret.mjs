@@ -43,6 +43,8 @@ export const NOT_A_SECRET = {
     'the file name the credential-use trail is written to, not a credential',
   'apps/cli/src/cloud/api_keys.rs:API_KEYS_PATH':
     'the account route that lists and revokes API keys, not a key',
+  'apps/cli/src/features/a2a/registry.rs:TOKEN_REQUIRED_KEY':
+    'the agent-card metadata key that flags a peer as needing a token, whose value is a boolean, not a token',
 };
 
 /**

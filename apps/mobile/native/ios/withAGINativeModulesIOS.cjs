@@ -1,4 +1,5 @@
 const { withXcodeProject, withDangerousMod, createRunOncePlugin } = require('expo/config-plugins');
+const { iosProjectNameFor } = require('./iosProjectName.cjs');
 const fs = require('fs');
 const path = require('path');
 
@@ -91,7 +92,7 @@ function withXcodeSourceFiles(config) {
   return withXcodeProject(config, (c) => {
     const xcodeProject = c.modResults;
     const targetUuid = xcodeProject.getFirstTarget()?.uuid;
-    const appName = c.modRequest.projectName ?? 'AGIMobile';
+    const appName = c.modRequest.projectName ?? iosProjectNameFor(c.name);
     const appGroupKey =
       xcodeProject.findPBXGroupKey({ name: appName }) ||
       xcodeProject.findPBXGroupKey({ path: appName });

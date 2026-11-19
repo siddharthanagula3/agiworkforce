@@ -730,6 +730,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
         />
       ) : (
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           className="flex-1"
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}

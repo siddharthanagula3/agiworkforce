@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { ChevronDown, ChevronUp, X } from '@agiworkforce/icons';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { applyPageFindSelection, pageFindOccurrences } from '../lib/page-find';
@@ -110,6 +111,7 @@ export function PageFindBar() {
             setIndex(0);
           }}
           onKeyDown={(event) => {
+            if (isImeComposingKey(event.nativeEvent)) return;
             if (event.key === 'Escape') {
               event.preventDefault();
               setOpen(false);

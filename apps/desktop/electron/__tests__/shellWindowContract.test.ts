@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -181,7 +182,7 @@ describe('what the reader is told about an update', () => {
       version: '1.2.3',
       downloadUrl: '',
     });
-    expect(prompt).toMatchObject({ type: 'info', title: 'AGI Desktop is up to date' });
+    expect(prompt).toMatchObject({ type: 'info', title: `${PRODUCT_NAMES.desktop} is up to date` });
     expect(prompt.detail).toContain('Installed: 1.2.3');
     expect(prompt.downloadButton).toBeNull();
   });

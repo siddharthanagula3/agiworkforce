@@ -83,6 +83,13 @@ describe('background cleanup cron admission', () => {
     expect(mocks.drain).toHaveBeenCalledWith(expect.objectContaining({ db }));
   });
 
+  it('drains only the region whose database it is connected to', async () => {
+    expect((await GET(request(`Bearer ${secret}`))).status).toBe(200);
+    expect(mocks.drain).toHaveBeenCalledWith(
+      expect.objectContaining({ region: DEFAULT_DATA_REGION }),
+    );
+  });
+
   it('reports a dispatch failure without claiming jobs or exposing internal details', async () => {
     mocks.dispatch.mockRejectedValue(new Error('fixture-private-storage-detail'));
     const response = await GET(request(`Bearer ${secret}`));

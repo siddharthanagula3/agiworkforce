@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-10-31
+Last updated: 2026-11-11
 
 What the owner registers with each vendor so that AGI Workforce connectors sign
 in the way Claude and ChatGPT connectors do. Most connectors need nothing from
@@ -334,7 +334,7 @@ expire. Anthropic's GitHub integration is a GitHub App.
    read-only first, which the descriptor section lists once confirmed.
 5. Where can this app be installed: **Any account**.
 6. Generate a client secret and copy the client ID and secret into the
-   `github` Vercel variables.
+   `github-mcp` Vercel variables; the connector id `github` is reserved.
 
 ## 5. HubSpot
 

@@ -37,6 +37,24 @@ describe('map search card contract', () => {
     expect(MapSearchCardBodySchema.safeParse(body).success).toBe(true);
   });
 
+  it('accepts unresolved stops beside located places and refuses them alone', () => {
+    const located = {
+      view: { latitude: 40, longitude: -86, zoom: 6, attribution: '© OpenStreetMap contributors' },
+      places: [{ label: 'Chicago', latitude: 41.8781, longitude: -87.6298 }],
+    };
+
+    expect(
+      MapSearchCardBodySchema.safeParse({ ...body, ...located, unresolvedStops: ['Indianapolis'] })
+        .success,
+    ).toBe(true);
+    expect(
+      MapSearchCardBodySchema.safeParse({ ...body, unresolvedStops: ['Indianapolis'] }).success,
+    ).toBe(false);
+    expect(
+      MapSearchCardBodySchema.safeParse({ ...body, ...located, unresolvedStops: [] }).success,
+    ).toBe(false);
+  });
+
   it('rejects duplicate providers and unsafe URLs', () => {
     expect(
       MapSearchCardBodySchema.safeParse({

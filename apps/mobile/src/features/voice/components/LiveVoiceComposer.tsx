@@ -52,6 +52,7 @@ export function LiveVoiceComposer({
       interrupted={controller.interrupted}
       turns={controller.turns}
       error={controller.error}
+      routeNotice={controller.routeNotice}
       approvals={controller.approvals}
       toolActivity={controller.toolActivity}
       toolOutcomes={controller.toolOutcomes}

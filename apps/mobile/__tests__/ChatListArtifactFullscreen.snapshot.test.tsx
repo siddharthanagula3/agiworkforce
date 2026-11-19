@@ -69,16 +69,6 @@ jest.mock('@/services/api', () => ({
   api: { post: jest.fn() },
 }));
 
-jest.mock('react-native-reanimated', () => {
-  const RN = require('react-native');
-  return {
-    __esModule: true,
-    default: { View: RN.View },
-    FadeIn: { duration: () => ({ duration: () => ({}) }) },
-    useReducedMotion: () => false,
-  };
-});
-
 jest.mock('react-native-gesture-handler', () => {
   const RN = require('react-native');
   return {
@@ -128,6 +118,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('@agiworkforce/types', () => ({
+  ...jest.requireActual('@agiworkforce/types'),
   summarizeGeneratedFileBundle: () => ({
     title: 'test.py',
     fileName: 'test.py',

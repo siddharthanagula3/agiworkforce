@@ -46,7 +46,7 @@ export default function AutoApproveScreen() {
     >
       <SettingsInfo
         title="Review before AGI acts"
-        body="Approvals apply only when a workflow uses tools, files, services or a paired desktop."
+        body="Applies when AGI uses tools, files, services or a paired desktop."
         icon={SlidersHorizontal}
       />
 

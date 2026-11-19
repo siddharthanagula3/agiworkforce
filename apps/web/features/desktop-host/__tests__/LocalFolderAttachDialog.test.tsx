@@ -107,3 +107,62 @@ describe('LocalFolderAttachDialog row actions', () => {
     expect(openWorkspacePath).not.toHaveBeenCalled();
   });
 });
+
+describe('LocalFolderAttachDialog listing custody', () => {
+  it('drops a folder listing that finishes after another folder was chosen', async () => {
+    const user = userEvent.setup();
+    const second = { ...root, id: 'root-2', name: 'other', path: '/Users/me/other' };
+    const firstListing = { ...entry, name: 'first.md', path: 'first.md' };
+    const secondListing = { ...entry, name: 'second.md', path: 'second.md' };
+    let resolveFirst: (value: unknown) => void = () => undefined;
+    listWorkspaceRoots.mockResolvedValue([root, second]);
+    listWorkspaceFiles.mockImplementation((rootId: string) =>
+      rootId === 'root-1'
+        ? new Promise((resolve) => {
+            resolveFirst = resolve;
+          })
+        : Promise.resolve([secondListing]),
+    );
+    render(<LocalFolderAttachDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'other' }));
+    await screen.findByRole('button', { name: 'second.md' });
+
+    await act(async () => {
+      resolveFirst([firstListing]);
+    });
+
+    expect(screen.queryByRole('button', { name: 'first.md' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'second.md' })).toBeInTheDocument();
+  });
+
+  it('keeps showing the loading state when the retired listing fails', async () => {
+    const user = userEvent.setup();
+    const second = { ...root, id: 'root-2', name: 'other', path: '/Users/me/other' };
+    let rejectFirst: (reason: unknown) => void = () => undefined;
+    let resolveSecond: (value: unknown) => void = () => undefined;
+    listWorkspaceRoots.mockResolvedValue([root, second]);
+    listWorkspaceFiles.mockImplementation((rootId: string) =>
+      rootId === 'root-1'
+        ? new Promise((_resolve, reject) => {
+            rejectFirst = reject;
+          })
+        : new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+    );
+    render(<LocalFolderAttachDialog open onClose={vi.fn()} onAttach={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'other' }));
+    await act(async () => {
+      rejectFirst(new Error('gone'));
+    });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecond([entry]);
+    });
+    expect(await screen.findByRole('button', { name: 'notes.md' })).toBeInTheDocument();
+  });
+});

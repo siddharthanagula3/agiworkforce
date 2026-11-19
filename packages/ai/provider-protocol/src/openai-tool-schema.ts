@@ -60,3 +60,10 @@ export function normalizeOpenAIStrictToolParameters<T>(schema: T, strict: boolea
   }
   return normalizeStrictOpenAIJsonSchema(schema) as T;
 }
+
+export function resolveOpenAIToolStrictness(
+  tool: { strict?: boolean },
+  supportsStrictMode: boolean,
+): boolean | undefined {
+  return supportsStrictMode ? tool.strict : undefined;
+}

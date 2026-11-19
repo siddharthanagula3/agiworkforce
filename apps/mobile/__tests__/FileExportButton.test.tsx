@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('@/src/ui/theme', () => {
   const actual = jest.requireActual('@/src/ui/theme/tokens');
@@ -95,5 +96,49 @@ describe('FileExportButton', () => {
     fireEvent.press(getByLabelText('Export as PDF'));
 
     expect(mockExportToPDF).toHaveBeenCalledWith('Hello world', 'Hello world');
+  });
+
+  it('hands the exported PDF to the share sheet instead of reporting Done for a hidden file', async () => {
+    mockShareFile.mockReset();
+    mockExportToPDF.mockResolvedValue({ uri: 'file://export.pdf' });
+    mockShareFile.mockResolvedValue(undefined);
+    const { getByLabelText, findByText } = render(
+      <FileExportButton content="Hello world" visible onClose={jest.fn()} />,
+    );
+
+    fireEvent.press(getByLabelText('Export as PDF'));
+
+    await findByText('Done!');
+    expect(mockShareFile).toHaveBeenCalledWith('file://export.pdf');
+  });
+
+  it('hands the exported text file to the share sheet', async () => {
+    mockShareFile.mockReset();
+    mockExportToText.mockResolvedValue({ uri: 'file://export.txt' });
+    mockShareFile.mockResolvedValue(undefined);
+    const { getByLabelText, findByText } = render(
+      <FileExportButton content="Hello world" visible onClose={jest.fn()} />,
+    );
+
+    fireEvent.press(getByLabelText('Export as Text'));
+
+    await findByText('Done!');
+    expect(mockShareFile).toHaveBeenCalledWith('file://export.txt');
+  });
+
+  it('tells the user when the file could not be delivered and never shows Done', async () => {
+    mockShareFile.mockReset();
+    mockExportToText.mockResolvedValue({ uri: 'file://export.txt' });
+    mockShareFile.mockRejectedValue(new Error('Sharing is not available on this device'));
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByLabelText, queryByText } = render(
+      <FileExportButton content="Hello world" visible onClose={jest.fn()} />,
+    );
+
+    fireEvent.press(getByLabelText('Export as Text'));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Export Failed', expect.any(String)));
+    expect(queryByText('Done!')).toBeNull();
+    alertSpy.mockRestore();
   });
 });

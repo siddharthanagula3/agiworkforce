@@ -103,13 +103,15 @@ Desktop participates in two continuity domains without merging them:
 
 - **Consumer Cloud.** Conversation inference is Managed Cloud. The public
   Electron dispatcher refuses every command in `LOCAL_INFERENCE_COMMANDS` with
-  `unsupported-platform`. Consumer Desktop does not accept provider API keys or
+  `unsupported-platform`. Desktop chat does not accept provider API keys or
   expose Local/BYOK chat; its device-registry profile reports
-  `localModels: false` and `localMcp: false`. Cloud conversations, projects,
+  `localModels: false`, and `localMcp: true` when the bundled CLI serves MCP
+  servers (managed on the Developer settings page). Cloud conversations, projects,
   memory, settings, connected apps, files/artifacts, and account state share
   the hosted contract with Web and later Mobile/eligible Chrome clients.
 - **Host Developer.** Desktop Code uses the host-owned developer runtime also
-  consumed by CLI and VS Code. Session IDs/transcripts, workspace tools and
+  consumed by CLI and VS Code: a local coding session runs the bundled CLI, which
+  can use a local model or a provider key set up in the CLI. Session IDs/transcripts, workspace tools and
   extensions, permission decisions, approved repositories/files, and local
   credential references are host state. Provider or tool secrets stay in the
   operating-system credential store and are not inherited by Consumer Cloud.
@@ -136,8 +138,9 @@ The executable owners are:
 ## Renderer and IPC boundary
 
 The window always loads the hosted web app, `https://agiworkforce.com`;
-`AGI_CLOUD_APP_ORIGIN` can point it at localhost or another first-party host
-for development. The main window
+in an unpackaged build `AGI_CLOUD_APP_ORIGIN` can point it at localhost or
+another first-party host, and a packaged build ignores that variable but honors
+`--agi-cloud-app-origin=` within the same allowlist. The main window
 uses context isolation, Chromium sandboxing, no renderer Node integration, and
 the Electron preload. The preload exposes the host bridge only to the allowed
 AGI origin; OAuth pages do not inherit it.

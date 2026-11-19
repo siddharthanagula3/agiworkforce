@@ -182,7 +182,7 @@ export function classifyAuthError(error: unknown): AuthErrorDescriptor {
   if (!vendor) return { kind: 'unexpected' };
 
   const status = vendor.status;
-  const code = vendor.code ?? '';
+  const code = typeof vendor.code === 'string' ? vendor.code : '';
   const kind =
     (status === RATE_LIMIT_STATUS ? 'rate_limited' : null) ??
     kindFromCode(code) ??

@@ -21,6 +21,7 @@ use crate::platform::runtime::session::PrivacyMode;
 pub const IMAGE_GENERATE_PATH: &str = "/api/media/image/generate";
 pub const IMAGE_CANCEL_PATH: &str = "/api/media/image/cancel";
 pub const IMAGE_RETRY_PATH: &str = "/api/media/image/retry";
+pub const IMAGE_STATUS_PATH: &str = "/api/media/image/status";
 pub const MEDIA_AVAILABILITY_PATH: &str = "/api/media/availability";
 pub const IMAGE_QUALITIES: [&str; 2] = ["standard", "hd"];
 
@@ -274,6 +275,41 @@ impl ImageFailure {
     }
 }
 
+#[derive(Debug)]
+struct Undelivered {
+    saved: Vec<SavedImage>,
+    total: usize,
+    error: CloudError,
+}
+
+impl Undelivered {
+    fn message(&self, resumable: bool) -> String {
+        let mut text = format!(
+            "The image was generated, but only {} of {} file(s) were saved on this device ({}).",
+            self.saved.len(),
+            self.total,
+            self.error
+        );
+        if !self.saved.is_empty() {
+            text.push_str(&format!(
+                " Saved: {}.",
+                self.saved
+                    .iter()
+                    .map(|file| file.path.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if resumable {
+            text.push_str(
+                " The rest stay in your account, and retrying saves them without generating the \
+                 image again.",
+            );
+        }
+        text
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum ImageRun {
     Saved(ImageGeneration),
@@ -288,6 +324,7 @@ pub enum LastOutcome {
     Saved,
     Failed,
     Stopped,
+    Undelivered,
 }
 
 impl LastOutcome {
@@ -297,6 +334,7 @@ impl LastOutcome {
             LastOutcome::Saved => "saved",
             LastOutcome::Failed => "failed",
             LastOutcome::Stopped => "stopped",
+            LastOutcome::Undelivered => "generated, but not every file was saved on this device",
         }
     }
 }
@@ -319,6 +357,8 @@ pub struct LastImage {
     pub retryable: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub files: Vec<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub out: Option<PathBuf>,
     #[serde(default)]
     pub at: String,
 }
@@ -849,6 +889,7 @@ async fn generate_with(
         job_id: None,
         retryable: false,
         files: Vec::new(),
+        out: None,
         at: now(),
     };
     remember(&last);
@@ -878,6 +919,9 @@ pub async fn retry(
         )));
     };
     let client = CloudClient::connect(privacy)?;
+    if let Some(job_id) = redelivery_job(&last, client.owner()) {
+        return redeliver(&client, &job_id, out, cwd, &mut last).await;
+    }
     let options = ImageRequestOptions {
         prompt: last.prompt.clone(),
         settings: last.settings.clone(),
@@ -908,6 +952,107 @@ pub async fn retry(
         }
     };
     settle(&client, reply, &options, cwd, &label, &mut last).await
+}
+
+fn redelivery_job(last: &LastImage, owner: &str) -> Option<String> {
+    if last.outcome == LastOutcome::Undelivered && last.owner == owner {
+        last.job_id.clone()
+    } else {
+        None
+    }
+}
+
+async fn redeliver(
+    client: &CloudClient,
+    job_id: &str,
+    out: Option<PathBuf>,
+    cwd: &Path,
+    last: &mut LastImage,
+) -> Result<ImageRun, CloudError> {
+    let options = ImageRequestOptions {
+        prompt: last.prompt.clone(),
+        settings: last.settings.clone(),
+        out: out.or_else(|| last.out.clone()),
+    };
+    let label = ModelLabel {
+        id: last.settings.model.clone().unwrap_or_default(),
+        name: last.model_name.clone(),
+        provider: last.provider.clone(),
+    };
+    let snapshot: ImageGenerationResponse = client
+        .get(IMAGE_STATUS_PATH, &[("job_id", job_id.to_string())])
+        .await?;
+    last.at = now();
+    if snapshot.status.as_deref() != Some("completed") || snapshot.images.is_empty() {
+        last.outcome = LastOutcome::Failed;
+        last.retryable = false;
+        remember(last);
+        return Ok(ImageRun::Failed(ImageFailure::local(
+            "Your account no longer has the rest of that image, so nothing more was saved. \
+             Retrying again starts a new generation."
+                .to_string(),
+        )));
+    }
+    let delivered = last.files.clone();
+    let delivery = save_images(client, &snapshot, &options, cwd, &label, None, &delivered).await;
+    let run = record_delivery(
+        last,
+        snapshot.job_id.clone(),
+        absolute_out(&options, cwd),
+        delivery,
+    );
+    remember(last);
+    Ok(run)
+}
+
+fn absolute_out(options: &ImageRequestOptions, cwd: &Path) -> Option<PathBuf> {
+    options.out.as_ref().map(|out| {
+        if out.is_absolute() {
+            out.clone()
+        } else {
+            cwd.join(out)
+        }
+    })
+}
+
+fn record_delivery(
+    last: &mut LastImage,
+    job_id: Option<String>,
+    out: Option<PathBuf>,
+    delivery: Result<ImageGeneration, Undelivered>,
+) -> ImageRun {
+    if job_id.is_some() {
+        last.job_id = job_id;
+    }
+    last.retryable = false;
+    match delivery {
+        Ok(generation) => {
+            last.outcome = LastOutcome::Saved;
+            last.provider = generation.provider.clone();
+            last.files = generation.paths();
+            last.out = None;
+            ImageRun::Saved(generation)
+        }
+        Err(undelivered) => {
+            let resumable = last.job_id.is_some();
+            last.outcome = if resumable {
+                LastOutcome::Undelivered
+            } else {
+                LastOutcome::Failed
+            };
+            last.files = undelivered
+                .saved
+                .iter()
+                .map(|file| file.path.clone())
+                .collect();
+            last.out = out;
+            ImageRun::Failed(ImageFailure {
+                message: undelivered.message(resumable),
+                retryable: resumable,
+                job_id: last.job_id.clone(),
+            })
+        }
+    }
 }
 
 async fn settle(
@@ -953,14 +1098,15 @@ async fn settle(
             job_id: response.job_id,
         }));
     }
-    let generation = save_images(client, &response, options, cwd, label, None).await?;
-    last.outcome = LastOutcome::Saved;
-    last.retryable = false;
-    last.job_id = response.job_id.clone();
-    last.provider = generation.provider.clone();
-    last.files = generation.paths();
+    let delivery = save_images(client, &response, options, cwd, label, None, &[]).await;
+    let run = record_delivery(
+        last,
+        response.job_id.clone(),
+        absolute_out(options, cwd),
+        delivery,
+    );
     remember(last);
-    Ok(ImageRun::Saved(generation))
+    Ok(run)
 }
 
 async fn stopped(
@@ -978,14 +1124,16 @@ async fn stopped(
             if snapshot.status.as_deref() == Some("completed") && !snapshot.images.is_empty() =>
         {
             let note = "It finished before the stop reached your account.".to_string();
-            let generation =
-                save_images(client, &snapshot, options, cwd, label, Some(note)).await?;
-            last.outcome = LastOutcome::Saved;
-            last.job_id = snapshot.job_id.clone();
-            last.provider = generation.provider.clone();
-            last.files = generation.paths();
+            let delivery =
+                save_images(client, &snapshot, options, cwd, label, Some(note), &[]).await;
+            let run = record_delivery(
+                last,
+                snapshot.job_id.clone(),
+                absolute_out(options, cwd),
+                delivery,
+            );
             remember(last);
-            return Ok(ImageRun::Saved(generation));
+            return Ok(run);
         }
         CancelOutcome::Snapshot {
             accepted: true,
@@ -1088,7 +1236,8 @@ async fn save_images(
     cwd: &Path,
     label: &ModelLabel,
     note: Option<String>,
-) -> Result<ImageGeneration, CloudError> {
+    delivered: &[PathBuf],
+) -> Result<ImageGeneration, Undelivered> {
     let provider = response
         .provider
         .clone()
@@ -1099,43 +1248,74 @@ async fn save_images(
     let total = response.images.len();
     let mut files = Vec::with_capacity(total);
     for (index, image) in response.images.iter().enumerate() {
-        let (bytes, header) = image_bytes(client, image).await?;
-        let claim = header
-            .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-            .filter(image_provenance::is_claim)
-            .or_else(|| {
-                response
-                    .provenance
-                    .get(index)
-                    .filter(|claim| image_provenance::is_claim(claim))
-                    .cloned()
+        let saved = async {
+            let (bytes, header) = image_bytes(client, image).await?;
+            let claim = header
+                .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+                .filter(image_provenance::is_claim)
+                .or_else(|| {
+                    response
+                        .provenance
+                        .get(index)
+                        .filter(|claim| image_provenance::is_claim(claim))
+                        .cloned()
+                })
+                .unwrap_or_else(|| {
+                    image_provenance::local_claim(&provider, &model, &bytes, &generated_at)
+                });
+            let labelled =
+                image_provenance::embed_xmp(&bytes, &image_provenance::xmp_packet(&claim));
+            let kept = delivered.get(index).filter(|path| path.is_file()).cloned();
+            let path = match kept {
+                Some(path) => path,
+                None => {
+                    let path = output_path(
+                        options.out.as_deref(),
+                        cwd,
+                        &options.prompt,
+                        index,
+                        total,
+                        image_extension(&bytes),
+                    );
+                    let path = if named { path } else { unused_path(path) };
+                    if let Some(parent) = path.parent() {
+                        if !parent.as_os_str().is_empty() {
+                            std::fs::create_dir_all(parent).map_err(|error| {
+                                CloudError::LocalFile(format!(
+                                    "could not create {}: {error}",
+                                    parent.display()
+                                ))
+                            })?;
+                        }
+                    }
+                    std::fs::write(&path, labelled.as_deref().unwrap_or(&bytes)).map_err(
+                        |error| {
+                            CloudError::LocalFile(format!(
+                                "could not write {}: {error}",
+                                path.display()
+                            ))
+                        },
+                    )?;
+                    path
+                }
+            };
+            Ok::<_, CloudError>(SavedImage {
+                path,
+                dimensions: image_provenance::dimensions(&bytes),
+                labelled: labelled.is_some(),
             })
-            .unwrap_or_else(|| {
-                image_provenance::local_claim(&provider, &model, &bytes, &generated_at)
-            });
-        let labelled = image_provenance::embed_xmp(&bytes, &image_provenance::xmp_packet(&claim));
-        let path = output_path(
-            options.out.as_deref(),
-            cwd,
-            &options.prompt,
-            index,
-            total,
-            image_extension(&bytes),
-        );
-        let path = if named { path } else { unused_path(path) };
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|error| CloudError::Transport(error.to_string()))?;
+        }
+        .await;
+        match saved {
+            Ok(file) => files.push(file),
+            Err(error) => {
+                return Err(Undelivered {
+                    saved: files,
+                    total,
+                    error,
+                })
             }
         }
-        std::fs::write(&path, labelled.as_deref().unwrap_or(&bytes))
-            .map_err(|error| CloudError::Transport(error.to_string()))?;
-        files.push(SavedImage {
-            path,
-            dimensions: image_provenance::dimensions(&bytes),
-            labelled: labelled.is_some(),
-        });
     }
 
     Ok(ImageGeneration {
@@ -1591,6 +1771,216 @@ mod tests {
         assert!(matches!(error, CloudError::NotManaged(PrivacyMode::Local)));
         assert!(error.to_string().starts_with("Local:"), "{error}");
         assert!(error.is_boundary());
+    }
+
+    fn fixture_client() -> CloudClient {
+        use base64::Engine;
+        let claims =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"sub":"fixture-owner"}"#);
+        CloudClient::from_managed_context(&crate::tier_cache::ManagedRequestContext {
+            jwt: Some(format!("e30.{claims}.fixture")),
+            base: "http://127.0.0.1:9".to_string(),
+            owner: Some("fixture-owner".to_string()),
+        })
+        .expect("a fixture account client")
+    }
+
+    fn encoded(bytes: &[u8]) -> GeneratedImage {
+        use base64::Engine;
+        GeneratedImage {
+            url: None,
+            b64_json: Some(base64::engine::general_purpose::STANDARD.encode(bytes)),
+        }
+    }
+
+    fn completed_job(job_id: &str) -> ImageGenerationResponse {
+        ImageGenerationResponse {
+            success: true,
+            images: vec![encoded(b"first-image"), encoded(b"second-image")],
+            provider: Some("openai".to_string()),
+            model: Some("fixture-image-model".to_string()),
+            job_id: Some(job_id.to_string()),
+            status: Some("completed".to_string()),
+            ..ImageGenerationResponse::default()
+        }
+    }
+
+    fn fixture_label() -> ModelLabel {
+        ModelLabel {
+            id: "fixture-image-model".to_string(),
+            name: "Fixture".to_string(),
+            provider: "openai".to_string(),
+        }
+    }
+
+    fn started(owner: &str) -> LastImage {
+        LastImage {
+            owner: owner.to_string(),
+            prompt: "a red bicycle".to_string(),
+            settings: ImageSettings::default(),
+            model_name: "Fixture".to_string(),
+            provider: "openai".to_string(),
+            outcome: LastOutcome::Started,
+            job_id: None,
+            retryable: false,
+            files: Vec::new(),
+            out: None,
+            at: now(),
+        }
+    }
+
+    fn named_out(cwd: &Path) -> ImageRequestOptions {
+        ImageRequestOptions {
+            prompt: "a red bicycle".to_string(),
+            settings: ImageSettings::default(),
+            out: Some(cwd.join("result.png")),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_local_save_keeps_the_completed_job_and_the_files_already_saved() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("result-2.png")).unwrap();
+        let options = named_out(dir.path());
+        let response = completed_job("job-1");
+        let delivery = save_images(
+            &fixture_client(),
+            &response,
+            &options,
+            dir.path(),
+            &fixture_label(),
+            None,
+            &[],
+        )
+        .await;
+        let mut last = started("fixture-owner");
+        let run = record_delivery(
+            &mut last,
+            response.job_id.clone(),
+            absolute_out(&options, dir.path()),
+            delivery,
+        );
+
+        let first = dir.path().join("result-1.png");
+        assert_eq!(std::fs::read(&first).unwrap(), b"first-image");
+        let failure = match run {
+            ImageRun::Failed(failure) => failure,
+            other => panic!("a partial save must not read as complete: {other:?}"),
+        };
+        assert!(failure.retryable);
+        assert_eq!(failure.job_id.as_deref(), Some("job-1"));
+        assert!(
+            failure.message.contains("only 1 of 2"),
+            "{}",
+            failure.message
+        );
+        assert!(
+            failure.message.contains(&first.display().to_string()),
+            "{}",
+            failure.message
+        );
+        assert!(
+            failure
+                .message
+                .contains("without generating the image again"),
+            "{}",
+            failure.message
+        );
+        assert_eq!(last.outcome, LastOutcome::Undelivered);
+        assert_eq!(last.job_id.as_deref(), Some("job-1"));
+        assert_eq!(last.files, vec![first]);
+        assert_eq!(last.out, Some(dir.path().join("result.png")));
+        assert_eq!(
+            redelivery_job(&last, "fixture-owner").as_deref(),
+            Some("job-1")
+        );
+        assert_eq!(redelivery_job(&last, "another-owner"), None);
+        assert_eq!(
+            redelivery_job(&started("fixture-owner"), "fixture-owner"),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn redelivery_saves_only_the_missing_files_and_keeps_the_saved_ones() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = dir.path().join("result-1.png");
+        std::fs::write(&first, b"kept-on-disk").unwrap();
+        let options = named_out(dir.path());
+        let mut last = started("fixture-owner");
+        last.outcome = LastOutcome::Undelivered;
+        last.job_id = Some("job-1".to_string());
+        last.files = vec![first.clone()];
+        let delivered = last.files.clone();
+        let delivery = save_images(
+            &fixture_client(),
+            &completed_job("job-1"),
+            &options,
+            dir.path(),
+            &fixture_label(),
+            None,
+            &delivered,
+        )
+        .await;
+        let run = record_delivery(
+            &mut last,
+            Some("job-1".to_string()),
+            absolute_out(&options, dir.path()),
+            delivery,
+        );
+
+        let second = dir.path().join("result-2.png");
+        let generation = match run {
+            ImageRun::Saved(generation) => generation,
+            other => panic!("the completed job must finish saving: {other:?}"),
+        };
+        assert_eq!(generation.paths(), vec![first.clone(), second.clone()]);
+        assert_eq!(std::fs::read(&first).unwrap(), b"kept-on-disk");
+        assert_eq!(std::fs::read(&second).unwrap(), b"second-image");
+        assert_eq!(last.outcome, LastOutcome::Saved);
+        assert_eq!(last.files, vec![first, second]);
+        assert_eq!(last.out, None);
+        assert_eq!(redelivery_job(&last, "fixture-owner"), None);
+    }
+
+    #[test]
+    fn the_job_status_snapshot_reads_as_a_completed_delivery() {
+        let snapshot: ImageGenerationResponse = serde_json::from_value(json!({
+            "success": true,
+            "job_id": "job-1",
+            "status": "completed",
+            "provider": "openai",
+            "model": "fixture-image-model",
+            "attempts": 1,
+            "max_attempts": 3,
+            "retryable": false,
+            "image_count": 2,
+            "images": [{ "url": "/api/files/a" }, { "url": "/api/files/b" }],
+            "provenance": [{}, {}]
+        }))
+        .unwrap();
+        assert_eq!(snapshot.status.as_deref(), Some("completed"));
+        assert_eq!(snapshot.job_id.as_deref(), Some("job-1"));
+        assert_eq!(
+            snapshot
+                .images
+                .iter()
+                .filter_map(|image| image.url.as_deref().and_then(hosted_media_path))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn an_older_history_without_an_output_still_loads() {
+        let last: LastImage = serde_json::from_value(json!({
+            "prompt": "a red bicycle",
+            "outcome": "undelivered",
+            "job_id": "job-1"
+        }))
+        .unwrap();
+        assert_eq!(last.out, None);
+        assert_eq!(last.outcome, LastOutcome::Undelivered);
     }
 
     #[tokio::test]

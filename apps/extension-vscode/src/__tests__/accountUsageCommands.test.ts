@@ -2,11 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
   BILLING_PLAN_CAPABILITY_LABELS,
+  BILLING_PLAN_PRICING,
   creditsFromCents,
   formatCredits,
   usageWorkloadLabel,
 } from '@agiworkforce/types';
 import { setupCommands, type CommandDeps } from '../core/commandSetup';
+import { signIn } from '../features/surfaces/accountAccess';
+import { cachedAccountTier } from '../integrations/tierResolver';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { getTokenCounter } from '../data/tokenCounter';
 import { modelDisplayLabel } from '../features/model-picker/modelConstants';
@@ -23,6 +26,12 @@ import type { UsageHistory } from '../protocol/apiResponses';
 import { requireCatalogModel } from './catalogModelFixtures';
 import { ExtensionContext } from './__mocks__/vscode';
 type ScanModule0 = typeof import('../utils/api');
+type AccountAccessModule = typeof import('../features/surfaces/accountAccess');
+
+vi.mock('../features/surfaces/accountAccess', async (importOriginal) => ({
+  ...(await importOriginal<AccountAccessModule>()),
+  signIn: vi.fn(),
+}));
 
 vi.mock('../utils/api', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
@@ -96,6 +105,8 @@ function registerHandlers(context: ExtensionContext): Map<string, Handler> {
       memoryTreeProvider: unused,
       diffDecorationProvider: unused,
       diagnosticsProvider: unused,
+      artifactsTreeProvider: unused,
+      artifactContentProvider: unused,
     } as unknown as CommandDeps,
   );
   return handlers;
@@ -229,12 +240,16 @@ describe('compare plans command', () => {
     await handlers.get('agi-workforce.comparePlans')?.();
 
     const items = lastQuickPickItems();
-    const current = items.find((item) => item.label === '$(check) Max 20x');
+    const current = items.find(
+      (item) => item.label === `$(check) ${BILLING_PLAN_PRICING.max_15x.label}`,
+    );
     expect(current?.description).toMatch(/^Your plan · /u);
     expect(items.find((item) => item.label === 'Enterprise')?.detail).toBe(
-      `Adds over Max 20x: ${BILLING_PLAN_CAPABILITY_LABELS.team_admin}, ${BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls}`,
+      `Adds over ${BILLING_PLAN_PRICING.max_15x.label}: ${BILLING_PLAN_CAPABILITY_LABELS.team_admin}, ${BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls}`,
     );
-    expect(items.find((item) => item.label === 'Pro')?.detail).toBe('No features beyond Max 20x');
+    expect(items.find((item) => item.label === BILLING_PLAN_PRICING.pro.label)?.detail).toBe(
+      `No features beyond ${BILLING_PLAN_PRICING.max_15x.label}`,
+    );
   });
 
   it('falls back to the cached plan when the account cannot be read', async () => {
@@ -245,7 +260,11 @@ describe('compare plans command', () => {
 
     await handlers.get('agi-workforce.comparePlans')?.();
 
-    expect(lastQuickPickItems().some((item) => item.label === '$(check) Pro')).toBe(true);
+    expect(
+      lastQuickPickItems().some(
+        (item) => item.label === `$(check) ${BILLING_PLAN_PRICING.pro.label}`,
+      ),
+    ).toBe(true);
   });
 
   it('opens web pricing for prices and checkout', async () => {
@@ -258,5 +277,27 @@ describe('compare plans command', () => {
     expect(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0].toString()).toBe(
       `${getCloudWebOrigin()}/pricing?from=vscode-extension-plans`,
     );
+  });
+});
+
+describe('signing in as another account', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetSubsystemHealthForTests();
+  });
+
+  it("never shows the previous account's plan when the first plan read fails", async () => {
+    const context = new ExtensionContext();
+    await context.globalState.update('tierStatus.cachedTier', 'max');
+    await context.globalState.update('tierStatus.cachedAtMs', Date.now());
+    await context.secrets.store('agiWorkforce.accountToken', 'second-account-token');
+    vi.mocked(signIn).mockResolvedValue(true);
+    vi.mocked(fetchTierInfo).mockResolvedValue(undefined);
+    const handlers = registerHandlers(context);
+
+    await handlers.get('agi-workforce.signIn')?.();
+
+    expect(fetchTierInfo).toHaveBeenCalled();
+    expect(cachedAccountTier(context as unknown as vscode.ExtensionContext)).toBeUndefined();
   });
 });

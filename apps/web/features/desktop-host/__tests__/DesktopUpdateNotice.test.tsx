@@ -7,6 +7,7 @@ import type {
 } from '@agiworkforce/local-runtime-contract';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { DesktopUpdateNotice } from '../components/DesktopUpdateNotice';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 function host(overrides: Partial<HostBridge> = {}): HostBridge {
   return { ...hostBridgeStub(), ...overrides };
@@ -66,7 +67,9 @@ describe('DesktopUpdateNotice', () => {
         readyToInstall: true,
       }),
     );
-    expect(screen.getByRole('status')).toHaveTextContent('AGI Desktop update is ready to install');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `${PRODUCT_NAMES.desktop} update is ready to install`,
+    );
     expect(screen.getByRole('status')).not.toHaveTextContent('1.4.0');
     expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
@@ -97,7 +100,9 @@ describe('DesktopUpdateNotice', () => {
     }));
     render(<DesktopUpdateNotice host={host({ checkForUpdate, openUpdateInstaller })} />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('AGI Desktop 1.3.0 is available');
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      `${PRODUCT_NAMES.desktop} 1.3.0 is available`,
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Download installer' }));
     expect(openUpdateInstaller).toHaveBeenCalledTimes(1);
   });
@@ -117,7 +122,7 @@ describe('DesktopUpdateNotice', () => {
     );
 
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'AGI Desktop 1.3.0 is ready to install',
+      `${PRODUCT_NAMES.desktop} 1.3.0 is ready to install`,
     );
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Relaunch to update' }));
@@ -143,13 +148,15 @@ describe('DesktopUpdateNotice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Relaunch to update' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('AGI Desktop could not restart to install the update.');
+    expect(alert).toHaveTextContent(
+      `${PRODUCT_NAMES.desktop} could not restart to install the update.`,
+    );
     expect(alert).not.toHaveTextContent('Error invoking remote method');
     expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
 
   it.each([
-    ['deferred', 'The update will install the next time AGI Desktop quits.'],
+    ['deferred', `The update will install the next time ${PRODUCT_NAMES.desktop} quits.`],
     ['not-ready', 'The update has not finished downloading.'],
   ] as const)('says what happened when the restart is %s', async (outcome, text) => {
     const restartToUpdate = vi.fn(async () => outcome);

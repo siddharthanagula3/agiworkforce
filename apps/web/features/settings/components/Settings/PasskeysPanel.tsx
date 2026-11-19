@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   MAX_PASSKEY_NAME_CHARS,
   usePasskeys,
@@ -149,8 +150,13 @@ function OwnedPasskeysPanel({
     blocked: uncertain,
   }).current;
   const rendered = {};
-  const latestRender = useRef(rendered);
-  latestRender.current = rendered;
+  const latestRender = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    latestRender.current = rendered;
+    return () => {
+      if (latestRender.current === rendered) latestRender.current = null;
+    };
+  });
   const current = () => lane.active && owner.isCurrent();
   const reconcileOwner = () => {
     if (lane.active && !owner.isCurrent()) replace();
@@ -418,6 +424,7 @@ function OwnedPasskeysPanel({
                           setRenaming({ ...renaming, name: event.target.value });
                       }}
                       onKeyDown={(event) => {
+                        if (isImeComposingKey(event.nativeEvent)) return;
                         if (event.key === 'Enter') {
                           event.preventDefault();
                           void handleRename();

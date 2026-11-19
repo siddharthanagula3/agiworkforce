@@ -559,6 +559,7 @@ export function buildSchedulesSection(
 
   let templateSources: ManagedCloudScheduleSources | undefined;
   let editingSchedule: ManagedCloudScheduleTask | null = null;
+  let formGeneration = 0;
   let modelChoices: ScheduleModelOption[] = [];
   let desiredModel: ManagedCloudScheduleMutation['model'] = MANAGED_CLOUD_DEFAULT_MODEL_SELECTION;
   let modelsReady = false;
@@ -642,6 +643,7 @@ export function buildSchedulesSection(
   }
 
   function resetForm(): void {
+    formGeneration += 1;
     invalidateModels();
     modelsReady = false;
     desiredModel = MANAGED_CLOUD_DEFAULT_MODEL_SELECTION;
@@ -700,6 +702,7 @@ export function buildSchedulesSection(
       void loadModels();
       nameInput.focus();
     } else {
+      formGeneration += 1;
       invalidateModels();
       editingSchedule = null;
     }
@@ -790,15 +793,18 @@ export function buildSchedulesSection(
       formError.replaceChildren(document.createTextNode(mutation));
       return;
     }
+    const generation = formGeneration;
     createBtn.disabled = true;
     formError.replaceChildren();
     void deps.createSchedule(mutation).then(async (result) => {
-      createBtn.disabled = false;
+      const ownsForm = generation === formGeneration;
+      if (ownsForm) createBtn.disabled = false;
       if (result.status === 'error') {
-        formError.replaceChildren(document.createTextNode(result.message));
+        if (ownsForm) formError.replaceChildren(document.createTextNode(result.message));
+        else reportFailure(result);
         return;
       }
-      setFormOpen(false);
+      if (ownsForm) setFormOpen(false);
       await refresh();
       setStatus(t('spSchedulesCreated', [result.schedule.name]));
     });
@@ -1209,6 +1215,7 @@ export function buildSchedulesSection(
       );
       return;
     }
+    const generation = formGeneration;
     createBtn.disabled = true;
     formError.replaceChildren();
     const result = await deps.updateScheduleDetails(schedule.id, {
@@ -1216,16 +1223,18 @@ export function buildSchedulesSection(
       description: descriptionInput.value.trim() || null,
       prompt,
     });
-    createBtn.disabled = false;
+    const ownsForm = generation === formGeneration;
+    if (ownsForm) createBtn.disabled = false;
     if (result.status === 'error') {
-      formError.replaceChildren(document.createTextNode(result.message));
+      if (ownsForm) formError.replaceChildren(document.createTextNode(result.message));
+      else reportFailure(result);
       return;
     }
     schedules = schedules.map((entry) => (entry.id === schedule.id ? result.schedule : entry));
-    setFormOpen(false);
+    if (ownsForm) setFormOpen(false);
     setStatus(t('spSchedulesUpdated', [result.schedule.name]));
     render();
-    focusRowAction(schedule.id, 'edit');
+    if (ownsForm) focusRowAction(schedule.id, 'edit');
   }
 
   async function deleteSchedule(schedule: ManagedCloudScheduleTask): Promise<void> {

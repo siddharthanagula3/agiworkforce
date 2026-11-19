@@ -310,15 +310,31 @@
       "open": "إعداد {{name}}",
       "dismiss": "إخفاء اقتراحات التطبيقات",
       "optionalLink": "اربط تطبيقاتك (اختياري)"
-    },
-    "agiWorkExamples": "مهام كمثال",
-    "agiWorkIntro": "صف مهمة وستستمر في العمل على السحابة حتى تكتمل.",
-    "agiWorkExampleHint": "يضع هذا المثال في مربع الرسالة",
-    "agiWork": {
-      "p1": "لخّص طلبات السحب على GitHub لهذا الأسبوع للفريق",
-      "p2": "أنشئ قائمة تحقق لإصدار تطبيق الجوال من المشكلات المفتوحة لدينا",
-      "p3": "حوّل سلاسل Slack غير المقروءة إلى قائمة مهام",
-      "p4": "حدّث عرض المشروع بأحدث الأرقام من Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "المواقع المنشورة",
+    "schedules": "الجداول",
+    "reports": "التقارير",
+    "organizeChats": "تنظيم المحادثات",
+    "newChat": "محادثة جديدة",
+    "inOneList": "في قائمة واحدة",
+    "byProject": "حسب المشروع",
+    "recents": "الأخيرة",
+    "noRecentChats": "لا توجد محادثات حديثة",
+    "seeAllChats": "عرض كل المحادثات",
+    "seeAll": "عرض الكل",
+    "seeAllChatsIn": "عرض كل المحادثات في {{name}}",
+    "openProject": "فتح المشروع: {{name}}",
+    "openConversation": "فتح المحادثة: {{title}}",
+    "openConversationUnread": "فتح المحادثة: {{title}}، غير مقروءة",
+    "showChatsIn": "عرض المحادثات في {{name}}",
+    "hideChatsIn": "إخفاء المحادثات في {{name}}",
+    "notifications": "الإشعارات",
+    "helpAndAbout": "المساعدة وحول التطبيق",
+    "usageRemaining": "الاستخدام المتبقي",
+    "usageRemainingValue": "الاستخدام المتبقي · {{value}}",
+    "usageRemainingChecking": "الاستخدام المتبقي · جارٍ التحقق…",
+    "usageRemainingUnavailable": "الاستخدام المتبقي · غير متاح"
   }
 }

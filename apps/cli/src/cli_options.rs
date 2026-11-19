@@ -136,6 +136,37 @@ impl EffectivePermissions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaunchPermissionMode {
+    pub mode: PermissionMode,
+    pub requested: bool,
+    pub repository: Option<PermissionMode>,
+    pub explicit_yes: bool,
+    pub explicit_skip: bool,
+}
+
+impl LaunchPermissionMode {
+    pub(crate) fn after_load(
+        self,
+        before_load: PermissionMode,
+        saved: Option<PermissionMode>,
+        pinned: Option<PermissionMode>,
+    ) -> PermissionMode {
+        match saved {
+            Some(saved) if !self.requested => {
+                let narrowed_since_launch =
+                    self.mode.is_looser_than(before_load).then_some(before_load);
+                saved
+                    .storable(None)
+                    .within(self.repository)
+                    .within(narrowed_since_launch)
+            }
+            _ => before_load,
+        }
+        .within(pinned)
+    }
+}
+
 impl CliOptions {
     pub(crate) fn from_cli(cli: &crate::Cli) -> Self {
         Self {
@@ -153,30 +184,6 @@ impl CliOptions {
         }
     }
 
-    pub(crate) fn should_skip_permissions(&self, explicit_skip: bool) -> bool {
-        // `DontAsk` is deliberately NOT a blanket skip: it must keep the
-        // approval gate so that non-safe tools auto-deny in headless runs (no
-        // interactive prompt -> denied), matching the documented contract that
-        // only pre-approved safe work runs. Only `BypassPermissions` (and the
-        // explicit `--dangerously-skip-permissions` flag) skip all approvals.
-        explicit_skip
-            || matches!(
-                self.permission_mode,
-                Some(PermissionMode::BypassPermissions)
-            )
-    }
-
-    pub(crate) fn should_auto_approve_safe(&self, explicit_yes: bool) -> bool {
-        // `DontAsk` auto-approves only the read-only/safe-tool allowlist so that
-        // pre-approved safe work runs non-interactively while mutating tools
-        // still hit the (non-interactive -> deny) approval gate.
-        explicit_yes
-            || matches!(
-                self.permission_mode,
-                Some(PermissionMode::AcceptEdits) | Some(PermissionMode::DontAsk)
-            )
-    }
-
     /// The permission settings a run actually starts with.
     ///
     /// Resolved in one place because it is not one flag but five, and the
@@ -192,15 +199,17 @@ impl CliOptions {
         explicit_yes: bool,
         persisted_mode: Option<&str>,
     ) -> EffectivePermissions {
-        // `--mode` wins over `--permission-mode` when both are given.
         let mode = mode_flag
             .or(self.permission_mode)
             .or_else(|| persisted_mode.and_then(persisted_permission_mode))
             .unwrap_or(PermissionMode::Default);
+        // Every mode-derived flag reads the one winning mode, so a losing
+        // `--permission-mode` cannot leave its bypass behind. `DontAsk` is not
+        // a skip: it pre-approves only the safe allowlist and keeps the gate,
+        // which denies every mutation in a headless run.
         EffectivePermissions {
-            skip_permissions: self.should_skip_permissions(explicit_skip)
-                || matches!(mode, PermissionMode::BypassPermissions),
-            auto_approve_safe: self.should_auto_approve_safe(explicit_yes)
+            skip_permissions: explicit_skip || matches!(mode, PermissionMode::BypassPermissions),
+            auto_approve_safe: explicit_yes
                 || matches!(mode, PermissionMode::AcceptEdits | PermissionMode::DontAsk),
             mode,
         }
@@ -276,6 +285,95 @@ mod tests {
         assert_eq!(
             PermissionMode::Plan.storable(Some(PermissionMode::AcceptEdits)),
             PermissionMode::Plan
+        );
+    }
+
+    #[test]
+    fn a_saved_session_never_loosens_the_mode_a_launch_asked_for() {
+        use super::PermissionMode::{AcceptEdits, Plan};
+        let default = PermissionMode::Default;
+        let flag = |mode| LaunchPermissionMode {
+            mode,
+            requested: true,
+            repository: None,
+            explicit_yes: false,
+            explicit_skip: false,
+        };
+        let no_flag = |mode| LaunchPermissionMode {
+            mode,
+            requested: false,
+            repository: None,
+            explicit_yes: false,
+            explicit_skip: false,
+        };
+
+        assert_eq!(flag(Plan).after_load(Plan, Some(AcceptEdits), None), Plan);
+        assert_eq!(
+            flag(AcceptEdits).after_load(AcceptEdits, Some(Plan), None),
+            AcceptEdits
+        );
+        assert_eq!(
+            flag(AcceptEdits).after_load(AcceptEdits, Some(Plan), Some(Plan)),
+            Plan
+        );
+        assert_eq!(
+            no_flag(default).after_load(default, Some(AcceptEdits), None),
+            AcceptEdits
+        );
+        assert_eq!(no_flag(default).after_load(default, Some(Plan), None), Plan);
+        assert_eq!(no_flag(default).after_load(default, None, None), default);
+        assert_eq!(
+            no_flag(Plan).after_load(Plan, Some(AcceptEdits), Some(Plan)),
+            Plan
+        );
+        assert_eq!(
+            flag(AcceptEdits).after_load(AcceptEdits, None, Some(Plan)),
+            Plan
+        );
+        assert_eq!(
+            no_flag(default).after_load(default, Some(PermissionMode::BypassPermissions), None),
+            default
+        );
+    }
+
+    #[test]
+    fn a_repository_or_agent_narrowing_holds_a_saved_session_without_a_flag() {
+        use super::PermissionMode::{AcceptEdits, Plan};
+        let default = PermissionMode::Default;
+        let repository_plan = LaunchPermissionMode {
+            mode: Plan,
+            requested: false,
+            repository: Some(Plan),
+            explicit_yes: false,
+            explicit_skip: false,
+        };
+        assert_eq!(
+            repository_plan.after_load(Plan, Some(AcceptEdits), None),
+            Plan
+        );
+
+        let narrowed_by_agent = LaunchPermissionMode {
+            mode: AcceptEdits,
+            requested: false,
+            repository: None,
+            explicit_yes: false,
+            explicit_skip: false,
+        };
+        assert_eq!(
+            narrowed_by_agent.after_load(default, Some(AcceptEdits), None),
+            default
+        );
+
+        let flag_over_repository = LaunchPermissionMode {
+            mode: AcceptEdits,
+            requested: true,
+            repository: Some(Plan),
+            explicit_yes: false,
+            explicit_skip: false,
+        };
+        assert_eq!(
+            flag_over_repository.after_load(AcceptEdits, Some(Plan), None),
+            AcceptEdits
         );
     }
 
@@ -356,6 +454,60 @@ mod tests {
         );
     }
 
+    #[test]
+    fn the_winning_mode_alone_decides_skip_and_safe_auto_approval() {
+        let with_permission_mode = |mode| CliOptions {
+            permission_mode: Some(mode),
+            ..options_without_flags()
+        };
+
+        for winner in [
+            PermissionMode::Default,
+            PermissionMode::DontAsk,
+            PermissionMode::Plan,
+        ] {
+            let resolved = with_permission_mode(PermissionMode::BypassPermissions)
+                .effective_permissions(Some(winner), false, false, None);
+            assert_eq!(resolved.mode, winner);
+            assert!(
+                !resolved.skip_permissions,
+                "losing bypass skipped approvals under {winner:?}"
+            );
+            assert_eq!(
+                resolved.auto_approve_safe,
+                winner == PermissionMode::DontAsk,
+                "{winner:?}"
+            );
+        }
+
+        let resolved = with_permission_mode(PermissionMode::AcceptEdits).effective_permissions(
+            Some(PermissionMode::Default),
+            false,
+            false,
+            None,
+        );
+        assert_eq!(resolved.mode, PermissionMode::Default);
+        assert!(!resolved.auto_approve_safe && !resolved.skip_permissions);
+        assert!(!resolved.mode.auto_approves_edits());
+
+        let resolved = with_permission_mode(PermissionMode::Default).effective_permissions(
+            Some(PermissionMode::BypassPermissions),
+            false,
+            false,
+            None,
+        );
+        assert!(resolved.skip_permissions);
+
+        let alone = with_permission_mode(PermissionMode::BypassPermissions)
+            .effective_permissions(None, false, false, None);
+        assert_eq!(alone.mode, PermissionMode::BypassPermissions);
+        assert!(alone.skip_permissions);
+
+        let explicit = with_permission_mode(PermissionMode::BypassPermissions)
+            .effective_permissions(Some(PermissionMode::Default), true, true, None);
+        assert!(explicit.skip_permissions && explicit.auto_approve_safe);
+    }
+
     mod auto_gate {
         use super::*;
         use crate::agent::ToolCall;
@@ -387,9 +539,17 @@ mod tests {
         ) -> ToolExecOptions {
             let resolved =
                 options_without_flags().effective_permissions(None, false, false, Some("auto"));
+            exec_options(resolved, callback, workspace_root)
+        }
+
+        fn exec_options(
+            resolved: EffectivePermissions,
+            callback: ApprovalCallback,
+            workspace_root: Option<std::path::PathBuf>,
+        ) -> ToolExecOptions {
             ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: !resolved.skip_permissions,
                 auto_approve_safe: resolved.auto_approve_safe,
                 auto_approve_edits: resolved.mode.auto_approves_edits(),
@@ -565,6 +725,39 @@ mod tests {
                     "{protected} did not ask"
                 );
             }
+        }
+
+        #[tokio::test]
+        async fn a_winning_default_mode_asks_before_a_write_despite_a_losing_bypass() {
+            let workspace = tempfile::Builder::new()
+                .prefix("mode-precedence")
+                .tempdir_in(std::env::current_dir().expect("cwd"))
+                .expect("workspace");
+            let target = workspace.path().join("note.txt");
+            let call = ToolCall {
+                name: "write_file".into(),
+                args: HashMap::from([
+                    ("path".into(), target.display().to_string()),
+                    ("content".into(), "written\n".into()),
+                ]),
+            };
+            let resolved = CliOptions {
+                permission_mode: Some(PermissionMode::BypassPermissions),
+                ..options_without_flags()
+            }
+            .effective_permissions(Some(PermissionMode::Default), false, false, None);
+            let (callback, seen) = answering(ApprovalDecision::Deny);
+
+            let result = execute_tool_with_opts(
+                &call,
+                &exec_options(resolved, callback, Some(workspace.path().to_path_buf())),
+            )
+            .await
+            .expect("tool result");
+
+            assert!(!result.success, "{}", result.output);
+            assert!(!target.exists(), "the write ran without asking");
+            assert_eq!(seen.lock().expect("seen lock").len(), 1);
         }
     }
 

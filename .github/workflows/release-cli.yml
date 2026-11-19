@@ -4,7 +4,12 @@ name: Release CLI
 # Builds 6 platform archives, signs their checksum manifest, and publishes a
 # GitHub release that https://agiworkforce.com/install.sh installs from.
 #
-# Required GitHub Secrets:
+# A manual run (workflow_dispatch) validates the source and builds and smokes
+# every archive, then stops: it never signs, tags or publishes. It proves the
+# matrix before a tag exists. Procedure: docs/runbooks/cli-release.md.
+#
+# Required secret, stored in the cli-release environment and never at
+# repository level (scripts/release/check-release-environments.mjs checks it):
 #   AGI_CLI_RELEASE_SIGNING_KEY, the PEM EC P-256 private key whose public half
 #   is pinned in RELEASE_SIGNING_KEY in apps/web/public/install.sh
 #
@@ -15,6 +20,7 @@ on:
   push:
     tags:
       - 'v-cli-*'
+  workflow_dispatch:
 
 concurrency:
   group: release-cli-${{ github.ref_name }}
@@ -31,6 +37,7 @@ jobs:
   validate-version:
     name: Validate CLI release version
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.release-metadata.outputs.version }}
       prerelease: ${{ steps.release-metadata.outputs.prerelease }}
@@ -39,6 +46,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # The release gates themselves are tested first: a guard whose fixtures no
       # longer fail it is a step that passes without checking anything.
@@ -46,9 +54,25 @@ jobs:
         run: |
           node --test scripts/lib/rollout/release-guards.test.mjs
           node --test scripts/lib/rollout/channels.test.mjs
+          node --test scripts/release/install-script.test.mjs
 
       - name: Require a pinned release signing key
+        if: github.event_name == 'push'
         run: node scripts/release/check-pinned-release-key.mjs
+
+      # The migration guard reads the route table through the TypeScript
+      # compiler, so it needs the workspace's installed packages.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       # A migration that cannot be reversed, or destroys rows without saying
       # so, must not reach a released version number.
@@ -58,12 +82,14 @@ jobs:
           node scripts/check-neon-migrations.mjs
 
       - name: Resolve the release channel this tag publishes to
+        if: github.event_name == 'push'
         id: channel
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/release/resolve-channel.mjs cli "$RELEASE_TAG"
 
       - name: Require tag and package versions to match
+        if: github.event_name == 'push'
         id: release-metadata
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -110,17 +136,25 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt,clippy
 
+      # The CLI tests run sandboxed commands through bubblewrap, so they get
+      # the host of the CI lane that keeps them green (ci.yml rust-desktop-cli):
+      # bubblewrap with its AppArmor profile, and a virtual display.
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+          sudo apt-get install -y pkg-config xvfb apparmor-profiles bubblewrap
+
+      - name: Prepare unprivileged Linux sandbox
+        run: /usr/bin/python3 -I -S scripts/prepare-linux-sandbox.py
 
       - name: Install Node for the notices check
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -137,33 +171,40 @@ jobs:
         run: cargo clippy --locked -p agiworkforce-cli --lib -- -D warnings
 
       - name: Test CLI
-        run: cargo test --locked -p agiworkforce-cli
+        env:
+          RUSTFLAGS: ''
+          CARGO_INCREMENTAL: '0'
+        run: xvfb-run --auto-servernum cargo test --locked -p agiworkforce-cli
 
+  # A tag builds only source that passed validation. A manual run builds
+  # either way, so a red test never hides whether the six archives compile.
   build:
     name: Build ${{ matrix.target }}
     needs: [validate-version, validate]
+    if: ${{ !cancelled() && needs.validate-version.result == 'success' && (needs.validate.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-15
             platform: darwin-arm64
             archive: tar.gz
             smoke: true
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-15
             platform: darwin-x64
             archive: tar.gz
             smoke: false
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-22.04
             platform: linux-x64
             archive: tar.gz
             smoke: true
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04
             platform: linux-arm64
             archive: tar.gz
             cross: true
@@ -181,6 +222,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable @ 2026-10-16
@@ -194,24 +237,16 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # Linux-only: install ALSA + udev dev headers so cpal (voice) and any
-      # other linux-system-lib crate can compile. Required because the cli
-      # binary statically links cpal regardless of feature flags.
-      - name: Install linux system deps (libasound2-dev, libudev-dev)
-        if: runner.os == 'Linux' && !matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
-
+      # Linux builds leave out the voice feature, the only part of the CLI
+      # that links a system library (ALSA), so they need no -dev packages.
       - name: Install cross (for aarch64 linux)
         if: matrix.cross
         run: cargo install cross --version 0.2.5 --locked
 
-      # Cross runs builds in a Docker container, system deps need to be
-      # installed inside the container via Cross.toml's pre-build hook.
-      # Generate it on the fly (kept out of git so the file doesn't apply
-      # to local cargo invocations).
-      - name: Configure cross with linux deps
+      # Generated on the fly so it never applies to local cargo invocations.
+      # cross 0.2.5 otherwise pulls ghcr.io/cross-rs/<target>:0.2.5, a tag that
+      # can be moved; the digest is that tag's image index as of 2026-11-11.
+      - name: Configure cross
         if: matrix.cross
         run: |
           cat > Cross.toml <<'EOF'
@@ -219,10 +254,7 @@ jobs:
           passthrough = ["AGI_CLI_SENTRY_DSN"]
 
           [target.aarch64-unknown-linux-gnu]
-          pre-build = [
-              "dpkg --add-architecture $CROSS_DEB_ARCH",
-              "apt-get update && apt-get install -y libasound2-dev:$CROSS_DEB_ARCH libudev-dev:$CROSS_DEB_ARCH pkg-config",
-          ]
+          image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:7f8308a8734d9fcd2ebbe9a3e4bdea74af293f0799d80c3cc341e340cda49a4c"
           EOF
 
       - name: Build (cross)
@@ -264,6 +296,34 @@ jobs:
             chmod +x "dist/cli/${CLI_PLATFORM}/bin/agi"
             chmod +x "dist/cli/${CLI_PLATFORM}/bin/agiworkforce"
           fi
+
+      # A gnu binary links the newest glibc symbols of the image it is built
+      # on, so a build image newer than the floor install.sh promises would
+      # ship an agi that refuses to start on a supported distribution.
+      - name: Require the glibc floor the installer promises
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CLI_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          floor=$(sed -n 's/^MIN_GLIBC_VERSION="\([0-9.]*\)"$/\1/p' apps/web/public/install.sh)
+          if [ -z "$floor" ]; then
+            echo "ERROR: apps/web/public/install.sh names no MIN_GLIBC_VERSION" >&2
+            exit 1
+          fi
+          for binary in "dist/cli/${CLI_PLATFORM}/bin/agi" "dist/cli/${CLI_PLATFORM}/bin/agiworkforce"; do
+            needed=$(readelf -V --wide "$binary" | { grep -o 'GLIBC_[0-9][0-9.]*' || true; } | sed 's/^GLIBC_//' | sort -uV | tail -1)
+            if [ -z "$needed" ]; then
+              echo "ERROR: $binary names no glibc symbol version; readelf could not read it" >&2
+              exit 1
+            fi
+            if [ "$(printf '%s\n%s\n' "$floor" "$needed" | sort -V | tail -1)" != "$floor" ]; then
+              echo "ERROR: $binary needs glibc $needed, above the $floor floor install.sh promises" >&2
+              exit 1
+            fi
+            echo "$binary needs glibc $needed (floor $floor)"
+          done
 
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar.gz'
@@ -324,12 +384,17 @@ jobs:
   sign-release-assets:
     name: Sign CLI release assets
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: cli-release
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download archives
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -339,7 +404,7 @@ jobs:
           merge-multiple: true
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Create and verify signed checksums
         env:
@@ -353,9 +418,7 @@ jobs:
             exit 1
           fi
           pinned="$RUNNER_TEMP/pinned-keys"
-          mkdir -p "$pinned"
-          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
-            | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+          node scripts/release/release-signing-key.mjs export "$pinned"
 
           ( umask 077 && printf '%s\n' "$AGI_CLI_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.key" )
           if ! openssl ec -in "$RUNNER_TEMP/release-signing.key" -pubout -outform DER -out "$RUNNER_TEMP/signing.der" 2>/dev/null; then
@@ -401,14 +464,14 @@ jobs:
     name: Create GitHub Release
     needs: [validate-version, sign-release-assets]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: cli-release
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # set-commits below reads the range between the previous tag and this
-          # one out of the local clone.
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Download signed release assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -417,7 +480,7 @@ jobs:
           name: signed-cli-release-assets
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       # The assets crossed the artifact store since signing, so the signature
       # is checked again where they are published.
@@ -429,9 +492,7 @@ jobs:
         run: |
           set -euo pipefail
           pinned="$RUNNER_TEMP/pinned-keys"
-          mkdir -p "$pinned"
-          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
-            | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+          node scripts/release/release-signing-key.mjs export "$pinned"
           verified=false
           for key in "$pinned"/*.pem; do
             [ -e "$key" ] || continue
@@ -464,6 +525,23 @@ jobs:
           draft: false
           prerelease: ${{ needs.validate-version.outputs.prerelease }}
 
+  # npm resolves this install fresh from the registry, so it runs in a job of
+  # its own, after the release is published, holding only a read token.
+  sentry-release:
+    name: Register the CLI release in Sentry
+    needs: [validate-version, github-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # set-commits below reads the range between the previous tag and this
+          # one out of the local clone.
+          fetch-depth: 0
+          persist-credentials: false
+
       # apps/cli/src/crash_reports.rs sends `agiworkforce-cli@<CARGO_PKG_VERSION>`
       # as the release, so that exact string is what a crash arrives under and
       # what has to exist here for the version to mean anything in Sentry.
@@ -477,7 +555,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_CLI }}
-          SENTRY_RELEASE: agiworkforce-cli@${{ steps.version.outputs.VERSION }}
+          SENTRY_RELEASE: agiworkforce-cli@${{ needs.validate-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail

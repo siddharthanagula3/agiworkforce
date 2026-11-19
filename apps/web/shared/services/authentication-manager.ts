@@ -70,19 +70,39 @@ class AuthService {
    * browser, so the window stayed on the screen the user had just signed out
    * of; the destination is resolved here instead.
    */
-  async logout(): Promise<{ error: string | null }> {
-    if (typeof window === 'undefined') return { error: null };
-    const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
-      { signOut?: (options?: { redirectUrl?: string }) => Promise<void> } | undefined;
+  async logout(options?: { sessionId?: string }): Promise<{ error: string | null }> {
+    const clerk = this.clerk();
     if (typeof clerk?.signOut !== 'function') return { error: null };
     const redirectUrl = signedOutRedirectUrl(undefined, isDesktopHost());
+    const signOutOptions = {
+      ...(options?.sessionId === undefined ? {} : { sessionId: options.sessionId }),
+      ...(redirectUrl === undefined ? {} : { redirectUrl }),
+    };
     try {
-      await (redirectUrl === undefined ? clerk.signOut() : clerk.signOut({ redirectUrl }));
+      await (Object.keys(signOutOptions).length === 0
+        ? clerk.signOut()
+        : clerk.signOut(signOutOptions));
       return { error: null };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
   }
+
+  isSessionSuperseded(sessionId: string): boolean {
+    const active = this.clerk()?.session?.id;
+    return typeof active === 'string' && active !== sessionId;
+  }
+
+  private clerk(): ClerkBrowserHandle | undefined {
+    if (typeof window === 'undefined') return undefined;
+    return (window as unknown as Record<string, unknown>)['Clerk'] as
+      ClerkBrowserHandle | undefined;
+  }
+}
+
+interface ClerkBrowserHandle {
+  signOut?: (options?: { sessionId?: string; redirectUrl?: string }) => Promise<void>;
+  session?: { id?: string } | null;
 }
 
 export const authService = new AuthService();

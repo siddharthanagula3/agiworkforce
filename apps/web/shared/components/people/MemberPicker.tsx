@@ -3,6 +3,7 @@
 import { useId, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { Check, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 
 export interface PickerMember {
   userId: string;
@@ -148,6 +149,7 @@ export function MemberPicker({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (isImeComposingKey(event.nativeEvent)) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       if (!open) {

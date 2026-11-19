@@ -645,6 +645,14 @@ impl McpClient {
         timeout: Duration,
         reconnect_on: fn(&anyhow::Error) -> bool,
     ) -> Result<Option<Value>> {
+        if matches!(&self.conn, Conn::Sse(sse) if sse.stream_ended()) {
+            self.reconnect().await.map_err(|error| {
+                error.context(format!(
+                    "[{}] the SSE stream ended and reconnecting failed",
+                    self.server_name
+                ))
+            })?;
+        }
         match self.dispatch(method, params.clone(), timeout).await {
             Err(error) if reconnect_on(&error) => {
                 eprintln!(
@@ -1043,8 +1051,6 @@ impl McpClient {
             "Broken pipe",
             "Connection reset",
             "Connection refused",
-            "SSE channel closed",
-            "SSE: POST",
             "SSE GET failed",
         ]
         .iter()

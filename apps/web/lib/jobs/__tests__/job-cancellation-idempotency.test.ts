@@ -312,6 +312,14 @@ describe('cancellation', () => {
     expect(sql).toContain('lease_expires_at < now()');
   });
 
+  it('finishes a cancellation recorded on a job that went back to the queue', async () => {
+    const execute = vi.fn(async () => 1);
+    await reapAbandonedCancellations(database(vi.fn(), execute));
+    const [sql] = execute.mock.calls[0] as unknown as [string];
+    expect(sql).toContain("status = 'queued'");
+    expect(sql).toContain("set status = 'cancelled'");
+  });
+
   it('states what cancellation cannot stop rather than leaving a caller to guess', () => {
     expect(BACKGROUND_JOB_CANCELLATION.cannotBeStopped.length).toBeGreaterThan(0);
     expect(BACKGROUND_JOB_CANCELLATION.propagatesTo).toContain('background-worker');

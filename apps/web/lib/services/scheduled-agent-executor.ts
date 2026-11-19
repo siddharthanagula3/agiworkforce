@@ -48,6 +48,7 @@ import {
 import { extractManagedAgentEventEnvelopes } from '@/app/api/llm/v1/chat/completions/lib/managed-agent-stream';
 import {
   appendWebSearchTool,
+  resolveTurnWebDomainPolicy,
   resolveWebFetchTools,
   shouldOfferGenericWebSearchTool,
   type ChatCompletionRequest,
@@ -238,6 +239,7 @@ export async function buildScheduledToolPlan(input: {
   webAllowed: boolean;
   codeAllowed?: boolean;
   connectors: readonly string[] | null;
+  agentWebDomains?: { name: string; allow: readonly string[]; deny: readonly string[] } | null;
 }): Promise<ScheduledToolPlan> {
   const capabilities = getModelMetadataById(input.model)?.capabilities;
   const policy = getTierPolicy(input.planTier);
@@ -262,8 +264,20 @@ export async function buildScheduledToolPlan(input: {
   let tools: unknown[] = [];
   let webSearch = false;
   let webDomainPolicy: ResearchDomainPolicy | null = null;
-  if (policy.allowSearch && input.webAllowed) {
-    webDomainPolicy = await readWorkspaceWebDomainPolicy(input.db, input.organizationId ?? null);
+  let webReachable = policy.allowSearch && input.webAllowed;
+  if (webReachable) {
+    const turnPolicy = resolveTurnWebDomainPolicy({
+      workspace: await readWorkspaceWebDomainPolicy(input.db, input.organizationId ?? null),
+      agent: input.agentWebDomains ?? null,
+      request: undefined,
+    });
+    if (turnPolicy.ok) {
+      webDomainPolicy = turnPolicy.policy;
+    } else {
+      webReachable = false;
+    }
+  }
+  if (webReachable) {
     const nativeSearch = appendWebSearchTool(provider, [], capabilities) ?? [];
     const searchTools = shouldOfferGenericWebSearchTool({
       providerLower: provider,
@@ -319,7 +333,7 @@ export async function buildScheduledToolPlan(input: {
     connectorPermissions,
     toolApprovalPolicy,
     webSearch,
-    webFetch: policy.allowSearch && input.webAllowed,
+    webFetch: webReachable,
     codeExecution: codeTools.length > 0,
     withheldTools,
     ...(webDomainPolicy ? { webDomainPolicy } : {}),
@@ -920,6 +934,13 @@ async function runScheduledAgent(
     connectors: agentTurn
       ? agentConnectorSelection(agentTurn.config, task.connectors ?? null)
       : (task.connectors ?? null),
+    agentWebDomains: agentTurn
+      ? {
+          name: agentTurn.config.name,
+          allow: agentTurn.config.allowedWebDomains,
+          deny: agentTurn.config.blockedWebDomains,
+        }
+      : null,
   });
   if (
     !modelKeepsInputsOutOfTraining(route.modelKey) &&

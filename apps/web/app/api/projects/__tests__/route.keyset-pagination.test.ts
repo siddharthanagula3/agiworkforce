@@ -1,4 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+const { mockWorkspaceAccessGate } = vi.hoisted(() => ({
+  mockWorkspaceAccessGate: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+}));
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildWorkspaceAccessGateResponse: mockWorkspaceAccessGate,
+}));
 type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
@@ -45,6 +56,12 @@ function row(index: number): Record<string, unknown> {
   };
 }
 
+function unreferencedOrdinals(sql: string, params: unknown[]): number[] {
+  return params.flatMap((_, index) =>
+    new RegExp(`\\$${index + 1}(?!\\d)`, 'u').test(sql) ? [] : [index + 1],
+  );
+}
+
 function listRequest(query = ''): never {
   return new Request(`http://localhost:3000/api/projects${query}`) as never;
 }
@@ -52,6 +69,27 @@ function listRequest(query = ''): never {
 beforeEach(() => {
   vi.clearAllMocks();
   mockResolveSharedProjectScope.mockResolvedValue(null);
+});
+
+describe('GET /api/projects · which clients may reach the workspace', () => {
+  it('asks about the client the credential is bound to and reads nothing when it is refused', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockRlsQuery(...args) },
+      userId: 'member-1',
+      organizationId: null,
+      surface: 'chrome',
+    } as never);
+    mockWorkspaceAccessGate.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'surface_not_allowed' } }), { status: 403 }),
+    );
+
+    const response = await LIST_PROJECTS(listRequest());
+
+    expect(response.status).toBe(403);
+    expect(mockWorkspaceAccessGate).toHaveBeenCalledWith('member-1', expect.anything(), 'chrome');
+    expect(mockRlsQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/projects · keyset pagination', () => {
@@ -89,11 +127,23 @@ describe('GET /api/projects · keyset pagination', () => {
     await LIST_PROJECTS(listRequest(`?limit=2&cursor=${cursor}`));
 
     const [sql, params] = mockRlsQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('(page_sort_key, id) < ($6, $7)');
+    expect(sql).toContain('(page_sort_key, id) < ($5, $6)');
     expect(sql).toContain('order by page_sort_key desc, id desc');
     expect(sql).not.toContain('offset');
-    expect(params[5]).toBe('2026-01-02T00:00:00.000000Z');
-    expect(params[6]).toBe('00000002-0000-4000-8000-000000000000');
+    expect(params[4]).toBe('2026-01-02T00:00:00.000000Z');
+    expect(params[5]).toBe('00000002-0000-4000-8000-000000000000');
+    expect(unreferencedOrdinals(sql, params)).toEqual([]);
+  });
+
+  it('references every bound parameter when paging by offset', async () => {
+    mockRlsQuery.mockResolvedValue([]);
+
+    await LIST_PROJECTS(listRequest('?limit=2&offset=4'));
+
+    const [sql, params] = mockRlsQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('offset $5');
+    expect(params[4]).toBe(4);
+    expect(unreferencedOrdinals(sql, params)).toEqual([]);
   });
 
   it('ignores an unreadable cursor rather than failing the read', async () => {
@@ -103,6 +153,6 @@ describe('GET /api/projects · keyset pagination', () => {
 
     expect(response.status).toBe(200);
     const [sql] = mockRlsQuery.mock.calls[0] as [string];
-    expect(sql).toContain('offset $3');
+    expect(sql).toContain('offset $5');
   });
 });

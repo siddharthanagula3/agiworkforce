@@ -98,9 +98,13 @@ async function handleGetConversations(request: NextRequest) {
     } else if (archivedFilter === 'exclude') {
       where.push('archived = false');
     }
-    params.push(limit + 1, offset);
-    const limitParameter = params.length - 1;
-    const offsetParameter = params.length;
+    params.push(limit + 1);
+    const limitParameter = params.length;
+    let offsetClause = '';
+    if (!cursor) {
+      params.push(offset);
+      offsetClause = `offset $${params.length}`;
+    }
     const keyset = keysetSql({
       sortColumn: PAGE_SORT_COLUMN,
       idColumn: 'id',
@@ -125,7 +129,7 @@ async function handleGetConversations(request: NextRequest) {
           ) conversations
           ${keyset.where ? `where ${keyset.where}` : ''}
           ${keyset.orderBy}
-          limit $${limitParameter} ${cursor ? '' : `offset $${offsetParameter}`}
+          limit $${limitParameter} ${offsetClause}
         `,
             params,
           ),

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 
 const {
   mockIdentity,
@@ -70,6 +71,7 @@ const TOP_UP = {
   units: 500,
   productId: PRODUCT_ID,
 };
+const TOP_UP_GRANT_MICROUSD = TOP_UP.units * MICROUSD_PER_CREDIT;
 const SUBSCRIPTION_ID = 'agi_pro';
 const NEXT_SUBSCRIPTION_ID = 'agi_max';
 const PRO = {
@@ -132,6 +134,7 @@ function harness(
     ownerUserId?: string | null;
     subscriptionToken?: string;
     receiptEnvironment?: string;
+    newerSnapshotCommitted?: boolean;
   } = {},
 ) {
   const seenNotifications = new Set<string>();
@@ -147,6 +150,9 @@ function harness(
     if (sql.includes('insert into public.mobile_iap_transactions')) {
       recorded = true;
       return [{ id: 'receipt-1' }];
+    }
+    if (sql.includes('update public.mobile_iap_accounts')) {
+      return options.newerSnapshotCommitted ? [] : [{ user_id: 'user-1' }];
     }
     if (sql.includes('from public.mobile_iap_accounts')) {
       return options.ownerUserId ? [{ user_id: options.ownerUserId }] : [];
@@ -175,12 +181,17 @@ function harness(
           id: 'receipt-1',
           user_id: 'user-1',
           app_account_token: APP_ACCOUNT_TOKEN,
+          units_granted: 500,
           intended_amount_cents: 1000,
           refunded_amount_cents: 0,
           environment: options.receiptEnvironment ?? 'production',
           product_id: PRODUCT_ID,
         },
       ];
+    }
+    if (sql.includes('from public.credit_transactions')) {
+      const grant = sql.includes("transaction_type = 'purchase'") ? TOP_UP_GRANT_MICROUSD : 0;
+      return [{ total: String(grant) }];
     }
     return [];
   });
@@ -236,7 +247,7 @@ describe('POST /api/mobile/iap/google-notifications', () => {
     expect(refunds).toHaveLength(1);
     expect(refunds[0]?.[1]).toEqual([
       'user-1',
-      1000,
+      2_500_000,
       expect.stringContaining('store-transaction-1'),
     ]);
   });
@@ -334,6 +345,40 @@ describe('POST /api/mobile/iap/google-notifications', () => {
       expect(mockAcknowledge).not.toHaveBeenCalled();
     },
   );
+
+  it('orders a suspension by when Play was read, not by when the notice was generated', async () => {
+    const h = harness();
+    mockLifecycleVerify.mockResolvedValue(
+      verifiedSubscription({ lifecycle: 'on_hold', entitlementStatus: 'expired' }),
+    );
+    const before = Date.now();
+
+    await POST(
+      notification('held-ordered', {
+        ...subscriptionNotice(5),
+        eventTimeMillis: String(before - 3_600_000),
+      }),
+    );
+
+    const claim = h.query.mock.calls.find(([sql]) =>
+      String(sql).includes('update public.mobile_iap_accounts'),
+    );
+    const claimedAt = Date.parse(String((claim?.[1] as unknown[])[1]));
+    expect(claimedAt).toBeGreaterThanOrEqual(before);
+    expect(claimedAt).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('leaves a recovered plan active when an older account-hold snapshot commits after it', async () => {
+    const h = harness({ newerSnapshotCommitted: true });
+    mockLifecycleVerify.mockResolvedValue(
+      verifiedSubscription({ lifecycle: 'on_hold', entitlementStatus: 'expired' }),
+    );
+
+    const response = await POST(notification('held-late', subscriptionNotice(5)));
+
+    await expect(response.json()).resolves.toMatchObject({ status: 'stale' });
+    expect(subscriptionWrites(h)).toEqual([]);
+  });
 
   it.each([
     ['expired', 13, 'expired'],

@@ -6,8 +6,11 @@ vi.mock('@shared/lib/logger', () => ({ logger: { warn: vi.fn(), error: vi.fn(), 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
+import { connectorCategoryToolName } from '@agiworkforce/cloud-contracts';
 import {
   useToolPermissionsStore,
+  PERMISSION_PARTIAL_SAVE_COPY,
+  PERMISSION_PARTIAL_UNVERIFIED_COPY,
   PERMISSION_RESET_FAILED_COPY,
   PERMISSION_SAVE_FAILED_COPY,
 } from '../tool-permissions-store';
@@ -67,6 +70,27 @@ describe('tool-permissions-store server sync', () => {
     });
     await useToolPermissionsStore.getState().hydrateFromServer();
     expect(useToolPermissionsStore.getState().getToolPermission('notion', 'search')).toBe('ask');
+  });
+
+  it('hydrateFromServer drops a local verdict the server no longer holds', async () => {
+    useToolPermissionsStore.setState({
+      permissions: { github: { create_issue: 'allow' }, slack: { post: 'deny' } },
+    });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ permissions: [] }) });
+    await useToolPermissionsStore.getState().hydrateFromServer();
+    expect(useToolPermissionsStore.getState().permissions).toEqual({});
+  });
+
+  it('hydrateFromServer keeps a verdict whose write is still in flight', async () => {
+    useToolPermissionsStore.setState({
+      permissions: { github: { create_issue: 'allow' } },
+      saving: { github: ['create_issue'] },
+    });
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ permissions: [] }) });
+    await useToolPermissionsStore.getState().hydrateFromServer();
+    expect(useToolPermissionsStore.getState().getToolPermission('github', 'create_issue')).toBe(
+      'allow',
+    );
   });
 
   it('hydrateFromServer is a no-op that keeps local state on a non-ok response', async () => {
@@ -267,5 +291,69 @@ describe('a refused write never leaves a verdict the server is not enforcing', (
         'deny',
       );
     });
+  });
+});
+
+describe('a partly committed category write reports what the server holds', () => {
+  const category = 'read_only' as const;
+  const categoryTool = connectorCategoryToolName(category);
+
+  function serveWrites(options: { toolWriteOk: boolean; reread: unknown }) {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(init.body as string) as { category?: string };
+        const ok = body.category !== undefined || options.toolWriteOk;
+        return { ok, status: ok ? 200 : 500, json: async () => ({}) };
+      }
+      if (options.reread === 'fail') throw new Error('offline');
+      return { ok: true, json: async () => options.reread };
+    });
+  }
+
+  it('shows the committed category level instead of restoring the old levels', async () => {
+    useToolPermissionsStore.setState({
+      permissions: { github: { list_issues: 'deny' } },
+      saving: {},
+      saveError: {},
+    });
+    serveWrites({
+      toolWriteOk: false,
+      reread: {
+        permissions: [
+          { connectorId: 'github', toolName: categoryTool, level: 'allow' },
+          { connectorId: 'github', toolName: 'list_issues', level: 'deny' },
+        ],
+      },
+    });
+
+    useToolPermissionsStore
+      .getState()
+      .setToolsPermission('github', ['list_issues', 'get_issue'], 'allow', category);
+
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getSaveError('github')).toBe(
+        PERMISSION_PARTIAL_SAVE_COPY,
+      );
+    });
+    expect(useToolPermissionsStore.getState().getConnectorPermissions('github')).toEqual({
+      [categoryTool]: 'allow',
+      list_issues: 'deny',
+    });
+    expect(useToolPermissionsStore.getState().isToolSaving('github', 'get_issue')).toBe(false);
+  });
+
+  it('says the saved levels could not be checked when the reread fails', async () => {
+    serveWrites({ toolWriteOk: false, reread: 'fail' });
+
+    useToolPermissionsStore
+      .getState()
+      .setToolsPermission('github', ['list_issues'], 'allow', category);
+
+    await vi.waitFor(() => {
+      expect(useToolPermissionsStore.getState().getSaveError('github')).toBe(
+        PERMISSION_PARTIAL_UNVERIFIED_COPY,
+      );
+    });
+    expect(useToolPermissionsStore.getState().isToolSaving('github', 'list_issues')).toBe(false);
   });
 });

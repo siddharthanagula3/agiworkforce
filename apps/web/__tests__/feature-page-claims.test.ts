@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PRODUCT_NAMES, PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 /**
  * Claim guard for the landing page and the feature pages that describe how the
@@ -54,10 +57,10 @@ describe('landing, the Chrome surface card', () => {
     });
   }
 
-  it('names Managed Cloud as where an extension answer comes from', () => {
+  it(`names ${CLOUD} as where an extension answer comes from`, () => {
     const source = collapsed(LANDING);
-    expect(source).toContain('Answers come back from AGI Managed Cloud');
-    expect(source).toContain('Chat answered by Managed Cloud');
+    expect(source).toContain(`Answers come back from ${CLOUD}`);
+    expect(source).toContain(`Chat answered by ${CLOUD}`);
   });
 });
 
@@ -70,7 +73,7 @@ describe('landing, the Desktop surface card', () => {
    */
   it('describes the Electron app rather than the Tauri build', () => {
     const source = collapsed(LANDING);
-    expect(source).toContain('AGI Desktop for macOS');
+    expect(source).toContain(`${PRODUCT_NAMES.desktop} for macOS`);
     expect(source).not.toMatch(/built in Rust|AppImage|Linux x64/u);
   });
 
@@ -211,19 +214,21 @@ describe('/agi-work, the plan', () => {
    * PRO_TIERS, and ChatComposerNew.tsx renders the Chat | AGI Work control only
    * when `canUseBillingPlanCapability(tier, 'agi_work')` holds.
    */
-  it('keeps the plan gate on Pro and above', () => {
-    expect(collapsed(AGI_WORK)).toContain('Pro plans and above');
+  it('keeps the plan gate on the entry paid plan and above', () => {
+    expect(collapsed(AGI_WORK)).toContain(`\${BILLING_PLAN_PRICING.pro.label} plans and above`);
   });
 
   /**
    * apps/web/app/chat/page.tsx preselects AGI Work only when the proxy stamps
    * the requested path as /agi-work, so a link to /chat opens plain chat.
    */
-  it('sends Open AGI Work through sign-in back to /agi-work, not to plain chat', () => {
+  it(`sends Open ${PRODUCT_NAMES.work} through sign-in back to /agi-work, not to plain chat`, () => {
     expect(read('app/chat/page.tsx')).toMatch(/requestedPath === AGI_WORK_PATH/u);
     const source = collapsed(AGI_WORK);
     expect(source).toContain("const AGI_WORK_ENTRY_HREF = '/login?redirectTo=%2Fagi-work';");
-    expect(source).toContain('<Button href={AGI_WORK_ENTRY_HREF}>Open AGI Work</Button>');
+    expect(source).toContain(
+      '<Button href={AGI_WORK_ENTRY_HREF}>Open {PRODUCT_NAMES.work}</Button>',
+    );
     expect(source).not.toMatch(/<Button href="\/chat">/u);
   });
 });
@@ -244,7 +249,7 @@ describe('/agi-code, session forking', () => {
   });
 });
 
-describe('/agi-code, Managed Cloud on the developer surfaces', () => {
+describe(`/agi-code, ${CLOUD} on the developer surfaces`, () => {
   /**
    * packages/contracts/types/src/billing-catalog.ts maps `developer_surfaces`
    * to PRO_TIERS, and apps/web/lib/free-chat-surface-policy.ts puts the CLI and

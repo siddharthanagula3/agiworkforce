@@ -5,7 +5,7 @@ path: /docs
 category: getting-started
 tags: glossary, terminology, definitions, what does mean, jargon, terms, vocabulary, acronym
 platforms: web, desktop, cli, mobile, vscode, chrome, macos, windows, linux, ios, android
-updated: 2026-10-12
+updated: 2026-11-11
 description: Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.
 scope: public
 ---
@@ -98,8 +98,8 @@ surface rather than assuming it.
 
 **Web** is agiworkforce.com in a browser.
 
-**Desktop** is the installable desktop app, published for macOS, Windows and
-Linux as those releases become available.
+**Desktop** is the installable desktop app for macOS. Windows and Linux
+installers have not been published.
 
 **CLI** is the `agi` command, a Rust-native developer agent that runs in a
 terminal on macOS, Windows and Linux.

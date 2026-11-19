@@ -62,6 +62,21 @@ describe('MeResponseSchema', () => {
     ).toBe(false);
   });
 
+  it('accepts only known billing owners and leaves the field optional for older servers', () => {
+    for (const billing_owner of ['organization', 'personal'] as const) {
+      expect(
+        parseMeResponse({ ...golden, plan: { ...golden.plan, billing_owner } }).plan.billing_owner,
+      ).toBe(billing_owner);
+    }
+    expect(parseMeResponse(golden).plan.billing_owner).toBeUndefined();
+    expect(
+      MeResponseSchema.safeParse({
+        ...golden,
+        plan: { ...golden.plan, billing_owner: 'workspace' },
+      }).success,
+    ).toBe(false);
+  });
+
   it('accepts and preserves scheduled cancellation state', () => {
     const parsed = parseMeResponse({
       ...golden,

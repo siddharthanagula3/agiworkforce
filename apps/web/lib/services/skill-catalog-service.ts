@@ -145,12 +145,16 @@ export function selectedSkillRequirementFailure(
   };
 }
 
+export type SkillInstallOverrides = ReadonlyMap<string, boolean> | null;
+
 export function filterSkillsByInstallOverrides(
   skills: readonly Skill[],
-  installOverrides: ReadonlyMap<string, boolean>,
+  installOverrides: SkillInstallOverrides,
 ): Skill[] {
   return skills.filter(
-    (skill) => isPluginOwnedSkill(skill) || installOverrides.get(skill.name) !== false,
+    (skill) =>
+      isPluginOwnedSkill(skill) ||
+      (installOverrides !== null && installOverrides.get(skill.name) !== false),
   );
 }
 
@@ -459,7 +463,8 @@ export interface ExecuteManagedSkillToolOptions extends Pick<
 > {
   availableEnvironmentVariables?: ReadonlySet<string>;
   platform?: string;
-  installOverrides?: ReadonlyMap<string, boolean>;
+  installOverrides?: SkillInstallOverrides;
+  allowSkill?: (skillName: string) => boolean;
 }
 
 const EMPTY_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
@@ -479,7 +484,11 @@ const managedSkillFileAccess: SkillToolFileAccess = {
 };
 
 function skillToolRuntimeContext(options: ExecuteManagedSkillToolOptions): SkillToolRuntimeContext {
-  const { installOverrides: _installOverrides, ...runtimeOptions } = options;
+  const {
+    installOverrides: _installOverrides,
+    allowSkill: _allowSkill,
+    ...runtimeOptions
+  } = options;
   return {
     ...runtimeOptions,
     availableEnvironmentVariables:
@@ -499,8 +508,8 @@ export async function executeManagedSkillTool(
 ): Promise<SkillToolResult> {
   const catalog = filterSkillsByInstallOverrides(
     await getManagedSkillCatalog(),
-    options.installOverrides ?? EMPTY_INSTALL_OVERRIDES,
-  );
+    options.installOverrides === undefined ? EMPTY_INSTALL_OVERRIDES : options.installOverrides,
+  ).filter((skill) => options.allowSkill?.(skill.name) ?? true);
   return executeSkillToolWithFiles(
     catalog,
     args,
@@ -516,8 +525,8 @@ export async function executeManagedSkillToolForPlugins(
 ): Promise<SkillToolResult> {
   const catalog = filterSkillsByInstallOverrides(
     await getManagedSkillCatalogForPlugins(enabledPluginIds),
-    options.installOverrides ?? EMPTY_INSTALL_OVERRIDES,
-  );
+    options.installOverrides === undefined ? EMPTY_INSTALL_OVERRIDES : options.installOverrides,
+  ).filter((skill) => options.allowSkill?.(skill.name) ?? true);
   return executeSkillToolWithFiles(
     catalog,
     args,
@@ -564,7 +573,7 @@ export interface SelectableSkillCatalogParams {
   db: DatabaseAdapter;
   userId: string;
   loadEnabledPluginIds: () => Promise<ReadonlySet<string>>;
-  loadInstallOverrides: () => Promise<ReadonlyMap<string, boolean>>;
+  loadInstallOverrides: () => Promise<SkillInstallOverrides>;
   includeNetworkBackedDirectorySkills?: boolean;
   pluginsAllowed?: boolean;
 }
@@ -594,7 +603,7 @@ export async function loadSelectableSkillCatalog(
       readOptionalSkillSource('enabled-plugin-ids', EMPTY_PLUGIN_IDS, () =>
         params.loadEnabledPluginIds(),
       ),
-      readOptionalSkillSource('skill-install-overrides', EMPTY_INSTALL_OVERRIDES, () =>
+      readOptionalSkillSource<SkillInstallOverrides>('skill-install-overrides', null, () =>
         params.loadInstallOverrides(),
       ),
       readOptionalSkillSource('user-skills', NO_SKILLS, () =>

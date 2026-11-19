@@ -11,6 +11,7 @@ import {
   getBillingPlanPricing,
   isPerSeatBillingPlan,
   MIN_PURCHASABLE_SEATS,
+  type PriceTaxBehavior,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import {
@@ -330,10 +331,17 @@ export interface UpgradePromotionSummary {
   durationInMonths: number | null;
 }
 
+export interface UpgradeRecurringTerms {
+  amountCents: number;
+  currency: string;
+  taxBehavior: PriceTaxBehavior;
+}
+
 export interface UpgradePreviewResult {
   amountDueNowCents: number;
   currency: string;
   previewToken: string;
+  recurring: UpgradeRecurringTerms;
   /** Null when the server sent no breakdown; the dialog then shows the total alone. */
   charge: UpgradeChargeBreakdown | null;
   promotion: UpgradePromotionSummary | null;
@@ -430,6 +438,9 @@ export async function previewUpgrade(data: {
     amountDueNowCents?: unknown;
     currency?: unknown;
     previewToken?: unknown;
+    recurringAmountCents?: unknown;
+    recurringCurrency?: unknown;
+    recurringTaxBehavior?: unknown;
     charge?: unknown;
     promotion?: unknown;
     replacesScheduledChange?: unknown;
@@ -460,7 +471,13 @@ export async function previewUpgrade(data: {
     typeof result.amountDueNowCents !== 'number' ||
     typeof result.currency !== 'string' ||
     typeof result.previewToken !== 'string' ||
-    !result.previewToken
+    !result.previewToken ||
+    typeof result.recurringAmountCents !== 'number' ||
+    !Number.isSafeInteger(result.recurringAmountCents) ||
+    result.recurringAmountCents < 0 ||
+    typeof result.recurringCurrency !== 'string' ||
+    !result.recurringCurrency ||
+    (result.recurringTaxBehavior !== 'inclusive' && result.recurringTaxBehavior !== 'exclusive')
   ) {
     throw new Error('Upgrade preview returned an unexpected response.');
   }
@@ -468,6 +485,11 @@ export async function previewUpgrade(data: {
     amountDueNowCents: result.amountDueNowCents,
     currency: result.currency,
     previewToken: result.previewToken,
+    recurring: {
+      amountCents: result.recurringAmountCents,
+      currency: result.recurringCurrency,
+      taxBehavior: result.recurringTaxBehavior,
+    },
     charge: parseChargeBreakdown(result.charge),
     promotion: parsePromotion(result.promotion),
     replacesScheduledChange: result.replacesScheduledChange === true,

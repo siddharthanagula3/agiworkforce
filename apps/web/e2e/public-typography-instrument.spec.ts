@@ -612,8 +612,7 @@ test('statistics reject wrong sizes and fonts, local token overrides and missing
     const wrongFont = await scan(
       page,
       statisticMarkup,
-      statisticStyle +
-        `#${id} { font-family:var(${id === 'stat-label' ? '--font-geist-sans' : '--font-geist-mono'}); }`,
+      statisticStyle + `#${id} { font-family:var(--font-geist-mono); }`,
     );
     expect(wrongFont.findings).toContainEqual(
       expect.objectContaining({ selector: `#${id}`, kind: 'font-family' }),

@@ -389,10 +389,10 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
       >
         {isProcessing ? (
           <Animated.View style={spinAnimatedStyle}>
-            <Loader size={20} color={iconColor} />
+            <Loader size={24} color={iconColor} />
           </Animated.View>
         ) : (
-          <Mic size={20} color={iconColor} />
+          <Mic size={24} color={iconColor} />
         )}
       </AnimatedPressable>
 

@@ -8,6 +8,7 @@ import {
 } from '../features/trees';
 import { type DiffDecorationProvider } from '../providers/diffDecorationProvider';
 import { MemoryTreeProvider } from '../memory/memoryTreeProvider';
+import { whenInUse } from './startupWork';
 import { AccountMemoryStore, setAccountMemoryStore } from '../memory/accountMemoryStore';
 import { CloudTasksTreeProvider, resolveCloudAgentRunClient } from '../features/cloud-tasks';
 import { SchedulesTreeProvider, resolveSchedulesClient } from '../features/schedules';
@@ -80,7 +81,7 @@ export function setupChat(
       setAccountMemoryStore(undefined);
     }),
   );
-  void memoryTreeProvider.refresh();
+  whenInUse(() => void memoryTreeProvider.refresh());
 
   const cloudTasksTreeProvider = new CloudTasksTreeProvider(() =>
     resolveCloudAgentRunClient(context.secrets),

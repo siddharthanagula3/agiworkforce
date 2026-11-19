@@ -1,8 +1,16 @@
+import { createHash } from 'node:crypto';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+import { logger } from '@/lib/logger';
 
 import {
   GOOGLE_USER_DATA_WITHHELD,
@@ -63,20 +71,63 @@ interface EventRecord {
   entry_hash: string;
 }
 
-// The fake enforces the two properties 0229 enforces with check constraints, a
-// second approver and an eight-hour ceiling, so a pass here is not a pass
-// bought by a fake more permissive than the database.
+// The fake enforces what the schema enforces with check constraints, a second
+// approver, an eight-hour ceiling and the approval lifecycle of 0403, so a pass
+// here is not a pass bought by a fake more permissive than the database.
 const CONSENT_TICKET = '33333333-3333-4333-8333-333333333333';
 const CONSENTING_MEMBER = 'user_member_1';
 
-function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
+function jsonbRoundTrip(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(jsonbRoundTrip);
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort((a, b) =>
+      a.length !== b.length ? a.length - b.length : Buffer.compare(Buffer.from(a), Buffer.from(b)),
+    );
+    const out: Record<string, unknown> = {};
+    for (const key of keys) out[key] = jsonbRoundTrip((value as Record<string, unknown>)[key]);
+    return out;
+  }
+  return value;
+}
+
+type ApprovalRule = '0229' | '0403';
+
+function approvalIsComplete(grant: GrantRecord, rule: ApprovalRule): boolean {
+  const complete =
+    grant.approved_by_user_id !== null && grant.decided_at !== null && grant.expires_at !== null;
+  const none = grant.approved_by_user_id === null && grant.expires_at === null;
+  if (rule === '0229') return (grant.status === 'approved') === complete;
+  switch (grant.status) {
+    case 'approved':
+    case 'expired':
+      return complete;
+    case 'revoked':
+      return none || complete;
+    default:
+      return none;
+  }
+}
+
+function harness(
+  startedAt = Date.parse('2026-09-17T09:00:00.000Z'),
+  approvalRule: ApprovalRule = '0403',
+) {
   const grants: GrantRecord[] = [];
+
+  function writeGrant(grant: GrantRecord, changes: Partial<GrantRecord>): GrantRecord {
+    const next = { ...grant, ...changes };
+    if (!approvalIsComplete(next, approvalRule)) {
+      throw new Error('violates check constraint support_access_grants_approval_is_complete');
+    }
+    return Object.assign(grant, changes);
+  }
   const consentTickets = new Map<string, { userId: string; organizationId: string }>([
     [CONSENT_TICKET, { userId: CONSENTING_MEMBER, organizationId: ORG }],
   ]);
   const events: EventRecord[] = [];
   let clock = startedAt;
   let nextGrant = 0;
+  let eventInsertsFail = false;
 
   const now = () => new Date(clock).toISOString();
 
@@ -109,12 +160,14 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
     if (grant.requested_by_user_id === approver) {
       throw new Error('support_access_grants_needs_a_second_approver');
     }
-    grant.status = 'approved';
-    grant.approved_by_user_id = approver;
-    grant.decided_at = now();
-    grant.expires_at = new Date(
-      Math.min(clock + ttlMs, Date.parse(grant.requested_at) + ceilingMs),
-    ).toISOString();
+    writeGrant(grant, {
+      status: 'approved',
+      approved_by_user_id: approver,
+      decided_at: now(),
+      expires_at: new Date(
+        Math.min(clock + ttlMs, Date.parse(grant.requested_at) + ceilingMs),
+      ).toISOString(),
+    });
     return [grant];
   }
 
@@ -138,8 +191,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
     if (sql.includes("set status = 'denied'")) {
       const grant = grants.find((row) => row.id === params[0] && row.status === 'pending');
       if (!grant) return [] as never[];
-      grant.status = 'denied';
-      grant.decided_at = now();
+      writeGrant(grant, { status: 'denied', decided_at: now() });
       return [grant] as never[];
     }
     if (sql.includes("set status = 'revoked'")) {
@@ -147,18 +199,24 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
         (row) => row.id === params[0] && (row.status === 'pending' || row.status === 'approved'),
       );
       if (!grant) return [] as never[];
-      grant.status = 'revoked';
-      grant.revoked_at = now();
-      grant.revoked_by_user_id = params[1] as string;
+      writeGrant(grant, {
+        status: 'revoked',
+        revoked_at: now(),
+        revoked_by_user_id: params[1] as string,
+      });
       return [grant] as never[];
     }
     if (sql.includes('from public.support_access_grants where id = $1')) {
       return grants.filter((row) => row.id === params[0]) as never[];
     }
     if (sql.includes("where status = 'approved' and expires_at <= now()")) {
-      return grants.filter(
-        (row) => row.status === 'approved' && Date.parse(row.expires_at ?? '') <= clock,
-      ) as never[];
+      const limit = Number(/limit (\d+)/.exec(sql)?.[1] ?? Number.POSITIVE_INFINITY);
+      return grants
+        .filter((row) => row.status === 'approved' && Date.parse(row.expires_at ?? '') <= clock)
+        .sort(
+          (left, right) => Date.parse(left.expires_at ?? '') - Date.parse(right.expires_at ?? ''),
+        )
+        .slice(0, limit) as never[];
     }
     if (sql.includes('organization_id = any ($3::uuid[])')) {
       const wanted = params[2] as string[];
@@ -189,6 +247,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
 
   const execute = vi.fn(async (sql: string, params: unknown[] = []) => {
     if (sql.includes('insert into public.support_access_events')) {
+      if (eventInsertsFail) throw new Error('support_access_events insert failed');
       events.push({
         id: events.length + 1,
         grant_id: params[0] as string | null,
@@ -198,7 +257,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
         resource_type: params[4] as string | null,
         resource_id: params[5] as string | null,
         row_count: params[6] as number | null,
-        detail: JSON.parse(params[7] as string) as Record<string, unknown>,
+        detail: jsonbRoundTrip(JSON.parse(params[7] as string)) as Record<string, unknown>,
         occurred_at: params[8] as string,
         previous_hash: params[9] as string,
         entry_hash: params[10] as string,
@@ -213,7 +272,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
           Date.parse(row.expires_at ?? '') <= clock,
       );
       if (!grant) return 0;
-      grant.status = 'expired';
+      writeGrant(grant, { status: 'expired' });
       return 1;
     }
     throw new Error(`unexpected execute: ${sql.slice(0, 80)}`);
@@ -231,6 +290,9 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
     grants,
     advance: (ms: number) => {
       clock += ms;
+    },
+    failEventInserts: (fail: boolean) => {
+      eventInsertsFail = fail;
     },
   };
 }
@@ -452,7 +514,11 @@ describe('the gate', () => {
       }),
     ).rejects.toBeInstanceOf(SupportAccessDeniedError);
 
-    expect(await expireStaleSupportAccessGrants(h.db)).toBe(1);
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 0,
+      more: false,
+    });
     expect(h.grants[0]?.status).toBe('expired');
     expect(h.events.at(-1)).toMatchObject({ event: 'expired' });
   });
@@ -470,6 +536,188 @@ describe('the gate', () => {
         scope: 'conversations',
       }),
     ).resolves.toBeNull();
+  });
+});
+
+describe('an approved grant can be withdrawn or lapse', () => {
+  it('revokes a live grant, keeps its approval and records the revocation', async () => {
+    const h = harness();
+    const grant = await approvedGrant(h);
+
+    const revoked = await revokeSupportAccess({
+      db: h.db,
+      grantId: grant.id,
+      actorUserId: APPROVER,
+    });
+
+    expect(revoked).toMatchObject({ status: 'revoked', approvedByUserId: APPROVER });
+    expect(h.grants[0]).toMatchObject({
+      status: 'revoked',
+      approved_by_user_id: APPROVER,
+      revoked_by_user_id: APPROVER,
+    });
+    expect(h.grants[0]?.decided_at).not.toBeNull();
+    expect(h.grants[0]?.expires_at).not.toBeNull();
+    expect(h.events.at(-1)).toMatchObject({ event: 'revoked', grant_id: grant.id });
+  });
+
+  it('withdraws a pending request that was never approved', async () => {
+    const h = harness();
+    const requested = await requestSupportAccess({
+      db: h.db,
+      organizationId: ORG,
+      requestedByUserId: REQUESTER,
+      reason: REASON,
+      ticketRef: TICKET,
+      purpose: 'support',
+      scopes: ['conversations'],
+    });
+
+    await revokeSupportAccess({ db: h.db, grantId: requested.id, actorUserId: APPROVER });
+
+    expect(h.grants[0]).toMatchObject({
+      status: 'revoked',
+      approved_by_user_id: null,
+      expires_at: null,
+    });
+  });
+
+  it('expires a lapsed grant, keeps its approval and records the expiry', async () => {
+    const h = harness();
+    const grant = await approvedGrant(h);
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 0,
+      more: false,
+    });
+    expect(h.grants[0]).toMatchObject({ status: 'expired', approved_by_user_id: APPROVER });
+    expect(h.grants[0]?.decided_at).not.toBeNull();
+    expect(h.grants[0]?.expires_at).not.toBeNull();
+    expect(h.events.at(-1)).toMatchObject({ event: 'expired', grant_id: grant.id });
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+  });
+
+  it('does nothing when no approved grant has lapsed', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    const eventsBefore = h.events.length;
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 0,
+      more: false,
+    });
+    expect(h.grants[0]?.status).toBe('approved');
+    expect(h.events).toHaveLength(eventsBefore);
+  });
+
+  it('closes a lapsed grant once, however often the sweep runs', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    await expireStaleSupportAccessGrants(h.db);
+    const eventsAfterFirst = h.events.length;
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 0,
+      more: false,
+    });
+    expect(h.events).toHaveLength(eventsAfterFirst);
+  });
+
+  it('leaves a revoked grant and a live grant alone', async () => {
+    const h = harness();
+    const revoked = await approvedGrant(h);
+    await revokeSupportAccess({ db: h.db, grantId: revoked.id, actorUserId: APPROVER });
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+    await approvedGrant(h);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 0,
+      more: false,
+    });
+    expect(h.grants.map((grant) => grant.status)).toEqual(['revoked', 'approved']);
+  });
+
+  it('closes the other grants when one cannot be closed, and counts the failure', async () => {
+    const h = harness();
+    const stuck = await approvedGrant(h);
+    const sound = await approvedGrant(h, ['files']);
+    const stuckRow = h.grants.find((grant) => grant.id === stuck.id);
+    if (stuckRow) stuckRow.decided_at = null;
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 1,
+      more: false,
+    });
+    expect(h.grants.find((grant) => grant.id === stuck.id)?.status).toBe('approved');
+    expect(h.grants.find((grant) => grant.id === sound.id)?.status).toBe('expired');
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ grantId: stuck.id, organizationId: ORG }),
+      expect.stringContaining('could not be closed'),
+    );
+  });
+
+  it('takes a bounded batch, oldest first, and says that grants remain', async () => {
+    const h = harness();
+    const base = Date.parse('2026-09-17T10:00:00.000Z');
+    for (let index = 0; index < 101; index += 1) {
+      h.grants.push({
+        id: `lapsed-${index}`,
+        organization_id: ORG,
+        requested_by_user_id: REQUESTER,
+        approved_by_user_id: APPROVER,
+        revoked_by_user_id: null,
+        reason: REASON,
+        ticket_ref: TICKET,
+        purpose: 'support',
+        scopes: ['conversations'],
+        status: 'approved',
+        requested_at: '2026-09-17T09:00:00.000Z',
+        decided_at: '2026-09-17T09:30:00.000Z',
+        expires_at: new Date(base + index * 1_000).toISOString(),
+        revoked_at: null,
+      });
+    }
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 100,
+      failed: 0,
+      more: true,
+    });
+    expect(
+      h.grants.filter((grant) => grant.status === 'approved').map((grant) => grant.id),
+    ).toEqual(['lapsed-100']);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 0,
+      more: false,
+    });
+  });
+
+  it('could not withdraw a live grant under the 0229 constraint', async () => {
+    const h = harness(undefined, '0229');
+    const grant = await approvedGrant(h);
+
+    await expect(
+      revokeSupportAccess({ db: h.db, grantId: grant.id, actorUserId: APPROVER }),
+    ).rejects.toThrow(/support_access_grants_approval_is_complete/);
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 1,
+      more: false,
+    });
+    expect(h.grants[0]?.status).toBe('approved');
   });
 });
 
@@ -531,6 +779,77 @@ describe('the trail cannot be quietly rewritten', () => {
     await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({
       intact: false,
       reason: 'an entry names a predecessor that is not the entry before it',
+    });
+  });
+
+  it('verifies an untouched request after the database reorders its detail keys', async () => {
+    const h = harness();
+    await requestSupportAccess({
+      db: h.db,
+      organizationId: ORG,
+      requestedByUserId: REQUESTER,
+      reason: REASON,
+      ticketRef: TICKET,
+      purpose: 'support',
+      scopes: ['conversations'],
+    });
+
+    expect(Object.keys(h.events[0]?.detail ?? {})).toEqual([
+      'reason',
+      'scopes',
+      'purpose',
+      'ticketRef',
+    ]);
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({
+      intact: true,
+      entries: 1,
+    });
+  });
+
+  it('still verifies an entry written under the original digest', async () => {
+    const h = harness();
+    const occurredAt = '2026-09-17T09:00:00.000Z';
+    const detail = { scope: 'conversations' };
+    const previousHash = '0'.repeat(64);
+    const entryHash = createHash('sha256')
+      .update(
+        JSON.stringify([
+          previousHash,
+          ORG,
+          '',
+          REQUESTER,
+          'refused',
+          'conversations',
+          '',
+          null,
+          detail,
+          occurredAt,
+        ]),
+      )
+      .digest('hex');
+    h.events.push({
+      id: 1,
+      grant_id: null,
+      organization_id: ORG,
+      actor_user_id: REQUESTER,
+      event: 'refused',
+      resource_type: 'conversations',
+      resource_id: null,
+      row_count: null,
+      detail,
+      occurred_at: occurredAt,
+      previous_hash: previousHash,
+      entry_hash: entryHash,
+    });
+
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+
+    const target = h.events[0];
+    if (!target) throw new Error('expected the legacy entry');
+    target.detail = { scope: 'billing' };
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({
+      intact: false,
+      brokenAtEventId: '1',
     });
   });
 });
@@ -630,6 +949,19 @@ describe('an operator listing that spans workspaces', () => {
       row_count: 1,
     });
     await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+  });
+
+  it('serves a workspace without content when its accessed entry cannot be appended', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    h.failEventInserts(true);
+
+    const view = await listing(h);
+
+    expect(view.records.every((row) => Object.keys(row.payload).length === 0)).toBe(true);
+    expect(view.grantedOrganizationIds).toEqual([]);
+    expect(view.redactedCount).toBe(3);
+    expect(h.events.filter((event) => event.event === 'accessed')).toHaveLength(0);
   });
 
   it('asks the database once for every workspace on the page', async () => {
@@ -819,3 +1151,5 @@ describe('Google user data under a grant', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/logger');

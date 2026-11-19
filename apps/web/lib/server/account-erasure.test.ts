@@ -88,7 +88,8 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
   revokeAllConnectorTokensAtProviders: (userId: string) =>
     mocks.revokeAllConnectorTokensAtProviders(userId),
 }));
-vi.mock('@/lib/server/object-backup', () => ({
+vi.mock('@/lib/server/object-backup', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
   deleteBackupObject: (key: string, options?: unknown) => mocks.deleteBackupObject(key, options),
   forgetBackupReplicas: (keys: readonly string[]) => mocks.forgetBackupReplicas(keys),
@@ -179,6 +180,8 @@ function userScopedSchemaTables(): Map<string, Set<string>> {
 interface ErasureFixture {
   mediaRows?: Array<{ id: string; storage_pathname: string | null }>;
   knowledgeRows?: Array<{ storage_uri: string | null }>;
+  untrackedLedgerKeys?: string[];
+  unsettledLedgerRows?: number;
   avatarUrl?: string | null;
   feedbackScreenshotKeys?: Array<string | null>;
   failStatementMatching?: string;
@@ -221,6 +224,10 @@ function primeDb(fixture: ErasureFixture = {}): void {
       ];
     }
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
+    if (sql.includes('from public.project_knowledge_objects ledger')) {
+      return (fixture.untrackedLedgerKeys ?? []).map((object_key) => ({ object_key }));
+    }
+    if (sql.includes('as unsettled')) return [{ unsettled: fixture.unsettledLedgerRows ?? 0 }];
     if (sql.includes('project_knowledge_files')) return fixture.knowledgeRows ?? [];
     if (sql.includes('avatar_url')) return [{ avatar_url: fixture.avatarUrl ?? null }];
     if (sql.includes("metadata->>'screenshot_key'")) {
@@ -660,6 +667,53 @@ describe('eraseUserAccountData', () => {
     expect(report.complete).toBe(false);
   });
 
+  it('finds an unregistered screenshot through its cleanup record as well as through a report', async () => {
+    primeDb({ feedbackScreenshotKeys: ['feedback/user-1/3_orphan.png'] });
+
+    await eraseUserAccountData('user-1');
+
+    const lookup = mocks.query.mock.calls
+      .map((call) => String(call[0]).replace(/\s+/gu, ' '))
+      .find((sql) => sql.includes("metadata->>'screenshot_key'"));
+    expect(lookup).toContain('union select storage_key as screenshot_key');
+    expect(lookup).toContain('from public.feedback_screenshot_cleanups where user_id = $1');
+    expect(mocks.deletePrivateObject).toHaveBeenCalledWith('feedback/user-1/3_orphan.png');
+    expect(executedStatements()).toContain(
+      'delete from public.feedback_screenshot_cleanups where user_id = $1',
+    );
+  });
+
+  it('keeps the cleanup records while a screenshot is still stored, so the next run finds it', async () => {
+    primeDb({ feedbackScreenshotKeys: ['feedback/user-1/3_orphan.png'] });
+    mocks.deletePrivateObject.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.tables['feedback_screenshot_cleanups']).toEqual({
+      deleted: false,
+      retainedForRetry: true,
+    });
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes('delete from public.feedback_screenshot_cleanups'),
+      ),
+    ).toBe(false);
+    expect(report.complete).toBe(false);
+  });
+
+  it('erases the relay pairings that name the account in their metadata', async () => {
+    primeDb({});
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes("delete from public.signaling_sessions where metadata ->> 'userId' = $1"),
+      ),
+    ).toBe(true);
+    expect(report.tables['signaling_sessions']).toEqual({ deleted: true });
+  });
+
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {
     primeDb({
       knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }],
@@ -674,9 +728,10 @@ describe('eraseUserAccountData', () => {
     expect(mocks.deleteObject).toHaveBeenCalledWith('av.png');
 
     const statements = executedStatements();
-    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
+    for (const { table, column, alsoColumn, jsonKey } of USER_SCOPED_TABLES) {
+      const target = jsonKey === undefined ? column : `${column} ->> '${jsonKey}'`;
       const subject =
-        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
+        alsoColumn === undefined ? `${target} = $1` : `(${target} = $1 or ${alsoColumn} = $1)`;
       expect(
         statements.some((sql) => sql.includes(`delete from public.${table} where ${subject}`)),
         `${table}.${column} still names an account that no longer exists`,
@@ -950,6 +1005,70 @@ describe('eraseUserAccountData', () => {
     expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
     expect(
       executedStatements().some((sql) => sql.includes('delete from public.user_projects')),
+    ).toBe(false);
+  });
+
+  it('deletes the bytes of untracked ledger rows and settles them once the projects are gone', async () => {
+    const backfilled = 'knowledge-files/projects/p1/1_backfilled.txt';
+    primeDb({
+      knowledgeRows: [{ storage_uri: 'knowledge-files/projects/p1/2_live.txt' }],
+      untrackedLedgerKeys: [backfilled, 'knowledge-files/projects/p1/2_live.txt'],
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteObject).toHaveBeenCalledWith(backfilled);
+    expect(mocks.deleteObject).toHaveBeenCalledTimes(2);
+    expect(report.anonymized['project_knowledge_objects']).toEqual({ updated: true });
+    expect(report.complete).toBe(true);
+    const statements = executedStatements();
+    const projects = statements.findIndex((sql) =>
+      sql.includes('delete from public.user_projects where user_id = $1'),
+    );
+    const settle = statements.findIndex((sql) =>
+      sql.includes("update public.project_knowledge_objects set state = 'deleted'"),
+    );
+    expect(projects).toBeGreaterThan(-1);
+    expect(settle).toBeGreaterThan(projects);
+    expect(statements[settle]).toContain(
+      'object_key = null, user_id = null, organization_id = null',
+    );
+    expect(statements[settle]).toContain('and not origin_known');
+    const settleCall = mocks.execute.mock.calls.find((call) =>
+      String(call[0]).includes("set state = 'deleted'"),
+    );
+    expect(settleCall?.[1]).toEqual([
+      'user-1',
+      ['knowledge-files/projects/p1/2_live.txt', backfilled],
+    ]);
+  });
+
+  it('keeps the profile while an untracked ledger row is left unsettled', async () => {
+    primeDb({
+      untrackedLedgerKeys: ['knowledge-files/projects/p1/1_a.txt'],
+      unsettledLedgerRows: 1,
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.anonymized['project_knowledge_objects']).toMatchObject({ updated: false });
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    expect(executedStatements().some((sql) => sql.includes('delete from public.profiles'))).toBe(
+      false,
+    );
+  });
+
+  it('settles no ledger row while the projects are kept for a failed byte deletion', async () => {
+    primeDb({ untrackedLedgerKeys: ['knowledge-files/projects/p1/1_a.txt'] });
+    mocks.deleteObject.mockRejectedValue(new Error('R2 unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(report.anonymized['project_knowledge_objects']).toBeUndefined();
+    expect(
+      executedStatements().some((sql) => sql.includes('update public.project_knowledge_objects')),
     ).toBe(false);
   });
 
@@ -1239,6 +1358,9 @@ describe('POST /api/auth/device/refresh', () => {
     deletionScheduledFor: string | null;
   }): void {
     mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('insert into public.device_refresh_token_families (family_id, user_id)')) {
+        return [{ family_id: 'family-1', revoked_at: null }];
+      }
       if (sql.includes('FROM device_refresh_tokens')) {
         return [
           {
@@ -1300,3 +1422,5 @@ describe('POST /api/auth/device/refresh', () => {
     expect(body.refresh_token).toBeTruthy();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/object-backup');

@@ -217,7 +217,7 @@ it('does not publish a fetch or retained listener after its hook unmounts', asyn
   );
   const hook = await renderHookAsync(useNetworkStatus);
   const staleListener = mockNetworkListener;
-  await hook.unmount();
+  await hook.unmountAsync();
 
   await act(async () => {
     staleListener?.({ isConnected: true, isInternetReachable: true });
@@ -254,7 +254,7 @@ it('keeps processor readiness across navigation and observes surviving subscribe
   const isReady = mockProcessQueue.mock.calls[0]?.[1] as () => boolean;
   expect(isReady()).toBe(true);
 
-  await original.unmount();
+  await original.unmountAsync();
   expect(isReady()).toBe(true);
   let finishSuccessorFetch!: (state: Reachability) => void;
   mockFetch.mockReturnValue(
@@ -308,7 +308,7 @@ it.each(['current', 'cleared', 'changed-account'] as const)(
       mockNetworkListener?.({ isConnected: true, isInternetReachable: true });
     });
     const processing = mockProcessQueue.mock.results[0]?.value as Promise<void>;
-    await hook.unmount();
+    await hook.unmountAsync();
     if (ownership === 'cleared') mockEntries = [{ ...queuedIntent() }];
     if (ownership === 'changed-account') mockAccountEpoch += 1;
 

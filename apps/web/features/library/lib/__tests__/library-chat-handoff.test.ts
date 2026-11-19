@@ -30,6 +30,7 @@ const ITEM = {
 afterEach(() => {
   vi.unstubAllGlobals();
   takeStagedLibraryAttachments();
+  useChatStore.getState().clearDraftContent(PENDING_CONVERSATION_KEY);
 });
 
 describe('library chat handoff', () => {
@@ -77,6 +78,38 @@ describe('library chat handoff', () => {
 
     const staged = takeStagedLibraryAttachments();
     expect(staged?.[0]?.name).toBe('sunset.png');
+  });
+
+  it('keeps an unsent new-chat draft and adds the remix prompt after it', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('PNG')),
+    );
+    useChatStore.getState().setDraftContent('my unsent question', PENDING_CONVERSATION_KEY);
+
+    await stageLibraryItemForImageRemix({
+      ...ITEM,
+      file_name: 'sunset.png',
+      mime_type: 'image/png',
+      kind: 'image',
+      origin: 'generated' as const,
+      prompt: 'a sunset over a pier',
+    });
+    expect(selectDraftContent(null)(useChatStore.getState())).toBe(
+      'my unsent question\n\na sunset over a pier',
+    );
+
+    await stageLibraryItemForImageRemix({
+      ...ITEM,
+      file_name: 'untitled.png',
+      mime_type: 'image/png',
+      kind: 'image',
+      origin: 'generated' as const,
+      prompt: null,
+    });
+    expect(selectDraftContent(null)(useChatStore.getState())).toBe(
+      'my unsent question\n\na sunset over a pier',
+    );
   });
 
   it('refuses to remix something that is not an image', async () => {

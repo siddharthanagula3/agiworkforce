@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/agent-notification-service', () => ({
   notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+  trackAgentRunOutcome: vi.fn(),
 }));
 vi.mock('../agent-notification-service', () => ({
   notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+  trackAgentRunOutcome: vi.fn(),
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';

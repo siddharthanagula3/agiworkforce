@@ -17,9 +17,11 @@ import type {
 import {
   ALL_MANAGED_RUN_STATES,
   MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS,
+  RESUMED_RUN_BROWSER_STEP_MESSAGE,
   cancelChromeManagedRun,
   cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
+  listChromeManagedRuns,
   resumeChromeManagedRun,
   assertChromeManagedCallerRun,
   type ChromeManagedRunDependencies,
@@ -212,7 +214,54 @@ describe('Chrome managed run control', () => {
         },
       },
     );
-    expect(result).toMatchObject({ status: 'error', code: 'server_error' });
+    expect(result).toEqual({
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_RUN_BROWSER_STEP_MESSAGE,
+    });
+  });
+
+  it('settles a resumed run that stopped for a browser step with a one-line Retry explanation', async () => {
+    const events = [
+      { type: 'tool-use-start', toolUseId: 'call-1', name: 'browser_read_page' },
+      { type: 'tool-use-delta', toolUseId: 'call-1', deltaJson: '{}' },
+      { type: 'tool-use-end', toolUseId: 'call-1' },
+      { type: 'stop', reason: 'tool-use' },
+    ];
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      cancelRun: vi.fn(),
+      followRun: vi.fn(async (_id, options) => {
+        for (const [sequence, event] of events.entries())
+          await options?.onEvent?.(
+            AgentEventEnvelopeSchema.parse({
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+              emittedAtMs: 1000 + sequence,
+              sequence,
+              event,
+            }),
+          );
+        return {
+          run: { ...completedRun(), state: 'awaiting_input', completedAt: null },
+          lastSequence: 3,
+        };
+      }),
+    };
+
+    const result = await resumeChromeManagedRun(
+      { run: reference, alreadyVisibleText: '' },
+      dependencies(client),
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_RUN_BROWSER_STEP_MESSAGE,
+    });
+    expect(RESUMED_RUN_BROWSER_STEP_MESSAGE).not.toContain('\n');
   });
 
   it('returns a structured failure when recovery credentials cannot refresh', async () => {
@@ -236,12 +285,12 @@ describe('Chrome managed run control', () => {
     expect(client.followRun).not.toHaveBeenCalled();
   });
 
-  it.each([401, 403])('classifies HTTP %s as an auth boundary failure', async (status) => {
+  it('classifies HTTP 401 as an auth boundary failure', async () => {
     const client: ManagedCloudAgentRunClient = {
       listRuns: vi.fn(),
       getRun: vi.fn(),
-      followRun: vi.fn().mockRejectedValue(new ManagedCloudAgentRunHttpError('rejected', status)),
-      cancelRun: vi.fn().mockRejectedValue(new ManagedCloudAgentRunHttpError('rejected', status)),
+      followRun: vi.fn().mockRejectedValue(new ManagedCloudAgentRunHttpError('rejected', 401)),
+      cancelRun: vi.fn().mockRejectedValue(new ManagedCloudAgentRunHttpError('rejected', 401)),
     };
 
     await expect(
@@ -250,6 +299,94 @@ describe('Chrome managed run control', () => {
     await expect(cancelChromeManagedRun(reference, dependencies(client))).resolves.toMatchObject({
       status: 'error',
       code: 'auth_required',
+    });
+  });
+
+  it('never reads a 403 without a reason as a lost sign-in', async () => {
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      followRun: vi.fn().mockRejectedValue(new ManagedCloudAgentRunHttpError('rejected', 403)),
+      cancelRun: vi.fn().mockRejectedValue(new ManagedCloudAgentRunHttpError('rejected', 403)),
+    };
+
+    const resumed = await resumeChromeManagedRun(
+      { run: reference, alreadyVisibleText: '' },
+      dependencies(client),
+    );
+    expect(resumed).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(resumed).not.toMatchObject({ code: 'auth_required' });
+    await expect(cancelChromeManagedRun(reference, dependencies(client))).resolves.toMatchObject({
+      status: 'error',
+      code: 'invalid_request',
+    });
+  });
+
+  describe('a refusal from the server keeps its own reason', () => {
+    function serverAnswering(
+      status: number,
+      body: unknown,
+      headers: Record<string, string> = {},
+    ): Partial<ChromeManagedRunDependencies> {
+      return {
+        getAuthToken: vi.fn(async () => 'token-1'),
+        fetchImpl: vi.fn(async () => Response.json(body, { status, headers })),
+      };
+    }
+
+    it("shows a workspace policy in the administrator's words when resuming and cancelling", async () => {
+      const policy =
+        'Your workspace administrator has turned off AGI Cloud in the Chrome extension.';
+      const body = {
+        error: { type: 'organization_policy', code: 'surface_not_allowed', message: policy },
+      };
+      await expect(
+        resumeChromeManagedRun(
+          { run: reference, alreadyVisibleText: '' },
+          serverAnswering(403, body),
+        ),
+      ).resolves.toEqual({ status: 'error', code: 'policy_blocked', message: policy });
+      await expect(cancelChromeManagedRun(reference, serverAnswering(403, body))).resolves.toEqual({
+        status: 'error',
+        code: 'policy_blocked',
+        message: policy,
+      });
+    });
+
+    it('tells a plan limit and an account gate apart from a sign-in', async () => {
+      const plan = 'Background tasks are not included in this plan.';
+      await expect(
+        listChromeManagedRuns(
+          10,
+          serverAnswering(403, { error: { code: 'SUBSCRIPTION_REQUIRED', message: plan } }),
+        ),
+      ).resolves.toEqual({ status: 'error', code: 'plan_required', message: plan });
+
+      const gate = 'This account is not available right now.';
+      await expect(
+        listChromeManagedRuns(
+          10,
+          serverAnswering(403, { error: { code: 'ACCOUNT_UNAVAILABLE', message: gate } }),
+        ),
+      ).resolves.toEqual({ status: 'error', code: 'account_suspended', message: gate });
+    });
+
+    it('reads a 503 as a short outage with the wait the server asked for', async () => {
+      await expect(
+        listChromeManagedRuns(
+          10,
+          serverAnswering(
+            503,
+            { error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' } },
+            { 'retry-after': '5' },
+          ),
+        ),
+      ).resolves.toEqual({
+        status: 'error',
+        code: 'server_error',
+        message: 'AGI Cloud is temporarily unavailable. Try again in 5 seconds.',
+        retryAfterSeconds: 5,
+      });
     });
   });
 

@@ -1,4 +1,3 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 jest.mock('../storage/installedModels', () => {
@@ -82,7 +81,9 @@ jest.mock('@agiworkforce/local-llm', () => {
     tier2LoadModel: realTier2.tier2LoadModel,
     tier2Generate: realTier2.tier2Generate,
     tier2Release: realTier2.tier2Release,
+    tier2IsPresetDownloaded: realTier2.tier2IsPresetDownloaded,
     _setLLMModuleForTesting: realTier2._setLLMModuleForTesting,
+    _setPresetDownloadedCheckForTesting: realTier2._setPresetDownloadedCheckForTesting,
     detectCapabilities: jest.fn().mockResolvedValue(FIXED_CAPS),
     isThermallyThrottled: jest.fn().mockReturnValue(false),
     getCapabilities: jest.fn().mockResolvedValue(FIXED_CAPS),
@@ -91,7 +92,12 @@ jest.mock('@agiworkforce/local-llm', () => {
   };
 });
 
-import { tier2Release, _setLLMModuleForTesting, getDefaultModel } from '@agiworkforce/local-llm';
+import {
+  tier2Release,
+  _setLLMModuleForTesting,
+  _setPresetDownloadedCheckForTesting,
+  getDefaultModel,
+} from '@agiworkforce/local-llm';
 import { resolveLocalModelRef } from '../src/features/model-picker/localModelRuntime';
 
 const DEFAULT_LOCAL_MODEL = getDefaultModel();
@@ -102,11 +108,13 @@ describe('first offline turn: recordInstalledModel(pte) → resolveLocalModelRef
     mockInstance = makeInstance();
     mockFromModelName.mockImplementation(() => Promise.resolve(mockInstance));
     _setLLMModuleForTesting({ fromModelName: mockFromModelName });
+    _setPresetDownloadedCheckForTesting(async () => true);
     tier2Release();
   });
 
   afterEach(() => {
     _setLLMModuleForTesting(null);
+    _setPresetDownloadedCheckForTesting(null);
     tier2Release();
   });
 
@@ -128,11 +136,13 @@ describe('first offline turn: tier2Generate produces real tokens via LLMModule s
     mockInstance = makeInstance();
     mockFromModelName.mockImplementation(() => Promise.resolve(mockInstance));
     _setLLMModuleForTesting({ fromModelName: mockFromModelName });
+    _setPresetDownloadedCheckForTesting(async () => true);
     tier2Release();
   });
 
   afterEach(() => {
     _setLLMModuleForTesting(null);
+    _setPresetDownloadedCheckForTesting(null);
     tier2Release();
   });
 

@@ -105,15 +105,19 @@ export function PlaceDetailPopup({
       {/* The middle scrolls; the name and the pagination are chrome and stay
           put, so a tall note never hides which place of how many this is. */}
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-2">
-        {rating ? (
+        {rating || open ? (
           <p className="flex items-center gap-1.5 text-sm text-[color:var(--chat-text-secondary)]">
-            <Star
-              className="size-3.5 text-[color:var(--chat-warning)]"
-              fill="currentColor"
-              aria-hidden="true"
-            />
-            <span className="font-medium text-[color:var(--chat-text-primary)]">{rating}</span>
-            {reviews ? <span>{reviews}</span> : null}
+            {rating ? (
+              <>
+                <Star
+                  className="size-3.5 text-[color:var(--chat-warning)]"
+                  fill="currentColor"
+                  aria-hidden="true"
+                />
+                <span className="font-medium text-[color:var(--chat-text-primary)]">{rating}</span>
+                {reviews ? <span>{reviews}</span> : null}
+              </>
+            ) : null}
             {open ? (
               <span
                 className={cn(

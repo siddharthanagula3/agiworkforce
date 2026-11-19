@@ -60,12 +60,22 @@ describe('isMessageContinuable', () => {
     ).toBe(true);
   });
 
-  it('offers Continue when a stop-finished turn reads as cut off', () => {
+  it('takes a recorded stop at its word even when the text reads as cut off', () => {
     expect(
       isMessageContinuable({
         ...base,
         content: 'Selecting plants with silver leaves ensures continuous nighttime luminosity',
         metadata: { finishReason: 'stop' },
+      }),
+    ).toBe(false);
+  });
+
+  it('offers Continue on text that reads as cut off when no finish reason was recorded', () => {
+    expect(
+      isMessageContinuable({
+        ...base,
+        content: 'Selecting plants with silver leaves ensures continuous nighttime luminosity',
+        metadata: {},
       }),
     ).toBe(true);
   });

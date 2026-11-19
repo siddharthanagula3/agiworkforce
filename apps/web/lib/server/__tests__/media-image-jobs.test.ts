@@ -4,6 +4,7 @@ vi.mock('server-only', () => ({}));
 
 import {
   claimImageGenerationJobAttempt,
+  closeExhaustedImageGenerationJob,
   completeImageGenerationJob,
   createImageGenerationJob,
   deferImageGenerationJobFailure,
@@ -228,6 +229,52 @@ describe('durable image job persistence boundary', () => {
 
     expect(failed.terminalAt).not.toBeNull();
     expect(isImageGenerationJobRetryable(failed)).toBe(false);
+  });
+
+  it('closes an exhausted job only once nothing holds its claim', async () => {
+    const query = vi.fn().mockResolvedValue([
+      row({
+        status: 'failed',
+        attempts: 3,
+        retryable: false,
+        public_error: 'did not finish',
+        billing_outcome: 'released',
+        terminal_at: '2026-09-17T00:02:00.000Z',
+      }),
+    ]);
+    const db = { query } as never;
+
+    const closed = await closeExhaustedImageGenerationJob({
+      db,
+      jobId: JOB_ID,
+      userId: 'user-1',
+      publicError: 'did not finish',
+      billingOutcome: 'released',
+      billingSettlementStatus: 'succeeded',
+    });
+
+    expect(closed?.terminalAt).not.toBeNull();
+    expect(isImageGenerationJobRetryable(closed!)).toBe(false);
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/attempts >= max_attempts/);
+    expect(sql).toMatch(/terminal_at is null/);
+    expect(sql).toMatch(/cancel_requested_at is null/);
+    expect(sql).toMatch(/claim_expires_at is null or claim_expires_at <= now\(\)/);
+    expect(params[0]).toBe(JOB_ID);
+    expect(params[1]).toBe('user-1');
+  });
+
+  it('reports no close when the job is not exhausted or is still claimed', async () => {
+    const query = vi.fn().mockResolvedValue([]);
+    const closed = await closeExhaustedImageGenerationJob({
+      db: { query } as never,
+      jobId: JOB_ID,
+      userId: 'user-1',
+      publicError: 'did not finish',
+      billingOutcome: null,
+      billingSettlementStatus: null,
+    });
+    expect(closed).toBeNull();
   });
 
   it('binds delivered candidates and closes the job in one transaction', async () => {

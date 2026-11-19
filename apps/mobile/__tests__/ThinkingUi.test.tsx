@@ -37,7 +37,9 @@ jest.mock('react-native-reanimated', () => {
 
   return {
     __esModule: true,
+    useAnimatedProps: (factory: () => unknown) => factory(),
     default: {
+      createAnimatedComponent: (component: unknown) => component,
       View: mockAnimated,
       Text: mockAnimatedText,
     },
@@ -48,7 +50,7 @@ jest.mock('react-native-reanimated', () => {
     withRepeat: jest.fn(),
     withSequence: jest.fn(),
     withTiming: jest.fn((v) => v),
-    Easing: { inOut: jest.fn(() => jest.fn()), ease: {} },
+    Easing: { inOut: jest.fn(() => jest.fn()), ease: {}, linear: (value: number) => value },
     cancelAnimation: jest.fn(),
   };
 });

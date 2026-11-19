@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -35,9 +35,13 @@ jest.mock('react-native-reanimated', () => {
   };
   return {
     __esModule: true,
-    default: {
-      View: RN.View,
-    },
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useSharedValue: <T,>(value: T) => ({ value }),
+    withRepeat: <T,>(value: T) => value,
+    withTiming: <T,>(value: T) => value,
+    default: { createAnimatedComponent: (component: unknown) => component, View: RN.View },
     FadeInDown: fadeBuilder,
     useReducedMotion: () => false,
   };
@@ -173,7 +177,13 @@ import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { lightColors } from '@/src/ui/theme/tokens';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { DEFAULT_LOCAL_MODEL_ID, getShortDisplayName } from '@/src/features/model-picker/service';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  getDisplayName,
+  getModelById,
+  getShortDisplayName,
+} from '@/src/features/model-picker/service';
+import { requireAutoMode, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 const LOCAL_MODEL_LABEL = getShortDisplayName(DEFAULT_LOCAL_MODEL_ID);
 const SYNTHETIC_CLOUD_MODEL_ID = 'fixture-cloud-model';
@@ -217,6 +227,47 @@ describe('MessageBubble model label', () => {
     }
     fireEvent.press(view.getByRole('button', { name: 'Next response' }));
     expect(onSelectVariant).toHaveBeenCalledWith('answer-3');
+  });
+
+  it('wraps a failed reply notice inside the reading column instead of running off screen', () => {
+    const message: ChatMessage = {
+      id: 'answer-failed',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-11-11T00:00:00.000Z',
+      metadata: {
+        streamError:
+          'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.',
+      },
+    };
+    const onSwitchModel = jest.fn();
+    const view = render(
+      <MessageBubble
+        message={{
+          ...message,
+          metadata: {
+            streamError: {
+              message:
+                'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later.',
+              code: 'billing_period_not_renewed',
+            },
+          },
+        }}
+        onRetryMessage={jest.fn()}
+        onSwitchModel={onSwitchModel}
+      />,
+    );
+
+    expect(view.getByTestId('stream-failure-notice-text')).toHaveStyle({ flexShrink: 1 });
+    const actions = view.getByTestId('stream-failure-notice-actions');
+    expect(actions).toHaveStyle({ flexDirection: 'row', flexWrap: 'wrap' });
+    expect(within(actions).getByText('Retry')).toBeTruthy();
+    expect(view.getByTestId('stream-failure-notice-text').parent).not.toBe(actions);
+    expect(
+      view.getByLabelText(
+        'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later. Tap to try again.',
+      ),
+    ).toHaveStyle({ alignSelf: 'flex-start', maxWidth: '100%' });
   });
 
   it('follows the stored rating when a failed write restores the previous value', () => {
@@ -263,6 +314,43 @@ describe('MessageBubble model label', () => {
     expect(getByText(new RegExp(LOCAL_MODEL_LABEL))).toBeTruthy();
     expect(queryByText(DEFAULT_LOCAL_MODEL_ID)).toBeNull();
     expect(getByLabelText(`More message actions for ${LOCAL_MODEL_LABEL}`)).toBeTruthy();
+  });
+
+  it('names the Cloud model that answered, even when the turn asked for Auto', () => {
+    const cloudModel = requireMobileCloudModel();
+    const autoModeId = requireAutoMode().id;
+    const message: ChatMessage = {
+      id: 'm-cloud',
+      role: 'assistant',
+      content: 'Answered in Cloud.',
+      createdAt: new Date().toISOString(),
+      model: autoModeId,
+      metadata: { requestedModel: autoModeId, resolvedModel: cloudModel.id },
+    };
+
+    const { getByText, queryByText } = render(<MessageBubble message={message} />);
+
+    expect(getByText(`AGI Cloud · ${getModelById(cloudModel.id)?.name}`)).toBeTruthy();
+    expect(queryByText(/Local Mode/)).toBeNull();
+  });
+
+  it('names a picked Cloud model that is not its provider preview model', () => {
+    const pickedModel = requireMobileCloudModel(
+      (model) => getModelById(model.id) === undefined,
+      'Cloud model outside the per-provider preview list',
+    );
+    const message: ChatMessage = {
+      id: 'm-cloud-picked',
+      role: 'assistant',
+      content: 'Answered by the picked model.',
+      createdAt: new Date().toISOString(),
+      model: pickedModel.id,
+      metadata: { requestedModel: pickedModel.id, resolvedModel: pickedModel.id },
+    };
+
+    const { getByText } = render(<MessageBubble message={message} />);
+
+    expect(getByText(`AGI Cloud · ${getDisplayName(pickedModel.id)}`)).toBeTruthy();
   });
 
   it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {

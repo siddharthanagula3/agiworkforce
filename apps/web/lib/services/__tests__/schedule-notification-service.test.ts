@@ -11,7 +11,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('../push-notification-service', () => ({
+vi.mock('../push-notification-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   sendPushToUser: (...args: unknown[]) => mocks.sendPush(...args),
 }));
 vi.mock('../notification-service', () => ({
@@ -21,8 +22,13 @@ vi.mock('../notification-email-service', () => ({
   sendScheduleCompletionEmail: (...args: unknown[]) => mocks.sendEmail(...args),
 }));
 
-const { notifyScheduleCompleted, SCHEDULE_PUSH_PREFERENCE_KEY, SCHEDULE_EMAIL_PREFERENCE_KEY } =
-  await import('../schedule-notification-service');
+const {
+  loadSchedulePreferences,
+  notifyScheduleCompleted,
+  scheduleQuietHoursType,
+  SCHEDULE_PUSH_PREFERENCE_KEY,
+  SCHEDULE_EMAIL_PREFERENCE_KEY,
+} = await import('../schedule-notification-service');
 
 const callerDb = { query: mocks.query } as never;
 
@@ -149,6 +155,24 @@ describe('notifyScheduleCompleted, content', () => {
 
     const message = mocks.sendPush.mock.calls[0]![1] as { data: Record<string, string> };
     expect(message.data).toEqual({ type: 'schedule_run', taskId: 'task-1' });
+  });
+
+  it.each([
+    ['awaiting_approval', 'agent_approval_needed'],
+    ['failed', 'agent_failed'],
+    ['timeout', 'agent_failed'],
+    ['success', undefined],
+  ] as const)('judges a %s notice for quiet hours as %s', async (status, expected) => {
+    expect(scheduleQuietHoursType(status)).toBe(expected);
+
+    await notifyScheduleCompleted(callerDb, { ...notice, status });
+
+    const message = mocks.sendPush.mock.calls[0]![1] as {
+      data: Record<string, string>;
+      quietHoursType?: string;
+    };
+    expect(message.quietHoursType).toBe(expected);
+    expect(message.data['type']).toBe('schedule_run');
   });
 
   it('truncates a very long task name', async () => {
@@ -288,6 +312,35 @@ describe('per-routine notification policy', () => {
     });
     expect(mocks.record).not.toHaveBeenCalled();
   });
+  it('reports an unreadable preference store instead of answering as an opt-out', async () => {
+    mocks.query.mockRejectedValue(new Error('db down'));
+    await expect(loadSchedulePreferences(callerDb, 'user-1', notice)).rejects.toThrow('db down');
+  });
+
+  it('answers as disabled, without throwing, for invalid stored routine settings', async () => {
+    mocks.query.mockResolvedValue([
+      { notifications: {}, email: 'user@example.test', schedule_notifications: { push: 'yes' } },
+    ]);
+    await expect(loadSchedulePreferences(callerDb, 'user-1', notice)).resolves.toEqual({
+      push: false,
+      email: false,
+      email_address: null,
+      enabled: false,
+    });
+  });
+
+  it('delivers from preferences the caller already read, without a second read', async () => {
+    mocks.query.mockRejectedValue(new Error('db down'));
+    await expect(
+      notifyScheduleCompleted(callerDb, notice, {
+        email: false,
+        preferences: { push: true, email: false, email_address: null, enabled: true },
+      }),
+    ).resolves.toEqual({ pushed: true, emailed: false });
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.record).toHaveBeenCalledTimes(1);
+  });
+
   it('does not revive notifications for a deleted or inaccessible routine', async () => {
     mocks.query.mockResolvedValue([
       { notifications: {}, email: 'user@example.test', schedule_exists: false },
@@ -301,3 +354,5 @@ describe('per-routine notification policy', () => {
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('../push-notification-service');

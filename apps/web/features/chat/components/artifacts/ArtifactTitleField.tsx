@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { ARTIFACT_TITLE_MAX_CHARS, normalizeArtifactTitle } from '../../stores/artifacts-store';
 
 export const RENAME_ARTIFACT_LABEL = 'Rename';
@@ -47,6 +48,7 @@ export function ArtifactTitleField({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (isImeComposingKey(event.nativeEvent)) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       commit();

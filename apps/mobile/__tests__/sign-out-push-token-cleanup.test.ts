@@ -22,7 +22,10 @@ jest.mock('@/src/features/chat/store/appModeStore', () => ({
 }));
 
 import { EgressBlockedError, guardedFetch } from '../lib/egressGuard';
-import { unregisterPushTokenForSignOut } from '../src/features/auth/services/signOutPushTokenCleanup';
+import {
+  PushTokenCleanupCredentialRejectedError,
+  unregisterPushTokenForSignOut,
+} from '../src/features/auth/services/signOutPushTokenCleanup';
 
 describe('sign-out push-token cleanup', () => {
   beforeEach(() => {
@@ -57,6 +60,20 @@ describe('sign-out push-token cleanup', () => {
       guardedFetch('https://agiworkforce.com/api/chat/conversations', { method: 'DELETE' }),
     ).rejects.toBeInstanceOf(EgressBlockedError);
     expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+
+  it('marks only an HTTP 401 as a credential the server rejected for good', async () => {
+    mockSecureFetch.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    await expect(unregisterPushTokenForSignOut('expired-clerk-jwt')).rejects.toBeInstanceOf(
+      PushTokenCleanupCredentialRejectedError,
+    );
+
+    for (const status of [403, 429, 503]) {
+      mockSecureFetch.mockResolvedValueOnce(new Response(null, { status }));
+      const failure = unregisterPushTokenForSignOut('captured-clerk-jwt');
+      await expect(failure).rejects.toThrow(`HTTP ${status}`);
+      await expect(failure).rejects.not.toBeInstanceOf(PushTokenCleanupCredentialRejectedError);
+    }
   });
 
   it('does not attempt a request without a captured Clerk credential', async () => {

@@ -78,6 +78,33 @@ describe('a picture added to the draft', () => {
     expect(result.current.attachments).toEqual([]);
     expect(result.current.previews).toEqual([]);
   });
+
+  it('is reported to the caller as taken once prepared, and as not taken when it is refused', async () => {
+    const { result } = renderHook(() => useAttachments());
+    const beach = jpegWithLocation('beach.jpg');
+    const whole = jpegWithLocationBytes();
+    const cut = new File([whole.subarray(0, 20)], 'cut.jpg', { type: 'image/jpeg' });
+    let taken: File[] = [];
+
+    await act(async () => {
+      taken = await result.current.admitFiles([beach, cut]);
+    });
+
+    expect(taken).toEqual([beach]);
+    expect(result.current.attachments).toHaveLength(1);
+  });
+
+  it('is reported as not taken when the draft is cleared while it is being prepared', async () => {
+    const { result } = renderHook(() => useAttachments());
+    let pending: Promise<File[]> = Promise.resolve([]);
+
+    act(() => {
+      pending = result.current.admitFiles([jpegWithLocation('beach.jpg')]);
+    });
+    act(() => result.current.clearAll());
+
+    await expect(pending).resolves.toEqual([]);
+  });
 });
 
 describe('a document added to the draft', () => {

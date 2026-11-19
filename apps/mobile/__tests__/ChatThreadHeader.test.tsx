@@ -5,6 +5,11 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
 
+jest.mock('@clerk/expo', () => ({
+  ...jest.requireActual('@clerk/expo'),
+  useSession: () => ({ session: null }),
+}));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -33,6 +38,8 @@ jest.mock('@/hooks/useNetworkStatus', () => ({
 jest.mock('@/src/navigation/openNearestDrawer', () => ({
   openNearestDrawer: jest.fn(),
 }));
+
+jest.mock('@clerk/expo', () => ({ useSession: () => ({ session: null }) }));
 
 jest.mock('@/src/features/chat/components/Composer/Composer', () => {
   const { View } = require('react-native');
@@ -91,8 +98,14 @@ jest.mock('@/lib/mmkv', () => {
 });
 
 import ChatScreen from '../app/(app)/chat/[id]';
-import { useChatStore } from '../stores/chatStore';
+import { handOffConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
+import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
+import { useTierStore } from '../src/features/billing/store';
+import { useModelStore } from '../src/features/model-picker/store';
+import { useWaitlistStore } from '../src/features/waitlist';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { isAutoModeModelId } from '@agiworkforce/types';
 
 function seedThread(overrides: Record<string, unknown> = {}): void {
   useChatStore.setState({
@@ -145,6 +158,114 @@ describe('Thread header', () => {
         name: 'A conversation title with more detail. Open conversation menu',
       }),
     ).toHaveStyle({ minWidth: 44, minHeight: 44 });
+  });
+
+  it('shows the message being handed to a new chat instead of a blank skeleton while history loads', () => {
+    seedThread();
+    useChatStore.setState({ isLoadingMessages: true, loadMessages: jest.fn() } as never);
+    handOffConversationSend('thread-1', 'Teach me fractions');
+
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByText('Teach me fractions')).toBeTruthy();
+    expect(screen.getByLabelText('Your message: Teach me fractions. Sending')).toBeTruthy();
+    takeConversationSend('thread-1');
+  });
+
+  it('keeps the model picked for a new Cloud chat instead of resetting it to Auto', () => {
+    const picked = requireMobileCloudModel(
+      (model) => !isAutoModeModelId(model.id),
+      'non-Auto Mobile Cloud model',
+    ).id;
+    useTierStore.setState({ tier: 'max' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useModelStore.setState({ selectedModel: picked });
+    seedThread({ executionMode: 'cloud' });
+
+    render(<ChatScreen />);
+
+    expect(useModelStore.getState().selectedModel).toBe(picked);
+  });
+
+  it('offers Chat and Work only until the first message is sent', () => {
+    useTierStore.setState({ tier: 'pro' });
+    seedThread({ executionMode: 'cloud' });
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.work-mode.chat')).toBeTruthy();
+
+    act(() => {
+      useChatStore.setState({
+        messages: {
+          'thread-1': [
+            {
+              id: 'first-question',
+              conversationId: 'thread-1',
+              role: 'user',
+              content: 'Plan my week',
+              createdAt: '2026-11-12T00:00:00.000Z',
+            },
+          ],
+        },
+      } as never);
+    });
+
+    expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
+    expect(screen.queryByTestId('chat.work-mode.agiwork')).toBeNull();
+  });
+
+  it('leaves Switch model to the failed turn instead of repeating it in the error bar', () => {
+    const failure = 'The model is busy right now. Try again or pick another model.';
+    seedThread();
+    useChatStore.setState({
+      messages: {
+        'thread-1': [
+          {
+            id: 'question',
+            conversationId: 'thread-1',
+            role: 'user',
+            content: 'Hello',
+            createdAt: '2026-11-12T00:00:00.000Z',
+          },
+          {
+            id: 'failed-answer',
+            conversationId: 'thread-1',
+            role: 'assistant',
+            content: '',
+            createdAt: '2026-11-12T00:00:01.000Z',
+            metadata: { streamError: { message: failure, code: 'provider_overloaded' } },
+          },
+        ],
+      },
+    } as never);
+    useChatExecutionStore.setState({
+      error: failure,
+      failureCode: { message: failure, code: 'provider_overloaded' },
+    } as never);
+
+    const screen = render(<ChatScreen />);
+
+    expect(screen.queryByText('Switch model')).toBeNull();
+  });
+
+  it('offers Switch model in the error bar when no turn shows the failure', () => {
+    const failure = 'The model is busy right now. Try again or pick another model.';
+    seedThread();
+    useChatExecutionStore.setState({
+      error: failure,
+      failureCode: { message: failure, code: 'provider_overloaded' },
+    } as never);
+
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByText('Switch model')).toBeTruthy();
+  });
+
+  it('clips the thread to its own frame so a reply never draws over the composer controls', () => {
+    seedThread();
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.thread-frame')).toHaveStyle({ flex: 1, overflow: 'hidden' });
   });
 
   it('shows the conversation title and opens the conversation menu from it', () => {

@@ -7,6 +7,7 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 
 import { LinkedDevicesPanel } from '../LinkedDevicesPanel';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const DESKTOP = {
   id: '11111111-2222-4333-8444-555555555555',
@@ -173,7 +174,7 @@ describe('LinkedDevicesPanel', () => {
     render(<LinkedDevicesPanel />);
 
     const heading = await screen.findByText('Linked devices');
-    const description = screen.getByText(/Unlinking revokes the device's stored credential/);
+    const description = screen.getByText(/Unlinking revokes the device's credential/);
     expect(heading.compareDocumentPosition(description)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
@@ -208,7 +209,9 @@ describe('LinkedDevicesPanel', () => {
     render(<LinkedDevicesPanel />);
 
     expect(await screen.findByText('Build box')).toBeVisible();
-    expect(screen.getByText('AGI CLI · 0.9.2 · Linux 6.8 x64 · Workspace sign-in')).toBeVisible();
+    expect(
+      screen.getByText(`${PRODUCT_NAMES.cli} · 0.9.2 · Linux 6.8 x64 · Workspace sign-in`),
+    ).toBeVisible();
     expect(screen.getByText(/^Sleeping · Signed in/)).toBeVisible();
     expect(screen.getByText('Can use Local models, Local MCP')).toBeVisible();
   });

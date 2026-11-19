@@ -54,6 +54,10 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 
+import {
+  DataExportCompletenessSchema,
+  DataExportResponseSchema,
+} from '@agiworkforce/cloud-contracts';
 import { GET } from '../route';
 
 function exportRequest(url = 'https://agiworkforce.com/api/user/export'): NextRequest {
@@ -97,6 +101,11 @@ describe('GET /api/user/export completeness', () => {
     expect(body.data.export_metadata.completeness.truncated_sections).toEqual([
       { section: 'security_audit_logs', limit: 1000 },
     ]);
+    const envelope = DataExportResponseSchema.parse(body);
+    expect(envelope).toMatchObject({ success: false, status: 'partial' });
+    expect(
+      DataExportCompletenessSchema.parse(body.data.export_metadata.completeness),
+    ).toMatchObject({ status: 'partial' });
   });
 
   it('reports a complete export when every section was read', async () => {

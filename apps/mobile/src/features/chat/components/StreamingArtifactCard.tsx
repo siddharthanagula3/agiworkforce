@@ -17,7 +17,7 @@ const STREAMING_ARTIFACT_MIN_LINES = 4;
 const STREAMING_ARTIFACT_TITLE = 'Generating artifact';
 const STOPPED_ARTIFACT_TITLE = 'Stopped artifact';
 const INTERRUPTED_ARTIFACT_NOTICE =
-  'This artifact stopped before it finished. What arrived is kept; regenerate for the whole document.';
+  'Stopped before it finished. Regenerate for the whole document.';
 
 interface StreamingArtifactCardProps {
   conversationId: string;

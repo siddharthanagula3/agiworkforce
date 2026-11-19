@@ -61,6 +61,34 @@ describe('SupportTicketsPanel', () => {
     expect(screen.getByRole('button', { name: 'Raise a ticket' })).toBeInTheDocument();
   });
 
+  it('reaches tickets beyond the first window and stops offering more at the end', async () => {
+    const user = userEvent.setup();
+    const OLDER = { ...TICKET, id: 'ticket-51', subject: 'Resolved long ago' };
+    mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [TICKET], nextOffset: 50 }));
+    mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [TICKET, OLDER], nextOffset: null }));
+    render(<SupportTicketsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Show older tickets' }));
+
+    expect(await screen.findByRole('button', { name: /Resolved long ago/ })).toBeInTheDocument();
+    expect(urlOf(mocks.fetch.mock.calls[1])).toContain('offset=50');
+    expect(screen.getAllByRole('button', { name: /Export never arrives/ })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Show older tickets' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the loaded tickets and says so when the older ones cannot be loaded', async () => {
+    const user = userEvent.setup();
+    mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [TICKET], nextOffset: 50 }));
+    mocks.fetch.mockResolvedValueOnce(jsonResponse({ error: { message: 'Denied' } }, 403));
+    render(<SupportTicketsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Show older tickets' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export never arrives/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show older tickets' })).toBeEnabled();
+  });
+
   it('surfaces a failed list as an alert with a way back', async () => {
     mocks.fetch.mockResolvedValue(jsonResponse({ error: { message: 'Denied' } }, 403));
     render(<SupportTicketsPanel />);

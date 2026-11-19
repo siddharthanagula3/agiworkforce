@@ -85,6 +85,45 @@ describe('includeTimestamps reaches every format that offers it', () => {
   });
 });
 
+describe('includeMetadata reaches the markdown body', () => {
+  const service = new ChatExportService();
+  const stamp = new Date('2026-01-01T12:00:00.000Z').toLocaleString();
+
+  it('keeps the title, dates and message count when the option is omitted or on', () => {
+    for (const markdown of [
+      service.exportAsMarkdown(session('Private title'), messages()),
+      service.exportAsMarkdown(session('Private title'), messages(), { includeMetadata: true }),
+    ]) {
+      expect(markdown).toContain('# Private title');
+      expect(markdown).toContain('**Created:**');
+      expect(markdown).toContain('**Last Updated:**');
+      expect(markdown).toContain('**Messages:** 2');
+    }
+  });
+
+  it('leaves the title, dates and message count out when disabled, keeping every message', () => {
+    const markdown = service.exportAsMarkdown(session('Private title'), messages(), {
+      includeMetadata: false,
+    });
+
+    expect(markdown).not.toContain('Private title');
+    expect(markdown).not.toContain('**Created:**');
+    expect(markdown).not.toContain('**Last Updated:**');
+    expect(markdown).not.toContain('**Messages:**');
+    expect(markdown).toContain('hello');
+    expect(markdown).toContain('hi');
+  });
+
+  it('keeps per-message timestamps independent of the metadata option', () => {
+    const markdown = service.exportAsMarkdown(session('t'), messages(), {
+      includeMetadata: false,
+      includeTimestamps: true,
+    });
+
+    expect(markdown).toContain(stamp);
+  });
+});
+
 const SIGNED_ATTACHMENT_URL =
   'https://bucket.objects.example.test/private-media/clip.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256' +
   '&X-Amz-Date=20260901T000000Z&X-Amz-Expires=300&X-Amz-Signature=deadbeef';
@@ -178,5 +217,70 @@ describe('a downloaded export outlives the session that made it', () => {
 
     expect(created).toEqual([objectUrl]);
     expect(revoked).toEqual([objectUrl]);
+  });
+});
+
+describe('a readable export keeps the sources its numeric markers point at', () => {
+  const service = new ChatExportService();
+
+  function answerWithSources(): ChatMessage[] {
+    return [
+      {
+        id: 'message-1',
+        role: 'assistant',
+        content: 'Rates rose [1] and fell [2].',
+        createdAt: new Date('2026-01-01T12:00:00.000Z'),
+        metadata: {
+          searchResults: [
+            {
+              title: 'Central bank [update]',
+              url: 'https://bank.example.test/rates',
+              snippet: 's',
+            },
+            { title: 'Markets', url: 'https://markets.example.test/a_(b)', snippet: 's' },
+            { title: 'Signed', url: SIGNED_ATTACHMENT_URL, snippet: 's' },
+            { title: 'Local', url: 'javascript:alert(1)', snippet: 's' },
+          ],
+        },
+      } as ChatMessage,
+    ];
+  }
+
+  it('lists each source under its marker in the markdown body', () => {
+    const markdown = service.exportAsMarkdown(session('t'), answerWithSources());
+
+    expect(markdown).toContain('**Sources:**');
+    expect(markdown).toContain(
+      '- [1] [Central bank \\[update\\]](https://bank.example.test/rates)',
+    );
+    expect(markdown).toContain('- [2] [Markets](https://markets.example.test/a_%28b%29)');
+  });
+
+  it('never ships an expiring link or a non-web link as a source', () => {
+    const markdown = service.exportAsMarkdown(session('t'), answerWithSources());
+    const html = service.exportAsHTML(session('t'), answerWithSources());
+
+    for (const content of [markdown, html]) {
+      expect(content).not.toContain('X-Amz-Signature');
+      expect(content).not.toContain('javascript:');
+      expect(content).toContain(EXPIRING_LINK_PLACEHOLDER);
+    }
+  });
+
+  it('lists the sources in the html body as escaped links', () => {
+    const html = service.exportAsHTML(session('t'), answerWithSources());
+
+    expect(html).toContain('<strong>Sources:</strong>');
+    expect(html).toContain(
+      '<li>[1] <a href="https://bank.example.test/rates" rel="noopener noreferrer">Central bank [update]</a></li>',
+    );
+  });
+
+  it('adds no source section to a turn without sources or to a user turn', () => {
+    expect(service.exportAsMarkdown(session('t'), messages())).not.toContain('Sources');
+    expect(service.exportAsHTML(session('t'), messages())).not.toContain('Sources');
+
+    const user = answerWithSources().map((message) => ({ ...message, role: 'user' as const }));
+    expect(service.exportAsMarkdown(session('t'), user)).not.toContain('Sources');
   });
 });

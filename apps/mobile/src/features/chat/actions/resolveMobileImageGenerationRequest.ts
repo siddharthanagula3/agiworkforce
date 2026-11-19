@@ -11,6 +11,7 @@ import {
   type ManagedMediaImageAspectRatio,
   type ManagedMediaImageOperation,
 } from '@agiworkforce/cloud-contracts';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { listMediaModels, resolveMediaModelId } from './mediaMode';
 
@@ -129,7 +130,9 @@ const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImag
     },
     plan_required: {
       title: 'Image generation is not included',
-      message: 'Upgrade to an eligible AGI Cloud plan to generate images.',
+      message: NATIVE_PURCHASES_AVAILABLE
+        ? 'Upgrade to an eligible AGI Cloud plan to generate images.'
+        : "It isn't included in your plan.",
     },
     offline: {
       title: 'Network connection required',

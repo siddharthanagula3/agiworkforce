@@ -12,7 +12,7 @@ type LoggerModule = typeof import('@/lib/logger');
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
-  claimed: new Set<string>(),
+  claimed: new Map<string, unknown>(),
   enabled: true,
 }));
 
@@ -45,9 +45,10 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
   ...(await importOriginal<KeyValueModule>()),
   getKeyValueStore: () => ({
-    set: vi.fn(async (key: string, _value: unknown, options?: { onlyIfAbsent?: boolean }) => {
+    get: vi.fn(async (key: string) => mocks.claimed.get(key) ?? null),
+    set: vi.fn(async (key: string, value: unknown, options?: { onlyIfAbsent?: boolean }) => {
       if (options?.onlyIfAbsent && mocks.claimed.has(key)) return false;
-      mocks.claimed.add(key);
+      mocks.claimed.set(key, value);
       return true;
     }),
     delete: vi.fn(async (key: string) => (mocks.claimed.delete(key) ? 1 : 0)),
@@ -127,5 +128,47 @@ describe('POST /api/usage/reset-reminder', () => {
     expect(failed.status).toBe(503);
     expect(retried.status).toBe(200);
     expect(mocks.start).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not confirm a second request while the first is still scheduling, nor after it fails', async () => {
+    const resetAt = inHours(3);
+    let rejectStart: (error: Error) => void = () => undefined;
+    mocks.start.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectStart = reject;
+        }),
+    );
+
+    const first = POST(post({ resetAt }));
+    await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+    const whilePending = await POST(post({ resetAt }));
+    rejectStart(new Error('queue unavailable'));
+    const firstResponse = await first;
+
+    expect(whilePending.status).toBe(409);
+    expect(firstResponse.status).toBe(503);
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms a second request once the first has scheduled the reminder', async () => {
+    const resetAt = inHours(3);
+    let resolveStart: (value: { runId: string }) => void = () => undefined;
+    mocks.start.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStart = resolve;
+        }),
+    );
+
+    const first = POST(post({ resetAt }));
+    await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
+    resolveStart({ runId: 'run-1' });
+    expect((await first).status).toBe(200);
+
+    const second = await POST(post({ resetAt }));
+
+    expect(second.status).toBe(200);
+    expect(mocks.start).toHaveBeenCalledTimes(1);
   });
 });

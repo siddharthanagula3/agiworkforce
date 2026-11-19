@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import AdminConsolePage from './AdminConsolePage';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 vi.mock('../components/SecurityOperationsPanel', () => ({
   default: () => <div data-testid="security-operations-panel">Live security operations</div>,
@@ -33,7 +36,7 @@ describe('AdminConsolePage, managed compute status honesty', () => {
     const { container } = render(<AdminConsolePage />);
 
     expectNoForbiddenLanguage(container.textContent ?? '');
-    expect(screen.getByText('Managed compute: public alpha, open by default')).toBeInTheDocument();
+    expect(screen.getByText(`${CLOUD} compute: public alpha, open by default`)).toBeInTheDocument();
     expect(screen.getByText('Managed Compute Access')).toBeInTheDocument();
     expect(screen.getByText('Open (public alpha)')).toBeInTheDocument();
     expect(screen.getByText('Public alpha')).toBeInTheDocument();
@@ -47,7 +50,7 @@ describe('AdminConsolePage, managed compute status honesty', () => {
 
       expectNoForbiddenLanguage(container.textContent ?? '');
       expect(
-        screen.getByText('Managed compute temporarily disabled (incident kill-switch)'),
+        screen.getByText(`${CLOUD} compute temporarily disabled (incident kill-switch)`),
       ).toBeInTheDocument();
       expect(screen.getByText('Temporarily disabled (incident kill-switch)')).toBeInTheDocument();
       expect(screen.getByText('Managed Compute Access')).toBeInTheDocument();
@@ -68,6 +71,6 @@ describe('AdminConsolePage, managed compute status honesty', () => {
     const { container } = render(<AdminConsolePage />);
 
     expectNoForbiddenLanguage(container.textContent ?? '');
-    expect(screen.getByText('Managed compute: public alpha, open by default')).toBeInTheDocument();
+    expect(screen.getByText(`${CLOUD} compute: public alpha, open by default`)).toBeInTheDocument();
   });
 });

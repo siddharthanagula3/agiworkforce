@@ -25,11 +25,13 @@ import {
   startDeveloperSession,
   startDeveloperTurn,
   startLocalChat,
+  startBackgroundLocalCommand,
   startLocalCommand,
   steerDeveloperTurn,
   stopComputerUse,
   writeLocalCommandPolicy,
   readPreviewConsoleErrors,
+  setDeveloperSkillConsent,
 } from '../lib/runtime-client';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 
@@ -92,6 +94,21 @@ describe('local command client', () => {
     expect(calls[0]?.command).toBe('shell_run');
     expect(calls[0]?.args).toMatchObject({ runId: run.runId, rootId: 'root-1' });
     expect(result.runId).toBe(run.runId);
+  });
+
+  it('names a background start before it settles so it can be cancelled', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ runId: String(args?.['runId']), running: true });
+    });
+
+    const start = startBackgroundLocalCommand({ rootId: 'root-1', command: 'pnpm dev' });
+
+    expect(start.runId).toHaveLength(36);
+    expect(calls[0]?.command).toBe('shell_start');
+    expect(calls[0]?.args).toMatchObject({ runId: start.runId, rootId: 'root-1' });
+    await expect(start.started).resolves.toMatchObject({ runId: start.runId });
   });
 
   it('passes a subfolder and a timeout only when given', async () => {
@@ -186,10 +203,12 @@ describe('reading the preview console errors', () => {
 
     await expect(readPreviewConsoleErrors(false)).resolves.toEqual(report);
     await readPreviewConsoleErrors(true);
+    await readPreviewConsoleErrors(true, 'http://localhost:5173/');
 
     expect(calls.map((call) => [call.command, call.args])).toEqual([
       ['app_preview_errors', { clear: false }],
       ['app_preview_errors', { clear: true }],
+      ['app_preview_errors', { clear: true, url: 'http://localhost:5173/' }],
     ]);
   });
 });
@@ -251,6 +270,18 @@ describe('clipboard', () => {
     expect(files).toHaveLength(1);
     expect(files[0]?.name).toBe('clipboard-5.txt');
     expect(files[0]?.type).toBe('text/plain');
+  });
+
+  it('says in the attached text when the host cut the clipboard short', async () => {
+    const [file] = clipboardAttachments({ text: 'start', textTruncated: true }, 5);
+    const text = await file!.text();
+    expect(text.startsWith('start\n\n[Clipboard text cut off')).toBe(true);
+    expect(text).toContain('500,000 characters');
+  });
+
+  it('leaves text the host did not cut short exactly as copied', async () => {
+    const [file] = clipboardAttachments({ text: 'whole', textTruncated: false }, 5);
+    expect(await file!.text()).toBe('whole');
   });
 
   it('turns an image into a png attachment', () => {
@@ -602,5 +633,26 @@ describe('computer use client', () => {
 
     await expect(stopComputerUse()).resolves.toEqual({ stopped: true });
     expect(calls.map((call) => call.command)).toEqual(['computer_stop']);
+  });
+});
+
+describe('project skill consent client', () => {
+  it('sends the reviewed digest with a grant and nothing with a revoke', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok(true);
+    });
+
+    await setDeveloperSkillConsent('root-1', true, 'digest-a');
+    await setDeveloperSkillConsent('root-1', false, 'digest-a');
+
+    expect(calls).toEqual([
+      {
+        command: 'developer_skill_consent',
+        args: { rootId: 'root-1', granted: true, digest: 'digest-a' },
+      },
+      { command: 'developer_skill_consent', args: { rootId: 'root-1', granted: false } },
+    ]);
   });
 });

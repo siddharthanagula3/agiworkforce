@@ -184,7 +184,6 @@ describe('POST /api/billing/refund-requests', () => {
       db: DB,
       userId: USER_ID,
       customerId: 'cus_123',
-      subscriptionId: 'sub_123',
       chargeId: CHARGE_ID,
       reason: 'accidental_purchase',
       details: 'bought twice',

@@ -94,6 +94,17 @@ describe('the deletion backlog a workspace can finally see', () => {
     expect(figures.queryByText('Estimated to finish')).toBeNull();
   });
 
+  it('does not claim a sweep reached the window before any sweep has run', () => {
+    state({ pendingDeletions: 0, runsRemaining: 0, lastSweptAt: null });
+
+    render(<WorkspaceDataControls />);
+
+    const figures = within(strip());
+    expect(figures.getByText('Nothing')).toBeTruthy();
+    expect(figures.getByText('No conversation is older than the 30-day window.')).toBeTruthy();
+    expect(figures.queryByText('The sweep has reached the whole retention window.')).toBeNull();
+  });
+
   it('admits it cannot date the finish until two sweeps have set a pace', () => {
     state({ estimatedCompletionAt: null });
 
@@ -127,5 +138,17 @@ describe('the deletion backlog a workspace can finally see', () => {
 
     expect(screen.queryByRole('group', { name: 'Deletion backlog' })).toBeNull();
     expect(screen.getByText('No sweep has run')).toBeTruthy();
+  });
+
+  it('does not tell an administrator to turn on retention that is already enforced', () => {
+    state({ enforced: true, lastSweptAt: null });
+
+    render(<WorkspaceDataControls />);
+
+    expect(screen.getByText('No sweep has run')).toBeTruthy();
+    expect(screen.getByText(/Retention is enforced for this workspace/)).toBeTruthy();
+    expect(screen.queryByText(/Turn it on/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'policy' })).toBeNull();
+    expect(screen.queryByText(/not enforced/)).toBeNull();
   });
 });

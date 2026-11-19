@@ -36,11 +36,12 @@ export interface FlashcardSet {
   cards: Flashcard[];
 }
 
-const MAX_QUESTIONS = 100;
-const MAX_OPTIONS = 8;
-const MAX_CARDS = 300;
-const MAX_TEXT = 2_000;
+export const MAX_QUESTIONS = 100;
+export const MAX_OPTIONS = 8;
+export const MAX_CARDS = 300;
+export const MAX_TEXT = 2_000;
 const MAX_HINTS = 5;
+const MAX_ACCEPTED = 10;
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, MAX_TEXT) : '';
@@ -65,17 +66,21 @@ function parseQuestion(raw: unknown): QuizQuestion | null {
   if (!question) return null;
   const explanation = text(entry['explanation']);
   const hints = list(entry['hints'], MAX_HINTS);
-  const options = list(entry['options'], MAX_OPTIONS);
+  const positioned = (Array.isArray(entry['options']) ? entry['options'] : [])
+    .map((option, position) => ({ option: text(option), position }))
+    .filter(({ option }) => option)
+    .slice(0, MAX_OPTIONS);
+  const options = positioned.map(({ option }) => option);
   const kind = text(entry['type'] ?? entry['kind']);
   if (options.length >= 2 && kind !== 'short_answer') {
     const rawAnswer = entry['answer'];
     const index =
       typeof rawAnswer === 'number'
-        ? rawAnswer
+        ? positioned.findIndex(({ position }) => position === rawAnswer)
         : typeof rawAnswer === 'string'
           ? options.findIndex((option) => option.toLowerCase() === rawAnswer.trim().toLowerCase())
           : -1;
-    if (!Number.isInteger(index) || index < 0 || index >= options.length) return null;
+    if (index < 0) return null;
     return { kind: 'multiple_choice', question, options, answer: index, explanation, hints };
   }
   const answer = text(entry['answer']);
@@ -84,7 +89,7 @@ function parseQuestion(raw: unknown): QuizQuestion | null {
     kind: 'short_answer',
     question,
     answer,
-    accept: list(entry['accept'], 10),
+    accept: list(entry['accept'], MAX_ACCEPTED),
     explanation,
     hints,
   };
@@ -117,6 +122,68 @@ export function parseFlashcards(source: string): FlashcardSet | null {
       return front && back ? [{ front, back }] : [];
     });
   return cards.length > 0 ? { title: text(entry['title']), cards } : null;
+}
+
+function rawSet(
+  source: string,
+  key: 'questions' | 'cards',
+): { title: unknown; entries: unknown[] } | null {
+  const parsed = parseJson(source);
+  const root = Array.isArray(parsed) ? { [key]: parsed } : parsed;
+  if (!root || typeof root !== 'object') return null;
+  const entry = root as Record<string, unknown>;
+  const entries = entry[key];
+  return Array.isArray(entries) ? { title: entry['title'], entries } : null;
+}
+
+function tooLong(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > MAX_TEXT;
+}
+
+function tooMany(value: unknown, limit: number): boolean {
+  return Array.isArray(value) && value.filter((item) => text(item)).length > limit;
+}
+
+function questionOverflows(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object') return false;
+  const entry = raw as Record<string, unknown>;
+  return (
+    ['question', 'answer', 'explanation'].some((field) => tooLong(entry[field])) ||
+    tooMany(entry['options'], MAX_OPTIONS) ||
+    tooMany(entry['hints'], MAX_HINTS) ||
+    tooMany(entry['accept'], MAX_ACCEPTED) ||
+    ['options', 'hints', 'accept'].some((field) => {
+      const values = entry[field];
+      return Array.isArray(values) && values.some(tooLong);
+    })
+  );
+}
+
+function cardOverflows(raw: unknown): boolean {
+  return !!raw && typeof raw === 'object' && Object.values(raw).some(tooLong);
+}
+
+export function studySourceIsLossless(kind: 'quiz' | 'flashcards', source: string): boolean {
+  if (kind === 'quiz') {
+    const quiz = parseQuiz(source);
+    const raw = rawSet(source, 'questions');
+    return (
+      !!quiz &&
+      !!raw &&
+      raw.entries.length === quiz.questions.length &&
+      !tooLong(raw.title) &&
+      !raw.entries.some(questionOverflows)
+    );
+  }
+  const set = parseFlashcards(source);
+  const raw = rawSet(source, 'cards');
+  return (
+    !!set &&
+    !!raw &&
+    raw.entries.length === set.cards.length &&
+    !tooLong(raw.title) &&
+    !raw.entries.some(cardOverflows)
+  );
 }
 
 export function serializeQuiz(quiz: Quiz): string {

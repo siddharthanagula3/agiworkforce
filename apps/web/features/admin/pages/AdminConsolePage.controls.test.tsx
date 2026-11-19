@@ -1,6 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import AdminConsolePage from './AdminConsolePage';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 vi.mock('../components/SecurityOperationsPanel', () => ({
   default: () => <div data-testid="security-operations-panel">Live security operations</div>,
@@ -154,14 +157,14 @@ describe('AdminConsolePage, readiness ledger provenance', () => {
     const { container } = render(<AdminConsolePage />);
     const areas = ledgerRows(container).map((row) => row.querySelector('td')?.textContent ?? '');
 
-    expect(areas).toEqual(['Privacy modes', 'Managed compute']);
+    expect(areas).toEqual(['Privacy modes', `${CLOUD} compute`]);
   });
 
   it('reads the managed-compute row from the environment on every render', () => {
     vi.stubEnv('AGI_MANAGED_COMPUTE_PRIVATE_BETA', 'off');
     const { container } = render(<AdminConsolePage />);
     const row = ledgerRows(container).find((candidate) =>
-      candidate.textContent?.startsWith('Managed compute'),
+      candidate.textContent?.startsWith(`${CLOUD} compute`),
     );
 
     expect(row).toBeDefined();

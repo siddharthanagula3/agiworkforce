@@ -86,7 +86,8 @@ impl AgentDefinition {
     ///
     /// The following fields are applied when set:
     /// - `model`: calls `session.switch_model()`
-    /// - `tools`: sets `session.allowed_tools` (whitelist)
+    /// - `tools`: sets `session.allowed_tools`, kept within any allowlist the
+    ///   caller passed on the command line
     /// - `disallowed_tools`: appends to `session.disallowed_tools`
     /// - `max_turns`: sets `session.max_turns`
     /// - `permission_mode`: keeps or narrows the session's mode, never widens it
@@ -108,7 +109,10 @@ impl AgentDefinition {
         }
         if let Some(ref tools) = self.tools {
             if !tools.is_empty() {
-                session.allowed_tools = Some(tools.clone());
+                session.allowed_tools = Some(match session.caller_allowed_tools.as_deref() {
+                    Some(cap) => crate::tool_filters::intersect_allowlists(cap, tools),
+                    None => tools.clone(),
+                });
             }
         }
         if let Some(ref disallowed) = self.disallowed_tools {
@@ -242,78 +246,125 @@ impl AgentDefinition {
 // Discovery
 // ---------------------------------------------------------------------------
 
-/// Discover all available agent definitions from project and global directories.
+/// Discover all available agent definitions from global and project directories.
 ///
-/// Discovery order (later entries can shadow earlier ones by name):
-/// 1. `.agiworkforce/agents/` in the current project directory
-/// 2. `.claude/agents/` in the current project directory (Claude Code compat)
-/// 3. `~/.agiworkforce/agents/` global agents
-/// 4. `~/.claude/agents/` global agents (Claude Code compat)
-/// 5. Plugin-declared agent paths (via installed plugin manifests)
+/// Discovery order (the first definition of a name wins):
+/// 1. `~/.agiworkforce/agents/` global agents
+/// 2. `~/.claude/agents/` global agents (Claude Code compat)
+/// 3. Agent paths declared by plugins the user installed
+/// 4. `.agiworkforce/agents/` and `.claude/agents/` in the current project,
+///    then agent paths declared by the project's own plugins, only when the
+///    workspace is trusted to supply configuration
 pub fn discover_agents() -> Vec<AgentDefinition> {
-    let mut agents = Vec::new();
-
-    // Project-level agents: .agiworkforce/agents/ and .claude/agents/
-    if let Ok(cwd) = std::env::current_dir() {
-        let agi_dir = cwd.join(".agiworkforce").join("agents");
-        if agi_dir.exists() {
-            load_agents_from_dir(&agi_dir, &mut agents);
-        }
-        let claude_dir = cwd.join(".claude").join("agents");
-        if claude_dir.exists() {
-            load_agents_from_dir(&claude_dir, &mut agents);
-        }
-    }
-
-    // Global agents: ~/.agiworkforce/agents/ and ~/.claude/agents/
+    let cwd = std::env::current_dir().ok();
+    let mut user_dirs = Vec::new();
     if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-        let global_dir = config_dir.join("agents");
-        if global_dir.exists() {
-            load_agents_from_dir(&global_dir, &mut agents);
-        }
+        user_dirs.push(config_dir.join("agents"));
     }
     if let Some(home) = dirs::home_dir() {
-        let claude_global = home.join(".claude").join("agents");
-        if claude_global.exists() {
-            load_agents_from_dir(&claude_global, &mut agents);
+        user_dirs.push(home.join(".claude").join("agents"));
+    }
+    discover_agents_from(cwd.as_deref().and_then(trusted_project), &user_dirs)
+}
+
+fn trusted_project(cwd: &Path) -> Option<&Path> {
+    crate::trust::restrictions_for(cwd)
+        .repository_config
+        .then_some(cwd)
+}
+
+fn discover_agents_from(project: Option<&Path>, user_dirs: &[PathBuf]) -> Vec<AgentDefinition> {
+    let mut user_agents = Vec::new();
+    for dir in user_dirs {
+        if dir.exists() {
+            load_agents_from_dir(dir, &mut user_agents);
         }
     }
 
-    // Plugin-declared agent paths
+    let mut project_agents = Vec::new();
+    if let Some(project) = project {
+        load_project_agents(project, &mut project_agents);
+    }
+
     let mut plugins_mgr = crate::plugins::PluginsManager::new();
-    if plugins_mgr
-        .load_all(std::env::current_dir().ok().as_deref())
-        .is_ok()
-    {
+    if plugins_mgr.load_all(project).is_ok() {
+        let project_plugin_roots: Vec<PathBuf> = plugins_mgr
+            .enabled_plugins()
+            .filter(|plugin| plugin.from_project_dir)
+            .map(|plugin| plugin.root.clone())
+            .collect();
         for entry in plugins_mgr.agent_path_entries() {
             let plugin_root = entry.plugin_root;
             let path = entry.path;
             if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &path) {
                 continue;
             }
+            let agents = if project_plugin_roots.contains(&plugin_root) {
+                &mut project_agents
+            } else {
+                &mut user_agents
+            };
             if path.is_dir() {
-                load_agents_from_plugin_dir(&path, &plugin_root, &mut agents);
+                load_agents_from_plugin_dir(&path, &plugin_root, agents);
             } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
-                if let Ok(agent) = load_agent(&path) {
+                if let Ok(agent) = load_agent_within(&plugin_root, &path) {
                     agents.push(agent);
                 }
             }
         }
     }
 
+    users_before_project(user_agents, project_agents)
+}
+
+fn load_project_agents(project: &Path, agents: &mut Vec<AgentDefinition>) {
+    for dir in [
+        project.join(".agiworkforce").join("agents"),
+        project.join(".claude").join("agents"),
+    ] {
+        if dir.exists() {
+            load_agents_from_dir_depth(&dir, Some(project), agents, 0);
+        }
+    }
+}
+
+fn users_before_project(
+    mut agents: Vec<AgentDefinition>,
+    project_agents: Vec<AgentDefinition>,
+) -> Vec<AgentDefinition> {
+    for agent in project_agents {
+        if let Some(kept) = agents
+            .iter()
+            .find(|kept| kept.name.eq_ignore_ascii_case(&agent.name))
+        {
+            tracing::warn!(
+                agent = %agent.name,
+                ignored = %agent.path.display(),
+                kept = %kept.path.display(),
+                "ignoring project agent that collides with your own agent"
+            );
+            continue;
+        }
+        agents.push(agent);
+    }
     agents
 }
 
 /// Load agent definition markdown files from a directory.
 fn load_agents_from_dir(dir: &Path, agents: &mut Vec<AgentDefinition>) {
-    load_agents_from_dir_depth(dir, agents, 0);
+    load_agents_from_dir_depth(dir, None, agents, 0);
 }
 
 fn load_agents_from_plugin_dir(dir: &Path, plugin_root: &Path, agents: &mut Vec<AgentDefinition>) {
     load_agents_from_plugin_dir_depth(dir, plugin_root, agents, 0);
 }
 
-fn load_agents_from_dir_depth(dir: &Path, agents: &mut Vec<AgentDefinition>, depth: usize) {
+fn load_agents_from_dir_depth(
+    dir: &Path,
+    within: Option<&Path>,
+    agents: &mut Vec<AgentDefinition>,
+    depth: usize,
+) {
     if depth > 6 {
         return;
     }
@@ -328,12 +379,16 @@ fn load_agents_from_dir_depth(dir: &Path, agents: &mut Vec<AgentDefinition>, dep
 
     for path in paths {
         if path.is_dir() {
-            load_agents_from_dir_depth(&path, agents, depth + 1);
+            load_agents_from_dir_depth(&path, within, agents, depth + 1);
             continue;
         }
 
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            if let Ok(agent) = load_agent(&path) {
+            let loaded = match within {
+                Some(root) => load_agent_within(root, &path),
+                None => load_agent(&path),
+            };
+            if let Ok(agent) = loaded {
                 agents.push(agent);
             }
         }
@@ -368,7 +423,7 @@ fn load_agents_from_plugin_dir_depth(
         }
 
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
-            if let Ok(agent) = load_agent(&path) {
+            if let Ok(agent) = load_agent_within(plugin_root, &path) {
                 agents.push(agent);
             }
         }
@@ -379,8 +434,22 @@ fn load_agents_from_plugin_dir_depth(
 fn load_agent(path: &Path) -> Result<AgentDefinition> {
     let content = std::fs::read_to_string(path)
         .context(format!("Failed to read agent file: {}", path.display()))?;
+    agent_from_content(path, &content)
+}
 
-    let fm = parse_agent_frontmatter(&content)?;
+fn load_agent_within(root: &Path, path: &Path) -> Result<AgentDefinition> {
+    let content = crate::project_text::read_within(root, path).with_context(|| {
+        format!(
+            "Agent file {} is not a readable regular file inside {}",
+            path.display(),
+            root.display()
+        )
+    })?;
+    agent_from_content(path, &content)
+}
+
+fn agent_from_content(path: &Path, content: &str) -> Result<AgentDefinition> {
+    let fm = parse_agent_frontmatter(content)?;
 
     Ok(AgentDefinition {
         name: fm.name,
@@ -397,6 +466,16 @@ fn load_agent(path: &Path) -> Result<AgentDefinition> {
         system_prompt: fm.body,
         path: path.to_path_buf(),
     })
+}
+
+/// Reload the definition a picker row showed, by the file it came from, so a
+/// same-named definition elsewhere cannot stand in for it.
+pub fn find_agent_at(path: &Path) -> Option<AgentDefinition> {
+    agent_at(discover_agents(), path)
+}
+
+fn agent_at(agents: Vec<AgentDefinition>, path: &Path) -> Option<AgentDefinition> {
+    agents.into_iter().find(|agent| agent.path == path)
 }
 
 /// Find an agent definition by name (case-insensitive match).
@@ -480,6 +559,21 @@ impl AgentScope {
             Self::Global => "global",
         }
     }
+}
+
+const MANAGEMENT_SUBCOMMANDS: &[&str] = &[
+    "list", "ls", "show", "view", "inspect", "path", "where", "new", "create", "init", "validate",
+    "doctor", "check", "history", "activity", "log", "delete", "remove", "rm", "rename", "set",
+    "help", "-h", "--help",
+];
+
+pub fn is_management_subcommand(arg: &str) -> bool {
+    let first = arg
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    first.is_empty() || MANAGEMENT_SUBCOMMANDS.contains(&first.as_str())
 }
 
 /// Render the `/agents` management command.
@@ -1609,6 +1703,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_management_verb_is_routed_to_the_renderer_not_to_activation() {
+        for verb in [
+            "history", "activity", "log", "delete", "remove", "rm", "rename", "set", "validate",
+            "list", "help", "--help",
+        ] {
+            assert!(is_management_subcommand(verb), "{verb}");
+            assert!(
+                is_management_subcommand(&format!("{verb} reviewer")),
+                "{verb}"
+            );
+        }
+        assert!(is_management_subcommand("HISTORY reviewer"));
+        assert!(is_management_subcommand(""));
+        assert!(!is_management_subcommand("reviewer"));
+        assert!(!is_management_subcommand("reviewer history"));
+    }
+
+    #[test]
     fn format_subagents_renders_model_tools_and_when_to_use() {
         let agents = vec![
             AgentDefinition {
@@ -2056,6 +2168,80 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         assert_eq!(agents[0].name, "compat-agent");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_project_agent_file_that_leads_out_of_the_project_is_not_loaded() {
+        let project = tempfile::tempdir().expect("project");
+        let outside = tempfile::tempdir().expect("outside");
+        std::fs::write(outside.path().join("notes"), "outside-secret-value").expect("outside");
+        let agents_dir = project.path().join(".claude").join("agents");
+        std::fs::create_dir_all(&agents_dir).expect("agents dir");
+        std::os::unix::fs::symlink(outside.path().join("notes"), agents_dir.join("setup.md"))
+            .expect("link out");
+        std::fs::write(
+            agents_dir.join("inside.md"),
+            "---\nname: inside\ndescription: Inside\n---\n\nInside body.",
+        )
+        .expect("inside agent");
+
+        let agents = discover_agents_from(Some(project.path()), &[]);
+
+        assert!(agents.iter().any(|agent| agent.name == "inside"));
+        assert!(
+            agents
+                .iter()
+                .all(|agent| !agent.system_prompt.contains("outside-secret-value")),
+            "a file outside the project was loaded as an agent"
+        );
+    }
+
+    #[test]
+    fn an_untrusted_project_supplies_no_agents() {
+        let project = tempfile::tempdir().expect("project");
+        let agents_dir = project.path().join(".agiworkforce").join("agents");
+        std::fs::create_dir_all(&agents_dir).expect("agents dir");
+        std::fs::write(
+            agents_dir.join("setup.md"),
+            "---\nname: setup\ndescription: Setup\n---\n\nRepository body.",
+        )
+        .expect("project agent");
+
+        assert!(trusted_project(project.path()).is_none());
+        let agents = discover_agents_from(trusted_project(project.path()), &[]);
+        assert!(agents
+            .iter()
+            .all(|agent| !agent.path.starts_with(project.path())));
+    }
+
+    #[test]
+    fn a_project_agent_never_replaces_your_own_agent_of_the_same_name() {
+        let project = tempfile::tempdir().expect("project");
+        let home = tempfile::tempdir().expect("home");
+        let project_dir = project.path().join(".agiworkforce").join("agents");
+        std::fs::create_dir_all(&project_dir).expect("project agents");
+        std::fs::write(
+            project_dir.join("reviewer.md"),
+            "---\nname: Reviewer\ndescription: Repository reviewer\n---\n\nRepository body.",
+        )
+        .expect("project agent");
+        let user_dir = home.path().join("agents");
+        std::fs::create_dir_all(&user_dir).expect("user agents");
+        std::fs::write(
+            user_dir.join("reviewer.md"),
+            "---\nname: reviewer\ndescription: My reviewer\n---\n\nMy body.",
+        )
+        .expect("user agent");
+
+        let agents = discover_agents_from(Some(project.path()), std::slice::from_ref(&user_dir));
+        let named: Vec<&AgentDefinition> = agents
+            .iter()
+            .filter(|agent| agent.name.eq_ignore_ascii_case("reviewer"))
+            .collect();
+
+        assert_eq!(named.len(), 1);
+        assert_eq!(named[0].path, user_dir.join("reviewer.md"));
+    }
+
     #[test]
     fn test_agent_scope_label_project() {
         let agent = AgentDefinition {
@@ -2074,6 +2260,43 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             mcp_servers: None,
         };
         assert_eq!(agent_scope_label(&agent), "project");
+    }
+
+    #[test]
+    fn a_selected_path_resolves_to_that_file_and_never_a_namesake() {
+        let project = AgentDefinition {
+            name: "reviewer".to_string(),
+            description: "Project editor".to_string(),
+            model: None,
+            tools: Some(vec!["write_file".to_string()]),
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
+            system_prompt: "Project instructions".to_string(),
+            path: PathBuf::from("/repo/.agiworkforce/agents/reviewer.md"),
+            mcp_servers: None,
+        };
+        let global = AgentDefinition {
+            description: "Global reader".to_string(),
+            tools: Some(vec!["read_file".to_string()]),
+            system_prompt: "Global instructions".to_string(),
+            path: PathBuf::from("/home/me/.agiworkforce/agents/reviewer.md"),
+            ..project.clone()
+        };
+        let agents = vec![project.clone(), global.clone()];
+
+        let selected = agent_at(agents.clone(), &global.path).expect("global row");
+        assert_eq!(selected.system_prompt, "Global instructions");
+        assert_eq!(selected.tools, Some(vec!["read_file".to_string()]));
+
+        assert!(agent_at(
+            vec![project],
+            Path::new("/home/me/.agiworkforce/agents/reviewer.md")
+        )
+        .is_none());
     }
 
     fn make_test_context() -> crate::context::SystemContext {

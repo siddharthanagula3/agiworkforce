@@ -921,7 +921,7 @@ export function SchedulesPage({
         className={
           scope
             ? 'flex w-full flex-col gap-6'
-            : 'mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12'
+            : 'mx-auto flex w-full max-w-[68rem] flex-col gap-8 px-8 py-12 max-md:px-4 max-md:pt-6'
         }
       >
         {!scope && <LocalRoutinesSection />}
@@ -942,7 +942,7 @@ export function SchedulesPage({
             </div>
           ) : (
             <div className="max-w-3xl space-y-1">
-              <h1 className="text-balance font-[var(--chat-font-sans)] text-[28px] font-medium">
+              <h1 className="text-balance text-[28px] font-medium max-md:leading-[1.2]">
                 Scheduled
               </h1>
               <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
@@ -958,7 +958,7 @@ export function SchedulesPage({
                     type="button"
                     variant="outline"
                     aria-label={`Sort by ${sortLabel}`}
-                    className="gap-1.5 rounded-full"
+                    className="gap-1.5 whitespace-nowrap rounded-full pointer-coarse:min-h-11"
                   >
                     <span className="text-muted-foreground">Sort by</span>
                     <span className="text-foreground">{sortLabel}</span>
@@ -990,7 +990,7 @@ export function SchedulesPage({
               >
                 <Button
                   type="button"
-                  className="rounded-none ps-5 focus-visible:ring-inset focus-visible:ring-offset-0"
+                  className="rounded-none ps-5 pointer-coarse:min-h-11 focus-visible:ring-inset focus-visible:ring-offset-0"
                   onClick={openCreate}
                 >
                   {scope ? 'New task in this project' : 'New task'}
@@ -1000,7 +1000,7 @@ export function SchedulesPage({
                     <Button
                       type="button"
                       aria-label="More ways to create a task"
-                      className="rounded-none border-s border-primary-foreground/20 pe-4 ps-3 focus-visible:ring-inset focus-visible:ring-offset-0"
+                      className="rounded-none pointer-coarse:min-h-11 border-s border-primary-foreground/20 pe-4 ps-3 focus-visible:ring-inset focus-visible:ring-offset-0"
                     >
                       <ChevronDown className="h-4 w-4" aria-hidden="true" />
                     </Button>
@@ -1051,8 +1051,7 @@ export function SchedulesPage({
 
         {!canCreateSchedules && (
           <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            Scheduled tasks are available on Basic and higher plans. Existing schedules remain
-            available to review.
+            Scheduled tasks are available on Basic and higher plans.
           </p>
         )}
 
@@ -1092,7 +1091,7 @@ export function SchedulesPage({
         )}
 
         {listStatus === 'success' && sortedSchedules.length === 0 && (
-          <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
+          <section className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center max-md:px-4 max-md:py-10">
             <CalendarClock className="mx-auto h-9 w-9 text-muted-foreground" aria-hidden="true" />
             <h2 className="mt-4 text-xl font-semibold">
               {scope ? 'No scheduled tasks in this project yet' : 'No schedules yet'}
@@ -1116,7 +1115,7 @@ export function SchedulesPage({
             */}
             {canCreateSchedules && (
               <div className="mt-10 text-start">
-                <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <h3 className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground max-md:text-sm max-md:font-medium max-md:normal-case max-md:tracking-normal">
                   Or start from one of these
                 </h3>
                 <ScheduleTemplateGrid
@@ -1156,7 +1155,7 @@ export function SchedulesPage({
                 </Button>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Each template opens the create form filled in, for you to review before saving.
+                Opens a filled-in form to review before saving.
               </p>
               <ScheduleTemplateGrid
                 className="mt-4"
@@ -1195,7 +1194,7 @@ export function SchedulesPage({
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setStatusFilter(filter.id)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-9 ${
                     selected
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border text-muted-foreground hover:bg-accent'
@@ -1218,7 +1217,7 @@ export function SchedulesPage({
               type="button"
               aria-pressed={projectFilter === 'all'}
               onClick={() => setProjectFilter('all')}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-9 ${
                 projectFilter === 'all'
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-border text-muted-foreground hover:bg-accent'
@@ -1232,7 +1231,7 @@ export function SchedulesPage({
                 type="button"
                 aria-pressed={projectFilter === filter.id}
                 onClick={() => setProjectFilter(filter.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors pointer-coarse:min-h-9 ${
                   projectFilter === filter.id
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-border text-muted-foreground hover:bg-accent'
@@ -1342,10 +1341,7 @@ export function SchedulesPage({
         >
           <DialogHeader className="shrink-0">
             <DialogTitle>{editing ? 'Edit Schedule' : 'Create Schedule'}</DialogTitle>
-            <DialogDescription>
-              Configure a Cloud task that returns text. The server validates timing again before
-              saving. {SCHEDULE_RELIABILITY_NOTE}
-            </DialogDescription>
+            <DialogDescription>{SCHEDULE_RELIABILITY_NOTE}</DialogDescription>
           </DialogHeader>
           <ScheduleForm
             draft={draft}

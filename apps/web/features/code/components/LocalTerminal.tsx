@@ -14,6 +14,7 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 import { CODE_COPY, CODE_LIMITS } from '../code-surface';
 import { LOCAL_CODE_COPY, LOCAL_PANEL_COPY, localTerminalTabLabel } from '../local-code';
+import { LocalPtyTerminal } from './LocalPtyTerminal';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -27,6 +28,11 @@ interface TerminalEntry {
   exitCode: number | null;
   failed: boolean;
   running: boolean;
+  detached?: boolean;
+}
+
+interface CancellableRun {
+  runId: string;
 }
 
 export interface LocalTerminalProps {
@@ -46,7 +52,8 @@ export function LocalTerminal({
 }: LocalTerminalProps) {
   const [command, setCommand] = useState('');
   const [entries, setEntries] = useState<TerminalEntry[]>([]);
-  const run = useRef<LocalCommandRun | null>(null);
+  const run = useRef<CancellableRun | null>(null);
+  const stopRequested = useRef(new Set<string>());
   const fieldId = useId();
   const endRef = useRef<HTMLDivElement>(null);
   const runningCommand = entries.find((entry) => entry.running)?.command ?? null;
@@ -134,6 +141,7 @@ export function LocalTerminal({
       }));
     } finally {
       run.current = null;
+      stopRequested.current.delete(started.runId);
       onCommandFinished();
     }
   };
@@ -142,35 +150,44 @@ export function LocalTerminal({
     const line = command.trim();
     if (!line || running) return;
     setCommand('');
-    const id = crypto.randomUUID();
+    const { runId, started: pending } = startBackgroundLocalCommand({ rootId, command: line });
+    run.current = { runId };
     setEntries((current) => [
       ...current,
-      { id, command: line, output: '', exitCode: null, failed: false, running: true },
+      { id: runId, command: line, output: '', exitCode: null, failed: false, running: true },
     ]);
     try {
-      const started = await startBackgroundLocalCommand({ rootId, command: line });
-      update(id, () => ({
-        output: [started.output, LOCAL_CODE_COPY.startedInBackground]
+      const started = await pending;
+      const stopped = stopRequested.current.delete(runId);
+      const detached = started.running && !stopped;
+      update(runId, () => ({
+        output: [started.output, detached ? LOCAL_CODE_COPY.startedInBackground : '']
           .filter((text) => text !== '')
           .join('\n')
           .slice(-MAX_ENTRY_OUTPUT),
         exitCode: started.running ? null : started.exitCode,
         failed: !started.running && started.exitCode !== EXIT_CODE_OK,
         running: false,
+        detached,
       }));
-      onBackgroundStarted?.();
+      if (!stopped) onBackgroundStarted?.();
     } catch (cause: unknown) {
-      update(id, () => ({
+      stopRequested.current.delete(runId);
+      update(runId, () => ({
         output: toUserMessage(cause, LOCAL_CODE_COPY.commandFailed),
         failed: true,
         running: false,
       }));
+    } finally {
+      if (run.current?.runId === runId) run.current = null;
     }
   };
 
   const stop = () => {
     const current = run.current;
-    if (current) void cancelLocalCommand(current.runId);
+    if (!current) return;
+    stopRequested.current.add(current.runId);
+    void cancelLocalCommand(current.runId);
   };
 
   return (
@@ -185,7 +202,7 @@ export function LocalTerminal({
             {entry.output && <pre className={styles['terminalOutput']}>{entry.output}</pre>}
             {entry.running ? (
               <Spinner size="sm" aria-label={LOCAL_CODE_COPY.working} />
-            ) : (
+            ) : entry.detached ? null : (
               <div
                 className={`${styles['terminalScreenExit']} ${entry.failed ? styles['terminalError'] : ''}`}
               >
@@ -247,6 +264,8 @@ export interface LocalTerminalDockProps {
   rootId: string;
   folder: string;
   open: boolean;
+  /** The CLI hosts a real shell, so each tab is a terminal instead of a command line. */
+  pty?: boolean;
   onClose: () => void;
   onCommandFinished: () => void;
   onBackgroundStarted: () => void;
@@ -258,6 +277,7 @@ export function LocalTerminalDock({
   rootId,
   folder,
   open,
+  pty = false,
   onClose,
   onCommandFinished,
   onBackgroundStarted,
@@ -274,7 +294,9 @@ export function LocalTerminalDock({
   useEffect(() => {
     if (!open) return;
     panelsRef.current
-      ?.querySelector<HTMLInputElement>(`[data-terminal-tab="${activeId}"] input:not(:disabled)`)
+      ?.querySelector<HTMLElement>(
+        `[data-terminal-tab="${activeId}"] input:not(:disabled), [data-terminal-tab="${activeId}"] textarea`,
+      )
       ?.focus();
   }, [open, activeId]);
 
@@ -422,13 +444,17 @@ export function LocalTerminalDock({
             data-terminal-tab={tab.id}
             hidden={tab.id !== activeId}
           >
-            <LocalTerminal
-              rootId={rootId}
-              folder={folder}
-              onCommandFinished={onCommandFinished}
-              onBackgroundStarted={onBackgroundStarted}
-              onRunningChange={(command) => reportRunning(tab.id, command)}
-            />
+            {pty ? (
+              <LocalPtyTerminal rootId={rootId} />
+            ) : (
+              <LocalTerminal
+                rootId={rootId}
+                folder={folder}
+                onCommandFinished={onCommandFinished}
+                onBackgroundStarted={onBackgroundStarted}
+                onRunningChange={(command) => reportRunning(tab.id, command)}
+              />
+            )}
           </div>
         ))}
       </div>

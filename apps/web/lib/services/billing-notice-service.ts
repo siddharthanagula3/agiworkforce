@@ -40,6 +40,7 @@ export interface BillingNotice {
 export interface BillingNoticeResult {
   recorded: boolean;
   emailed: boolean;
+  settled: boolean;
 }
 
 const UNSUBSCRIBE_MAILTO = contactMailto(UNSUBSCRIBE_SUBJECT);
@@ -209,20 +210,21 @@ export async function sendBillingNotice(
   db: DatabaseAdapter,
   notice: BillingNotice,
 ): Promise<BillingNoticeResult> {
-  const { recorded } = await recordNotification(db, billingNotification(notice));
+  const { recorded, failed } = await recordNotification(db, billingNotification(notice));
   const result = await emailBillingNotice(db, notice);
   if (!result) {
     logger.warn(
       { userId: notice.userId, dedupeKey: notice.dedupeKey },
       'Billing notice recorded in the app only; no email address or sender is configured',
     );
-    return { recorded, emailed: false };
+    return { recorded, emailed: false, settled: !failed };
   }
   if (!result.delivered) {
     logger.warn(
       { userId: notice.userId, dedupeKey: notice.dedupeKey, reason: result.reason },
       'Billing notice email was not delivered',
     );
+    return { recorded, emailed: false, settled: result.retryable !== true && !failed };
   }
-  return { recorded, emailed: result.delivered };
+  return { recorded, emailed: true, settled: true };
 }

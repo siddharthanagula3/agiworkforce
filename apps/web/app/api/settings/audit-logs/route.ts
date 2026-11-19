@@ -10,7 +10,11 @@ import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-respo
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SecurityAuditLogRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { presentActivity, type PresentedActivity } from '../activity/activity-presentation';
+import {
+  presentableAuditRowClause,
+  presentActivity,
+  type PresentedActivity,
+} from '../activity/activity-presentation';
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -62,7 +66,7 @@ async function handleGetAuditLogs(request: NextRequest) {
 
   try {
     const params: unknown[] = [effectiveUserId, limit + 1, offset];
-    const clauses: string[] = [];
+    const clauses: string[] = [presentableAuditRowClause(params)];
 
     if (action) {
       params.push(action);
@@ -81,7 +85,7 @@ async function handleGetAuditLogs(request: NextRequest) {
       clauses.push(`sal.created_at <= $${params.length}::timestamptz`);
     }
 
-    const whereExtra = clauses.length > 0 ? `and ${clauses.join(' and ')}` : '';
+    const whereExtra = `and ${clauses.join(' and ')}`;
 
     const rows = await db.query<SecurityAuditLogRow>(
       `select

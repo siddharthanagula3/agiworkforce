@@ -82,7 +82,55 @@ describe('GET /api/notifications', () => {
     ]);
     const [feedSql, feedParams] = mockQuery.mock.calls.find(([sql]) => !sql.includes('count(*)'))!;
     expect(feedSql).toContain('where user_id = $1');
-    expect(feedParams).toEqual(['user-owner', 20]);
+    expect(feedParams).toEqual(['user-owner', 21]);
+  });
+
+  it('pages from an opaque cursor and returns the next one', async () => {
+    const cursor = Buffer.from(
+      JSON.stringify(['2026-09-17T10:00:00.123456Z', ROW_ID]),
+      'utf8',
+    ).toString('base64url');
+    const rows = Array.from({ length: 3 }, (_, index) => ({
+      id: `9c1d2e3f-0000-4000-8000-00000000000${index}`,
+      category: 'general',
+      type: 'info',
+      title: 'Title',
+      message: 'Message',
+      target_kind: null,
+      target_id: null,
+      is_read: false,
+      created_at: '2026-09-17T09:00:00.000Z',
+      page_sort_key: '2026-09-17T09:00:00.000000Z',
+    }));
+    mockQuery.mockImplementation(async (sql: string) =>
+      sql.includes('count(*)') ? [{ unread: '3' }] : rows,
+    );
+
+    const response = await GET(request('GET', `?limit=2&cursor=${cursor}`));
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.notifications).toHaveLength(2);
+    expect(typeof body.nextCursor).toBe('string');
+    const [feedSql, feedParams] = mockQuery.mock.calls.find(([sql]) => !sql.includes('count(*)'))!;
+    expect(feedSql).toContain('(created_at, id) < ($2, $3)');
+    expect(feedParams).toEqual(['user-owner', '2026-09-17T10:00:00.123456Z', ROW_ID, 3]);
+  });
+
+  it.each([
+    ['not base64 json', 'abc'],
+    [
+      'a sort value that is not a timestamp',
+      Buffer.from(JSON.stringify(['x', ROW_ID])).toString('base64url'),
+    ],
+    [
+      'an id that is not a uuid',
+      Buffer.from(JSON.stringify(['2026-09-17T10:00:00.123456Z', 'nope'])).toString('base64url'),
+    ],
+  ])('rejects a cursor that is %s before touching the database', async (_label, cursor) => {
+    const response = await GET(request('GET', `?cursor=${cursor}`));
+    expect(response.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('rejects a malformed cursor before touching the database', async () => {

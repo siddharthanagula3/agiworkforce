@@ -222,7 +222,7 @@ export default function ArchivedChatsScreen() {
       router.back();
       return;
     }
-    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handleRefresh = useCallback(() => {
@@ -281,11 +281,15 @@ export default function ArchivedChatsScreen() {
           }
         }
         if (!restored || !isCurrent(owner)) return;
+        let refreshFailed = false;
         try {
           await loadConversations();
+          refreshFailed = Boolean(useChatMessageStore.getState().conversationLoadError);
         } catch {
-          if (isCurrent(owner))
-            Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
+          refreshFailed = true;
+        }
+        if (refreshFailed && isCurrent(owner)) {
+          Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
         }
       })();
     },
@@ -508,7 +512,7 @@ export default function ArchivedChatsScreen() {
                   maxWidth: 280,
                 }}
               >
-                Chats you archive appear here, and you can restore them any time.
+                Chats you archive appear here to restore any time.
               </Text>
             </View>
           </Card>

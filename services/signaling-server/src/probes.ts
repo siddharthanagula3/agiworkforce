@@ -21,25 +21,33 @@ export function createDatabaseCheck(options: {
 }): DatabaseCheck {
   const now = options.now ?? Date.now;
   let cached: DatabaseState | null = null;
+  let cachedGeneration = 0;
+  let generation = 0;
   let inFlight: Promise<DatabaseState> | null = null;
 
-  const record = (state: DatabaseState): DatabaseState => {
-    cached = state;
-    inFlight = null;
-    return state;
-  };
-
   const refresh = (): Promise<DatabaseState> => {
-    inFlight ??= options.probe().then(
-      (result) =>
-        record(
+    if (inFlight) return inFlight;
+    const startedIn = generation;
+    const pending: Promise<DatabaseState> = options
+      .probe()
+      .then(
+        (result): DatabaseState =>
           result.ok
             ? { status: 'ok', latencyMs: result.latencyMs, checkedAt: now() }
             : { status: 'down', reason: result.reason, checkedAt: now() },
-        ),
-      () => record({ status: 'down', reason: 'probe_failed', checkedAt: now() }),
-    );
-    return inFlight;
+        (): DatabaseState => ({ status: 'down', reason: 'probe_failed', checkedAt: now() }),
+      )
+      .then((state) => {
+        if (inFlight === pending) inFlight = null;
+        if (state.status === 'ok' && startedIn !== generation) return refresh();
+        if (startedIn >= cachedGeneration) {
+          cached = state;
+          cachedGeneration = startedIn;
+        }
+        return state;
+      });
+    inFlight = pending;
+    return pending;
   };
 
   return {
@@ -53,7 +61,9 @@ export function createDatabaseCheck(options: {
     refresh,
     last: () => cached,
     invalidate: () => {
+      generation += 1;
       cached = null;
+      inFlight = null;
     },
   };
 }

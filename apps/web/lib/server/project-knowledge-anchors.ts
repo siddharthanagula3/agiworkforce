@@ -17,6 +17,8 @@ export interface KnowledgeAnchor {
   heading?: string;
   /** Markdown heading depth, 1 for `#`, so a heading trail can be rebuilt. */
   level?: number;
+  /** Set on the closing entry of a capped list: from `start` on, no location is known. */
+  unmapped?: true;
 }
 
 export const MAX_KNOWLEDGE_ANCHORS = 500;
@@ -79,12 +81,15 @@ export function headingAnchors(text: string): KnowledgeAnchor[] {
     const match = HEADING_PATTERN.exec(line);
     const heading = match?.[2]?.trim();
     if (heading) {
+      if (anchors.length >= MAX_KNOWLEDGE_ANCHORS) {
+        anchors.push({ start: offset, unmapped: true });
+        break;
+      }
       anchors.push({
         start: offset,
         heading: heading.slice(0, MAX_HEADING_CHARS),
         level: match?.[1]?.length ?? 1,
       });
-      if (anchors.length >= MAX_KNOWLEDGE_ANCHORS) break;
     }
     offset += line.length + 1;
   }
@@ -105,8 +110,15 @@ export function rebaseAnchors(
   for (const anchor of anchors) {
     const start = anchor.start - leadingTrimmed;
     if (start < 0 || start >= boundedLength) continue;
+    if (anchor.unmapped) {
+      rebased.push({ start, unmapped: true });
+      break;
+    }
+    if (rebased.length >= MAX_KNOWLEDGE_ANCHORS) {
+      rebased.push({ start, unmapped: true });
+      break;
+    }
     rebased.push({ ...anchor, start });
-    if (rebased.length >= MAX_KNOWLEDGE_ANCHORS) break;
   }
   return rebased;
 }
@@ -171,14 +183,23 @@ export function formatAnchor(anchor: KnowledgeAnchor | null | undefined): string
 export function parseKnowledgeAnchors(value: unknown): KnowledgeAnchor[] {
   if (!Array.isArray(value)) return [];
   const anchors: KnowledgeAnchor[] = [];
+  let located = 0;
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue;
     const record = entry as Record<string, unknown>;
     const start = Number(record['start']);
     if (!Number.isFinite(start) || start < 0) continue;
+    if (record['unmapped'] === true) {
+      anchors.push({ start: Math.trunc(start), unmapped: true });
+      continue;
+    }
     const page = Number(record['page']);
     const heading = typeof record['heading'] === 'string' ? record['heading'].trim() : '';
     if (!Number.isFinite(page) && !heading) continue;
+    if (located >= MAX_KNOWLEDGE_ANCHORS) {
+      anchors.push({ start: Math.trunc(start), unmapped: true });
+      break;
+    }
     const level = Number(record['level']);
     anchors.push({
       start: Math.trunc(start),
@@ -186,7 +207,7 @@ export function parseKnowledgeAnchors(value: unknown): KnowledgeAnchor[] {
       ...(heading ? { heading: heading.slice(0, MAX_HEADING_CHARS) } : {}),
       ...(heading && Number.isFinite(level) && level > 0 ? { level: Math.trunc(level) } : {}),
     });
-    if (anchors.length >= MAX_KNOWLEDGE_ANCHORS) break;
+    located += 1;
   }
   return anchors.sort((a, b) => a.start - b.start);
 }

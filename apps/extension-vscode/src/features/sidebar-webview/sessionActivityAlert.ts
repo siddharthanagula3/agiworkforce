@@ -31,19 +31,19 @@ export function alertSessionActivity(
   if (event === null || vscode.window.state.focused) return;
   const { title, body } = codeSessionActivityNotice(event, 'A coding session');
   if (message.type === 'approvalRequested') {
-    const { requestId, summary } = message.payload;
-    void vscode.window
-      .showWarningMessage(
-        `${PRODUCT_NAMES.code}: ${title}. ${summary}`,
-        ALLOW_ONCE,
-        DENY,
-        OPEN_CHAT,
-      )
-      .then((choice) => {
-        if (choice === ALLOW_ONCE) host.respond(requestId, 'once');
-        else if (choice === DENY) host.respond(requestId, 'deny');
-        else if (choice === OPEN_CHAT) host.reveal();
+    const { requestId, summary, question } = message.payload;
+    const text = `${PRODUCT_NAMES.code}: ${title}. ${summary}`;
+    if (question !== undefined) {
+      void vscode.window.showWarningMessage(text, OPEN_CHAT).then((choice) => {
+        if (choice === OPEN_CHAT) host.reveal();
       });
+      return;
+    }
+    void vscode.window.showWarningMessage(text, ALLOW_ONCE, DENY, OPEN_CHAT).then((choice) => {
+      if (choice === ALLOW_ONCE) host.respond(requestId, 'once');
+      else if (choice === DENY) host.respond(requestId, 'deny');
+      else if (choice === OPEN_CHAT) host.reveal();
+    });
     return;
   }
   const text = `${PRODUCT_NAMES.code}: ${title}. ${body}`;

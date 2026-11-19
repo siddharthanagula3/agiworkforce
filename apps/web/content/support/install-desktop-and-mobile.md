@@ -5,7 +5,7 @@ path: /download
 category: surfaces
 tags: install, download, desktop app, macos, windows, linux, dmg, installer, mobile app, ios, android, release notes, signature, notarized, get notified
 platforms: desktop, mobile, macos, windows, linux, ios, android
-updated: 2026-10-05
+updated: 2026-11-10
 description: How to check release availability and install the desktop and mobile apps.
 scope: public
 ---
@@ -28,8 +28,9 @@ before running it.
 
 ## What desktop provides
 
-The current Desktop application is managed-cloud-only and does not accept
-provider keys or run local models. Read the
+Desktop chat uses Cloud and Desktop does not accept provider keys; its local
+coding sessions run the CLI, which can use a local model or a provider key you set
+up there. Read the
 [Desktop overview](https://agiworkforce.com/desktop) for supported workflows.
 For CLI local inference and provider-key setup, see
 [Local mode](https://agiworkforce.com/help/local-mode) and

@@ -423,8 +423,7 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
           </SettingsSectionLink>
         </div>
         <p style={CARD_NOTE}>
-          Once a plan limit is reached, bonus credits are used first, soonest to expire, then
-          purchased credits.
+          Past a plan limit, bonus credits go first, soonest to expire, then bought credits.
         </p>
       </div>
       <dl style={CARD_BODY}>
@@ -1277,8 +1276,8 @@ export function UsageSection() {
         >
           Usage
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Your plan limits in credits, when each one resets, and where your credits went.
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+          Your limits, when they reset, and where your credits went.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="usage-and-credits" label="Learn more about usage limits" />
@@ -1325,7 +1324,7 @@ export function UsageSection() {
               Upgrade
             </button>
           ) : contractPriced ? (
-            <div className="space-y-3 text-sm text-[var(--text-2)]">
+            <div className="space-y-3 text-xs text-[var(--text-2)]">
               <p>Your usage allowances and billing are set by your workspace contract.</p>
               <SettingsPageLink
                 href="/workspace/usage"

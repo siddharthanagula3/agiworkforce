@@ -267,6 +267,7 @@ export async function beginMcpAuthorization(
 
 export type McpAuthorizationCompletion =
   | { status: 'connected'; connectorId: string; grantedScopes: string[] }
+  | { status: 'superseded' }
   | { status: 'error'; reason: McpAuthorizationFailure; message: string };
 
 export async function completeMcpAuthorization(input: {
@@ -349,7 +350,7 @@ export async function completeMcpAuthorization(input: {
 
   const grantedScopes = tokens.scope ? tokens.scope.split(/\s+/).filter(Boolean) : [];
 
-  await upsertConnectorOAuthGrant(
+  const stored = await upsertConnectorOAuthGrant(
     pending.userId,
     pending.connectorId,
     {
@@ -367,7 +368,15 @@ export async function completeMcpAuthorization(input: {
       mcpUrl,
     },
     { accountLabel: accountLabelFromIdToken(tokens.id_token) },
+    pending.authorizationId,
   );
+  if (!stored) {
+    logger.warn(
+      { connectorId: pending.connectorId },
+      '[mcp-discovery] authorization was replaced or cancelled before it was saved; nothing was stored',
+    );
+    return { status: 'superseded' };
+  }
 
   logger.info(
     { connectorId: pending.connectorId, issuer: provider.issuer },

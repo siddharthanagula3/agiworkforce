@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { settleAppIdentity, USER_DATA_FOLDER } from '../userDataLocation';
@@ -35,6 +36,10 @@ describe('settleAppIdentity', () => {
   it('pins the data folder before the new name could move it', () => {
     const app = fakeApp();
     settleAppIdentity(app);
-    expect(app.calls).toEqual(['getPath:appData', 'setPath:userData', 'setName:AGI Desktop']);
+    expect(app.calls).toEqual([
+      'getPath:appData',
+      'setPath:userData',
+      `setName:${PRODUCT_NAMES.desktop}`,
+    ]);
   });
 });

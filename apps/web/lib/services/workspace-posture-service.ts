@@ -35,13 +35,6 @@ export type PostureEnforcement = 'enforced' | 'stated' | 'unconfigured';
 export type PostureState = 'ok' | 'attention' | 'off';
 
 /**
- * A workspace with one owner is one lost account away from nobody being able to
- * change its billing, policy or membership. Support cannot promote an owner for
- * a workspace it has no member of, so this is recovered by nobody.
- */
-export const MIN_RECOMMENDED_OWNERS = 2;
-
-/**
  * How long before an identity provider's signing certificate expires the
  * workspace is told. An expired certificate does not degrade sign-in, it ends
  * it for every member at once, and reissuing one is an IdP-side change with its
@@ -726,7 +719,6 @@ export async function readWorkspacePosture(
       activeDirectoryCount: activeDirectory.length,
       verifiedDomainCount: verifiedDomains.length,
       syncErrors,
-      ownerCount,
     }),
   };
 }
@@ -840,19 +832,15 @@ function ownersSignal(ownerCount: number): PostureSignal {
     };
   }
 
-  const healthy = ownerCount >= MIN_RECOMMENDED_OWNERS;
   return {
     id: 'owners',
     label: 'Owners',
     value: plural(ownerCount, 'owner', 'owners'),
-    state: healthy ? 'ok' : 'attention',
+    state: 'ok',
     enforcement: 'enforced',
-    detail: healthy
-      ? 'More than one account can change billing, policy and membership, so losing one of ' +
-        'them does not leave the workspace unadministered.'
-      : 'One account holds every owner power. If it is lost, disabled by your identity ' +
-        'provider, or leaves, nobody remaining can change billing, policy or membership, and ' +
-        'no one outside the workspace can grant it back. Promote a second owner.',
+    detail:
+      'A workspace has exactly one owner, who holds billing, policy and membership. ' +
+      'Ownership moves to another member with Transfer ownership.',
     href: '/workspace/people',
   };
 }
@@ -1109,19 +1097,8 @@ function buildRecommendations(input: {
   activeDirectoryCount: number;
   verifiedDomainCount: number;
   syncErrors: number;
-  ownerCount: number;
 }): PostureRecommendation[] {
   const out: PostureRecommendation[] = [];
-
-  if (input.ownerCount < MIN_RECOMMENDED_OWNERS) {
-    out.push({
-      id: 'second-owner',
-      title: 'Promote a second owner',
-      body: 'A workspace with a single owner cannot be administered if that account is lost, and nobody outside it can restore the role.',
-      href: '/workspace/people',
-      cta: 'Review people',
-    });
-  }
 
   if (!input.configured) {
     out.push({

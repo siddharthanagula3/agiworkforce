@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   ManagedCloudArtifactIndexEntry,
   ManagedCloudPublishedArtifact,
@@ -17,8 +17,15 @@ import {
   artifactTooltipLines,
   describeArtifactFailure,
 } from '../features/artifacts/artifactPresentation';
-import { readArtifactContent } from '../features/artifacts/artifactActions';
-import type { ArtifactsWorkspace } from '../features/artifacts/artifactsClient';
+import {
+  ArtifactContentProvider,
+  artifactUri,
+  readArtifactContent,
+} from '../features/artifacts/artifactActions';
+import {
+  createExtensionArtifactsWorkspace,
+  type ArtifactsWorkspace,
+} from '../features/artifacts/artifactsClient';
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const MESSAGE_ID = '22222222-2222-4222-8222-222222222222';
@@ -55,6 +62,7 @@ function makePublished(
     updatedAt: '2026-09-13T11:00:00.000Z',
     shareUrl: 'https://agiworkforce.com/a/tok_1',
     sandboxed: true,
+    ...overrides,
   };
 }
 
@@ -95,8 +103,10 @@ describe('artifacts tree', () => {
     try {
       const items = (await provider.getChildren()) as ArtifactTreeItem[];
 
-      expect(items).toHaveLength(1);
-      expect(items[0]?.contextValue).toBe('artifact');
+      expect(items).toHaveLength(2);
+      expect(items[0]?.label).toBe('Published status could not be loaded');
+      expect((items[0]?.command as { command: string }).command).toBe(REFRESH_ARTIFACTS_COMMAND);
+      expect(items[1]?.contextValue).toBe('artifact');
     } finally {
       provider.dispose();
     }
@@ -209,6 +219,65 @@ describe('artifact content and language', () => {
     expect(await readArtifactContent(workspace, makeArtifact())).toBeUndefined();
   });
 
+  it('follows message pages until the source message appears', async () => {
+    const getConversation = vi
+      .fn()
+      .mockResolvedValueOnce({ messages: [{ id: 'm1', content: 'plain' }], hasMore: true })
+      .mockResolvedValueOnce({ messages: [{ id: 'm2', content: 'plain' }], hasMore: true })
+      .mockResolvedValueOnce({
+        messages: [{ id: MESSAGE_ID, content: ARTIFACT_MARKDOWN }],
+        hasMore: false,
+      });
+    const workspace = { chat: { getConversation } } as unknown as ArtifactsWorkspace;
+    const { deriveArtifacts } = await import('@agiworkforce/artifacts');
+    const derived = deriveArtifacts(ARTIFACT_MARKDOWN, {
+      conversationId: CONVERSATION_ID,
+      messageId: MESSAGE_ID,
+    });
+
+    const content = await readArtifactContent(workspace, makeArtifact({ id: derived[0]!.id }));
+
+    expect(content).toContain('<h1>Invoice</h1>');
+    expect(getConversation.mock.calls.map((call) => call[1])).toEqual([
+      { limit: 500, offset: 0 },
+      { limit: 500, offset: 1 },
+      { limit: 500, offset: 2 },
+    ]);
+  });
+
+  it('reports a missing source only after the last page has been read', async () => {
+    const getConversation = vi
+      .fn()
+      .mockResolvedValueOnce({ messages: [{ id: 'm1', content: 'plain' }], hasMore: true })
+      .mockResolvedValueOnce({ messages: [{ id: 'm2', content: 'plain' }], hasMore: false });
+    const workspace = { chat: { getConversation } } as unknown as ArtifactsWorkspace;
+
+    expect(await readArtifactContent(workspace, makeArtifact())).toBeUndefined();
+    expect(getConversation).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails instead of claiming exhaustion when pages stop progressing', async () => {
+    const getConversation = vi.fn().mockResolvedValue({ messages: [], hasMore: true });
+    const workspace = { chat: { getConversation } } as unknown as ArtifactsWorkspace;
+
+    await expect(readArtifactContent(workspace, makeArtifact())).rejects.toThrow(
+      'could not be searched',
+    );
+    expect(getConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails instead of claiming exhaustion when the page bound is reached', async () => {
+    const getConversation = vi
+      .fn()
+      .mockResolvedValue({ messages: [{ id: 'm1', content: 'plain' }], hasMore: true });
+    const workspace = { chat: { getConversation } } as unknown as ArtifactsWorkspace;
+
+    await expect(readArtifactContent(workspace, makeArtifact())).rejects.toThrow(
+      'could not be searched',
+    );
+    expect(getConversation).toHaveBeenCalledTimes(100);
+  });
+
   it('resolves an editor language and file name for each artifact face', () => {
     expect(artifactEditorLanguage(makeArtifact())).toBe('html');
     expect(artifactEditorLanguage(makeArtifact({ type: 'react', language: 'tsx' }))).toBe(
@@ -232,5 +301,92 @@ describe('published audience', () => {
     expect(artifactTooltipLines(makeArtifact(), published)).toContain(
       'A published copy of this artifact opens only for the people it was shared with.',
     );
+  });
+});
+
+describe('published artifact listing', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubPages(pages: Array<{ artifacts: unknown[]; nextCursor: string | null }>) {
+    const fetchMock = vi.fn();
+    for (const page of pages) {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          artifacts: page.artifacts,
+          pageInfo: { nextCursor: page.nextCursor },
+        }),
+      });
+    }
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('follows the cursor until every publication has been read', async () => {
+    const fetchMock = stubPages([
+      { artifacts: [makePublished({ token: 'tok_1', artifactId: 'a1' })], nextCursor: 'c 1' },
+      { artifacts: [makePublished({ token: 'tok_2', artifactId: 'a2' })], nextCursor: null },
+    ]);
+
+    const published =
+      await createExtensionArtifactsWorkspace('token').index.listPublishedArtifacts();
+
+    expect(published.map((entry) => entry.artifactId)).toEqual(['a1', 'a2']);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('cursor=');
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('?cursor=c%201');
+  });
+
+  it('fails instead of returning a truncated list when the cursor repeats', async () => {
+    stubPages([
+      { artifacts: [makePublished()], nextCursor: 'same' },
+      { artifacts: [makePublished({ token: 'tok_2' })], nextCursor: 'same' },
+      { artifacts: [], nextCursor: 'same' },
+    ]);
+
+    await expect(
+      createExtensionArtifactsWorkspace('token').index.listPublishedArtifacts(),
+    ).rejects.toMatchObject({ status: 502, message: expect.stringContaining('incomplete') });
+  });
+
+  it('fails when the page bound is reached while more pages remain', async () => {
+    const fetchMock = vi.fn();
+    let call = 0;
+    fetchMock.mockImplementation(async () => {
+      call += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ artifacts: [], pageInfo: { nextCursor: `cursor-${call}` } }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      createExtensionArtifactsWorkspace('token').index.listPublishedArtifacts(),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(fetchMock).toHaveBeenCalledTimes(100);
+  });
+});
+
+describe('artifact content cache', () => {
+  it('drops cached text and tells open documents to reload on clear', () => {
+    const provider = new ArtifactContentProvider();
+    const artifact = makeArtifact();
+    const changed: unknown[] = [];
+    provider.onDidChange((uri) => changed.push(uri));
+
+    provider.set(artifact, '<h1>Invoice</h1>');
+    expect(provider.provideTextDocumentContent(artifactUri(artifact))).toBe('<h1>Invoice</h1>');
+
+    changed.length = 0;
+    provider.clear();
+
+    expect(provider.provideTextDocumentContent(artifactUri(artifact))).toBe('');
+    expect(changed).toHaveLength(1);
+    provider.dispose();
   });
 });

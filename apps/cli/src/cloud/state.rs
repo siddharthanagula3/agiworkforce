@@ -67,6 +67,8 @@ pub struct SyncState {
     pub messages: SyncSection,
     #[serde(default)]
     pub projects: SyncSection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projects_scope: Option<String>,
     #[serde(default)]
     pub memories: SyncSection,
 }
@@ -99,6 +101,15 @@ impl SyncState {
         let temp = path.with_extension("json.tmp");
         std::fs::write(&temp, serialized)?;
         std::fs::rename(&temp, &path)
+    }
+}
+
+pub fn pull_frontier(section: &SyncSection, cached_through: Option<&str>) -> String {
+    let cached_through = cached_through.unwrap_or(INITIAL_CURSOR);
+    if version_greater(&section.cursor, cached_through) {
+        cached_through.to_string()
+    } else {
+        section.cursor.clone()
     }
 }
 
@@ -192,5 +203,15 @@ mod tests {
         let state = SyncState::load(dir.path(), "user_a");
         assert_eq!(state.owner, "user_a");
         assert_eq!(state.conversations.cursor, INITIAL_CURSOR);
+    }
+
+    #[test]
+    fn a_pull_resumes_from_what_the_durable_cache_holds() {
+        let mut section = SyncSection::default();
+        section.advance("11");
+        assert_eq!(pull_frontier(&section, Some("10")), "10");
+        assert_eq!(pull_frontier(&section, Some("11")), "11");
+        assert_eq!(pull_frontier(&section, Some("12")), "11");
+        assert_eq!(pull_frontier(&section, None), INITIAL_CURSOR);
     }
 }

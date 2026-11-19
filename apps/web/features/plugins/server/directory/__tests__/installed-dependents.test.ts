@@ -10,9 +10,12 @@ vi.mock('../memory-cache', () => ({
 
 import {
   collectDependents,
+  dependenciesUnavailableMessage,
   dependentsRefusalMessage,
   listMarketplaceDependents,
   listRegistryDependents,
+  listUnmetMarketplaceDependencies,
+  listUnmetRegistryDependencies,
   type InstalledPluginNode,
 } from '../installed-dependents';
 
@@ -163,5 +166,189 @@ describe('listRegistryDependents', () => {
     await expect(listRegistryDependents(db, 'user-1', 'research-pack')).resolves.toEqual([
       { id: 'review-pack', label: 'review-pack', name: 'Review Pack' },
     ]);
+  });
+});
+
+function registryRow(
+  id: string,
+  dependencies: unknown,
+  overrides: Partial<{
+    enabled: boolean;
+    review_required: boolean;
+    installed_version: string;
+    version_status: string;
+  }> = {},
+) {
+  return {
+    plugin_id: id,
+    name: id.toUpperCase(),
+    dependencies,
+    enabled: true,
+    review_required: false,
+    installed_version: '1.0.0',
+    version_status: 'published',
+    ...overrides,
+  };
+}
+
+describe('listUnmetRegistryDependencies', () => {
+  const root = registryRow('review-pack', [{ name: 'research-pack' }], { enabled: false });
+
+  it('reads every installation, including the ones that are off', async () => {
+    const db = database([root, registryRow('research-pack', null)]);
+    await listUnmetRegistryDependencies(db, 'user-1', 'review-pack');
+    const sql = String((db.query as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+    expect(sql).not.toContain('installation.enabled = true');
+  });
+
+  it('is satisfied when the required plugin is installed and on', async () => {
+    const db = database([root, registryRow('research-pack', null)]);
+    await expect(listUnmetRegistryDependencies(db, 'user-1', 'review-pack')).resolves.toEqual([]);
+  });
+
+  it('names a required plugin that was turned off', async () => {
+    const db = database([root, registryRow('research-pack', null, { enabled: false })]);
+    await expect(listUnmetRegistryDependencies(db, 'user-1', 'review-pack')).resolves.toEqual([
+      { name: 'RESEARCH-PACK', problem: 'is turned off' },
+    ]);
+  });
+
+  it('names a required plugin that was removed', async () => {
+    const db = database([root]);
+    await expect(listUnmetRegistryDependencies(db, 'user-1', 'review-pack')).resolves.toEqual([
+      { name: 'research-pack', problem: 'is not installed' },
+    ]);
+  });
+
+  it('names a required plugin waiting for a permission review or suspended', async () => {
+    const reviewing = database([
+      root,
+      registryRow('research-pack', null, { review_required: true }),
+    ]);
+    await expect(
+      listUnmetRegistryDependencies(reviewing, 'user-1', 'review-pack'),
+    ).resolves.toEqual([{ name: 'RESEARCH-PACK', problem: 'is waiting for a permission review' }]);
+    const suspended = database([
+      root,
+      registryRow('research-pack', null, { version_status: 'suspended' }),
+    ]);
+    await expect(
+      listUnmetRegistryDependencies(suspended, 'user-1', 'review-pack'),
+    ).resolves.toEqual([{ name: 'RESEARCH-PACK', problem: 'is suspended' }]);
+  });
+
+  it('names a required plugin installed outside the version range', async () => {
+    const ranged = registryRow('review-pack', [{ name: 'research-pack', version: '^2.0.0' }]);
+    const db = database([ranged, registryRow('research-pack', null)]);
+    await expect(listUnmetRegistryDependencies(db, 'user-1', 'review-pack')).resolves.toEqual([
+      { name: 'RESEARCH-PACK', problem: 'is installed at 1.0.0 but needs ^2.0.0' },
+    ]);
+  });
+
+  it('follows a ready dependency to the plugin it needs, and lists each plugin once', async () => {
+    const db = database([
+      registryRow('top', [{ name: 'middle' }, { name: 'base' }]),
+      registryRow('middle', [{ name: 'base' }]),
+      registryRow('base', null, { enabled: false }),
+    ]);
+    await expect(listUnmetRegistryDependencies(db, 'user-1', 'top')).resolves.toEqual([
+      { name: 'BASE', problem: 'is turned off' },
+    ]);
+  });
+
+  it('answers nothing for a plugin that is not installed', async () => {
+    await expect(
+      listUnmetRegistryDependencies(database([]), 'user-1', 'review-pack'),
+    ).resolves.toEqual([]);
+  });
+});
+
+describe('listUnmetMarketplaceDependencies', () => {
+  function marketplaceRow(
+    id: string,
+    sourceName: string,
+    dependencies: unknown,
+    overrides: Partial<{
+      enabled: boolean;
+      review_required: boolean;
+      installed_version: string;
+    }> = {},
+  ) {
+    return {
+      id: `inst-${id}`,
+      plugin_key: id,
+      name: id.toUpperCase(),
+      source_name: sourceName,
+      dependencies,
+      enabled: true,
+      review_required: false,
+      installed_version: '1.0.0',
+      ...overrides,
+    };
+  }
+
+  it('reads installations that are off as well as on', async () => {
+    const db = database([marketplaceRow('top', 'acme', [{ name: 'base' }])]);
+    await listUnmetMarketplaceDependencies(db, 'user-1', 'inst-top');
+    const sql = String((db.query as ReturnType<typeof vi.fn>).mock.calls[0]![0]);
+    expect(sql).not.toContain('installation.enabled = true');
+  });
+
+  it('is satisfied by an enabled install in the same marketplace, shadow name included', async () => {
+    const db = database([
+      marketplaceRow('top', 'acme', [{ name: 'base' }], { enabled: false }),
+      marketplaceRow('base', 'agi:installed:acme', []),
+    ]);
+    await expect(listUnmetMarketplaceDependencies(db, 'user-1', 'inst-top')).resolves.toEqual([]);
+  });
+
+  it('names a dependency that is off, and one that was removed', async () => {
+    const db = database([
+      marketplaceRow('top', 'acme', [{ name: 'base' }, { name: 'gone' }], { enabled: false }),
+      marketplaceRow('base', 'acme', [], { enabled: false }),
+    ]);
+    await expect(listUnmetMarketplaceDependencies(db, 'user-1', 'inst-top')).resolves.toEqual([
+      { name: 'BASE', problem: 'is turned off' },
+      { name: 'gone@acme', problem: 'is not installed' },
+    ]);
+  });
+
+  it('does not take a same-named plugin from another marketplace for the dependency', async () => {
+    const db = database([
+      marketplaceRow('top', 'acme', [{ name: 'base' }], { enabled: false }),
+      marketplaceRow('base', 'elsewhere', []),
+    ]);
+    await expect(listUnmetMarketplaceDependencies(db, 'user-1', 'inst-top')).resolves.toEqual([
+      { name: 'base@acme', problem: 'is not installed' },
+    ]);
+  });
+
+  it('holds an unversioned copy to the version range the dependency names', async () => {
+    const db = database([
+      marketplaceRow('top', 'acme', [{ name: 'base', version: '^1.0.0' }]),
+      marketplaceRow('base', 'acme', [], { installed_version: '0.0.0+sha.abc123' }),
+    ]);
+    await expect(listUnmetMarketplaceDependencies(db, 'user-1', 'inst-top')).resolves.toEqual([
+      { name: 'BASE', problem: 'is a copy with no version but needs ^1.0.0' },
+    ]);
+  });
+});
+
+describe('dependenciesUnavailableMessage', () => {
+  it('names one plugin and what is wrong with it', () => {
+    expect(
+      dependenciesUnavailableMessage('Review Pack', [{ name: 'Base', problem: 'is turned off' }]),
+    ).toBe(
+      'Review Pack cannot be turned on yet because it needs Base, which is turned off. Fix that plugin first, then turn Review Pack on again.',
+    );
+  });
+
+  it('names several plugins', () => {
+    const message = dependenciesUnavailableMessage('Review Pack', [
+      { name: 'Base', problem: 'is turned off' },
+      { name: 'Extra', problem: 'is not installed' },
+    ]);
+    expect(message).toContain('Base, which is turned off; Extra, which is not installed');
+    expect(message).toContain('Fix those plugins first');
   });
 });

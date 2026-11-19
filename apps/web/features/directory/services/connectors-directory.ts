@@ -27,6 +27,7 @@ import {
   type DirectoryCategory,
 } from '@/lib/connectors/directory/categorize';
 import { DEFAULT_LIST_SHORT_BELOW } from '@/lib/connectors/directory/listing';
+import { compareDirectoryRecordsByName } from '@/lib/connectors/directory/snapshot-view';
 import firstPartyTargets from '@/lib/connectors/directory/sources/first-party.json';
 import {
   COMING_SOON_LABEL,
@@ -311,6 +312,7 @@ export function connectorCategoryFilter(
   return {
     id: CONNECTOR_CATEGORY_GROUP_ID,
     label: CONNECTOR_CATEGORY_GROUP_LABEL,
+    exclusive: true,
     options: sorted.map((category) => ({ value: category, label: category })),
   };
 }
@@ -622,7 +624,12 @@ export function toConnectorSection({
     withPopularRanks([...curatedEntries, ...registryEntries], popularity),
     pending,
   );
-  const loaded = request.sort === DIRECTORY_SORT_POPULAR ? sortByPopularRank(ranked) : ranked;
+  const loaded =
+    request.sort === DIRECTORY_SORT_POPULAR
+      ? sortByPopularRank(ranked)
+      : request.sort === DIRECTORY_SORT_NAME
+        ? [...ranked].sort(compareDirectoryRecordsByName)
+        : ranked;
   /*
    * The directory request has no connected facet, so this is decided here.
    * Connected is the whole connected set the adapter pins onto the first page,

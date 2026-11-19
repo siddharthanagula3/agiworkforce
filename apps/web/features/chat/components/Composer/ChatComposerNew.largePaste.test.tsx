@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { LARGE_PASTE_THRESHOLD } from '@agiworkforce/unified-chat';
 import { ChatComposerNew, type ComposerProjectPicker } from './ChatComposerNew';
@@ -98,6 +98,43 @@ describe('what a long paste tells the user', () => {
     fireEvent.click(await screen.findByTestId('pasted-text-undo'));
 
     expect(textarea.value).toContain('y'.repeat(50));
+    expect(screen.queryByTestId('pasted-text-notice')).toBeNull();
+  });
+
+  it('puts back the latest paste, not an earlier one that shares its name', async () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} projectPicker={picker()} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    pasteText(textarea, 'a'.repeat(LARGE_PASTE_THRESHOLD + 1));
+    pasteText(textarea, 'b'.repeat(LARGE_PASTE_THRESHOLD + 2));
+    await screen.findByText('Pasted text 2.txt');
+    fireEvent.click(screen.getByLabelText('Remove Pasted text.txt'));
+    pasteText(textarea, 'c'.repeat(LARGE_PASTE_THRESHOLD + 3));
+    await screen.findByTestId('pasted-text-undo');
+    expect(screen.getAllByText(/^Pasted text( 2)?\.txt$/)).toHaveLength(2);
+
+    fireEvent.click(screen.getByTestId('pasted-text-undo'));
+
+    expect(textarea.value).toContain('c'.repeat(LARGE_PASTE_THRESHOLD + 3));
+    expect(textarea.value).not.toContain('b');
+    expect(screen.getAllByText(/^Pasted text( 2)?\.txt$/)).toHaveLength(1);
+    expect(screen.getByText('Pasted text 2.txt')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /send message/i }));
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    const sent = onSend.mock.calls[0]?.[1] as File[];
+    expect(sent.map((file) => file.size)).toEqual([LARGE_PASTE_THRESHOLD + 2]);
+  });
+
+  it('does not claim a paste was attached when the composer refused it', async () => {
+    render(<ChatComposerNew onSend={vi.fn()} projectPicker={picker()} />);
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+
+    pasteText(textarea, 'a'.repeat(LARGE_PASTE_THRESHOLD + 1));
+    await screen.findByTestId('pasted-text-notice');
+    fireEvent.click(screen.getByLabelText('Remove Pasted text.txt'));
+
     expect(screen.queryByTestId('pasted-text-notice')).toBeNull();
   });
 

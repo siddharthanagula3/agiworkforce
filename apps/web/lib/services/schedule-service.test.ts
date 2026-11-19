@@ -1215,6 +1215,94 @@ describe('due-schedule batch isolation', () => {
     expect(summary.claimed).toBe(2);
   });
 
+  describe('expired-lease recovery', () => {
+    const expiredClaimRow = {
+      ...taskRow,
+      run_id: 'run-1',
+      run_started_at: claim.scheduledFor,
+      scheduled_for: claim.scheduledFor,
+      trigger_source: 'schedule',
+      run_attempt_count: 1,
+    };
+
+    function sweep(query: QueryFn, execute: ReturnType<typeof vi.fn>) {
+      return processDueScheduleRuns({
+        limit: 2,
+        concurrency: 1,
+        timeoutMs: 1000,
+        db: database(query, execute),
+        executor: vi.fn() as unknown as ScheduledTaskExecutor,
+      });
+    }
+
+    it('finalizes only a lease that is still expired when the write lands', async () => {
+      const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('lease_expires_at < now()')) return [expiredClaimRow];
+        if (sql.includes('for update of task')) return [taskRow];
+        if (sql.includes('update scheduled_task_runs')) return [runRow('timeout')];
+        return [];
+      });
+
+      await sweep(query, vi.fn());
+
+      const finalize = query.mock.calls.find(([sql]) =>
+        String(sql).includes('update scheduled_task_runs'),
+      );
+      expect(finalize?.[0]).toContain('now() > lease_expires_at');
+      expect(finalize?.[1]?.at(-1)).toBe(true);
+    });
+
+    it('does not require an expired lease for a worker finishing its own run', async () => {
+      const query = vi
+        .fn()
+        .mockResolvedValueOnce([taskRow])
+        .mockResolvedValueOnce([runRow('success')])
+        .mockResolvedValueOnce([{ id: 'task-1' }]);
+
+      await finalizeScheduleRun(database(query), claim, {
+        status: 'success',
+        completedAt: new Date('2026-07-15T12:00:02.000Z'),
+      });
+
+      expect((query.mock.calls[1] as [string, unknown[]])[1].at(-1)).toBe(false);
+    });
+
+    it('ends a run whose owner lost the schedule and keeps claiming other work', async () => {
+      const execute = vi.fn().mockResolvedValue(1);
+      const query = vi.fn(async (sql: string) => {
+        if (sql.includes('lease_expires_at < now()')) return [expiredClaimRow];
+        return [];
+      });
+
+      await expect(sweep(query, execute)).resolves.toMatchObject({ claimed: 0 });
+
+      expect(execute).toHaveBeenCalledTimes(1);
+      const [sql, params] = execute.mock.calls[0] as [string, unknown[]];
+      expect(sql).toContain("status = 'timeout'");
+      expect(sql).toContain('now() > lease_expires_at');
+      expect(params.slice(0, 2)).toEqual(['run-1', 'task-1']);
+      expect(query.mock.calls.some(([sql]) => String(sql).includes('expired_candidates'))).toBe(
+        true,
+      );
+    });
+
+    it('isolates a recovery failure so the sweep still claims fresh work', async () => {
+      const execute = vi.fn();
+      const query = vi.fn(async (sql: string) => {
+        if (sql.includes('lease_expires_at < now()')) return [expiredClaimRow];
+        if (sql.includes('for update of task')) throw new Error('connection reset');
+        return [];
+      });
+
+      await expect(sweep(query, execute)).resolves.toMatchObject({ claimed: 0 });
+
+      expect(execute).not.toHaveBeenCalled();
+      expect(query.mock.calls.some(([sql]) => String(sql).includes('expired_candidates'))).toBe(
+        true,
+      );
+    });
+  });
+
   it('reads an expired claim with its attempt count, so its retry key moves on', async () => {
     // A retry's idempotency key is built from the attempt it is on. Read as
     // attempt 1 every time, a second lapsed lease re-queued the same key, the

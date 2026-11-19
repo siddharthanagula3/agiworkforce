@@ -336,7 +336,12 @@ export interface MessageMetadata {
   /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */
   attachments?: Attachment[];
   mcpContext?: {
-    prompt?: { connectorId: string; name: string };
+    prompt?: {
+      connectorId: string;
+      name: string;
+      arguments?: Record<string, string>;
+      argumentsOmitted?: boolean;
+    };
     resources?: Array<{ connectorId: string; uri: string; name?: string }>;
   };
   /** True while server-managed code execution is running */
@@ -361,6 +366,7 @@ export interface MessageMetadata {
    * widget, never the answer.
    */
   interactiveCards?: InteractiveCard[];
+  interactiveCardTextOffsets?: Record<string, number>;
   interactiveCardsResumed?: boolean;
   interactiveCardSubmissionErrors?: Record<string, string>;
   /**
@@ -453,6 +459,8 @@ export interface MessageMetadata {
   imageGenModel?: string;
   /** Bounded ISO instant before which provider-directed image retry should stay disabled. */
   imageRetryAt?: string;
+  /** Durable server job that Try again resumes on its existing reservation instead of starting a new generation. */
+  imageJobId?: string;
   imageVersions?: ImageVersion[];
   /**
    * Generated video URL. Displayed inline when toolType === 'video-generation';
@@ -474,6 +482,8 @@ export interface MessageMetadata {
   videoAspect?: string;
   videoResolution?: string;
   videoDurationSecs?: number;
+  /** Which image conditioning the request carried; the images themselves are never persisted. */
+  videoInputKind?: 'first_frame' | 'reference';
   /** Latest provider progress reported by the durable reconciler. */
   videoProgress?: number;
   /** Durable terminal error projected by the server. */

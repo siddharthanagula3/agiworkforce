@@ -100,7 +100,7 @@ function harness(hold: Record<string, unknown>, rows: (sql: string) => Record<st
       return [{ id: 'export-1' }];
     }
     if (/pg_advisory_xact_lock/.test(sql)) return [];
-    if (/select entry_hash from public\.ediscovery_exports/.test(sql)) return [];
+    if (/select entry_hash, completed_at from public\.ediscovery_exports/.test(sql)) return [];
     if (/from public\.legal_holds/.test(sql)) return [hold];
     seen.push({ sql, params });
     return rows(sql);
@@ -202,6 +202,7 @@ describe('GET legal hold eDiscovery export', () => {
     const custody = parsed[parsed.length - 1] as { data: Record<string, unknown> };
     expect(custody.data['id']).toBe('export-1');
     expect(String(custody.data['entryHash'])).toMatch(/^[0-9a-f]{64}$/);
+    expect(custody.data['completedAt']).toBe(params[13]);
   });
 
   it('exports the whole workspace for an organization-wide hold', async () => {

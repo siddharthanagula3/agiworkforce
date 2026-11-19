@@ -119,6 +119,26 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     );
   });
 
+  it('refuses to retire a project whose file an active legal hold preserves', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('update user_projects')) return [{ id: PROJECT_ID }];
+      if (sql.includes('select k.id from project_knowledge_files')) return [{ id: 'file-held' }];
+      return [];
+    });
+
+    const res = await callDelete();
+
+    expect(res.status).toBe(403);
+    expect(
+      knowledgeFileCalls().some(([sql]) => sql.includes('update project_knowledge_files')),
+    ).toBe(false);
+    const holdQuery = knowledgeFileCalls().find(([sql]) =>
+      sql.includes('public.app_project_content_held('),
+    );
+    expect(holdQuery?.[1]).toContain('project_file');
+    expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+  });
+
   it('does not purge knowledge files when no live project matched', async () => {
     mocks.query.mockResolvedValue([]);
 

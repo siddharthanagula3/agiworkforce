@@ -1,425 +1,630 @@
 {
-  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "guards": [
     {
       "path": "scripts/check-action-pins.sh"
     },
     {
       "path": "scripts/check-admin-route-guards.mjs",
-      "pnpm": ["check:admin-route-guards"]
+      "pnpm": [
+        "check:admin-route-guards"
+      ]
     },
     {
       "path": "scripts/check-agent-context-indexes.mjs",
-      "pnpm": ["check:agent-context-indexes"]
+      "pnpm": [
+        "check:agent-context-indexes"
+      ]
     },
     {
       "path": "scripts/check-agent-docs.mjs",
-      "pnpm": ["check:agent-docs"]
+      "pnpm": [
+        "check:agent-docs"
+      ]
     },
     {
       "path": "scripts/check-agent-run-state-machine.mjs",
-      "pnpm": ["check:agent-run-state-machine"]
+      "pnpm": [
+        "check:agent-run-state-machine"
+      ]
     },
     {
       "path": "scripts/check-artifact-sync-ownership.mjs",
-      "pnpm": ["check:artifact-sync-ownership"]
+      "pnpm": [
+        "check:artifact-sync-ownership"
+      ]
     },
     {
       "path": "scripts/check-attachment-class-coverage.mjs",
-      "pnpm": ["check:attachment-class-coverage"]
+      "pnpm": [
+        "check:attachment-class-coverage"
+      ]
     },
     {
       "path": "scripts/check-audit-immutability.mjs",
-      "pnpm": ["check:audit-immutability"]
+      "pnpm": [
+        "check:audit-immutability"
+      ]
     },
     {
       "path": "scripts/check-audit-inventory.mjs",
-      "pnpm": ["check:audit-inventory"]
+      "pnpm": [
+        "check:audit-inventory"
+      ]
     },
     {
       "path": "scripts/check-audit-progress.mjs"
     },
     {
       "path": "scripts/check-auth-surface.mjs",
-      "pnpm": ["check:auth-surface"]
+      "pnpm": [
+        "check:auth-surface"
+      ]
     },
     {
       "path": "scripts/check-availability-invariant.mjs",
-      "pnpm": ["check:availability-invariant"]
+      "pnpm": [
+        "check:availability-invariant"
+      ]
     },
     {
       "path": "scripts/check-billing-provider-ids.mjs",
-      "pnpm": ["check:billing-provider-ids"]
+      "pnpm": [
+        "check:billing-provider-ids"
+      ]
     },
     {
       "path": "scripts/check-blob-route-authz.mjs",
-      "pnpm": ["check:blob-route-authz"]
+      "pnpm": [
+        "check:blob-route-authz"
+      ]
     },
     {
       "path": "scripts/check-boundaries.mjs",
-      "pnpm": ["check:boundaries"]
+      "pnpm": [
+        "check:boundaries"
+      ]
     },
     {
       "path": "scripts/check-capability-advertisement.mjs",
-      "pnpm": ["check:capability-advertisement"]
+      "pnpm": [
+        "check:capability-advertisement"
+      ]
     },
     {
       "path": "scripts/check-capability-boundaries.mjs",
-      "pnpm": ["check:capability-boundaries"]
+      "pnpm": [
+        "check:capability-boundaries"
+      ]
     },
     {
       "path": "scripts/check-capability-consumption.mjs",
-      "pnpm": ["check:capability-consumption"]
+      "pnpm": [
+        "check:capability-consumption"
+      ]
     },
     {
       "path": "scripts/check-capability-gaps.mjs",
-      "pnpm": ["check:capability-gaps"]
+      "pnpm": [
+        "check:capability-gaps"
+      ]
     },
     {
       "path": "scripts/check-capability-preconditions.mjs",
-      "pnpm": ["check:capability-preconditions"]
+      "pnpm": [
+        "check:capability-preconditions"
+      ]
     },
     {
       "path": "scripts/check-ci-guardrails.mjs",
-      "pnpm": ["check:ci-guardrails"]
+      "pnpm": [
+        "check:ci-guardrails"
+      ]
     },
     {
       "path": "scripts/check-clerk-bot-protection.mjs"
     },
     {
       "path": "scripts/check-cli-local-secret.mjs",
-      "pnpm": ["check:cli-local-secret"]
+      "pnpm": [
+        "check:cli-local-secret"
+      ]
     },
     {
       "path": "scripts/check-cli-wire-parity.mjs",
-      "pnpm": ["check:cli-wire-parity"]
+      "pnpm": [
+        "check:cli-wire-parity"
+      ]
     },
     {
       "path": "scripts/check-client-bundle-secrets.mjs",
-      "pnpm": ["check:client-bundle-secrets"]
+      "pnpm": [
+        "check:client-bundle-secrets"
+      ]
     },
     {
       "path": "scripts/check-client-handshake-coverage.mjs",
-      "pnpm": ["check:client-handshake-coverage"]
+      "pnpm": [
+        "check:client-handshake-coverage"
+      ]
     },
     {
       "path": "scripts/check-client-handshake.mjs",
-      "pnpm": ["check:client-handshake"]
+      "pnpm": [
+        "check:client-handshake"
+      ]
     },
     {
       "path": "scripts/check-client-inference.mjs",
-      "pnpm": ["check:client-inference"]
+      "pnpm": [
+        "check:client-inference"
+      ]
     },
     {
       "path": "scripts/check-client-sdk-usage.mjs",
-      "pnpm": ["check:client-sdk-usage"]
+      "pnpm": [
+        "check:client-sdk-usage"
+      ]
     },
     {
       "path": "scripts/check-client-trusted-authz.mjs",
-      "pnpm": ["check:client-trusted-authz"]
+      "pnpm": [
+        "check:client-trusted-authz"
+      ]
     },
     {
       "path": "scripts/check-client-version-compatibility.mjs",
-      "pnpm": ["check:client-version-compatibility"]
+      "pnpm": [
+        "check:client-version-compatibility"
+      ]
     },
     {
       "path": "scripts/check-cloud-contract-ownership.mjs",
-      "pnpm": ["check:cloud-contract-ownership"]
+      "pnpm": [
+        "check:cloud-contract-ownership"
+      ]
     },
     {
       "path": "scripts/check-codeowners-contract.mjs",
-      "pnpm": ["check:codeowners"]
+      "pnpm": [
+        "check:codeowners"
+      ]
     },
     {
       "path": "scripts/check-concept-registry.mjs",
-      "pnpm": ["check:concept-registry", "registry:concepts"]
+      "pnpm": [
+        "check:concept-registry",
+        "registry:concepts"
+      ]
     },
     {
       "path": "scripts/check-concurrent-step-lease.mjs",
-      "pnpm": ["check:concurrent-step-lease"]
+      "pnpm": [
+        "check:concurrent-step-lease"
+      ]
     },
     {
       "path": "scripts/check-config-keys.mjs",
-      "pnpm": ["check:config-keys"]
+      "pnpm": [
+        "check:config-keys"
+      ]
     },
     {
       "path": "scripts/check-connector-credential-containment.mjs",
-      "pnpm": ["check:connector-credential-containment"]
+      "pnpm": [
+        "check:connector-credential-containment"
+      ]
     },
     {
       "path": "scripts/check-connector-logos.mjs",
-      "pnpm": ["check:connector-logos"]
+      "pnpm": [
+        "check:connector-logos"
+      ]
     },
     {
       "path": "scripts/check-connector-scopes.mjs",
-      "pnpm": ["check:connector-scopes"]
+      "pnpm": [
+        "check:connector-scopes"
+      ]
     },
     {
       "path": "scripts/check-connector-secret-reseal.mjs",
-      "pnpm": ["check:connector-secret-reseal"]
+      "pnpm": [
+        "check:connector-secret-reseal"
+      ]
     },
     {
       "path": "scripts/check-connector-tool-gate.mjs",
-      "pnpm": ["check:connector-tool-gate"]
+      "pnpm": [
+        "check:connector-tool-gate"
+      ]
     },
     {
       "path": "scripts/check-content-blocks.mjs",
-      "pnpm": ["check:content-blocks"]
+      "pnpm": [
+        "check:content-blocks"
+      ]
     },
     {
       "path": "scripts/check-context-temporary-boundary.mjs",
-      "pnpm": ["check:context-temporary-boundary"]
+      "pnpm": [
+        "check:context-temporary-boundary"
+      ]
     },
     {
       "path": "scripts/check-conversation-graph.mjs",
-      "pnpm": ["check:conversation-graph"]
+      "pnpm": [
+        "check:conversation-graph"
+      ]
     },
     {
       "path": "scripts/check-coverage-floors.mjs",
-      "pnpm": ["check:coverage-floors"]
+      "pnpm": [
+        "check:coverage-floors"
+      ]
     },
     {
       "path": "scripts/check-cron-contract.mjs",
-      "pnpm": ["check:cron-contract"]
+      "pnpm": [
+        "check:cron-contract"
+      ]
     },
     {
       "path": "scripts/check-cross-version-matrix.mjs",
-      "pnpm": ["check:cross-version-matrix"]
+      "pnpm": [
+        "check:cross-version-matrix"
+      ]
     },
     {
       "path": "scripts/check-crypto-context-binding.mjs",
-      "pnpm": ["check:crypto-context-binding"]
+      "pnpm": [
+        "check:crypto-context-binding"
+      ]
     },
     {
       "path": "scripts/check-css-tokens.mjs",
-      "pnpm": ["check:css-tokens"]
+      "pnpm": [
+        "check:css-tokens"
+      ]
     },
     {
       "path": "scripts/check-dashboard-producers.mjs",
-      "pnpm": ["check:dashboard-producers"]
+      "pnpm": [
+        "check:dashboard-producers"
+      ]
     },
     {
       "path": "scripts/check-db-isolation.mjs",
-      "pnpm": ["check:db-isolation"]
+      "pnpm": [
+        "check:db-isolation"
+      ]
     },
     {
       "path": "scripts/check-delivered-error-messages.mjs",
-      "pnpm": ["check:delivered-error-messages"]
+      "pnpm": [
+        "check:delivered-error-messages"
+      ]
     },
     {
       "path": "scripts/check-dependency-deadlines.mjs",
-      "pnpm": ["check:dependency-deadlines"]
+      "pnpm": [
+        "check:dependency-deadlines"
+      ]
     },
     {
       "path": "scripts/check-dependency-direction.mjs",
-      "pnpm": ["check:dependency-direction"]
+      "pnpm": [
+        "check:dependency-direction"
+      ]
     },
     {
       "path": "scripts/check-deploy-gates.mjs",
-      "pnpm": ["check:deploy-gates"]
+      "pnpm": [
+        "check:deploy-gates"
+      ]
     },
     {
       "path": "scripts/check-desktop-local-egress.mjs",
-      "pnpm": ["check:desktop-local-egress"]
+      "pnpm": [
+        "check:desktop-local-egress"
+      ]
     },
     {
       "path": "scripts/check-desktop-release-integrity.mjs",
-      "pnpm": ["check:desktop-release-integrity"]
+      "pnpm": [
+        "check:desktop-release-integrity"
+      ]
     },
     {
       "path": "scripts/check-desktop-telemetry-domains.mjs",
-      "pnpm": ["check:desktop-telemetry-domains"]
+      "pnpm": [
+        "check:desktop-telemetry-domains"
+      ]
     },
     {
       "path": "scripts/check-desktop-window-session.mjs",
-      "pnpm": ["check:desktop-window-session"]
+      "pnpm": [
+        "check:desktop-window-session"
+      ]
     },
     {
       "path": "scripts/check-device-auth-grant.mjs",
-      "pnpm": ["check:device-auth-grant"]
+      "pnpm": [
+        "check:device-auth-grant"
+      ]
     },
     {
       "path": "scripts/check-doc-freshness.mjs",
-      "pnpm": ["check:doc-freshness"]
+      "pnpm": [
+        "check:doc-freshness"
+      ]
     },
     {
       "path": "scripts/check-doc-matrices.mjs",
-      "pnpm": ["check:doc-matrices"]
+      "pnpm": [
+        "check:doc-matrices"
+      ]
     },
     {
       "path": "scripts/check-doc-registry.mjs",
-      "pnpm": ["check:doc-registry"]
+      "pnpm": [
+        "check:doc-registry"
+      ]
     },
     {
       "path": "scripts/check-doc-status.mjs",
-      "pnpm": ["check:doc-status"]
+      "pnpm": [
+        "check:doc-status"
+      ]
     },
     {
       "path": "scripts/check-document-classes.mjs",
-      "pnpm": ["check:document-classes"]
+      "pnpm": [
+        "check:document-classes"
+      ]
     },
     {
       "path": "scripts/check-domain-event-emitters.mjs",
-      "pnpm": ["check:domain-event-emitters"]
+      "pnpm": [
+        "check:domain-event-emitters"
+      ]
     },
     {
       "path": "scripts/check-domain-ownership.mjs",
-      "pnpm": ["check:domain-ownership"]
+      "pnpm": [
+        "check:domain-ownership"
+      ]
     },
     {
       "path": "scripts/check-dr-recovery-table.mjs",
-      "pnpm": ["check:dr-recovery-table"]
+      "pnpm": [
+        "check:dr-recovery-table"
+      ]
     },
     {
       "path": "scripts/check-e2e-structure-locators.mjs",
-      "pnpm": ["check:e2e-structure-locators"]
+      "pnpm": [
+        "check:e2e-structure-locators"
+      ]
     },
     {
       "path": "scripts/check-edge-middleware.mjs",
-      "pnpm": ["check:edge-middleware"]
+      "pnpm": [
+        "check:edge-middleware"
+      ]
     },
     {
       "path": "scripts/check-em-dash-in-copy.mjs",
-      "pnpm": ["check:em-dash"]
+      "pnpm": [
+        "check:em-dash"
+      ]
     },
     {
       "path": "scripts/check-embedded-frame-sandbox.mjs",
-      "pnpm": ["check:embedded-frame-sandbox"]
+      "pnpm": [
+        "check:embedded-frame-sandbox"
+      ]
     },
     {
       "path": "scripts/check-enterprise-contracts.mjs",
-      "pnpm": ["check:enterprise-contracts"]
+      "pnpm": [
+        "check:enterprise-contracts"
+      ]
     },
     {
       "path": "scripts/check-entitlement-entry-point.mjs",
-      "pnpm": ["check:entitlement-entry-point"]
+      "pnpm": [
+        "check:entitlement-entry-point"
+      ]
     },
     {
       "path": "scripts/check-env-drift.mjs"
     },
     {
       "path": "scripts/check-error-contract-parity.mjs",
-      "pnpm": ["check:error-contract-parity"]
+      "pnpm": [
+        "check:error-contract-parity"
+      ]
     },
     {
       "path": "scripts/check-error-model.mjs",
-      "pnpm": ["check:error-model"]
+      "pnpm": [
+        "check:error-model"
+      ]
     },
     {
       "path": "scripts/check-error-vocabulary.mjs",
-      "pnpm": ["check:error-vocabulary"]
+      "pnpm": [
+        "check:error-vocabulary"
+      ]
     },
     {
       "path": "scripts/check-eval-gate-policy.mjs",
-      "pnpm": ["check:eval-gate-policy"]
+      "pnpm": [
+        "check:eval-gate-policy"
+      ]
     },
     {
       "path": "scripts/check-eval-safety-floor.mjs",
-      "pnpm": ["check:eval-safety-floor"]
+      "pnpm": [
+        "check:eval-safety-floor"
+      ]
     },
     {
       "path": "scripts/check-executable-docs.mjs",
-      "pnpm": ["check:executable-docs"]
+      "pnpm": [
+        "check:executable-docs"
+      ]
     },
     {
       "path": "scripts/check-experiments.mjs",
-      "pnpm": ["check:experiments"]
+      "pnpm": [
+        "check:experiments"
+      ]
     },
     {
       "path": "scripts/check-fake-affordances.mjs",
-      "pnpm": ["check:fake-affordances"]
+      "pnpm": [
+        "check:fake-affordances"
+      ]
     },
     {
       "path": "scripts/check-feature-flags.mjs",
-      "pnpm": ["check:feature-flags"]
+      "pnpm": [
+        "check:feature-flags"
+      ]
     },
     {
       "path": "scripts/check-feature-maturity.mjs",
-      "pnpm": ["check:feature-maturity"]
+      "pnpm": [
+        "check:feature-maturity"
+      ]
     },
     {
       "path": "scripts/check-feature-registry.mjs",
-      "pnpm": ["check:feature-registry"]
+      "pnpm": [
+        "check:feature-registry"
+      ]
     },
     {
       "path": "scripts/check-file-naming.mjs",
-      "pnpm": ["check:file-naming"]
+      "pnpm": [
+        "check:file-naming"
+      ]
     },
     {
       "path": "scripts/check-file-reference-canonical.mjs",
-      "pnpm": ["check:file-reference-canonical"]
+      "pnpm": [
+        "check:file-reference-canonical"
+      ]
     },
     {
       "path": "scripts/check-generated-artifacts.mjs",
-      "pnpm": ["check:generated-artifacts"]
+      "pnpm": [
+        "check:generated-artifacts"
+      ]
     },
     {
       "path": "scripts/check-guard-inventory.mjs",
-      "pnpm": ["check:guard-inventory"]
+      "pnpm": [
+        "check:guard-inventory"
+      ]
     },
     {
       "path": "scripts/check-hardcoded-fixture-arrays.mjs",
-      "pnpm": ["check:hardcoded-arrays"]
+      "pnpm": [
+        "check:hardcoded-arrays"
+      ]
     },
     {
       "path": "scripts/check-hooks.mjs",
-      "pnpm": ["check:hooks"]
+      "pnpm": [
+        "check:hooks"
+      ]
     },
     {
       "path": "scripts/check-i18n-parity.mjs",
-      "pnpm": ["check:i18n-parity"]
+      "pnpm": [
+        "check:i18n-parity"
+      ]
     },
     {
       "path": "scripts/check-ide-core-neutral.mjs",
-      "pnpm": ["check:ide-core-neutral"]
+      "pnpm": [
+        "check:ide-core-neutral"
+      ]
     },
     {
       "path": "scripts/check-idempotency.mjs",
-      "pnpm": ["check:idempotency"]
+      "pnpm": [
+        "check:idempotency"
+      ]
     },
     {
       "path": "scripts/check-identifier-discipline.mjs",
-      "pnpm": ["check:identifier-discipline"]
+      "pnpm": [
+        "check:identifier-discipline"
+      ]
     },
     {
       "path": "scripts/check-identity-account-revocation.mjs",
-      "pnpm": ["check:identity-account-revocation"]
+      "pnpm": [
+        "check:identity-account-revocation"
+      ]
     },
     {
       "path": "scripts/check-image-job-states.mjs",
-      "pnpm": ["check:image-job-states"]
+      "pnpm": [
+        "check:image-job-states"
+      ]
     },
     {
       "path": "scripts/check-image-job-termination.mjs",
-      "pnpm": ["check:image-job-termination"]
+      "pnpm": [
+        "check:image-job-termination"
+      ]
     },
     {
       "path": "scripts/check-interaction-modes.mjs",
-      "pnpm": ["check:interaction-modes"]
+      "pnpm": [
+        "check:interaction-modes"
+      ]
     },
     {
       "path": "scripts/check-kill-switch-readers.mjs",
-      "pnpm": ["check:kill-switch-readers"]
+      "pnpm": [
+        "check:kill-switch-readers"
+      ]
     },
     {
       "path": "scripts/check-lane-ownership.mjs",
-      "pnpm": ["check:lane-ownership"]
+      "pnpm": [
+        "check:lane-ownership"
+      ]
     },
     {
       "path": "scripts/check-ledger-postings.mjs",
-      "pnpm": ["check:ledger-postings"]
+      "pnpm": [
+        "check:ledger-postings"
+      ]
     },
     {
       "path": "scripts/check-legal-hold-coverage.mjs",
-      "pnpm": ["check:legal-hold-coverage"]
+      "pnpm": [
+        "check:legal-hold-coverage"
+      ]
     },
     {
       "path": "scripts/check-licenses.mjs",
-      "pnpm": ["check:licenses"]
+      "pnpm": [
+        "check:licenses"
+      ]
     },
     {
       "path": "scripts/check-lifecycle-semantics.mjs",
-      "pnpm": ["check:lifecycle-semantics"]
+      "pnpm": [
+        "check:lifecycle-semantics"
+      ]
     },
     {
       "path": "scripts/check-llm-failure-guardrails.mjs",
@@ -432,533 +637,797 @@
     },
     {
       "path": "scripts/check-llm-log-hygiene.mjs",
-      "pnpm": ["check:llm-log-hygiene"]
+      "pnpm": [
+        "check:llm-log-hygiene"
+      ]
     },
     {
       "path": "scripts/check-log-redaction.mjs",
-      "pnpm": ["check:log-redaction"]
+      "pnpm": [
+        "check:log-redaction"
+      ]
     },
     {
       "path": "scripts/check-managed-safety-floor.mjs",
-      "pnpm": ["check:managed-safety-floor"]
+      "pnpm": [
+        "check:managed-safety-floor"
+      ]
     },
     {
       "path": "scripts/check-marketing-models.mjs",
-      "pnpm": ["check:marketing-models"]
+      "pnpm": [
+        "check:marketing-models"
+      ]
     },
     {
       "path": "scripts/check-mcp-dial-egress.mjs",
-      "pnpm": ["check:mcp-dial-egress"]
+      "pnpm": [
+        "check:mcp-dial-egress"
+      ]
     },
     {
       "path": "scripts/check-membership-exit-revocation.mjs",
-      "pnpm": ["check:membership-exit-revocation"]
+      "pnpm": [
+        "check:membership-exit-revocation"
+      ]
     },
     {
       "path": "scripts/check-membership-isolation.mjs",
-      "pnpm": ["check:membership-isolation"]
+      "pnpm": [
+        "check:membership-isolation"
+      ]
     },
     {
       "path": "scripts/check-membership-revocation.mjs",
-      "pnpm": ["check:membership-revocation"]
+      "pnpm": [
+        "check:membership-revocation"
+      ]
     },
     {
       "path": "scripts/check-membership-unattended-work.mjs",
-      "pnpm": ["check:membership-unattended-work"]
+      "pnpm": [
+        "check:membership-unattended-work"
+      ]
     },
     {
       "path": "scripts/check-memory-isolation.mjs",
-      "pnpm": ["check:memory-isolation"]
+      "pnpm": [
+        "check:memory-isolation"
+      ]
     },
     {
       "path": "scripts/check-memory-write-gate.mjs",
-      "pnpm": ["check:memory-write-gate"]
+      "pnpm": [
+        "check:memory-write-gate"
+      ]
     },
     {
       "path": "scripts/check-migration-dependencies.mjs",
-      "pnpm": ["check:migration-dependencies"]
+      "pnpm": [
+        "check:migration-dependencies"
+      ]
+    },
+    {
+      "path": "scripts/check-migration-table-privileges.mjs",
+      "pnpm": [
+        "check:migration-table-privileges"
+      ]
     },
     {
       "path": "scripts/check-mobile-hygiene.mjs",
-      "pnpm": ["check:mobile-hygiene"]
+      "pnpm": [
+        "check:mobile-hygiene"
+      ]
     },
     {
       "path": "scripts/check-mobile-primitives.mjs",
-      "pnpm": ["check:mobile-primitives"]
+      "pnpm": [
+        "check:mobile-primitives"
+      ]
     },
     {
       "path": "scripts/check-mock-exports.mjs",
-      "pnpm": ["check:mock-exports"]
+      "pnpm": [
+        "check:mock-exports"
+      ]
     },
     {
       "path": "scripts/check-model-catalog-integrity.mjs",
-      "pnpm": ["check:model-catalog"]
+      "pnpm": [
+        "check:model-catalog"
+      ]
     },
     {
       "path": "scripts/check-model-change-suites.mjs",
-      "pnpm": ["check:model-change-suites"]
+      "pnpm": [
+        "check:model-change-suites"
+      ]
     },
     {
       "path": "scripts/check-model-improvement-eligibility.mjs",
-      "pnpm": ["check:model-improvement-eligibility"]
+      "pnpm": [
+        "check:model-improvement-eligibility"
+      ]
     },
     {
       "path": "scripts/check-model-registry-integrity.mjs",
-      "pnpm": ["check:model-registry-integrity"]
+      "pnpm": [
+        "check:model-registry-integrity"
+      ]
     },
     {
       "path": "scripts/check-module-reachability.mjs",
-      "pnpm": ["check:module-reachability"]
+      "pnpm": [
+        "check:module-reachability"
+      ]
     },
     {
       "path": "scripts/check-money-paths.mjs",
-      "pnpm": ["check:money-paths"]
+      "pnpm": [
+        "check:money-paths"
+      ]
     },
     {
       "path": "scripts/check-neon-migrations.mjs",
-      "pnpm": ["check:neon-migrations"]
+      "pnpm": [
+        "check:neon-migrations"
+      ]
     },
     {
       "path": "scripts/check-no-hardcoded-endpoints.mjs",
-      "pnpm": ["check:hardcoded-endpoints"]
+      "pnpm": [
+        "check:hardcoded-endpoints"
+      ]
     },
     {
       "path": "scripts/check-no-hardcoded-model-ids.mjs",
-      "pnpm": ["check:model-id-literals"]
+      "pnpm": [
+        "check:model-id-literals"
+      ]
     },
     {
       "path": "scripts/check-no-hardcoded-models.sh"
     },
     {
       "path": "scripts/check-no-hex-colors-mobile.mjs",
-      "pnpm": ["check:no-hex-mobile"]
+      "pnpm": [
+        "check:no-hex-mobile"
+      ]
     },
     {
       "path": "scripts/check-node-version.sh"
     },
     {
       "path": "scripts/check-non-md-artifacts.mjs",
-      "pnpm": ["check:non-md-artifacts"]
+      "pnpm": [
+        "check:non-md-artifacts"
+      ]
     },
     {
       "path": "scripts/check-org-permissions.mjs",
-      "pnpm": ["check:org-permissions"]
+      "pnpm": [
+        "check:org-permissions"
+      ]
     },
     {
       "path": "scripts/check-org-role-checks.mjs",
-      "pnpm": ["check:org-role-checks"]
+      "pnpm": [
+        "check:org-role-checks"
+      ]
     },
     {
       "path": "scripts/check-outbound-inspection-coverage.mjs",
-      "pnpm": ["check:outbound-inspection"]
+      "pnpm": [
+        "check:outbound-inspection"
+      ]
     },
     {
       "path": "scripts/check-package-runtimes.mjs",
-      "pnpm": ["check:package-runtimes"]
+      "pnpm": [
+        "check:package-runtimes"
+      ]
     },
     {
       "path": "scripts/check-pagination-contract.mjs",
-      "pnpm": ["check:pagination-contract"]
+      "pnpm": [
+        "check:pagination-contract"
+      ]
     },
     {
       "path": "scripts/check-plan-tier-predicates.mjs",
-      "pnpm": ["check:plan-tier-predicates"]
+      "pnpm": [
+        "check:plan-tier-predicates"
+      ]
     },
     {
       "path": "scripts/check-plugin-install-gate.mjs",
-      "pnpm": ["check:plugin-install-gate"]
+      "pnpm": [
+        "check:plugin-install-gate"
+      ]
     },
     {
       "path": "scripts/check-policy-gate-scope.mjs",
-      "pnpm": ["check:policy-gate-scope"]
+      "pnpm": [
+        "check:policy-gate-scope"
+      ]
     },
     {
       "path": "scripts/check-policy-versions.mjs",
-      "pnpm": ["check:policy-versions"]
+      "pnpm": [
+        "check:policy-versions"
+      ]
     },
     {
       "path": "scripts/check-privacy-claims.mjs",
-      "pnpm": ["check:privacy-claims"]
+      "pnpm": [
+        "check:privacy-claims"
+      ]
     },
     {
       "path": "scripts/check-product-names.mjs",
-      "pnpm": ["check:product-names"]
+      "pnpm": [
+        "check:product-names"
+      ]
     },
     {
       "path": "scripts/check-production-mocks.mjs",
-      "pnpm": ["check:production-mocks"]
+      "pnpm": [
+        "check:production-mocks"
+      ]
     },
     {
       "path": "scripts/check-project-context-boundary.mjs",
-      "pnpm": ["check:project-context-boundary"]
+      "pnpm": [
+        "check:project-context-boundary"
+      ]
     },
     {
       "path": "scripts/check-prompt-layer-assembly.mjs",
-      "pnpm": ["check:prompt-layer-assembly"]
+      "pnpm": [
+        "check:prompt-layer-assembly"
+      ]
     },
     {
       "path": "scripts/check-prompt-versions-append-only.mjs",
-      "pnpm": ["check:prompt-versions-append-only"]
+      "pnpm": [
+        "check:prompt-versions-append-only"
+      ]
     },
     {
       "path": "scripts/check-protocol-types.mjs",
-      "pnpm": ["check:protocol-parity"]
+      "pnpm": [
+        "check:protocol-parity"
+      ]
     },
     {
       "path": "scripts/check-provider-adapter-boundary.mjs",
-      "pnpm": ["check:provider-adapter-boundary"]
+      "pnpm": [
+        "check:provider-adapter-boundary"
+      ]
     },
     {
       "path": "scripts/check-provider-call-reservation.mjs",
-      "pnpm": ["check:provider-call-reservation"]
+      "pnpm": [
+        "check:provider-call-reservation"
+      ]
     },
     {
       "path": "scripts/check-public-share-dlp.mjs",
-      "pnpm": ["check:public-share-dlp"]
+      "pnpm": [
+        "check:public-share-dlp"
+      ]
     },
     {
       "path": "scripts/check-raw-error-to-user.mjs",
-      "pnpm": ["check:raw-error-to-user"]
+      "pnpm": [
+        "check:raw-error-to-user"
+      ]
     },
     {
       "path": "scripts/check-raw-html-sinks.mjs",
-      "pnpm": ["check:raw-html-sinks"]
+      "pnpm": [
+        "check:raw-html-sinks"
+      ]
     },
     {
       "path": "scripts/check-readme-facts.mjs",
-      "pnpm": ["check:readme-facts"]
+      "pnpm": [
+        "check:readme-facts"
+      ]
     },
     {
       "path": "scripts/check-reference-integrity.mjs",
-      "pnpm": ["check:reference-integrity"]
+      "pnpm": [
+        "check:reference-integrity"
+      ]
     },
     {
       "path": "scripts/check-registry-references.mjs",
-      "pnpm": ["check:registry-references"]
+      "pnpm": [
+        "check:registry-references"
+      ]
     },
     {
       "path": "scripts/check-release-artifact-integrity.mjs",
-      "pnpm": ["check:release-artifact-integrity"]
+      "pnpm": [
+        "check:release-artifact-integrity"
+      ]
     },
     {
       "path": "scripts/check-release-gates.mjs"
     },
     {
       "path": "scripts/check-repo-organization.mjs",
-      "pnpm": ["check:repo-organization"]
+      "pnpm": [
+        "check:repo-organization"
+      ]
     },
     {
       "path": "scripts/check-report-retention.mjs",
-      "pnpm": ["check:report-retention"]
+      "pnpm": [
+        "check:report-retention"
+      ]
     },
     {
       "path": "scripts/check-research-run-bounds.mjs",
-      "pnpm": ["check:research-run-bounds"]
+      "pnpm": [
+        "check:research-run-bounds"
+      ]
     },
     {
       "path": "scripts/check-resource-metadata.mjs",
-      "pnpm": ["check:resource-metadata"]
+      "pnpm": [
+        "check:resource-metadata"
+      ]
     },
     {
       "path": "scripts/check-retention-graph.mjs",
-      "pnpm": ["check:retention-graph"]
+      "pnpm": [
+        "check:retention-graph"
+      ]
     },
     {
       "path": "scripts/check-retry-semantics.mjs",
-      "pnpm": ["check:retry-semantics"]
+      "pnpm": [
+        "check:retry-semantics"
+      ]
     },
     {
       "path": "scripts/check-rls-boundary.mjs",
-      "pnpm": ["check:rls-boundary"]
+      "pnpm": [
+        "check:rls-boundary"
+      ]
     },
     {
       "path": "scripts/check-rollout-flags.mjs",
-      "pnpm": ["check:rollout-flags"]
+      "pnpm": [
+        "check:rollout-flags"
+      ]
     },
     {
       "path": "scripts/check-route-account-gate.mjs",
-      "pnpm": ["check:route-account-gate"]
+      "pnpm": [
+        "check:route-account-gate"
+      ]
     },
     {
       "path": "scripts/check-route-observability.mjs",
-      "pnpm": ["check:route-observability"]
+      "pnpm": [
+        "check:route-observability"
+      ]
     },
     {
       "path": "scripts/check-route-shared-contracts.mjs",
-      "pnpm": ["check:route-shared-contracts"]
+      "pnpm": [
+        "check:route-shared-contracts"
+      ]
     },
     {
       "path": "scripts/check-route-states.mjs",
-      "pnpm": ["check:route-states"]
+      "pnpm": [
+        "check:route-states"
+      ]
     },
     {
       "path": "scripts/check-route-tests.mjs",
-      "pnpm": ["check:route-tests"]
+      "pnpm": [
+        "check:route-tests"
+      ]
     },
     {
       "path": "scripts/check-runbook-commands.mjs",
-      "pnpm": ["check:runbook-commands"]
+      "pnpm": [
+        "check:runbook-commands"
+      ]
     },
     {
       "path": "scripts/check-rust-egress-boundary.mjs",
-      "pnpm": ["check:rust-egress-boundary"]
+      "pnpm": [
+        "check:rust-egress-boundary"
+      ]
     },
     {
       "path": "scripts/check-scan-findings.mjs"
     },
     {
       "path": "scripts/check-schedule-clock-injection.mjs",
-      "pnpm": ["check:schedule-clock-injection"]
+      "pnpm": [
+        "check:schedule-clock-injection"
+      ]
     },
     {
       "path": "scripts/check-search-index-coverage.mjs",
-      "pnpm": ["check:search-index-coverage"]
+      "pnpm": [
+        "check:search-index-coverage"
+      ]
     },
     {
       "path": "scripts/check-secrets.mjs",
-      "pnpm": ["check:secrets", "check:secrets:history"]
+      "pnpm": [
+        "check:secrets",
+        "check:secrets:history"
+      ]
     },
     {
       "path": "scripts/check-security-claims.mjs",
-      "pnpm": ["check:security-claims"]
+      "pnpm": [
+        "check:security-claims"
+      ]
     },
     {
       "path": "scripts/check-security-control-reachability.mjs",
-      "pnpm": ["check:security-control-reachability"]
+      "pnpm": [
+        "check:security-control-reachability"
+      ]
     },
     {
       "path": "scripts/check-security-egress-inventory.mjs",
-      "pnpm": ["check:security-egress-inventory"]
+      "pnpm": [
+        "check:security-egress-inventory"
+      ]
     },
     {
       "path": "scripts/check-security-gates.mjs"
     },
     {
       "path": "scripts/check-security-helpers.mjs",
-      "pnpm": ["check:security-helpers"]
+      "pnpm": [
+        "check:security-helpers"
+      ]
     },
     {
       "path": "scripts/check-security-key-lifecycle.mjs",
-      "pnpm": ["check:security-key-lifecycle"]
+      "pnpm": [
+        "check:security-key-lifecycle"
+      ]
     },
     {
       "path": "scripts/check-security-response-headers.mjs",
-      "pnpm": ["check:security-response-headers"]
+      "pnpm": [
+        "check:security-response-headers"
+      ]
     },
     {
       "path": "scripts/check-semgrep-findings.mjs"
     },
     {
       "path": "scripts/check-service-domain-ownership.mjs",
-      "pnpm": ["check:service-domain-ownership"]
+      "pnpm": [
+        "check:service-domain-ownership"
+      ]
     },
     {
       "path": "scripts/check-service-layer.mjs",
-      "pnpm": ["check:service-layer"]
+      "pnpm": [
+        "check:service-layer"
+      ]
     },
     {
       "path": "scripts/check-session-cookie-attributes.mjs",
-      "pnpm": ["check:session-cookie-attributes"]
+      "pnpm": [
+        "check:session-cookie-attributes"
+      ]
     },
     {
       "path": "scripts/check-session-lifetime-enforcement.mjs",
-      "pnpm": ["check:session-lifetime-enforcement"]
+      "pnpm": [
+        "check:session-lifetime-enforcement"
+      ]
     },
     {
       "path": "scripts/check-settings-precedence.mjs",
-      "pnpm": ["check:settings-precedence"]
+      "pnpm": [
+        "check:settings-precedence"
+      ]
     },
     {
       "path": "scripts/check-shortcut-registry.mjs",
-      "pnpm": ["check:shortcut-registry"]
+      "pnpm": [
+        "check:shortcut-registry"
+      ]
     },
     {
       "path": "scripts/check-skill-authority.mjs",
-      "pnpm": ["check:skill-authority"]
+      "pnpm": [
+        "check:skill-authority"
+      ]
     },
     {
       "path": "scripts/check-soc2-controls.mjs",
-      "pnpm": ["check:soc2-controls"]
+      "pnpm": [
+        "check:soc2-controls"
+      ]
     },
     {
       "path": "scripts/check-sse-readers.mjs",
-      "pnpm": ["check:sse-readers"]
+      "pnpm": [
+        "check:sse-readers"
+      ]
     },
     {
       "path": "scripts/check-stream-protocol.mjs",
-      "pnpm": ["check:stream-protocol"]
+      "pnpm": [
+        "check:stream-protocol"
+      ]
     },
     {
       "path": "scripts/check-structure-conventions.mjs",
-      "pnpm": ["check:structure-conventions"]
+      "pnpm": [
+        "check:structure-conventions"
+      ]
     },
     {
       "path": "scripts/check-subprocessor-coverage.mjs",
-      "pnpm": ["check:subprocessor-coverage"]
+      "pnpm": [
+        "check:subprocessor-coverage"
+      ]
     },
     {
       "path": "scripts/check-supply-chain.mjs",
-      "pnpm": ["check:supply-chain"]
+      "pnpm": [
+        "check:supply-chain"
+      ]
     },
     {
       "path": "scripts/check-support-access-coverage.mjs",
-      "pnpm": ["check:support-access-coverage"]
+      "pnpm": [
+        "check:support-access-coverage"
+      ]
     },
     {
       "path": "scripts/check-support-claims.mjs",
-      "pnpm": ["check:support-claims"]
+      "pnpm": [
+        "check:support-claims"
+      ]
     },
     {
       "path": "scripts/check-surface-feature-matrix.mjs",
-      "pnpm": ["check:surface-feature-matrix"]
+      "pnpm": [
+        "check:surface-feature-matrix"
+      ]
     },
     {
       "path": "scripts/check-surface-invariants.mjs",
-      "pnpm": ["check:surface-invariants"]
+      "pnpm": [
+        "check:surface-invariants"
+      ]
     },
     {
       "path": "scripts/check-surface-reachability.mjs",
-      "pnpm": ["check:surface-reachability"]
+      "pnpm": [
+        "check:surface-reachability"
+      ]
     },
     {
       "path": "scripts/check-terminology.mjs",
-      "pnpm": ["check:terminology"]
+      "pnpm": [
+        "check:terminology"
+      ]
     },
     {
       "path": "scripts/check-test-hygiene.mjs",
-      "pnpm": ["check:test-hygiene"]
+      "pnpm": [
+        "check:test-hygiene"
+      ]
     },
     {
       "path": "scripts/check-test-integrity.mjs",
-      "pnpm": ["check:test-integrity"]
+      "pnpm": [
+        "check:test-integrity"
+      ]
     },
     {
       "path": "scripts/check-theme-only-text-colours.mjs",
-      "pnpm": ["check:theme-text-colours"]
+      "pnpm": [
+        "check:theme-text-colours"
+      ]
     },
     {
       "path": "scripts/check-time-semantics.mjs",
-      "pnpm": ["check:time-semantics"]
+      "pnpm": [
+        "check:time-semantics"
+      ]
     },
     {
       "path": "scripts/check-tool-gate-approval-mode.mjs",
-      "pnpm": ["check:tool-gate-approval-mode"]
+      "pnpm": [
+        "check:tool-gate-approval-mode"
+      ]
     },
     {
       "path": "scripts/check-tool-gate-result-containment.mjs",
-      "pnpm": ["check:tool-gate-result-containment"]
+      "pnpm": [
+        "check:tool-gate-result-containment"
+      ]
     },
     {
       "path": "scripts/check-tool-registry.mjs",
-      "pnpm": ["check:tool-registry"]
+      "pnpm": [
+        "check:tool-registry"
+      ]
     },
     {
       "path": "scripts/check-trust-boundaries.mjs",
-      "pnpm": ["check:trust-boundaries"]
+      "pnpm": [
+        "check:trust-boundaries"
+      ]
     },
     {
       "path": "scripts/check-trust-claims.mjs",
-      "pnpm": ["check:trust-claims"]
+      "pnpm": [
+        "check:trust-claims"
+      ]
     },
     {
       "path": "scripts/check-ui-buttons.mjs",
-      "pnpm": ["check:ui-buttons"]
+      "pnpm": [
+        "check:ui-buttons"
+      ]
     },
     {
       "path": "scripts/check-ui-gaps.mjs",
-      "pnpm": ["check:ui-gaps", "check:ui-gaps:monotonic"]
+      "pnpm": [
+        "check:ui-gaps",
+        "check:ui-gaps:monotonic"
+      ]
     },
     {
       "path": "scripts/check-ui-icons.mjs",
-      "pnpm": ["check:ui-icons"]
+      "pnpm": [
+        "check:ui-icons"
+      ]
     },
     {
       "path": "scripts/check-ui-motion.mjs",
-      "pnpm": ["check:ui-motion"]
+      "pnpm": [
+        "check:ui-motion"
+      ]
     },
     {
       "path": "scripts/check-ui-theme-tokens.mjs",
-      "pnpm": ["check:ui-theme-tokens"]
+      "pnpm": [
+        "check:ui-theme-tokens"
+      ]
     },
     {
       "path": "scripts/check-ui-typography.mjs",
-      "pnpm": ["check:ui-typography"]
+      "pnpm": [
+        "check:ui-typography"
+      ]
     },
     {
       "path": "scripts/check-unaudited-db-writes.mjs",
-      "pnpm": ["check:unaudited-db-writes"]
+      "pnpm": [
+        "check:unaudited-db-writes"
+      ]
     },
     {
       "path": "scripts/check-unsafe-retry.mjs",
-      "pnpm": ["check:unsafe-retry"]
+      "pnpm": [
+        "check:unsafe-retry"
+      ]
     },
     {
       "path": "scripts/check-upload-inspection-coverage.mjs",
-      "pnpm": ["check:upload-inspection"]
+      "pnpm": [
+        "check:upload-inspection"
+      ]
     },
     {
       "path": "scripts/check-usage-pool-is-shared.mjs",
-      "pnpm": ["check:usage-pool-is-shared"]
+      "pnpm": [
+        "check:usage-pool-is-shared"
+      ]
     },
     {
       "path": "scripts/check-usage-reservation-replay.mjs",
-      "pnpm": ["check:usage-reservation-replay"]
+      "pnpm": [
+        "check:usage-reservation-replay"
+      ]
     },
     {
       "path": "scripts/check-vacuous-e2e.mjs",
-      "pnpm": ["check:vacuous-e2e"]
+      "pnpm": [
+        "check:vacuous-e2e"
+      ]
     },
     {
       "path": "scripts/check-vercel-cost-loops.mjs",
-      "pnpm": ["check:vercel-cost-loops"]
+      "pnpm": [
+        "check:vercel-cost-loops"
+      ]
     },
     {
       "path": "scripts/check-version-registry.mjs",
-      "pnpm": ["check:version-registry"]
+      "pnpm": [
+        "check:version-registry"
+      ]
     },
     {
       "path": "scripts/check-visual-session-telemetry.mjs",
-      "pnpm": ["check:visual-session-telemetry"]
+      "pnpm": [
+        "check:visual-session-telemetry"
+      ]
     },
     {
       "path": "scripts/check-voice-session-metering.mjs",
-      "pnpm": ["check:voice-session-metering"]
+      "pnpm": [
+        "check:voice-session-metering"
+      ]
     },
     {
       "path": "scripts/check-voice-session-parity.mjs",
-      "pnpm": ["check:voice-session-parity"]
+      "pnpm": [
+        "check:voice-session-parity"
+      ]
     },
     {
       "path": "scripts/check-web-ui-invariants.mjs",
-      "pnpm": ["check:web-ui-invariants"]
+      "pnpm": [
+        "check:web-ui-invariants"
+      ]
     },
     {
       "path": "scripts/check-work-client-state.mjs",
-      "pnpm": ["check:work-client-state"]
+      "pnpm": [
+        "check:work-client-state"
+      ]
     },
     {
       "path": "scripts/check-workflow-cargo-features.mjs",
-      "pnpm": ["check:workflow-cargo-features"]
+      "pnpm": [
+        "check:workflow-cargo-features"
+      ]
     },
     {
       "path": "scripts/check-workflow-hardening.mjs",
-      "pnpm": ["check:workflow-hardening"]
+      "pnpm": [
+        "check:workflow-hardening"
+      ]
     },
     {
       "path": "scripts/check-workspace-cache-scope.mjs",
-      "pnpm": ["check:workspace-cache-scope"]
+      "pnpm": [
+        "check:workspace-cache-scope"
+      ]
     },
     {
       "path": "scripts/check-workspace-policy-enforcement.mjs",
-      "pnpm": ["check:workspace-policy-enforcement"]
+      "pnpm": [
+        "check:workspace-policy-enforcement"
+      ]
     },
     {
       "path": "scripts/check-workspace-scripts.mjs",
-      "pnpm": ["check:workspace-scripts"]
+      "pnpm": [
+        "check:workspace-scripts"
+      ]
     },
     {
       "path": "scripts/check-worktask-scope.mjs",
-      "pnpm": ["check:worktask-scope"]
+      "pnpm": [
+        "check:worktask-scope"
+      ]
     }
   ]
 }

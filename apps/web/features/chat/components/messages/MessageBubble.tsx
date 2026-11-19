@@ -220,7 +220,8 @@ import {
   WORKBOOK_PREVIEW_TOO_LARGE,
 } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
-import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
+import type { InteractiveCard } from '@agiworkforce/types';
+import { cardLeadsProse } from '@/features/chat/lib/interactive-card-placement';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { ImageToolCard } from './cards/ImageToolCard';
 import { TurnPluginDraftCard } from '../PluginDraftCard';
@@ -654,6 +655,7 @@ interface Message {
      * unrecognized card carries only its envelope and its authored fallback.
      */
     interactiveCards?: InteractiveCard[];
+    interactiveCardTextOffsets?: Record<string, number>;
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
     /** Work plan steps with their status, and the goal and approval state they belong to. */
@@ -2168,13 +2170,16 @@ const MessageBubbleComponent = function MessageBubble({
       }),
     [interactiveCards, inlineToolImages],
   );
+  const interactiveCardTextOffsets = message.metadata?.interactiveCardTextOffsets;
   const leadingInteractiveCards = useMemo(
-    () => separateInteractiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
-    [separateInteractiveCards],
+    () =>
+      separateInteractiveCards.filter((card) => cardLeadsProse(card, interactiveCardTextOffsets)),
+    [separateInteractiveCards, interactiveCardTextOffsets],
   );
   const trailingInteractiveCards = useMemo(
-    () => separateInteractiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
-    [separateInteractiveCards],
+    () =>
+      separateInteractiveCards.filter((card) => !cardLeadsProse(card, interactiveCardTextOffsets)),
+    [separateInteractiveCards, interactiveCardTextOffsets],
   );
 
   /**
@@ -2668,6 +2673,9 @@ const MessageBubbleComponent = function MessageBubble({
               key={showNoSearchResultsNotice ? `${message.id}-no-sources` : message.id}
               activity={activityTimeline}
               {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
+              {...(!message.isStreaming && searchSources.length > 0
+                ? { sourceCount: searchSources.length }
+                : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
               onApproveForChat={
@@ -2814,7 +2822,11 @@ const MessageBubbleComponent = function MessageBubble({
               leads the turn; every other card follows the prose that motivated
               it. */}
           {!isUser && leadingInteractiveCards.length > 0 ? (
-            <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
+            <InteractiveCardBlock
+              cards={leadingInteractiveCards}
+              assistantText={cleanedContent}
+              trustedImageUrls={trustedImageUrls}
+            />
           ) : null}
 
           {!isUser && proseIsStreaming && cleanedContent.trim() && !activityTimeline ? (
@@ -2954,7 +2966,11 @@ const MessageBubbleComponent = function MessageBubble({
               A card that fails to render its kind still renders its authored
               fallback, so this block never leaves a gap in the answer. */}
           {!isUser && trailingInteractiveCards.length > 0 ? (
-            <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
+            <InteractiveCardBlock
+              cards={trailingInteractiveCards}
+              assistantText={cleanedContent}
+              trustedImageUrls={trustedImageUrls}
+            />
           ) : null}
 
           {!isUser && !streamingBlock && createdArtifacts.length > 0 && (

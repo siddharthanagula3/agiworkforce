@@ -37,6 +37,11 @@ jest.mock('@/lib/models', () => {
   };
 });
 
+jest.mock('@/src/features/model-picker/service', () => ({
+  getSelectableModelById: (id: string) =>
+    id === 'fixture-on-device-model' ? { id, contextWindow: 4000 } : undefined,
+}));
+
 import {
   computeContextBudget,
   estimateTokens,
@@ -122,6 +127,21 @@ describe('contextBudgeter', () => {
     it('hardCapTokens is 80% of 262144', () => {
       const budget = computeContextBudget(modelId, []);
       expect(budget.hardCapTokens).toBe(Math.floor(262144 * 0.8));
+    });
+  });
+
+  describe('computeContextBudget, on-device model', () => {
+    it('measures against the on-device window rather than a cloud fallback', () => {
+      const budget = computeContextBudget('fixture-on-device-model', makeMessages(5, 2800));
+      expect(budget.runsOnDevice).toBe(true);
+      expect(budget.contextWindowTokens).toBe(4000);
+      expect(budget.status).toBe('compact');
+    });
+
+    it('does not mark a cloud model as on-device', () => {
+      const budget = computeContextBudget(LARGE_CONTEXT_MODEL_ID, []);
+      expect(budget.runsOnDevice).toBe(false);
+      expect(budget.contextWindowTokens).toBe(262144);
     });
   });
 

@@ -333,6 +333,7 @@ export async function claimJobs(
               where job.queue = slots.queue
                 and job.status = 'queued'
                 and job.run_after <= now()
+                and job.cancel_requested_at is null
                 and (
                   $6::text is null
                   or coalesce(job.origin_region, $7::text) = $6::text
@@ -510,7 +511,7 @@ export async function reapExpiredJobLeases(db: DatabaseAdapter): Promise<ReapSum
               dead_lettered_at = now(), lease_expires_at = null, worker_id = null,
               completed_at = now(), updated_at = now()
         where queue = any($1::text[]) and status = 'running' and lease_expires_at < now()
-          and attempts >= max_attempts`,
+          and attempts >= max_attempts and cancel_requested_at is null`,
     [JOB_QUEUE_NAMES, JOB_RETRY_REASON.leaseExpired],
   );
   const requeued = await db.execute(
@@ -528,7 +529,7 @@ export async function reapExpiredJobLeases(db: DatabaseAdapter): Promise<ReapSum
               lease_expires_at = null, worker_id = null, updated_at = now()
          from policy
         where job.queue = policy.queue and status = 'running' and lease_expires_at < now()
-          and attempts < max_attempts`,
+          and attempts < max_attempts and job.cancel_requested_at is null`,
     [
       JOB_QUEUE_NAMES,
       JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].backoffBaseSeconds),

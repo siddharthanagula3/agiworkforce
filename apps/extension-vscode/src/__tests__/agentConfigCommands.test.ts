@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { activate } from '../extension';
 import { LocalRuntimePool } from '../integrations/localRuntimePool';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const { openAgentConfigMock } = vi.hoisted(() => ({
   openAgentConfigMock: vi.fn().mockResolvedValue('/host/.agiworkforce/config.toml'),
@@ -81,7 +82,7 @@ describe('agent configuration commands', () => {
     resolveRestart({ restartedWorkspaces: 1 });
     await command;
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code: Local runtime restarted in 1 workspace.',
+      `${PRODUCT_NAMES.code}: Local runtime restarted in 1 workspace.`,
     );
   });
 
@@ -101,7 +102,7 @@ describe('agent configuration commands', () => {
 
     expect(result).toEqual({ ok: false, error: 'protocol handshake failed' });
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Code: Local runtime restart failed, protocol handshake failed',
+      `${PRODUCT_NAMES.code}: Local runtime restart failed, protocol handshake failed`,
     );
   });
 });

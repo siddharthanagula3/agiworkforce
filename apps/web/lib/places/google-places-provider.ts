@@ -172,7 +172,6 @@ export function normalizeGooglePlace(wire: GooglePlaceWire): PlaceRecord | null 
   const name = localizedText(wire.displayName);
   if (!placeId || !name) return null;
 
-  const openingHours = wire.currentOpeningHours ?? wire.regularOpeningHours;
   const address = text(wire.formattedAddress);
   const rating = finiteNumber(wire.rating);
   const reviewCount = finiteNumber(wire.userRatingCount);
@@ -182,9 +181,9 @@ export function normalizeGooglePlace(wire: GooglePlaceWire): PlaceRecord | null 
     typeof wire.currentOpeningHours?.openNow === 'boolean'
       ? wire.currentOpeningHours.openNow
       : undefined;
-  const hours =
-    stringList(wire.currentOpeningHours?.weekdayDescriptions) ??
-    stringList(openingHours?.weekdayDescriptions);
+  const currentHours = stringList(wire.currentOpeningHours?.weekdayDescriptions);
+  const regularHours = stringList(wire.regularOpeningHours?.weekdayDescriptions);
+  const hours = currentHours ?? regularHours;
   const phone = text(wire.nationalPhoneNumber);
   const website = httpsUrl(wire.websiteUri);
   const mapsUrl = httpsUrl(wire.googleMapsUri);
@@ -201,7 +200,7 @@ export function normalizeGooglePlace(wire: GooglePlaceWire): PlaceRecord | null 
     ...(category ? { category } : {}),
     ...(priceLevel ? { priceLevel } : {}),
     ...(openNow !== undefined ? { openNow } : {}),
-    ...(hours ? { hours } : {}),
+    ...(hours ? { hours, hoursKind: currentHours ? 'current' : 'regular' } : {}),
     ...(phone ? { phone } : {}),
     ...(website ? { website } : {}),
     ...(mapsUrl ? { mapsUrl } : {}),

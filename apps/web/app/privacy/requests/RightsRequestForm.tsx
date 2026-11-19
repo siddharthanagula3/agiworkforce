@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, type FormEvent } from 'react';
+import { useId, useRef, useState, type FormEvent } from 'react';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
@@ -37,6 +37,9 @@ const REQUEST_TYPES = [
   },
 ] as const;
 
+const UNCONFIRMED_RECEIPT_MESSAGE =
+  'We could not confirm whether your request was recorded. Submit again: the same submission is never recorded twice. If this keeps happening, email the grievance contact above.';
+
 type FormState = 'idle' | 'submitting' | 'error';
 
 export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } = {}) {
@@ -52,6 +55,7 @@ export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } 
   const [errorMsg, setErrorMsg] = useState('');
   const [reference, setReference] = useState<string | null>(null);
   const [operatorNotified, setOperatorNotified] = useState(false);
+  const submissionToken = useRef<string | null>(null);
 
   const selected = REQUEST_TYPES.find((entry) => entry.id === requestType);
 
@@ -74,6 +78,8 @@ export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } 
     setState('submitting');
     setErrorMsg('');
 
+    submissionToken.current ??= crypto.randomUUID();
+
     try {
       const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/privacy/requests', {
@@ -84,6 +90,7 @@ export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } 
           requestType,
           contactEmail: normalizedEmail,
           details: details.trim() || undefined,
+          submissionToken: submissionToken.current,
         }),
       });
 
@@ -91,7 +98,9 @@ export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } 
         setErrorMsg(
           res.status === 429
             ? 'Too many requests from this network. Wait a while, or email the grievance contact above.'
-            : 'Your request was not recorded, so nothing was stored. Please email the grievance contact above.',
+            : res.status === 409
+              ? 'This submission was already recorded with different details. Reload the page and submit again.'
+              : UNCONFIRMED_RECEIPT_MESSAGE,
         );
         setState('error');
         return;
@@ -102,9 +111,10 @@ export function RightsRequestForm({ onSubmitted }: { onSubmitted?: () => void } 
       setOperatorNotified(body.operatorNotified === true);
       setState('idle');
       setDetails('');
+      submissionToken.current = null;
       onSubmitted?.();
     } catch {
-      setErrorMsg('Your request was not recorded, so nothing was stored.');
+      setErrorMsg(UNCONFIRMED_RECEIPT_MESSAGE);
       setState('error');
     }
   }

@@ -13,17 +13,17 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSession } from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
 import { apiErrorMessage } from '@shared/utils/api-error';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const GRANT_PATH = '/api/auth/desktop/grant';
 const HEADING = 'Return to Desktop';
 const DETAIL =
   'Your browser asks to open Desktop. Allow it, and the desktop app finishes signing you in. You can close this tab afterwards.';
-const OPEN_LABEL = 'Open chat Desktop';
+const OPEN_LABEL = `Open ${PRODUCT_NAMES.desktop}`;
 const PREPARING = 'Preparing your sign-in';
 const GRANT_FAILED = 'This sign-in could not be handed to the desktop app. Try again.';
 const INVALID_HEADING = 'Start from the desktop app';
-const INVALID_DETAIL =
-  'This link is missing part of the sign-in. Open chat Desktop on your computer and choose Continue in your browser again.';
+const INVALID_DETAIL = `This link is missing part of the sign-in. Open ${PRODUCT_NAMES.desktop} on your computer and choose Continue in your browser again.`;
 
 type HandoffState = { kind: 'preparing' } | { kind: 'ready' } | { kind: 'failed'; message: string };
 

@@ -30,6 +30,7 @@ import {
   MAX_CONVERSATIONS,
   MAX_CONVERSATION_STORE_BYTES,
   MAX_HISTORY_CONTENT_CHARS,
+  MAX_HISTORY_ERROR_TEXT_CHARS,
   MAX_MESSAGES_PER_CONVERSATION,
   pendingCloudMessages,
   recordCloudSyncState,
@@ -39,6 +40,7 @@ import {
 } from '../background/conversation-history';
 import { getFreshClerkAuthContext } from './clerkAuth';
 import { FREE_TRIAL_GATEWAY } from './freeTrialClient';
+import { classifyCloudRefusal } from './cloudRefusal';
 import {
   createExtensionCloudChatClient,
   ManagedCloudOwnerChangedError,
@@ -47,6 +49,7 @@ import {
 import { sameManagedCloudOwner, type ManagedCloudOwner } from './managedCloudAuthority';
 import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { t } from '../../i18n';
 
 const HISTORY_PULL_TIMEOUT_MS = 20_000;
 
@@ -83,6 +86,8 @@ export class CloudHistoryCacheWindowError extends Error {
     );
   }
 }
+
+const POLICY_BLOCK_RETRY_MS = 5 * 60_000;
 
 export class CloudHistoryUnavailableError extends Error {
   constructor() {
@@ -225,6 +230,15 @@ export function projectPublicHistoryMessage(message: ManagedCloudMessage): Histo
     ...(metadata['managedQuickMode'] === true ? { managedQuickMode: true } : {}),
     ...(message.role === 'assistant' && metadata['agiWorkPlanDeclined'] === true
       ? { agiWorkPlanDeclined: true }
+      : {}),
+    ...(message.role === 'assistant' && metadata['error'] === true
+      ? {
+          error: true,
+          errorText:
+            typeof metadata['errorText'] === 'string' && metadata['errorText'].trim()
+              ? metadata['errorText'].slice(0, MAX_HISTORY_ERROR_TEXT_CHARS)
+              : t('spStoredReplyFailed'),
+        }
       : {}),
     ...(message.role === 'user' && Object.prototype.hasOwnProperty.call(metadata, 'attachments')
       ? { attachments }
@@ -373,13 +387,35 @@ export async function refreshManagedCloudConversationHistory(
       );
     } catch (error) {
       if (error instanceof ManagedCloudChatHttpError && [401, 403, 404].includes(error.status)) {
+        const serverMessage = error.message.replace(/^HTTP \d{3}: /u, '');
+        const refusal = classifyCloudRefusal(error.status, {
+          error: { ...(error.code ? { code: error.code } : {}), message: serverMessage },
+        });
+        const policyBlock =
+          error.code !== 'workspace_not_accessible' &&
+          (refusal.kind === 'policy' || refusal.kind === 'plan' || refusal.kind === 'account');
         if (options.isCurrent() && !signal.aborted) {
-          await recordCloudSyncState(owner, entry.id, {
-            state: 'blocked',
-            blockedReason:
-              error.status === 404 ? 'not-found' : error.status === 403 ? 'workspace' : 'auth',
-            lastError: 'The account chat could not be read in the current workspace.',
-          });
+          await recordCloudSyncState(
+            owner,
+            entry.id,
+            policyBlock
+              ? {
+                  state: 'blocked',
+                  blockedReason: 'policy',
+                  lastError: refusal.message ?? serverMessage,
+                  retryAfter: Date.now() + POLICY_BLOCK_RETRY_MS,
+                }
+              : {
+                  state: 'blocked',
+                  blockedReason:
+                    error.status === 404
+                      ? 'not-found'
+                      : error.status === 403
+                        ? 'workspace'
+                        : 'auth',
+                  lastError: 'The account chat could not be read in the current workspace.',
+                },
+          );
         }
         throw new CloudHistoryUnavailableError();
       }

@@ -5,7 +5,9 @@ import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-spac
 import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicator';
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { useWindowEdgeOffset } from '@/features/chat/hooks/use-window-edge-offset';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
+import { isKeepableChatMessage } from '@/lib/chat-kept-messages';
 import { clientProvisionalTitle } from '@/lib/chat-title';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
@@ -98,6 +100,7 @@ import {
 } from '../lib/imageGenerationPersistence';
 import { runDurableImageGenerationTurn } from '../lib/durableImageGenerationTurn';
 import { startVideoAfterTranscriptCommit } from '../lib/durableVideoGenerationTurn';
+import { resolveVideoRetryInputs, videoInputKindOf } from '../lib/videoRetryInputs';
 import {
   useChatStore,
   selectActiveLeafId,
@@ -353,6 +356,7 @@ import {
   type ResearchRunActionHandler,
   type ResearchRunControls,
 } from '../components/research/research-run-controls';
+import { AnswerUiFollowUpProvider } from '../components/messages/cards/answer-ui/answer-ui-follow-up';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
@@ -372,6 +376,7 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
+import { replayMcpContext } from '../lib/mcp-context-summary';
 import {
   approvedResearchSteps,
   completedResearchSteps,
@@ -1004,6 +1009,18 @@ function readVideoStartFailureProjection(value: unknown): VideoStartFailureProje
     ...(typeof metadata['videoRetryable'] === 'boolean'
       ? { videoRetryable: metadata['videoRetryable'] }
       : {}),
+    ...(typeof metadata['videoAspect'] === 'string'
+      ? { videoAspect: metadata['videoAspect'] }
+      : {}),
+    ...(typeof metadata['videoResolution'] === 'string'
+      ? { videoResolution: metadata['videoResolution'] }
+      : {}),
+    ...(typeof metadata['videoDurationSecs'] === 'number'
+      ? { videoDurationSecs: metadata['videoDurationSecs'] }
+      : {}),
+    ...(metadata['videoInputKind'] === 'first_frame' || metadata['videoInputKind'] === 'reference'
+      ? { videoInputKind: metadata['videoInputKind'] }
+      : {}),
   };
   return {
     applied: response['applied'],
@@ -1110,6 +1127,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const appHeaderRef = useRef<HTMLElement>(null);
+  useWindowEdgeOffset(appHeaderRef);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const shellLayout = useShellLayout();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -1353,6 +1372,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
   const autoTitledConversationsRef = useRef<Set<string>>(new Set());
+  const manualTitleEditsRef = useRef<Map<string, number>>(new Map());
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
@@ -2857,6 +2877,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         ...imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
           ...(paywall ? { paywall } : {}),
           ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
+          ...(apiError?.jobId ? { jobId: apiError.jobId } : {}),
         }),
         errorCode: paywall || cancelled ? undefined : IMAGE_GENERATION_FAILED_CODE,
       };
@@ -3201,6 +3222,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       );
 
       const previousMetadata = readMessageMetadata(ownerConversationId, messageId);
+      const resumeJobId =
+        previousMetadata?.imageJobId &&
+        !opts.edit &&
+        previousMetadata.imageGenPrompt === opts.prompt &&
+        previousMetadata.imageGenAspect === requestedAspect &&
+        (requestedModel === undefined || previousMetadata.imageGenModel === requestedModel)
+          ? previousMetadata.imageJobId
+          : undefined;
       if (!tryAcquireImageTranscriptMutation([messageId])) {
         throw new Error(
           'Wait for this image card to finish saving before generating a new version.',
@@ -3229,6 +3258,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             imageGenPrompt: opts.prompt,
             imageGenAspect: requestedAspect,
             imageRetryAt: undefined,
+            imageJobId: undefined,
             errorCode: undefined,
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
@@ -3264,6 +3294,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               authority,
               cancelScope: ownerConversationId,
               conversationId: ownerConversationId,
+              ...(resumeJobId ? { resumeJobId } : {}),
             });
             return generatedImage.imageUrl;
           },
@@ -3726,6 +3757,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
           let assistantMessageId = crypto.randomUUID();
           videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
+          const videoInputKind = videoInputKindOf(videoOptions?.inputImages);
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
@@ -3734,6 +3766,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
             ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
             ...(videoOptions?.durationSecs ? { videoDurationSecs: videoOptions.durationSecs } : {}),
+            ...(videoInputKind ? { videoInputKind } : {}),
           };
           addMessage(
             {
@@ -3840,6 +3873,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               ...(videoOptions?.durationSecs
                 ? { videoDurationSecs: videoOptions.durationSecs }
                 : {}),
+              ...(videoInputKind ? { videoInputKind } : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -4041,7 +4075,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const authority = videoMessageAuthoritiesRef.current.get(messageId);
       if (authority && !authority.isCurrent()) return;
       const failed = assistantMessage.metadata;
-      const inputImages = videoInputImagesRef.current.get(messageId);
+      const inputs = resolveVideoRetryInputs(
+        failed.videoInputKind,
+        videoInputImagesRef.current.get(messageId),
+      );
+      if (!inputs.ok) {
+        updateMessage(
+          messageId,
+          {
+            content: inputs.message,
+            metadata: { ...failed, videoRetryable: false, videoError: inputs.message },
+          },
+          displayedConversationId,
+        );
+        return;
+      }
+      const { inputImages } = inputs;
       videoInputImagesRef.current.delete(messageId);
       handleGenerateVideo(userMessage.content, {
         authority,
@@ -4063,6 +4112,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       handleOpenUpgradeDialog,
       isStreaming,
       isTrialExhausted,
+      updateMessage,
     ],
   );
 
@@ -4350,6 +4400,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const sendAnswerUiFollowUp = useCallback(
+    (text: string) => {
+      handleSend(text);
+    },
+    [handleSend],
+  );
+
   const handleAcceptProviderNotice = useCallback(async () => {
     const pending = pendingProviderNotice;
     if (!pending || pendingProviderNoticeRef.current !== pending) return;
@@ -4543,8 +4600,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const handleRenameSession = useCallback(
-    (id: string, title: string) =>
-      runSessionRowAction('rename', () => updateConversation(id, { title })),
+    (id: string, title: string) => {
+      manualTitleEditsRef.current.set(id, (manualTitleEditsRef.current.get(id) ?? 0) + 1);
+      return runSessionRowAction('rename', () => updateConversation(id, { title }));
+    },
     [updateConversation],
   );
 
@@ -4675,7 +4734,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             (message) =>
               (message.role === 'user' || message.role === 'assistant') &&
               !message.isStreaming &&
-              message.content.trim().length > 0,
+              isKeepableChatMessage(message),
           );
       if (keptMessages.length === 0) {
         return updateConversation(conversationId, { isTemporary });
@@ -4721,8 +4780,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
+  const firstAnswerStreaming = displayedMessages[1]?.isStreaming === true;
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
+    if (firstAnswerStreaming) return;
     const conversationId = displayedConversationId;
     if (autoTitledConversationsRef.current.has(conversationId)) return;
     const convo = conversations.find((c) => c.id === conversationId);
@@ -4735,6 +4796,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       localModelSelection !== null ||
       conversationHoldsLocalTurns(displayedMessages);
     autoTitledConversationsRef.current.add(conversationId);
+    const manualEditsAtStart = manualTitleEditsRef.current.get(conversationId) ?? 0;
+    const ownerRenamed = () =>
+      (manualTitleEditsRef.current.get(conversationId) ?? 0) !== manualEditsAtStart;
 
     void (async () => {
       let adopted: string | null = null;
@@ -4751,6 +4815,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           }
           if (!serverTitle || AUTO_TITLE_PLACEHOLDERS.has(serverTitle)) continue;
           if (serverTitle === adopted) continue;
+          if (ownerRenamed()) return;
           useChatStore.getState().updateConversation(conversationId, { title: serverTitle });
           // The first non-placeholder read is the stage-1 truncation; the next distinct
           // one is the generated title, and nothing follows it.
@@ -4760,16 +4825,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (adopted) return;
       }
       const fallback = clientFallbackTitle(firstUser.content);
-      if (!fallback || fallback === placeholderTitle) return;
+      if (!fallback || fallback === placeholderTitle || ownerRenamed()) return;
       if (titleStaysOnDevice) {
         useChatStore.getState().updateConversation(conversationId, { title: fallback });
         return;
       }
-      void updateConversation(conversationId, { title: fallback });
+      void updateConversation(conversationId, { title: fallback, expectedTitle: placeholderTitle });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     displayedMessages.length,
+    firstAnswerStreaming,
     displayedConversationId,
     conversations,
     localModelSelection,
@@ -5250,9 +5316,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setChatError(replayDecision.message, conversationId);
         return;
       }
+      const mcpReplay = replayMcpContext(planned.message.metadata?.mcpContext);
+      if (!mcpReplay.ok) {
+        setChatError(mcpReplay.message, conversationId);
+        return;
+      }
       const replayOptions = {
         ...replayToSendOptions(replayDecision.replay),
         ...freeModelHandoffReplay(planned.message.metadata),
+        ...(mcpReplay.mcpContext ? { mcpContext: mcpReplay.mcpContext } : {}),
       };
 
       if (variantsEnabled) {
@@ -5445,9 +5517,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
 
+      const mcpReplay = replayMcpContext(userMsg.metadata?.mcpContext);
+      if (!mcpReplay.ok) {
+        setChatError(mcpReplay.message, displayedConversationId);
+        return;
+      }
       const replayOptions = {
         ...replayToSendOptions(replayDecision.replay),
         ...freeModelHandoffReplay(userMsg.metadata),
+        ...(mcpReplay.mcpContext ? { mcpContext: mcpReplay.mcpContext } : {}),
       };
 
       if (userRetryIndex >= 0 && !conversations.some((c) => c.id === displayedConversationId)) {
@@ -6343,6 +6421,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const voiceModeActive = useVoiceModeActive();
   useEffect(() => () => releaseVoiceSessionOnPageExit(), []);
+  const emptyStateExtras =
+    !compact && !voiceModeActive ? (
+      <>
+        {composerToggles?.workMode === AGI_WORK_MODE && (
+          <>
+            <HomeActiveTasks />
+            <AgiWorkIntroDialog />
+          </>
+        )}
+        <NewChatConnectorSuggestions
+          show={
+            !isConversationSidebarPending && conversations.length === 0 && !conversationListError
+          }
+        />
+      </>
+    ) : null;
   const voiceFocusMode = useVoiceSessionStore((state) => state.focusMode);
   const voiceActivityMessageId = useVoiceSessionStore((state) => state.activityMessageId);
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
@@ -6379,6 +6473,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       router,
       surfaceConversationHref,
     ],
+  );
+
+  const handleVoiceDiscardConversation = useCallback(
+    (conversationId: string) => {
+      void deleteConversation(conversationId).then((deleted) => {
+        if (!deleted) return;
+        setBareChatSessionId(null);
+        setActiveConversation(null);
+        router.replace(surfaceRootHref);
+      });
+    },
+    [deleteConversation, setActiveConversation, router, surfaceRootHref],
   );
 
   const handleVoiceTranscript = useCallback(
@@ -6492,6 +6598,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     onSend: handleVoiceSend,
     onStartWorkTask: handleVoiceStartWorkTask,
     onEnsureConversation: handleVoiceEnsureConversation,
+    onDiscardConversation: handleVoiceDiscardConversation,
     onTranscript: handleVoiceTranscript,
     onNewChat: handleNewChat,
     onOpenLibrary: handleVoiceOpenLibrary,
@@ -6896,6 +7003,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               {...sharedSidebarProps}
               collapsed={false}
               width={MOBILE_NAV_DRAWER_WIDTH}
+              className="max-w-full"
               onToggleCollapse={() => setMobileNavOpen(false)}
             />
           </SheetContent>
@@ -6942,9 +7050,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : null
           ) : (
             <header
+              ref={appHeaderRef}
               data-app-header=""
+              data-window-edge="offset"
               className={cn(
-                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4 max-md:ps-2',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -6971,7 +7081,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ms-1 h-8 w-8 shrink-0 p-0 pointer-coarse:h-11 pointer-coarse:w-11"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0 max-md:ms-0 pointer-coarse:h-11 pointer-coarse:w-11"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -7275,7 +7385,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : isEmptyChat ? (
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
-                <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
+                <div
+                  className={cn(
+                    'flex min-h-full w-full flex-col items-center justify-center-safe gap-6',
+                    !voiceModeActive &&
+                      'max-md:pb-[env(safe-area-inset-bottom,0px)] max-md:[&>*]:mt-auto',
+                  )}
+                >
                   {!compact && !voiceModeActive && (
                     <GreetingBanner
                       showWorkspace
@@ -7283,6 +7399,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     />
                   )}
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
+                    {isNarrowViewport && (
+                      <div className="mb-3 empty:hidden">{emptyStateExtras}</div>
+                    )}
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
@@ -7338,23 +7457,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           : {})}
                       />
                     )}
-                    {!compact &&
-                      !voiceModeActive &&
-                      composerToggles?.workMode === AGI_WORK_MODE && (
-                        <>
-                          <HomeActiveTasks />
-                          <AgiWorkIntroDialog />
-                        </>
-                      )}
-                    {!compact && !voiceModeActive && (
-                      <NewChatConnectorSuggestions
-                        show={
-                          !isConversationSidebarPending &&
-                          conversations.length === 0 &&
-                          !conversationListError
-                        }
-                      />
-                    )}
+                    {!isNarrowViewport && emptyStateExtras}
                   </div>
                 </div>
               </div>
@@ -7373,50 +7476,52 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
-                              <ChatMessageList
-                                messages={chatMessages}
-                                transcriptPatch={chatMessageProjection.patch}
-                                currentTier={currentTier}
-                                conversationId={displayedConversationId}
-                                isLoading={isLoading && !isStreaming}
-                                isUserTyping={isUserTyping}
-                                onRegenerate={handleRegenerateMessage}
-                                onScheduleTurn={handleScheduleTurn}
-                                onRetryResearch={handleRetryResearch}
-                                onResearchPlanDecision={handleResearchPlanDecision}
-                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                                retryingResearchMessageId={retryingResearchMessageId}
-                                onContinue={handleContinueMessage}
-                                onEdit={handleEditMessage}
-                                onFenceEdit={handleFenceEdit}
-                                onDelete={handleDeleteMessage}
-                                onDeleteVariant={handleDeleteVariant}
-                                countVariantFollowers={countVariantFollowers}
-                                onReact={handleReactMessage}
-                                onPin={handlePinMessage}
-                                branchGroupsByMessageId={branchGroupsByMessageId}
-                                branchingMessageId={branchingMessageId}
-                                onBranch={createBranch}
-                                onSwitchBranch={switchBranch}
-                                variantInfoByMessageId={variantInfoByMessageId}
-                                onSelectVariant={handleSelectVariant}
-                                activeLeafId={activeLeafId}
-                                variantAnchorMessageId={variantAnchorMessageId}
-                                isConversationStreaming={isStreaming}
-                                onRegenerateImage={handleRegenerateImageInPlace}
-                                onResumeVideo={handleResumeVideo}
-                                onRetryVideo={handleRetryVideo}
-                                onSendMessage={setComposerPrefill}
-                                onSubmitPrompt={handleSubmitPrompt}
-                                onPaywallUpgrade={handlePaywallRecovery}
-                                onPaywallDismiss={handlePaywallDismiss}
-                                onRegenerateWithModel={handleRegenerateWithModel}
-                                regenerateModelOptions={regenerateModelOptions}
-                                turnErrorActive={turnErrorNotice !== null}
-                                temporaryChat={temporaryChatActive}
-                              />
-                            </ProjectAnswerSaveProvider>
+                            <AnswerUiFollowUpProvider value={sendAnswerUiFollowUp}>
+                              <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                                <ChatMessageList
+                                  messages={chatMessages}
+                                  transcriptPatch={chatMessageProjection.patch}
+                                  currentTier={currentTier}
+                                  conversationId={displayedConversationId}
+                                  isLoading={isLoading && !isStreaming}
+                                  isUserTyping={isUserTyping}
+                                  onRegenerate={handleRegenerateMessage}
+                                  onScheduleTurn={handleScheduleTurn}
+                                  onRetryResearch={handleRetryResearch}
+                                  onResearchPlanDecision={handleResearchPlanDecision}
+                                  onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                  retryingResearchMessageId={retryingResearchMessageId}
+                                  onContinue={handleContinueMessage}
+                                  onEdit={handleEditMessage}
+                                  onFenceEdit={handleFenceEdit}
+                                  onDelete={handleDeleteMessage}
+                                  onDeleteVariant={handleDeleteVariant}
+                                  countVariantFollowers={countVariantFollowers}
+                                  onReact={handleReactMessage}
+                                  onPin={handlePinMessage}
+                                  branchGroupsByMessageId={branchGroupsByMessageId}
+                                  branchingMessageId={branchingMessageId}
+                                  onBranch={createBranch}
+                                  onSwitchBranch={switchBranch}
+                                  variantInfoByMessageId={variantInfoByMessageId}
+                                  onSelectVariant={handleSelectVariant}
+                                  activeLeafId={activeLeafId}
+                                  variantAnchorMessageId={variantAnchorMessageId}
+                                  isConversationStreaming={isStreaming}
+                                  onRegenerateImage={handleRegenerateImageInPlace}
+                                  onResumeVideo={handleResumeVideo}
+                                  onRetryVideo={handleRetryVideo}
+                                  onSendMessage={setComposerPrefill}
+                                  onSubmitPrompt={handleSubmitPrompt}
+                                  onPaywallUpgrade={handlePaywallRecovery}
+                                  onPaywallDismiss={handlePaywallDismiss}
+                                  onRegenerateWithModel={handleRegenerateWithModel}
+                                  regenerateModelOptions={regenerateModelOptions}
+                                  turnErrorActive={turnErrorNotice !== null}
+                                  temporaryChat={temporaryChatActive}
+                                />
+                              </ProjectAnswerSaveProvider>
+                            </AnswerUiFollowUpProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>
@@ -7424,7 +7529,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   </ToolApprovalProvider>
                 </div>
 
-                <div className="shrink-0 pb-4">
+                <div className="shrink-0 pb-4 max-md:pb-[env(safe-area-inset-bottom,0px)]">
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}

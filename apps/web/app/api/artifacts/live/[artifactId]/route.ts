@@ -154,7 +154,7 @@ async function handleDelete(request: NextRequest, context: RouteContext): Promis
   if (scoped instanceof Response) return scoped;
 
   const existing = await readLiveArtifact(scoped.db, scoped, artifactId);
-  const removed = await removeLiveArtifact(scoped.db, scoped.userId, artifactId);
+  const removed = await removeLiveArtifact(scoped.db, scoped, artifactId);
   if (!removed) return refusal(404, 'live_artifact_not_found', NOT_LIVE);
   await audit(request, scoped, artifactId, 'live_artifact_unbound', existing?.connectors ?? []);
   return respond({ artifact: null });

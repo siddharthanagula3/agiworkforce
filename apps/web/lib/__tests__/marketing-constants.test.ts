@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { modelsCatalogJson } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  managedUsageComparisonLabel,
+  modelsCatalogJson,
+} from '@agiworkforce/types';
 import {
   CATALOG_AS_OF,
   CLI_LOCAL_RUNTIMES,
@@ -14,24 +18,31 @@ import {
 
 const repoRoot = resolve(import.meta.dirname, '../../../..');
 
+const PLAN_LABEL = {
+  pro: getBillingPlanPricing('pro').label,
+  max: getBillingPlanPricing('max').label,
+  max_15x: getBillingPlanPricing('max_15x').label,
+  team: getBillingPlanPricing('team').label,
+} as const;
+
 describe('marketing plan matrix', () => {
   it('uses the founder-approved shared catalog labels and prices', () => {
     expect(MARKETING_FEATURE_MATRIX.team).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ planId: 'pro', label: 'Pro', price: '$20/mo' }),
-        expect.objectContaining({ planId: 'max', label: 'Max 5x', price: '$100/mo' }),
+        expect.objectContaining({ planId: 'pro', label: PLAN_LABEL.pro, price: '$20/mo' }),
+        expect.objectContaining({ planId: 'max', label: PLAN_LABEL.max, price: '$100/mo' }),
         expect.objectContaining({
           planId: 'max_15x',
-          label: 'Max 20x',
+          label: PLAN_LABEL.max_15x,
           price: '$200/mo',
-          usageCapacity: '20x more usage per session and 10x more weekly usage than Pro',
+          usageCapacity: managedUsageComparisonLabel('max_15x', 'pro', PLAN_LABEL.pro),
         }),
         expect.objectContaining({
           planId: 'team',
-          label: 'Team',
+          label: PLAN_LABEL.team,
           price: '$25/seat/mo',
           billingInterval: 'Self-serve monthly; annual only where checkout offers it',
-          usageCapacity: 'Same usage as Pro for every seat',
+          usageCapacity: `${managedUsageComparisonLabel('team', 'pro', PLAN_LABEL.pro)} for every seat`,
         }),
       ]),
     );

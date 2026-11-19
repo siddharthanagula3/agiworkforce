@@ -128,4 +128,55 @@ describe('follow-ups route', () => {
       followUpSuggestions: ['What changed?', 'Who makes it?', 'Is it repairable?'],
     });
   });
+
+  it('only writes the set while no other request has saved one', async () => {
+    respondWith(SEARCHED_METADATA);
+
+    await POST(request(), context());
+
+    expect(String(mocks.execute.mock.calls[0]?.[0])).toContain("metadata -> 'followUpSuggestions'");
+  });
+
+  it('never saves a refused or empty generation over the turn', async () => {
+    respondWith(SEARCHED_METADATA);
+    mocks.generate.mockResolvedValue([]);
+
+    const response = await POST(request(), context());
+
+    expect(await response.json()).toEqual({ suggestions: [], cached: false });
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('returns the set another request saved while this one was refused', async () => {
+    let messageReads = 0;
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('web_conversations')) return [{ id: CONVERSATION_ID }];
+      messageReads += 1;
+      return [
+        {
+          content: 'The chassis changed in 2026.',
+          role: 'assistant',
+          metadata: messageReads === 1 ? {} : { followUpSuggestions: ['Saved by the first tab?'] },
+        },
+      ];
+    });
+    mocks.generate.mockResolvedValue([]);
+
+    const response = await POST(request(), context());
+
+    expect(await response.json()).toEqual({
+      suggestions: ['Saved by the first tab?'],
+      cached: true,
+    });
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('treats a stored empty set as not cached so it never blocks a real one', async () => {
+    respondWith({ followUpSuggestions: [] });
+
+    const response = await POST(request(), context());
+
+    expect(await response.json()).toMatchObject({ cached: false });
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+  });
 });

@@ -180,7 +180,7 @@ vi.mock('@/lib/support/handoff/priority', async (importOriginal) => ({
 }));
 
 import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-access';
-import { insertStaffReply, listStaffQueue } from '../store';
+import { insertReply, insertStaffReply, listStaffQueue } from '../store';
 import {
   TicketClosedError,
   TicketNotFoundError,
@@ -360,5 +360,20 @@ describe('the staff ticket path', () => {
     expect(second.nextOffset).toBeNull();
     const listed = [...first.tickets, ...second.tickets].map((ticket) => ticket.id);
     expect(listed).not.toContain(answered.id);
+  });
+
+  it('refuses a customer reply at the SQL once another session has closed the ticket', async () => {
+    const ticket = await raise();
+    await moveTicket({ ticketId: ticket.id, userId: CUSTOMER, to: 'closed' });
+
+    const stored = await insertReply({
+      ticketId: ticket.id,
+      userId: CUSTOMER,
+      message: 'Sent from a session that read the ticket before it closed.',
+      isStaff: false,
+    });
+
+    expect(stored).toBeNull();
+    expect(tables.replies).toHaveLength(0);
   });
 });

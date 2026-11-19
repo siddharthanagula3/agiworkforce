@@ -1,5 +1,6 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
+import { productNameWithArticle } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -175,8 +176,7 @@ const STORAGE: StorageRow[] = [
   {
     key: 'agiworkforce-web-chat',
     store: 'Local storage',
-    holds:
-      'Your model choice, the sidebar state, and the standing per-conversation decisions you made: which connectors a chat may not reach, whether Memory is off for it, and whether it is a Chat or a Work thread. No message text.',
+    holds: `Your model choice, the sidebar state, and the standing per-conversation decisions you made: which connectors a chat may not reach, whether Memory is off for it, and whether it is ${productNameWithArticle('chat')} or ${productNameWithArticle('work')} thread. No message text.`,
     clearedBy: 'Signing out, or clearing site data.',
     source: 'shared/stores/web-chat-store.ts',
   },

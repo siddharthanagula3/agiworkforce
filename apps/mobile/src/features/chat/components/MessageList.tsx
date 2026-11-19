@@ -14,6 +14,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { Reply, ChevronDown } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { MessageBubble } from './MessageBubble';
+import { MessageListRow } from './MessageListRow';
 import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -89,6 +90,8 @@ interface MessageListProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  continuableMessageId?: string | null;
+  onContinueMessage?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
   onScheduleMessage?: (messageId: string) => void;
   footer?: ReactElement | null;
@@ -97,7 +100,7 @@ interface MessageListProps {
   variantInfoByMessageId?: VariantInfoByMessageId;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
   onQuoteReply?: (message: ChatMessage) => void;
@@ -134,6 +137,8 @@ export function MessageList({
   onDeleteMessage,
   onRetryMessage,
   onRetryWithModel,
+  continuableMessageId = null,
+  onContinueMessage,
   onBranch,
   onScheduleMessage,
   footer,
@@ -199,7 +204,11 @@ export function MessageList({
     ({ item, index }: { item: ChatMessage; index: number }) => (
       // The column is on the row, not on the list, so a swipe anywhere in the
       // pane still scrolls the thread on a tablet.
-      <View testID="chat.message-row" style={contentColumn('reading')}>
+      <MessageListRow
+        messageId={item.id}
+        streaming={item.isStreaming === true}
+        style={contentColumn('reading')}
+      >
         {shouldShowTimeDivider(messages[index - 1]?.createdAt, item.createdAt) ? (
           <TimeDivider createdAt={item.createdAt} />
         ) : null}
@@ -210,6 +219,7 @@ export function MessageList({
             onDeleteMessage={onDeleteMessage}
             onRetryMessage={canRetry(item) ? onRetryMessage : undefined}
             onRetryWithModel={canRetry(item) ? onRetryWithModel : undefined}
+            onContinueMessage={item.id === continuableMessageId ? onContinueMessage : undefined}
             onBranch={onBranch}
             onScheduleMessage={onScheduleMessage}
             onEditImageArea={onEditImageArea}
@@ -229,7 +239,7 @@ export function MessageList({
             onFollowUp={item.role === 'assistant' ? onFollowUp : undefined}
           />
         </SwipeReplyWrapper>
-      </View>
+      </MessageListRow>
     ),
     [
       colors,
@@ -239,6 +249,8 @@ export function MessageList({
       onDeleteMessage,
       onRetryMessage,
       onRetryWithModel,
+      continuableMessageId,
+      onContinueMessage,
       onBranch,
       onScheduleMessage,
       onEditImageArea,
@@ -311,15 +323,11 @@ export function MessageList({
               onPress={scrollToBottom}
               accessibilityLabel="Scroll to bottom"
               accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.fabButton,
-                {
-                  backgroundColor: colors.teal,
-                  opacity: pressed ? 0.82 : 1,
-                },
-              ]}
+              style={({ pressed }) => [styles.fabTarget, { opacity: pressed ? 0.82 : 1 }]}
             >
-              <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
+              <View style={[styles.fabButton, { backgroundColor: colors.teal }]}>
+                <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
+              </View>
             </Pressable>
           </Animated.View>
         </View>
@@ -344,8 +352,14 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 8,
     alignSelf: 'center',
+  },
+  fabTarget: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timeDivider: {
     alignItems: 'center',

@@ -517,14 +517,24 @@ export function projectContextLoaders(context: LoadedProjectContext): ContextSou
   const siblingSources = context.sources.filter(
     (source) => source.sourceClass === 'project_sibling_chat',
   );
+  const fileIdOf = (source: (typeof context.sources)[number]): string =>
+    source.provenance.locator.slice('project_knowledge_files/'.length);
+  const renderPosition = new Map(
+    context.knowledgeFiles.map((file, index) => [file.fileId, index] as const),
+  );
+  const orderedFor = (sourceClass: string): Array<(typeof context.sources)[number]> => {
+    const sources = context.sources.filter((source) => source.sourceClass === sourceClass);
+    if (sourceClass !== 'project_knowledge_file') return sources;
+    const position = (source: (typeof context.sources)[number]): number =>
+      renderPosition.get(fileIdOf(source)) ?? context.knowledgeFiles.length;
+    return [...sources].sort((left, right) => position(left) - position(right));
+  };
   const textFor = (source: (typeof context.sources)[number]): string => {
-    const { locator } = source.provenance;
     if (source.sourceClass === 'project_instruction') return context.instructions?.trim() ?? '';
     if (source.sourceClass === 'project_knowledge_file') {
-      const fileId = locator.slice('project_knowledge_files/'.length);
-      const file = context.knowledgeFiles.find((entry) => entry.fileId === fileId);
-      const passages = file?.selection?.passages.map((passage) => passage.text).join('\n');
-      return passages || file?.extractedText?.trim() || file?.summary?.trim() || '';
+      const file = context.knowledgeFiles.find((entry) => entry.fileId === fileIdOf(source));
+      if (file?.selection) return file.selection.passages.map((passage) => passage.text).join('\n');
+      return file?.extractedText?.trim() || file?.summary?.trim() || '';
     }
     const chat = context.siblingChats[siblingSources.indexOf(source)];
     return chat?.preview?.trim() || chat?.title.trim() || '';
@@ -534,12 +544,10 @@ export function projectContextLoaders(context: LoadedProjectContext): ContextSou
     sourceClass,
     budgetChars: PROJECT_SOURCE_BUDGET_CHARS[sourceClass] ?? PROJECT_INSTRUCTIONS_MAX_LENGTH,
     load: (): ContextCandidate[] =>
-      context.sources
-        .filter((source) => source.sourceClass === sourceClass)
-        .flatMap((source): ContextCandidate[] => {
-          const text = textFor(source);
-          return text ? [{ source, text }] : [];
-        }),
+      orderedFor(sourceClass).flatMap((source): ContextCandidate[] => {
+        const text = textFor(source);
+        return text ? [{ source, text }] : [];
+      }),
   }));
 }
 

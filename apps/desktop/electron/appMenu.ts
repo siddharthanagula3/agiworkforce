@@ -1,4 +1,4 @@
-import { Menu, app, type MenuItemConstructorOptions } from 'electron';
+import { Menu, app, type MenuItem, type MenuItemConstructorOptions } from 'electron';
 import {
   COMPUTER_USE_STOP_SHORTCUT,
   HOST_MENU_SHORTCUTS,
@@ -25,6 +25,15 @@ import type { WindowArrangement, WindowTile } from './garnishCore';
  * and stay clickable, which is what a menu is for.
  */
 
+function changeLaunchAtLogin(item: MenuItem): void {
+  try {
+    setLaunchAtLogin(item.checked);
+  } catch (error) {
+    item.checked = isLaunchAtLoginEnabled();
+    console.warn('[launch-at-login] the change was not saved:', error);
+  }
+}
+
 export interface AppMenuActions {
   newChat: () => void;
   newWindow: () => void;
@@ -39,6 +48,7 @@ export interface AppMenuActions {
   openSettings: () => void;
   openLogs: () => void;
   copyDiagnostics: () => void;
+  clearCacheAndRestart: () => void;
   openProductHelp: () => void;
   openWhatsNew: () => void;
   openSupport: () => void;
@@ -131,7 +141,7 @@ function appleMenu(actions: AppMenuActions): MenuItemConstructorOptions[] {
           label: 'Launch at Login',
           type: 'checkbox',
           checked: isLaunchAtLoginEnabled(),
-          click: (item) => setLaunchAtLogin(item.checked),
+          click: changeLaunchAtLogin,
         },
         { type: 'separator' },
         { role: 'services' },
@@ -211,7 +221,7 @@ function fileMenu(
         label: 'Launch at Login',
         type: 'checkbox',
         checked: isLaunchAtLoginEnabled(),
-        click: (item) => setLaunchAtLogin(item.checked),
+        click: changeLaunchAtLogin,
       },
       { type: 'separator' },
       { role: 'quit' },
@@ -556,6 +566,8 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
         submenu: [
           { label: 'Open Logs', click: actions.openLogs },
           { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+          { type: 'separator' },
+          { label: 'Clear Cache and Restart…', click: actions.clearCacheAndRestart },
         ],
       },
       { label: 'Open-Source Licenses', click: actions.openOpenSourceNotices },

@@ -47,11 +47,23 @@ export function composeSurfaceSections(
     };
   }[],
 ): Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'> {
+  const owners = new WeakMap<
+    vscode.TreeItem,
+    Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'>
+  >();
   return {
-    async getChildren(): Promise<vscode.TreeItem[]> {
+    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+      if (element !== undefined) {
+        const owner = owners.get(element);
+        if (owner === undefined) return [];
+        const children = (await owner.getChildren(element)) ?? [];
+        for (const child of children) owners.set(child, owner);
+        return children;
+      }
       const groups = await Promise.all(
         sections.map(async (section) => {
           const children = (await section.provider.getChildren()) ?? [];
+          for (const child of children) owners.set(child, section.provider);
           return [surfaceSectionItem(section.label), ...children];
         }),
       );
@@ -110,6 +122,14 @@ export function buildSurfaceRows(
     };
   });
 }
+
+export const SURFACE_REFRESH_COMMANDS: ReadonlySet<string> = new Set([
+  'agi-workforce.refreshCloudTasks',
+  'agi-workforce.refreshSchedules',
+  'agi-workforce.refreshProjects',
+  'agi-workforce.refreshArtifacts',
+  'agi-workforce.refreshConnectors',
+]);
 
 export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Promise<void> {
   const rowActions = options.rowActions ?? [];
@@ -188,8 +208,12 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
 
     pick.onDidAccept(() => {
       const selected = pick.selectedItems[0];
-      pick.hide();
       const command = selected?.item.command;
+      if (command !== undefined && SURFACE_REFRESH_COMMANDS.has(command.command)) {
+        void load();
+        return;
+      }
+      pick.hide();
       if (command === undefined) return;
       void vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
     });

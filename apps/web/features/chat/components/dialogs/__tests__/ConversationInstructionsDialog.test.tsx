@@ -44,6 +44,39 @@ describe('ConversationInstructionsDialog', () => {
     expect(onSave).toHaveBeenCalledWith('');
   });
 
+  it('locks the text while a save is pending and unlocks it when the save fails', async () => {
+    let finish!: (saved: boolean) => void;
+    const onSave = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <ConversationInstructionsDialog
+        open
+        instructions=""
+        onOpenChange={vi.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    const field = screen.getByLabelText('Instructions');
+    await user.type(field, 'Answer in Spanish.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(field).toHaveAttribute('readonly'));
+
+    await user.type(field, ' Add a glossary.');
+    expect(field).toHaveValue('Answer in Spanish.');
+
+    finish(false);
+    await screen.findByRole('alert');
+    expect(field).not.toHaveAttribute('readonly');
+    await user.type(field, ' Add a glossary.');
+    expect(field).toHaveValue('Answer in Spanish. Add a glossary.');
+  });
+
   it('stays open and says so when the save fails', async () => {
     const onOpenChange = vi.fn();
     const user = userEvent.setup();

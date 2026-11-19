@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Web chat
-Last updated: 2026-10-30
+Last updated: 2026-11-13
 
 ## Scope and evidence
 
@@ -156,7 +156,13 @@ required by this feature spec. Rich controls are advertised only on web/desktop;
 commands remain Copy-all, actions copy-only, tags plain text and status notes
 unadvertised.
 
-Published @1–14 text is unchanged; stable pin @6 remains. Deterministic assembly,
+`chat.system@16` is internal too. It carries @15's rendering and tool rules into
+one version with the identity, serving model, chat setup and Settings guidance
+of @11, sends writing card and artifact app text only to a surface that renders
+them, and adds tone, hard limits, wellbeing, professional advice,
+evenhandedness, copyright and consent before an action with consequences.
+
+Published @1–15 text is unchanged; stable pin @6 remains. Deterministic assembly,
 immutability, release and replay checks verify code/fixtures, not model quality
 or permission to promote.
 

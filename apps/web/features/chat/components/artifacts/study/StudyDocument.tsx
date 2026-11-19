@@ -15,6 +15,7 @@ import {
   serializeFlashcards,
   serializeQuiz,
   studySegments,
+  studySourceIsLossless,
 } from './study-set';
 import { flashcardsPrintHtml, printHtml, quizPrintHtml } from './study-print';
 
@@ -53,7 +54,8 @@ export function StudyDocument({
               </p>
             );
           }
-          const isEditing = editing === segment.start;
+          const lossless = studySourceIsLossless(segment.kind, segment.source);
+          const isEditing = editing === segment.start && lossless;
           const save = (source: string) => {
             onSave(
               replaceStudyBlock(
@@ -88,9 +90,15 @@ export function StudyDocument({
                   <FlashcardsView key={segment.source} set={cards} />
                 )
               ) : null}
+              {!lossless ? (
+                <p className="text-sm text-muted-foreground" role="status">
+                  Part of this {quiz ? 'quiz' : 'flashcard set'} is beyond what can be shown or
+                  edited here, so editing is off to keep the original intact.
+                </p>
+              ) : null}
               {!isEditing ? (
                 <div className="flex gap-1">
-                  {editable ? (
+                  {editable && lossless ? (
                     <Button
                       variant="ghost"
                       size="sm"

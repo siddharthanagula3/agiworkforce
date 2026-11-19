@@ -2,6 +2,7 @@
 import { execFileSync } from 'node:child_process';
 import process from 'node:process';
 import { classifyDeployScope, selectSurfaceBaseline } from './production-deploy-scope.mjs';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const SURFACES = [{ key: 'web', jobName: 'Deploy verified web artifact' }];
 
@@ -49,6 +50,7 @@ async function loadRuns(repository, token, headSha) {
 
 function changedFilesSince(baseline) {
   return execFileSync('git', ['diff', '--name-only', `${baseline}`, 'HEAD'], {
+    maxBuffer: GIT_MAX_BUFFER,
     encoding: 'utf8',
   }).split(/\r?\n/);
 }

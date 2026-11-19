@@ -248,6 +248,61 @@ describe('stream envelope consumption', () => {
     expect(cursor.cursor).toEqual({ sequence: 1, characters: 1 });
   });
 
+  it('hands a withheld marker prefix to the replay instead of emitting it twice', async () => {
+    useChatStore.setState({
+      activeConversationId: CONVERSATION.id,
+      conversations: [CONVERSATION],
+    });
+    routeFetch({
+      completion: () => droppedSseResponse(envelopedEvent('x <', 1)),
+      resume: () =>
+        sseResponse(
+          `data: ${JSON.stringify({
+            choices: [{ delta: { content: '< 5' }, finish_reason: null }],
+          })}\n\ndata: ${JSON.stringify({
+            choices: [{ delta: {}, finish_reason: 'stop' }],
+          })}\n\ndata: [DONE]\n\n`,
+        ),
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('compare', { conversationId: CONVERSATION.id });
+    });
+
+    expect(assistantMessage()?.content).toBe('x < 5');
+    const resumeCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([input]) => String(input).includes('/resume/stream'));
+    const cursor = JSON.parse(String((resumeCall?.[1] as RequestInit).body)) as {
+      cursor: { characters: number };
+    };
+    expect(cursor.cursor.characters).toBe(2);
+  });
+
+  it('keeps a withheld marker prefix when the replay has nothing more to add', async () => {
+    useChatStore.setState({
+      activeConversationId: CONVERSATION.id,
+      conversations: [CONVERSATION],
+    });
+    routeFetch({
+      completion: () => droppedSseResponse(envelopedEvent('x <', 1)),
+      resume: () =>
+        sseResponse(
+          `data: ${JSON.stringify({
+            choices: [{ delta: {}, finish_reason: 'stop' }],
+          })}\n\ndata: [DONE]\n\n`,
+        ),
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('compare', { conversationId: CONVERSATION.id });
+    });
+
+    expect(assistantMessage()?.content).toBe('x <');
+  });
+
   it('never asks a temporary conversation to resume, because nothing was persisted', async () => {
     useChatStore.setState({
       activeConversationId: TEMP_CONVERSATION.id,

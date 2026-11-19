@@ -235,7 +235,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
       {
         label: 'BYOK posture',
-        value: `Every seat can use the CLI fully local or with its own provider keys, so that client work need not reach our infrastructure. ${BYOK_SURFACES.availability} Desktop is cloud only. A workspace admin can choose which routes seats may use, for example turning off AGI-cloud compute so client work runs Local or on the seat's own keys.`,
+        value: `Every seat can use the CLI fully local or with its own provider keys, so that client work need not reach our infrastructure. ${BYOK_SURFACES.availability} Desktop chat is cloud only, and Desktop local coding sessions run the CLI. A workspace admin can choose which routes seats may use, for example turning off AGI-cloud compute so client work runs Local or on the seat's own keys.`,
       },
     ],
     closeTitle: 'Put the agent on the bench.',

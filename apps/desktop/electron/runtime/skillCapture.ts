@@ -135,8 +135,12 @@ async function secureInputMayBeOn(): Promise<boolean> {
   }
 }
 
-async function captureUnlessSecure(displayId: number): Promise<FrameRead | { secure: true }> {
+async function captureUnlessSecure(
+  displayId: number,
+  recording: () => boolean,
+): Promise<FrameRead | { secure: true } | { withdrawn: true }> {
   if (await secureInputMayBeOn()) return { secure: true };
+  if (!recording()) return { withdrawn: true };
   const read = await captureFrame(displayId);
   if (!('image' in read)) return read;
   if (await secureInputMayBeOn()) return { secure: true };
@@ -184,7 +188,11 @@ async function sample(current: Session): Promise<void> {
   }
   current.capturing = true;
   try {
-    const read = await captureUnlessSecure(current.displayId);
+    const read = await captureUnlessSecure(
+      current.displayId,
+      () => session === current && current.stoppedAt === null,
+    );
+    if ('withdrawn' in read) return;
     if (session !== current || current.stoppedAt !== null) return;
     if ('secure' in read) {
       current.secureInputSkips += 1;
@@ -298,7 +306,7 @@ async function beginRecording(window: BrowserWindow): Promise<SkillCaptureStartO
   try {
     if (!(await overlay.shown)) return refusal('unavailable', INDICATOR_FAILED);
     if (cancelled()) return refusal('declined', 'Recording was cancelled.');
-    const first = await captureUnlessSecure(display.id);
+    const first = await captureUnlessSecure(display.id, () => !cancelled());
     if (cancelled()) return refusal('declined', 'Recording was cancelled.');
     if ('lost' in first) return refusal('unavailable', DISPLAY_LOST);
     if ('blank' in first) return refusal('permission', SCREEN_RECORDING_OFF);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 import {
   SETTINGS_COMMANDS,
+  isRejectedSettingsUpdate,
   parseSettingsWebviewMessage,
 } from '../features/settings/settingsProtocol';
 import type { MutableConfigValues } from '../platform/config';
@@ -27,6 +28,22 @@ const validValues: MutableConfigValues = {
 };
 
 describe('settings webview protocol', () => {
+  it('flags a known key with a rejected value but not unknown keys or other messages', () => {
+    for (const value of [501, 1.5, '50']) {
+      const message = { type: 'settings.update', key: 'contextLines', value };
+      expect(parseSettingsWebviewMessage(message)).toBeUndefined();
+      expect(isRejectedSettingsUpdate(message)).toBe(true);
+    }
+    expect(isRejectedSettingsUpdate({ type: 'settings.update', key: 'cliPath', value: '  ' })).toBe(
+      true,
+    );
+    expect(isRejectedSettingsUpdate({ type: 'settings.update', key: 'nope', value: 1 })).toBe(
+      false,
+    );
+    expect(isRejectedSettingsUpdate({ type: 'settings.bogus' })).toBe(false);
+    expect(isRejectedSettingsUpdate('settings.update')).toBe(false);
+  });
+
   it('accepts every settings-panel key with its typed value', () => {
     for (const [key, value] of Object.entries(validValues)) {
       expect(parseSettingsWebviewMessage({ type: 'settings.update', key, value }), key).toEqual({

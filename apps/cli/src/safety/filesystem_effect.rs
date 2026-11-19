@@ -139,10 +139,7 @@ fn classify_segment(segment: &str) -> FilesystemEffect {
             None => FilesystemEffect::Read,
         },
         "sed" => {
-            if rest
-                .iter()
-                .any(|arg| *arg == "-i" || arg.starts_with("--in-place"))
-            {
+            if rest.iter().any(|arg| sed_argument_edits_in_place(arg)) {
                 FilesystemEffect::Write
             } else {
                 FilesystemEffect::Read
@@ -191,6 +188,26 @@ fn classify_segment(segment: &str) -> FilesystemEffect {
         return FilesystemEffect::Write;
     }
     effect
+}
+
+fn sed_argument_edits_in_place(arg: &str) -> bool {
+    if arg.starts_with("--in-place") {
+        return true;
+    }
+    let Some(cluster) = arg.strip_prefix('-') else {
+        return false;
+    };
+    if cluster.starts_with('-') {
+        return false;
+    }
+    for flag in cluster.chars() {
+        match flag {
+            'i' | 'I' => return true,
+            'e' | 'f' | 'l' => return false,
+            _ => {}
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -268,6 +285,37 @@ mod tests {
             classify_filesystem_effect("git clean -fd"),
             FilesystemEffect::Delete
         );
+    }
+
+    #[test]
+    fn every_in_place_sed_spelling_is_a_write() {
+        for command in [
+            "sed -i.bak s/old/new/ notes.txt",
+            "sed -i'' s/old/new/ notes.txt",
+            "sed -ni s/old/new/p notes.txt",
+            "sed -Ei s/old/new/ notes.txt",
+            "sed -I .bak s/old/new/ notes.txt",
+            "sed --in-place=.bak s/old/new/ notes.txt",
+            "sed -i s/old/new/ notes.txt",
+        ] {
+            assert_eq!(
+                classify_filesystem_effect(command),
+                FilesystemEffect::Write,
+                "{command}"
+            );
+        }
+        for command in [
+            "sed -n 1,20p notes.txt",
+            "sed -e s/i/I/ notes.txt",
+            "sed -E -e s/a/b/ notes.txt",
+            "sed -es/i/x/ notes.txt",
+        ] {
+            assert_eq!(
+                classify_filesystem_effect(command),
+                FilesystemEffect::Read,
+                "{command}"
+            );
+        }
     }
 
     #[test]

@@ -415,7 +415,8 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
   }
 
   const access = await evaluateProviderProxyModelAccess({
-    userId: input.userId,
+    db: input.db,
+    organizationId: input.organizationId,
     planTier: input.planTier,
     providerId: input.providerId,
     model: parsed.model,

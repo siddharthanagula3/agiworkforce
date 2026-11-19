@@ -82,7 +82,10 @@ Release sets `released_at` and `released_by_user_id`. It destroys nothing. What
 the hold was preserving becomes eligible for the next retention sweep and the
 next purge run, so releasing a hold over content that has been soft-deleted or
 is past a retention window will lead to it being destroyed, on a schedule, not
-at the moment of release. Confirm with counsel before releasing.
+at the moment of release. Confirm with counsel before releasing. Project
+knowledge files and media assets users deleted during the hold go on the first
+daily `cron/purge-deleted-media` run after release once they are thirty days
+past deletion; each workspace's purge is audited as `deleted_content_purged`.
 
 The release is audited as `legal_hold_released` at critical severity. A release
 that matches no active hold returns the same answer as a release against another

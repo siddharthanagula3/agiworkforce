@@ -93,7 +93,10 @@ pub(super) async fn execute_memory(
                     format!("Keep a memory under {MAX_MEMORY_CHARS} characters."),
                 ));
             }
-            let Some(path) = memory_path(&manager, &tier) else {
+            let Some(path) = manager
+                .path_for_tier(&tier)
+                .map(std::path::Path::to_path_buf)
+            else {
                 return Ok(result(false, "No memory file for that scope here."));
             };
             if !confirmed(

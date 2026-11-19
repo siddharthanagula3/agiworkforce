@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BREAK_REMINDER_MINUTES,
   TIME_FOCUS_PREFERENCES_NAMESPACE,
+  clockTimeToMinutes,
   defaultTimeFocusPreferences,
   normalizeTimeFocusPreferences,
   type TimeFocusPreferences,
@@ -99,6 +100,14 @@ export function CloudTimeFocusSection() {
   const handleSave = async () => {
     if (draft.quietHours.enabled && draft.quietHours.days.length === 0) {
       setValidationMessage('Choose at least one quiet-hours day.');
+      return;
+    }
+    if (
+      draft.quietHours.enabled &&
+      (clockTimeToMinutes(draft.quietHours.startTime) === null ||
+        clockTimeToMinutes(draft.quietHours.endTime) === null)
+    ) {
+      setValidationMessage('Enter both a start and an end time.');
       return;
     }
     if (draft.quietHours.enabled && draft.quietHours.startTime === draft.quietHours.endTime) {

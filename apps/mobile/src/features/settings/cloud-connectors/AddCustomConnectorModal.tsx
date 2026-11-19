@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { addCustomConnector, type CustomConnectorResult } from '@/services/connectors';
+import { toUserMessage } from '@/services/userMessage';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -107,9 +108,9 @@ export function AddCustomConnectorModal({
       reset();
       onAdded(connector);
       onClose();
-    } catch {
+    } catch (caught) {
       if (!isFormScopeCurrent(requestScope)) return;
-      setError('Could not add this connector. Check its URL and try again.');
+      setError(toUserMessage(caught, 'Could not add this connector. Check its URL and try again.'));
       setSubmitting(false);
     }
   }, [authToken, canSubmit, isFormScopeCurrent, name, onAdded, onClose, reset, url]);
@@ -155,7 +156,7 @@ export function AddCustomConnectorModal({
             Add custom MCP connector
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
-            Connect a remote MCP server by its HTTPS URL. Its tools become available to the model.
+            Add a remote MCP server by its HTTPS URL to use its tools in chat.
           </Text>
 
           <TextInput

@@ -247,7 +247,10 @@ describe('ChatInput owned dictation controls', () => {
     const { getByLabelText } = renderInput({ onSend });
     fireEvent.changeText(getByLabelText('Message input'), 'Original');
     startRecording();
-    fireEvent.changeText(getByLabelText('Message input'), 'Remind me');
+    fireEvent.changeText(
+      getByLabelText('Message input', { includeHiddenElements: true }),
+      'Remind me',
+    );
     deliver('tomorrow at nine', 'send');
     await waitFor(() =>
       expect(onSend).toHaveBeenCalledWith('Remind me tomorrow at nine', undefined),

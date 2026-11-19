@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import process from 'node:process';
+import { GIT_MAX_BUFFER } from '../../../scripts/lib/git-output.mjs';
 
 const files = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
+  maxBuffer: GIT_MAX_BUFFER,
   encoding: 'utf8',
 }).split('\0');
 const pattern =

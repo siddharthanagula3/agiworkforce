@@ -17,6 +17,15 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 import { GET } from './route';
+import { presentActivity } from '../../activity/activity-presentation';
+
+const unmappedApprovalRow = {
+  id: 'audit-approval',
+  event_type: 'tool_approval_decided',
+  endpoint: '/api/llm/v1/chat/completions/approve',
+  user_agent: null,
+  created_at: '2026-09-19T12:00:00.000Z',
+};
 
 const SCOPED_USER = 'user-1';
 
@@ -44,6 +53,16 @@ describe('GET /api/settings/audit-logs/actions', () => {
     expect(mocks.getUserScopedDb).toHaveBeenCalledWith(request, { resolveOrganization: false });
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/from public\.security_audit_logs/i);
-    expect(params).toEqual([SCOPED_USER]);
+    expect(params[0]).toBe(SCOPED_USER);
+  });
+
+  it('offers only categories whose rows the activity presenter can show', async () => {
+    await GET(new NextRequest('http://localhost/api/settings/audit-logs/actions'));
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/sal\.event_type = any\(\$2::text\[\]\)/);
+    expect(params[1]).toContain('login');
+    expect(params[1]).not.toContain('tool_approval_decided');
+    expect(presentActivity(unmappedApprovalRow)).toBeNull();
   });
 });

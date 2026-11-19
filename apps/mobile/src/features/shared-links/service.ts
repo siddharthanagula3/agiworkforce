@@ -1,3 +1,8 @@
+import {
+  ConversationShareRevokedSchema,
+  ConversationShareVisibilitySchema,
+  type ConversationShareVisibility,
+} from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import {
@@ -14,6 +19,7 @@ export interface SharedLink {
   modelId: string | null;
   provider: string | null;
   messageCount: number;
+  visibility: ConversationShareVisibility;
   createdAt: string;
   expiresAt: string;
   expired: boolean;
@@ -21,6 +27,7 @@ export interface SharedLink {
 
 interface SharedLinkResponse {
   shares?: unknown;
+  complete?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,6 +48,7 @@ function toSharedLink(value: unknown): SharedLink | null {
     modelId: typeof value['modelId'] === 'string' ? value['modelId'] : null,
     provider: typeof value['provider'] === 'string' ? value['provider'] : null,
     messageCount: typeof value['messageCount'] === 'number' ? value['messageCount'] : 0,
+    visibility: ConversationShareVisibilitySchema.catch('public').parse(value['visibility']),
     createdAt: typeof value['createdAt'] === 'string' ? value['createdAt'] : '',
     expiresAt: typeof value['expiresAt'] === 'string' ? value['expiresAt'] : '',
     expired: value['expired'] === true,
@@ -52,13 +60,21 @@ export interface SharedLinksRequestOptions {
   signal?: AbortSignal;
 }
 
-export async function fetchSharedLinks(options: SharedLinksRequestOptions): Promise<SharedLink[]> {
+export interface SharedLinkInventory {
+  links: SharedLink[];
+  complete: boolean;
+}
+
+export async function fetchSharedLinks(
+  options: SharedLinksRequestOptions,
+): Promise<SharedLinkInventory> {
   assertCloudAccountEpochCurrent(options.accountEpoch);
   const response = await api.get<SharedLinkResponse>('/api/share', options);
   assertCloudAccountEpochCurrent(options.accountEpoch);
   const shares = response?.shares;
-  if (!Array.isArray(shares)) return [];
-  return shares.map(toSharedLink).filter((link): link is SharedLink => link !== null);
+  if (!Array.isArray(shares)) return { links: [], complete: false };
+  const links = shares.map(toSharedLink).filter((link): link is SharedLink => link !== null);
+  return { links, complete: response?.complete === true && links.length === shares.length };
 }
 
 export async function revokeSharedLink(
@@ -66,13 +82,17 @@ export async function revokeSharedLink(
   options: SharedLinksRequestOptions,
 ): Promise<void> {
   assertCloudAccountEpochCurrent(options.accountEpoch);
+  let receipt: unknown;
   try {
-    await api.delete(`/api/share/${encodeURIComponent(token)}`, options);
-    assertCloudAccountEpochCurrent(options.accountEpoch);
+    receipt = await api.delete<unknown>(`/api/share/${encodeURIComponent(token)}`, options);
   } catch (error) {
     assertCloudAccountEpochCurrent(options.accountEpoch);
     if (error instanceof ApiHttpError && error.status === 404) return;
     throw error;
+  }
+  assertCloudAccountEpochCurrent(options.accountEpoch);
+  if (!ConversationShareRevokedSchema.safeParse(receipt).success) {
+    throw new Error('The server did not confirm that the link was revoked.');
   }
 }
 

@@ -69,6 +69,7 @@ export function ConversationInstructionsDialog({
             value={draft}
             maxLength={CONVERSATION_INSTRUCTIONS_MAX_LENGTH}
             rows={6}
+            readOnly={saving}
             onChange={(event) => setDraft(event.target.value)}
             placeholder="For example: answer in Spanish, and keep every reply under 150 words."
             className="resize-y"

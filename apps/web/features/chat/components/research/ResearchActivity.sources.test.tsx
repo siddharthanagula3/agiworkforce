@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
-import { ResearchActivity, parseResearchDomainList } from './ResearchActivity';
+vi.mock('@/features/chat/hooks/use-browser-reply-ready-preference', async () => {
+  const { NOTIFICATION_DEFAULTS } =
+    await import('@/features/settings/lib/notification-preferences');
+  return { useBrowserReplyReadyPreference: () => NOTIFICATION_DEFAULTS.browserReplyReady };
+});
+
+import { ResearchActivity, parseResearchDomainList, researchDomainRules } from './ResearchActivity';
 
 function awaitingApproval(): MessageResearchState {
   return {
@@ -53,6 +59,41 @@ describe('parseResearchDomainList', () => {
       'cdc.gov',
     ]);
     expect(parseResearchDomainList('   ')).toEqual([]);
+  });
+});
+
+describe('researchDomainRules', () => {
+  it('normalizes each site to the rule the run enforces', () => {
+    expect(researchDomainRules('Nature.com., https://www.nature.com/x *.who.int')).toEqual([
+      'nature.com',
+      'who.int',
+    ]);
+  });
+
+  it('refuses the whole entry when any token is not a site', () => {
+    expect(researchDomainRules('nature.com nature')).toBeNull();
+  });
+});
+
+describe('adding a site that is not a domain', () => {
+  it('keeps Add disabled and adds nothing, so no chip promises a limit', () => {
+    const onPlanDecision = renderPlan();
+
+    addSource('web-excluded', 'nature');
+    expect(screen.getByTestId('research-plan-add-source')).toBeDisabled();
+    expect(screen.getByTestId('research-plan-add-domain')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryAllByTestId('research-plan-source')).toHaveLength(0);
+
+    fireEvent.change(screen.getByTestId('research-plan-add-domain'), {
+      target: { value: 'Nature.com.' },
+    });
+    fireEvent.click(screen.getByTestId('research-plan-add-source'));
+    fireEvent.click(screen.getByTestId('research-plan-start'));
+
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({ allowDomains: [], denyDomains: ['nature.com'] }),
+    );
   });
 });
 
@@ -186,5 +227,35 @@ describe('choosing what a research run may read', () => {
         (option) => option.value,
       ),
     ).toEqual(['web', 'web-excluded', 'files']);
+  });
+});
+
+describe('a connector step that completed only in part', () => {
+  it('shows what was not answered on the completed row', () => {
+    render(
+      <ResearchActivity
+        isStreaming={false}
+        research={{
+          phase: 'complete',
+          label: 'Research complete',
+          searches: 2,
+          sources: 1,
+          elapsedMs: 1000,
+          startedAt: '2026-08-05T10:00:00.000Z',
+          steps: [
+            {
+              id: 'connector-notion',
+              type: 'read',
+              description: 'Search Notion',
+              status: 'completed',
+              note: 'only 1 of 2 searches in this app were answered, so its results may be incomplete',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('research-plan-step')).toHaveAttribute('data-status', 'completed');
+    expect(screen.getByText(/only 1 of 2 searches in this app were answered/)).toBeInTheDocument();
   });
 });

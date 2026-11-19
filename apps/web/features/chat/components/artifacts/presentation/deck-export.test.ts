@@ -55,6 +55,35 @@ describe('deck export', () => {
     expect(size.getWidth()).toBeGreaterThan(size.getHeight());
   });
 
+  it('keeps a themed background and a numbered footer on every page of an overflowing slide', async () => {
+    const long = [
+      '<!-- deck theme=midnight -->',
+      '',
+      '# Long',
+      '',
+      ...Array.from({ length: 40 }, (_, index) => `Point ${index + 1}\n`),
+      '---',
+      '',
+      '## Short',
+      '',
+      'Done',
+    ].join('\n');
+    const pdf = await buildDeckPdf('Overflow', long);
+    const pages = pdf.getNumberOfPages();
+    expect(pages).toBeGreaterThan(2);
+    const streams = (pdf.internal as unknown as { pages: string[][] }).pages
+      .slice(1)
+      .map((page) => page.join('\n'));
+    expect(streams).toHaveLength(pages);
+    streams.forEach((stream) => {
+      expect(stream).toMatch(/0\. 360\. 640\. -360\. re\nf/);
+      expect(stream).toMatch(/\([12] \/ 2( \\\(cont\.\\\))?\) Tj/);
+    });
+    expect(streams.filter((stream) => stream.includes('\\(cont.\\)'))).toHaveLength(pages - 2);
+    expect(streams.at(-1)).toContain('(2 / 2) Tj');
+    expect(streams.join('\n')).toContain('(Point 40');
+  });
+
   it('labels every pie slice with a legend swatch in the viewer and the PDF', async () => {
     const pie = [
       '## Status',

@@ -1,11 +1,40 @@
 //! SSRF protection and security helpers for A2A endpoints.
 
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex, MutexGuard};
 
 use anyhow::{bail, Context, Result};
 
 static PRIVATE_OVERRIDE_WARNED: AtomicBool = AtomicBool::new(false);
+
+static PEER_TOKENS: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Mutex::default);
+
+fn peer_tokens() -> MutexGuard<'static, HashMap<String, String>> {
+    PEER_TOKENS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn peer_origin(endpoint: &str) -> Option<String> {
+    let parsed = endpoint.parse::<reqwest::Url>().ok()?;
+    matches!(parsed.scheme(), "http" | "https").then(|| parsed.origin().ascii_serialization())
+}
+
+/// Bind a bearer token to the origin of `endpoint` for the rest of this process.
+/// The token is held in memory only and is attached solely to requests for that origin.
+pub fn remember_peer_token(endpoint: &str, token: &str) -> Result<()> {
+    let origin = peer_origin(endpoint)
+        .ok_or_else(|| anyhow::anyhow!("A2A endpoint must be an http or https URL: {endpoint}"))?;
+    peer_tokens().insert(origin, token.to_string());
+    Ok(())
+}
+
+/// The bearer token bound to the origin of `endpoint`, if one was remembered.
+pub fn peer_token(endpoint: &str) -> Option<String> {
+    peer_tokens().get(&peer_origin(endpoint)?).cloned()
+}
 
 /// Validate that an A2A endpoint URL is safe to contact, returning the host and
 /// the validated socket addresses it resolved to.
@@ -270,6 +299,30 @@ mod tests {
         assert!(!is_private_ip(
             &IpAddr::from_str("2001:4860:4860::8888").unwrap()
         ));
+    }
+
+    #[test]
+    fn a_peer_token_is_bound_to_the_origin_it_was_given_for() {
+        remember_peer_token("http://127.0.0.1:47801/", "bound-token").unwrap();
+
+        assert_eq!(
+            peer_token("http://127.0.0.1:47801/a2a/task").as_deref(),
+            Some("bound-token")
+        );
+        assert_eq!(
+            peer_token("http://127.0.0.1:47801").as_deref(),
+            Some("bound-token")
+        );
+        assert_eq!(peer_token("http://127.0.0.1:47802"), None);
+        assert_eq!(peer_token("https://127.0.0.1:47801"), None);
+        assert_eq!(peer_token("http://localhost:47801"), None);
+        assert_eq!(peer_token("not a url"), None);
+    }
+
+    #[test]
+    fn a_peer_token_needs_an_http_endpoint() {
+        assert!(remember_peer_token("ftp://127.0.0.1:47803", "token").is_err());
+        assert!(remember_peer_token("not a url", "token").is_err());
     }
 
     #[test]

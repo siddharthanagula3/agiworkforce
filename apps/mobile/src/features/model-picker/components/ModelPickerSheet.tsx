@@ -1,6 +1,6 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, View } from 'react-native';
+import React, { Children, isValidElement, useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -8,34 +8,35 @@ import BottomSheet, {
   BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
+import { Check, ChevronDown, ChevronUp, Cpu, Search, X as XIcon } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { ModelRow } from './ModelRow';
 import { SpeedControl } from './SpeedControl';
 import {
-  DEFAULT_EFFORT_SCOPE,
   EffortSlider,
   effortStepsFor,
+  effortStepsForModel,
   resolveEffortStep,
-  setDefaultEffort,
+  useScopedEffort,
 } from './EffortSlider';
+import { ModelFilterChips } from './ModelFilterChips';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
 import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import { claimModelSelection } from '@/src/features/model-picker/selectionIntent';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
-import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import {
+  EFFORT_LABEL,
   ROUTING_PROFILE_CHOICE_OPTIONS,
   canAccessAutoRoutingProfileForTier,
-  getAutoRoutingProfileTiers,
   getModelFamilySlotForModel,
   getModelReasoning,
-  listPickerRecommendedModelIds,
-  type RoutingProfileChoice,
+  type Effort,
 } from '@agiworkforce/types';
 import {
   AUTO_MODES,
@@ -48,9 +49,11 @@ import {
   type ModelDef,
 } from '@/src/features/model-picker/service';
 import { guardProviderSwitch } from '@/src/features/model-picker/tierGuard';
+import { groupByModelLine, leadModelOf } from '@/src/features/model-picker/modelLines';
+import { matchesModelFilters, type ModelFilterId } from '@/src/features/model-picker/modelFilters';
 import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { radii, typeScale } from '@/src/ui/theme/tokens';
 
 function establishedCloudModel(
   conversationId: string,
@@ -65,8 +68,8 @@ function establishedCloudModel(
   return model?.surface === 'cloud_managed' ? model : undefined;
 }
 
-const ROUTING_PROFILE_OPTIONS_UNDER_AUTO = ROUTING_PROFILE_CHOICE_OPTIONS.filter(
-  (option) => option.choice !== 'auto',
+const AUTO_ROUTING_PROFILE_OPTION = ROUTING_PROFILE_CHOICE_OPTIONS.find(
+  (option) => option.choice === 'auto',
 );
 
 function byModelFamily(models: ModelDef[]): ModelDef[] {
@@ -88,45 +91,93 @@ function byModelFamily(models: ModelDef[]): ModelDef[] {
     .map(({ model }) => model);
 }
 
-function groupBySurface(
-  models: ModelDef[],
-): Array<{ sectionId: string; sectionLabel: string; models: ModelDef[] }> {
-  const local = models.filter((model) => model.surface === 'local');
-  const cloud = models.filter((model) => model.surface === 'cloud_managed');
-  const sections: Array<{ sectionId: string; sectionLabel: string; models: ModelDef[] }> = [];
+function availableFirst(models: ModelDef[]): ModelDef[] {
+  return [
+    ...byModelFamily(models.filter((model) => model.availability !== 'locked')),
+    ...byModelFamily(models.filter((model) => model.availability === 'locked')),
+  ];
+}
 
-  if (local.length > 0)
-    sections.push({ sectionId: 'local', sectionLabel: 'On device', models: local });
+function ModelGroup({ title, children }: { title?: string; children: React.ReactNode }) {
+  const colors = useThemeColors();
+  const rows = Children.toArray(children);
+  if (rows.length === 0) return null;
 
-  const byTier = new Map<string, ModelDef[]>();
-  for (const model of cloud) {
-    const entry = byTier.get(model.tier) ?? [];
-    entry.push(model);
-    byTier.set(model.tier, entry);
-  }
-  const pushTier = (tierId: string, label: string) => {
-    const entry = byTier.get(tierId);
-    if (!entry || entry.length === 0) return;
-    byTier.delete(tierId);
-    const available = entry.filter((m) => m.availability !== 'locked');
-    const locked = entry.filter((m) => m.availability === 'locked');
-    sections.push({
-      sectionId: `cloud-${tierId}`,
-      sectionLabel: label,
-      models: [...byModelFamily(available), ...byModelFamily(locked)],
-    });
-  };
-  for (const tier of getAutoRoutingProfileTiers()) pushTier(tier.profile, tier.label);
-  for (const tierId of [...byTier.keys()]) pushTier(tierId, tierId);
-  return sections;
+  return (
+    <View style={{ marginHorizontal: 16, marginBottom: 14 }}>
+      {title ? (
+        <Text
+          accessibilityRole="header"
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.caption,
+            fontWeight: '700',
+            paddingHorizontal: 4,
+            marginBottom: 6,
+          }}
+        >
+          {title}
+        </Text>
+      ) : null}
+      <View
+        style={{
+          borderRadius: radii.xl,
+          backgroundColor: colors.neutralSurface,
+          overflow: 'hidden',
+        }}
+      >
+        {rows.map((row, index) => (
+          <View
+            key={isValidElement(row) && row.key !== null ? row.key : index}
+            style={
+              index > 0
+                ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.neutralBorder }
+                : undefined
+            }
+          >
+            {row}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function LineDisclosure({
+  testID,
+  accessibilityLabel,
+  expanded,
+  onPress,
+}: {
+  testID: string;
+  accessibilityLabel: string;
+  expanded: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  const Disclosure = expanded ? ChevronUp : ChevronDown;
+  return (
+    <PressableBox
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ expanded }}
+      style={{ width: 48, minHeight: 52, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Disclosure size={18} color={colors.textMuted} />
+    </PressableBox>
+  );
 }
 
 function AutoModeRow({
   mode,
+  description,
   selected,
   onPress,
 }: {
   mode: AutoModeDef;
+  description: string;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -135,7 +186,7 @@ function AutoModeRow({
     <PressableBox
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${mode.name}: ${mode.description}`}
+      accessibilityLabel={`${mode.name}: ${description}`}
       accessibilityState={{ selected }}
       style={{
         minHeight: 62,
@@ -171,57 +222,6 @@ function AutoModeRow({
         </Text>
         <Text
           style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
-          numberOfLines={1}
-        >
-          {mode.description}
-        </Text>
-      </View>
-      {selected ? <Check size={17} color={colors.teal} /> : null}
-    </PressableBox>
-  );
-}
-
-function RoutingProfileRow({
-  label,
-  description,
-  selected,
-  onPress,
-}: {
-  label: string;
-  description: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const colors = useThemeColors();
-  return (
-    <PressableBox
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Auto, ${label}: ${description}`}
-      accessibilityState={{ selected }}
-      style={{
-        minHeight: 52,
-        paddingLeft: 58,
-        paddingRight: 16,
-        paddingVertical: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        backgroundColor: selected ? colors.accentSurface : colors.transparent,
-      }}
-    >
-      <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            color: selected ? colors.teal : colors.textPrimary,
-            fontSize: typeScale.subhead,
-            fontWeight: '600',
-          }}
-        >
-          {label}
-        </Text>
-        <Text
-          style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}
           numberOfLines={2}
         >
           {description}
@@ -236,28 +236,31 @@ interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
   openSignal?: number;
   onSelect?: (modelId: string) => void;
+  selectedModelId?: string;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
-  offerRoutingProfiles?: boolean;
+  showSpeed?: boolean;
+  showEffort?: boolean;
 }
 
 export function ModelPickerSheet({
   sheetRef,
   openSignal,
   onSelect,
+  selectedModelId,
   onOpenCloudAccess,
   modelScope = 'local',
   conversationId,
-  offerRoutingProfiles = false,
+  showSpeed = true,
+  showEffort = true,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
-  const routingProfile = useModelStore((s) => s.routingProfile);
-  const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
+  const rowSelectedModel = selectedModelId ?? selectedModel;
   const favorites = useModelStore((s) => s.favorites);
   const recentModels = useModelStore((s) => s.recentModels);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
@@ -268,6 +271,7 @@ export function ModelPickerSheet({
   const freeQuotaError = useFreeQuotaCatalogueStore((s) => s.error);
   const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const showsFreeCatalogue = cloudUnlocked && modelScope !== 'local' && subscriptionTier === 'free';
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
@@ -280,19 +284,9 @@ export function ModelPickerSheet({
 
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
-  const selectedEffort = useAgentControlStore(
-    (s) => s.resolve(conversationId ?? DEFAULT_EFFORT_SCOPE, null).effort,
-  );
-  const handleSelectEffort = useCallback(
-    (effort: PickerEffort) => {
-      if (conversationId) {
-        useAgentControlStore.getState().setEffort(conversationId, effort);
-      } else {
-        setDefaultEffort(effort);
-      }
-    },
-    [conversationId],
-  );
+  const [openLineId, setOpenLineId] = useState<string | null>(null);
+  const [activeFilters, setActiveFilters] = useState<ModelFilterId[]>([]);
+  const [selectedEffort, handleSelectEffort] = useScopedEffort(conversationId);
   const completeModelList = useMemo(
     () => getModelListForCloudAccess(cloudUnlocked, subscriptionTier, freeQuotaCatalogue),
     [cloudUnlocked, subscriptionTier, freeQuotaCatalogue],
@@ -308,19 +302,16 @@ export function ModelPickerSheet({
           ),
     [modelScope, subscriptionTier],
   );
-  const showRoutingProfiles =
-    offerRoutingProfiles &&
-    modelScope === 'cloud' &&
-    selectableAutoModes.some((mode) => mode.id === DEFAULT_AUTO_MODE_ID);
-  const activeRoutingProfile: RoutingProfileChoice =
-    showRoutingProfiles && selectedModel === DEFAULT_AUTO_MODE_ID ? routingProfile : 'auto';
+  const offersFilters = modelScope !== 'local';
+  const filtering = offersFilters && activeFilters.length > 0;
+  const everydayTier = AUTO_MODES.find((mode) => mode.id === DEFAULT_AUTO_MODE_ID)?.tier;
 
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
   const effortOptions = useMemo(() => effortStepsFor(selectedReasoning), [selectedReasoning]);
   const selectedSupportsReasoning = effortOptions.length > 0;
   const selectedRequiresReasoning =
     selectedReasoning.capable && selectedReasoning.canDisableThinking === false;
-  const showEffortControl = modelScope === 'cloud' && selectedSupportsReasoning;
+  const showEffortControl = showEffort && modelScope === 'cloud' && selectedSupportsReasoning;
 
   useEffect(() => {
     if (!showEffortControl) return;
@@ -374,45 +365,58 @@ export function ModelPickerSheet({
   }, [modelList, query]);
 
   // Recency order comes from the store, not from the catalogue, so the row is
-  // built by walking `recentModels` rather than filtering the model list.
+  // built by walking `recentModels` rather than filtering the model list. Cloud
+  // models are reached through their line, so only on-device ones are listed.
   const recentModelDefs = useMemo(() => {
-    const byId = new Map(filteredModels.map((model) => [model.id, model]));
+    if (query) return [];
+    const byId = new Map(
+      filteredModels.filter((model) => model.surface === 'local').map((model) => [model.id, model]),
+    );
     return recentModels
       .map((id) => byId.get(id))
       .filter((model): model is ModelDef => model !== undefined);
-  }, [filteredModels, recentModels]);
+  }, [filteredModels, query, recentModels]);
 
   const favoriteModels = useMemo(
     () => filteredModels.filter((model) => favorites.includes(model.id)),
     [favorites, filteredModels],
   );
 
-  const recommendedModels = useMemo(() => {
-    if (query) return [];
-    const pinnedIds = new Set([...favorites, ...recentModelDefs.map((model) => model.id)]);
-    const byId = new Map(filteredModels.map((model) => [model.id, model]));
-    return listPickerRecommendedModelIds()
-      .map((id) => byId.get(id))
-      .filter(
-        (model): model is ModelDef =>
-          model !== undefined && model.availability !== 'locked' && !pinnedIds.has(model.id),
-      );
-  }, [favorites, filteredModels, query, recentModelDefs]);
-
   const nonFavoriteModels = useMemo(() => {
-    const pinnedIds = new Set([
-      ...favorites,
-      ...recentModelDefs.map((model) => model.id),
-      ...recommendedModels.map((model) => model.id),
-    ]);
+    const pinnedIds = new Set([...favorites, ...recentModelDefs.map((model) => model.id)]);
     if (pinnedIds.size === 0) return filteredModels;
     return filteredModels.filter((model) => !pinnedIds.has(model.id));
-  }, [favorites, filteredModels, recentModelDefs, recommendedModels]);
+  }, [favorites, filteredModels, recentModelDefs]);
 
-  const groupedModels = useMemo(() => groupBySurface(nonFavoriteModels), [nonFavoriteModels]);
+  const onDeviceModels = useMemo(
+    () => nonFavoriteModels.filter((model) => model.surface === 'local'),
+    [nonFavoriteModels],
+  );
+
+  const modelLines = useMemo(
+    () =>
+      groupByModelLine(
+        availableFirst(filteredModels.filter((model) => model.surface === 'cloud_managed')),
+      ),
+    [filteredModels],
+  );
+
+  const matchingModels = useMemo(
+    () =>
+      filtering
+        ? availableFirst(
+            filteredModels.filter(
+              (model) =>
+                model.surface === 'cloud_managed' && matchesModelFilters(model, activeFilters),
+            ),
+          )
+        : [],
+    [activeFilters, filteredModels, filtering],
+  );
 
   const selectAndClose = useCallback(
     (id: string) => {
+      claimModelSelection();
       setExpandedModelId(null);
       if (onSelect) onSelect(id);
       else setModel(id);
@@ -433,6 +437,7 @@ export function ModelPickerSheet({
   }, [onOpenCloudAccess, router, sheetRef]);
 
   const openUpgrade = useCallback(() => {
+    if (!NATIVE_PURCHASES_AVAILABLE) return;
     sheetRef.current?.close();
     requestAnimationFrame(() => {
       router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
@@ -440,7 +445,7 @@ export function ModelPickerSheet({
   }, [router, sheetRef]);
 
   const handleSelectModel = useCallback(
-    (id: string) => {
+    (id: string, effort?: Effort) => {
       const chosenModel = getModelByIdForCloudAccess(id, cloudUnlocked, subscriptionTier);
       if (!chosenModel) return;
       if (chosenModel.availability === 'locked') {
@@ -463,11 +468,15 @@ export function ModelPickerSheet({
       ) {
         Alert.alert(
           'Start a new chat for this model',
-          `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat needs the Max plan.`,
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'See plans', onPress: openUpgrade },
-          ],
+          NATIVE_PURCHASES_AVAILABLE
+            ? `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat needs the Max plan.`
+            : `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat isn't included in your plan. Start a new chat to use ${chosenModel.providerLabel}.`,
+          NATIVE_PURCHASES_AVAILABLE
+            ? [
+                { text: 'OK', style: 'cancel' },
+                { text: 'See plans', onPress: openUpgrade },
+              ]
+            : [{ text: 'OK', style: 'cancel' }],
         );
         return;
       }
@@ -476,13 +485,22 @@ export function ModelPickerSheet({
       if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
 
       if (installStatus.status === 'download_required' || installStatus.status === 'failed') {
+        const stillWanted = claimModelSelection();
         void prepareModel(chosenModel)
-          .then(() => selectAndClose(id))
+          .then(() => {
+            if (stillWanted()) selectAndClose(id);
+          })
           .catch(() => undefined);
         return;
       }
 
-      if (id === selectedModel && !isAutoMode(id)) {
+      if (id === rowSelectedModel && !isAutoMode(id)) {
+        claimModelSelection();
+        if (effort) {
+          handleSelectEffort(effort);
+          sheetRef.current?.close();
+          return;
+        }
         if (chosenModel.surface === 'cloud_managed' && chosenModel.supportsThinking) {
           setExpandedModelId((prev) => (prev === id ? null : id));
           return;
@@ -491,35 +509,49 @@ export function ModelPickerSheet({
         return;
       }
 
+      if (effort) handleSelectEffort(effort);
       selectAndClose(id);
     },
     [
       cloudUnlocked,
       conversationId,
+      handleSelectEffort,
       subscriptionTier,
       openInvite,
       openUpgrade,
       prepareModel,
+      rowSelectedModel,
       selectAndClose,
-      selectedModel,
       sheetRef,
       statusForModel,
     ],
   );
 
   const handleSelectAutoMode = useCallback(
-    (id: string, profile: RoutingProfileChoice = 'auto') => {
+    (id: string) => {
+      claimModelSelection();
       setExpandedModelId(null);
-      if (showRoutingProfiles || !onSelect) setRoutingProfile(profile);
       if (onSelect) onSelect(id);
       else setModel(id);
       sheetRef.current?.close();
     },
-    [onSelect, setModel, setRoutingProfile, sheetRef, showRoutingProfiles],
+    [onSelect, setModel, sheetRef],
   );
 
   const clearSearch = useCallback(() => {
     setSearch('');
+  }, []);
+
+  const resetView = useCallback(() => {
+    setSearch('');
+    setOpenLineId(null);
+    setActiveFilters([]);
+  }, []);
+
+  const toggleFilter = useCallback((id: ModelFilterId) => {
+    setActiveFilters((current) =>
+      current.includes(id) ? current.filter((active) => active !== id) : [...current, id],
+    );
   }, []);
 
   const renderBackdrop = useCallback(
@@ -536,7 +568,11 @@ export function ModelPickerSheet({
   );
 
   const renderModelRow = useCallback(
-    (model: ModelDef, keyPrefix: string) => {
+    (
+      model: ModelDef,
+      keyPrefix: string,
+      placement: { nested?: boolean; trailing?: React.ReactNode; effort?: Effort } = {},
+    ) => {
       const installStatus =
         installJobs[model.id] ??
         (installedModelIds.includes(model.id) || readySystemModelIds.includes(model.id)
@@ -547,12 +583,19 @@ export function ModelPickerSheet({
         <ModelRow
           key={`${keyPrefix}-${model.id}`}
           model={model}
-          isSelected={selectedModel === model.id}
+          isSelected={rowSelectedModel === model.id}
           isFavorite={favorites.includes(model.id)}
-          isExpanded={expandedModelId === model.id && selectedModel === model.id}
+          isExpanded={expandedModelId === model.id && rowSelectedModel === model.id}
           thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
           installStatus={installStatus}
-          onSelect={handleSelectModel}
+          nested={placement.nested}
+          trailing={placement.trailing}
+          detail={placement.effort ? EFFORT_LABEL[placement.effort] : undefined}
+          onSelect={
+            placement.effort
+              ? (id: string) => handleSelectModel(id, placement.effort)
+              : handleSelectModel
+          }
           onLockedPress={model.lockReason === CLOUD_LOCK_REASON ? openInvite : openUpgrade}
           onToggleFavorite={toggleFavorite}
           onToggleThinking={toggleThinkingForModel}
@@ -568,7 +611,7 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       readySystemModelIds,
-      selectedModel,
+      rowSelectedModel,
       statusForModel,
       thinkingEnabledPerModel,
       toggleFavorite,
@@ -584,6 +627,7 @@ export function ModelPickerSheet({
         accessible={false}
         snapPoints={snapPoints}
         enablePanDownToClose
+        onClose={resetView}
         enableDynamicSizing={false}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
@@ -631,19 +675,12 @@ export function ModelPickerSheet({
               <XIcon size={16} color={colors.textSecondary} />
             </PressableBox>
           </View>
-          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 2 }}>
-            {modelScope === 'cloud'
-              ? 'AGI Cloud models are managed separately from Local Mode.'
-              : modelScope === 'all'
-                ? 'Local and AGI Cloud models are shown in separate groups.'
-                : 'Local models run on this device. AGI Cloud is managed separately.'}
-          </Text>
-          {cloudUnlocked && modelScope !== 'local' && freeQuotaLoading ? (
+          {showsFreeCatalogue && freeQuotaLoading ? (
             <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
               Checking provider-funded Free models…
             </Text>
           ) : null}
-          {cloudUnlocked && modelScope !== 'local' && freeQuotaError ? (
+          {showsFreeCatalogue && freeQuotaError ? (
             <View style={{ marginTop: 6 }}>
               <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
                 {freeQuotaError}
@@ -660,8 +697,7 @@ export function ModelPickerSheet({
               </PressableBox>
             </View>
           ) : null}
-          {cloudUnlocked &&
-          modelScope !== 'local' &&
+          {showsFreeCatalogue &&
           isCloudAccountEpochCurrent(freeQuotaAccount) &&
           !freeQuotaLoading &&
           !freeQuotaError &&
@@ -718,11 +754,13 @@ export function ModelPickerSheet({
             accessibilityValue={{ text: search }}
           />
           {search.length > 0 ? (
-            <PressableBox onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
+            <PressableBox onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={15}>
               <XIcon size={14} color={colors.textMuted} />
             </PressableBox>
           ) : null}
         </View>
+
+        {offersFilters ? <ModelFilterChips active={activeFilters} onToggle={toggleFilter} /> : null}
 
         {showEffortControl ? (
           <View
@@ -764,11 +802,12 @@ export function ModelPickerSheet({
               steps={effortOptions}
               value={effortOptions.includes(selectedEffort) ? selectedEffort : undefined}
               onChange={handleSelectEffort}
+              showDescription={false}
             />
           </View>
         ) : null}
 
-        {modelScope === 'cloud' ? <SpeedControl modelId={selectedModel} /> : null}
+        {modelScope === 'cloud' && showSpeed ? <SpeedControl modelId={selectedModel} /> : null}
 
         {readingInstalled ? (
           <View
@@ -789,104 +828,108 @@ export function ModelPickerSheet({
           contentContainerStyle={{ paddingBottom: 40 }}
           keyboardShouldPersistTaps="handled"
         >
-          {!query ? (
-            <View style={{ marginBottom: 8 }}>
+          {!query && !filtering ? (
+            <ModelGroup>
               {selectableAutoModes.map((mode) => (
                 <AutoModeRow
                   key={mode.id}
                   mode={mode}
-                  selected={selectedModel === mode.id && activeRoutingProfile === 'auto'}
+                  description={
+                    (modelScope === 'cloud' && mode.id === DEFAULT_AUTO_MODE_ID
+                      ? AUTO_ROUTING_PROFILE_OPTION?.description
+                      : undefined) ?? mode.description
+                  }
+                  selected={rowSelectedModel === mode.id}
                   onPress={() => handleSelectAutoMode(mode.id)}
                 />
               ))}
-              {showRoutingProfiles
-                ? ROUTING_PROFILE_OPTIONS_UNDER_AUTO.map((option) => (
-                    <RoutingProfileRow
-                      key={option.choice}
-                      label={option.label}
-                      description={option.description}
-                      selected={activeRoutingProfile === option.choice}
-                      onPress={() => handleSelectAutoMode(DEFAULT_AUTO_MODE_ID, option.choice)}
-                    />
-                  ))
-                : null}
-            </View>
+            </ModelGroup>
           ) : null}
 
-          {!query && recentModelDefs.length > 0 ? (
-            <View style={{ marginBottom: 6 }}>
-              <Text
-                style={{
-                  color: colors.textMuted,
-                  fontSize: typeScale.caption,
-                  fontWeight: '700',
-                  paddingHorizontal: 16,
-                  paddingVertical: 6,
-                }}
-              >
-                Recent
-              </Text>
-              {recentModelDefs.map((model) => renderModelRow(model, 'recent'))}
-            </View>
-          ) : null}
-
-          {recommendedModels.length > 0 ? (
-            <View style={{ marginBottom: 6 }}>
-              <Text
-                accessibilityRole="header"
-                style={{
-                  color: colors.textMuted,
-                  fontSize: typeScale.caption,
-                  fontWeight: '700',
-                  paddingHorizontal: 16,
-                  paddingVertical: 6,
-                }}
-              >
-                Recommended
-              </Text>
-              {recommendedModels.map((model) => renderModelRow(model, 'recommended'))}
-            </View>
-          ) : null}
-
-          {favoriteModels.length > 0 ? (
-            <View style={{ marginBottom: 6 }}>
-              <Text
-                style={{
-                  color: colors.textMuted,
-                  fontSize: typeScale.caption,
-                  fontWeight: '700',
-                  paddingHorizontal: 16,
-                  paddingVertical: 6,
-                }}
-              >
-                Favorites
-              </Text>
-              {favoriteModels.map((model) => renderModelRow(model, 'fav'))}
-            </View>
-          ) : null}
-
-          {query ? (
-            <View>{nonFavoriteModels.map((model) => renderModelRow(model, 'search'))}</View>
+          {filtering ? (
+            <ModelGroup>
+              {matchingModels.map((model) =>
+                renderModelRow(model, 'filter', {
+                  effort: activeFilters.includes('instant')
+                    ? effortStepsForModel(model.id)[0]
+                    : undefined,
+                }),
+              )}
+            </ModelGroup>
           ) : (
-            groupedModels.map(({ sectionId, sectionLabel, models }) => (
-              <View key={sectionId} style={{ marginBottom: 6 }}>
-                <Text
-                  style={{
-                    color: colors.textMuted,
-                    fontSize: typeScale.caption,
-                    fontWeight: '700',
-                    paddingHorizontal: 16,
-                    paddingVertical: 6,
-                  }}
-                >
-                  {sectionLabel}
-                </Text>
-                {models.map((model) => renderModelRow(model, `grp-${sectionId}`))}
-              </View>
-            ))
+            <>
+              <ModelGroup title="Recent">
+                {recentModelDefs.map((model) => renderModelRow(model, 'recent'))}
+              </ModelGroup>
+
+              <ModelGroup title="Favorites">
+                {favoriteModels.map((model) => renderModelRow(model, 'fav'))}
+              </ModelGroup>
+
+              {query ? (
+                <ModelGroup>
+                  {nonFavoriteModels.map((model) => renderModelRow(model, 'search'))}
+                </ModelGroup>
+              ) : (
+                <>
+                  <ModelGroup title="On device">
+                    {onDeviceModels.map((model) => renderModelRow(model, 'local'))}
+                  </ModelGroup>
+                  <ModelGroup>
+                    {modelLines.map((line) => {
+                      const expanded = openLineId === line.id;
+                      const lead = leadModelOf(line, rowSelectedModel, recentModels, everydayTier);
+                      const others = line.models.filter((model) => model.id !== lead.id);
+                      return (
+                        <View key={line.id}>
+                          {renderModelRow(lead, `line-${line.id}`, {
+                            trailing:
+                              others.length > 0 ? (
+                                <LineDisclosure
+                                  testID={`model-line-${line.id}`}
+                                  accessibilityLabel={`More ${line.label} models`}
+                                  expanded={expanded}
+                                  onPress={() => setOpenLineId(expanded ? null : line.id)}
+                                />
+                              ) : undefined,
+                          })}
+                          {expanded
+                            ? others.map((model) =>
+                                renderModelRow(model, `line-${line.id}`, { nested: true }),
+                              )
+                            : null}
+                        </View>
+                      );
+                    })}
+                  </ModelGroup>
+                </>
+              )}
+            </>
           )}
 
-          {filteredModels.length === 0 ? (
+          {filtering && matchingModels.length === 0 ? (
+            <View
+              testID="model-filters-empty"
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 44,
+                paddingHorizontal: 28,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.textMuted,
+                  fontSize: typeScale.subhead,
+                  textAlign: 'center',
+                }}
+              >
+                No models match these filters.
+              </Text>
+            </View>
+          ) : null}
+
+          {!filtering && filteredModels.length === 0 ? (
             <View
               style={{
                 alignItems: 'center',

@@ -5,7 +5,11 @@ import {
   loadProjectInstructionSources,
   type ProjectInstructionSource,
 } from '../../data/projectInstructions';
-import { formatActiveProjectPrelude, getActiveCloudProject } from '../projects/activeProject';
+import {
+  formatActiveProjectPrelude,
+  getActiveCloudProject,
+  type ActiveCloudProject,
+} from '../projects/activeProject';
 
 export const HOST_CUSTOM_INSTRUCTIONS_KEY = 'agiWorkforce.customInstructions.host';
 export const WORKSPACE_CUSTOM_INSTRUCTIONS_KEY = 'agiWorkforce.customInstructions.workspace';
@@ -84,6 +88,7 @@ export function formatCustomInstructionPrelude(instructions: StoredCustomInstruc
 }
 
 export interface TurnPreludeOptions {
+  project?: ActiveCloudProject | null;
   projectAppliedByServer?: boolean;
 }
 
@@ -91,10 +96,12 @@ export function buildTurnPrelude(
   context: Pick<vscode.ExtensionContext, 'globalState' | 'workspaceState'>,
   options: TurnPreludeOptions = {},
 ): string {
+  const project =
+    options.project === undefined
+      ? getActiveCloudProject(context.workspaceState)
+      : (options.project ?? undefined);
   return [
-    options.projectAppliedByServer === true
-      ? ''
-      : formatActiveProjectPrelude(getActiveCloudProject(context.workspaceState)),
+    options.projectAppliedByServer === true ? '' : formatActiveProjectPrelude(project),
     formatCustomInstructionPrelude(getStoredCustomInstructions(context)),
   ]
     .filter((section) => section !== '')

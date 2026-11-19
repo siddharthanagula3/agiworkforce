@@ -100,6 +100,27 @@ describe('usage exhaustion from a usage snapshot', () => {
     expect(workUsageRecoveryActionLabel('enable_usage_credits')).toBe('Turn on usage credits');
   });
 
+  it('points an account whose plan someone else manages at the reset, never at Billing', () => {
+    expect(
+      resolveExhaustedUsageRecovery(
+        input({}, { purchased: { remaining: 20, overage_enabled: false, self_serve: false } }),
+        NOW,
+      ),
+    ).toBe('wait');
+    expect(
+      resolveExhaustedUsageRecovery(
+        input({}, { purchased: { remaining: 0, overage_enabled: true, self_serve: false } }),
+        NOW,
+      ),
+    ).toBe('wait');
+    expect(
+      resolveExhaustedUsageRecovery(
+        input({}, { purchased: { remaining: 20, overage_enabled: false, self_serve: true } }),
+        NOW,
+      ),
+    ).toBe('enable_usage_credits');
+  });
+
   it('offers more credits when usage credits are on but spent', () => {
     expect(
       resolveExhaustedUsageRecovery(

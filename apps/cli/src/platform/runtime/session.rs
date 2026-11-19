@@ -39,9 +39,30 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Serializes this process's saves, not other processes. External writers still
-/// require a cooperative lock around the whole read/preserve/replace operation.
+/// Serializes this process's saves. [`lock_session_saves`] extends the same
+/// exclusion to every other process saving into the directory.
 static SESSION_WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub(crate) const SESSION_SAVE_LOCK_FILE: &str = ".session-save.lock";
+
+/// Every writer holds this across reading, preserving and replacing a session
+/// file, so two processes cannot both observe the same baseline and the second
+/// rename silently discard the first one's turns. Closing the handle unlocks.
+fn lock_session_saves(target: &Path) -> Result<fs::File> {
+    let dir = target
+        .parent()
+        .context("Managed session path has no parent")?;
+    let lock_path = dir.join(SESSION_SAVE_LOCK_FILE);
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("Failed to open session lock {}", lock_path.display()))?;
+    file.lock()
+        .with_context(|| format!("Failed to lock {}", lock_path.display()))?;
+    Ok(file)
+}
 
 #[derive(Debug, Clone)]
 struct SessionBaseline {
@@ -156,6 +177,18 @@ pub(crate) fn session_fingerprint(path: &Path) -> Option<SessionFingerprint> {
     fingerprint_of(path)
 }
 
+/// What follows a session's file name in the name of a copy kept when two
+/// writers collided on it.
+pub const SESSION_KEPT_COPY_MARKER: &str = ".conflict-";
+
+fn kept_copy_notice(kept: &Path) -> String {
+    format!(
+        "[session] Another agi process saved this session too. Its turns were kept at {}. Open them with: agi --resume {}",
+        kept.display(),
+        crate::sandbox::shell_quote(&kept.to_string_lossy())
+    )
+}
+
 /// Make an exclusively-created recovery COPY; never move the original and
 /// never replace an older recovery file. Failure leaves the original in place.
 fn preserve_conflicting_session(path: &Path, contents: &[u8]) -> Result<PathBuf> {
@@ -166,7 +199,7 @@ fn preserve_conflicting_session(path: &Path, contents: &[u8]) -> Result<PathBuf>
         .file_name()
         .context("Managed session path has no filename")?
         .to_os_string();
-    prefix.push(".conflict-");
+    prefix.push(SESSION_KEPT_COPY_MARKER);
     let mut copy = tempfile::Builder::new()
         .prefix(&prefix)
         .tempfile_in(dir)
@@ -1562,6 +1595,7 @@ impl ManagedSession {
             .lock()
             .map_err(|_| anyhow::anyhow!("Session write lock is poisoned"))?;
         let target = session_target(path)?;
+        let _saves = lock_session_saves(&target)?;
         let mut baseline = self
             .persistence
             .baseline
@@ -1573,9 +1607,9 @@ impl ManagedSession {
                 if known
                     .is_none_or(|known| !known.complete || known.digest != session_digest(&current))
                 {
-                    preserve_conflicting_session(&target, &current)
+                    let kept = preserve_conflicting_session(&target, &current)
                         .context("Could not preserve changed session; refusing to overwrite it")?;
-                    eprintln!("[session] Previous session contents were preserved in the session directory");
+                    eprintln!("{}", kept_copy_notice(&kept));
                 }
             }
             None if known.is_some() => {
@@ -1586,8 +1620,6 @@ impl ManagedSession {
             }
             None => {}
         }
-        // This is not cross-process compare-and-swap: a foreign writer can
-        // still change the target between the read above and this replacement.
         atomic_write_session(&target, &buf)
             .with_context(|| format!("Failed to write session file {}", target.display()))?;
         *baseline = Some(SessionBaseline {
@@ -3327,6 +3359,38 @@ mod tests {
     }
 
     #[test]
+    fn the_notice_for_a_kept_copy_names_it_and_how_to_open_it() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("s1.jsonl");
+        let mut mine = ManagedSession::new("s1", Utc::now());
+        mine.messages.push(Message::text("user", "mine"));
+        mine.save_to_path(&path).expect("first save");
+        let mut theirs = ManagedSession::load_from_path(&path).expect("load second writer");
+        theirs.messages.push(Message::text("user", "theirs"));
+        theirs.save_to_path(&path).expect("foreign save");
+        mine.save_to_path(&path).expect("second save");
+        let kept = std::fs::read_dir(dir.path())
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .find(|path| path.to_string_lossy().contains(".conflict-"))
+            .expect("a kept copy");
+
+        let notice = super::kept_copy_notice(&kept);
+
+        assert!(notice.contains(&*kept.to_string_lossy()), "{notice}");
+        assert!(notice.contains("agi --resume "), "{notice}");
+        assert!(
+            ManagedSession::load_from_path(&kept)
+                .expect("the named copy opens")
+                .messages
+                .iter()
+                .any(|message| message.text_content() == "theirs"),
+            "{notice}"
+        );
+    }
+
+    #[test]
     fn a_second_writer_never_erases_the_first_writers_turns() {
         let dir = tempdir().expect("tempdir");
         let path = dir.path().join("s1.jsonl");
@@ -3374,5 +3438,59 @@ mod tests {
                 .any(|message| format!("{:?}", message.content).contains("more of mine")),
             "the writer that won must still have written its turn"
         );
+    }
+
+    #[test]
+    fn a_save_reads_the_destination_only_under_the_cross_process_lock() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("s1.jsonl");
+        let mut mine = ManagedSession::new("s1", Utc::now());
+        mine.save_to_path(&path).expect("baseline save");
+
+        let elsewhere = tempdir().expect("other process dir");
+        let foreign_path = elsewhere.path().join("s1.jsonl");
+        let mut theirs = ManagedSession::load_from_path(&path).expect("load second writer");
+        theirs.messages.push(Message::text("user", "theirs"));
+        theirs
+            .save_to_path(&foreign_path)
+            .expect("stage the other process's version");
+        let theirs_bytes = std::fs::read(&foreign_path).expect("their bytes");
+
+        let held = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.path().join(super::SESSION_SAVE_LOCK_FILE))
+            .expect("open the shared save lock");
+        held.lock().expect("the other process holds the save lock");
+
+        mine.messages.push(Message::text("user", "mine"));
+        let saving = std::thread::spawn({
+            let path = path.clone();
+            move || mine.save_to_path(&path)
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(
+            !saving.is_finished(),
+            "a save must wait for another process's read-to-rename window to close"
+        );
+
+        std::fs::write(&path, &theirs_bytes).expect("the other process installs its version");
+        drop(held);
+        saving
+            .join()
+            .expect("save thread")
+            .expect("save after the lock is released");
+
+        assert_eq!(
+            recovery_bytes(dir.path()),
+            vec![theirs_bytes],
+            "the version installed while this save waited must be preserved"
+        );
+        let current = ManagedSession::load_from_path(&path).expect("load current");
+        assert!(current
+            .messages
+            .iter()
+            .any(|message| message.text_content() == "mine"));
     }
 }

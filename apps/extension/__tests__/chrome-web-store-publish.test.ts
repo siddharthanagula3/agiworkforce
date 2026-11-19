@@ -118,6 +118,65 @@ describe('Chrome Web Store publisher', () => {
     );
   });
 
+  it('never reports a rejected version as submitted', async () => {
+    const rejectedFetch = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        submittedItemRevisionStatus: {
+          state: 'REJECTED',
+          distributionChannels: [{ crxVersion: '1.2.0' }],
+        },
+      }),
+    );
+
+    await expect(publishChromeWebStore(releaseOptions(rejectedFetch))).rejects.toThrow(
+      /rejected version 1\.2\.0/i,
+    );
+    expect(rejectedFetch).toHaveBeenCalledOnce();
+  });
+
+  it.each(['PUBLISHED', 'REJECTED', 'CANCELLED'])(
+    'uploads past an earlier version whose submission is %s',
+    async (state) => {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          jsonResponse({
+            submittedItemRevisionStatus: {
+              state,
+              distributionChannels: [{ crxVersion: '1.1.9' }],
+            },
+          }),
+        )
+        .mockResolvedValueOnce(
+          jsonResponse({ itemId: extensionId, crxVersion: '1.2.0', uploadState: 'SUCCEEDED' }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ itemId: extensionId, state: 'PENDING_REVIEW' }));
+
+      await expect(publishChromeWebStore(releaseOptions(fetchImpl))).resolves.toMatchObject({
+        outcome: 'submitted',
+        state: 'PENDING_REVIEW',
+      });
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it('still refuses to upload past a version that is under review or staged', async () => {
+    for (const state of ['PENDING_REVIEW', 'STAGED']) {
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(
+        jsonResponse({
+          submittedItemRevisionStatus: {
+            state,
+            distributionChannels: [{ crxVersion: '1.1.9' }],
+          },
+        }),
+      );
+      await expect(publishChromeWebStore(releaseOptions(fetchImpl))).rejects.toThrow(
+        /resolve it before uploading 1\.2\.0/i,
+      );
+      expect(fetchImpl).toHaveBeenCalledOnce();
+    }
+  });
+
   it('rejects malformed publisher or item identifiers before making a request', async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     await expect(

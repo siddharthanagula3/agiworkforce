@@ -33,6 +33,7 @@ const cloudModules = [
   'message-metadata-projection',
   'message-thread',
   'interactive-cards',
+  'answer-ui',
   'managed-cloud-chat-client',
   'chat-attachments',
   'chat-attachment-truncation',

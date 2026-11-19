@@ -52,7 +52,7 @@ export function SiteSharingOptions({
               <span className="text-sm font-medium text-[var(--chat-text-primary)]">
                 {OPTION_LABELS[option]}
               </span>
-              <span className="text-sm text-[var(--chat-text-muted)]">
+              <span className="text-xs text-[var(--chat-text-muted)]">
                 {unavailable
                   ? 'Join or create a workspace to share with its members only.'
                   : SITE_VISIBILITY_DESCRIPTIONS[option]}

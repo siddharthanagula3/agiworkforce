@@ -235,14 +235,15 @@ export async function checkProjectKnowledgeCapacity(
     throw createError.conflict('This project is archived. Unarchive it to add sources.');
   }
 
-  const [countRow] = await db.query<{ count: number }>(
-    `select count(*)::int as count
+  const [countRow] = await db.query<{ count: number; replaces_current?: boolean }>(
+    `select count(*)::int as count,
+            coalesce(bool_or(file_name = $2), false) as replaces_current
        from project_knowledge_files
       where project_id = $1 and deleted_at is null and superseded_at is null`,
-    [projectId],
+    [projectId, body.fileName.trim()],
   );
   const activeCount = countRow?.count ?? 0;
-  if (activeCount >= MAX_PROJECT_KNOWLEDGE_FILES) {
+  if (activeCount >= MAX_PROJECT_KNOWLEDGE_FILES && countRow?.replaces_current !== true) {
     throw createError.conflict(
       `This project already has the maximum of ${MAX_PROJECT_KNOWLEDGE_FILES} knowledge files. Remove a file before adding another.`,
     );
@@ -302,18 +303,6 @@ export async function registerProjectKnowledgeFile(
 ): Promise<ProjectKnowledgeRegistration> {
   const { db, userId, organizationId, projectId } = scope;
   const { planTier } = await checkProjectKnowledgeCapacity(scope, body);
-
-  const [supersedes] = await db.query<{ id: string; version: number }>(
-    `select id, version
-       from project_knowledge_files
-      where project_id = $1
-        and file_name = $2
-        and deleted_at is null
-        and superseded_at is null
-      order by version desc
-      limit 1`,
-    [projectId, body.fileName.trim()],
-  );
 
   let extraction: Awaited<ReturnType<typeof extractProjectKnowledgeFile>>;
   try {
@@ -395,30 +384,54 @@ export async function registerProjectKnowledgeFile(
 
   let data: Record<string, unknown>;
   try {
-    const [inserted] = await db.query<Record<string, unknown>>(
-      `insert into project_knowledge_files
-         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at, version, supersedes_id, storage_targets)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $10::text is null then null else now() end, $11, $12, $13::jsonb)
-       returning *`,
-      [
-        projectId,
-        body.fileName.trim(),
-        body.mimeType.trim(),
-        body.byteCount,
-        body.checksumSha256.trim(),
-        extraction.scannedTextWithheld
-          ? scanWithheldNotice(extraction.scannedTextWithheld)
-          : unreadableUploadSummary(body.mimeType, extraction.extractedText),
-        body.sourceSurface,
-        userId,
-        sealed.key,
-        extraction.extractedText,
-        (supersedes?.version ?? 0) + 1,
-        supersedes?.id ?? null,
-        JSON.stringify(sealed.targets),
-      ],
-    );
-    if (!inserted) throw new Error('No row returned');
+    const fileName = body.fileName.trim();
+    const inserted = await db.transaction(async (tx) => {
+      await tx.execute(`select pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+        `agi:knowledge-file:${projectId}:${fileName}`,
+      ]);
+      const [row] = await tx.query<Record<string, unknown>>(
+        `insert into project_knowledge_files
+           (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri, extracted_text, extracted_at, version, supersedes_id, storage_targets)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $10::text is null then null else now() end,
+           (select coalesce(max(version), 0) + 1
+              from project_knowledge_files
+             where project_id = $1 and file_name = $2 and deleted_at is null and superseded_at is null),
+           (select id
+              from project_knowledge_files
+             where project_id = $1 and file_name = $2 and deleted_at is null and superseded_at is null
+             order by version desc
+             limit 1),
+           $11::jsonb)
+         returning *`,
+        [
+          projectId,
+          fileName,
+          body.mimeType.trim(),
+          body.byteCount,
+          body.checksumSha256.trim(),
+          extraction.scannedTextWithheld
+            ? scanWithheldNotice(extraction.scannedTextWithheld)
+            : unreadableUploadSummary(body.mimeType, extraction.extractedText),
+          body.sourceSurface,
+          userId,
+          sealed.key,
+          extraction.extractedText,
+          JSON.stringify(sealed.targets),
+        ],
+      );
+      if (!row) throw new Error('No row returned');
+      await tx.query(
+        `update project_knowledge_files
+            set superseded_at = now()
+          where project_id = $1
+            and file_name = $2
+            and id <> $3
+            and deleted_at is null
+            and superseded_at is null`,
+        [projectId, fileName, row['id']],
+      );
+      return row;
+    });
     data = inserted;
 
     // Written separately from the insert so a database without migration 0192
@@ -458,15 +471,6 @@ export async function registerProjectKnowledgeFile(
           '[knowledge-files] the imported source was not recorded',
         );
       }
-    }
-
-    if (supersedes) {
-      await db.query(
-        `update project_knowledge_files
-            set superseded_at = now()
-          where id = $1 and project_id = $2 and superseded_at is null`,
-        [supersedes.id, projectId],
-      );
     }
   } catch (error) {
     logger.error({ error, projectId }, 'Failed to create knowledge file');

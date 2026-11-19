@@ -167,7 +167,14 @@ async function evaluateFundingOrganizationBillingHold(
 }
 
 function withRequestCountry(ask: PolicyAsk, request: ScopedRequest | undefined): PolicyAsk {
-  if (ask.resource !== 'managed_compute' && ask.resource !== 'feature') return ask;
+  if (
+    ask.resource !== 'managed_compute' &&
+    ask.resource !== 'feature' &&
+    ask.resource !== 'workspace_access' &&
+    ask.resource !== 'chat_sync'
+  ) {
+    return ask;
+  }
   if (ask.country !== undefined) return ask;
   return { ...ask, country: request?.headers.get(REQUEST_COUNTRY_HEADER) ?? null };
 }
@@ -380,7 +387,12 @@ export async function diagnoseMemberPolicy(
 ): Promise<MemberPolicyDiagnosis> {
   const member = await readMemberControls(db, organizationId, memberUserId);
   if (!member) {
-    return { effective: null, decision: ask ? UNSCOPED_POLICY_DECISION : null };
+    if (!ask) return { effective: null, decision: null };
+    const billingHold = evaluateBillingHold(
+      ask,
+      await readOrganizationCollectionState(db, organizationId),
+    );
+    return { effective: null, decision: billingHold ?? UNSCOPED_POLICY_DECISION };
   }
   const collectionState = await readOrganizationCollectionState(db, organizationId);
   return {

@@ -9,10 +9,7 @@ export const metadata: Metadata = {
 
 export default function WorkspaceRolesPage() {
   return (
-    <ConsolePage
-      title="Roles"
-      description="What each role may do, who holds which roles, and which roles a directory group grants."
-    >
+    <ConsolePage title="Roles" description="What each role may do and who holds it.">
       <WorkspaceRoles />
     </ConsolePage>
   );

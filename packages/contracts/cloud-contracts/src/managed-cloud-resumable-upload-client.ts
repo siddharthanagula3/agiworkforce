@@ -352,9 +352,17 @@ export function createManagedCloudResumableUploadClient(
       if (session && !stored) {
         assertNotAborted(signal);
         onCompleting?.();
-        const completed = await complete(session, completion, signal);
-        await forget(fingerprint);
-        return completed;
+        try {
+          const completed = await complete(session, completion, signal);
+          await forget(fingerprint);
+          return completed;
+        } catch (error) {
+          if (!(error instanceof ManagedCloudResumableUploadError) || error.status !== 404) {
+            throw error;
+          }
+          await forget(fingerprint);
+          session = null;
+        }
       }
       if (!session) {
         session = await openSession(createRequest, signal);

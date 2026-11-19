@@ -46,7 +46,8 @@ describe('cloud utility failure classification', () => {
 describe('inline command failure handling', () => {
   it('offers a retry for non-credential failures', () => {
     expect(inline).toContain('showCloudUtilityErrorActions(failure');
-    expect(inline).toContain('retry: () => runInlineCommand(context, command, targetRange)');
+    expect(inline).toContain('await runInlineCommandOnTarget(context, command, target)');
+    expect(inline).not.toContain('runInlineCommand(context, command, targetRange)');
   });
 
   it('lets the progress notification close before it asks the user anything', () => {

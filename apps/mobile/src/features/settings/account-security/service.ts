@@ -203,7 +203,9 @@ export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<A
     `/api/settings/audit-logs?limit=${limit}`,
     signal ? { signal } : undefined,
   );
-  if (!isRecord(response) || !Array.isArray(response['entries'])) return [];
+  if (!isRecord(response) || !Array.isArray(response['entries'])) {
+    throw new Error('Account security returned an invalid activity history');
+  }
 
   return response['entries'].flatMap((raw): AuditLogEntry[] => {
     if (!isRecord(raw)) return [];

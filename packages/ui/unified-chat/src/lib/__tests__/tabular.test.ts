@@ -242,11 +242,16 @@ describe('neutralizeSpreadsheetText', () => {
     ["+1+cmd|'/c calc'!A0", "'+1+cmd|'/c calc'!A0"],
     ['-2+3+cmd', "'-2+3+cmd"],
     [' =HYPERLINK("http://attacker.example")', '\' =HYPERLINK("http://attacker.example")'],
-    // the tab is a separator to an importer that auto-detects one, so the payload is guarded
-    // both as the first cell of a comma reading and as the second cell of a tab reading
-    ['\t=1+1', "'\t'=1+1"],
     [' =1+1', "' =1+1"],
   ];
+
+  // the tab is a separator to an importer that auto-detects one, so the payload is guarded
+  // both as the first cell of a comma reading and as the second cell of a tab reading
+  it('guards a payload behind a leading tab under both readings', () => {
+    expect(evaluableCells('\t=1+1')).not.toEqual([]);
+    expect(neutralizeSpreadsheetText('\t=1+1')).toBe("'\t'=1+1");
+    expect(evaluableCells(neutralizeSpreadsheetText('\t=1+1'))).toEqual([]);
+  });
 
   it.each(singleCellPayloads)(
     'neutralizes content parseTabular rejects: %j',
@@ -531,5 +536,44 @@ describe('spreadsheetSafeExport · json array-of-objects artifacts', () => {
 describe('spreadsheetSafeExport · content a filesystem renames back to a sheet', () => {
   it('neutralizes a language whose trailing dot the filesystem drops', () => {
     expect(spreadsheetSafeExport("=cmd|'/c calc'!A0", 'csv.').body).toBe("'=cmd|'/c calc'!A0");
+  });
+});
+
+describe('parseTabular · delimited preview', () => {
+  it('reads a quoted multiline header by its own record, not its first physical line', () => {
+    const parsed = parseTabular('"Account;segment\nlabel",Amount\nAlice,10');
+    expect(parsed?.delimiter).toBe(',');
+    expect(parsed?.columns).toEqual(['Account;segment\nlabel', 'Amount']);
+    expect(parsed?.rows).toEqual([['Alice', '10']]);
+  });
+
+  it('ignores delimiters inside quotes and doubled quotes when choosing a separator', () => {
+    const parsed = parseTabular('"a;b;c ""x;y""";d\n1;2');
+    expect(parsed?.delimiter).toBe(';');
+    expect(parsed?.columns).toEqual(['a;b;c "x;y"', 'd']);
+  });
+
+  it('keeps a leading empty header cell so each header stays above its own column', () => {
+    const parsed = parseTabular('\tRevenue\tCost\nAlice\t10\t20');
+    expect(parsed?.delimiter).toBe('\t');
+    expect(parsed?.columns).toEqual(['Column 1', 'Revenue', 'Cost']);
+    expect(parsed?.rows).toEqual([['Alice', '10', '20']]);
+  });
+
+  it('keeps leading empty cells in the first row of a comma table', () => {
+    const parsed = parseTabular(',Revenue\nAlice,10');
+    expect(parsed?.columns).toEqual(['Column 1', 'Revenue']);
+    expect(parsed?.rows).toEqual([['Alice', '10']]);
+  });
+
+  it('still skips blank lines and a byte order mark before the header', () => {
+    const parsed = parseTabular('﻿\n  \r\nname,value\nfoo,1\n\n');
+    expect(parsed?.columns).toEqual(['name', 'value']);
+    expect(parsed?.rows).toEqual([['foo', '1']]);
+  });
+
+  it('rejects empty and whitespace-only content', () => {
+    expect(parseTabular('')).toBeNull();
+    expect(parseTabular(' \n\t \n')).toBeNull();
   });
 });

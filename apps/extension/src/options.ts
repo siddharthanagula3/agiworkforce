@@ -58,8 +58,13 @@ import {
   revokeBrowserControlConsent,
 } from './features/computer-use/browserControlConsent';
 import {
+  ACCOUNT_ORIGIN_REFUSAL,
+  isExtensionAccountOrigin,
+} from './features/computer-use/accountOrigins';
+import {
   AUTOFILL_PROFILE_STORAGE_KEY as AUTOFILL_PROFILE_KEY,
   clearAutofillProfile,
+  saveAutofillProfile,
 } from './features/content/autofill/profile-storage';
 
 const DEV_BEARER_KEY = 'agi_dev_bearer_token';
@@ -1315,6 +1320,10 @@ function buildPage(): void {
   const sitePolicySection = createSitePermissionPolicySection({
     get: (key) => chrome.storage.local.get(key),
     set: (items) => chrome.storage.local.set(items),
+    onChanged: (listener) =>
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local') listener(changes);
+      }),
   });
   permSection.appendChild(sitePolicySection.element);
   permSection.appendChild(createHistoryAccessRow().element);
@@ -1518,6 +1527,11 @@ function buildPage(): void {
   consentGrantBtn.addEventListener('click', async () => {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
+    if (isExtensionAccountOrigin(origin)) {
+      closeConsentPrompt();
+      setAllowlistStatus(ACCOUNT_ORIGIN_REFUSAL, true);
+      return;
+    }
     // Chrome spends the user gesture on the first await, so the site-access
     // prompt has to be raised before any storage read. Nothing is recorded
     // unless Chrome itself grants the host, the extension's own record must
@@ -1555,6 +1569,10 @@ function buildPage(): void {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
     const list = await loadAllowlist();
+    if (!list.includes(origin) && isExtensionAccountOrigin(origin)) {
+      setAllowlistStatus(ACCOUNT_ORIGIN_REFUSAL, true);
+      return;
+    }
     if (!list.includes(origin)) {
       consentOriginLine.textContent = origin;
       consentPrompt.hidden = false;
@@ -1687,10 +1705,16 @@ function buildPage(): void {
       logoutBtn.textContent = 'Logging out…';
       logoutBtn.disabled = true;
       try {
-        const { webSessionEnded } = await signOutOfAccount();
+        const { webSessionEnded, profileCleared } = await signOutOfAccount();
         renderAccountRow(false);
-        if (!webSessionEnded) {
+        if (!webSessionEnded && !profileCleared) {
+          accountStatus.textContent =
+            'Signed out here. The web session could not be ended and the saved autofill profile could not be removed. Delete it from Autofill profile.';
+        } else if (!webSessionEnded) {
           accountStatus.textContent = 'Signed out here. The web session could not be ended.';
+        } else if (!profileCleared) {
+          accountStatus.textContent =
+            'Signed out here. The saved autofill profile could not be removed. Delete it from Autofill profile.';
         }
       } catch {
         logoutBtn.textContent = 'Error';
@@ -1828,7 +1852,7 @@ function buildPage(): void {
   });
 
   saveProfileBtn.addEventListener('click', async () => {
-    const profile: Record<string, string> = {};
+    const profile: Partial<Record<ProfileKey, string>> = {};
     for (const field of PROFILE_FIELDS) {
       const input = profileInputs[field.key];
       if (input?.value.trim()) profile[field.key] = input.value.trim();
@@ -1841,7 +1865,7 @@ function buildPage(): void {
     saveStatus.textContent = 'Saving…';
     saveStatus.className = 'opt-save-status';
     try {
-      await chrome.storage.local.set({ [AUTOFILL_PROFILE_KEY]: profile });
+      await saveAutofillProfile(profile);
       saveStatus.textContent = 'Saved';
       saveStatus.className = 'opt-save-status saved';
       profileStatusTimer = setTimeout(() => {

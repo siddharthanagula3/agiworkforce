@@ -87,8 +87,9 @@ search as off for the model you picked, that model has no search path here, so
 pick one that has.
 
 Searching your own conversations with Cmd/Ctrl+K reports a failed request as
-"Search failed. Please try again." If the search window itself cannot open, it
-shows "Search unavailable" instead; close it and open it again.
+"Search could not be completed" with a Retry button and never as no matches; if
+the search window itself cannot open, it shows "Search unavailable" instead, so
+close it and open it again.
 
 The help centre's search tells an index that could not be loaded apart from a
 query that matched nothing, so "nothing matched" really means nothing matched.
@@ -99,9 +100,9 @@ The CLI is {{STATUS.cli}}, and these steps apply to an installed CLI.
 
 `agi login` with no provider signs in to your AGI account. It shows a link and
 a code, opens the link in your browser, and waits while you approve the code
-there, signed in to the same account. If the wait stops with "Device code
-expired. Please run /login again." or "Authorization timed out", the code was
-not approved in time: run `agi login` again for a fresh one.
+there, signed in to the same account. If the wait stops with "The sign-in code
+expired." or "Authorization timed out", the code was not approved in time: run
+`agi login` again for a fresh one.
 
 `agi auth-status` lists every credential the CLI holds and how each one
 authenticates; "No authentication configured." means nothing is stored yet.

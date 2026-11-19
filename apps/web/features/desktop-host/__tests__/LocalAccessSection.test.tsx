@@ -8,6 +8,7 @@ import {
   type ShellPolicy,
 } from '@agiworkforce/local-runtime-contract';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const listWorkspaceRoots = vi.fn();
 const pickWorkspaceRoot = vi.fn();
@@ -202,7 +203,7 @@ describe('LocalAccessSection', () => {
     readDesktopPermissions.mockResolvedValue(reviewOf([screenRefused]));
     render(<LocalAccessSection />);
     expect(
-      await screen.findByText('Refused until you quit AGI Desktop', { exact: false }),
+      await screen.findByText(`Refused until you quit ${PRODUCT_NAMES.desktop}`, { exact: false }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Worktrees')).not.toBeInTheDocument();
     expect(localWorktreeKeep).not.toHaveBeenCalled();
@@ -217,7 +218,9 @@ describe('LocalAccessSection', () => {
     expect(
       screen.getByText('Read the screen and control the mouse and keyboard'),
     ).toBeInTheDocument();
-    expect(screen.getByText('This Mac · Refused until you quit AGI Desktop')).toBeInTheDocument();
+    expect(
+      screen.getByText(`This Mac · Refused until you quit ${PRODUCT_NAMES.desktop}`),
+    ).toBeInTheDocument();
   });
 
   it('withdraws one permission and rereads the list', async () => {

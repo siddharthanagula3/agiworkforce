@@ -183,12 +183,15 @@ export const useStyleStore = create<StyleState>()(
 
         addCustomStyle: (name, instruction, sampleText) => {
           const id = crypto.randomUUID();
-          set((state) => ({
-            customStyles: [
-              ...state.customStyles,
-              { id, name, instruction, sampleText, createdAt: new Date().toISOString() },
-            ],
-          }));
+          const created: CustomStyle = {
+            id,
+            name,
+            instruction,
+            sampleText,
+            createdAt: new Date().toISOString(),
+          };
+          set((state) => ({ customStyles: [...state.customStyles, created] }));
+          holdMutation(id, created);
           select({ style: 'custom', activeCustomStyleId: id });
           void syncToServer();
           return id;
@@ -198,6 +201,7 @@ export const useStyleStore = create<StyleState>()(
           set((state) => ({
             customStyles: state.customStyles.map((s) => (s.id === id ? { ...s, ...updates } : s)),
           }));
+          holdMutation(id, useStyleStore.getState().customStyles.find((s) => s.id === id) ?? null);
           void syncToServer();
         },
 
@@ -214,6 +218,7 @@ export const useStyleStore = create<StyleState>()(
               ...(state.activeCustomStyleId === id ? DEFAULT_SELECTION : {}),
             };
           });
+          holdMutation(id, null);
           void syncToServer();
         },
 
@@ -234,22 +239,12 @@ export const useStyleStore = create<StyleState>()(
           }
           serverStylesRead = true;
           const serverStyles = Array.isArray(stored.customStyles) ? stored.customStyles : null;
+          const replayed = heldMutations.size > 0;
           if (serverStyles) {
-            set((state) => ({
-              customStyles: localWriteHeld
-                ? [
-                    ...serverStyles,
-                    ...state.customStyles.filter(
-                      (local) => !serverStyles.some((remote) => remote.id === local.id),
-                    ),
-                  ]
-                : serverStyles,
-            }));
+            set({ customStyles: replayHeldMutations(serverStyles) });
           }
-          if (localWriteHeld) {
-            localWriteHeld = false;
-            syncToServer();
-          }
+          heldMutations.clear();
+          if (replayed) syncToServer();
         },
       };
     },
@@ -285,13 +280,26 @@ export const useStyleStore = create<StyleState>()(
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let serverStylesRead = false;
-let localWriteHeld = false;
+const heldMutations = new Map<string, CustomStyle | null>();
+
+function holdMutation(id: string, row: CustomStyle | null): void {
+  if (!serverStylesRead) heldMutations.set(id, row);
+}
+
+function replayHeldMutations(base: CustomStyle[]): CustomStyle[] {
+  const replayed = base.filter((style) => heldMutations.get(style.id) !== null);
+  for (const [id, row] of heldMutations) {
+    if (!row) continue;
+    const index = replayed.findIndex((style) => style.id === id);
+    if (index === -1) replayed.push(row);
+    else replayed[index] = row;
+  }
+  return replayed;
+}
+
 function syncToServer(): void {
   if (typeof window === 'undefined') return;
-  if (!serverStylesRead) {
-    localWriteHeld = true;
-    return;
-  }
+  if (!serverStylesRead) return;
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
     const { customStyles } = useStyleStore.getState();

@@ -1,14 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
 import type { LocalBranches } from '@agiworkforce/local-runtime-contract';
 import { listLocalBranches, pushLocalBranch } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
-import { CODE_COPY } from '../code-surface';
+import { CODE_COPY, githubInstallHref } from '../code-surface';
 import { LOCAL_CODE_COPY, localPullRequestLabel } from '../local-code';
 import {
+  LocalPullRequestRequestError,
   openLocalPullRequest,
   readLocalPullRequest,
   type LocalPullRequestLookup,
@@ -31,23 +32,30 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
   const [opened, setOpened] = useState<LocalPullRequestState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectGitHub, setReconnectGitHub] = useState(false);
+
+  const loadSequence = useRef(0);
 
   const load = useCallback(async () => {
+    loadSequence.current += 1;
+    const sequence = loadSequence.current;
+    const isCurrent = () => loadSequence.current === sequence;
     setError(null);
     try {
       const read = await listLocalBranches(rootId);
+      if (!isCurrent()) return;
       setBranches(read);
+      setLookup(null);
       if (read?.remoteUrl && read.current) {
-        setLookup(
-          await readLocalPullRequest({
-            remoteUrl: read.remoteUrl,
-            head: read.current,
-            base: read.baseBranch,
-          }),
-        );
+        const found = await readLocalPullRequest({
+          remoteUrl: read.remoteUrl,
+          head: read.current,
+          base: read.baseBranch,
+        });
+        if (isCurrent()) setLookup(found);
       }
     } catch (cause: unknown) {
-      setError(toUserMessage(cause, LOCAL_CODE_COPY.pullRequestReadFailed));
+      if (isCurrent()) setError(toUserMessage(cause, LOCAL_CODE_COPY.pullRequestReadFailed));
     }
   }, [rootId]);
 
@@ -55,13 +63,17 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
     setOpened(null);
     setLookup(null);
     void load();
+    return () => {
+      loadSequence.current += 1;
+    };
   }, [load, refreshKey]);
 
-  const open = async () => {
+  const open = async (createBranch: boolean) => {
     setBusy(true);
     setError(null);
+    setReconnectGitHub(false);
     try {
-      const pushed = await pushLocalBranch(rootId);
+      const pushed = await pushLocalBranch(rootId, createBranch ? title : undefined);
       if (!pushed.baseBranch) throw new Error(LOCAL_CODE_COPY.pullRequestNoBase);
       setOpened(
         await openLocalPullRequest({
@@ -71,8 +83,10 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
           title,
         }),
       );
+      if (createBranch) setBranches(await listLocalBranches(rootId));
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.pullRequestOpenFailed));
+      setReconnectGitHub(cause instanceof LocalPullRequestRequestError && cause.reconnectGitHub);
     } finally {
       setBusy(false);
     }
@@ -94,6 +108,32 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
   }, [checksRunning, load, lookup]);
 
   const onBase = Boolean(branches?.current) && branches?.current === branches?.baseBranch;
+
+  if (branches !== null && branches.remoteUrl && !branches.current && pullRequest === null) {
+    return (
+      <div className={styles['pullRequestBlock']}>
+        <button
+          type="button"
+          className={styles['secondaryButton']}
+          disabled={busy || !branches.baseBranch}
+          onClick={() => void open(true)}
+        >
+          {busy && <Spinner size="sm" aria-hidden="true" />}
+          {busy ? CODE_COPY.creatingPullRequest : LOCAL_CODE_COPY.createBranchAndOpenPullRequest}
+        </button>
+        <span className={styles['formHelp']}>
+          {branches.baseBranch
+            ? LOCAL_CODE_COPY.pullRequestDetached
+            : LOCAL_CODE_COPY.pullRequestNoBase}
+        </span>
+        {error !== null && (
+          <span className={styles['formHelp']} role="alert">
+            {error}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   if (branches === null || !branches.remoteUrl || !branches.current) {
     return error !== null ? (
@@ -136,7 +176,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
             type="button"
             className={styles['secondaryButton']}
             disabled={busy || onBase || lookup === null}
-            onClick={() => void open()}
+            onClick={() => void open(false)}
           >
             {busy && <Spinner size="sm" aria-hidden="true" />}
             {busy ? CODE_COPY.creatingPullRequest : LOCAL_CODE_COPY.pushAndOpenPullRequest}
@@ -150,6 +190,11 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
         <span className={styles['formHelp']} role="alert">
           {error}
         </span>
+      )}
+      {error !== null && reconnectGitHub && (
+        <a className={styles['secondaryButton']} href={githubInstallHref()}>
+          {CODE_COPY.githubReauthorizeAction}
+        </a>
       )}
     </div>
   );

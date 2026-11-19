@@ -58,9 +58,9 @@ describe('ToolLabel', () => {
       expect(document.querySelector('.text-success-text')).toBeTruthy();
     });
 
-    it('shows spinning Loader icon for running status', () => {
+    it('shows the spinning AGI mark for running status', () => {
       render(<ToolLabel entry={{ ...baseEntry, status: 'running', durationMs: undefined }} />);
-      expect(document.querySelector('.animate-spin')).toBeTruthy();
+      expect(document.querySelector('.agi-mark-spin')).toBeTruthy();
     });
 
     it('shows red X icon for error status', () => {

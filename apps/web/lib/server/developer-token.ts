@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 
 import { getNeonDb } from '@/lib/server/neon-db';
+import { revokeDeviceRefreshFamily } from '@/lib/server/refresh-token-family';
 
 const DEVELOPER_TOKEN_ISSUER = 'agiworkforce-api-gateway';
 const DEVELOPER_TOKEN_AUDIENCE = 'agiworkforce';
@@ -112,13 +113,19 @@ export async function isDeveloperTokenRevoked(token: VerifiedDeveloperToken): Pr
   if (!token.sessionFamilyId) return false;
 
   const liveFamilyRows = await db.query<{ id: string }>(
-    `SELECT id
-       FROM device_refresh_tokens
-      WHERE family_id = $1
-        AND user_id = $2
-        AND revoked_at IS NULL
-        AND used_at IS NULL
-        AND expires_at > now()
+    `SELECT t.id
+       FROM device_refresh_tokens t
+      WHERE t.family_id = $1
+        AND t.user_id = $2
+        AND t.revoked_at IS NULL
+        AND t.used_at IS NULL
+        AND t.expires_at > now()
+        AND NOT EXISTS (
+          SELECT 1
+            FROM public.device_refresh_token_families f
+           WHERE f.family_id = t.family_id
+             AND f.revoked_at IS NOT NULL
+        )
       LIMIT 1`,
     [token.sessionFamilyId, token.userId],
   );
@@ -136,13 +143,9 @@ export async function revokeDeveloperToken(token: VerifiedDeveloperToken): Promi
   return rows.length > 0;
 }
 
-export async function revokeDeveloperSessionFamily(sessionFamilyId: string): Promise<boolean> {
-  const affected = await getNeonDb().execute(
-    `UPDATE device_refresh_tokens
-        SET revoked_at = COALESCE(revoked_at, now())
-      WHERE family_id = $1
-        AND revoked_at IS NULL`,
-    [sessionFamilyId],
-  );
-  return affected > 0;
+export async function revokeDeveloperSessionFamily(
+  sessionFamilyId: string,
+  userId: string,
+): Promise<boolean> {
+  return (await revokeDeviceRefreshFamily(getNeonDb(), { familyId: sessionFamilyId, userId })) > 0;
 }

@@ -29,6 +29,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -191,6 +192,8 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const { openActions, rename } = useConversationActions();
   const serverChatMatches = useChatViewStore((state) => state.remoteSearchChats);
   const serverProjectMatches = useChatViewStore((state) => state.remoteSearchProjects);
+  const searchFailed = useChatViewStore((state) => state.searchFailed);
+  const searchInFlight = useChatViewStore((state) => state.isSearching);
   const localProjects = useProjectStore((state) => state.projects);
   const cloudProjects = useCloudProjectStore((state) => state.projects);
   const storedArtifacts = useArtifactStore((state) => state.artifacts);
@@ -298,11 +301,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         artifacts,
         remoteChats: remoteSearchChats,
         remoteProjects: remoteSearchProjects,
+        remoteChatsOnlyFromConversations: filter !== 'all',
       }),
     [
       artifacts,
       contentMatchIds,
       files,
+      filter,
       filteredHistory,
       libraryImages,
       projects,
@@ -313,17 +318,19 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   );
 
   const isSearching = query.trim().length > 0;
+  const searchPending = isSearching && (!searchIsCurrent || searchInFlight);
+  const cloudSearchFailed = isSearching && searchIsCurrent && searchFailed && appMode === 'cloud';
   const sections = useMemo<ChatsListSection[]>(() => {
     if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
     return [
       searchSection('Chats', 'chat', globalResults.chats),
-      searchSection('Go to', 'destination', searchMobileDestinations(query)),
+      searchSection('Go to', 'destination', searchMobileDestinations(query, appMode)),
       searchSection('Projects', 'project', globalResults.projects),
       searchSection('Files', 'file', globalResults.files),
       searchSection('Library', 'library', globalResults.library),
       searchSection('Artifacts', 'artifact', globalResults.artifacts),
     ].filter((section): section is ChatsListSection => section !== null);
-  }, [filteredHistory, globalResults, isSearching, query, searchOnly]);
+  }, [appMode, filteredHistory, globalResults, isSearching, query, searchOnly]);
 
   const openFilter = useCallback(() => {
     const option = (value: ChatListFilter) => ({
@@ -368,7 +375,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
       if (item.kind === 'library') {
         router.push({
           pathname: '/(app)/library',
-          params: { imageId: item.id },
+          params: { imageId: item.targetId ?? item.id },
         });
         return;
       }
@@ -384,11 +391,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     ({ item }: { item: ChatsListItem }) => (
       <PressableBox
         onPress={() => openItem(item)}
-        onLongPress={
-          item.kind === 'chat'
-            ? () => openActions(item.id, item.title, item.pinned === true)
-            : undefined
-        }
+        onLongPress={item.kind === 'chat' ? () => openActions(item.id, item.title) : undefined}
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
         accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
@@ -444,7 +447,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           <ChevronRight size={16} color={colors.textMuted} />
         ) : item.kind === 'chat' ? (
           <PressableBox
-            onPress={() => openActions(item.id, item.title, item.pinned === true)}
+            onPress={() => openActions(item.id, item.title)}
             accessibilityRole="button"
             accessibilityLabel={`More actions for ${item.title}`}
             hitSlop={8}
@@ -507,7 +510,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             maxFontSizeMultiplier={2}
             style={{ color: colors.textMuted, fontSize: typeScale.caption }}
           >
-            {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
+            {appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local on this device'}
           </Text>
         </View>
         {!searchOnly && (
@@ -590,7 +593,29 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
+          cloudSearchFailed ? (
+            <View
+              accessibilityRole="alert"
+              style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
+            >
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {hasResults
+                  ? 'Search could not be completed. Showing matches already on this device.'
+                  : 'Search could not be completed. Check your connection and try again.'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry search"
+                onPress={() => searchConversations(query)}
+              >
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            </View>
+          ) : appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
             <View
               accessibilityRole="alert"
               style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
@@ -642,7 +667,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           ) : null
         }
         ListEmptyComponent={
-          appMode === 'cloud' && conversationLoadError ? null : (
+          (appMode === 'cloud' && conversationLoadError) || cloudSearchFailed ? null : (
             <View
               style={{
                 flex: 1,
@@ -655,6 +680,8 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             >
               {searchOnly && !isSearching ? (
                 <Search size={34} color={colors.textMuted} />
+              ) : searchPending ? (
+                <LoadingIndicator accessibilityLabel="Searching" />
               ) : appMode === 'cloud' && isLoadingConversations ? (
                 <LoadingIndicator accessibilityLabel="Loading chats" />
               ) : (
@@ -669,15 +696,17 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               >
                 {searchOnly && !isSearching
                   ? 'Search your workspace'
-                  : appMode === 'cloud' && isLoadingConversations
-                    ? 'Loading chats'
-                    : isSearching
-                      ? 'No matches'
-                      : filter === 'all'
-                        ? 'No chats yet'
-                        : 'No chats here'}
+                  : searchPending
+                    ? 'Searching'
+                    : appMode === 'cloud' && isLoadingConversations
+                      ? 'Loading chats'
+                      : isSearching
+                        ? 'No matches'
+                        : filter === 'all'
+                          ? 'No chats yet'
+                          : 'No chats here'}
               </Text>
-              {appMode === 'cloud' && isLoadingConversations ? null : (
+              {searchPending || (appMode === 'cloud' && isLoadingConversations) ? null : (
                 <Text
                   style={{
                     color: colors.textMuted,
@@ -686,9 +715,9 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                   }}
                 >
                   {searchOnly && !isSearching
-                    ? 'Find chats, projects, files, library images, and artifacts in this mode.'
+                    ? 'Search chats, projects, files, images and artifacts in this mode.'
                     : isSearching
-                      ? `Nothing in ${appMode === 'cloud' ? 'Managed Cloud' : 'Local Mode'} matches “${query.trim()}”.`
+                      ? `Nothing in ${appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local Mode'} matches “${query.trim()}”.`
                       : filter === 'all'
                         ? 'Start a new chat to begin your history.'
                         : `No ${FILTER_LABELS[filter].toLocaleLowerCase()} are available in this mode.`}

@@ -36,7 +36,7 @@ describe('sidebar Code control', () => {
 
     const group = screen.getByRole('group', { name: 'Switch between Home and Code' });
     const home = screen.getByRole('button', { name: 'Home' });
-    const code = screen.getByRole('button', { name: 'AGI Code' });
+    const code = screen.getByRole('button', { name: 'Code' });
     const newChat = screen.getByRole('button', { name: 'New chat' });
 
     expect(home.parentElement).toBe(group);
@@ -72,7 +72,7 @@ describe('sidebar Code control', () => {
     const onOpenCode = vi.fn();
     renderSidebar({ collapsed: true, onOpenCode });
 
-    const code = screen.getByRole('button', { name: 'AGI Code' });
+    const code = screen.getByRole('button', { name: 'Code' });
     const newChat = screen.getByRole('button', { name: 'New chat' });
     const search = screen.getByRole('button', { name: 'Search' });
 
@@ -85,12 +85,12 @@ describe('sidebar Code control', () => {
 
   it('renders nothing when the surface has no Code destination', () => {
     renderSidebar({});
-    expect(screen.queryByRole('button', { name: 'AGI Code' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Code' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Switch between Home and Code' })).toBeNull();
 
     cleanup();
 
     renderSidebar({ collapsed: true });
-    expect(screen.queryByRole('button', { name: 'AGI Code' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Code' })).toBeNull();
   });
 });

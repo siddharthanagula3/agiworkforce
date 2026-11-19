@@ -20,7 +20,12 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { render } from '@testing-library/react-native';
-import { VoiceOrb, smoothVoiceLevel } from '@/src/features/voice/components/VoiceOrb';
+import {
+  VoiceOrb,
+  smoothVoiceLevel,
+  voiceOrbPalette,
+} from '@/src/features/voice/components/VoiceOrb';
+import { colors } from '@/src/ui/theme';
 
 const ORB_SOURCE = readFileSync(
   join(__dirname, '..', 'src/features/voice/components/VoiceOrb.tsx'),
@@ -75,6 +80,24 @@ describe('VoiceOrb', () => {
     it('never springs the orb', () => {
       expect(ORB_SOURCE).not.toMatch(/withSpring\s*\(/);
       expect(ORB_SOURCE).toMatch(/withTiming\(1 \+ level \* /);
+    });
+  });
+
+  describe('colour carries the phase', () => {
+    it('keeps the calm periwinkle while listening, thinking and idle', () => {
+      for (const phase of ['idle', 'listening', 'thinking'] as const) {
+        expect(voiceOrbPalette(phase)).toEqual({
+          start: colors.voiceOrbStart,
+          mid: colors.voiceOrbMid,
+          end: colors.voiceOrbEnd,
+        });
+      }
+    });
+
+    it('turns warm while the assistant speaks', () => {
+      const speaking = voiceOrbPalette('speaking');
+      expect(speaking.start).toBe(colors.brandAmber);
+      expect(speaking.start).not.toBe(voiceOrbPalette('listening').start);
     });
   });
 

@@ -1,4 +1,7 @@
-import { MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH } from '@agiworkforce/cloud-contracts';
+import {
+  assertUploadSendsSignedHeaders,
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+} from '@agiworkforce/cloud-contracts';
 
 import { toUserMessage } from '@agiworkforce/unified-chat/network-error';
 import { getAuthToken } from '@shared/lib/get-auth-token';
@@ -381,9 +384,11 @@ class SettingsService {
         publicUrl: string;
       };
 
+      const uploadHeaders = presign.uploadHeaders ?? { 'Content-Type': file.type };
+      assertUploadSendsSignedHeaders(presign.uploadUrl, uploadHeaders);
       const putRes = await fetch(presign.uploadUrl, {
         method: 'PUT',
-        headers: presign.uploadHeaders ?? { 'Content-Type': file.type },
+        headers: uploadHeaders,
         body: file,
       });
 
@@ -391,7 +396,10 @@ class SettingsService {
         return { data: '', error: `Upload failed (HTTP ${putRes.status})` };
       }
 
-      await this.updateProfile({ avatar_url: presign.publicUrl });
+      const profileUpdate = await this.updateProfile({ avatar_url: presign.publicUrl });
+      if (profileUpdate.error) {
+        return { data: '', error: profileUpdate.error };
+      }
 
       return { data: presign.publicUrl };
     } catch (error) {

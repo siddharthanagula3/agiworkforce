@@ -25,6 +25,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { useRouter } from 'expo-router';
 import { api, apiFetch } from '@/services/api';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { StudyScreen } from '@/src/features/study/StudyScreen';
 import { StudyModeBanner, STUDY_MODE_OFF_NOTE } from '@/src/features/study/StudyModeBanner';
 
@@ -80,12 +81,37 @@ describe('StudyScreen', () => {
     expect(mockCreateConversation).not.toHaveBeenCalled();
   });
 
+  it('says the recent sessions could not be loaded, then shows them after a retry', async () => {
+    (api.get as jest.Mock)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ sessions: [session()] });
+    render(<StudyScreen />);
+
+    expect(await screen.findByText('Your recent study sessions could not be loaded.')).toBeTruthy();
+    expect(screen.queryByText('RECENT')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('study-history-retry'));
+
+    expect(await screen.findByText('Spanish past tense')).toBeTruthy();
+    expect(screen.queryByTestId('study-history-error')).toBeNull();
+  });
+
   it('asks a Local Mode user to switch to Cloud instead of starting', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
     render(<StudyScreen />);
     expect(screen.queryByTestId('study-start')).toBeNull();
     fireEvent.press(screen.getByLabelText('Switch to Cloud mode'));
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+  });
+
+  it('sends a signed-out Local Mode user to sign in instead of switching', () => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useWaitlistStore.setState({ cloudUnlocked: false });
+    render(<StudyScreen />);
+    fireEvent.press(screen.getByLabelText('Switch to Cloud mode'));
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(useRouter().push).toHaveBeenCalled();
   });
 });
 
@@ -113,6 +139,20 @@ describe('StudyModeBanner', () => {
 
     fireEvent.press(screen.getByLabelText('Turn study mode back on'));
     expect(await screen.findByText('Studying: Spanish past tense · Practise it')).toBeTruthy();
+  });
+
+  it('shows study mode as off when leaving was saved but its reply was lost', async () => {
+    (api.get as jest.Mock).mockResolvedValueOnce({ sessions: [session()] }).mockResolvedValueOnce({
+      sessions: [session({ endedAt: '2026-10-19T09:00:00.000Z' })],
+    });
+    (apiFetch as jest.Mock).mockRejectedValue(new Error('network lost'));
+    render(<StudyModeBanner conversationId={CONVERSATION_ID} />);
+
+    expect(await screen.findByText('Studying: Spanish past tense · Practise it')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Leave study mode'));
+
+    expect(await screen.findByText(STUDY_MODE_OFF_NOTE)).toBeTruthy();
+    expect(screen.getByLabelText('Turn study mode back on')).toBeTruthy();
   });
 
   it('stays hidden in a chat that is not a study session', async () => {

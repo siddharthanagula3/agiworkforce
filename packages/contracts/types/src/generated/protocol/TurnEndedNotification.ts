@@ -23,4 +23,12 @@ export type TurnEndedNotification = {
    * send them again.
    */
   unsentSteers?: number;
+  /**
+   * Tokens the conversation occupies in the model's context window once the
+   * turn has ended, as the host measures it. `input_tokens` sums every
+   * request of the turn, so it is never this figure; a host that cannot
+   * measure occupancy leaves the field out and a client shows no context
+   * figure.
+   */
+  contextTokens?: number;
 };

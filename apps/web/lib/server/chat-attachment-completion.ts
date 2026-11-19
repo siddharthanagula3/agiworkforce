@@ -77,16 +77,23 @@ export function resolveUploadSourceSurface(request: NextRequest): SyncedAppSurfa
     : 'web';
 }
 
-async function isTemporaryChatUpload(
+interface UploadConversation {
+  temporary: boolean;
+  conversationId: string | null;
+}
+
+async function resolveUploadConversation(
   db: Pick<DatabaseAdapter, 'query'>,
   scope: { userId: string; organizationId: string | null },
   input: { conversationId?: string | undefined; temporary?: boolean | undefined },
-): Promise<boolean> {
+): Promise<UploadConversation> {
   const { userId, organizationId } = scope;
-  if (!input.conversationId) return input.temporary === true;
+  const declaredTemporary = input.temporary === true;
+  if (!input.conversationId) return { temporary: declaredTemporary, conversationId: null };
+  let row: { id: string; is_temporary: boolean } | undefined;
   try {
-    const [row] = await db.query<{ is_temporary: boolean }>(
-      `select is_temporary
+    [row] = await db.query<{ id: string; is_temporary: boolean }>(
+      `select id, is_temporary
          from web_conversations
         where id = $1
           and user_id = $2
@@ -95,14 +102,17 @@ async function isTemporaryChatUpload(
         limit 1`,
       [input.conversationId, userId, organizationId],
     );
-    return row?.is_temporary === true;
   } catch (error) {
     logger.warn(
       { err: error, userId, conversationId: input.conversationId },
-      '[uploads] temporary-chat lookup failed; counting the file against storage',
+      '[uploads] temporary-chat lookup failed; refusing the upload instead of guessing its retention',
     );
-    return false;
+    throw createError.serviceUnavailable(
+      'This file could not be attached because the chat could not be checked. Try again.',
+    );
   }
+  if (!row) return { temporary: declaredTemporary, conversationId: null };
+  return { temporary: row.is_temporary === true, conversationId: row.id };
 }
 
 function reportedUploadFindings(
@@ -252,16 +262,25 @@ export async function findCompletedChatAttachment(
   > & { temporaryChat: boolean },
 ): Promise<ManagedCloudChatAttachment | null> {
   const { db, userId, organizationId, storageKey, temporaryChat } = input;
-  const existing =
-    (await getMediaAssetByStoragePathname(
-      userId,
-      sealedChatAttachmentPathname(storageKey),
-      organizationId,
-      db,
-      temporaryChat,
-    )) ??
-    (await getMediaAssetByStoragePathname(userId, storageKey, organizationId, db, temporaryChat));
-  return existing ? attachmentFrom(existing, input.fileName, input.byteCount) : null;
+  const sealed = await getMediaAssetByStoragePathname(
+    userId,
+    sealedChatAttachmentPathname(storageKey),
+    organizationId,
+    db,
+    temporaryChat,
+  );
+  if (sealed) {
+    await purgeChatAttachmentUpload(userId, storageKey);
+    return attachmentFrom(sealed, input.fileName, input.byteCount);
+  }
+  const legacy = await getMediaAssetByStoragePathname(
+    userId,
+    storageKey,
+    organizationId,
+    db,
+    temporaryChat,
+  );
+  return legacy ? attachmentFrom(legacy, input.fileName, input.byteCount) : null;
 }
 
 export async function resolveTemporaryChatUpload(
@@ -270,17 +289,22 @@ export async function resolveTemporaryChatUpload(
     'db' | 'userId' | 'organizationId' | 'conversationId' | 'temporary'
   >,
 ): Promise<boolean> {
-  return isTemporaryChatUpload(input.db, input, {
+  const conversation = await resolveUploadConversation(input.db, input, {
     conversationId: input.conversationId,
     temporary: input.temporary,
   });
+  return conversation.temporary;
 }
 
 export async function completeChatAttachmentUpload(
   input: ChatAttachmentCompletionInput,
 ): Promise<ManagedCloudChatAttachment> {
   const { db, userId, organizationId, storageKey, fileName, mimeType, byteCount } = input;
-  const temporaryChat = await resolveTemporaryChatUpload(input);
+  const conversation = await resolveUploadConversation(db, input, {
+    conversationId: input.conversationId,
+    temporary: input.temporary,
+  });
+  const temporaryChat = conversation.temporary;
   if (!isOwnedChatAttachmentUploadKey(storageKey, userId)) {
     throw createError.forbidden('Invalid upload destination');
   }
@@ -438,6 +462,7 @@ export async function completeChatAttachmentUpload(
       contentSha256: hashMatch.sha256,
       sourceSurface: input.sourceSurface,
       temporaryChat,
+      ...(conversation.conversationId ? { conversationId: conversation.conversationId } : {}),
       metadata: {
         filename: fileName,
         origin: 'upload',

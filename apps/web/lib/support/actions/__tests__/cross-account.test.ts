@@ -23,7 +23,8 @@ vi.mock('@/lib/services/managed-usage-summary-service', () => ({
     throw new Error('usage unavailable in this test');
   }),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOperatorMappedConnectorIds: () => new Set(['slack', 'notion']),
   getUserGithubInstallations: vi.fn(async () => []),
   getUserCustomConnectorSummaries: vi.fn(async () => []),
@@ -162,3 +163,5 @@ describe('support actions, cross-account refusal', () => {
     expect(mocks.db!.proposals[0]!.user_id).toBe(USER_A);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/user-connector-tools');

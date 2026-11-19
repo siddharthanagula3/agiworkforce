@@ -9,6 +9,7 @@
 import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';
 import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
+import { nodeCliResolutionHost, resolveCliPath, type CliResolution } from './remoteEnvironment';
 import {
   enforceAgentModeConsent,
   setAgentEffortWithConsent,
@@ -109,7 +110,6 @@ const DEFAULTS = {
   editorContextAutoAttach: true,
   respectGitIgnore: true,
   telemetryEnabled: false,
-  currentTier: 'unknown',
   cliPath: 'agi',
   activateOnStartup: false,
   useTerminal: false,
@@ -124,11 +124,64 @@ function getUserScoped<T>(key: string, fallback: T): T {
   return inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
 }
 
-function workspaceOverrides(): MutableConfigKey[] {
+function repositoryValues<T>(key: string): T[] {
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<T>(key);
+  const folderValues = (vscode.workspace.workspaceFolders ?? []).map(
+    (folder) =>
+      vscode.workspace.getConfiguration('agiWorkforce', folder.uri).inspect<T>(key)
+        ?.workspaceFolderValue,
+  );
+  return [inspected?.workspaceValue, inspected?.workspaceFolderValue, ...folderValues].filter(
+    (value): value is T => value !== undefined,
+  );
+}
+
+function userChoiceNarrowedByWorkspace(
+  key: string,
+  fallback: boolean,
+  privateValue: boolean,
+): boolean {
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<boolean>(key);
+  const userValue = inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
+  return repositoryValues<boolean>(key).includes(privateValue) ? privateValue : userValue;
+}
+
+const OPT_OUT_SETTING_BY_FEATURE = {
+  'memory.enabled': 'optOut.memory',
+  'inlineCompletions.enabled': 'optOut.inlineCompletions',
+  autoApplyFixes: 'optOut.autoApplyFixes',
+} as const satisfies Partial<Record<MutableConfigKey, string>>;
+
+export type OptOutFeature = keyof typeof OPT_OUT_SETTING_BY_FEATURE;
+export const OPT_OUT_SETTING_KEYS = Object.values(OPT_OUT_SETTING_BY_FEATURE);
+
+export function optOutSettingFor(feature: OptOutFeature): string {
+  return `agiWorkforce.${OPT_OUT_SETTING_BY_FEATURE[feature]}`;
+}
+
+function isOptOutFeature(key: MutableConfigKey): key is OptOutFeature {
+  return key in OPT_OUT_SETTING_BY_FEATURE;
+}
+
+function optedOutHere(feature: OptOutFeature): boolean {
+  const key = OPT_OUT_SETTING_BY_FEATURE[feature];
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<boolean>(key);
+  return inspected?.globalValue === true || repositoryValues<boolean>(key).includes(true);
+}
+
+function userChoiceUnlessOptedOut(feature: OptOutFeature, fallback: boolean): boolean {
+  return getUserScoped<boolean>(feature, fallback) && !optedOutHere(feature);
+}
+
+function workspaceOverrides(values: MutableConfigValues): MutableConfigKey[] {
   const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   return SETTINGS_PANEL_SETTING_KEYS.filter((key) => {
+    const overridden = isOptOutFeature(key)
+      ? optedOutHere(key)
+      : repositoryValues<unknown>(key).length > 0;
+    if (!overridden) return false;
     const inspected = configuration.inspect<unknown>(key);
-    return inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
+    return values[key] !== (inspected?.globalValue ?? inspected?.defaultValue);
   });
 }
 
@@ -168,13 +221,19 @@ export const Config = {
     return get<boolean>('codeLensEnabled', DEFAULTS.codeLensEnabled);
   },
   autoApplyFixes(): boolean {
-    return get<boolean>('autoApplyFixes', DEFAULTS.autoApplyFixes);
+    return userChoiceUnlessOptedOut('autoApplyFixes', DEFAULTS.autoApplyFixes);
   },
   memoryEnabled(): boolean {
-    return get<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
+    return userChoiceUnlessOptedOut('memory.enabled', DEFAULTS.memoryEnabled);
+  },
+  memoryUserSetting(): boolean {
+    return getUserScoped<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
+  },
+  memoryOptedOutHere(): boolean {
+    return optedOutHere('memory.enabled');
   },
   inlineCompletionsEnabled(): boolean {
-    return get<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
+    return userChoiceUnlessOptedOut('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
   },
   inlineCompletionsDebounceMs(): number {
     return get<number>('inlineCompletions.debounceMs', DEFAULTS.inlineCompletionsDebounceMs);
@@ -198,10 +257,14 @@ export const Config = {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
   editorContextAutoAttach(): boolean {
-    return get<boolean>('editorContext.autoAttach', DEFAULTS.editorContextAutoAttach);
+    return userChoiceNarrowedByWorkspace(
+      'editorContext.autoAttach',
+      DEFAULTS.editorContextAutoAttach,
+      false,
+    );
   },
   respectGitIgnore(): boolean {
-    return get<boolean>('respectGitIgnore', DEFAULTS.respectGitIgnore);
+    return userChoiceNarrowedByWorkspace('respectGitIgnore', DEFAULTS.respectGitIgnore, true);
   },
   apiEndpoint(): string {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
@@ -209,13 +272,6 @@ export const Config = {
 
   telemetryEnabled(): boolean {
     return getUserScoped<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
-  },
-
-  currentTier(): string {
-    const inspected = vscode.workspace
-      .getConfiguration('agiWorkforce')
-      .inspect<string>('currentTier');
-    return inspected?.globalValue ?? DEFAULTS.currentTier;
   },
 
   cliPath(): string {
@@ -226,34 +282,33 @@ export const Config = {
     return get<string>('cliPath', DEFAULTS.cliPath);
   },
 
-  settingsSnapshot(): ExtensionSettingsSnapshot {
+  settingsSnapshot(currentTier: string): ExtensionSettingsSnapshot {
+    const values: MutableConfigValues = {
+      apiEndpoint: this.apiEndpoint(),
+      model: this.model(),
+      cliPath: this.cliPath(),
+      'composer.followUpBehavior': this.composerFollowUpBehavior(),
+      'composer.enterBehavior': this.composerEnterBehavior(),
+      contextLines: this.contextLines(),
+      'editorContext.autoAttach': this.editorContextAutoAttach(),
+      respectGitIgnore: this.respectGitIgnore(),
+      telemetryEnabled: this.telemetryEnabled(),
+      hoverEnabled: this.hoverEnabled(),
+      codeLensEnabled: this.codeLensEnabled(),
+      autoApplyFixes: this.autoApplyFixes(),
+      'memory.enabled': this.memoryEnabled(),
+      'inlineCompletions.enabled': this.inlineCompletionsEnabled(),
+      'inlineCompletions.debounceMs': this.inlineCompletionsDebounceMs(),
+      'inlineCompletions.maxLength': this.inlineCompletionsMaxLength(),
+      'agent.mode': this.agentMode(),
+      'agent.effort': this.agentEffort(),
+      'agent.thinking': this.agentThinking(),
+      activateOnStartup: this.activateOnStartup(),
+      useTerminal: this.useTerminal(),
+    };
     return {
-      values: {
-        apiEndpoint: this.apiEndpoint(),
-        model: this.model(),
-        cliPath: this.cliPath(),
-        'composer.followUpBehavior': this.composerFollowUpBehavior(),
-        'composer.enterBehavior': this.composerEnterBehavior(),
-        contextLines: this.contextLines(),
-        'editorContext.autoAttach': this.editorContextAutoAttach(),
-        respectGitIgnore: this.respectGitIgnore(),
-        telemetryEnabled: this.telemetryEnabled(),
-        hoverEnabled: this.hoverEnabled(),
-        codeLensEnabled: this.codeLensEnabled(),
-        autoApplyFixes: this.autoApplyFixes(),
-        'memory.enabled': this.memoryEnabled(),
-        'inlineCompletions.enabled': this.inlineCompletionsEnabled(),
-        'inlineCompletions.debounceMs': this.inlineCompletionsDebounceMs(),
-        'inlineCompletions.maxLength': this.inlineCompletionsMaxLength(),
-        'agent.mode': this.agentMode(),
-        'agent.effort': this.agentEffort(),
-        'agent.thinking': this.agentThinking(),
-        activateOnStartup: this.activateOnStartup(),
-        useTerminal: this.useTerminal(),
-        currentTier: this.currentTier(),
-        currentTierLabel: currentTierLabel(this.currentTier()),
-      },
-      workspaceOverrides: workspaceOverrides(),
+      values: { ...values, currentTier, currentTierLabel: currentTierLabel(currentTier) },
+      workspaceOverrides: workspaceOverrides(values),
       workspaceTrusted: vscode.workspace.isTrusted,
     };
   },
@@ -273,3 +328,12 @@ export const Config = {
 } as const;
 
 export const __CONFIG_DEFAULTS = DEFAULTS;
+
+export function resolveConfiguredCli(): CliResolution {
+  return resolveCliPath(
+    Config.cliPath(),
+    nodeCliResolutionHost(
+      (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+    ),
+  );
+}

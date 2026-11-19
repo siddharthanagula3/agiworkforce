@@ -4,7 +4,7 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from 'expo-router';
-import { ArrowLeft, FileText, Menu, Settings2 } from 'lucide-react-native';
+import { ArrowLeft, FileText, Menu, MoreHorizontal, Settings2 } from 'lucide-react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
@@ -13,6 +13,10 @@ import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTa
 import { ProjectArtifactsTab } from '@/src/features/projects/components/ProjectArtifactsTab';
 import { ProjectRoutinesTab } from '@/src/features/projects/components/ProjectRoutinesTab';
 import { Text } from '@/components/ui/Text';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { ProjectEditorModal } from '@/src/features/projects/components/ProjectEditorModal';
+import { useProjectActions } from '@/src/features/projects/useProjectActions';
+import { useProjectEditor } from '@/src/features/projects/useProjectEditor';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -197,6 +201,8 @@ export default function ProjectDetailScreen() {
   );
   const isCloudProject = target === 'cloud' && !!cloudProject;
   const cloudDetails = useCloudProjectStore((s) => (id ? s.details[id] : undefined));
+  const editor = useProjectEditor();
+  const projectActions = useProjectActions(editor.openEdit);
 
   useEffect(() => {
     if (!isCloudProject || appMode !== 'cloud' || !isClerkSignedIn) return;
@@ -226,6 +232,12 @@ export default function ProjectDetailScreen() {
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
   }, [navigation]);
+
+  const { openActions } = projectActions;
+  const handleOpenActions = useCallback(() => {
+    if (!id) return;
+    openActions(id, { variant: 'page', onRemoved: handleBack });
+  }, [handleBack, id, openActions]);
 
   if (!id) {
     return (
@@ -329,6 +341,23 @@ export default function ProjectDetailScreen() {
             <Settings2 size={21} color={colors.textSecondary} />
           </PressableBox>
         ) : null}
+        {target !== 'unknown' && appMode === target ? (
+          <PressableBox
+            testID="project-detail-actions"
+            onPress={handleOpenActions}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 8,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            accessibilityLabel="More project actions"
+            accessibilityRole="button"
+          >
+            <MoreHorizontal size={22} color={colors.textSecondary} />
+          </PressableBox>
+        ) : null}
         <PressableBox
           onPress={handleOpenDrawer}
           style={{ padding: 8, borderRadius: 8 }}
@@ -397,6 +426,8 @@ export default function ProjectDetailScreen() {
           </>
         )}
       </View>
+      <ProjectEditorModal editor={editor} />
+      <ActionMenuSheet menu={projectActions.menu} dismissLabel="Dismiss project actions" />
     </SafeAreaView>
   );
 }

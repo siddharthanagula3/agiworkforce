@@ -1,6 +1,8 @@
 import {
   isResearchGap,
   isResearchStep,
+  normalizeResearchDeliverable,
+  type ResearchDeliverableSpec,
   type ResearchGap,
   type ResearchStep,
 } from '@agiworkforce/types';
@@ -43,6 +45,7 @@ export interface ResearchRunState {
   steps?: ResearchStep[];
   gaps?: ResearchGap[];
   sourcesForRetry?: ToolSearchResult[];
+  deliverable?: ResearchDeliverableSpec;
 }
 
 export const RESEARCH_PHASE_LABELS: Record<ResearchPhase, string> = {
@@ -135,6 +138,15 @@ export function parseResearchPlanSteps(payload: unknown): ResearchStep[] | null 
   return steps.length > 0 ? steps : null;
 }
 
+export function parseResearchPlanDeliverable(payload: unknown): ResearchDeliverableSpec | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const run = (payload as { run?: unknown }).run;
+  if (!run || typeof run !== 'object' || Array.isArray(run)) return null;
+  const deliverable = (run as { deliverable?: unknown }).deliverable;
+  if (!deliverable || typeof deliverable !== 'object') return null;
+  return normalizeResearchDeliverable(deliverable);
+}
+
 export function parseResearchGaps(payload: unknown): ResearchGap[] | null {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
   const rawGaps = (payload as { gaps?: unknown }).gaps;
@@ -190,8 +202,13 @@ export function reduceResearchDelta(
   let next = readResearchStatus(wire.x_research_status, prev, nowIso) ?? prev;
 
   const steps = parseResearchPlanSteps(wire.x_research_plan);
-  if (steps) {
-    next = { ...(next ?? { phase: 'planning', startedAt: nowIso }), steps };
+  const deliverable = parseResearchPlanDeliverable(wire.x_research_plan);
+  if (steps || deliverable) {
+    next = {
+      ...(next ?? { phase: 'planning', startedAt: nowIso }),
+      ...(steps ? { steps } : {}),
+      ...(deliverable ? { deliverable } : {}),
+    };
   }
 
   const gaps = parseResearchGaps(wire.x_research_gaps);
@@ -232,7 +249,13 @@ export function readResearchRunState(value: unknown): ResearchRunState | undefin
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
   if (!RESEARCH_PHASES.includes(raw['phase'] as ResearchPhase)) return undefined;
-  return raw as unknown as ResearchRunState;
+  const state = raw as unknown as ResearchRunState;
+  if (state.deliverable) return state;
+  const runConfig = raw['runConfig'];
+  if (!runConfig || typeof runConfig !== 'object' || Array.isArray(runConfig)) return state;
+  const persisted = (runConfig as { deliverable?: unknown }).deliverable;
+  if (!persisted || typeof persisted !== 'object') return state;
+  return { ...state, deliverable: normalizeResearchDeliverable(persisted) };
 }
 
 export function completedResearchSteps(steps: ResearchStep[] | undefined): ResearchStep[] {
@@ -264,11 +287,13 @@ export function researchResumePayload(research: ResearchRunState): {
   sources: ToolSearchResult[];
   steps: ResearchStep[];
   approvedSteps: ResearchStep[];
+  deliverable?: ResearchDeliverableSpec;
 } {
   return {
     sources: research.sourcesForRetry ?? [],
     steps: completedResearchSteps(research.steps),
     approvedSteps: approvedResearchSteps(research.steps),
+    ...(research.deliverable ? { deliverable: research.deliverable } : {}),
   };
 }
 

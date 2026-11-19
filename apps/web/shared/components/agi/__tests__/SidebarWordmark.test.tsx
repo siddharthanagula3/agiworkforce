@@ -1,26 +1,29 @@
 import { render, screen } from '@testing-library/react';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
 import { SidebarWordmark } from '../SidebarWordmark';
 
+const HOME_LINK = `${PRODUCT_BRAND} home`;
+
 describe('SidebarWordmark', () => {
-  it('keeps the product name on one line and the mark at full size', () => {
+  it('keeps the mark at full size inside a link that does not shrink', () => {
     const { container } = render(<SidebarWordmark />);
 
-    expect(screen.getByText('AGI')).toHaveClass('whitespace-nowrap');
-    expect(screen.getByRole('link', { name: 'AGI home' })).toHaveClass('shrink-0');
+    expect(screen.getByRole('link', { name: HOME_LINK })).toHaveClass('shrink-0');
     expect(container.querySelector('img.agi-mark')).toHaveClass('shrink-0');
   });
 
-  it('shows the name only when its container has room, leaving the mark alone beside window controls', () => {
+  it('shows the mark alone, naming the product only to assistive technology', () => {
     render(<SidebarWordmark />);
 
-    expect(screen.getByText('AGI')).toHaveClass('hidden', '@[7rem]:inline');
+    expect(screen.getByRole('link', { name: HOME_LINK })).toHaveTextContent('');
+    expect(screen.queryByText(PRODUCT_BRAND)).toBeNull();
   });
 
   it('uses the product typeface rather than a serif override', () => {
     render(<SidebarWordmark />);
 
-    expect(screen.getByText('AGI').getAttribute('style')).toBeNull();
+    expect(screen.getByRole('link', { name: HOME_LINK }).getAttribute('style')).toBeNull();
   });
 });

@@ -400,6 +400,7 @@ interface UseConversationsReturn {
     id: string,
     updates: {
       title?: string;
+      expectedTitle?: string;
       model?: string;
       selectedRouteId?: string | null;
       projectId?: string | null;
@@ -893,6 +894,7 @@ export function useConversations(): UseConversationsReturn {
       id: string,
       updates: {
         title?: string;
+        expectedTitle?: string;
         model?: string;
         selectedRouteId?: string | null;
         projectId?: string | null;

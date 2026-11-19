@@ -14,6 +14,8 @@ import {
   researchFileSourcesPrompt,
   MAX_RESEARCH_CONNECTOR_SOURCES,
   resolveResearchConnectorPolicy,
+  researchConnectorOutcomeNote,
+  researchConnectorSourcesPrompt,
 } from '../research-sources';
 
 function hit(overrides: Partial<SearchHit>): SearchHit {
@@ -201,5 +203,40 @@ describe('connectors as research sources', () => {
     const policy = resolveResearchConnectorPolicy(many, new Set(many));
 
     expect(policy.allowed).toHaveLength(MAX_RESEARCH_CONNECTOR_SOURCES);
+  });
+});
+
+describe('a connector that answered only some of its searches', () => {
+  const partial = {
+    connectorId: 'notion',
+    label: 'Notion',
+    outcome: 'partial' as const,
+    searchesAsked: 2,
+    searchesAnswered: 1,
+    sources: [{ url: 'https://notion.so/a', title: 'Plan', snippet: 'Q3 plan' }],
+  };
+
+  it('names how many searches were answered', () => {
+    expect(researchConnectorOutcomeNote(partial)).toBe(
+      'only 1 of 2 searches in this app were answered, so its results may be incomplete',
+    );
+  });
+
+  it('tells the model the results are incomplete without dropping the sources', () => {
+    const prompt = researchConnectorSourcesPrompt([partial]);
+
+    expect(prompt).toContain('Only partly searched: Notion (1 found; only 1 of 2 searches');
+    expect(prompt).not.toContain('Searched: Notion');
+    expect(prompt).not.toContain('Could not be searched');
+    expect(prompt).toContain('https://notion.so/a');
+  });
+
+  it('keeps a fully answered connector under Searched with no qualifier', () => {
+    const prompt = researchConnectorSourcesPrompt([
+      { ...partial, outcome: 'read', searchesAnswered: 2 },
+    ]);
+
+    expect(prompt).toContain('Searched: Notion (1 found).');
+    expect(prompt).not.toContain('partly');
   });
 });

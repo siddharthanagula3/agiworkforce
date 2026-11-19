@@ -152,7 +152,8 @@ export function AgentEditorScreen() {
                 <AgentManageSections
                   agent={editor.agent}
                   dirty={editor.dirty}
-                  onAgent={editor.replaceAgent}
+                  onAgent={editor.syncAgent}
+                  onRestored={editor.replaceAgent}
                   onDeleted={() =>
                     router.replace(AGENTS_ROUTE as Parameters<typeof router.replace>[0])
                   }
@@ -165,6 +166,7 @@ export function AgentEditorScreen() {
       <ModelPickerSheet
         sheetRef={modelSheetRef}
         modelScope="cloud"
+        selectedModelId={editor.draft.model ?? DEFAULT_AUTO_MODE_ID}
         onSelect={(model) =>
           editor.change({ model: model === DEFAULT_AUTO_MODE_ID ? null : model })
         }

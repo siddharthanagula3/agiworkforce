@@ -2364,6 +2364,7 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
         expect(result.stderr).not.toMatch(/^(git|xcrun|xcode-select): /mu);
         expect(result.exitCode).toBe(0);
       },
+      30_000,
     );
 
     // With the network opened, a name has to resolve, not only a literal

@@ -49,7 +49,8 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/support/handoff/handoff-service', () => ({
+vi.mock('@/lib/support/handoff/handoff-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   MissingContactEmailError: class MissingContactEmailError extends Error {},
   cancelHandoffForOwner: vi.fn(),
   escalateToHuman: vi.fn(),
@@ -58,7 +59,8 @@ vi.mock('@/lib/support/handoff/handoff-service', () => ({
   sweepExpiredHandoffs: vi.fn(),
   claimHandoffForAgent: mocks.claimHandoffForAgent,
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   cancelSessionForOwner: vi.fn(),
   claimExpiredWaitingBatch: vi.fn(),
   claimExpiredWaitingSession: vi.fn(),
@@ -149,3 +151,6 @@ describe('POST /api/support/handoff/agent/[sessionId]/claim', () => {
     );
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/support/handoff/handoff-service');
+type ImportedModule0 = typeof import('@/lib/support/handoff/store');

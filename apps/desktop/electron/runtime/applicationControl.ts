@@ -132,23 +132,57 @@ export async function gateApplication(
   if (state !== 'granted') throw new ComputerUseRefused('permission', refusal(app));
 }
 
+function refuseOwnWindow(command: string, app: ScreenApplication): void {
+  if (app.pid === process.pid) {
+    throw new ComputerUseRefused(
+      'failed',
+      KEYBOARD_STEPS.has(command) ? OWN_FRONT_REFUSED : OWN_WINDOW_REFUSED,
+    );
+  }
+}
+
+function targetKey(app: ScreenApplication): string {
+  return scopeFor(app).target ?? app.name;
+}
+
 export async function gateApplications(
   window: BrowserWindow | null,
   command: string,
   args: StepArgs,
-): Promise<void> {
+): Promise<ReadonlySet<string>> {
   const asked = new Set<string>();
   for (const app of await targetsOf(command, args)) {
     if (!app) continue;
-    if (app.pid === process.pid) {
-      throw new ComputerUseRefused(
-        'failed',
-        KEYBOARD_STEPS.has(command) ? OWN_FRONT_REFUSED : OWN_WINDOW_REFUSED,
-      );
-    }
-    const key = scopeFor(app).target ?? app.name;
+    refuseOwnWindow(command, app);
+    const key = targetKey(app);
     if (asked.has(key)) continue;
     asked.add(key);
     await gateApplication(window, command, app);
+  }
+  return asked;
+}
+
+/**
+ * Prompts and reviews are awaited after the apps are approved, so the app a
+ * step reaches can change meanwhile. This reads the targets again just before
+ * the input and refuses any app that was not approved or is no longer allowed.
+ */
+export async function confirmApplicationsUnchanged(
+  command: string,
+  args: StepArgs,
+  approved: ReadonlySet<string>,
+): Promise<void> {
+  for (const app of await targetsOf(command, args)) {
+    if (!app) continue;
+    refuseOwnWindow(command, app);
+    if (!approved.has(targetKey(app))) {
+      throw new ComputerUseRefused(
+        'failed',
+        `${app.name} is now where this step would land, and it was not the app you allowed, so the step did not run. Take a new screenshot and try again.`,
+      );
+    }
+    if (getPermissionState('application.control', scopeFor(app)) !== 'granted') {
+      throw new ComputerUseRefused('permission', refusal(app));
+    }
   }
 }

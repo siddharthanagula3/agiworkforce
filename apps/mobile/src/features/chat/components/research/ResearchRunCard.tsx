@@ -219,7 +219,7 @@ function PlanEditor({
       style={{ borderTopWidth: 1, borderTopColor: colors.borderLight, paddingTop: 6, gap: 6 }}
     >
       <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-        Edit any step before it runs. What you start here is exactly what gets searched.
+        Edit any step before it runs. Only these steps are searched.
       </Text>
       {steps.map((step, index) => (
         <View key={step.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

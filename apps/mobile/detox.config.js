@@ -6,6 +6,7 @@ const {
   DETOX_ANDROID_AVD_ENV,
   DEFAULT_IOS_DEVICE,
   DEFAULT_ANDROID_AVD,
+  IOS_PROJECT_NAME,
   IOS_APP_BINARY,
   ANDROID_APP_BINARY,
 } = require('./detox.env');
@@ -31,13 +32,12 @@ module.exports = {
     'ios.debug': {
       type: 'ios.app',
       binaryPath: IOS_APP_BINARY.debug,
-      build:
-        'xcodebuild -workspace ios/AGIMobile.xcworkspace -scheme AGIMobile -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
+      build: `xcodebuild -workspace ios/${IOS_PROJECT_NAME}.xcworkspace -scheme ${IOS_PROJECT_NAME} -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build`,
     },
     'ios.release': {
       type: 'ios.app',
       binaryPath: IOS_APP_BINARY.release,
-      build: `xcodebuild -workspace ios/AGIMobile.xcworkspace -scheme AGIMobile -configuration Release -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath ios/build ONLY_ACTIVE_ARCH=YES ARCHS=${simulatorArch}`,
+      build: `xcodebuild -workspace ios/${IOS_PROJECT_NAME}.xcworkspace -scheme ${IOS_PROJECT_NAME} -configuration Release -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath ios/build ONLY_ACTIVE_ARCH=YES ARCHS=${simulatorArch}`,
     },
     'android.debug': {
       type: 'android.apk',

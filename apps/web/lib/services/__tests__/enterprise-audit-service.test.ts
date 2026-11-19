@@ -41,6 +41,19 @@ function lastCall(query: ReturnType<typeof vi.fn>) {
 describe('listAuditEvents', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('hands back the next-page cursor at full database precision', async () => {
+    const h = harness();
+    const first = {
+      ...row(1, '2026-11-01T12:00:00.123Z'),
+      created_at_cursor: '2026-11-01T12:00:00.123456Z',
+    };
+    h.query.mockResolvedValueOnce([first, row(2)]);
+
+    const page = await listAuditEvents(h.db, ORG, {}, { limit: 1 });
+
+    expect(page.nextCursor).toEqual({ createdAt: '2026-11-01T12:00:00.123456Z', id: first.id });
+  });
+
   it('always pins the organization as the first bound parameter', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([]);
@@ -134,6 +147,31 @@ describe('listAuditEvents', () => {
 
 describe('iterateAuditEventsForExport', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('pages on the database timestamp at full precision, not the millisecond-truncated Date', async () => {
+    const h = harness();
+    const boundary = {
+      ...row(2, '2026-11-01T12:00:00.123Z'),
+      created_at_cursor: '2026-11-01T12:00:00.123456Z',
+    };
+    h.query.mockResolvedValueOnce([row(1), boundary]).mockResolvedValueOnce([]);
+
+    for await (const _ of iterateAuditEventsForExport(h.db, ORG, {}, 2)) void _;
+
+    const { sql, params } = lastCall(h.query);
+    expect(sql).toContain('(created_at, id) <');
+    expect(params).toContain('2026-11-01T12:00:00.123456Z');
+    expect(params).not.toContain('2026-11-01T12:00:00.123Z');
+  });
+
+  it('selects the cursor timestamp with microsecond precision', async () => {
+    const h = harness();
+    h.query.mockResolvedValueOnce([]);
+
+    for await (const _ of iterateAuditEventsForExport(h.db, ORG)) void _;
+
+    expect(lastCall(h.query).sql).toMatch(/to_char\(created_at at time zone 'UTC'.*\.US/);
+  });
 
   it('walks every batch and stops on a short one', async () => {
     const h = harness();

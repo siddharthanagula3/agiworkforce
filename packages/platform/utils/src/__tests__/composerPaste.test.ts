@@ -71,6 +71,22 @@ describe('composer paste policy', () => {
     expect(decision.file.type).toBe('text/plain');
   });
 
+  it('names a paste after the first unused ordinal, not the count of earlier pastes', () => {
+    const decision = decideComposerPaste(
+      fakeTransfer({ text: 'x'.repeat(LARGE_PASTE_THRESHOLD) }),
+      { existingFileNames: ['Pasted text 2.txt'] },
+    );
+
+    expect(decision.kind).toBe('attachment');
+    if (decision.kind !== 'attachment') return;
+    expect(decision.file.name).toBe('Pasted text.txt');
+
+    const next = decideComposerPaste(fakeTransfer({ text: 'x'.repeat(LARGE_PASTE_THRESHOLD) }), {
+      existingFileNames: ['Pasted text.txt', 'Pasted text 3.txt'],
+    });
+    expect(next.kind === 'attachment' && next.file.name).toBe('Pasted text 2.txt');
+  });
+
   it('leaves an ordinary text paste to the textarea', () => {
     expect(
       decideComposerPaste(fakeTransfer({ text: 'x'.repeat(LARGE_PASTE_THRESHOLD - 1) })),

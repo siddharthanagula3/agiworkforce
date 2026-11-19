@@ -54,6 +54,7 @@ export interface Project {
   description: string;
   instructions: string;
   sources?: ProjectSource[];
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -65,6 +66,8 @@ interface ProjectState {
   createProject: (name: string, description: string, instructions: string) => string;
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void;
   deleteProject: (id: string) => void;
+  setProjectPinned: (id: string, pinned: boolean) => void;
+  setProjectArchived: (id: string, archived: boolean) => void;
   setActiveProject: (id: string | null) => void;
   addSource: (
     projectId: string,
@@ -466,6 +469,40 @@ export const useProjectStore = create<ProjectState>()(
           projects: state.projects.filter((p) => p.id !== id),
           activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
         }));
+      },
+
+      setProjectPinned: (id, pinned) => {
+        const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
+
+        if (isCloud) {
+          const existing = useCloudProjectStore.getState().projects.find((p) => p.id === id);
+          if (existing && existing.deletedAt === null) {
+            useCloudProjectStore.getState().upsertCloudProject({
+              ...existing,
+              metadata: { ...existing.metadata, starred: pinned },
+            });
+            markProjectForSync(id);
+          }
+          return;
+        }
+
+        set((state) => ({
+          projects: state.projects.map((p) => (p.id === id ? { ...p, pinned } : p)),
+        }));
+      },
+
+      setProjectArchived: (id, archived) => {
+        if (useChatAppModeStore.getState().appMode !== 'cloud') return;
+        const existing = useCloudProjectStore.getState().projects.find((p) => p.id === id);
+        if (!existing || existing.deletedAt !== null) return;
+        useCloudProjectStore.getState().upsertCloudProject({
+          ...existing,
+          isArchived: archived,
+        });
+        if (archived && useCloudProjectStore.getState().activeProjectId === id) {
+          useCloudProjectStore.getState().setActiveCloudProject(null);
+        }
+        markProjectForSync(id);
       },
 
       setActiveProject: (id) => {

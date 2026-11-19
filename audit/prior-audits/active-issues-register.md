@@ -36,7 +36,11 @@ Original assessment: the local window claim allocated a new conversation but hyd
 
 ## EXT-MIXED-HOSTED-TOOL-HANDOFF-01
 
-Status: partial implementation with source/component qualification. First-party caller negotiation remains off. The finding and its supplied outer audit folder remain open.
+Status: partial implementation with source/component qualification. First-party caller negotiation is on for scoped admissions only (2026-11-11, below). Native acceptance is still missing. The finding and its supplied outer audit folder remain open.
+
+2026-11-11 activation for scoped admissions: Chrome now sends `caller_tool_handoff_version` (through `ChromeManagedChatRequest.callerToolContinuation`, set in background `handleChatMessage`) only when the admission already proves every binding the owned-action path checks later: an acknowledged account conversation scope (`captureCallerConversationContext`), a page with a document id, a local chat id, durable custody, and an interactive (not background-delivery) turn. `executeChromeManagedChat` negotiates on non-receipt legs only, and it refuses a negotiation request that has no custody or no browser tools, before any request is sent. Any other admission keeps the legacy protocol unchanged. With negotiation, a reply that pauses for a hosted approval or input and then asks for a browser tool continues through the existing custody recovery (`handleResolveChatApproval` with `onCallerCheckpoint`, then `resumeOwnedManagedRun`). Approval and resume streams now record their stream and local chat ids, so a reopened side panel adopts them, together with their waiting browser handoff, instead of a durable replay aborting them. No server change was needed: the approve route replays the checkpoint request with the negotiation fields (`buildApprovalCheckpointRequest`/`checkpointRequestForResume`), and `tool-loop.client-tools.test.ts` already covers approved and rejected hosted siblings followed by a caller boundary. Source evidence: managed-chat-handler (negotiation, legacy default, two refusals), background-stream-cancellation (three admission cases), managed-chat-panel-close (approval-stream adoption). Each fails without its change. 17 extension files (359 tests) and 5 web files (98 tests) pass. This is not native acceptance.
+
+Still on the legacy protocol, where approval-then-browser-tool still ends with "This run has more browser work...": the first turn of a new chat (no acknowledged cloud conversation yet), temporary chats, chats with account mirroring off, and pages admitted without a readable document id (no site access at send time). Those need the scope-proof item below.
 
 The original report traced hosted and caller siblings being handed wholesale to Chrome, whose allowlist correctly rejected the hosted functions. Current server source creates a persisted caller-only boundary after hosted obligations and their normal approval/input/device gates. Strict caller-resume schemas, original private provider context, cumulative budgets, result inspection, checkpoint leases and context-policy checks remain server-owned.
 
@@ -3939,34 +3943,6 @@ Verification: Three real-hook/store assertions fail as expected; this particular
 
 Resolution/acceptance: Construct an otherwise admitted request with adequate budget and an allowed model; require the exact managed_compute_disabled code when the policy is off, then enable the policy and require that this gate permits the same request. Inject a broken managed-compute gate and prove the test fails even if another refusal remains.
 
-## CLI-CHECKPOINT-PARENT-SYMLINK-ESCAPE-01
-
-Severity: High. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Checkpoint rewind follows swapped parent symlinks outside the approved workspace. Snapshot paths are lexical root joins, not stable confined handles. restore_files checks the final file only for Contents; symlink_metadata follows symlink parents, so an outside regular leaf passes. Absent directly removes the lexical path. The app-server rewind checks thread/writer ownership but never revalidates snapshot paths against the workspace or executes these writes in its shell sandbox.
-
-Impact/trigger: Capture workspace/sub/file during an approved edit, then replace sub with a symlink to a directory outside the workspace before choosing code rewind. An outside regular file of the same name is overwritten; a file captured as Absent is deleted through the symlink.
-
-Start at `apps/cli/src/agent/checkpoints.rs:322` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
-
-Verification: Exact unsafe_to_overwrite function extracted from current source into a standalone Rust probe; same restore filesystem operations performed in temporary directories. Limit: Primitive reproduction, not full CLI build, mounted app-server or rendered UI. No user files touched.
-
-Resolution/acceptance: Revalidate every snapshot destination under the owned workspace immediately before restore/delete and reject symlink ancestors; use confined/no-follow filesystem operations to avoid a check/write race. Keep skipped-file reporting.
-
-## VSCODE-CLI-HANDOFF-NOT-ACTIVATED-01
-
-Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Continue CLI Session accepts the chosen thread but never opens it in VS Code. continueCliSessionHere selects newest/requested ID, validates and accepts its handoff, then only executes agi-workforce.chat. That command reveals native chat or the sidebar; it does not resume the accepted thread. The existing fork command explicitly calls sidebarProvider.resumeConversation(forkedId), demonstrating the required activation is separate. Deep links reach the same command.
-
-Impact/trigger: With a different sidebar thread active, invoke Continue CLI Session or a developer-session deep link for a specific CLI thread and confirm Continue here.
-
-Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
-
-Verification: Read complete command consumer and target command. Limit: No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation.
-
-Resolution/acceptance: After acceptance, reveal first-party chat and resume newest.id; only record acceptance once backend admission and activation succeed. Add a command test with a different active thread.
-
 ## CLI-INTERRUPT-RELEASE-BEFORE-CLEANUP-01
 
 Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
@@ -4404,18 +4380,6 @@ In a separate temporary Git repository, apps/unregistered/AGENTS.md passes while
 Source: `scripts/check-agent-docs.mjs:79`. Exact evidence (`audit/checklist/evidence/coverage-agent-doc-enumeration-2026-10-09.json`, untracked) and bounded review (`audit/checklist/reviews/coverage-ecosystem-instruments-2026-10-09-001.md`, untracked). No current production privilege bypass demonstrated; scoped contract guard misses pre-staging changes.
 
 Resolution/acceptance: Enumerate tracked plus current nonignored untracked scoped files, retain vendored ownership exclusions, and test both untracked and staged fixtures. No implementation fix was made, per the documentation-only audit scope.
-
-## EXT-MIRROR-TEST-FAKE-COVERAGE-01
-
-Severity: Low. Status: existing open instrument defect; additional concrete instances recorded 2026-10-09. The original `security-fixes.test.ts` scope and prior evidence remain open; it was not freshly read or closed in this wave.
-
-The full-file specialist review found two additional instruments with the same tracking concern. `autofill-escalation-agent-integration.test.ts` describes real content/background handler coverage but imports neither; its composed helper test calls `runAgentLoop` directly and itself emits `AGI_CU_STEP` from its supplied callback. Removing the runtime handoff/broadcast does not exercise that purported handler subject. `connection-lifecycle.test.ts` imports reconnect helpers, while broadcaster, timeout and status groups exercise implementations local to the test. Those groups cannot settle corresponding worker execution.
-
-Full-file review, exact locations and separate source claims (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-001.json`, untracked). Local report identities `CHROME-AUTOFILL-INTEGRATION-HANDLERS-UNEXERCISED-01` and `CHROME-LIFECYCLE-TEST-LOCAL-REPLICAS-01` remain preserved instances under this existing canonical tracking owner, rather than duplicate register rows. Lead independently inspected the handler claims, local lifecycle subjects and manual progress emission. Neither case was newly run or mutated; missing production behavior is not inferred.
-
-Resolution/acceptance: Exercise the real message handlers and native worker lifecycle with controlled dependencies, or accurately qualify helper-only coverage. Adverse controls must detect removing the actual producer/consumer behavior. The October9 fourth Chrome packet separately re-read the original security-fixes file through EOF: its private test subjects remain disconnected, while real gateway/Markdown/redactor groups are distinguished. No test or implementation edits were made.
-
-October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot capture against the real handler is covered by `apps/extension/__tests__/background-screenshot-capture.test.ts`. Production recorder behavior and full browser tests were not run.
 
 ## AUDIT-CODEOWNERS-COMMENT-ONLY-01
 
@@ -8513,20 +8477,6 @@ Acceptance target: Record acquisition independently of directory presence and re
 
 Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
 
-## AUDIT-R2-CORS-READBACK-POLICY-01
-
-Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
-
-The exact matchesExpected predicate accepts its first rule when origins/count and required methods match, even with missing declared allowed headers or altered exposed ETag/max age. Fourteen inert exact-predicate controls preserve seven counterguards and demonstrate seven accepted policy drifts. Bounded current presign/upload consumer reads establish that method/header contracts exist; they do not establish a deployed policy or browser failure.
-
-Source: `scripts/r2-apply-cors.mjs:9-34,75-85,134-143`. Exact predicate controls (`audit/checklist/evidence/coverage-r2-cors-exact-predicate-controls-2026-10-11.json`, untracked), independent review (`audit/checklist/evidence/coverage-root053-independent-premise-review-2026-10-11.json`, untracked) and frozen source report (`audit/checklist/reviews/coverage-release-dev-operations-source-2026-10-10-053.json`, untracked).
-
-Counterguards and ownership: Missing first rule, missing/extra origins, a wrong origin and missing required methods refuse. PUT failures record failure. The wildcard response-header setter census owner checks a different producer/mechanism and is not duplicated.
-
-Acceptance target: Compare the intended policy fields and successful GET result before verified output; retain existing origin/method guards.
-
-Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
-
 ## AUDIT-SKILL-VETTING-SELFTEST-NULL-VERDICT-01
 
 Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
@@ -8649,33 +8599,6 @@ and user-visible resolution before deciding whether to invalidate or migrate
 records. Blind version adoption, deleting snapshots, or claiming a normal pull
 already reconciles content is not justified. Accepted new conflict handling and
 its unexecuted fixtures do not resolve this legacy-state boundary.
-
-## EXT-SITE-TOOL-AUTO-APPROVAL-CONTRACT-01
-
-Severity: Medium. Status: OPEN source-backed product-policy contract discrepancy,
-2026-11-04. No exploit, deployed behavior or universal consent bypass established.
-
-`apps/extension/src/features/computer-use/browserToolDefinitions.ts` describes
-`call_site_tool` as requiring approval on every call. `approvalPolicy.ts` returns
-`alwaysAsk: true, reason: 'site_tool'`, but `crucialActions.ts` maps that reason to
-null. `askBeforeActing.ts::actionNeedsApproval` ignores noncrucial `alwaysAsk` in
-Auto, the default mode, and returns false; the production `background.ts`
-`onBeforeAction` callback consequently returns true without an extension prompt.
-This is a concrete mismatch between the declared per-call contract and mode
-resolution, not evidence that every site call runs without consent.
-
-`webmcp.ts::callTool` independently plans against the actual page and retains
-`window.confirm` when its policy requires approval; form submission also confirms.
-Ask/Full and other crucial-action requirements remain separate. Accepted alias
-retirement `73709c77c6839814c86ae8fe16ff6632a0522334` routes production site tools
-through the existing canonical bound service but does not change this policy.
-
-Required decision: establish whether every canonical site invocation must prompt
-in Auto, or whether the declared contract should describe mode-dependent consent.
-Then align driver policy, tool description and user-facing permission semantics
-without weakening actual-page sensitive/authentication/form controls. No policy
-change is approved or implemented by this note; fixtures are unexecuted and
-runtime/deployment acceptance remains open.
 
 ## WEB-VIDEO-DELIVERY-RECOVERY-01
 
@@ -9059,9 +8982,28 @@ Source-only review; no tests, checks, network or sharing actions.
 
 ## MOBILE-IOS-SHARE-INBOX-DELIVERY-01
 
-Severity: Medium. Status: OPEN source-backed received-copy preservation and
-acknowledgment design constraint, 2026-11-04. No runtime reproduction or observed
-production loss; no native implementation change is approved by this finding.
+Severity: Medium. Status: SOURCE-CORRECTED 2026-11-10, device acceptance open.
+
+Correction: the extension saves a share all-or-nothing into its own
+`PendingShares/files/<share>/` directory and lists the items it could not add.
+`AGIShareInbox.claimPendingShares` claims a batch of at most ten files and
+100 KB of text by renaming its manifests into `PendingShares/claims/<receipt>/`,
+copies (never moves) the files into `Caches/AGISharedInbox/<receipt>/`, reports
+copies that failed as `unavailableFileCount`, and re-delivers any claim not
+held by the running JS. `acknowledgePendingShares` deletes only the manifests
+and files that receipt owns. JS holds each receipt, acknowledges it from Share
+Preview (adopted, sent, or dismissed) with bounded retry, releases it when the
+preview is invalidated or the subscriber is gone, then claims the next batch.
+Unreferenced copies older than a day are pruned only when a new batch is
+claimed. Account teardown clears the in-memory composer handoff. The Swift was
+typechecked with `swiftc -typecheck` against the iOS 17 simulator SDK (React
+types stubbed); nothing ran on a device. Close after a device run proves: a
+claim survives killing the app before review; more than ten saved files arrive
+over successive previews; a share saved while a preview is open is not
+deleted; Dismiss deletes the App Group and cached copies; Add to chat keeps the
+cached copies until sent; an orphaned copy older than a day is pruned.
+
+Original finding, 2026-11-04:
 
 `apps/mobile/native/ios/AGIShareInbox.swift::consumePendingShares` aggregates JSON
 manifests, then `stageSharedFiles` processes `files.prefix(maximumSharedFiles)`
@@ -9391,7 +9333,7 @@ universal settings or memory lifecycle closure is established.
   database lock held across remote storage calls is not an established solution.
   The initial 2026-11-04 review performed no tests, checks, database or network actions.
 
-- **2026-11-09 implementation progress, still OPEN:** append-only migration 0398
+- **2026-11-09 implementation progress, still OPEN:** append-only migration 0419
   and the server lifecycle reconciliation driver now have isolated real-PostgreSQL
   evidence for reference fencing, both duplicate/delete orderings, repeatable-read
   serialization, strict scope privileges, target receipts and stale-lease/lost-ack
@@ -9460,6 +9402,8 @@ universal settings or memory lifecycle closure is established.
   unregistered/staging producers, backups/versions, legacy provenance, uncertain
   client outcomes, hold/deletion linearization, deployment and native acceptance
   remain open. No production repair or migration apply is claimed.
+
+Update 2026-11-10: `f84d38a885` stops the project retention sweep listing a `storage_uri` that another live knowledge file in a recent or held project still references, and treats a `project_file`-only hold as holding the project (`lib/services/domain-retention-service.ts:78-102`, `domain-retention-service.test.ts:166,181`); checked by SQL-text tests only, not against Postgres. Duplicate-route races and object-removal recovery remain open.
 
 ## WEB-MEDIA-SESSION-CLEANUP-01
 
@@ -10164,6 +10108,8 @@ reads have no direct authored fixture; those remain acceptance cases, not proven
 source defects. No tests, lint, typechecks, builds, browser/auth, server export,
 push or deployment ran for this slice.
 
+Update 2026-11-10: `e24ae2c271` orders the latest-export lookup by request time, re-checks admission under a per-account advisory lock in one transaction, and publishes the stored deletion deadline as the final-volume expiry (`lib/server/data-export-archive.ts:450,533,583`, `data-export-archive.test.ts`). Runtime and cross-view acceptance remain open.
+
 ## WEB-CSRF-ACQUISITION-RETIREMENT-01
 
 Status: Boundedly source-corrected in
@@ -10740,6 +10686,8 @@ Continue/logout and global cleanup remain open; connector-history compatibility
 is still held. No product tests, lint, typechecks, builds, installations, live
 account actions, migration application or deployment ran. Publication is separate.
 
+Update 2026-11-10: `d9782438fa` binds scheduling to the confirming session (`use-settings-queries.ts:507-595`: owned status snapshot, captured-session request, receipt session) and skips the post-success sign-out and navigation when that session was superseded (`authentication-manager.ts:73-93`, `useDeleteAccount.retry.test.tsx`). `cleanupAllStores()` cannot be aborted once started, so a replacement session during it can still have local stores cleared. Cleanup and unique generation remain open.
+
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
 Status: Boundedly source-corrected in
@@ -11183,6 +11131,8 @@ they do not establish provider behavior, database transactions or real browser
 ordering. No tests, lint, typechecks, builds, installs, app/service execution,
 push or deployment ran.
 
+Update 2026-11-10: `4d97ccfd06` makes shared-chat continuation read the active workspace once and send it on create, every bulk batch and the cleanup delete (`app/chat/from-share/[token]/ContinueSharedSession.tsx:80-190`, `fork-from-share.test.tsx:176`). Other Team lifetimes and runtime acceptance remain open.
+
 ## WEB-WORKSPACE-LEAVE-RECEIPT-01
 
 Severity: Medium. Status: Bounded receipt/UI correction `2d9f982e0282698d5be95f986594b0d75a54790c`,
@@ -11220,6 +11170,8 @@ to be skipped. Empty warnings therefore do not prove every session ended.
 Deprovision retries/resumption, durable receipt recovery and server completion
 semantics remain open. All review remained source-only; no tests, checks, builds,
 installations, live/database actions, push or deployment ran.
+
+Update 2026-11-10: `94bd5b25cc` makes member removal parse its receipt and show a persistent warning for cleanup warnings or an unreadable receipt (`features/settings/hooks/use-settings-queries.ts:1247-1289`, `useSettingsQueries.member-removal-receipt.test.tsx`). Durable recovery and full credential cleanup remain open.
 
 ## WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01
 
@@ -11387,6 +11339,8 @@ No tests, lint, typechecks, builds, installations, live/database actions, push o
 deployment ran. Claim only refusal to proceed after lock-establishment failure
 and removal of erasure's own premature flag deletion, not universal isolation.
 
+Update 2026-11-10: `4d97ccfd06` makes `openSharedCloudCodeSession` call `assertTenantNotLockedDown` before any transcript is read, owner included (`lib/services/cloud-code-session-sharing.ts:137`, `cloud-code-session-sharing.lockdown.test.ts`). Broader isolation and runtime acceptance remain open.
+
 ## WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01
 
 Severity: High. Status: Retry-pointer loss source-corrected in
@@ -11510,6 +11464,8 @@ mobile cleanup, existing mobile-only failure, full success and audit outcomes.
 External boundaries are mocked; no actual sessions, provider calls or runtime
 acceptance were exercised. No tests, lint, typechecks, builds, installations,
 live/database actions, push or deployment ran.
+
+Update 2026-11-10: `471ff596a4` clears the matured recovery hold and records the session verification in one transaction, announcing only after commit (`lib/server/account-security/service.ts:822`, `recovery-completion.test.ts`).
 
 ## WEB-CREDENTIAL-MUTATION-RETRY-01
 
@@ -11868,6 +11824,8 @@ This reports omissions; it does not retrieve older invoices/lines, recover
 historical or unlinked customers, verify other providers, or solve archive
 snapshot/erasure custody. No tests, lint, typechecks, builds, installations,
 live database/provider actions, push or deployment ran.
+
+Update 2026-11-10: `6757c6732a` makes the signed-in invoices route return `available` and `hasMore` (`app/api/billing/invoices/route.ts:28`) and the list show a truncation note or an unavailable state instead of "No invoices yet" (`app/billing/invoices/InvoiceList.tsx:98-119`, `InvoicesPage.test.tsx`). Retrieval of older history and live-provider acceptance remain open.
 
 ## WEB-STORE-BILLING-ERASURE-CUSTODY-01
 
@@ -12925,6 +12883,8 @@ regression, not the correction proposed here. This plan concerns persisted
 allowance resurrection, not instantaneous cancellation of already authorized
 in-memory execution. No implementation or runtime acceptance is represented.
 
+Update 2026-11-10: `f3ce0fd085` binds each remembered approval to a per-connector permission generation (`connector-tool-permissions.ts:129-178`, `approve/route.ts:391-416`) and refuses a stale card with 409. It requires migration 0411, an unapplied draft, applied before deploy; without it permission changes and disconnect fail. Checkpoints written before the change can approve once only. Not runtime accepted.
+
 ## CONNECTOR-DISCONNECT-GRANT-CLEANUP-01
 
 Severity: Medium. Status: Open source finding, independently confirmed on
@@ -12960,6 +12920,8 @@ Preserve directory `target.serverId` for permissions versus `target.connectorId`
 for OAuth. Include failure, partial-loop, retry and reconnect coverage, and the
 permission-generation contract above. No source patch was accepted for this gap.
 
+Update 2026-11-10: `4c7a0cb704` makes `clearConnectorToolPermissions` (`apps/web/lib/connectors/mcp-custom-connections.ts:403`) revoke conversation grants and delete standing rows in one transaction and return whether it succeeded; `apps/web/app/api/connectors/route.ts` reports a failed clear in its notice. The custom-connector DELETE (`app/api/connectors/custom/route.ts:194`) and plugin uninstall (`lib/connectors/plugin-connectors.ts:97`) still discard the result. The transaction also advances the permission generation of migration 0411, an unapplied draft; without it the clear fails and nothing is cleared. Fixtures not re-run here.
+
 ## SUPPORT-CONNECTOR-REVOCATION-LIFECYCLE-01
 
 Severity: High. Status: Open source finding, independently confirmed on
@@ -12991,6 +12953,8 @@ not silently added under that old contract. Keep custom exclusions and explicit
 user confirmation intact. Integrate with the permission-generation fence and
 exercise upstream failure, absent targets, mixed states, permission failure and
 retry before representing successful disconnect. No live service was contacted.
+
+Update 2026-11-10: `4c7a0cb704` makes support revoke run `disconnectConnectorOAuthGrant`, evict OAuth caches, uninstall the GitHub App at GitHub before forgetting it, and stop claiming permissions were cleared when clearing failed (`apps/web/lib/support/actions/executors/revoke-connector.ts:62-100`, `revoke-connector.test.ts`). Still missing against `app/api/connectors/route.ts`: the vendor-revocation outcome is not reported, MCP response caches are not purged, and the GitHub path skips its OAuth grant disconnect. The permission clear needs migration 0411, an unapplied draft.
 
 ## CONNECTOR-OAUTH-PARTIAL-CREDENTIAL-01
 
@@ -13215,6 +13179,8 @@ not real provider ownership, unique counts, token rollback, database or browser
 acceptance. Deferred cases settle their gates; no product tests, lint, typechecks,
 builds, installs, live services or migration actions were run.
 
+Update 2026-11-10: `212ede787b` records each emailed-undo cleanup step durably (`lib/server/account-security/undo.ts:57-166`, `undo.test.ts`, `undo-cleanup-store.test.ts`), so reopening the same link finishes only the unfinished steps and never repeats a settled one, until the link's original expiry. It writes columns added by migration 0407, an unapplied draft that must be applied before this code deploys. Cleanup after the link expires remains open.
+
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
 
 Severity: Medium. Bounded source correction `897e894683` independently reviewed
@@ -13404,7 +13370,7 @@ read retries, shared defaults, success invalidation or explicit subsequent user
 actions. A transient failure now surfaces immediately instead of being retried.
 The existing `ProjectsPanel` and `WebhooksPanel` use these hooks.
 
-`features/developers/__tests__/developer-mutation-retry.test.tsx` authors 24
+`features/developers/__tests__/DeveloperMutationRetry.test.tsx` authors 24
 unrun cases through the real mutation hooks and a real QueryClient with the old
 retry default enabled. For every operation, transport rejection and a successful
 HTTP response with failed JSON consumption must settle after one transport call;
@@ -13516,7 +13482,7 @@ introduced in `0073` and refined by `0272`; it is not an organization-wide total
 This read correction does not repair project-limit/archive cross-workspace
 coverage documented in `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01`.
 
-`developer-query-ownership.test.tsx` authors both-hook fixtures using real session
+`DeveloperQueryOwnership.test.tsx` authors both-hook fixtures using real session
 snapshots, admission, RequestAuthority and QueryClient, with controlled Clerk,
 network and unrelated mutation transport. Sources cover cache isolation across
 A/B/A and session replacement, deferred tokens/responses/success and error bodies,
@@ -13578,7 +13544,7 @@ server authorization are unchanged. Deployed RLS is unverified.
 
 The existing ownership fixture matrix now covers endpoints and deliveries with
 real session/admission/RequestAuthority/QueryClient paths and controlled Clerk/
-network boundaries. New `developer-webhook-read-ownership.test.tsx` sources cover
+network boundaries. New `DeveloperWebhookReadOwnership.test.tsx` sources cover
 disabled/blank IDs, enable/resource callback retirement, cached-error masking,
 shared in-flight disable and captured interval selection. Its transparent query
 wrapper records interval callbacks for direct evaluation: it does not establish
@@ -14313,6 +14279,8 @@ server cancellation. No new polling or automatic recap generation is intended.
 Authored success and adversarial lifetime fixtures remain unrun. Installed
 React/Next/SDK integration and live workspace/account transitions still require
 acceptance; no tests, lint, typechecks, builds, app execution, push or deploy ran.
+
+Update 2026-11-10: the mobile Reflect screen now aborts and fences refresh and Retry loads on supersede and unmount (`180dc2ec2b`, `apps/mobile/app/(app)/settings/reflect.tsx:73-131`, `ReflectScreen.test.tsx`). Runtime acceptance remains open.
 
 ## WEB-PASSKEY-APPLICATION-LIFETIME-01
 
@@ -16906,6 +16874,8 @@ publication inventory remain outside this correction. No product tests, lint,
 typechecks, builds, app execution, live provider/database/migration actions,
 push or deployment. Prior 0394/0395 remain UNAPPLIED.
 
+Update 2026-11-10: three further consumers are corrected. CLI `agi shares` keeps the server's `complete` flag and prints a bounded-inventory notice (`02f5bfe207`, `apps/cli/src/cloud/shares.rs:24-30,51,80`; Rust tests unrun). Mobile `fetchSharedLinks` returns `{ links, complete }` and the screen says nothing is shared only for a confirmed complete list (`02f5bfe207`, `apps/mobile/src/features/shared-links/service.ts:68-80`, `SharedLinks.test.tsx`). Live-artifact refresh-policy PATCH and DELETE require the binding's conversation to be live and in the selected workspace (`289d02803e`, `lib/services/artifact-runtime-service.ts:987-1030`). Other consumers and runtime acceptance remain open.
+
 ## WEB-PUBLICATION-QUOTA-ADMISSION-01
 
 Severity: Medium. Bounded canonical admission correction source-reviewed in
@@ -18028,6 +17998,8 @@ No database role, RLS, advisory permission/wait, isolation, snapshot, rollback,
 durability or deployed concurrency behavior has been exercised. No transaction
 retry, migration application, client change, live service, push or deployment.
 Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+Update 2026-11-10: `816db30469` makes the VS Code published-artifact list follow every page cursor and shows a retry row instead of marking every artifact unpublished (`apps/extension-vscode/src/features/artifacts/artifactsClient.ts:70-96`, `artifactsView.test.ts`). Reconciliation and live acceptance remain open.
 
 ## ELECTRON-RUN-AS-NODE-FUSE-ON-01
 

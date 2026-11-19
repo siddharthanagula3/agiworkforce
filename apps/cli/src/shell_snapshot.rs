@@ -145,6 +145,23 @@ pub(crate) fn applied_file() -> Option<PathBuf> {
     active().map(|snapshot| snapshot.file.clone())
 }
 
+/// An interactive shell started in a background process group of the
+/// controlling terminal is stopped by job control before it reads its startup
+/// files, so the capture shell gets a session of its own with no terminal.
+/// The session leader also leads a new process group, which the timeout kills.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn detach_from_terminal(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+
+    unsafe {
+        command.pre_exec(|| {
+            nix::unistd::setsid()?;
+            Ok(())
+        });
+    }
+}
+
 pub struct ShellSnapshot;
 
 impl ShellSnapshot {
@@ -164,15 +181,34 @@ impl ShellSnapshot {
                         *active = Some(Arc::new(snapshot));
                     }
                 }
-                Ok(None) => tracing::warn!(
-                    "your shell setup could not be captured; commands run without your aliases and functions"
+                Ok(None) => crate::output::print_warn(
+                    "Your shell setup could not be captured, so commands run without your aliases and functions.",
                 ),
-                Err(error) => tracing::warn!(
-                    %error,
-                    "your shell setup could not be captured; commands run without your aliases and functions"
-                ),
+                Err(error) => crate::output::print_warn(&format!(
+                    "Your shell setup could not be captured ({error}), so commands run without your aliases and functions."
+                )),
             }
         });
+    }
+
+    fn capture_command(
+        shell: &Path,
+        kind: ShellKind,
+        outputs: [&Path; 3],
+    ) -> std::process::Command {
+        let mut command = std::process::Command::new(shell);
+        command
+            .arg("-i")
+            .arg("-c")
+            .arg(kind.capture_script())
+            .arg(kind.name())
+            .args(outputs)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        #[cfg(unix)]
+        detach_from_terminal(&mut command);
+        command
     }
 
     fn capture_inner(
@@ -186,20 +222,8 @@ impl ShellSnapshot {
         let script = tempfile::NamedTempFile::new_in(&snapshot_dir)?;
         let names = tempfile::NamedTempFile::new_in(&snapshot_dir)?;
         let path = tempfile::NamedTempFile::new_in(&snapshot_dir)?;
-        let mut command = std::process::Command::new(&shell);
-        command
-            .arg("-i")
-            .arg("-c")
-            .arg(kind.capture_script())
-            .arg(kind.name())
-            .arg(script.path())
-            .arg(names.path())
-            .arg(path.path())
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null());
-        #[cfg(unix)]
-        std::os::unix::process::CommandExt::process_group(&mut command, 0);
+        let mut command =
+            Self::capture_command(&shell, kind, [script.path(), names.path(), path.path()]);
         let mut child = command.spawn()?;
         let deadline = std::time::Instant::now() + CAPTURE_TIMEOUT;
         while child.try_wait()?.is_none() {
@@ -500,6 +524,38 @@ mod tests {
             let redacted = ShellSnapshot::redact_env_value("ANY", value);
             assert!(!redacted.contains("pö"), "leaked userinfo from {value}");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_capture_shell_leads_its_own_session_and_process_group() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("tempdir");
+        let shell = dir.path().join("shell");
+        std::fs::write(&shell, "#!/bin/sh\nexec sleep 5\n").expect("shell");
+        std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+        let outputs = [dir.path(), dir.path(), dir.path()];
+        let mut command = ShellSnapshot::capture_command(&shell, ShellKind::Bash, outputs);
+        let mut attempts = 0;
+        let mut child = loop {
+            match command.spawn() {
+                Err(error) if error.raw_os_error() == Some(nix::libc::ETXTBSY) && attempts < 50 => {
+                    attempts += 1;
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                spawned => break spawned.expect("spawn"),
+            }
+        };
+        let pid = nix::unistd::Pid::from_raw(i32::try_from(child.id()).expect("pid"));
+        let session = nix::unistd::getsid(Some(pid));
+        let group = nix::unistd::getpgid(Some(pid));
+        let _ = nix::sys::signal::killpg(pid, nix::sys::signal::Signal::SIGKILL);
+        let _ = child.wait();
+
+        assert_eq!(session.expect("child session"), pid);
+        assert_eq!(group.expect("child process group"), pid);
+        assert_ne!(nix::unistd::getsid(None).expect("own session"), pid);
     }
 
     #[test]

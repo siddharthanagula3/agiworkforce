@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
 
@@ -144,6 +144,7 @@ import { useChatViewStore } from '../stores/chat/chatViewStore';
 import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
+import { ownerHandler } from '../test-utils/ownerProps';
 import {
   SYNTHETIC_RETIRED_VIDEO_MODEL_ID,
   requireLiveVideoModelId,
@@ -164,6 +165,11 @@ const RESEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel((model) => {
   return capabilities?.research === true && capabilities.search === true;
 }, 'research-and-search-capable Mobile Cloud model').id;
 
+const CODE_CAPABLE_MODEL_ID = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.codeExecution === true,
+  'code-execution-capable Mobile Cloud model',
+).id;
+
 function resetStores() {
   useChatStore.setState({
     conversations: [],
@@ -175,7 +181,7 @@ function resetStores() {
       webSearch: true,
       imageGen: true,
       health: false,
-      codeExecution: false,
+      codeExecution: true,
       research: false,
     },
   });
@@ -202,7 +208,6 @@ const defaultProps = {
   onFile: jest.fn(),
   onOpenCloudAccess: jest.fn(),
   onOpenStyleSelector: jest.fn(),
-  onOpenModelPicker: jest.fn(),
   onOpenProjectPicker: jest.fn(),
   onAttachFromLibrary: jest.fn(),
 };
@@ -234,7 +239,7 @@ describe('AddToChatSheet', () => {
     const view = renderSheet({ destinationKey: 'first', onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
     const row = await view.findByLabelText('Attach old.pdf from Library');
-    const stalePress = row.props.onPress;
+    const stalePress = ownerHandler(row, 'onPress');
     view.rerender(
       <AddToChatSheet
         {...defaultProps}
@@ -301,7 +306,10 @@ describe('AddToChatSheet', () => {
     const onAttachFromLibrary = jest.fn();
     const view = renderSheet({ onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
-    const stalePress = (await view.findByLabelText('Attach old.pdf from Library')).props.onPress;
+    const stalePress = ownerHandler(
+      await view.findByLabelText('Attach old.pdf from Library'),
+      'onPress',
+    );
     fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
     act(() => stalePress());
     expect(onAttachFromLibrary).not.toHaveBeenCalled();
@@ -520,14 +528,21 @@ describe('AddToChatSheet', () => {
         disabledConnectorIdsByConversation: {},
       });
 
-      const { getByLabelText, findByLabelText } = renderSheet();
+      const { getByLabelText, queryByLabelText, findByText } = renderSheet();
 
       fireEvent(getByLabelText('Web search on'), 'valueChange', false);
       expect(useChatViewStore.getState().features.webSearch).toBe(false);
-      fireEvent(await findByLabelText('Gmail on'), 'valueChange', false);
+
+      const connectors = getByLabelText('Connectors');
+      expect(await findByText('1 on')).toBeTruthy();
+      expect(queryByLabelText('Gmail on')).toBeNull();
+      fireEvent.press(connectors);
+      fireEvent(getByLabelText('Gmail on'), 'valueChange', false);
       expect(useChatViewStore.getState().disabledConnectorIdsByConversation).toEqual({
         'chat-42': ['gmail'],
       });
+      expect(within(getByLabelText('Connectors')).getByText('Off')).toBeTruthy();
+      expect(getByLabelText('Manage connectors')).toBeTruthy();
     });
 
     it('no longer offers AGI Work at a paid tier, the drawer owns it now', () => {
@@ -558,8 +573,8 @@ describe('AddToChatSheet', () => {
 
       expect(queryByText('Temporary chat')).toBeNull();
       expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image')).toBeNull();
-      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
       expect(queryByText('AGI Work')).toBeNull();
       expect(queryByText('Run code')).toBeNull();
       expect(queryByText('Computer use')).toBeNull();
@@ -573,7 +588,7 @@ describe('AddToChatSheet', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
       const { getByText } = renderSheet();
-      expect(getByText('Image')).toBeTruthy();
+      expect(getByText('Create image')).toBeTruthy();
     });
 
     it('hides Image below Pro so the option cannot promise a denied request', () => {
@@ -582,7 +597,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
     });
 
     it('hides Image when the server capability handshake denies it', () => {
@@ -591,7 +606,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
     });
 
     it('hides Video below Max 20x', () => {
@@ -600,20 +615,68 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
     });
 
-    it('never offers Run code in the + sheet, even fully entitled in Cloud', () => {
+    it('folds the file types under one Create file row, each with its file-type icon', () => {
+      const features = FEATURES as { codeExecution: boolean };
+      const previous = features.codeExecution;
+      features.codeExecution = true;
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
       useTierStore.setState({
         tier: 'max',
-        grantedCapabilities: ['canUseImages', 'canUseCloudExecution', 'canUseDeepResearch'],
+        grantedCapabilities: ['canUseImages', 'canUseCloudExecution'],
         codeExecutionAvailable: true,
       } as never);
 
-      const { queryByText } = renderSheet();
+      try {
+        const { getByLabelText, queryByLabelText } = renderSheet({ offersOutputFormat: true });
+        expect(queryByLabelText('Document')).toBeNull();
+        fireEvent.press(getByLabelText('Create file'));
+        for (const [label, icon] of [
+          ['Document', 'icon-FileText'],
+          ['Presentation', 'icon-MonitorPlay'],
+          ['Spreadsheet', 'icon-FileSpreadsheet'],
+        ] as const) {
+          expect(within(getByLabelText(label)).getByTestId(icon)).toBeTruthy();
+        }
 
+        fireEvent.press(getByLabelText('Spreadsheet'));
+        expect(within(getByLabelText('Create file')).getByText('Spreadsheet')).toBeTruthy();
+        fireEvent.press(getByLabelText('Spreadsheet, selected'));
+        expect(within(getByLabelText('Create file')).queryByText('Spreadsheet')).toBeNull();
+      } finally {
+        features.codeExecution = previous;
+      }
+    });
+
+    it('offers Run code per chat only while the Settings permission allows code execution', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: CODE_CAPABLE_MODEL_ID });
+      useTierStore.setState({
+        tier: 'max',
+        grantedCapabilities: ['canUseCloudExecution'],
+        codeExecutionAvailable: true,
+      } as never);
+      useChatViewStore.setState({ styleConversationId: 'chat-42', runCodeByConversation: {} });
+
+      const permitted = renderSheet();
+      expect(permitted.getByText('Run code')).toBeTruthy();
+      fireEvent(permitted.getByLabelText('Run code off'), 'valueChange', true);
+      expect(useChatViewStore.getState().runCodeByConversation).toEqual({ 'chat-42': true });
+      permitted.unmount();
+
+      useChatStore.setState({
+        features: {
+          webSearch: true,
+          imageGen: true,
+          health: false,
+          codeExecution: false,
+          research: false,
+        },
+      });
+      const { queryByText } = renderSheet();
       expect(queryByText('Run code')).toBeNull();
     });
 
@@ -628,7 +691,7 @@ describe('AddToChatSheet', () => {
 
       try {
         const { getByText } = renderSheet();
-        expect(getByText('Video')).toBeTruthy();
+        expect(getByText('Create video')).toBeTruthy();
       } finally {
         features.videoGen = false;
       }
@@ -646,8 +709,7 @@ describe('AddToChatSheet', () => {
 
       try {
         const { queryByText } = renderSheet();
-        expect(queryByText('Video')).toBeNull();
-        expect(queryByText('Generate video in this chat')).toBeNull();
+        expect(queryByText('Create video')).toBeNull();
       } finally {
         features.videoGen = false;
       }
@@ -669,7 +731,7 @@ describe('AddToChatSheet', () => {
 
       try {
         const { getByText } = renderSheet();
-        expect(getByText('Video')).toBeTruthy();
+        expect(getByText('Create video')).toBeTruthy();
       } finally {
         features.videoGen = false;
       }
@@ -684,8 +746,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Video')).toBeNull();
-      expect(queryByText('Generate video in this chat')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
     });
 
     it('hides the Video row when only the image capability is granted', () => {
@@ -694,7 +755,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
     });
 
     it('updates the selected video-model row immediately after the user picks another model', () => {
@@ -753,7 +814,7 @@ describe('AddToChatSheet', () => {
       const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
     });
 
     it('keeps Web search out of the + sheet when a Cloud generic backend is available', () => {
@@ -807,10 +868,16 @@ describe('AddToChatSheet', () => {
     it('marks the tapped handoff row busy while the sheet closes', () => {
       const { getByText, queryByTestId, getByTestId } = renderSheet();
 
-      expect(queryByTestId('config-link-pending-Model')).toBeNull();
+      expect(queryByTestId('config-link-pending-Choose style')).toBeNull();
       fireEvent.press(getByText('Project'));
       expect(getByTestId('config-link-pending-Project')).toBeTruthy();
-      expect(queryByTestId('config-link-pending-Model')).toBeNull();
+      expect(queryByTestId('config-link-pending-Choose style')).toBeNull();
+    });
+
+    it('leaves the model to the composer', () => {
+      const { queryByLabelText } = renderSheet();
+
+      expect(queryByLabelText('Model')).toBeNull();
     });
 
     it('renders the local-safe config links', () => {

@@ -1,4 +1,8 @@
 import { test, expect } from '@playwright/test';
+import { englishResources } from '@agiworkforce/i18n/en';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+
+const PRO_CTA = englishResources.pricing.proCta.replace('{{plan}}', BILLING_PLAN_PRICING.pro.label);
 
 test.describe('signup gates the purchase', () => {
   test('a paid CTA sends a signed-out visitor to sign up, and signing in from there still returns to pricing', async ({
@@ -7,7 +11,7 @@ test.describe('signup gates the purchase', () => {
     await page.goto('/pricing');
     await page.waitForLoadState('networkidle');
 
-    const getPro = page.getByRole('button', { name: 'Get Pro' });
+    const getPro = page.getByRole('button', { name: PRO_CTA });
     await expect(getPro).toBeEnabled();
 
     await getPro.click();

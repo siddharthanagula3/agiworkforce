@@ -5,6 +5,7 @@ const mockWriteAsStringAsync = jest.fn();
 const mockGetInfoAsync = jest.fn();
 const mockMakeDirectoryAsync = jest.fn();
 jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
   documentDirectory: 'file:///docs/',
   getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
   deleteAsync: jest.fn(),
@@ -47,6 +48,10 @@ import {
   saveGeneratedImageToPhotos,
   copyGeneratedImage,
 } from '@/services/fileCreation';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 class FakeFileReader {
   onload: (() => void) | null = null;
@@ -182,7 +187,39 @@ describe('downloadGeneratedFile', () => {
     );
   });
 
-  it('downloads each video preparation and places its player beside the new video', async () => {
+  function respondWithContentType(contentType: string) {
+    mockGuardedFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => contentType },
+      blob: async () => ({}),
+    });
+  }
+
+  function trackWrittenFiles(): Set<string> {
+    const files = new Set<string>(['file:///docs/exports/']);
+    const fileSystem = jest.requireMock('expo-file-system/legacy') as {
+      moveAsync: jest.Mock;
+    };
+    mockGetInfoAsync.mockImplementation(async (uri: string) => ({ exists: files.has(uri) }));
+    mockMakeDirectoryAsync.mockImplementation(async (uri: string) => {
+      files.add(uri);
+    });
+    mockWriteAsStringAsync.mockImplementation(async (uri: string) => {
+      files.add(uri);
+    });
+    fileSystem.moveAsync.mockImplementation(async ({ from, to }: { from: string; to: string }) => {
+      files.delete(from);
+      files.add(to);
+    });
+    return files;
+  }
+
+  it('keeps a video preview in the account cache and replays it without downloading again', async () => {
+    respondWithContentType('video/mp4');
+    trackWrittenFiles();
+    activateCloudAccount('user_a');
+
     const first = await prepareLocalVideoPlayer(
       'https://agiworkforce.com/api/files/video-1',
       '#000',
@@ -191,16 +228,124 @@ describe('downloadGeneratedFile', () => {
       'https://agiworkforce.com/api/files/video-1',
       '#fff',
     );
-    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
-    expect(first.videoUri).not.toBe(second.videoUri);
+
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(1);
+    expect(first.directoryUri).toBe('file:///cache/video-previews/user_a/video-1/');
+    expect(second.videoUri).toBe(first.videoUri);
     expect(first.videoUri).toBe(`${first.directoryUri}video-video-1.mp4`);
-    expect(second.videoUri).toBe(`${second.directoryUri}video-video-1.mp4`);
-    expect(first.playerUri).toBe(`${first.directoryUri}player.html`);
     expect(second.playerUri).toBe(`${second.directoryUri}player.html`);
-    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+    expect(mockWriteAsStringAsync).toHaveBeenLastCalledWith(
       second.playerUri,
-      expect.stringContaining('<video src="video-video-1.mp4"'),
+      expect.stringContaining('background:#fff'),
       { encoding: 'utf8' },
+    );
+  });
+
+  it('downloads again for another account instead of reusing its cached preview', async () => {
+    respondWithContentType('video/mp4');
+    trackWrittenFiles();
+    activateCloudAccount('user_a');
+    const first = await prepareLocalVideoPlayer(
+      'https://agiworkforce.com/api/files/video-1',
+      '#000',
+    );
+    activateCloudAccount('user_b');
+
+    const second = await prepareLocalVideoPlayer(
+      'https://agiworkforce.com/api/files/video-1',
+      '#000',
+    );
+
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    expect(second.directoryUri).toBe('file:///cache/video-previews/user_b/video-1/');
+    expect(second.videoUri).not.toBe(first.videoUri);
+  });
+
+  it('uses a one-off cache folder when no account owns the preview', async () => {
+    respondWithContentType('video/mp4');
+    trackWrittenFiles();
+    __resetCloudAccountSessionForTests();
+
+    const first = await prepareLocalVideoPlayer(
+      'https://agiworkforce.com/api/files/video-1',
+      '#000',
+    );
+    const second = await prepareLocalVideoPlayer(
+      'https://agiworkforce.com/api/files/video-1',
+      '#000',
+    );
+
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    expect(first.directoryUri).toMatch(/^file:\/\/\/cache\/video-previews\/transient\//);
+    expect(second.directoryUri).not.toBe(first.directoryUri);
+  });
+
+  it.each([
+    ['video/webm', 'webm'],
+    ['video/quicktime', 'mov'],
+  ])('keeps the %s container in the local video name', async (contentType, extension) => {
+    respondWithContentType(contentType);
+
+    const prepared = await prepareLocalVideoPlayer(
+      'https://agiworkforce.com/api/files/video-2',
+      '#000',
+    );
+
+    expect(prepared.videoUri).toBe(`${prepared.directoryUri}video-video-2.${extension}`);
+    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+      prepared.playerUri,
+      expect.stringContaining(`<video src="video-video-2.${extension}"`),
+      { encoding: 'utf8' },
+    );
+  });
+
+  it.each(['text/html', 'application/octet-stream'])(
+    'refuses to name %s bytes as a video',
+    async (contentType) => {
+      respondWithContentType(contentType);
+
+      await expect(
+        prepareLocalVideoPlayer('https://agiworkforce.com/api/files/video-3', '#000'),
+      ).rejects.toThrow(/video format is not supported/);
+      expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['mp4', 'public.mpeg-4', 'video/mp4'],
+    ['mov', 'com.apple.quicktime-movie', 'video/quicktime'],
+    ['webm', 'public.movie', 'video/webm'],
+  ])('shares a .%s file with video metadata', async (extension, uti, mimeType) => {
+    await shareFile(`file:///docs/exports/export-1/video.${extension}`);
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      `file:///docs/exports/export-1/video.${extension}`,
+      { UTI: uti, mimeType },
+    );
+  });
+
+  it.each([
+    ['gif', 'com.compuserve.gif', 'image/gif'],
+    ['webp', 'org.webmproject.webp', 'image/webp'],
+    ['mp3', 'public.mp3', 'audio/mpeg'],
+    ['wav', 'com.microsoft.waveform-audio', 'audio/wav'],
+    ['m4a', 'public.mpeg-4-audio', 'audio/mp4'],
+    ['txt', 'public.plain-text', 'text/plain'],
+  ])('shares a .%s file with its own type', async (extension, uti, mimeType) => {
+    await shareFile(`file:///docs/exports/export-1/file.${extension}`);
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      `file:///docs/exports/export-1/file.${extension}`,
+      { UTI: uti, mimeType },
+    );
+  });
+
+  it('does not claim a type it does not know when sharing', async () => {
+    await shareFile('file:///docs/exports/export-1/notes.unknownext');
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      'file:///docs/exports/export-1/notes.unknownext',
+      {},
     );
   });
 

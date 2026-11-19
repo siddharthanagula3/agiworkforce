@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendCustomerTicketEmail } from '@/lib/support/handoff/escalation-email';
 
-import { listTickets, openTicket, readTicket, replyToTicket } from './service';
+import { findLatestTicket, openTicket, readTicket, replyToTicket } from './service';
 import {
   APPEAL_FOLLOW_PATH,
   APPEAL_TICKET_SUBJECT,
@@ -14,9 +14,7 @@ import {
 } from '@agiworkforce/cloud-contracts/support';
 
 export async function readLatestAppeal(userId: string): Promise<SupportTicketThread | null> {
-  const appeal = (await listTickets(userId)).find(
-    (ticket) => ticket.subject === APPEAL_TICKET_SUBJECT,
-  );
+  const appeal = await findLatestTicket(userId, APPEAL_TICKET_SUBJECT);
   return appeal ? readTicket(appeal.id, userId) : null;
 }
 

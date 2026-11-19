@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-17
+Last updated: 2026-11-11
 
 ## Why this exists
 
@@ -30,7 +30,7 @@ case the eight-hour ceiling and the one-hour default were sized for.
 1. The operator who needs the access calls
    `POST /api/admin/support-access` with `action: "request"`, the workspace id,
    the scopes (`conversations`, `files`, `projects`, `connectors`, `billing`,
-   `audit_logs`, `workspace_settings`), the ticket, and a reason of at least 20
+   `audit_logs`, `workspace_settings`, `background_jobs`), the ticket, and a reason of at least 20
    characters. The workspace's owners and admins can read that reason, so write
    it for them.
 2. A **different** platform operator calls the same route with
@@ -40,7 +40,11 @@ case the eight-hour ceiling and the one-hour default were sized for.
    property holds even for a write made directly against the database.
 3. The grant expires on its own. `ttlMs` may shorten the window; nothing can
    lengthen it past eight hours, because `support_access_grants_is_time_boxed`
-   is a constraint rather than a code path.
+   is a constraint rather than a code path. Access ends at `expires_at` whether
+   or not anything has run; the daily `/api/cron/expire-support-access-grants`
+   sweep then marks the grant `expired` and appends its `expired` trail entry,
+   keeping the approval. It needs migration 0403 applied first, and answers 500
+   (with the counts) when a grant could not be closed.
 4. `action: "revoke"` ends a grant early, and `action: "deny"` closes a request
    that should not have been made. Both are recorded.
 

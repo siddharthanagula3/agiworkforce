@@ -17,6 +17,7 @@ import {
 } from './flag-definition';
 import {
   archiveFlagDefinition,
+  archiveStaleFlagDefinition,
   deleteFlagOverride,
   ensureFlagDefinition,
   getFlagDefinition,
@@ -258,9 +259,15 @@ export async function cleanUpStaleFlags(
 ): Promise<{ archived: StaleFlag[]; retained: StaleFlag[] }> {
   const stale = findStaleFlags(definitions, nowMs);
   const archivable = archivableStaleFlags(stale);
+  const versions = new Map(definitions.map((definition) => [definition.key, definition.version]));
   const archived: StaleFlag[] = [];
   for (const flag of archivable) {
-    const definition = await archiveFlagDefinition(flag.key);
+    const expectedVersion = versions.get(flag.key);
+    if (expectedVersion === undefined) continue;
+    const definition = await archiveStaleFlagDefinition(flag.key, {
+      expectedVersion,
+      keepRestrictedSubjects: flag.reason === 'fully_rolled_out',
+    });
     if (!definition) continue;
     await auditFlagChange(actor, definition, `archived_stale:${flag.reason}`, []);
     archived.push(flag);
@@ -323,7 +330,9 @@ export async function setFlagOverride(
   if (!definition.variants.includes(input.variant)) {
     throw createError.badRequest(`Flag ${key} declares no variant ${input.variant}`);
   }
-  await upsertFlagOverride(key, input);
+  if ((await upsertFlagOverride(key, input)) === false) {
+    throw createError.notFound('No active flag by that name');
+  }
   await auditOverride(actor, key, 'set', input.subject, input.subjectId, input.variant);
 }
 

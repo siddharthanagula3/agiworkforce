@@ -96,6 +96,31 @@ describe('GET /api/settings/audit-logs?limit=100&offset=0', () => {
     expect(serialized).not.toContain('203.0.113.4');
   });
 
+  it('selects and pages only rows the presenter can show, whichever category is filtered', async () => {
+    await GET(
+      new NextRequest(
+        'http://localhost/api/settings/audit-logs?limit=20&offset=0&action=tool_approval_decided',
+      ),
+    );
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/sal\.event_type = any\(\$4::text\[\]\)/);
+    expect(sql).toMatch(/split_part\(sal\.endpoint, '\?', 1\) = any\(\$5::text\[\]\)/);
+    expect(sql).toMatch(/split_part\(sal\.endpoint, '\?', 1\) like any\(\$6::text\[\]\)/);
+    expect(sql).toMatch(/and sal\.event_type = \$7/);
+    expect(params.slice(0, 3)).toEqual([SCOPED_USER, 21, 0]);
+    expect(params[3]).toContain('login');
+    expect(params[3]).not.toContain('tool_approval_decided');
+    expect(params[6]).toBe('tool_approval_decided');
+  });
+
+  it('builds the endpoint prefix patterns from the presenter prefix list', async () => {
+    await GET(new NextRequest('http://localhost/api/settings/audit-logs?limit=20&offset=0'));
+
+    const [, params] = mocks.query.mock.calls[0] as [string, string[][]];
+    expect(params[5]).toContain('/api/connectors/%');
+  });
+
   it('keeps pagination available when the presenter drops an internal row', async () => {
     mocks.query.mockResolvedValue([
       {

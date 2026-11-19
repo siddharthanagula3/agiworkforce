@@ -63,6 +63,30 @@ afterEach(() => {
 });
 
 describe('MapSearchCard', () => {
+  it('says which stops were not located instead of renumbering silently', async () => {
+    render(
+      <MapSearchCard
+        ctx={ctx}
+        body={{
+          ...ROUTE_BODY,
+          query: 'Dallas to Albuquerque to Las Vegas',
+          unresolvedStops: ['Albuquerque'],
+        }}
+      />,
+    );
+
+    expect((await screen.findByRole('status')).textContent).toBe(
+      '2 of 3 stops located. Not found: Albuquerque.',
+    );
+  });
+
+  it('shows no partial-result notice when every stop was located', async () => {
+    render(<MapSearchCard ctx={ctx} body={ROUTE_BODY} />);
+
+    await screen.findByTestId('places-map-canvas');
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('draws one shared map with a numbered pin per resolved place', async () => {
     render(<MapSearchCard ctx={ctx} body={ROUTE_BODY} />);
 

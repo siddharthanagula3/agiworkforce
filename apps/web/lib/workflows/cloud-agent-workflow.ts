@@ -84,7 +84,7 @@ export async function cloudAgentWorkflow(rawInput: CloudAgentWorkflowInput): Pro
         continue;
       }
       if (input.processed.chatRequest.work_mode === 'agiwork') {
-        await settleWorkPlanForRun(input, 'completed');
+        await settleWorkPlanForRun(input, result.outcome);
       }
       await closeCloudAgentWorkflowStream(input.runId);
       return;

@@ -90,7 +90,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
-import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
+import type { InteractiveCard, ReasoningReplayBlock } from '@agiworkforce/types';
 import {
   getModelMetadataById,
   getRegistryRoute,
@@ -99,11 +99,13 @@ import {
   isBrowserCommand,
   isImageChatToolName,
   isPhoneWriteStep,
+  isReplayableReasoningBlock,
   resolveMaxOutputTokens,
   skillLoadActivitySummary,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { agentAllowsSkill } from '@/lib/agents/agent-turn-config';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
@@ -184,6 +186,7 @@ import {
   TOOL_RESULT_READER_TOOL_NAME,
   keepTrimmedToolResult,
   createToolResultReference,
+  earlierToolResultsNotice,
   listConversationToolResults,
   readStoredToolResult,
   referenceOversizedToolResult,
@@ -278,6 +281,7 @@ import {
   withdrawnToolMessage,
 } from './tool-turn-governor';
 import { prohibitedToolResultMessage, turnProhibitsTool } from './turn-tool-prohibition';
+import { turnWithholdsTool, withheldToolResultMessage } from './turn-tool-offer';
 import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 import { resolveNativeSearchMaxUses } from './request-processor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
@@ -351,6 +355,7 @@ import {
   collectManagedPromptMaterials,
   extractTextContent,
   managedToolInventoryProviderView,
+  placeTurnSystemNotices,
   type ProcessedRequest,
 } from './request-processor';
 import {
@@ -407,6 +412,7 @@ import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
   findManagedSkillWithFiles,
+  type SkillInstallOverrides,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import {
@@ -450,6 +456,7 @@ import { isForcedToolChoiceFor } from '@/lib/required-tool-call';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
+import { executeAnswerUiTool, isAnswerUiTool } from '@/lib/services/answer-ui-tool-service';
 import {
   executeProductComparisonTool,
   isProductComparisonTool,
@@ -484,6 +491,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import {
   CHAT_TOOL_LOOP_BUDGET_MS,
+  FUNCTION_TEARDOWN_RESERVE_MS,
   PROVIDER_STREAM_DEADLINE_MS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
@@ -587,6 +595,7 @@ export interface ToolLoopApprovalCheckpoint {
     qualifiedName: string;
     args: Record<string, unknown>;
     approvalScopes: ToolApprovalScope[];
+    permissionGeneration?: string;
   }>;
 }
 
@@ -707,7 +716,7 @@ export interface ToolLoopProviderStepResult {
   textContent: string;
   publicTextTail: string;
   generatedFileRefs: GeneratedFileRef[];
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
   canonicalText: string;
   usage: ObservedProviderUsage;
   providerTrace?: ProviderStreamShape;
@@ -850,7 +859,7 @@ export interface ToolLoopFailoverPlan {
 
 export interface ToolLoopPolicy {
   maxSteps: number;
-  maxDurationMs: number | undefined;
+  maxDurationMs: number;
 }
 
 export function resolveToolLoopPolicy(
@@ -901,6 +910,7 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
     isItineraryTool(toolName) ||
     isProductComparisonTool(toolName) ||
     isClarifyTool(toolName) ||
+    isAnswerUiTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
     : 'unsafe';
@@ -968,6 +978,7 @@ function canonicalToolCategory(
   if (isItineraryTool(toolName)) return 'other';
   if (isProductComparisonTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
+  if (isAnswerUiTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
   if (isScheduleTool(toolName)) return 'other';
@@ -2192,10 +2203,10 @@ async function withSkillSandboxNote(
   return { content: note ? `${result.content}\n${note}` : result.content, isError: result.isError };
 }
 
-function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, boolean>> {
+function readSkillInstallOverrides(userId: string): Promise<SkillInstallOverrides> {
   return getSkillInstallOverrides(getNeonDb(), userId).catch((error: unknown) => {
-    logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
-    return EMPTY_SKILL_INSTALL_OVERRIDES;
+    logger.warn({ error, userId }, 'Skill install overrides read failed; withholding skills');
+    return null;
   });
 }
 
@@ -2304,7 +2315,8 @@ async function runMcpTool(
     allowInputRequired?: boolean;
     inputResponses?: Record<string, unknown>;
     requestState?: string;
-    loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
+    loadSkillInstallOverrides?: () => Promise<SkillInstallOverrides>;
+    allowSkill?: (skillName: string) => boolean;
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
@@ -2329,12 +2341,17 @@ async function runMcpTool(
     const enabledPluginIds = userId
       ? await listPermittedPluginIds(callerScopedDb(executionContext, userId), userId)
       : null;
+    const allowSkill = executionContext?.allowSkill;
     const result = enabledPluginIds
       ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
           availableTools,
           installOverrides: await executionContext?.loadSkillInstallOverrides?.(),
+          ...(allowSkill ? { allowSkill } : {}),
         })
-      : await executeManagedSkillTool(toolCall.args, { availableTools });
+      : await executeManagedSkillTool(toolCall.args, {
+          availableTools,
+          ...(allowSkill ? { allowSkill } : {}),
+        });
     if (result.code === 'skill_loaded' && requestedSkillName) {
       return withSkillSandboxNote(
         result,
@@ -2343,7 +2360,12 @@ async function runMcpTool(
         queueSandboxFiles,
       );
     }
-    if (result.code === 'skill_not_found' && userId && requestedSkillName) {
+    if (
+      result.code === 'skill_not_found' &&
+      userId &&
+      requestedSkillName &&
+      (allowSkill?.(requestedSkillName) ?? true)
+    ) {
       const pluginsAllowed = await workspaceAllowsPlugins(
         callerScopedDb(executionContext, userId),
         userId,
@@ -2614,6 +2636,16 @@ async function runMcpTool(
         ? { userMessage: executionContext.latestUserMessage }
         : {}),
     });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
+  }
+
+  if (isAnswerUiTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeAnswerUiTool(toolCall.args, { toolCallId: toolCall.id });
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
       : { content: outcome.content, isError: true };
@@ -3043,7 +3075,8 @@ export function isToolOffered(
     isPlacesSearchTool(qualifiedName) ||
     isItineraryTool(qualifiedName) ||
     isProductComparisonTool(qualifiedName) ||
-    isClarifyTool(qualifiedName)
+    isClarifyTool(qualifiedName) ||
+    isAnswerUiTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
   }
@@ -3533,7 +3566,10 @@ export async function executeOfferedToolCall(
     ? AbortSignal.any([input.signal, callAbort.signal])
     : callAbort.signal;
   const sessionScope = conversationId
-    ? managedCloudE2BSessionScope(userId, conversationId)
+    ? {
+        ...managedCloudE2BSessionScope(userId, conversationId),
+        releaseByMs: Date.now() + TOOL_CALL_DEADLINE_MS + FUNCTION_TEARDOWN_RESERVE_MS,
+      }
     : undefined;
   const sandbox: { executor: E2BExecutor | null; baseline: SandboxSnapshot | null } = {
     executor: null,
@@ -3674,10 +3710,15 @@ export async function* runToolLoop(
     options.unattendedEscalationPauses === true &&
     options.onApprovalCheckpoint !== undefined;
   const skillInstallOverridesUserId = options.userId;
-  let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
-  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> => {
+  let skillInstallOverridesPromise: Promise<SkillInstallOverrides> | undefined;
+  const loadSkillInstallOverrides = (): Promise<SkillInstallOverrides> => {
     if (!skillInstallOverridesUserId) return Promise.resolve(EMPTY_SKILL_INSTALL_OVERRIDES);
-    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId);
+    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId).then(
+      (overrides) => {
+        if (overrides === null) skillInstallOverridesPromise = undefined;
+        return overrides;
+      },
+    );
     return skillInstallOverridesPromise;
   };
   let sensitiveDataRead = false;
@@ -3736,6 +3777,7 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const turnToolProhibition = processed.turnToolProhibition;
+  const turnWithheldTools = new Set(processed.turnWithheldTools ?? []);
   const mcpTools = turnToolProhibition?.allTools ? [] : (options.mcpTools ?? []);
   const connectorPermissions = processed.toolLockdown
     ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
@@ -3781,7 +3823,7 @@ export async function* runToolLoop(
     return [
       ...loaded,
       ...(directory ? [directory] : []),
-      ...(storedResults ? [toolResultReaderToolDef(earlierStoredResults)] : []),
+      ...(storedResults ? [toolResultReaderToolDef()] : []),
     ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
@@ -3878,6 +3920,17 @@ export async function* runToolLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
+  const storedResultsNotice = earlierToolResultsNotice(earlierStoredResults);
+  if (storedResultsNotice) {
+    placeTurnSystemNotices(messages, [storedResultsNotice]);
+    if (llmRequest.turnContext) {
+      llmRequest.turnContext = {
+        ...llmRequest.turnContext,
+        afterMessages:
+          llmRequest.turnContext.afterMessages + messages.length - llmRequest.messages.length,
+      };
+    }
+  }
 
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
@@ -3956,6 +4009,26 @@ export async function* runToolLoop(
       `Tool "${qualifiedName}" was refused: untrusted external content is in this conversation and ` +
       'this run is unattended, so it cannot ask a human to approve an action that could send data ' +
       'off the system. Do not retry it; report this to the user instead of continuing.'
+    );
+  }
+
+  function isForcedToolChoice(choice: unknown): boolean {
+    return choice === 'required' || (typeof choice === 'object' && choice !== null);
+  }
+
+  function notOfferedToolResultMessage(qualifiedName: string): string {
+    return (
+      `Tool "${qualifiedName}" is not available on this turn and was not run. ` +
+      'Use only the tools offered now.'
+    );
+  }
+
+  function toolOfferedThisTurn(qualifiedName: string): boolean {
+    return (
+      qualifiedName === TOOL_DIRECTORY_TOOL_NAME ||
+      qualifiedName === TOOL_RESULT_READER_TOOL_NAME ||
+      availableTools.has(qualifiedName) ||
+      isToolOffered(qualifiedName, mcpTools, availableTools)
     );
   }
 
@@ -4532,6 +4605,7 @@ export async function* runToolLoop(
     conversationId && options.userId
       ? {
           ...managedCloudE2BSessionScope(options.userId, conversationId),
+          releaseByMs: Date.now() + maxDurationMs + FUNCTION_TEARDOWN_RESERVE_MS,
           ...(processed.freeTrial && freeTrialSpend
             ? { freeTurnHold: { reservation: processed.freeTrial, spend: freeTrialSpend } }
             : {}),
@@ -5116,6 +5190,12 @@ export async function* runToolLoop(
           unavailable: true,
         });
       }
+      if (turnWithholdsTool(turnWithheldTools, tc.qualifiedName)) {
+        return Promise.resolve({
+          content: withheldToolResultMessage(tc.qualifiedName),
+          isError: true,
+        });
+      }
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
       const budget = toolGovernor.countCall();
       if (!budget.withinCap) {
@@ -5125,7 +5205,10 @@ export async function* runToolLoop(
           isError: false,
         });
       }
-      if (toolGovernor.isWithdrawn(tc.qualifiedName)) {
+      if (
+        toolGovernor.isWithdrawn(tc.qualifiedName) ||
+        (mapSearchBatchCompleted && isMapSearchTool(tc.qualifiedName))
+      ) {
         return Promise.resolve({
           content: withdrawnToolMessage(tc.qualifiedName),
           isError: false,
@@ -5262,6 +5345,8 @@ export async function* runToolLoop(
               sourcePositionFor,
               isRetrievedSource,
               loadSkillInstallOverrides,
+              allowSkill: (skillName) =>
+                agentAllowsSkill(processed.agentTurn?.config ?? null, skillName),
               queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }
@@ -6326,7 +6411,7 @@ export async function* runToolLoop(
       if (options.takeSteerMessages) {
         yield* applySteerMessages(await options.takeSteerMessages());
       }
-      if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
+      if (now() - startedAt >= maxDurationMs) {
         logger.warn(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
           '[tool-loop] invocation time budget reached without terminal stop',
@@ -6384,12 +6469,12 @@ export async function* runToolLoop(
       });
       const turnTools =
         stepMcpTools.length > 0 ? [...(requestTools ?? []), ...stepMcpTools] : requestTools;
-      const offeredTools = mapSearchBatchCompleted
-        ? turnTools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
-        : turnTools;
-      const stepTools = toolGovernor.capReached()
-        ? undefined
-        : toolGovernor.offered(offeredTools, offeredToolName);
+      // The tool list is part of the cached prompt prefix, so it stays the same
+      // from step to step and a closed tool is refused when it is called. A
+      // provider-run tool is the exception: nothing here sees its call to refuse.
+      const stepTools = turnTools?.filter(
+        (tool) => !nativeSearchToolName(tool) || !toolGovernor.isWithdrawn(offeredToolName(tool)),
+      );
       if ((stepTools?.length ?? 0) > 0) toolCapabilityEvidence.toolsOffered = true;
       const stepRequest = {
         ...llmRequest,
@@ -6408,8 +6493,15 @@ export async function* runToolLoop(
         isForcedSkillToolChoice(llmRequest.tool_choice)
           ? { tool_choice: 'auto' as const }
           : {}),
+        // A forced choice would make the model call a tool the governor has
+        // closed, so once one is closed the step may answer instead.
+        ...(step > 1 &&
+        processed.chatRequest?.tool_choice === undefined &&
+        isForcedToolChoice(llmRequest.tool_choice) &&
+        toolGovernor.anyClosed()
+          ? { tool_choice: 'auto' as const }
+          : {}),
         // A tool choice with no tools on offer is a request providers refuse.
-        // The governor can empty the set mid-turn, so the choice goes with it.
         ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
       if (processed.freeTrial?.promotion) {
@@ -7002,7 +7094,7 @@ export async function* runToolLoop(
             ? await options.takeSteerMessages()
             : [];
         if (lateSteers.length > 0) {
-          const answerThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+          const answerThinking = providerStep.thinkingBlocks.filter(isReplayableReasoningBlock);
           const answerMessage: (typeof messages)[number] = {
             role: 'assistant',
             content: answerThinking.length > 0 ? providerStep.canonicalText : textContent,
@@ -7021,7 +7113,7 @@ export async function* runToolLoop(
         type: 'function' as const,
         function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
       }));
-      const signedThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+      const signedThinking = providerStep.thinkingBlocks.filter(isReplayableReasoningBlock);
       const assistantMessage: (typeof messages)[number] = {
         role: 'assistant',
         content: signedThinking.length > 0 ? providerStep.canonicalText : textContent,
@@ -7035,11 +7127,21 @@ export async function* runToolLoop(
       const prohibitedCalls = pendingToolCalls.filter(
         (tc) =>
           (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
-          turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
+          (turnProhibitsTool(turnToolProhibition, tc.qualifiedName) ||
+            turnWithholdsTool(turnWithheldTools, tc.qualifiedName)),
+      );
+      // A call to a tool this turn never offered has nothing to approve: the
+      // model named a tool it saw earlier or invented one. Asking would put a
+      // card in front of the user for a call that can only fail.
+      const unofferedCalls = pendingToolCalls.filter(
+        (tc) =>
+          (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
+          !prohibitedCalls.includes(tc) &&
+          !toolOfferedThisTurn(tc.qualifiedName),
       );
       const gatedCalls = pendingToolCalls
         .filter((tc) => !callerContinuation || !callerOwnedTools.has(tc.qualifiedName))
-        .filter((tc) => !prohibitedCalls.includes(tc))
+        .filter((tc) => !prohibitedCalls.includes(tc) && !unofferedCalls.includes(tc))
         .map((tc) => ({
           tc,
           gate: gateForToolCall(tc, pendingToolCalls),
@@ -7067,29 +7169,44 @@ export async function* runToolLoop(
           : allowedCalls),
       ];
 
-      const refusedCalls = [...prohibitedCalls.map((tc) => ({ tc, gate: null })), ...blockedCalls];
-      for (const { tc, gate } of refusedCalls) {
+      const refusedCalls = [
+        ...prohibitedCalls.map((tc) => ({ tc, gate: null, offered: true })),
+        ...unofferedCalls.map((tc) => ({ tc, gate: null, offered: false })),
+        ...blockedCalls.map((entry) => ({ ...entry, offered: true })),
+      ];
+      for (const { tc, gate, offered } of refusedCalls) {
         const escalationDenied = gate?.reason === 'lethal_trifecta';
+        const withheld = gate === null && turnWithholdsTool(turnWithheldTools, tc.qualifiedName);
         logger.warn(
           {
             tool: tc.qualifiedName,
             requestId: processed.requestId,
-            reason: gate?.reason ?? 'turn_prohibition',
+            reason:
+              gate?.reason ??
+              (!offered ? 'not_offered' : withheld ? 'turn_withheld' : 'turn_prohibition'),
           },
-          gate === null
-            ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
-            : escalationDenied
-              ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
-              : '[tool-loop] tool call blocked by the user permission store',
+          !offered
+            ? '[tool-loop] tool call refused: the tool was not offered on this turn'
+            : withheld
+              ? '[tool-loop] tool call refused: the request does not call for this tool'
+              : gate === null
+                ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
+                : escalationDenied
+                  ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
+                  : '[tool-loop] tool call blocked by the user permission store',
         );
         const content = await applyToolResultSecretPolicy(
           options.userId,
           tc.qualifiedName,
-          gate === null
-            ? prohibitedToolResultMessage(tc.qualifiedName)
-            : escalationDenied
-              ? refusedToolResultMessage(tc.qualifiedName)
-              : blockedToolResultMessage(tc.qualifiedName),
+          !offered
+            ? notOfferedToolResultMessage(tc.qualifiedName)
+            : withheld
+              ? withheldToolResultMessage(tc.qualifiedName)
+              : gate === null
+                ? prohibitedToolResultMessage(tc.qualifiedName)
+                : escalationDenied
+                  ? refusedToolResultMessage(tc.qualifiedName)
+                  : blockedToolResultMessage(tc.qualifiedName),
         );
         await auditToolCall(tc.qualifiedName, 'blocked');
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
@@ -7405,11 +7522,20 @@ export async function* runToolLoop(
           completedSteps: step,
           events: approvalEvents,
           messages: messages.map((message) => ({ ...message })),
-          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => ({
-            ...call,
-            args: { ...call.args },
-            approvalScopes: toolApprovalReview(call.qualifiedName, gate).approval_scopes,
-          })),
+          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => {
+            const approvalScopes = toolApprovalReview(call.qualifiedName, gate).approval_scopes;
+            const connectorId = parseQualifiedToolName(call.qualifiedName)?.serverId;
+            const permissionGeneration =
+              approvalScopes.length > 1 && connectorId
+                ? connectorPermissions.permissionGenerationFor?.(connectorId)
+                : undefined;
+            return {
+              ...call,
+              args: { ...call.args },
+              approvalScopes,
+              ...(permissionGeneration !== undefined ? { permissionGeneration } : {}),
+            };
+          }),
         });
 
         for (const chunk of approvalChunks) yield chunk;

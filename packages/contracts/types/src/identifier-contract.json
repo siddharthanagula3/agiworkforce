@@ -87,6 +87,10 @@
       "mintedBy": "cloud_agent_runs.id, one budget row per run"
     },
     {
+      "table": "device_refresh_token_families",
+      "mintedBy": "device_refresh_tokens.family_id, minted by crypto.randomUUID() in apps/web/app/api/auth/device/token/route.ts when a device is first signed in; the family row copies it from the token rows"
+    },
+    {
       "table": "organization_admin_policies",
       "mintedBy": "organizations.id, one policy row per workspace"
     },

@@ -200,6 +200,48 @@ describe('verified mobile IAP ledger', () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
+  it('posts the store commission again on a replay, so a posting lost earlier is repaired', async () => {
+    const h = harness({ existingUser: 'user-1' });
+    await recordVerifiedMobileIapPurchase({
+      db: h.db,
+      userId: 'user-1',
+      purchaseToken: 'fixture-token',
+      verified: verified(),
+    });
+    expect(recordCogsAdjustment).toHaveBeenCalledTimes(1);
+    expect(recordCogsAdjustment).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceRef: 'mobile_iap:ios:transaction-1' }),
+      h.db,
+    );
+  });
+
+  it('posts the store commission inside the grant transaction and fails the grant when it cannot', async () => {
+    vi.mocked(recordCogsAdjustment).mockRejectedValueOnce(new Error('cogs unavailable'));
+    const h = harness();
+    await expect(
+      recordVerifiedMobileIapPurchase({
+        db: h.db,
+        userId: 'user-1',
+        purchaseToken: 'fixture-token',
+        verified: verified(),
+      }),
+    ).rejects.toThrow('cogs unavailable');
+    expect(h.db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not post a store commission for a receipt owned by another account', async () => {
+    const h = harness({ existingUser: 'user-2' });
+    await expect(
+      recordVerifiedMobileIapPurchase({
+        db: h.db,
+        userId: 'user-1',
+        purchaseToken: 'fixture-token',
+        verified: verified(),
+      }),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(recordCogsAdjustment).not.toHaveBeenCalled();
+  });
+
   it('rejects a receipt previously bound to a different AGI account', async () => {
     const h = harness({ existingUser: 'user-2' });
     await expect(
@@ -317,7 +359,10 @@ describe('verified mobile IAP ledger', () => {
     expect(planWrites(h)).toEqual([]);
     expect(allocate).not.toHaveBeenCalled();
     expect(executed(h, "set status = 'already_processed'")).toEqual([['receipt-1']]);
-    expect(recordCogsAdjustment).not.toHaveBeenCalled();
+    expect(recordCogsAdjustment).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceRef: 'mobile_iap:ios:transaction-sub-1' }),
+      h.db,
+    );
   });
 
   it('moves the plan forward when the app verifies a renewal before the store reports it', async () => {

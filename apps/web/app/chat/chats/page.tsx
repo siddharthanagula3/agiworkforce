@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function ChatsAndTasksPage() {
   return (
     <WebAppShell>
-      <section className="min-h-full px-gutter-compact py-8 sm:px-gutter-regular sm:py-12 lg:px-gutter-wide">
+      <section className="min-h-full px-gutter-compact py-8 max-md:pt-6 sm:px-gutter-regular sm:py-12 lg:px-gutter-wide">
         <ChatsAndTasksList />
       </section>
     </WebAppShell>

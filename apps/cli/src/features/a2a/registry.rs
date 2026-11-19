@@ -7,8 +7,10 @@ use crate::config::CliConfig;
 use crate::terminal_style as ts;
 
 use super::protocol::AgentCard;
+use super::security::peer_token;
 
 const AGENTS_REGISTRY_FILENAME: &str = "agents.json";
+const TOKEN_REQUIRED_KEY: &str = "token_required";
 
 /// Load the local agent registry from `~/.agiworkforce/agents.json`.
 ///
@@ -96,28 +98,43 @@ pub async fn discover_agents(config: &CliConfig) -> Result<Vec<AgentCard>> {
             }
         };
 
-        match client.get(&url).send().await {
-            Ok(resp) if resp.status().is_success() => match resp.json::<AgentCard>().await {
-                Ok(live_card) => results.push(live_card),
-                Err(_) => {
-                    let mut offline = card.clone();
-                    offline
-                        .metadata
-                        .insert("online".to_string(), serde_json::json!(false));
-                    results.push(offline);
-                }
-            },
-            _ => {
-                let mut offline = card.clone();
-                offline
-                    .metadata
-                    .insert("online".to_string(), serde_json::json!(false));
-                results.push(offline);
-            }
-        }
+        results.push(probe_card(&client, card, &url).await);
     }
 
     Ok(results)
+}
+
+async fn probe_card(client: &reqwest::Client, card: &AgentCard, url: &str) -> AgentCard {
+    let mut request = client.get(url);
+    if let Some(token) = peer_token(&card.endpoint) {
+        request = request.bearer_auth(token);
+    }
+
+    let mut probed = card.clone();
+    match request.send().await {
+        Ok(resp) if resp.status().is_success() => match resp.json::<AgentCard>().await {
+            Ok(live_card) => return live_card,
+            Err(_) => {
+                probed
+                    .metadata
+                    .insert("online".to_string(), serde_json::json!(false));
+            }
+        },
+        Ok(resp) if matches!(resp.status().as_u16(), 401 | 403) => {
+            probed
+                .metadata
+                .insert("online".to_string(), serde_json::json!(true));
+            probed
+                .metadata
+                .insert(TOKEN_REQUIRED_KEY.to_string(), serde_json::json!(true));
+        }
+        _ => {
+            probed
+                .metadata
+                .insert("online".to_string(), serde_json::json!(false));
+        }
+    }
+    probed
 }
 
 /// Format a list of discovered agents for terminal display.
@@ -133,7 +150,14 @@ pub fn format_agent_list(agents: &[AgentCard]) -> String {
             .get("online")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
-        let status = if online {
+        let token_required = card
+            .metadata
+            .get(TOKEN_REQUIRED_KEY)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let status = if token_required {
+            ts::warning(format!("token required, run /a2a auth {}", card.endpoint)).to_string()
+        } else if online {
             ts::success("online").to_string()
         } else {
             ts::danger("offline").to_string()
@@ -155,4 +179,78 @@ pub fn format_agent_list(agents: &[AgentCard]) -> String {
         ));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    const PEER_TOKEN: &str = "discovery-peer-token";
+
+    fn card(endpoint: &str) -> AgentCard {
+        AgentCard {
+            agent_id: "agent-peer".to_string(),
+            name: "peer".to_string(),
+            version: "0.1.0".to_string(),
+            capabilities: Vec::new(),
+            supported_models: Vec::new(),
+            endpoint: endpoint.to_string(),
+            auth_required: true,
+            metadata: HashMap::new(),
+        }
+    }
+
+    async fn serve_card_behind_bearer() -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let body = serde_json::to_string(&card(&endpoint)).unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let body = body.clone();
+                tokio::spawn(async move {
+                    let mut buffer = vec![0u8; 8192];
+                    let read = stream.read(&mut buffer).await.unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buffer[..read]).to_lowercase();
+                    let response = if request
+                        .contains(&format!("authorization: bearer {PEER_TOKEN}"))
+                    {
+                        format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        )
+                    } else {
+                        "HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            .to_string()
+                    };
+                    let _ = stream.write_all(response.as_bytes()).await;
+                    let _ = stream.shutdown().await;
+                });
+            }
+        });
+        endpoint
+    }
+
+    #[tokio::test]
+    async fn discovery_presents_the_remembered_token_and_flags_a_peer_that_needs_one() {
+        let endpoint = serve_card_behind_bearer().await;
+        let url = format!("{endpoint}/a2a/card");
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let registered = card(&endpoint);
+
+        let locked = probe_card(&client, &registered, &url).await;
+        assert_eq!(
+            locked.metadata.get(TOKEN_REQUIRED_KEY),
+            Some(&serde_json::json!(true))
+        );
+        assert!(format_agent_list(&[locked]).contains("/a2a auth"));
+
+        super::super::security::remember_peer_token(&endpoint, PEER_TOKEN).unwrap();
+        let unlocked = probe_card(&client, &registered, &url).await;
+        assert!(!unlocked.metadata.contains_key(TOKEN_REQUIRED_KEY));
+        assert!(!unlocked.metadata.contains_key("online"));
+    }
 }

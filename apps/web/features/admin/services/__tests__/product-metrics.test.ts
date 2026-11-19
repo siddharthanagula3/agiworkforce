@@ -111,6 +111,30 @@ describe('business metrics measured from rows the product already holds', () => 
     expect(metric(summary, 'churn')).toMatchObject({ numerator: 3, denominator: 12, value: 0.25 });
   });
 
+  it('reads the opening paid count from the snapshot of the window start day only', async () => {
+    answer({
+      'as churned': [{ churned: 3 }],
+      'from public.product_metric_days': [{ numerator: 12 }],
+    });
+
+    await readProductMetrics({ from: FROM, to: TO });
+
+    const snapshotRead = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes('from public.product_metric_days'),
+    );
+    expect(String(snapshotRead?.[0])).toMatch(/metric_day = \$2::date/);
+    expect(String(snapshotRead?.[0])).not.toMatch(/<=|order by|limit/);
+    expect(snapshotRead?.[1]).toEqual(['paid_subscribers', FROM.toISOString()]);
+  });
+
+  it('reports churn as unmeasured when the start day has no snapshot', async () => {
+    answer({ 'as churned': [{ churned: 3 }] });
+
+    const summary = await readProductMetrics({ from: FROM, to: TO });
+
+    expect(metric(summary, 'churn')).toMatchObject({ numerator: 3, denominator: 0, value: null });
+  });
+
   it('counts only an upgrade as expansion, never a downgrade', async () => {
     answer({
       "properties ->> 'planTier'": [
@@ -199,8 +223,47 @@ describe('the daily rollup', () => {
       .map((call) => call[1] as unknown[])
       .find((params) => params[1] === 'paid_subscribers');
 
-    expect(snapshot?.[0]).toBe('2026-09-16');
+    expect(snapshot?.[0]).toBe('2026-09-17');
     expect(snapshot?.[2]).toBe(9);
+  });
+
+  it('files the live count under the day it was observed, not the day that had closed', async () => {
+    const result = await rollUpProductMetrics(new Date('2026-09-17T04:00:00.000Z'));
+
+    const written = mocks.execute.mock.calls
+      .filter((call) => String(call[0]).includes('product_metric_days'))
+      .map((call) => call[1] as unknown[]);
+    const summaryDays = written.filter((params) => params[1] !== 'paid_subscribers');
+
+    expect(result.day).toBe('2026-09-16');
+    expect(summaryDays.length).toBeGreaterThan(0);
+    expect(summaryDays.every((params) => params[0] === '2026-09-16')).toBe(true);
+  });
+
+  it('keeps the first observation of a day when the rollup runs again', async () => {
+    await rollUpProductMetrics(new Date('2026-09-17T04:00:00.000Z'));
+
+    const snapshotCall = mocks.execute.mock.calls.find(
+      (call) => (call[1] as unknown[])[1] === 'paid_subscribers',
+    );
+
+    expect(String(snapshotCall?.[0])).toMatch(
+      /on conflict \(metric_day, metric, scope\) do nothing/,
+    );
+    expect(String(snapshotCall?.[0])).not.toMatch(/do update/);
+  });
+
+  it('does not count a snapshot that an earlier run already stored as newly written', async () => {
+    mocks.execute.mockImplementation(async (sql: string) =>
+      sql.includes('on conflict (metric_day, metric, scope) do nothing') ? 0 : 1,
+    );
+
+    const result = await rollUpProductMetrics(new Date('2026-09-17T04:00:00.000Z'));
+    const summaryRows = mocks.execute.mock.calls.filter((call) =>
+      String(call[0]).includes('do update'),
+    ).length;
+
+    expect(result.written).toBe(summaryRows);
   });
 
   it('purges the raw stream past its retention window', async () => {

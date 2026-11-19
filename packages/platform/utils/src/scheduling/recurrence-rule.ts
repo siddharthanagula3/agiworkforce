@@ -83,7 +83,7 @@ function parseDateTime(
   value: string,
   label: string,
   timezone: string,
-): { wall: WallClock; utc: boolean } {
+): { wall: WallClock; utc: boolean; second: number } {
   const match = /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?$/.exec(value);
   if (!match) fail(`${label} must look like 20260917T090000`);
   const wall: WallClock = {
@@ -93,21 +93,23 @@ function parseDateTime(
     hour: Number(match[4] ?? 0),
     minute: Number(match[5] ?? 0),
   };
+  const second = Number(match[6] ?? 0);
   if (
     wall.month < 1 ||
     wall.month > 12 ||
     wall.day < 1 ||
     wall.day > daysInMonth(wall.year, wall.month) ||
     wall.hour > 23 ||
-    wall.minute > 59
+    wall.minute > 59 ||
+    second > 59
   ) {
     fail(`${label} is not a valid date and time`);
   }
   const utc = match[7] === 'Z';
   if (utc) {
-    return { wall: wallClockAt(new Date(wallClockMs(wall)), timezone), utc };
+    return { wall: wallClockAt(new Date(wallClockMs(wall)), timezone), utc, second };
   }
-  return { wall, utc };
+  return { wall, utc, second };
 }
 
 function untilInstant(value: string, timezone: string): Date {
@@ -157,7 +159,9 @@ export function parseRecurrenceRule(text: string, timezone: string): RecurrenceR
       if (dtstart[1] && dtstart[1] !== timezone) {
         fail('DTSTART time zone must match the schedule time zone');
       }
-      start = parseDateTime(dtstart[2]!.toUpperCase(), 'DTSTART', timezone).wall;
+      const parsedStart = parseDateTime(dtstart[2]!.toUpperCase(), 'DTSTART', timezone);
+      if (parsedStart.second !== 0) fail('DTSTART must start on a whole minute');
+      start = parsedStart.wall;
       continue;
     }
     const rrule = /^(?:RRULE:)?(FREQ=.+)$/i.exec(line);

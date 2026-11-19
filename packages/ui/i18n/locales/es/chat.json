@@ -250,7 +250,7 @@
     "temporaryChatRetentionNote": "No se guardará en tu historial y omite la memoria en este turno.",
     "temporaryChatPersonalized": "Personalizado",
     "temporaryChatUnpersonalized": "Sin personalizar",
-    "temporaryChatPersonalizationHint": "Personalizado usa tu perfil, tus instrucciones y tu estilo de respuesta. Sin personalizar los deja fuera.",
+    "temporaryChatPersonalizationHint": "Personalizado usa tu perfil, tus instrucciones y tu estilo de respuesta.",
     "toggleArtifacts": "Alternar panel de artefactos",
     "toggleArtifactsCount": "Alternar panel de artefactos ({{count}})",
     "toggleStats": "Estadísticas",
@@ -302,7 +302,7 @@
     "noneReported": "El proveedor no informó recuentos de tokens para esta conversación.",
     "outputTokens": "Tokens de salida",
     "panelLabel": "Uso de tokens de la conversación",
-    "partialCoverage": "{{reported}} de {{total}} respuestas informaron el uso. El resto es anterior a la captura de uso o proviene de un proveedor que no informa nada, por lo que este total es un mínimo.",
+    "partialCoverage": "{{reported}} de {{total}} respuestas informaron el uso, así que este total es un mínimo.",
     "reasoningTokens": "Tokens de pensamiento"
   },
   "stream": {

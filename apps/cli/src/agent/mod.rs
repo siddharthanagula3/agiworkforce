@@ -128,6 +128,7 @@ impl std::fmt::Debug for SteerSource {
 /// TUI wrote straight past ratatui's buffer and left the model's answer on the
 /// frame's borders instead of in the transcript. A surface that owns the
 /// terminal installs this so both halves of one reply land in the same place.
+/// It is called once per streamed delta, not once per completion.
 #[derive(Clone)]
 pub struct ContinuationSink(pub std::sync::Arc<dyn Fn(&str) + Send + Sync>);
 
@@ -136,6 +137,15 @@ impl std::fmt::Debug for ContinuationSink {
         f.write_str("ContinuationSink(<callback>)")
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManagedModelSwitch {
+    SameSession,
+    NewSession,
+}
+
+pub const NEW_MANAGED_SESSION_NOTICE: &str =
+    "Started a new cloud session for this model; your earlier session is kept here and was not sent.";
 
 /// Stable identifiers shared by every SDK stream event in one CLI turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -198,6 +208,7 @@ impl SystemPromptParts {
             .map(|home| {
                 crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
                     home,
+                    self.memory_cwd.as_deref(),
                     privacy_mode,
                     memory_nonce,
                 )
@@ -291,6 +302,7 @@ pub struct AgentSession {
     /// any JSON event; chat.rs always writes a human-readable line to stderr.
     pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
+    pub plan_return_mode: Option<crate::cli_options::PermissionMode>,
     pub permission_mode: crate::cli_options::PermissionMode,
     pub(crate) pinned_permission_mode: Option<crate::cli_options::PermissionMode>,
     pub(crate) memory_enabled: bool,
@@ -308,6 +320,8 @@ pub struct AgentSession {
     pub on_tool_event: Option<ToolEventSink>,
     pub on_steer: Option<SteerSource>,
     pub on_continuation_chunk: Option<ContinuationSink>,
+    pub(crate) transcript_renderer:
+        Option<std::sync::Arc<std::sync::Mutex<crate::markdown::MarkdownRenderer>>>,
     /// Whether the desktop shell is running with a browser paired to it.
     ///
     /// `None` until the first turn resolves it. Resolved once per session
@@ -330,6 +344,7 @@ pub struct AgentSession {
     pub(crate) host_subagent_withheld: Vec<String>,
     active_child_ids: HashSet<String>,
     pub allowed_tools: Option<Vec<String>>,
+    pub(crate) caller_allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub(crate) allowed_mcp_servers: Option<Vec<String>>,
     pub privacy_mode: PrivacyMode,
@@ -361,6 +376,10 @@ pub struct AgentSession {
     /// its shutdown acknowledgment.
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     memory_extracted_through: usize,
+    /// Start of the earliest scheduled memory window whose summary was never
+    /// written. The next window and the session-end summary begin there, so a
+    /// failed write is retried instead of being counted as extracted.
+    memory_unsaved_from: std::sync::Arc<std::sync::Mutex<Option<usize>>>,
     memory_window_due_at: std::time::Instant,
     /// Marks this session's memory origin tags; see
     /// [`crate::memory_pipeline::origin_memory_tag`].
@@ -617,6 +636,24 @@ pub(crate) fn is_rule_sensitive_mutation_tool(tool_name: &str) -> bool {
     )
 }
 
+pub(crate) fn mcp_resource_selectors(typed: &str) -> Vec<(&str, &str)> {
+    let mut selectors: Vec<(&str, &str)> = Vec::new();
+    for token in typed.split_whitespace() {
+        let Some((server, uri)) = token
+            .strip_prefix('@')
+            .and_then(|mention| mention.split_once(':'))
+        else {
+            continue;
+        };
+        let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
+        if server.is_empty() || uri.is_empty() || selectors.contains(&(server, uri)) {
+            continue;
+        }
+        selectors.push((server, uri));
+    }
+    selectors
+}
+
 impl AgentSession {
     /// Create a new agent session with the system prompt.
     ///
@@ -789,6 +826,7 @@ impl AgentSession {
             max_budget_usd: None,
             on_budget_exhausted: None::<BudgetSink>,
             plan_mode: false,
+            plan_return_mode: None,
             permission_mode: crate::cli_options::PermissionMode::Default,
             pinned_permission_mode: crate::permissions::managed_permission_mode(),
             memory_enabled,
@@ -805,6 +843,7 @@ impl AgentSession {
             on_tool_event: None::<ToolEventSink>,
             on_steer: None::<SteerSource>,
             on_continuation_chunk: None::<ContinuationSink>,
+            transcript_renderer: None,
             browser_available: None,
             quiet: false,
             fast_mode: false,
@@ -816,6 +855,7 @@ impl AgentSession {
             host_subagent_withheld: Vec::new(),
             active_child_ids: HashSet::new(),
             allowed_tools: None,
+            caller_allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
             pending_privacy_handoff: None,
@@ -833,6 +873,7 @@ impl AgentSession {
             team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
+            memory_unsaved_from: Default::default(),
             memory_window_due_at: std::time::Instant::now()
                 + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL,
             memory_nonce,
@@ -897,25 +938,15 @@ impl AgentSession {
         } else {
             Some(allowed_tools.to_vec())
         };
+        self.caller_allowed_tools = self.allowed_tools.clone();
         self.disallowed_tools = disallowed_tools.to_vec();
     }
 
-    /// The MCP catalogue `tool_search` needs to hand over a schema the initial
-    /// list deferred. Built for that tool alone: any other call would clone
-    /// every connected schema and never read one.
-    pub(crate) fn mcp_catalog_for(
-        &self,
-        tool_name: &str,
-    ) -> Option<std::sync::Arc<Vec<ToolDefinition>>> {
-        if tool_name != "tool_search" {
-            return None;
-        }
-        self.mcp_manager
-            .as_ref()
-            .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
-    }
-
-    pub async fn expand_mcp_resource_mentions(&mut self, prompt: &str) -> (String, Vec<String>) {
+    pub async fn expand_mcp_resource_mentions(
+        &mut self,
+        typed: &str,
+        prompt: &str,
+    ) -> (String, Vec<String>) {
         const MAX_RESOURCE_CHARS: usize = 50_000;
         let privacy_mode = self.privacy_mode;
         let Some(manager) = self.mcp_manager.as_mut() else {
@@ -923,16 +954,8 @@ impl AgentSession {
         };
         let mut attached = String::new();
         let mut notices = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for token in prompt.split_whitespace() {
-            let Some((server, uri)) = token
-                .strip_prefix('@')
-                .and_then(|mention| mention.split_once(':'))
-            else {
-                continue;
-            };
-            let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
-            if uri.is_empty() || !manager.has_server(server) || !seen.insert(token.to_string()) {
+        for (server, uri) in mcp_resource_selectors(typed) {
+            if !manager.has_server(server) {
                 continue;
             }
             match manager.read_resource(server, uri, privacy_mode).await {
@@ -1133,10 +1156,50 @@ impl AgentSession {
         self.switch_model(model)
     }
 
+    /// A model the user typed that no catalog names can still be one the local
+    /// servers report, so a Local session asks them before giving up. Any other
+    /// session keeps the catalog as its only source: a local server's list never
+    /// moves a Managed or BYOK transcript across a trust boundary.
+    pub async fn switch_model_by_name_or_local(
+        &mut self,
+        config: &CliConfig,
+        model: &str,
+    ) -> Result<()> {
+        let Err(unknown) = self.switch_model_by_name(model) else {
+            return Ok(());
+        };
+        if self.privacy_mode != PrivacyMode::Local {
+            return Err(unknown);
+        }
+        let probes = crate::local_models::discover_all(config).await;
+        let installed = crate::local_models::discovered_models(&probes);
+        match crate::local_models::select_discovered_model(
+            &installed,
+            model,
+            models::provider_name(&self.provider),
+        )? {
+            Some(found) => self.switch_to_discovered_local_model(model, &found.provider),
+            None => Err(unknown),
+        }
+    }
+
+    fn switch_to_discovered_local_model(&mut self, model: &str, provider_name: &str) -> Result<()> {
+        let provider = models::provider_from_name(provider_name)
+            .filter(|provider| provider_privacy_mode(provider) == PrivacyMode::Local)
+            .with_context(|| format!("'{provider_name}' is not a local model provider"))?;
+        self.model = model.to_string();
+        self.provider = provider;
+        Ok(())
+    }
+
     /// Switch to a model discovered from the AGI managed gateway while
     /// preserving the managed trust/billing boundary instead of inferring the
     /// upstream vendor from the model id.
     pub fn switch_managed_model(&mut self, model: &str) -> Result<()> {
+        self.enter_managed_model(model).map(|_| ())
+    }
+
+    pub fn enter_managed_model(&mut self, model: &str) -> Result<ManagedModelSwitch> {
         let already_managed = self.privacy_mode == PrivacyMode::Managed
             && self.provider_privacy_mode() == PrivacyMode::Managed;
         let fresh_session = self.turn_count == 0
@@ -1156,6 +1219,11 @@ impl AgentSession {
             }
             .into());
         }
+        let leaves_history_behind = self.switch_to_managed_leaves_history_behind();
+        if leaves_history_behind {
+            self.managed_session = None;
+            self.managed_session_path = None;
+        }
         if !already_managed {
             self.rebuild_system_message_for(
                 PrivacyMode::Managed,
@@ -1165,7 +1233,35 @@ impl AgentSession {
         self.model = model.to_string();
         self.provider = models::Provider::ManagedCloud;
         self.set_privacy_mode(PrivacyMode::Managed);
-        Ok(())
+        if !leaves_history_behind {
+            return Ok(ManagedModelSwitch::SameSession);
+        }
+        self.start_fresh_managed_session()?;
+        Ok(ManagedModelSwitch::NewSession)
+    }
+
+    fn switch_to_managed_leaves_history_behind(&self) -> bool {
+        if self.privacy_mode == PrivacyMode::Managed {
+            return false;
+        }
+        let recorded = self
+            .session_activity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_records();
+        recorded
+            || !self.checkpoint_log.checkpoints().is_empty()
+            || self.managed_session.as_ref().is_some_and(|session| {
+                session.title.is_some()
+                    || session.code.is_some()
+                    || !session.approvals.is_empty()
+                    || !session.file_changes.is_empty()
+                    || !session.validations.is_empty()
+                    || session
+                        .messages
+                        .iter()
+                        .any(|message| message.role != "system")
+            })
     }
 
     /// Add an additional directory root at runtime, mirroring Claude Code's
@@ -1864,6 +1960,14 @@ impl AgentSession {
     /// created and no session-index row is written, so the run leaves no trace
     /// under `~/.agiworkforce/`.
     pub fn enable_managed_session(&mut self) -> Result<()> {
+        self.enable_managed_session_as(None)
+    }
+
+    /// Like [`Self::enable_managed_session`], but a new session takes
+    /// `requested_id` (`--session-id`) as its id and file name, so `--resume`,
+    /// `session show` and `session fork` find it under that id. An id that
+    /// already names a stored session is refused instead of overwritten.
+    pub fn enable_managed_session_as(&mut self, requested_id: Option<&str>) -> Result<()> {
         if !self.session_persistence {
             return Ok(());
         }
@@ -1871,19 +1975,36 @@ impl AgentSession {
             return Ok(());
         }
         let store = crate::runtime::session_control::ManagedSessionStore::user_config()?;
-        self.initialize_managed_session(&store)?;
+        self.create_managed_session_in(&store, requested_id)?;
         self.sync_managed_session_metadata()
+    }
+
+    fn create_managed_session_in(
+        &mut self,
+        store: &crate::runtime::session_control::ManagedSessionStore,
+        requested_id: Option<&str>,
+    ) -> Result<()> {
+        let session_id = match requested_id {
+            Some(requested) => {
+                if store.contains(requested)? {
+                    anyhow::bail!(
+                        "A session with id '{requested}' already exists. Continue it with --resume {requested}, or choose another --session-id."
+                    );
+                }
+                requested.to_string()
+            }
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        self.initialize_managed_session(store, session_id)
     }
 
     fn initialize_managed_session(
         &mut self,
         store: &crate::runtime::session_control::ManagedSessionStore,
+        session_id: String,
     ) -> Result<()> {
-        let mut managed_session = ManagedSession::with_messages(
-            uuid::Uuid::new_v4().to_string(),
-            chrono::Utc::now(),
-            self.messages.clone(),
-        );
+        let mut managed_session =
+            ManagedSession::with_messages(session_id, chrono::Utc::now(), self.messages.clone());
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(self.current_routing_authority());
         managed_session.memory_nonce = Some(self.memory_nonce.clone());
@@ -1899,24 +2020,6 @@ impl AgentSession {
         self.current_plan_path = current_plan_path;
         self.plan_rejection_feedback = plan_rejection_feedback;
         self.checkpoint_log = carried.moved_into(std::mem::take(&mut self.checkpoint_log));
-        Ok(())
-    }
-
-    /// Override the managed session ID with a caller-supplied UUID.  This must
-    /// be called after `enable_managed_session` so the session object exists.
-    /// Useful for embedder-driven flows that pre-allocate session IDs.
-    pub fn override_session_id(&mut self, session_id: &str) -> Result<()> {
-        if !self.session_persistence {
-            return Ok(());
-        }
-        crate::runtime::session::validate_managed_session_id(session_id)?;
-        if let Some(ref mut ms) = self.managed_session {
-            ms.session_id = session_id.to_string();
-            if let Some(ref path) = self.managed_session_path {
-                ms.save_to_path(path)?;
-            }
-            self.sync_managed_session_metadata()?;
-        }
         Ok(())
     }
 
@@ -1950,6 +2053,7 @@ impl AgentSession {
             self.plan_mode = plan_mode;
         }
         self.reset_plan_state();
+        self.plan_return_mode = None;
         self.plan_approved = managed_session.plan_approved.unwrap_or(false);
         self.current_plan = managed_session.current_plan.clone();
         if let Some(fast_mode) = managed_session.fast_mode {
@@ -1990,21 +2094,25 @@ impl AgentSession {
         Ok(())
     }
 
-    pub(crate) fn reload_if_changed_on_disk(&mut self) -> Result<bool> {
+    /// `Ok(Some(saved))` when the session was reloaded, with `saved` holding
+    /// the other writer's mode when it differs from the one this terminal kept.
+    pub(crate) fn reload_if_changed_on_disk(
+        &mut self,
+    ) -> Result<Option<Option<crate::cli_options::PermissionMode>>> {
         if !self.session_persistence {
-            return Ok(false);
+            return Ok(None);
         }
         let Some(path) = self.managed_session_path.clone() else {
-            return Ok(false);
+            return Ok(None);
         };
         let current = crate::runtime::session::session_fingerprint(&path);
         if current.is_none() || current == self.loaded_fingerprint {
-            return Ok(false);
+            return Ok(None);
         }
         let managed = ManagedSession::load_from_path(&path)?;
-        self.load_managed_conversation(managed, path)?;
+        let saved_mode = self.load_managed_conversation_keeping_mode(managed, path)?;
         self.loaded_fingerprint = current;
-        Ok(true)
+        Ok(Some(saved_mode))
     }
 
     pub(crate) fn load_managed_conversation(
@@ -2031,6 +2139,14 @@ impl AgentSession {
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.memory_extracted_through = self.memory_extracted_through.min(self.messages.len());
+        if let Some(failed) = self
+            .memory_unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+        {
+            *failed = (*failed).min(self.messages.len());
+        }
         Ok(())
     }
 
@@ -2052,7 +2168,7 @@ impl AgentSession {
                 Ok(LeaseClaim::HeldBy(holder)) => (
                     holder.holder_id.clone(),
                     format!(
-                        "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again. /control take makes this terminal the writer.",
+                        "{} is also writing this session. Neither process sees the other's turns. When one saves over the other, the version it replaces is kept in a copy beside the session, and agi history lists that copy with the command that opens it. /control take makes this terminal the writer.",
                         holder.holder_label
                     ),
                 ),
@@ -2281,6 +2397,69 @@ impl AgentSession {
         self.skip_permissions && self.pinned_permission_mode.is_none()
     }
 
+    pub(crate) fn settle_loaded_permission_mode(
+        &mut self,
+        launch: crate::cli_options::LaunchPermissionMode,
+        before_load: crate::cli_options::PermissionMode,
+    ) {
+        let saved = self
+            .managed_session
+            .as_ref()
+            .and_then(|session| session.permission_mode);
+        use crate::cli_options::PermissionMode;
+        let mode = launch.after_load(before_load, saved, self.pinned_permission_mode);
+        let planning = mode == PermissionMode::Plan;
+        if self.plan_mode != planning {
+            self.plan_approved = false;
+        }
+        self.permission_mode = mode;
+        self.plan_mode = planning;
+        self.auto_approve_safe = launch.explicit_yes
+            || matches!(mode, PermissionMode::AcceptEdits | PermissionMode::DontAsk);
+        self.skip_permissions = self.pinned_permission_mode.is_none()
+            && (launch.explicit_skip || mode == PermissionMode::BypassPermissions);
+    }
+
+    /// Load a session another writer saved, or one picked inside this
+    /// terminal, while this terminal keeps the mode it is in. Returns the
+    /// saved mode when it differs from the one kept.
+    pub(crate) fn load_managed_conversation_keeping_mode(
+        &mut self,
+        managed_session: ManagedSession,
+        path: PathBuf,
+    ) -> Result<Option<crate::cli_options::PermissionMode>> {
+        let saved = managed_session
+            .permission_mode
+            .map(|mode| mode.storable(None));
+        let kept_mode = self.permission_mode;
+        let kept_plan_mode = self.plan_mode;
+        let kept_return_mode = self.plan_return_mode;
+        self.load_managed_conversation(managed_session, path)?;
+        let mode = kept_mode.within(self.pinned_permission_mode);
+        let planning = kept_plan_mode || mode == crate::cli_options::PermissionMode::Plan;
+        if self.plan_mode != planning {
+            self.plan_approved = false;
+        }
+        self.permission_mode = mode;
+        self.plan_mode = planning;
+        self.plan_return_mode = kept_return_mode;
+        Ok(saved.filter(|saved| *saved != mode))
+    }
+
+    pub(crate) fn plan_exit_mode(&mut self) -> crate::cli_options::PermissionMode {
+        self.plan_return_mode
+            .take()
+            .unwrap_or_default()
+            .within(self.pinned_permission_mode)
+    }
+
+    pub(crate) fn pinned_mode_notice(&self) -> String {
+        format!(
+            "Your organization's policy holds tool approval at {}, so a looser mode is not available.",
+            self.governed_permission_mode().name()
+        )
+    }
+
     /// The approval callback a tool call receives: the surface's own, with
     /// every decision recorded on this session.
     pub(crate) fn recorded_approval_callback(&self) -> Option<crate::tools::ApprovalCallback> {
@@ -2306,6 +2485,7 @@ impl AgentSession {
         self.managed_session_path = None;
         self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
         self.checkpoint_captures.clear();
+        self.session_activity = Default::default();
         self.enable_managed_session()
     }
 
@@ -2529,16 +2709,28 @@ impl AgentSession {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
     }
 
+    fn unsummarized_messages(&self) -> &[Message] {
+        let failed = *self
+            .memory_unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let start = failed.map_or(self.memory_extracted_through, |failed| {
+            failed.min(self.memory_extracted_through)
+        });
+        &self.messages[start.min(self.messages.len())..]
+    }
+
     /// Persist the session-end memory summary through the session's own
     /// off-device route when it has one, and on the device otherwise.
     pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
-        let unextracted = &self.messages[self.memory_extracted_through.min(self.messages.len())..];
+        let unextracted = self.unsummarized_messages();
         if !self.memory_enabled || !unextracted.iter().any(|message| message.role != "system") {
             return Ok(());
         }
         let home = CliConfig::config_dir()?;
         crate::memory_pipeline::MemoryPipeline::extract_session_summary(
             &home,
+            self.system_prompt_parts.memory_cwd.as_deref(),
             &self.runtime_session_id,
             unextracted,
             config,
@@ -2866,6 +3058,38 @@ mod tests {
     }
 
     #[test]
+    fn a_local_session_follows_a_discovered_model_to_its_local_provider() {
+        let lmstudio = models::provider_from_name("lmstudio").expect("lmstudio");
+        let mut session =
+            AgentSession::new_with_provider("local-fixture-a", &test_context(), None, lmstudio);
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.switch_model_by_name("local-fixture-b").is_err());
+
+        session
+            .switch_to_discovered_local_model("local-fixture-b", "ollama")
+            .expect("local provider");
+        assert_eq!(session.model, "local-fixture-b");
+        assert_eq!(
+            session.provider,
+            models::Provider::Ollama(models::OllamaMode::Local)
+        );
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn a_discovered_model_never_switches_a_session_to_a_hosted_provider() {
+        let lmstudio = models::provider_from_name("lmstudio").expect("lmstudio");
+        let mut session =
+            AgentSession::new_with_provider("local-fixture-a", &test_context(), None, lmstudio);
+        for hosted in ["anthropic", "openai", "managed_cloud"] {
+            assert!(session
+                .switch_to_discovered_local_model("local-fixture-b", hosted)
+                .is_err());
+        }
+        assert_eq!(session.model, "local-fixture-a");
+    }
+
+    #[test]
     fn the_cli_turn_context_never_reads_as_what_the_user_typed() {
         let sent = with_turn_context(
             "[plan-mode] Call update_plan first.",
@@ -3005,6 +3229,238 @@ mod tests {
     }
 
     #[test]
+    fn a_requested_launch_mode_survives_loading_a_looser_saved_session() {
+        use crate::cli_options::{LaunchPermissionMode, PermissionMode};
+        for (requested, expected) in [
+            (true, PermissionMode::Plan),
+            (false, PermissionMode::AcceptEdits),
+        ] {
+            let temp = tempfile::tempdir().expect("session fixture");
+            let mut session =
+                AgentSession::new("fixture-local-model:latest", &test_context(), None);
+            session.set_session_persistence(false);
+            session.pinned_permission_mode = None;
+            session.permission_mode = PermissionMode::Plan;
+            session.plan_mode = true;
+            let mut incoming =
+                ManagedSession::with_messages("saved-in-auto", chrono::Utc::now(), Vec::new());
+            incoming.model = Some(session.model.clone());
+            incoming.routing_authority = Some(session.current_routing_authority());
+            incoming.permission_mode = Some(PermissionMode::AcceptEdits);
+            incoming.plan_mode = Some(false);
+            let launch = LaunchPermissionMode {
+                mode: PermissionMode::Plan,
+                requested,
+                repository: None,
+                explicit_yes: false,
+                explicit_skip: false,
+            };
+
+            let before_load = session.permission_mode;
+            session
+                .load_managed_conversation(incoming, temp.path().join("target.json"))
+                .expect("load target");
+            session.settle_loaded_permission_mode(launch, before_load);
+
+            assert_eq!(session.permission_mode, expected, "requested: {requested}");
+            assert_eq!(session.governed_permission_mode(), expected);
+            assert_eq!(
+                session.plan_mode,
+                expected == PermissionMode::Plan,
+                "requested: {requested}"
+            );
+        }
+    }
+
+    fn settled_from_saved(
+        launch: crate::cli_options::LaunchPermissionMode,
+        saved: crate::cli_options::PermissionMode,
+    ) -> AgentSession {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.pinned_permission_mode = None;
+        session.permission_mode = launch.mode;
+        session.auto_approve_safe = launch.explicit_yes
+            || matches!(
+                launch.mode,
+                crate::cli_options::PermissionMode::AcceptEdits
+                    | crate::cli_options::PermissionMode::DontAsk
+            );
+        session.skip_permissions = launch.explicit_skip;
+        let mut incoming =
+            ManagedSession::with_messages("saved-mode", chrono::Utc::now(), Vec::new());
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+        incoming.permission_mode = Some(saved);
+        incoming.plan_mode = Some(saved == crate::cli_options::PermissionMode::Plan);
+        let before_load = session.permission_mode;
+        session
+            .load_managed_conversation(incoming, temp.path().join("target.json"))
+            .expect("load target");
+        session.settle_loaded_permission_mode(launch, before_load);
+        session
+    }
+
+    #[test]
+    fn the_settled_mode_brings_its_switches_with_it() {
+        use crate::cli_options::{LaunchPermissionMode, PermissionMode};
+        let launch = |mode, explicit_yes, explicit_skip| LaunchPermissionMode {
+            mode,
+            requested: false,
+            repository: None,
+            explicit_yes,
+            explicit_skip,
+        };
+
+        let resumed_in_auto = settled_from_saved(
+            launch(PermissionMode::Default, false, false),
+            PermissionMode::AcceptEdits,
+        );
+        assert_eq!(resumed_in_auto.permission_mode, PermissionMode::AcceptEdits);
+        assert!(resumed_in_auto.auto_approve_safe);
+        assert!(!resumed_in_auto.skip_permissions);
+
+        let headless_dont_ask = settled_from_saved(
+            launch(PermissionMode::Default, false, false),
+            PermissionMode::DontAsk,
+        );
+        assert!(headless_dont_ask.auto_approve_safe);
+
+        let config_auto_saved_default = settled_from_saved(
+            launch(PermissionMode::AcceptEdits, false, false),
+            PermissionMode::Default,
+        );
+        assert_eq!(
+            config_auto_saved_default.permission_mode,
+            PermissionMode::Default
+        );
+        assert!(!config_auto_saved_default.auto_approve_safe);
+
+        let explicit_yes = settled_from_saved(
+            launch(PermissionMode::AcceptEdits, true, false),
+            PermissionMode::Default,
+        );
+        assert!(explicit_yes.auto_approve_safe);
+
+        let explicit_skip = settled_from_saved(
+            launch(PermissionMode::Default, false, true),
+            PermissionMode::Plan,
+        );
+        assert!(explicit_skip.skip_permissions);
+
+        let pinned_skip = {
+            let mut session = settled_from_saved(
+                launch(PermissionMode::Default, false, true),
+                PermissionMode::Default,
+            );
+            session.pinned_permission_mode = Some(PermissionMode::Default);
+            session.settle_loaded_permission_mode(
+                launch(PermissionMode::Default, false, true),
+                PermissionMode::Default,
+            );
+            session
+        };
+        assert!(!pinned_skip.skip_permissions);
+    }
+
+    #[test]
+    fn a_reloaded_or_picked_session_keeps_this_terminal_s_mode() {
+        use crate::cli_options::PermissionMode;
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.pinned_permission_mode = None;
+        session.permission_mode = PermissionMode::Plan;
+        session.plan_mode = true;
+        session.plan_return_mode = Some(PermissionMode::AcceptEdits);
+        let mut incoming =
+            ManagedSession::with_messages("saved-in-auto", chrono::Utc::now(), Vec::new());
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+        incoming.permission_mode = Some(PermissionMode::AcceptEdits);
+        incoming.plan_mode = Some(false);
+        incoming.plan_approved = Some(true);
+
+        let saved = session
+            .load_managed_conversation_keeping_mode(
+                incoming.clone(),
+                temp.path().join("target.json"),
+            )
+            .expect("load target");
+
+        assert_eq!(saved, Some(PermissionMode::AcceptEdits));
+        assert_eq!(session.permission_mode, PermissionMode::Plan);
+        assert_eq!(session.governed_permission_mode(), PermissionMode::Plan);
+        assert!(session.plan_mode);
+        assert!(!session.plan_approved);
+        assert_eq!(session.plan_return_mode, Some(PermissionMode::AcceptEdits));
+
+        session.permission_mode = PermissionMode::AcceptEdits;
+        session.plan_mode = false;
+        session.plan_return_mode = None;
+        session.pinned_permission_mode = Some(PermissionMode::Default);
+        incoming.permission_mode = Some(PermissionMode::Default);
+        let saved = session
+            .load_managed_conversation_keeping_mode(incoming, temp.path().join("target.json"))
+            .expect("load target again");
+
+        assert_eq!(saved, None);
+        assert_eq!(session.permission_mode, PermissionMode::Default);
+        assert!(!session.plan_mode);
+    }
+
+    #[test]
+    fn a_cleared_local_session_with_history_moves_to_managed_only_through_a_new_session() {
+        let mut local = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        local.set_session_persistence(false);
+        assert_eq!(local.privacy_mode, PrivacyMode::Local);
+        assert!(!local.switch_to_managed_leaves_history_behind());
+
+        local.managed_session = Some(ManagedSession::with_messages(
+            "local-empty",
+            chrono::Utc::now(),
+            Vec::new(),
+        ));
+        assert!(!local.switch_to_managed_leaves_history_behind());
+
+        let mut titled =
+            ManagedSession::with_messages("local-titled", chrono::Utc::now(), Vec::new());
+        titled.title = Some("the private project".to_string());
+        local.managed_session = Some(titled);
+        local
+            .messages
+            .push(Message::text("user", "the private project"));
+        local.clear();
+        assert!(local.switch_to_managed_leaves_history_behind());
+
+        local.managed_session = Some(ManagedSession::with_messages(
+            "local-turns",
+            chrono::Utc::now(),
+            vec![Message::text("user", "an earlier turn")],
+        ));
+        assert!(local.switch_to_managed_leaves_history_behind());
+
+        local.set_privacy_mode(PrivacyMode::Managed);
+        assert!(!local.switch_to_managed_leaves_history_behind());
+    }
+
+    #[test]
+    fn plan_exit_mode_returns_to_the_entry_mode_within_the_pin() {
+        use crate::cli_options::PermissionMode;
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.pinned_permission_mode = None;
+        session.plan_return_mode = Some(PermissionMode::AcceptEdits);
+        assert_eq!(session.plan_exit_mode(), PermissionMode::AcceptEdits);
+        assert_eq!(session.plan_return_mode, None);
+        assert_eq!(session.plan_exit_mode(), PermissionMode::Default);
+
+        session.pinned_permission_mode = Some(PermissionMode::Plan);
+        session.plan_return_mode = Some(PermissionMode::AcceptEdits);
+        assert_eq!(session.plan_exit_mode(), PermissionMode::Plan);
+    }
+
+    #[test]
     fn managed_load_keeps_memory_disabled_system_prompt_handling() {
         let temp = tempfile::tempdir().expect("session fixture");
         let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
@@ -3103,7 +3559,7 @@ mod tests {
         let expected_plan = serde_json::to_value(&session.current_plan).expect("plan");
 
         session
-            .initialize_managed_session(&store)
+            .create_managed_session_in(&store, None)
             .expect("initialize fixture");
 
         assert!(session.plan_approved);
@@ -3123,6 +3579,42 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&saved.current_plan).expect("saved plan"),
             expected_plan
+        );
+    }
+
+    #[test]
+    fn a_requested_session_id_names_the_session_file_and_is_never_overwritten() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let store =
+            crate::runtime::session_control::ManagedSessionStore::new(temp.path().to_path_buf());
+        let requested = "11111111-2222-4333-8444-555555555555";
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(true);
+
+        session
+            .create_managed_session_in(&store, Some(requested))
+            .expect("create under the requested id");
+
+        assert_eq!(session.managed_session_id(), Some(requested));
+        let resolved = store
+            .resolve(
+                crate::runtime::session_control::ManagedSessionReference::SessionId(
+                    requested.to_string(),
+                ),
+            )
+            .expect("the requested id resolves");
+        assert_eq!(
+            resolved.path.file_stem().and_then(|stem| stem.to_str()),
+            Some(requested)
+        );
+
+        let mut second = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        second.set_session_persistence(true);
+        assert!(
+            second
+                .create_managed_session_in(&store, Some(requested))
+                .is_err(),
+            "an id that names a stored session must not be reused"
         );
     }
 
@@ -3953,6 +4445,7 @@ mod tests {
         std::fs::write(memories.join("managed_memories.md"), "- managed fact").expect("managed");
         let memory = crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
             home.path(),
+            None,
             privacy,
             &session.memory_nonce,
         );
@@ -4120,6 +4613,50 @@ mod tests {
         assert!(!managed.contains("byok fact"), "{managed}");
         assert_eq!(session.memory_from_outside(PrivacyMode::Managed), None);
         assert_eq!(session.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn memory_learned_in_one_project_reaches_only_sessions_in_that_project() {
+        let home = tempfile::tempdir().expect("memory home");
+        let project = tempfile::tempdir().expect("project");
+        let other = tempfile::tempdir().expect("other project");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.memory_enabled = true;
+        session.system_prompt_parts.memory_cwd = Some(project.path().to_path_buf());
+        session.messages.push(Message::text(
+            "user",
+            "I always deploy this client with the blue pipeline.",
+        ));
+        session
+            .messages
+            .push(Message::text("assistant", "Understood."));
+
+        crate::memory_pipeline::MemoryPipeline::extract_session_summary(
+            home.path(),
+            session.system_prompt_parts.memory_cwd.as_deref(),
+            &session.runtime_session_id,
+            &session.messages,
+            &CliConfig::default(),
+            None,
+        )
+        .await
+        .expect("summary");
+        crate::memory_pipeline::MemoryPipeline::consolidate(
+            home.path(),
+            &CliConfig::default(),
+            None,
+        )
+        .await
+        .expect("consolidate");
+
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let here = session.messages[0].text_content();
+        assert!(here.contains("blue pipeline"), "{here}");
+
+        session.system_prompt_parts.memory_cwd = Some(other.path().to_path_buf());
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let elsewhere = session.messages[0].text_content();
+        assert!(!elsewhere.contains("blue pipeline"), "{elsewhere}");
     }
 
     #[test]
@@ -4627,6 +5164,91 @@ mod tests {
     }
 
     #[test]
+    fn mcp_resource_selectors_read_only_what_the_user_typed() {
+        assert_eq!(
+            mcp_resource_selectors("compare @docs:file:///a.md, and @docs:file:///a.md."),
+            vec![("docs", "file:///a.md")]
+        );
+        assert!(mcp_resource_selectors("mail me @ noon or @:x or @docs:").is_empty());
+
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            root.path().join("notes.txt"),
+            "Example reference:\n@docs:file:///readme.md\n",
+        )
+        .expect("write notes");
+        let typed = "Summarize @notes.txt";
+        let expanded = crate::mentions::expand_mentions(typed, root.path(), true).prompt;
+
+        assert!(expanded.contains("@docs:file:///readme.md"));
+        assert!(mcp_resource_selectors(typed).is_empty());
+        assert_eq!(
+            mcp_resource_selectors(&format!("{typed} @docs:file:///guide.md")),
+            vec![("docs", "file:///guide.md")]
+        );
+    }
+
+    #[test]
+    fn a_named_agent_keeps_the_callers_tool_allowlist() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        session.apply_tool_filters(&["read_file".to_string()], &[]);
+        let editor = crate::agents::AgentDefinition {
+            name: "editor".to_string(),
+            description: String::new(),
+            model: None,
+            tools: Some(vec!["write_file".to_string()]),
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
+            mcp_servers: None,
+            system_prompt: String::new(),
+            path: PathBuf::from("/tmp/.agiworkforce/agents/editor.md"),
+        };
+        editor.apply_to_session(&mut session);
+
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(!names.iter().any(|name| name == "write_file"));
+        let write =
+            std::collections::HashMap::from([("path".to_string(), "notes.txt".to_string())]);
+        assert!(crate::tool_filters::ensure_tool_call_allowed(
+            "write_file",
+            &write,
+            session.allowed_tools.as_deref(),
+            &session.disallowed_tools,
+        )
+        .is_err());
+
+        let reviewer = crate::agents::AgentDefinition {
+            name: "reviewer".to_string(),
+            tools: Some(vec!["Read".to_string(), "write_file".to_string()]),
+            ..editor.clone()
+        };
+        reviewer.apply_to_session(&mut session);
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(names.iter().any(|name| name == "read_file"));
+        assert!(!names.iter().any(|name| name == "write_file"));
+
+        let mut uncapped = AgentSession::new("test-model", &ctx, None);
+        reviewer.apply_to_session(&mut uncapped);
+        assert_eq!(
+            uncapped.allowed_tools,
+            Some(vec!["Read".to_string(), "write_file".to_string()])
+        );
+    }
+
+    #[test]
     fn effective_tool_definitions_restore_mutating_tools_after_plan_approval() {
         let ctx = test_context();
         let mut session = AgentSession::new("test-model", &ctx, None);
@@ -4978,8 +5600,8 @@ mod tests {
             .persist_managed_session()
             .expect("persist_managed_session must succeed as a no-op");
         session
-            .override_session_id("attempted-rename")
-            .expect("override_session_id must succeed as a no-op");
+            .enable_managed_session_as(Some("attempted-rename"))
+            .expect("enable_managed_session_as must succeed as a no-op");
 
         let after = std::fs::read_to_string(&path).expect("read file after persist");
         assert_eq!(

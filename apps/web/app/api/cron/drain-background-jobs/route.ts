@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
@@ -8,7 +9,6 @@ import { BACKGROUND_JOB_HANDLERS } from '@/lib/jobs/job-handlers';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { lowPowerCronSkip } from '@/lib/server/cron-low-power';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
 import { dispatchProjectKnowledgeCleanup } from '@/lib/server/project-knowledge-cleanup';
 
 export const runtime = 'nodejs';
@@ -34,6 +34,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       handlers: BACKGROUND_JOB_HANDLERS,
       budgetMs: DRAIN_BUDGET_MS,
       maxInFlight: MAX_JOBS_IN_FLIGHT,
+      region: DEFAULT_DATA_REGION,
     });
     if (!summary.drained) {
       logger.warn(summary, 'Background job drain ended with work still queued');

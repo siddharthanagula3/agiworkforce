@@ -19,7 +19,10 @@ import {
   buildSpendLimitGateResponse,
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveAuthenticatedSurface } from '../../chat/completions/lib/request-surface';
+import {
+  managedCloudSurfaceRefusal,
+  resolveAuthenticatedSurface,
+} from '../../chat/completions/lib/request-surface';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
@@ -48,7 +51,10 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
-import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
+import {
+  TRANSCRIPTION_OPERATION,
+  assertTierUnitAllowance,
+} from '@/lib/services/tier-unit-quota-service';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { settleAbandonedVoiceSessions } from '@/app/api/voice/live/sessions/lib/voice-session-settlement';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
@@ -313,6 +319,11 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
   );
   if (managedGateResponse) return managedGateResponse;
 
+  const surface = resolveAuthenticatedSurface(request, {
+    token: request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '',
+    surfaceClass: auth.surfaceClass,
+    boundSurface: auth.boundSurface,
+  });
   const policyGateResponse = await buildOrganizationPolicyGateResponse(
     userId,
     request,
@@ -320,11 +331,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       provider: 'openai',
       model: 'audio-transcription',
       feature: 'audio_transcription',
-      surface: resolveAuthenticatedSurface(request, {
-        token: request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '',
-        surfaceClass: auth.surfaceClass,
-        boundSurface: auth.boundSurface,
-      }),
+      surface,
     },
     {
       ...getCorsHeaders(request),
@@ -568,6 +575,13 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       });
       if (gateResponse) return gateResponse;
     }
+    if (surface === 'api') {
+      const planRefusal = managedCloudSurfaceRefusal(entitlement.plan, surface, {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      });
+      if (planRefusal) return planRefusal;
+    }
     const freeAllowanceSeconds = freeVoiceAllowanceSeconds(entitlement.plan);
     if (freeAllowanceSeconds === null) {
       await assertTierUnitAllowance({
@@ -592,6 +606,10 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
         estimatedCostMicrousd,
         planTier: entitlement.plan,
         isFlagship: false,
+        reservedUsage: {
+          operation: TRANSCRIPTION_OPERATION,
+          estimatedAudioSeconds: estimatedSeconds,
+        },
         ...(apiKeyId ? { apiKeyId } : {}),
       });
     } else {
@@ -669,7 +687,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
         outcome: 'failed',
         actualCostMicrousd: 0,
         usage: {
-          operation: 'transcription',
+          operation: TRANSCRIPTION_OPERATION,
           provider: selectedModel.provider,
           model: selectedModel.id,
           reason,
@@ -741,7 +759,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
     settled.outputTokens,
   );
   const transcriptionUsage = {
-    operation: 'transcription',
+    operation: TRANSCRIPTION_OPERATION,
     provider: selectedModel.provider,
     model: selectedModel.id,
     estimatedAudioSeconds: estimatedSeconds,

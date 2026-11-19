@@ -49,6 +49,7 @@ import { AudioRoutePicker } from '@/src/features/voice/components/AudioRoutePick
 import {
   AUDIO_ROUTES,
   audioRouteFromCategoryOptions,
+  audioRouteNotAppliedMessage,
   audioSessionCategoryFor,
   applyAudioRoute,
   readActiveAudioRoute,
@@ -118,6 +119,27 @@ describe('AudioRoutePicker', () => {
         categoryOptions: ['allowBluetooth', 'allowBluetoothA2DP'],
       }),
     );
+  });
+
+  it('does not present a route as applied when the audio session rejects it', () => {
+    mockSetCategoryIOS.mockImplementationOnce(() => {
+      throw new Error('session busy');
+    });
+    const { getByTestId, getByLabelText, queryByTestId } = render(<AudioRoutePicker />);
+
+    fireEvent.press(getByTestId('audio-route-trigger'));
+    fireEvent.press(getByTestId('audio-route-speaker'));
+
+    expect(useSettingsStore.getState().audioRoute).toBe('speaker');
+    expect(getByTestId('audio-route-not-applied').props.children).toBe(
+      audioRouteNotAppliedMessage('speaker'),
+    );
+    expect(getByLabelText('Audio route, Speaker, not applied')).toBeTruthy();
+
+    fireEvent.press(getByTestId('audio-route-bluetooth'));
+
+    expect(queryByTestId('audio-route-not-applied')).toBeNull();
+    expect(getByLabelText('Audio route, Bluetooth')).toBeTruthy();
   });
 
   it('lists every route with a hint and marks the selected one', () => {

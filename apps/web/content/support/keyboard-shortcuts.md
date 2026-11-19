@@ -45,7 +45,7 @@ These work while you type a message.
 
 ## In a local Code session
 
-This one works in a local AGI Code session and uses the Control key on a Mac too.
+This one works in a local Code session and uses the Control key on a Mac too.
 
 | Shortcut | What it does              |
 | -------- | ------------------------- |

@@ -36,11 +36,22 @@ describe('GAP-195, GAP-205, and GAP-255 desktop empty chat', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Research and plan next steps' }));
     expect(useChatStore.getState().draftContent).toBe(
-      'Research this topic and plan the next steps: ',
+      'Create a file or build a site that\n\nResearch this topic and plan the next steps: ',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Automate routine and recurring work' }));
     expect(onOpenScheduled).toHaveBeenCalledOnce();
+  });
+
+  it('adds a starter after an unsent draft instead of replacing it', () => {
+    useChatStore.getState().setDraftContent('my unsent question');
+    render(<EmptyChat />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Research and plan next steps' }));
+
+    expect(useChatStore.getState().draftContent).toBe(
+      'my unsent question\n\nResearch this topic and plan the next steps: ',
+    );
   });
 
   it('replaces unusable starters with an explicit Local model setup path', () => {

@@ -86,9 +86,7 @@ async function acceptDeleteConfirmation(user: User) {
 describe('cloud memory hydration', () => {
   it('retains loaded facts and shows refresh failure when a later list is incomplete', async () => {
     await renderCloudMemory();
-    await screen.findByText(
-      'Saved to your Managed Cloud account, available on every signed-in device.',
-    );
+    await screen.findByText('Saved to your Cloud account, available on every signed-in device.');
     const adapter = observeMemoryAdapter.mock.calls.at(-1)?.[0] as MemoryEditorDataAdapter;
     listCloudMemories.mockRejectedValueOnce(
       new Error('The complete cloud memory list could not be loaded.'),
@@ -101,14 +99,12 @@ describe('cloud memory hydration', () => {
     expect(screen.getByText('likes espresso')).toBeTruthy();
     expect(
       screen.getByText(
-        'Couldn’t refresh your Managed Cloud memory. The loaded list may be out of date. Device-local memory was not used.',
+        'Couldn’t refresh your Cloud memory. The loaded list may be out of date. Device-local memory was not used.',
       ),
     ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reload memories' })).toBeTruthy();
     expect(
-      screen.queryByText(
-        'Saved to your Managed Cloud account, available on every signed-in device.',
-      ),
+      screen.queryByText('Saved to your Cloud account, available on every signed-in device.'),
     ).toBeNull();
     expect(screen.queryByText(/No cloud memory facts yet/)).toBeNull();
   });
@@ -124,13 +120,16 @@ describe('cloud memory add', () => {
     await user.type(screen.getByRole('textbox', { name: /add a new fact/i }), 'drinks oat milk');
     await user.click(screen.getByRole('button', { name: /^add$/i }));
 
-    // Still in flight, and already on screen.
-    expect(screen.getByText('drinks oat milk')).toBeTruthy();
+    // Still in flight, already on screen as a row, and the draft stays in the composer.
+    const row = () => screen.getByRole('button', { name: /edit memory: drinks oat milk/i });
+    expect(row()).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: /add a new fact/i })).toHaveValue('drinks oat milk');
     expect(screen.getByText('Saving…')).toBeTruthy();
 
     pending.resolve(fact('m2', 'drinks oat milk'));
     await waitFor(() => expect(screen.queryByText('Saving…')).toBeNull());
-    expect(screen.getByText('drinks oat milk')).toBeTruthy();
+    expect(row()).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: /add a new fact/i })).toHaveValue('');
   });
 
   it('removes the fact again and says why when the server refuses', async () => {
@@ -223,7 +222,14 @@ describe('cloud memory edit', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('earlier text is back');
-    await waitFor(() => expect(screen.getByText('likes espresso')).toBeTruthy());
+    const reopened = await screen.findByRole('textbox', {
+      name: /editing memory: likes espresso/i,
+    });
+    expect(reopened).toHaveValue('likes decaf');
+
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(screen.getByRole('button', { name: /edit memory: likes espresso/i })).toBeTruthy();
     expect(screen.queryByText('likes decaf')).toBeNull();
   });
 });

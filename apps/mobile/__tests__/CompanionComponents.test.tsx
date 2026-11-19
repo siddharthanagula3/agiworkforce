@@ -6,6 +6,7 @@ jest.mock('react-native-reanimated', () => {
   const Animated = require('react-native').Animated;
   return {
     __esModule: true,
+    useAnimatedProps: (factory: () => unknown) => factory(),
     default: {
       View: require('react-native').View,
       Text: require('react-native').Text,
@@ -18,7 +19,7 @@ jest.mock('react-native-reanimated', () => {
     withTiming: (x: unknown) => x,
     withSequence: (...args: unknown[]) => args[0],
     cancelAnimation: jest.fn(),
-    Easing: { inOut: (x: unknown) => x, ease: (x: unknown) => x },
+    Easing: { inOut: (x: unknown) => x, ease: (x: unknown) => x, linear: (x: unknown) => x },
     FadeIn: { duration: () => ({ build: jest.fn() }) },
     FadeOut: { duration: () => ({ build: jest.fn() }) },
     SlideInDown: { duration: () => ({ springify: () => ({ build: jest.fn() }) }) },

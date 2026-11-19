@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  chromeExtensionIdFromPublicKey,
   configureChromeManifest,
   resolveChromeBuildConfiguration,
   validateReleaseManifest,
@@ -13,6 +14,7 @@ const sourceManifest = JSON.parse(readFileSync(join(APP_ROOT, 'manifest.json'), 
 const VALID_CHROME_EXTENSION_PUBLIC_KEY =
   'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5cGnbsCvSikskJTyhn/hqB8wtzGwhZDaa6PQTePWdmuxI7u2JR7dPuAcyOL8zYW8japmuv7P/SBJ/wr1CiFQAJIToFv3pbDbZDxrUy0ttLNpvZumZ/GPj/4kEMwlWV0PZIRHzF91Cm41O3iQUhctXifllGX5IMicNSwXj/I52fWAcHKLm7Ut6C/PP4s3RP26K/I+s4D9E8Q8PgVGmkgsxxwyxX0ct+N2tdDXVYhFiPSXyU3wPp1gyoD8FRzy+N+xEWNF/a/mm+TSjI3cxkNPL9jpY00IRy/gh7PywS3h5lNa8skhxy2OklT2k7br1xNBAMHJAZRKdmAf5z/1z12rxwIDAQAB';
 const VALID_CLERK_PUBLISHABLE_KEY = 'pk_live_Y2xlcmsuYWdpd29ya2ZvcmNlLmNvbSQ';
+const VALID_CHROME_EXTENSION_ID = 'bpokepadbideikgldoabhakaeglpkgdg';
 
 describe('Chrome release manifest configuration', () => {
   it('allows one exact isolated local renderer while retaining packaged-script policy', () => {
@@ -138,6 +140,77 @@ describe('Chrome release manifest configuration', () => {
         clerkPublishableKey: 'pk_live_Y2xlcmstb3RoZXIuaW52YWxpZCQ',
       }),
     ).toThrow(/configured CLERK_FRONTEND_API/i);
+  });
+
+  it('builds a first draft with production sign-in but without a key, only before the item exists', () => {
+    const clerk = {
+      clerkPublishableKey: VALID_CLERK_PUBLISHABLE_KEY,
+      clerkFrontendApi: 'https://clerk.agiworkforce.com',
+      clerkSyncHost: 'https://clerk.agiworkforce.com',
+    };
+    const draft = configureChromeManifest(sourceManifest, clerk);
+    const keyed = configureChromeManifest(sourceManifest, {
+      ...clerk,
+      chromeExtensionPublicKey: VALID_CHROME_EXTENSION_PUBLIC_KEY,
+    });
+
+    expect(draft.key).toBeUndefined();
+    expect(() => validateReleaseManifest(draft, clerk, { firstDraft: true })).not.toThrow();
+    expect(() => validateReleaseManifest(draft, clerk)).toThrow(/CHROME_EXTENSION_PUBLIC_KEY/);
+    expect(() => validateReleaseManifest(keyed, clerk, { firstDraft: true })).toThrow(
+      /must not carry a manifest key/,
+    );
+    expect(() =>
+      validateReleaseManifest(
+        draft,
+        { ...clerk, chromeExtensionPublicKey: VALID_CHROME_EXTENSION_PUBLIC_KEY },
+        { firstDraft: true },
+      ),
+    ).toThrow(/store item already exists/);
+    expect(() =>
+      validateReleaseManifest(
+        draft,
+        { ...clerk, clerkPublishableKey: 'pk_test_not_live' },
+        { firstDraft: true },
+      ),
+    ).toThrow(/valid live CLERK_PUBLISHABLE_KEY/);
+  });
+
+  it('refuses a public key that belongs to a different store item than CWS_EXTENSION_ID', () => {
+    const configuration = {
+      clerkPublishableKey: VALID_CLERK_PUBLISHABLE_KEY,
+      clerkFrontendApi: 'https://clerk.agiworkforce.com',
+      clerkSyncHost: 'https://clerk.agiworkforce.com',
+      chromeExtensionPublicKey: VALID_CHROME_EXTENSION_PUBLIC_KEY,
+    };
+    const manifest = configureChromeManifest(sourceManifest, configuration);
+
+    expect(chromeExtensionIdFromPublicKey(VALID_CHROME_EXTENSION_PUBLIC_KEY)).toBe(
+      VALID_CHROME_EXTENSION_ID,
+    );
+    expect(() =>
+      validateReleaseManifest(manifest, {
+        ...configuration,
+        chromeExtensionId: VALID_CHROME_EXTENSION_ID,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateReleaseManifest(manifest, {
+        ...configuration,
+        chromeExtensionId: 'abcdefghijklmnopabcdefghijklmnop',
+      }),
+    ).toThrow(/belongs to extension bpokepadbideikgldoabhakaeglpkgdg/);
+    expect(() =>
+      validateReleaseManifest(
+        configureChromeManifest(sourceManifest, { ...configuration, chromeExtensionPublicKey: '' }),
+        {
+          ...configuration,
+          chromeExtensionPublicKey: '',
+          chromeExtensionId: VALID_CHROME_EXTENSION_ID,
+        },
+        { firstDraft: true },
+      ),
+    ).toThrow(/store item already exists/);
   });
 
   it('accepts a fully configured production manifest', () => {

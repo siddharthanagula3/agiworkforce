@@ -22,10 +22,30 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
-import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
-import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import {
+  hasLiveBillingRelationship,
+  subscriptionAccessRank,
+} from '@/lib/services/subscription-access-policy';
+import {
+  BILLING_PLAN_PRICING,
+  isBillingPlanTier,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
 import { handleError } from '@/lib/error-handler';
 import { isStepUpRequiredError, requireStepUp } from '@/lib/server/step-up-auth';
+import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
+import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import {
+  reversePlanRenewalStop,
+  stopPlanRenewalForAccountDeletion,
+} from '@/lib/server/account-deletion-plan-renewal';
+import type { AccountDeletionRenewalStop } from '@/lib/server/payments/stripe-provider';
+import {
+  STORE_BILLING_NAME,
+  STORE_SUBSCRIPTION_MANAGEMENT_URL,
+  isStoreBillingSource,
+  type StoreBillingSource,
+} from '@/lib/billing/store-subscription-management';
 
 /**
  * What the account holder is told. The audit row keeps the full reason; a count
@@ -52,18 +72,33 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
 };
 
+type DeletionPlan =
+  | { kind: 'ending'; subscription: SubscriptionInfo }
+  | { kind: 'renewal_stopped'; subscription: SubscriptionInfo; subscriptionId: string }
+  | { kind: 'store_billed'; subscription: SubscriptionInfo; store: StoreBillingSource };
+
 function scheduledDeletionResponse(
   request: NextRequest,
   scheduledFor: string,
   alreadyScheduled = false,
+  plan: DeletionPlan | null = null,
 ): NextResponse {
   const outcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
+  const planNotice = plan ? ` ${deletionPlanNotice(plan)}` : '';
   return NextResponse.json(
     {
-      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.`,
+      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.${planNotice}`,
       scheduledFor,
       status: outcome.status,
       statusReason: deletionReceiptReason(outcome),
+      ...(plan?.kind === 'store_billed'
+        ? {
+            storeBilling: {
+              store: plan.store,
+              manageUrl: STORE_SUBSCRIPTION_MANAGEMENT_URL[plan.store],
+            },
+          }
+        : {}),
     },
     { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
   );
@@ -76,6 +111,34 @@ function isPaidSubscription(
   const planTier = (subscription.plan_tier || 'free').trim().toLowerCase();
   if (isFreeBillingPlanTier(planTier)) return false;
   return hasLiveBillingRelationship(subscription.status);
+}
+
+/**
+ * A plan already set to end with nothing left to collect cannot charge again,
+ * so deleting gives up only its remaining paid time. Erasure ends it through
+ * the same Stripe cancellation every due deletion runs before any row goes.
+ */
+function isEndingPaidPlan(subscription: SubscriptionInfo): boolean {
+  return (
+    subscription.cancel_at_period_end === true && subscriptionAccessRank(subscription.status) === 2
+  );
+}
+
+function planLabel(subscription: SubscriptionInfo): string {
+  const tier = subscription.plan_tier.trim().toLowerCase();
+  return isBillingPlanTier(tier) ? BILLING_PLAN_PRICING[tier].label : subscription.plan_tier;
+}
+
+function deletionPlanNotice(plan: DeletionPlan): string {
+  const label = planLabel(plan.subscription);
+  switch (plan.kind) {
+    case 'ending':
+      return `Your ${label} plan, already cancelled, ends when erasure runs instead of on ${periodEndLabel(plan.subscription)}. Deleting does not refund the unused time, and you will not be charged again.`;
+    case 'renewal_stopped':
+      return `Your ${label} plan no longer renews and ends when erasure runs instead of on ${periodEndLabel(plan.subscription)}. Deleting does not refund the unused time, and you will not be charged again. Cancelling the deletion turns renewal back on.`;
+    case 'store_billed':
+      return `Your ${label} plan is billed by ${STORE_BILLING_NAME[plan.store]}, and deleting your account does not cancel it. ${STORE_BILLING_NAME[plan.store]} keeps charging you until you cancel it there: ${STORE_SUBSCRIPTION_MANAGEMENT_URL[plan.store]}`;
+  }
 }
 
 function periodEndLabel(subscription: SubscriptionInfo): string {
@@ -135,12 +198,73 @@ function soleOwnerMessage(workspaces: SoleOwnedWorkspace[]): string {
   return `You are the only owner of ${subject}. Nothing was deleted. Make someone else an owner in Settings > Organization, or delete the workspace there first, then delete your account.`;
 }
 
-function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
-  const plan = subscription.plan_tier;
-  if (subscription.cancel_at_period_end) {
-    return `Your ${plan} plan is already cancelled and stays active until ${periodEndLabel(subscription)}. Nothing was deleted, you can delete your account once the plan has ended, or email ${CONTACT_EMAIL} to have it removed sooner.`;
+type PlanAdmission =
+  | { kind: 'none' }
+  | { kind: 'plan'; plan: DeletionPlan }
+  | { kind: 'stop_web_renewal'; subscription: SubscriptionInfo; subscriptionId: string }
+  | { kind: 'refused'; subscription: SubscriptionInfo; message: string };
+
+function admitPlan(subscription: SubscriptionInfo | null): PlanAdmission {
+  if (!isPaidSubscription(subscription)) return { kind: 'none' };
+  const plan = planLabel(subscription);
+  if (subscriptionAccessRank(subscription.status) !== 2) {
+    return {
+      kind: 'refused',
+      subscription,
+      message: `A payment for your ${plan} plan is still being collected, so nothing was deleted. Delete your account once it is settled, or email ${CONTACT_EMAIL} for help.`,
+    };
   }
-  return `Cancel your ${plan} plan before deleting your account. Nothing was deleted, and billing continues until you cancel in Settings > Billing. Email ${CONTACT_EMAIL} if you need help.`;
+  if (isEndingPaidPlan(subscription))
+    return { kind: 'plan', plan: { kind: 'ending', subscription } };
+  const source = resolveSubscriptionBillingSource(subscription);
+  if (isStoreBillingSource(source)) {
+    return { kind: 'plan', plan: { kind: 'store_billed', subscription, store: source } };
+  }
+  if (source === 'stripe' && isStripeSubscriptionId(subscription.stripe_subscription_id)) {
+    return {
+      kind: 'stop_web_renewal',
+      subscription,
+      subscriptionId: subscription.stripe_subscription_id,
+    };
+  }
+  return {
+    kind: 'refused',
+    subscription,
+    message: `Your ${plan} plan could not be matched to a purchase we can cancel, so nothing was deleted. Email ${CONTACT_EMAIL} to end it, then delete your account.`,
+  };
+}
+
+function renewalStopPlan(
+  stop: AccountDeletionRenewalStop,
+  subscription: SubscriptionInfo,
+  subscriptionId: string,
+): DeletionPlan | null {
+  switch (stop.outcome) {
+    case 'stopped':
+      return { kind: 'renewal_stopped', subscription, subscriptionId };
+    case 'not_renewing':
+      return { kind: 'ending', subscription };
+    case 'ended':
+    case 'scheduled_change':
+      return null;
+  }
+}
+
+function activeSubscriptionRefusal(
+  request: NextRequest,
+  subscription: SubscriptionInfo,
+  message: string,
+): NextResponse {
+  return NextResponse.json(
+    {
+      error: message,
+      reason: 'active_subscription',
+      planTier: subscription.plan_tier,
+      status: subscription.status,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end ?? false,
+    },
+    { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
+  );
 }
 
 const DeletionScheduleRowsSchema = z
@@ -256,21 +380,18 @@ async function handleDelete(request: NextRequest) {
     );
   }
 
-  if (isPaidSubscription(subscription)) {
+  const admission = admitPlan(subscription);
+
+  if (admission.kind === 'refused') {
     logger.warn(
-      { userId, planTier: subscription.plan_tier, status: subscription.status },
+      {
+        userId,
+        planTier: admission.subscription.plan_tier,
+        status: admission.subscription.status,
+      },
       'Account deletion refused while a paid subscription is active',
     );
-    return NextResponse.json(
-      {
-        error: activeSubscriptionMessage(subscription),
-        reason: 'active_subscription',
-        planTier: subscription.plan_tier,
-        status: subscription.status,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end ?? false,
-      },
-      { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
-    );
+    return activeSubscriptionRefusal(request, admission.subscription, admission.message);
   }
 
   let soleOwned: SoleOwnedWorkspace[];
@@ -323,6 +444,43 @@ async function handleDelete(request: NextRequest) {
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
   const scheduledFor = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
+  let plan: DeletionPlan | null = admission.kind === 'plan' ? admission.plan : null;
+  if (admission.kind === 'stop_web_renewal') {
+    let stop: AccountDeletionRenewalStop;
+    try {
+      stop = await stopPlanRenewalForAccountDeletion(
+        db,
+        userId,
+        admission.subscriptionId,
+        scheduledFor,
+      );
+    } catch (err) {
+      logger.error({ userId, err }, 'Account deletion halted: plan renewal could not be stopped');
+      return NextResponse.json(
+        {
+          error: `Your plan's renewal could not be stopped, so nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
+        },
+        { status: 503, headers: SECURITY_HEADERS },
+      );
+    }
+    if (stop.outcome === 'scheduled_change') {
+      logger.warn({ userId }, 'Account deletion refused while a plan change is scheduled');
+      return activeSubscriptionRefusal(
+        request,
+        admission.subscription,
+        `Your ${planLabel(admission.subscription)} plan has a scheduled change, so nothing was deleted. Keep your current plan in Settings > Billing, then delete your account.`,
+      );
+    }
+    plan = renewalStopPlan(stop, admission.subscription, admission.subscriptionId);
+  }
+
+  const reverseRenewalStop = async () => {
+    if (plan?.kind !== 'renewal_stopped') return;
+    await reversePlanRenewalStop(db, userId, plan.subscriptionId, scheduledFor);
+    plan = null;
+  };
+
+  let scheduled = false;
   try {
     let scheduledRows: number;
     try {
@@ -339,6 +497,7 @@ async function handleDelete(request: NextRequest) {
         { userId, error: updateErr instanceof Error ? updateErr.message : String(updateErr) },
         'Account deletion scheduling failed',
       );
+      await reverseRenewalStop();
       return NextResponse.json(
         {
           error: `Account deletion could not be scheduled. Nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
@@ -347,6 +506,7 @@ async function handleDelete(request: NextRequest) {
       );
     }
     if (scheduledRows === 0) {
+      await reverseRenewalStop();
       const [existing] = await db.query<{ deletion_scheduled_for: string | Date | null }>(
         `select deletion_scheduled_for from profiles where id = $1`,
         [userId],
@@ -363,6 +523,7 @@ async function handleDelete(request: NextRequest) {
               request,
               existingDeadline instanceof Date ? existingDeadline.toISOString() : existingDeadline,
               true,
+              plan,
             );
           }
           return NextResponse.json(
@@ -388,7 +549,8 @@ async function handleDelete(request: NextRequest) {
       );
     }
 
-    logger.info({ userId }, 'Account deletion scheduled');
+    scheduled = true;
+    logger.info({ userId, plan: plan?.kind ?? 'none' }, 'Account deletion scheduled');
 
     const scheduledOutcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
     await recordAuditEvent({
@@ -404,9 +566,10 @@ async function handleDelete(request: NextRequest) {
       },
     });
 
-    return scheduledDeletionResponse(request, scheduledFor);
+    return scheduledDeletionResponse(request, scheduledFor, false, plan);
   } catch (err) {
     logger.error({ userId, err }, 'Unexpected error during account deletion');
+    if (!scheduled) await reverseRenewalStop();
     return NextResponse.json(
       { error: `An unexpected error occurred. Please contact ${CONTACT_EMAIL}.` },
       { status: 500, headers: SECURITY_HEADERS },

@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import { lightColors } from '../src/ui/theme/tokens';
+
+let mockCameraGranted = true;
 
 jest.mock('expo-camera', () => {
   const { View } = require('react-native');
   return {
     CameraView: (props: Record<string, unknown>) => <View testID="camera-view" {...props} />,
-    useCameraPermissions: () => [{ granted: true }, jest.fn()],
+    useCameraPermissions: () => [{ granted: mockCameraGranted }, jest.fn()],
   };
 });
 
@@ -95,9 +97,13 @@ function backgroundColors(node: unknown): string[] {
 }
 
 describe('Dispatch surfaces in light theme', () => {
-  it('paints the manual pairing screen on the app surface, not literal black', () => {
+  beforeEach(() => {
+    mockCameraGranted = true;
+  });
+
+  it('paints the camera permission screen on the app surface, not literal black', () => {
+    mockCameraGranted = false;
     const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
-    fireEvent.press(screen.getByLabelText('Enter code manually'));
 
     const backgrounds = backgroundColors(screen.toJSON());
     expect(backgrounds).toContain(lightColors.surfaceBase);
@@ -105,11 +111,11 @@ describe('Dispatch surfaces in light theme', () => {
     expect(backgrounds).not.toContain('black');
   });
 
-  it('keeps the manual-entry copy readable against that surface', () => {
+  it('keeps the camera permission copy readable against that surface', () => {
+    mockCameraGranted = false;
     const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
-    fireEvent.press(screen.getByLabelText('Enter code manually'));
 
-    const instructions = screen.getByText(/Settings → Capabilities → Remote Control/);
+    const instructions = screen.getByText(/Pairing needs the QR code/);
     expect(instructions.props.style).toMatchObject({ color: lightColors.textSecondary });
     expect(instructions.props.style).not.toMatchObject({
       color: lightColors.cameraOverlayTextMuted,

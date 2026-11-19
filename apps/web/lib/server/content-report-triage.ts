@@ -24,6 +24,12 @@ export function isResolvedStatus(status: ContentReportStatus): boolean {
   return !OPEN_STATUSES.includes(status);
 }
 
+export interface ContentReportAsset {
+  kind: 'image' | 'video';
+  reference: string;
+  inlineHeaderOnly: boolean;
+}
+
 export interface ContentReport {
   id: string;
   clientReportId: string;
@@ -33,6 +39,7 @@ export interface ContentReport {
   category: string;
   contentExcerpt: string;
   userNote: string;
+  asset: ContentReportAsset | null;
   status: ContentReportStatus;
   reviewerId: string | null;
   reviewerNote: string | null;
@@ -51,6 +58,7 @@ interface ContentReportRow {
   category: string;
   content_excerpt: string;
   user_note: string;
+  asset: unknown;
   status: string;
   reviewer_id: string | null;
   reviewer_note: string | null;
@@ -60,6 +68,17 @@ interface ContentReportRow {
 
 function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+const MAX_ASSET_REFERENCE_LENGTH = 2048;
+
+export function parseReportAsset(value: unknown): ContentReportAsset | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { kind, url } = value as { kind?: unknown; url?: unknown };
+  if ((kind !== 'image' && kind !== 'video') || typeof url !== 'string') return null;
+  const reference = url.trim().slice(0, MAX_ASSET_REFERENCE_LENGTH);
+  if (!reference) return null;
+  return { kind, reference, inlineHeaderOnly: reference.startsWith('data:') };
 }
 
 function toReport(row: ContentReportRow, now: number = Date.now()): ContentReport {
@@ -75,6 +94,7 @@ function toReport(row: ContentReportRow, now: number = Date.now()): ContentRepor
     category: row.category,
     contentExcerpt: row.content_excerpt,
     userNote: row.user_note,
+    asset: parseReportAsset(row.asset),
     status,
     reviewerId: row.reviewer_id,
     reviewerNote: row.reviewer_note,
@@ -86,7 +106,8 @@ function toReport(row: ContentReportRow, now: number = Date.now()): ContentRepor
 }
 
 const SELECTED_COLUMNS = `id, client_report_id, user_id, message_id, conversation_id, category,
-          content_excerpt, user_note, status, reviewer_id, reviewer_note, reviewed_at, created_at`;
+          content_excerpt, user_note, metadata -> 'asset' as asset, status, reviewer_id, reviewer_note,
+          reviewed_at, created_at`;
 
 export interface ReadContentReportsOptions {
   readonly statuses?: readonly ContentReportStatus[];

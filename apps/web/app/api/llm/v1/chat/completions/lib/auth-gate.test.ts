@@ -237,7 +237,8 @@ describe('runAuthGate enterprise collection grace', () => {
       status: 'past_due',
       plan_tier: 'enterprise',
     });
-    mocks.readOrganizationCollectionState.mockRejectedValue(new Error('db unavailable'));
+    const failure = new Error('db unavailable');
+    mocks.readOrganizationCollectionState.mockRejectedValue(failure);
 
     await expect(runAuthGate(makeRequest())).rejects.toThrow('db unavailable');
   });
@@ -248,7 +249,8 @@ describe('runAuthGate enterprise collection grace', () => {
       status: 'past_due',
       plan_tier: 'enterprise',
     });
-    mocks.dbQuery.mockRejectedValue(new Error('db unavailable'));
+    const failure = new Error('db unavailable');
+    mocks.dbQuery.mockRejectedValue(failure);
 
     await expect(runAuthGate(makeRequest())).rejects.toThrow('db unavailable');
   });

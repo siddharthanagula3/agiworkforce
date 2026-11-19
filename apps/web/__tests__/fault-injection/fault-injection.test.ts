@@ -13,7 +13,8 @@ import { REDIS_OUTAGE_POLICY_ENV, checkRateLimit } from '@/lib/rate-limit';
 import { checkIdempotency } from '@/app/api/stripe-webhook/lib/idempotency';
 import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import { SANDBOX_MAX_AGE_MS, reclaimAbandonedE2BSandboxes } from '@/lib/e2b/reclaim';
+import { reclaimAbandonedE2BSandboxes } from '@/lib/e2b/reclaim';
+import { SANDBOX_MAX_AGE_MS } from '@/lib/e2b/reclaim-schedule';
 import { trimMessagesToContextWindow } from '@/app/api/llm/v1/chat/completions/lib/context-window';
 import { FAILURE_MODES } from './failure-modes';
 
@@ -131,15 +132,17 @@ const injections: Record<string, () => Promise<void> | void> = {
   'dependency-advertises-an-abusive-retry-after': async () => {
     const { waits, sleep } = recordedSleep();
     let attempts = 0;
-    await runWithRetryPolicy(
+    const failure = await runWithRetryPolicy(
       async () => {
         attempts += 1;
-        if (attempts === 1) throw httpFault(503, { retryAfterSeconds: 3600 });
-        return 'served';
+        throw httpFault(503, { retryAfterSeconds: 3600 });
       },
       { maxAttempts: 3, maxRetryAfterMs: 120_000, sleep },
-    );
-    expect(waits).toEqual([120_000]);
+    ).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(RetryStoppedError);
+    expect((failure as RetryStoppedError).reason).toBe('retry-after-exceeded');
+    expect(attempts).toBe(1);
+    expect(waits).toEqual([]);
   },
 
   'dependency-overloaded': async () => {

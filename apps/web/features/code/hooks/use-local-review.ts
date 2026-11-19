@@ -452,7 +452,12 @@ export function useLocalReview(
         act(async () => {
           setSetupLog([]);
           setSetup('running');
-          await runLocalWorktreeSetup(rootId, script.sha256);
+          try {
+            await runLocalWorktreeSetup(rootId, script.sha256);
+          } catch (cause: unknown) {
+            setSetup('idle');
+            throw cause;
+          }
           return null;
         });
       if (script.approved) {

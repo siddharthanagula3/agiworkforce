@@ -20,6 +20,6 @@ describe('SharedConversationNotFound', () => {
     expect(
       within(main).getByText(/expired, been revoked, or been entered incorrectly/i),
     ).toBeVisible();
-    expect(within(main).getByRole('link', { name: 'Open AGI' })).toHaveAttribute('href', '/');
+    expect(within(main).getByRole('link', { name: 'Open chat' })).toHaveAttribute('href', '/');
   });
 });

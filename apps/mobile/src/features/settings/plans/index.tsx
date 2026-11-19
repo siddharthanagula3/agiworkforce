@@ -16,7 +16,9 @@ import { Text } from '@/components/ui/Text';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useTierStore } from '@/src/features/billing/store';
+import { planCheckOf } from '@/src/features/billing/planCheck';
 import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 const COMPARED_PLANS: readonly BillingPlanTier[] = [
   'free',
@@ -60,16 +62,25 @@ function featureLines(
 export default function PlansScreen() {
   const colors = useThemeColors();
   const tier = useTierStore((s) => s.tier);
-  const current = COMPARED_PLANS.includes(tier) ? tier : null;
+  const planConfirmed = useTierStore(planCheckOf) === 'confirmed';
+  const current = planConfirmed && COMPARED_PLANS.includes(tier) ? tier : null;
+  const shownPlans = NATIVE_PURCHASES_AVAILABLE ? COMPARED_PLANS : planConfirmed ? [tier] : [];
 
   return (
-    <SettingsScreenShell title="Compare plans" backHref="/(app)/settings/cloud-billing">
+    <SettingsScreenShell
+      title={NATIVE_PURCHASES_AVAILABLE ? 'Compare plans' : 'Your plan'}
+      backHref="/(app)/settings/cloud-billing"
+    >
       <SettingsInfo
-        title="What each plan includes"
-        body="Usage resets every 5 hours, week and month, and varies by model and task."
+        title={NATIVE_PURCHASES_AVAILABLE ? 'What each plan includes' : 'What your plan includes'}
+        body={
+          NATIVE_PURCHASES_AVAILABLE || planConfirmed
+            ? 'Usage resets every 5 hours, week and month, and varies by model and task.'
+            : 'We couldn’t read your plan just now. Your subscription has not changed. Go back to Plan to try again.'
+        }
       />
-      {COMPARED_PLANS.map((plan) => {
-        const isCurrent = plan === current;
+      {shownPlans.map((plan) => {
+        const isCurrent = NATIVE_PURCHASES_AVAILABLE && plan === current;
         const features = featureLines(plan, current);
         const label = getBillingPlanPricing(plan).label;
         return (

@@ -39,6 +39,8 @@ export function noteDeveloperSessionEvent(rootId: string, event: DeveloperSessio
     workingTurns.set(rootId, turns);
   } else if (event.type === 'turn-finished') {
     workingTurns.get(rootId)?.delete(event.turnId);
+  } else if (event.type === 'runtime-stopped') {
+    workingTurns.delete(rootId);
   }
 }
 

@@ -9,9 +9,7 @@ import { registerChatRetryCommand } from '../features/chat/retry';
 import {
   cliProbeMessage,
   describeRemoteEnvironment,
-  nodeCliResolutionHost,
-  probeCli,
-  resolveCliPath,
+  probeResolvedCli,
   runCliVersion,
 } from '../platform/remoteEnvironment';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
@@ -25,6 +23,7 @@ import {
   validateWorkspaceContextFile,
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
+import { type MemoryFact } from '../memory/memoryStore';
 import {
   APPROVE_CLOUD_TASK_COMMAND,
   CloudTasksTreeProvider,
@@ -183,6 +182,7 @@ import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import {
   getActiveWorkspaceFolder,
   getActiveWorkspaceFolderSync,
+  shellExecutableForCurrentPlatform,
   shellQuoteForCurrentPlatform,
 } from '../platform/workspaceFolders';
 import {
@@ -205,7 +205,11 @@ import { showPlanComparison } from '../features/account-auth/planComparison';
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
-import { Config } from '../platform/config';
+import { Config, optOutSettingFor, resolveConfiguredCli } from '../platform/config';
+import {
+  MANAGE_WORKSPACE_TRUST_COMMAND,
+  WorkspaceNotTrustedError,
+} from '../integrations/localRuntimeClient';
 import { isEntitledSubscriptionStatus, isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
@@ -238,16 +242,22 @@ const upgradeUrl = (): string => `${getCloudWebOrigin()}/pricing`;
 const SWITCH_MODEL_ANYWAY = 'Switch anyway';
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
+const MEMORY_KEPT_OFF_HERE = `Memory stays off here because ${optOutSettingFor('memory.enabled')} is on for this workspace. Your user setting was not changed.`;
 
 async function requireMemoryEnabledForCapture(context: vscode.ExtensionContext): Promise<boolean> {
   if (Config.memoryEnabled()) return true;
+  if (Config.memoryOptedOutHere()) {
+    vscode.window.showInformationMessage(MEMORY_KEPT_OFF_HERE);
+    return false;
+  }
   const choice = await vscode.window.showWarningMessage(
     'Memory is off, so saved facts are not sent with any turn.',
     { modal: true },
     MEMORY_TURN_ON_ACTION,
   );
   if (choice !== MEMORY_TURN_ON_ACTION) return false;
-  return Config.update(context, { key: 'memory.enabled', value: true });
+  await Config.update(context, { key: 'memory.enabled', value: true });
+  return Config.memoryEnabled();
 }
 
 function contextCommandTarget(
@@ -464,6 +474,8 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     );
     return;
   }
+  const cli = await ensureCliForTerminal();
+  if (cli === undefined) return;
   try {
     await sidebarProvider.releaseForTerminal();
   } catch (error) {
@@ -472,37 +484,34 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     );
     return;
   }
-  const cli = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
   const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder.uri });
   terminal.show();
   terminal.sendText(
-    `${shellQuoteForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
+    `${shellExecutableForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
   );
 }
 
 const AGI_TERMINAL_NAME = 'AGI';
 const INSTALL_CLI_ACTION = 'Install AGI CLI';
 
-async function ensureCliForTerminal(): Promise<boolean> {
+async function ensureCliForTerminal(): Promise<string | undefined> {
   const environment = describeRemoteEnvironment(vscode.env.remoteName);
-  const probe = await probeCli(
-    resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
-    runCliVersion,
-  );
-  if (probe.ok) return true;
+  const probe = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);
+  if (probe.ok) return probe.cliPath;
   const choice = await vscode.window.showWarningMessage(
     cliProbeMessage(probe, environment),
     INSTALL_CLI_ACTION,
   );
-  if (choice !== INSTALL_CLI_ACTION) return false;
+  if (choice !== INSTALL_CLI_ACTION) return undefined;
   const installed = await vscode.commands.executeCommand<{ ok: boolean }>(
     'agi-workforce.installCli',
   );
-  return installed?.ok === true;
+  if (installed?.ok !== true) return undefined;
+  const resolved = resolveConfiguredCli();
+  return resolved.ok ? resolved.path : undefined;
 }
 
 async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<void> {
-  if (!(await ensureCliForTerminal())) return;
   if (sidebarProvider.activeThreadId() !== undefined) {
     await continueThisSessionInTheTerminal(sidebarProvider);
     return;
@@ -514,19 +523,29 @@ async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<v
     running.show();
     return;
   }
+  const cli = await ensureCliForTerminal();
+  if (cli === undefined) return;
   const folder = getActiveWorkspaceFolderSync();
   const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder?.uri });
   terminal.show();
-  terminal.sendText(
-    shellQuoteForCurrentPlatform(resolveCliPath(Config.cliPath(), nodeCliResolutionHost())),
-  );
+  terminal.sendText(shellExecutableForCurrentPlatform(cli));
 }
 
 const CONTINUE_HANDOFF_HERE = 'Continue here';
 
+async function offerWorkspaceTrust(error: WorkspaceNotTrustedError): Promise<void> {
+  const manageTrust = t('webview.manageTrust');
+  const choice = await vscode.window.showWarningMessage(
+    `${PRODUCT_NAMES.code}: ${error.message}`,
+    manageTrust,
+  );
+  if (choice === manageTrust) await vscode.commands.executeCommand(MANAGE_WORKSPACE_TRUST_COMMAND);
+}
+
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
   accepted: Set<string>,
+  openHere: (threadId: string) => Promise<void>,
   threadId?: string,
 ): Promise<void> {
   const folder = getActiveWorkspaceFolderSync();
@@ -542,6 +561,10 @@ async function continueCliSessionHere(
   try {
     threads = await runtime.listThreads({ cwd });
   } catch (error) {
+    if (error instanceof WorkspaceNotTrustedError) {
+      await offerWorkspaceTrust(error);
+      return;
+    }
     await vscode.window.showErrorMessage(
       `${PRODUCT_NAMES.code}: could not reach the AGI CLI. ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -580,9 +603,16 @@ async function continueCliSessionHere(
     CONTINUE_HANDOFF_HERE,
   );
   if (choice !== CONTINUE_HANDOFF_HERE) return;
+  try {
+    await runtime.acceptHandoff(handoff);
+    await openHere(newest.id);
+  } catch (error) {
+    await vscode.window.showErrorMessage(
+      `${PRODUCT_NAMES.code}: could not continue that session here. ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
   accepted.add(outcome.receipt);
-  await runtime.acceptHandoff(handoff);
-  await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
 }
 
 async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
@@ -788,6 +818,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     );
     return picked?.thread;
   };
+  const pickMemoryFact = async (placeHolder: string): Promise<MemoryFact | undefined> => {
+    const store = getAccountMemoryStore();
+    if (store === undefined) {
+      vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
+      return undefined;
+    }
+    const facts = store.cachedFacts();
+    if (facts.length === 0) {
+      vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: no memories are saved yet.`);
+      return undefined;
+    }
+    const picked = await vscode.window.showQuickPick(
+      facts.map((fact) => ({ label: fact.text.slice(0, 120), fact })),
+      { placeHolder, ignoreFocusOut: true },
+    );
+    return picked?.fact;
+  };
   const revealFirstPartyChat = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
@@ -907,8 +954,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.checkCli', async () => {
       const environment = describeRemoteEnvironment(vscode.env.remoteName);
-      const cliPath = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
-      const result = await probeCli(cliPath, runCliVersion);
+      const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);
       const message = cliProbeMessage(result, environment);
       if (result.ok) vscode.window.showInformationMessage(message);
       else vscode.window.showErrorMessage(message);
@@ -918,10 +964,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.installCli', async () => {
       if (!(await installCli())) return { ok: false as const };
       const environment = describeRemoteEnvironment(vscode.env.remoteName);
-      const result = await probeCli(
-        resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
-        runCliVersion,
-      );
+      const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);
       if (!result.ok) {
         vscode.window.showErrorMessage(cliProbeMessage(result, environment));
         return { ok: false as const };
@@ -1163,6 +1206,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.signIn', async () => {
       const ok = await signInPreferringCli(context.secrets, cliCapabilities);
       if (ok) {
+        artifactContentProvider.clear();
+        artifactsTreeProvider.refresh();
+        await clearAccountTierCache(context);
         await refreshAccountTierCache(context);
         sidebarProvider.refreshAccountPresentation();
         ChatEditorPanel.refreshAccountPresentation();
@@ -1188,6 +1234,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       }
       await clearAccountTierCache(context);
+      await getAccountMemoryStore()?.forgetLocalCache();
+      artifactContentProvider.clear();
+      artifactsTreeProvider.refresh();
       sidebarProvider.refreshAccountPresentation();
       ChatEditorPanel.refreshAccountPresentation();
     }),
@@ -1323,8 +1372,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     ),
     register('agi-workforce.addTerminalOutputToChat', () => sidebarProvider.attachTerminalOutput()),
 
-    register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
-      const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.thread.id;
+    register('agi-workforce.openConversation', async (idOrItem?: string | ConversationTreeItem) => {
+      const id =
+        typeof idOrItem === 'string'
+          ? idOrItem
+          : (idOrItem?.thread ?? (await pickDeveloperSession('Open which session?')))?.id;
+      if (id === undefined) return;
       await revealFirstPartyChat();
       await sidebarProvider.resumeConversation(id);
     }),
@@ -1372,6 +1425,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.forkConversation', async (item?: ConversationTreeItem) => {
+      const requestingChat = focusedChat();
       const thread = item?.thread ?? (await pickDeveloperSession('Fork which session?'));
       if (thread === undefined) return;
       const title = await vscode.window.showInputBox({
@@ -1388,6 +1442,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
         return;
       }
+      if (requestingChat !== undefined && requestingChat !== sidebarProvider) {
+        await requestingChat.resumeConversation(forkedId);
+        return;
+      }
       await revealFirstPartyChat();
       await sidebarProvider.resumeConversation(forkedId);
     }),
@@ -1400,6 +1458,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await continueCliSessionHere(
         localRuntimes,
         acceptedHandoffs,
+        async (id) => {
+          await revealFirstPartyChat();
+          await sidebarProvider.resumeConversation(id);
+        },
         typeof argument === 'string' && argument !== '' ? argument : undefined,
       );
     }),
@@ -1937,13 +1999,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.toggle', async () => {
-      const next = !Config.memoryEnabled();
+      const next = !Config.memoryUserSetting();
+      if (next && Config.memoryOptedOutHere()) {
+        vscode.window.showInformationMessage(MEMORY_KEPT_OFF_HERE);
+        return;
+      }
       await Config.update(context, { key: 'memory.enabled', value: next });
       void memoryTreeProvider.refresh();
       vscode.window.showInformationMessage(
         next
-          ? 'Memory on, saved facts are included with your turns.'
-          : 'Memory off, saved facts stay stored but are not sent.',
+          ? 'Memory turned on in your user settings, saved facts are included with your turns.'
+          : 'Memory turned off in your user settings, saved facts stay stored but are not sent.',
       );
     }),
 
@@ -1996,10 +2062,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
+    register('agi-workforce.memory.edit', async (item?: MemoryFactItem) => {
+      const fact = item?.fact ?? (await pickMemoryFact('Edit which memory?'));
+      if (fact === undefined) return;
       const newText = await vscode.window.showInputBox({
         title: `${PRODUCT_NAMES.code}, Edit Memory Fact`,
-        value: item.fact.text,
+        value: fact.text,
         prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -2007,13 +2075,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           return read.ok ? undefined : read.message;
         },
       });
-      if (!newText || newText.trim() === item.fact.text) return;
+      if (!newText || newText.trim() === fact.text) return;
       const store = getAccountMemoryStore();
       if (store === undefined) {
         vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
         return;
       }
-      const updated = await store.update(item.fact.id, newText.trim());
+      const updated = await store.update(fact.id, newText.trim());
       if (updated.applied) {
         vscode.window.showInformationMessage('Updated in your account, on every client.');
       } else {
@@ -2023,9 +2091,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
+    register('agi-workforce.memory.delete', async (item?: MemoryFactItem) => {
+      const fact = item?.fact ?? (await pickMemoryFact('Delete which memory?'));
+      if (fact === undefined) return;
       const confirm = await vscode.window.showWarningMessage(
-        `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
+        `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${fact.text.slice(0, 80)}${fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },
         'Delete',
       );
@@ -2035,7 +2105,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
           return;
         }
-        const removed = await store.remove(item.fact.id);
+        const removed = await store.remove(fact.id);
         vscode.window.showInformationMessage(
           removed.applied
             ? 'Deleted from your account, on every client.'

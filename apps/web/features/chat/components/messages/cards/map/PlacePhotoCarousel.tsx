@@ -19,19 +19,26 @@ export function PlacePhotoCarousel({ photos, placeName }: PlacePhotoCarouselProp
   }, [placeName]);
 
   const current = photos[index];
-  if (!current || failed[current.reference]) return null;
+  if (!current || photos.every((photo) => failed[photo.reference])) return null;
+  const currentFailed = failed[current.reference] === true;
 
   return (
     <div className="relative">
-      <img
-        src={placePhotoUrl(current.reference, PLACE_PHOTO_DETAIL_WIDTH_PX)}
-        alt={`Photo of ${placeName}`}
-        loading="lazy"
-        decoding="async"
-        onError={() => setFailed((state) => ({ ...state, [current.reference]: true }))}
-        className="h-24 w-full bg-[var(--chat-surface-hover)] object-cover"
-      />
-      {current.attribution ? (
+      {currentFailed ? (
+        <div className="grid h-24 w-full place-items-center bg-[var(--chat-surface-hover)] text-sm text-[color:var(--chat-text-secondary)]">
+          Photo unavailable
+        </div>
+      ) : (
+        <img
+          src={placePhotoUrl(current.reference, PLACE_PHOTO_DETAIL_WIDTH_PX)}
+          alt={`Photo of ${placeName}`}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed((state) => ({ ...state, [current.reference]: true }))}
+          className="h-24 w-full bg-[var(--chat-surface-hover)] object-cover"
+        />
+      )}
+      {current.attribution && !currentFailed ? (
         <span className="absolute bottom-1 right-1 max-w-[70%] truncate rounded-compact bg-[var(--chat-surface-overlay)] px-1.5 py-0.5 text-xs text-[color:var(--chat-text-secondary)]">
           {current.attribution}
         </span>

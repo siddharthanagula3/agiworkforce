@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Linking, Alert } from 'react-native';
+import { View, ScrollView, Linking, Alert, AppState } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,6 +21,11 @@ import {
 function isMobilePermissionKind(value: string | undefined): value is MobilePermissionKind {
   return typeof value === 'string' && value in PERMISSION_REGISTRY;
 }
+
+const PERMISSION_READ_FAILURE =
+  'Could not read this permission from your device. The status shown may be out of date.';
+const PERMISSION_REQUEST_FAILURE =
+  'Your device could not process the request. Try again, or open Settings.';
 
 function openAppSettings() {
   Linking.openSettings().catch(() => {
@@ -44,6 +49,7 @@ export default function PermissionDetailScreen() {
     permState?.lastObservedStatus ?? 'undetermined',
   );
   const [requesting, setRequesting] = useState(false);
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -51,16 +57,26 @@ export default function PermissionDetailScreen() {
       if (!registryEntry) return undefined;
       const readStatus = registryEntry.getStatus;
       let cancelled = false;
+      let sequence = 0;
       async function poll() {
-        const status = await readStatus();
-        if (!cancelled) {
+        const current = ++sequence;
+        try {
+          const status = await readStatus();
+          if (cancelled || current !== sequence) return;
           setOsStatus(status);
           setObservedStatus(kind, status);
+          setFailureMessage(null);
+        } catch {
+          if (!cancelled && current === sequence) setFailureMessage(PERMISSION_READ_FAILURE);
         }
       }
-      poll();
+      void poll();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void poll();
+      });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, [entry, kind, setObservedStatus]),
   );
@@ -76,10 +92,13 @@ export default function PermissionDetailScreen() {
   const handleRequest = useCallback(async () => {
     if (!entry || requesting) return;
     setRequesting(true);
+    setFailureMessage(null);
     try {
       const newStatus = await entry.requestPermission();
       setOsStatus(newStatus);
       setObservedStatus(kind, newStatus);
+    } catch {
+      setFailureMessage(PERMISSION_REQUEST_FAILURE);
     } finally {
       setRequesting(false);
     }
@@ -231,6 +250,21 @@ export default function PermissionDetailScreen() {
         >
           {STATUS_EXPLANATIONS[osStatus]}
         </Text>
+
+        {failureMessage ? (
+          <Text
+            accessibilityRole="alert"
+            style={{
+              color: c.agentError,
+              fontSize: typeScale.footnote,
+              lineHeight: 18,
+              marginTop: 10,
+              paddingHorizontal: 2,
+            }}
+          >
+            {failureMessage}
+          </Text>
+        ) : null}
 
         <Pressable
           onPress={canRequest ? handleRequest : openAppSettings}

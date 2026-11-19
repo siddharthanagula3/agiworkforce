@@ -215,7 +215,11 @@ describe('/api/artifacts/live/[artifactId]', () => {
     const response = await DELETE(...request('DELETE'));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ artifact: null });
-    expect(mocks.removeLiveArtifact).toHaveBeenCalledWith(mocks.db, 'user-1', ARTIFACT_ID);
+    expect(mocks.removeLiveArtifact).toHaveBeenCalledWith(
+      mocks.db,
+      expect.objectContaining({ userId: 'user-1', organizationId: 'org-1' }),
+      ARTIFACT_ID,
+    );
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         detail: expect.objectContaining({ status: 'live_artifact_unbound' }),

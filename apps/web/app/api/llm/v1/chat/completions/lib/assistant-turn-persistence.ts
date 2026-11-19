@@ -16,7 +16,11 @@ import {
   isRoutingRedirectUrl,
   type RedirectResolutionOverrides,
 } from '@/lib/web-search/web-search-tool';
-import { resolveSourceUrlMetadataRedirects } from '@/lib/web-search/source-url-metadata';
+import {
+  applySourceUrlRedirectMap,
+  resolveSourceUrlRedirectMap,
+  SOURCE_URL_METADATA_KEYS,
+} from '@/lib/web-search/source-url-metadata';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import {
   assertParentInConversation,
@@ -81,6 +85,9 @@ const SELECT_ASSISTANT_TURN_METADATA_SQL = `select m.metadata
           and m.deleted_at is null
         limit 1`;
 
+// The patch is computed from a read taken before a network wait, so it lands
+// only while the citation keys still hold exactly what that read saw; a save
+// that landed in between is re-read and patched instead of overwritten.
 const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m
           set metadata = m.metadata || $4::jsonb
          from public.web_conversations c
@@ -89,7 +96,12 @@ const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m
           and c.id = $2::uuid
           and c.user_id = $3
           and c.organization_id is not distinct from $5::uuid
-          and c.deleted_at is null`;
+          and c.deleted_at is null
+          and m.deleted_at is null
+          and m.metadata -> '${SOURCE_URL_METADATA_KEYS[0]}' is not distinct from $6::jsonb
+          and m.metadata -> '${SOURCE_URL_METADATA_KEYS[1]}' is not distinct from $7::jsonb`;
+
+const SOURCE_URL_PATCH_ATTEMPTS = 3;
 
 export type AssistantTurnOrigin = Pick<
   ProcessedRequest,
@@ -527,19 +539,47 @@ export async function patchAssistantTurnSourceUrls(params: {
       userId,
       organizationId,
     ]);
-    const stored = asMetadataRecord(row?.metadata);
+    let stored = asMetadataRecord(row?.metadata);
     if (!stored) return;
 
-    const patch = await resolveSourceUrlMetadataRedirects(stored, overrides ?? {});
-    if (!patch) return;
+    const publisherUrlByRedirect = await resolveSourceUrlRedirectMap(stored, overrides ?? {});
+    if (!publisherUrlByRedirect) return;
 
-    await db.execute(PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL, [
-      messageId,
-      conversationId,
-      userId,
-      JSON.stringify(patch),
-      organizationId,
-    ]);
+    for (let attempt = 0; attempt < SOURCE_URL_PATCH_ATTEMPTS; attempt += 1) {
+      const snapshot: Record<string, unknown> = stored;
+      const patch = applySourceUrlRedirectMap(snapshot, publisherUrlByRedirect);
+      if (!patch) return;
+
+      const written = await db.execute(PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL, [
+        messageId,
+        conversationId,
+        userId,
+        JSON.stringify(patch),
+        organizationId,
+        ...SOURCE_URL_METADATA_KEYS.map((key) =>
+          snapshot[key] === undefined ? null : JSON.stringify(snapshot[key]),
+        ),
+      ]);
+      if (written > 0) return;
+
+      const [latest] = await db.query<{ metadata: unknown }>(SELECT_ASSISTANT_TURN_METADATA_SQL, [
+        messageId,
+        conversationId,
+        userId,
+        organizationId,
+      ]);
+      stored = asMetadataRecord(latest?.metadata);
+      if (!stored) return;
+    }
+    logger.warn(
+      {
+        event: 'assistant_turn_citation_patch_contended',
+        userId,
+        requestId: processed.requestId,
+        conversationId,
+      },
+      'The turn kept changing while its citation URLs were patched; the latest save keeps its own URLs',
+    );
   } catch (error) {
     logger.error(
       {

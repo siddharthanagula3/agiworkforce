@@ -113,6 +113,7 @@ export interface GenerateImageOptions {
   referenceImagesBase64?: string[];
   transparentBackground?: boolean;
   cancelScope?: string;
+  resumeJobId?: string;
 }
 
 export interface GeneratedImageResult {
@@ -137,6 +138,8 @@ const IMAGE_GENERATION_TIMEOUT_MESSAGE =
   'The image did not finish in time. Try again or pick another image model.';
 export const IMAGE_GENERATION_CANCELLED_CODE = 'image_generation_cancelled';
 const IMAGE_GENERATION_CANCELLED_MESSAGE = 'You stopped this image.';
+export const IMAGE_JOB_IN_PROGRESS_CODE = 'image_job_in_progress';
+const IMAGE_JOB_IN_PROGRESS_MESSAGE = 'This image is still being generated. Try again in a moment.';
 const IMAGE_CANCEL_ATTEMPTS = 5;
 const IMAGE_CANCEL_RETRY_MS = 1_000;
 
@@ -215,6 +218,7 @@ export class MediaGenerationApiError extends Error {
   currentPlan: string | undefined;
   requiredPlans: readonly string[] | undefined;
   resetAt: string | undefined;
+  jobId: string | undefined;
   recoveryAction: MediaPaywallRecoveryAction | null;
   isPaywall: boolean;
 
@@ -227,6 +231,7 @@ export class MediaGenerationApiError extends Error {
       currentPlan?: string;
       requiredPlans?: readonly string[];
       resetAt?: string;
+      jobId?: string;
     } = {},
   ) {
     super(message);
@@ -237,6 +242,7 @@ export class MediaGenerationApiError extends Error {
     this.currentPlan = options.currentPlan;
     this.requiredPlans = options.requiredPlans;
     this.resetAt = options.resetAt;
+    this.jobId = options.jobId;
     this.recoveryAction = mediaPaywallRecoveryAction(options);
     this.isPaywall = this.recoveryAction !== null;
   }
@@ -277,6 +283,139 @@ function isAbortError(err: unknown): boolean {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+interface ImageApiErrorDetail {
+  message?: string;
+  code?: string;
+  type?: string;
+  current_plan?: unknown;
+  required_plans?: unknown;
+  reset_at?: unknown;
+}
+
+interface ImageApiBody {
+  error?: ImageApiErrorDetail | string;
+  retry_after_seconds?: unknown;
+  job_id?: unknown;
+  retryable?: unknown;
+  status?: unknown;
+  provider?: unknown;
+  model?: unknown;
+  images?: Array<{ url?: string }>;
+}
+
+function imageGenerationApiError(status: number, body: ImageApiBody): MediaGenerationApiError {
+  const errorField = body.error;
+  const detail = typeof errorField === 'object' && errorField !== null ? errorField : undefined;
+  const message =
+    detail?.message ||
+    (typeof errorField === 'string' ? errorField : undefined) ||
+    `Request failed: ${status}`;
+  const currentPlan = typeof detail?.current_plan === 'string' ? detail.current_plan : undefined;
+  const requiredPlansField = detail?.required_plans;
+  const requiredPlans = Array.isArray(requiredPlansField)
+    ? requiredPlansField.filter((plan: unknown): plan is string => typeof plan === 'string')
+    : undefined;
+  const resetAt =
+    typeof detail?.reset_at === 'string'
+      ? detail.reset_at
+      : status === 429
+        ? retryAtFromStructuredSeconds(body.retry_after_seconds)
+        : undefined;
+  const jobId =
+    typeof body.job_id === 'string' && body.retryable === true ? body.job_id : undefined;
+  return new MediaGenerationApiError(message, {
+    status,
+    code: detail?.code,
+    type: detail?.type,
+    currentPlan,
+    requiredPlans,
+    resetAt,
+    jobId,
+  });
+}
+
+function deliveredImageResult(
+  resultUrl: string | undefined,
+  provider: unknown,
+  catalogModelId: unknown,
+): GeneratedImageResult {
+  if (!resultUrl) throw new Error('No image URL in response');
+  const catalogModel =
+    typeof catalogModelId === 'string' ? getModelMetadataById(catalogModelId) : null;
+  if (
+    !isExecutableImageModel(catalogModel) ||
+    (provider !== 'google' && provider !== 'openai') ||
+    catalogModel.provider !== provider
+  ) {
+    throw new Error('Image response did not include valid canonical model provenance');
+  }
+  return { imageUrl: resultUrl, provider, model: catalogModel.id };
+}
+
+function imageEditFields(options: GenerateImageOptions) {
+  return {
+    ...(options.sourceImageBase64 ? { source_image: { b64_json: options.sourceImageBase64 } } : {}),
+    ...(options.maskImageBase64 ? { mask_image: { b64_json: options.maskImageBase64 } } : {}),
+    ...(options.referenceImagesBase64?.length
+      ? { reference_images: options.referenceImagesBase64.map((b64_json) => ({ b64_json })) }
+      : {}),
+  };
+}
+
+function isImageJobRunning(body: ImageApiBody): boolean {
+  return body.status === 'queued' || body.status === 'processing';
+}
+
+function imageJobInProgress(jobId: string): MediaGenerationApiError {
+  return new MediaGenerationApiError(IMAGE_JOB_IN_PROGRESS_MESSAGE, {
+    code: IMAGE_JOB_IN_PROGRESS_CODE,
+    jobId,
+  });
+}
+
+async function resumeImageJob(input: {
+  authority: RequestAuthority;
+  jobId: string;
+  signal: AbortSignal;
+  editFields: ReturnType<typeof imageEditFields>;
+}): Promise<GeneratedImageResult | null> {
+  const { authority, jobId, signal } = input;
+  const statusResponse = await authority.fetch(
+    `/api/media/image/status?job_id=${encodeURIComponent(jobId)}`,
+    { method: 'GET', signal },
+  );
+  if (statusResponse.status === 403 || statusResponse.status === 404) return null;
+  const snapshot = (await statusResponse.json().catch(() => ({}))) as ImageApiBody;
+  authority.assertCurrent();
+  if (!statusResponse.ok) throw imageGenerationApiError(statusResponse.status, snapshot);
+  if (snapshot.status === 'completed') {
+    return deliveredImageResult(snapshot.images?.[0]?.url, snapshot.provider, snapshot.model);
+  }
+  if (isImageJobRunning(snapshot)) throw imageJobInProgress(jobId);
+  if (snapshot.status !== 'failed' || snapshot.retryable !== true) return null;
+
+  const retryResponse = await authority.fetch('/api/media/image/retry', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ job_id: jobId, ...input.editFields }),
+    signal,
+  });
+  const retried = (await retryResponse.json().catch(() => ({}))) as ImageApiBody;
+  authority.assertCurrent();
+  if (retryResponse.status === 409) {
+    const code =
+      typeof retried.error === 'object' && retried.error !== null ? retried.error.code : undefined;
+    if (code === 'image_job_not_retryable') return null;
+    throw imageJobInProgress(jobId);
+  }
+  if (retried.status === 'completed' && retryResponse.ok) {
+    return deliveredImageResult(retried.images?.[0]?.url, retried.provider, retried.model);
+  }
+  if (isImageJobRunning(retried)) throw imageJobInProgress(jobId);
+  if (retried.status === 'canceled') return null;
+  throw imageGenerationApiError(retryResponse.status, retried);
+}
 
 export function useMediaGeneration() {
   const { addJob, updateJob, retireStaleJobs } = useMediaStore();
@@ -341,6 +480,23 @@ export function useMediaGeneration() {
         },
       );
       try {
+        if (options.resumeJobId) {
+          const resumed = await resumeImageJob({
+            authority: dispatchAuthority,
+            jobId: options.resumeJobId,
+            signal: deadline.signal,
+            editFields: imageEditFields(options),
+          });
+          if (resumed) {
+            updateJob(jobId, {
+              status: 'completed',
+              resultUrl: resumed.imageUrl,
+              completedAt: new Date().toISOString(),
+            });
+            return resumed;
+          }
+        }
+
         const response = await dispatchAuthority.fetch('/api/media/image/generate', {
           method: 'POST',
           headers: {
@@ -355,56 +511,18 @@ export function useMediaGeneration() {
             ...(options.provider ? { provider: options.provider } : {}),
             ...(options.model ? { model: options.model } : {}),
             ...(options.operation ? { operation: options.operation } : {}),
-            ...(options.sourceImageBase64
-              ? { source_image: { b64_json: options.sourceImageBase64 } }
-              : {}),
-            ...(options.maskImageBase64
-              ? { mask_image: { b64_json: options.maskImageBase64 } }
-              : {}),
-            ...(options.referenceImagesBase64?.length
-              ? {
-                  reference_images: options.referenceImagesBase64.map((b64_json) => ({ b64_json })),
-                }
-              : {}),
+            ...imageEditFields(options),
             ...(options.transparentBackground ? { transparent_background: true } : {}),
           }),
           signal: deadline.signal,
         });
 
         if (!response.ok) {
-          const err = await response.json().catch(() => ({ error: 'Generation failed' }));
+          const err = (await response
+            .json()
+            .catch(() => ({ error: 'Generation failed' }))) as ImageApiBody;
           dispatchAuthority.assertCurrent();
-          const errorField = err?.error;
-          const message =
-            (typeof errorField === 'object' && errorField?.message) ||
-            (typeof errorField === 'string' ? errorField : undefined) ||
-            `Request failed: ${response.status}`;
-          const code = typeof errorField === 'object' ? errorField?.code : undefined;
-          const type = typeof errorField === 'object' ? errorField?.type : undefined;
-          const currentPlan =
-            typeof errorField === 'object' && typeof errorField?.current_plan === 'string'
-              ? errorField.current_plan
-              : undefined;
-          const requiredPlans =
-            typeof errorField === 'object' && Array.isArray(errorField?.required_plans)
-              ? errorField.required_plans.filter(
-                  (plan: unknown): plan is string => typeof plan === 'string',
-                )
-              : undefined;
-          const resetAt =
-            typeof errorField === 'object' && typeof errorField?.reset_at === 'string'
-              ? errorField.reset_at
-              : response.status === 429
-                ? retryAtFromStructuredSeconds(err?.retry_after_seconds)
-                : undefined;
-          throw new MediaGenerationApiError(message, {
-            status: response.status,
-            code,
-            type,
-            currentPlan,
-            requiredPlans,
-            resetAt,
-          });
+          throw imageGenerationApiError(response.status, err ?? {});
         }
 
         const data = (await response.json()) as {
@@ -417,29 +535,15 @@ export function useMediaGeneration() {
         const first = data.images?.[0];
         const resultUrl = first?.url ?? objectUrlFromBase64(first?.b64_json);
 
-        if (!resultUrl) throw new Error('No image URL in response');
-
-        const catalogModel =
-          typeof data.catalog_model === 'string' ? getModelMetadataById(data.catalog_model) : null;
-        if (
-          !isExecutableImageModel(catalogModel) ||
-          (data.provider !== 'google' && data.provider !== 'openai') ||
-          catalogModel.provider !== data.provider
-        ) {
-          throw new Error('Image response did not include valid canonical model provenance');
-        }
+        const result = deliveredImageResult(resultUrl, data.provider, data.catalog_model);
 
         updateJob(jobId, {
           status: 'completed',
-          resultUrl,
+          resultUrl: result.imageUrl,
           completedAt: new Date().toISOString(),
         });
 
-        return {
-          imageUrl: resultUrl,
-          provider: data.provider,
-          model: catalogModel.id,
-        } satisfies GeneratedImageResult;
+        return result;
       } catch (err) {
         authority.assertCurrent();
         const error = active.cancelled

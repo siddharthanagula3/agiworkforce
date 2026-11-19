@@ -3,6 +3,7 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
+let mockUnreadCount = 0;
 const mockNavigate = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -27,6 +28,7 @@ jest.mock('@/services/notifications', () => ({
   enablePushNotifications: jest.fn().mockResolvedValue('granted'),
   getPushDeliveryStatus: jest.fn().mockResolvedValue('granted'),
   getPushRegistrationIssue: jest.fn().mockReturnValue(null),
+  useNotificationCenter: () => ({ unreadCount: mockUnreadCount }),
 }));
 
 jest.mock('@/services/notificationChannels', () => ({
@@ -36,6 +38,7 @@ jest.mock('@/services/notificationChannels', () => ({
 jest.mock('@/services/preferences', () => ({
   fetchPreferenceNamespace: jest.fn().mockResolvedValue({}),
   savePreferenceNamespace: jest.fn().mockResolvedValue(undefined),
+  patchPreferenceNamespace: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -55,6 +58,7 @@ jest.mock('lucide-react-native', () => {
     Bell: icon,
     BellOff: icon,
     Bot: icon,
+    CalendarClock: icon,
     CheckSquare: icon,
     ChevronRight: icon,
     Clock: icon,
@@ -63,6 +67,7 @@ jest.mock('lucide-react-native', () => {
     Mail: icon,
     MessageSquare: icon,
     Moon: icon,
+    Sparkles: icon,
     Vibrate: icon,
     X: icon,
   };
@@ -73,17 +78,24 @@ import NotificationCategoryDetailScreen from '../src/features/settings/notificat
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 describe('notification category settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
-      useAuthStore.setState({ isClerkSignedIn: false });
+      useAuthStore.setState({ isClerkSignedIn: false, isClerkLoaded: false, clerkUserId: null });
       useNotificationPrefsStore.setState({
         categoryEnabled: {
           chat_replies: true,
           tasks: true,
+          scheduled_tasks: true,
+          product_updates: false,
           product: false,
         },
         vibrationEnabled: {
@@ -109,7 +121,9 @@ describe('notification category settings', () => {
 
     expect(screen.getByLabelText('Chat replies. Push')).toBeTruthy();
     expect(screen.getByLabelText('Task and approval updates. Push')).toBeTruthy();
-    expect(screen.getByLabelText('Product. Off')).toBeTruthy();
+    expect(screen.getByLabelText('Scheduled tasks. Push')).toBeTruthy();
+    expect(screen.getByLabelText('Product updates. Off')).toBeTruthy();
+    expect(screen.getByLabelText('Service status. Off')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Task and approval updates. Push'));
 
     expect(mockPush).toHaveBeenCalledWith({
@@ -118,12 +132,47 @@ describe('notification category settings', () => {
     });
   });
 
+  it('opens the list of recent notifications, which no longer has a side panel row', async () => {
+    mockUnreadCount = 3;
+    const screen = render(<NotificationPreferencesScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Recent notifications. 3 unread'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/notifications');
+    mockUnreadCount = 0;
+  });
+
+  it('labels the break reminder as a once-a-day threshold, not a repeating interval', async () => {
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: 30 });
+    });
+    const screen = render(<NotificationPreferencesScreen />);
+    await screen.findByText('Your device is delivering notifications');
+
+    expect(screen.getByLabelText('Break reminder, currently After 30 min today')).toBeTruthy();
+    expect(screen.getByText('After 30 min today')).toBeTruthy();
+    expect(screen.queryByText(/^Every /)).toBeNull();
+
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: 120 });
+    });
+    expect(screen.getByText('After 2 hr today')).toBeTruthy();
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: null });
+    });
+  });
+
   it('blocks the per-device category rows while the device denies notifications', async () => {
     const { getPushDeliveryStatus } = require('@/services/notifications');
     (getPushDeliveryStatus as jest.Mock).mockResolvedValueOnce('denied');
+    activateCloudAccount('notification-owner');
     act(() => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useAuthStore.setState({ isClerkSignedIn: true });
+      useAuthStore.setState({
+        isClerkLoaded: true,
+        isClerkSignedIn: true,
+        clerkUserId: 'notification-owner',
+      });
     });
     const screen = render(<NotificationPreferencesScreen />);
     await screen.findByText('Your device is blocking notifications');
@@ -132,10 +181,10 @@ describe('notification category settings', () => {
     expect(row).toBeDisabled();
     fireEvent.press(row);
     expect(mockPush).not.toHaveBeenCalled();
-    expect(screen.getAllByText('Blocked')).toHaveLength(3);
+    expect(screen.getAllByText('Blocked')).toHaveLength(5);
     expect(
       await screen.findByText(
-        'Saved to your account, but this device stays silent until notifications are allowed in Settings.',
+        'Saved, but this device stays silent until notifications are allowed.',
       ),
     ).toBeTruthy();
   });
@@ -157,7 +206,7 @@ describe('notification category settings', () => {
     ['approvals', 'tasks', 'Task and approval updates'],
     ['task_updates', 'tasks', 'Task and approval updates'],
     ['errors', 'tasks', 'Task and approval updates'],
-    ['status', 'product', 'Product'],
+    ['status', 'product', 'Service status'],
   ] as const)('opens the %s link from the old taxonomy on %s', (legacy, current, label) => {
     const screen = render(<NotificationCategoryDetailScreen category={legacy} />);
 
@@ -170,6 +219,29 @@ describe('notification category settings', () => {
       current === 'product',
     );
     expect(useNotificationPrefsStore.getState().categoryEnabled).not.toHaveProperty(legacy);
+  });
+
+  it('opens the scheduled tasks switch on its own, leaving task and approval updates on', () => {
+    const screen = render(<NotificationCategoryDetailScreen category="scheduled_tasks" />);
+
+    expect(screen.getByText('Scheduled tasks')).toBeTruthy();
+    expect(screen.getByLabelText('Email notifications. On the web')).toBeTruthy();
+    expect(screen.queryByText('No email for this category')).toBeNull();
+
+    fireEvent(screen.getByRole('switch'), 'valueChange', false);
+
+    expect(useNotificationPrefsStore.getState().categoryEnabled.scheduled_tasks).toBe(false);
+    expect(useNotificationPrefsStore.getState().categoryEnabled.tasks).toBe(true);
+  });
+
+  it('turns product updates on from their own page', () => {
+    const screen = render(<NotificationCategoryDetailScreen category="product_updates" />);
+
+    expect(screen.getByText('Product updates')).toBeTruthy();
+    fireEvent(screen.getByRole('switch'), 'valueChange', true);
+
+    expect(useNotificationPrefsStore.getState().categoryEnabled.product_updates).toBe(true);
+    expect(useNotificationPrefsStore.getState().categoryEnabled.product).toBe(false);
   });
 
   it('rejects an unknown dynamic category without mutating preferences', () => {

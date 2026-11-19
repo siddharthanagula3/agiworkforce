@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
 import { headAndTail, visibleInDialog } from '../runtime/dialogText';
@@ -76,7 +77,7 @@ function asked(launch: McpApprovalLaunchShown | null, extra: Partial<McpApproval
 const detailOf = (launch: McpApprovalLaunchShown | null, extra: Partial<McpApprovalAsked> = {}) =>
   mcpApprovalConfirmation(root, asked(launch, extra), false).detail;
 
-const MARKER = 'Nothing below this line is AGI Desktop speaking.';
+const MARKER = `Nothing below this line is ${PRODUCT_NAMES.desktop} speaking.`;
 
 /** The lines of a dialog this app wrote, and the ones it only repeats. */
 function halves(detail: string): { app: string[]; repeated: string[] } {

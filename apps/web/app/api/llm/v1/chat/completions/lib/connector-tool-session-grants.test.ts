@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   connectorToolPermissionsFromEntries,
+  ConnectorToolPermissionStaleError,
   loadConnectorToolPermissions,
   saveScopedConnectorToolApprovals,
   LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
@@ -17,6 +18,7 @@ import {
   withWorkspaceToolRules,
 } from './connector-tool-permissions';
 import {
+  advanceConnectorPermissionGeneration,
   CHAT_COMPLETIONS_TRUST_BOUNDARY,
   insertConnectorToolSessionGrants,
   loadConnectorToolSessionGrants,
@@ -163,9 +165,14 @@ function permissionDatabase(
     workspaceLevel?: 'allow' | 'ask' | 'deny';
     standingUnavailable?: boolean;
     grantsUnavailable?: boolean;
+    generations?: { connector_id: string; generation: string }[] | Error;
   } = {},
 ) {
   const query = vi.fn(async (sql: string) => {
+    if (sql.includes('from public.connector_permission_generations')) {
+      if (options.generations instanceof Error) throw options.generations;
+      return options.generations ?? [];
+    }
     if (sql.includes('from public.user_settings')) return [{ settings: {} }];
     if (sql.includes('from public.connector_account_states')) return [];
     if (sql.includes('from public.connector_tool_permissions')) {
@@ -241,6 +248,26 @@ describe('connector tool session grants', () => {
     );
   });
 
+  it('asks for every connector tool, a read included, when the saved verdicts cannot be read', async () => {
+    const { db } = permissionDatabase({ standingUnavailable: true });
+    const permissions = await loadConnectorToolPermissions(db, 'user-1', null);
+    expect(permissions.levelFor('mcp__gmail__get_message')).toBe('ask');
+    expect(permissions.levelFor('mcp__github__create_issue')).toBe('ask');
+    expect(permissions.levelForConnectorTool('gmail', 'get_message')).toBe('ask');
+    expect(permissions.canRememberApproval?.('mcp__gmail__get_message')).toBe(false);
+  });
+
+  it('keeps a workspace deny final when the member verdicts cannot be read', async () => {
+    const { db } = permissionDatabase({ standingUnavailable: true, workspaceLevel: 'deny' });
+    const permissions = await loadConnectorToolPermissions(
+      db,
+      'user-1',
+      '0190a000-0000-7000-8000-000000000010',
+    );
+    expect(permissions.levelFor('mcp__github__create_issue')).toBe('deny');
+    expect(permissions.levelFor('mcp__gmail__get_message')).toBe('ask');
+  });
+
   it('reports unavailable grant storage without advertising conversation scope', async () => {
     const { db } = permissionDatabase({ grantsUnavailable: true });
     const permissions = await loadConnectorToolPermissions(
@@ -251,6 +278,43 @@ describe('connector tool session grants', () => {
     );
     expect(permissions.levelFor('mcp__github__create_issue')).toBe('ask');
     expect(permissions.sessionGrantsAvailable).toBe(false);
+  });
+
+  it('reads the permission generations before any verdict the cards are built from', async () => {
+    const { db, query } = permissionDatabase({
+      generations: [{ connector_id: 'github', generation: '7' }],
+    });
+    const permissions = await loadConnectorToolPermissions(
+      db,
+      'user-1',
+      null,
+      scope(CONVERSATION_A),
+    );
+
+    const sql = query.mock.calls.map(([statement]) => String(statement));
+    const generationRead = sql.findIndex((s) =>
+      s.includes('from public.connector_permission_generations'),
+    );
+    expect(generationRead).toBe(0);
+    expect(
+      sql.findIndex((s) => s.includes('from public.connector_tool_permissions')),
+    ).toBeGreaterThan(generationRead);
+    expect(permissions.permissionGenerationFor?.('github')).toBe('7');
+    expect(permissions.permissionGenerationFor?.('notion')).toBe('0');
+    expect(permissions.canRememberApproval?.('mcp__github__create_issue')).toBe(true);
+  });
+
+  it('offers no remembered scope when the generations cannot be read', async () => {
+    const { db } = permissionDatabase({ generations: new Error('relation does not exist') });
+    const permissions = await loadConnectorToolPermissions(
+      db,
+      'user-1',
+      null,
+      scope(CONVERSATION_A),
+    );
+
+    expect(permissions.permissionGenerationFor?.('github')).toBeUndefined();
+    expect(permissions.canRememberApproval?.('mcp__github__create_issue')).toBe(false);
   });
 
   it('refuses a stored grant whose current tool risk has increased', () => {
@@ -567,7 +631,10 @@ describe('planScopedToolApprovals', () => {
 });
 
 describe('one transaction for mixed scoped permissions', () => {
-  function atomicDb(fail: 'standing' | 'session' | 'conflict' | undefined) {
+  function atomicDb(
+    fail: 'standing' | 'session' | 'conflict' | undefined,
+    generations: Map<string, number> = new Map(),
+  ) {
     let persisted = ['existing-permission'];
     const nested = vi.fn(async () => {
       throw new Error('Nested transactions are unsupported');
@@ -580,6 +647,13 @@ describe('one transaction for mixed scoped permissions', () => {
       const pending = [...persisted];
       const query = vi.fn(async (sql: string, params: unknown[]) => {
         statements.push(sql);
+        if (sql.includes('insert into public.connector_permission_generations')) {
+          const connectorId = params[1] as string;
+          const current = generations.get(connectorId);
+          const next = sql.includes('generation + 1') ? (current ?? 0) + 1 : (current ?? 0);
+          generations.set(connectorId, next);
+          return [{ generation: String(next) }];
+        }
         if (sql.includes('insert into public.connector_tool_permissions')) {
           if (fail === 'standing') throw new Error('Standing write failed');
           if (fail === 'conflict') return [];
@@ -619,6 +693,7 @@ describe('one transaction for mixed scoped permissions', () => {
         destructive: true,
         riskTier: 'high' as const,
         critical: false,
+        reviewedGeneration: '0',
       },
       {
         toolCallId: 'always-call',
@@ -628,9 +703,102 @@ describe('one transaction for mixed scoped permissions', () => {
         destructive: false,
         riskTier: 'low' as const,
         critical: false,
+        reviewedGeneration: '0',
       },
     ],
   };
+
+  const isWrite = (sql: string) =>
+    sql.includes('insert into public.connector_tool_permissions') ||
+    sql.includes('insert into public.connector_tool_session_grants') ||
+    sql.includes('revoke_connector_tool_session_grants') ||
+    sql.includes('delete from public.connector_tool_session_grants') ||
+    sql.includes('generation + 1');
+
+  it('refuses an approval whose card predates a reset, and writes nothing', async () => {
+    const generations = new Map<string, number>();
+    const fixture = atomicDb(undefined, generations);
+    await fixture.transaction(async (tx: DatabaseAdapter) => {
+      await advanceConnectorPermissionGeneration(tx, 'user-1', 'github');
+    });
+    fixture.statements.length = 0;
+
+    await expect(saveScopedConnectorToolApprovals(fixture.db, input)).rejects.toBeInstanceOf(
+      ConnectorToolPermissionStaleError,
+    );
+    expect(fixture.persisted()).toEqual(['existing-permission']);
+    expect(fixture.statements.some(isWrite)).toBe(false);
+  });
+
+  it('refuses a session grant reviewed before a reset, even with no standing row involved', async () => {
+    const fixture = atomicDb(undefined, new Map([['custom-fixture', 3]]));
+    const sessionOnly = {
+      ...input,
+      approvals: [{ ...input.approvals[0]!, reviewedGeneration: '2' }],
+    };
+
+    await expect(saveScopedConnectorToolApprovals(fixture.db, sessionOnly)).rejects.toBeInstanceOf(
+      ConnectorToolPermissionStaleError,
+    );
+    expect(fixture.persisted()).toEqual(['existing-permission']);
+  });
+
+  it('locks every connector generation in a fixed order before the first write', async () => {
+    const fixture = atomicDb(undefined);
+    await saveScopedConnectorToolApprovals(fixture.db, input);
+
+    const locks = fixture.statements
+      .map((sql, index) => ({ sql, index }))
+      .filter(({ sql }) =>
+        sql.includes('generation = connector_permission_generations.generation\n'),
+      );
+    const firstWrite = fixture.statements.findIndex(isWrite);
+    expect(locks).toHaveLength(2);
+    expect(locks.every(({ index }) => index < firstWrite)).toBe(true);
+  });
+
+  it('checks the whole batch before its own standing write advances the generation', async () => {
+    const fixture = atomicDb(undefined, new Map([['github', 4]]));
+    const batch = {
+      ...input,
+      approvals: [
+        { ...input.approvals[1]!, reviewedGeneration: '4' },
+        {
+          ...input.approvals[1]!,
+          toolCallId: 'second-always',
+          toolName: 'list_issues',
+          reviewedGeneration: '4',
+        },
+      ],
+    };
+
+    await saveScopedConnectorToolApprovals(fixture.db, batch);
+    expect(fixture.persisted()).toEqual(['existing-permission', 'standing', 'standing']);
+  });
+
+  it('refuses a batch that names two generations for one connector', async () => {
+    const fixture = atomicDb(undefined);
+    const batch = {
+      ...input,
+      approvals: [
+        { ...input.approvals[1]!, reviewedGeneration: '0' },
+        { ...input.approvals[1]!, toolCallId: 'other', reviewedGeneration: '1' },
+      ],
+    };
+
+    await expect(saveScopedConnectorToolApprovals(fixture.db, batch)).rejects.toBeInstanceOf(
+      ConnectorToolPermissionStaleError,
+    );
+    expect(fixture.transaction).not.toHaveBeenCalled();
+  });
+
+  it('advances the generation when an always approval saves a standing allow', async () => {
+    const generations = new Map<string, number>();
+    const fixture = atomicDb(undefined, generations);
+    await saveScopedConnectorToolApprovals(fixture.db, input);
+    expect(generations.get('github')).toBe(1);
+    expect(generations.get('custom-fixture')).toBe(0);
+  });
 
   it('commits both kinds through the same adapter without a nested transaction', async () => {
     const fixture = atomicDb(undefined);

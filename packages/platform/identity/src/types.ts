@@ -47,6 +47,14 @@ export interface VerifySessionTokenOptions {
    * verify without one rather than leaving the decision to each caller.
    */
   authorizedParties: readonly string[];
+  /**
+   * A native app mints its tokens with no origin, so they carry no authorized
+   * party and the default check refuses them. Opting in admits such a token
+   * and still refuses one whose authorized party is present and off the
+   * allowlist. Nothing then ties the token to a client, so opt in only where
+   * the caller binds it another way, and never for a caller that cannot.
+   */
+  admitMissingAuthorizedParty?: boolean;
 }
 
 export interface IdentityRequestAuth {

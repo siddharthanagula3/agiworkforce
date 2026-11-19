@@ -3,7 +3,8 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 
 import { verifyDeveloperTokenSignature } from '@/lib/server/developer-token';
-import { getRequestIdentity, verifyIdentitySessionToken } from '@/lib/server/identity';
+import { getRequestIdentity } from '@/lib/server/identity';
+import { verifyRequestSessionToken } from '@/lib/server/native-session-token';
 
 export interface DeviceCredentialLink {
   credentialFamilyId: string | null;
@@ -29,7 +30,7 @@ export async function resolveDeviceCredentialLink(
     }
 
     try {
-      const claims = await verifyIdentitySessionToken(token);
+      const claims = await verifyRequestSessionToken(request, token);
       return claims?.sessionId
         ? { credentialFamilyId: null, identitySessionId: claims.sessionId }
         : NO_LINK;

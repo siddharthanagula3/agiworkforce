@@ -123,10 +123,15 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
   const conversationId = conversation?.id;
   const setActiveProject = useCallback(
     (id: string | null) => {
-      setGlobalActiveProject(id);
-      if (!conversationId) return;
+      if (!conversationId) {
+        setGlobalActiveProject(id);
+        return;
+      }
       void moveConversationToProject(conversationId, id).then((moved) => {
-        if (moved) return;
+        if (moved) {
+          setGlobalActiveProject(id);
+          return;
+        }
         Alert.alert(
           id ? 'Could not move chat to project' : 'Could not remove chat from project',
           'The change has been undone. Check your connection and try again.',

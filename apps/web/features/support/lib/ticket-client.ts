@@ -67,13 +67,23 @@ function asThread(payload: Record<string, unknown>): SupportTicketThread {
   };
 }
 
-export async function listSupportTickets(): Promise<SupportTicket[]> {
+export interface SupportTicketPage {
+  tickets: SupportTicket[];
+  nextOffset: number | null;
+}
+
+export async function listSupportTickets(offset = 0): Promise<SupportTicketPage> {
+  const path = offset > 0 ? `${SUPPORT_TICKETS_PATH}?offset=${offset}` : SUPPORT_TICKETS_PATH;
   const payload = await request(
-    SUPPORT_TICKETS_PATH,
+    path,
     { method: 'GET', headers: { Accept: 'application/json' } },
     'Your tickets could not be loaded.',
   );
-  return Array.isArray(payload['tickets']) ? (payload['tickets'] as SupportTicket[]) : [];
+  const next = payload['nextOffset'];
+  return {
+    tickets: Array.isArray(payload['tickets']) ? (payload['tickets'] as SupportTicket[]) : [],
+    nextOffset: typeof next === 'number' && Number.isInteger(next) && next > offset ? next : null,
+  };
 }
 
 export async function readSupportTicket(ticketId: string): Promise<SupportTicketThread> {

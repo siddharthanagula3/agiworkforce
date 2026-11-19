@@ -310,6 +310,30 @@ describe('tool rows', () => {
   });
 });
 
+describe('approval card guidance field', () => {
+  it('sends the denial on a plain Enter but not on the Enter that confirms an IME candidate', () => {
+    const postMessage = boot();
+    requestApproval();
+    const field = document.querySelector('.approval-card__guidance') as HTMLInputElement;
+    field.value = 'use a different command';
+
+    field.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }),
+    );
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'respondToApproval' }),
+    );
+
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'respondToApproval',
+        payload: expect.objectContaining({ guidance: 'use a different command' }),
+      }),
+    );
+  });
+});
+
 describe('error detail disclosure', () => {
   it('opens on a click anywhere on the row, and closes again', () => {
     boot();

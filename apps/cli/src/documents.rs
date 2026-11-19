@@ -13,6 +13,11 @@ use zip::read::ZipArchive;
 
 const WORD_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DRAWING_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const PRESENTATION_NS: &str = "http://schemas.openxmlformats.org/presentationml/2006/main";
+const RELATIONSHIPS_NS: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const PACKAGE_RELATIONSHIPS_NS: &str =
+    "http://schemas.openxmlformats.org/package/2006/relationships";
 pub const EXTRACT_COMMAND: &str = "__extract-document";
 pub const DEFAULT_PDF_PAGES: usize = 10;
 pub const MAX_PDF_PAGES_PER_READ: usize = 20;
@@ -430,25 +435,81 @@ fn docx_text(bytes: &[u8], budget: &Budget) -> Result<String> {
     Ok(output.trim_end().to_string())
 }
 
+fn optional_entry<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    entry: &str,
+    budget: &Budget,
+) -> Result<Option<String>> {
+    if archive.index_for_name(entry).is_none() {
+        return Ok(None);
+    }
+    let mut contents = String::new();
+    bounded(archive.by_name(entry)?, budget).read_to_string(&mut contents)?;
+    Ok(Some(contents))
+}
+
+fn deck_slide_order<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    budget: &Budget,
+) -> Result<Vec<String>> {
+    let (Some(presentation), Some(relationships)) = (
+        optional_entry(archive, "ppt/presentation.xml", budget)?,
+        optional_entry(archive, "ppt/_rels/presentation.xml.rels", budget)?,
+    ) else {
+        return Ok(Vec::new());
+    };
+    let presentation =
+        XmlDocument::parse(&presentation).context("the presentation is not valid")?;
+    let relationships =
+        XmlDocument::parse(&relationships).context("the presentation is not valid")?;
+    let targets: std::collections::HashMap<&str, &str> = relationships
+        .descendants()
+        .filter(|node| node.has_tag_name((PACKAGE_RELATIONSHIPS_NS, "Relationship")))
+        .filter_map(|node| Some((node.attribute("Id")?, node.attribute("Target")?)))
+        .collect();
+    let order: Vec<String> = presentation
+        .descendants()
+        .filter(|node| node.has_tag_name((PRESENTATION_NS, "sldId")))
+        .filter_map(|node| node.attribute((RELATIONSHIPS_NS, "id")))
+        .filter_map(|id| targets.get(id))
+        .map(|target| match target.strip_prefix('/') {
+            Some(rooted) => rooted.to_string(),
+            None => format!("ppt/{target}"),
+        })
+        .filter(|name| archive.index_for_name(name).is_some())
+        .collect();
+    Ok(order)
+}
+
 fn pptx_text(bytes: &[u8], budget: &Budget) -> Result<String> {
     let mut archive =
         ZipArchive::new(Cursor::new(bytes)).context("the presentation is not valid")?;
-    let mut slides: Vec<(usize, String)> = archive
-        .file_names()
-        .collect::<zip::result::ZipResult<Vec<_>>>()
-        .context("the presentation contains invalid entry names")?
+    let deck: Vec<(usize, String)> = deck_slide_order(&mut archive, budget)?
         .into_iter()
-        .filter(|name| name.starts_with("ppt/slides/slide") && name.ends_with(".xml"))
-        .map(|name| {
-            let number = name
-                .trim_start_matches("ppt/slides/slide")
-                .trim_end_matches(".xml")
-                .parse()
-                .unwrap_or(usize::MAX);
-            (number, name.to_string())
-        })
+        .enumerate()
+        .map(|(index, name)| (index + 1, name))
         .collect();
-    slides.sort();
+    let slides: Vec<(usize, String)> = if deck.is_empty() {
+        let mut numbered: Vec<(usize, String)> = archive
+            .file_names()
+            .collect::<zip::result::ZipResult<Vec<_>>>()
+            .context("the presentation contains invalid entry names")?
+            .into_iter()
+            .filter(|name| name.starts_with("ppt/slides/slide") && name.ends_with(".xml"))
+            .map(|name| {
+                let number = name
+                    .trim_start_matches("ppt/slides/slide")
+                    .trim_end_matches(".xml")
+                    .parse()
+                    .unwrap_or(usize::MAX);
+                (number, name.to_string())
+            })
+            .collect();
+        numbered.sort();
+        numbered
+    } else {
+        deck
+    };
     let mut output = String::new();
     for (number, name) in slides {
         let mut xml = String::new();
@@ -693,6 +754,47 @@ mod tests {
         );
         assert_eq!(result.text.matches("First slide").count(), 1);
         assert_eq!(result.text.matches("Second slide").count(), 1);
+    }
+
+    fn deck_package(listed: &[&str]) -> Vec<u8> {
+        let slide = |text: &str| {
+            format!(
+                r#"<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:sld>"#
+            )
+        };
+        let ids: String = listed
+            .iter()
+            .enumerate()
+            .map(|(index, rid)| format!(r#"<p:sldId id="{}" r:id="{rid}"/>"#, 256 + index))
+            .collect();
+        let presentation = format!(
+            r#"<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst>{ids}</p:sldIdLst></p:presentation>"#
+        );
+        let relationships = r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="/ppt/slides/slide3.xml"/></Relationships>"#;
+        office_package(&[
+            ("ppt/presentation.xml", &presentation),
+            ("ppt/_rels/presentation.xml.rels", relationships),
+            ("ppt/slides/slide1.xml", &slide("Alpha")),
+            ("ppt/slides/slide2.xml", &slide("Beta")),
+            ("ppt/slides/slide3.xml", &slide("Gamma")),
+        ])
+    }
+
+    #[test]
+    fn slides_follow_the_deck_order_not_the_part_names() {
+        let bytes = deck_package(&["rId3", "rId1", "rId2"]);
+        let result = extract_bytes(&bytes, DocumentKind::Slides, None).expect("read slides");
+        assert_eq!(
+            result.text,
+            "Slide 1\nGamma\n\nSlide 2\nAlpha\n\nSlide 3\nBeta"
+        );
+    }
+
+    #[test]
+    fn a_slide_missing_from_the_deck_list_is_not_part_of_the_deck() {
+        let bytes = deck_package(&["rId2", "rId1"]);
+        let result = extract_bytes(&bytes, DocumentKind::Slides, None).expect("read slides");
+        assert_eq!(result.text, "Slide 1\nBeta\n\nSlide 2\nAlpha");
     }
 
     fn spreadsheet_package(worksheet: &str) -> Vec<u8> {

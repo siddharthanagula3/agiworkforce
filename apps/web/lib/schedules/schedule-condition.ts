@@ -13,6 +13,7 @@ export interface ScheduleConditionState {
   met: boolean;
   detail: string;
   contentSha256?: string | null;
+  admittedFor?: string;
 }
 
 const MAX_URL_LENGTH = 2_000;

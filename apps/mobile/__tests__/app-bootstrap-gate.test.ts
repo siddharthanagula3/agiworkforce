@@ -64,10 +64,8 @@ describe('the launch path', () => {
     expect(text).toMatch(entryPoint);
   });
 
-  it('holds the launch image until storage and fonts have both settled', () => {
-    expect(ROOT_LAYOUT).toMatch(
-      /useLaunchSplashRelease\(\s*storageStatus !== 'pending' && \(fontsLoaded \|\| fontError !== null\)\s*\)/,
-    );
+  it('holds the launch image until encrypted storage has settled', () => {
+    expect(ROOT_LAYOUT).toMatch(/useLaunchSplashRelease\(\s*storageStatus !== 'pending'\s*\)/);
   });
 
   it('names a behavioural test for every stage it gates on', () => {

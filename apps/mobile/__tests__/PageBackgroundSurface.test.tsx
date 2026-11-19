@@ -156,6 +156,8 @@ jest.mock('@/src/shared/components/ApprovalModal', () => ({
 jest.mock('@/services/companion', () => ({
   startHealthChecks: jest.fn(),
   stopHealthChecks: jest.fn(),
+  stopReconnectRecovery: jest.fn(),
+  resumeReconnectCountdown: jest.fn(),
   requestAgentRefresh: jest.fn(),
   manualReconnect: jest.fn(),
 }));

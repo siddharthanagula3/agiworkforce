@@ -155,7 +155,7 @@ describe('saved notification preferences and browser capability', () => {
     render(<NotificationsSection />);
     const security = screen.getByRole('region', { name: 'Security alerts' });
     await userEvent.click(within(security).getByText('Delivery details'));
-    expect(within(security).getByText(/Advanced Account Security requires it/)).toBeVisible();
+    expect(within(security).getByText(/Advanced Account Security needs email/)).toBeVisible();
     expect(security).toHaveTextContent('including quiet hours');
     const tasks = screen.getByRole('region', { name: 'Scheduled task finished' });
     await userEvent.click(within(tasks).getByText('Delivery details'));

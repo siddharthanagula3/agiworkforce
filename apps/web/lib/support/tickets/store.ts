@@ -110,18 +110,40 @@ export async function insertTicket(input: CreateTicketInput): Promise<SupportTic
   return row ? toTicket(row) : null;
 }
 
-export async function listTicketsForUser(userId: string, limit: number): Promise<SupportTicket[]> {
+export async function listTicketsForUser(
+  userId: string,
+  limit: number,
+  offset = 0,
+): Promise<SupportTicket[]> {
   const db = getNeonDb();
   const rows = await db.query<TicketRow>(
     `select ${TICKET_COLUMNS}
        from public.support_tickets
       where user_id = $1
       order by case status when 'open' then 0 when 'in_progress' then 1 else 2 end asc,
-               created_at desc
-      limit $2`,
-    [userId, limit],
+               created_at desc, id desc
+      limit $2 offset $3`,
+    [userId, limit, offset],
   );
   return rows.map(toTicket);
+}
+
+export async function findLatestTicketBySubject(
+  userId: string,
+  subject: string,
+): Promise<SupportTicket | null> {
+  const db = getNeonDb();
+  const rows = await db.query<TicketRow>(
+    `select ${TICKET_COLUMNS}
+       from public.support_tickets
+      where user_id = $1 and subject = $2
+      order by case status when 'open' then 0 when 'in_progress' then 1 else 2 end asc,
+               created_at desc, id desc
+      limit 1`,
+    [userId, subject],
+  );
+  const row = rows[0];
+  return row ? toTicket(row) : null;
 }
 
 export async function getTicketForUser(
@@ -265,10 +287,11 @@ export async function insertReply(input: {
     `insert into public.support_ticket_replies (ticket_id, user_id, message, is_staff)
      select $1, $2, $3, $4
       where exists (
-        select 1 from public.support_tickets t where t.id = $1 and t.user_id = $2
+        select 1 from public.support_tickets t
+         where t.id = $1 and t.user_id = $2 and t.status = any($5::text[])
       )
      returning id, ticket_id, message, is_staff, created_at`,
-    [input.ticketId, input.userId, input.message, input.isStaff],
+    [input.ticketId, input.userId, input.message, input.isStaff, [...OPEN_TICKET_STATUSES]],
   );
   const row = rows[0];
   return row ? toReply(row) : null;

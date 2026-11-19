@@ -334,3 +334,90 @@ describe('reopening the side panel after a closed-panel turn finished', () => {
     expect(sendButton().getAttribute('data-mode')).toBe('send');
   });
 });
+
+describe('reopening the side panel while a reply waits on a browser step', () => {
+  const runId = '33333333-3333-4333-8333-333333333333';
+  const cloudAgentRun = {
+    runId,
+    runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+    lastSequence: 2,
+    state: 'running' as const,
+  };
+
+  function sentOfType(type: string): Array<Record<string, unknown>> {
+    return chromeMock.runtime.sendMessage.mock.calls
+      .map(([message]) => message as Record<string, unknown>)
+      .filter((message) => message['type'] === type);
+  }
+
+  async function reopenWith(
+    adoptReply: (typeof chromeMock)['adoptReply'],
+    authIncarnation: string,
+  ): Promise<void> {
+    document.getElementById('sp-new-chat-btn')!.click();
+    await vi.waitFor(() => expect(sendButton().getAttribute('data-mode')).toBe('send'));
+    await saveActiveConversation(OWNER, [
+      { role: 'user', content: 'Read this page', timestamp: 3_000, runtime: 'managed-cloud' },
+      {
+        role: 'assistant',
+        content: '',
+        timestamp: 3_001,
+        runtime: 'managed-cloud',
+        streaming: true,
+        cloudAgentRun,
+      },
+    ]);
+    chromeMock.runtime.sendMessage.mockClear();
+    chromeMock.adoptReply = adoptReply;
+    account.owner = { ...OWNER, authIncarnation };
+    account.onChange!();
+    await vi.waitFor(() => expect(adoptRequests()).toHaveLength(1));
+  }
+
+  it('takes the turn back from the extension and answers the waiting browser step', async () => {
+    await reopenWith(
+      () =>
+        Promise.resolve({
+          success: true,
+          adopted: {
+            id: 'stream-waiting-tool',
+            text: '',
+            cloudRun: cloudAgentRun,
+            toolHandoffs: [
+              {
+                handoffId: 'handoff-waiting',
+                calls: [
+                  {
+                    id: 'call-waiting',
+                    type: 'function',
+                    function: { name: 'not_a_browser_tool', arguments: '{}' },
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      'session-waiting-tool',
+    );
+
+    await vi.waitFor(() => expect(sentOfType('RESOLVE_CHAT_TOOLS')).toHaveLength(1));
+    expect(sentOfType('RESOLVE_CHAT_TOOLS')[0]).toMatchObject({
+      id: 'stream-waiting-tool',
+      handoffId: 'handoff-waiting',
+      clientInstanceId: adoptRequests()[0]!['clientInstanceId'],
+      results: [{ toolCallId: 'call-waiting', content: 'This browser tool call was malformed.' }],
+    });
+    expect(sentOfType('RESUME_CHAT_RUN')).toHaveLength(0);
+    expect(sendButton().getAttribute('data-mode')).toBe('stop');
+  });
+
+  it('follows the durable run when the extension no longer holds the turn', async () => {
+    chunk(adoptRequests()[0]!['clientInstanceId'], { id: 'stream-waiting-tool', done: true });
+    await reopenWith(() => Promise.resolve({ success: true }), 'session-lost-turn');
+
+    await vi.waitFor(() => expect(sentOfType('RESUME_CHAT_RUN')).toHaveLength(1));
+    expect(sentOfType('RESUME_CHAT_RUN')[0]).toMatchObject({
+      cloudRun: expect.objectContaining({ runId }),
+    });
+  });
+});

@@ -262,6 +262,20 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
     expect(lookup!.params).toEqual(['user_123', 'Refund for charge ch_123']);
   });
 
+  it('serializes the cumulative plan reconciliation per user and charge before reading it', async () => {
+    const { db, calls } = planRefundDb(0);
+
+    await dispatchStripeEvent(db, stripeForPlanRefund(), refundEvent({}));
+
+    const lock = calls.findIndex((call) => call.sql.includes('pg_advisory_xact_lock'));
+    const allowance = calls.findIndex((call) => call.sql.includes('from token_credits'));
+    const ledger = calls.findIndex((call) => call.sql.includes('from credit_transactions'));
+    expect(lock).toBeGreaterThanOrEqual(0);
+    expect(calls[lock]!.params).toEqual(['user_123', 'Refund for charge ch_123']);
+    expect(lock).toBeLessThan(allowance);
+    expect(lock).toBeLessThan(ledger);
+  });
+
   it('leaves the plan alone when the refunded charge bought credits, not a plan', async () => {
     const { db, calls } = makeDb((sql) =>
       sql.includes('from profiles') ? [{ id: 'user_123' }] : [],

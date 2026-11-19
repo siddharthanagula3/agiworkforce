@@ -7,6 +7,13 @@ import {
 } from '../InlinePaywallCard';
 import type { PaywallFeature, RequiredTier, UserTier } from '../InlinePaywallCard';
 import type { PaywallRecoveryAction } from '../InlinePaywallCard';
+import { MANAGED_USAGE_LIMITS, getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  max: getBillingPlanPricing('max').label,
+  max_15x: getBillingPlanPricing('max_15x').label,
+  pro: getBillingPlanPricing('pro').label,
+} as const;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,11 +62,15 @@ describe('InlinePaywallCard', () => {
     // call the component already made for the tier label.
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
       ['web_search', 'basic', 'Upgrade to Basic, $7/mo for web search'],
-      ['video_generation', 'max_15x', 'Upgrade to Max 20x, $200/mo for video generation'],
-      ['opus_5', 'max', 'Upgrade to Max 5x, $100/mo for Opus access'],
-      ['computer_use', 'pro', 'Upgrade to Pro, $20/mo for computer use'],
-      ['deep_research', 'max', 'Upgrade to Max 5x, $100/mo for deep research'],
-      ['image_quota', 'pro', 'Upgrade to Pro, $20/mo for more image generation'],
+      [
+        'video_generation',
+        'max_15x',
+        `Upgrade to ${PLAN_LABEL.max_15x}, $200/mo for video generation`,
+      ],
+      ['opus_5', 'max', `Upgrade to ${PLAN_LABEL.max}, $100/mo for Opus access`],
+      ['computer_use', 'pro', `Upgrade to ${PLAN_LABEL.pro}, $20/mo for computer use`],
+      ['deep_research', 'max', `Upgrade to ${PLAN_LABEL.max}, $100/mo for deep research`],
+      ['image_quota', 'pro', `Upgrade to ${PLAN_LABEL.pro}, $20/mo for more image generation`],
       // "usage", not "token": Desktop Cloud said "higher usage limits" for the
       // same refusal, and usage is what every meter in the product is labelled.
       // Both cards now read PAYWALL_FEATURE_COPY.
@@ -79,9 +90,13 @@ describe('InlinePaywallCard', () => {
   describe('plan usage', () => {
     it('states how much more the plan it sells gives, not its credit counts', () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'max_15x' })} />);
+      const weeklyMultiple =
+        MANAGED_USAGE_LIMITS.max_15x.weeklyCredits / MANAGED_USAGE_LIMITS.pro.weeklyCredits;
+      expect(MANAGED_USAGE_LIMITS.max_15x.fiveHourCredits).toBeNull();
       expect(
-        screen.getByText('20x more usage per session and 10x more weekly usage than Pro.'),
+        screen.getByText(`${weeklyMultiple}x more weekly usage than ${PLAN_LABEL.pro}.`),
       ).toBeInTheDocument();
+      expect(screen.queryByText(/more usage per session/)).toBeNull();
       expect(screen.queryByText(/credits per 5 hours/)).toBeNull();
     });
 
@@ -105,14 +120,14 @@ describe('InlinePaywallCard', () => {
       expect(screen.getByText('Basic')).toBeInTheDocument();
     });
 
-    it('shows "Max 5x" badge for max tier', () => {
+    it(`shows "${PLAN_LABEL.max}" badge for max tier`, () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'max' })} />);
-      expect(screen.getByText('Max 5x')).toBeInTheDocument();
+      expect(screen.getByText(`${PLAN_LABEL.max}`)).toBeInTheDocument();
     });
 
-    it('shows "Max 20x" badge for max_15x tier', () => {
+    it(`shows "${PLAN_LABEL.max_15x}" badge for max_15x tier`, () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'max_15x' })} />);
-      expect(screen.getByText('Max 20x')).toBeInTheDocument();
+      expect(screen.getByText(`${PLAN_LABEL.max_15x}`)).toBeInTheDocument();
     });
   });
 
@@ -164,10 +179,12 @@ describe('InlinePaywallCard', () => {
       );
 
       expect(
-        screen.getByText('Subscribe to Max 20x, $200/mo for video generation', { exact: false }),
+        screen.getByText(`Subscribe to ${PLAN_LABEL.max_15x}, $200/mo for video generation`, {
+          exact: false,
+        }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: 'Subscribe to Max 20x, $200/mo' }),
+        screen.getByRole('button', { name: `Subscribe to ${PLAN_LABEL.max_15x}, $200/mo` }),
       ).toBeInTheDocument();
     });
 
@@ -186,7 +203,7 @@ describe('InlinePaywallCard', () => {
       );
 
       expect(screen.getByText('Update billing to continue video generation')).toBeInTheDocument();
-      expect(screen.queryByText('Upgrade to Max 20x', { exact: false })).toBeNull();
+      expect(screen.queryByText(`Upgrade to ${PLAN_LABEL.max_15x}`, { exact: false })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));
       expect(onUpgrade).toHaveBeenCalledTimes(1);
     });
@@ -199,13 +216,13 @@ describe('InlinePaywallCard', () => {
             currentTier: 'max_15x',
             requiredTier: 'max_15x',
             recoveryAction: 'view_usage',
-            reason: 'Your Max 20x usage for this billing period is used up.',
+            reason: `Your ${PLAN_LABEL.max_15x} usage for this billing period is used up.`,
           })}
         />,
       );
 
       expect(screen.getByRole('button', { name: 'View usage' })).toBeInTheDocument();
-      expect(screen.queryByText('Upgrade to Max 20x', { exact: false })).toBeNull();
+      expect(screen.queryByText(`Upgrade to ${PLAN_LABEL.max_15x}`, { exact: false })).toBeNull();
     });
 
     // QA-037: a Max 20x subscriber whose credit account had no allocation read
@@ -255,7 +272,9 @@ describe('InlinePaywallCard', () => {
         />,
       );
 
-      expect(screen.getByRole('button', { name: /Upgrade to Pro/ })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: new RegExp(`Upgrade to ${PLAN_LABEL.pro}`) }),
+      ).toBeInTheDocument();
     });
 
     it('does not render a pricing navigation link for the upgrade action', () => {

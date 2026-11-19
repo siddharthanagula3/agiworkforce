@@ -14,6 +14,7 @@ import {
 
 import {
   PROVIDER_COST_REPORT_CLIENTS,
+  catchUpWindows,
   yesterdayWindow,
   type DayWindow,
   type ProviderCostReport,
@@ -31,11 +32,25 @@ const UPSERT_REPORTED_DAY = `insert into public.provider_cost_reconciliation_day
     reported_cost_microusd = excluded.reported_cost_microusd,
     fetched_at = excluded.fetched_at`;
 
+const READ_COVERED_DAYS = `select provider, source, to_char(day, 'YYYY-MM-DD') as day
+  from public.provider_cost_reconciliation_days
+ where day >= $1::date and day <= $2::date`;
+
 interface ProviderOutcome {
   provider: string;
   source: string;
   status: ProviderCostReport['status'];
   reportedMicrousd?: number;
+  detail?: string;
+}
+
+interface CatchUpOutcome extends ProviderOutcome {
+  day: string;
+}
+
+interface CatchUp {
+  status: 'checked' | 'failed';
+  outcomes: CatchUpOutcome[];
   detail?: string;
 }
 
@@ -101,6 +116,52 @@ async function runClient(
   return outcomeOf(report);
 }
 
+async function catchUpMissingDays(
+  now: Date,
+  yesterday: readonly ProviderOutcome[],
+): Promise<CatchUp> {
+  const healthy = PROVIDER_COST_REPORT_CLIENTS.filter((client) =>
+    yesterday.some(
+      (outcome) =>
+        outcome.provider === client.provider &&
+        outcome.source === client.source &&
+        outcome.status === 'reported',
+    ),
+  );
+  if (healthy.length === 0) return { status: 'checked', outcomes: [] };
+
+  const windows = catchUpWindows(now);
+  const first = windows[0];
+  const last = windows[windows.length - 1];
+  if (!first || !last) return { status: 'checked', outcomes: [] };
+
+  let covered: Set<string>;
+  try {
+    const rows = await getNeonDb().query<{ provider: string; source: string; day: string }>(
+      READ_COVERED_DAYS,
+      [first.day, last.day],
+    );
+    covered = new Set(rows.map((row) => `${row.provider}|${row.source}|${row.day}`));
+  } catch (error) {
+    return {
+      status: 'failed',
+      outcomes: [],
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  const outcomes: CatchUpOutcome[] = [];
+  for (const client of healthy) {
+    for (const window of windows) {
+      if (covered.has(`${client.provider}|${client.source}|${window.day}`)) continue;
+      const outcome = await runClient(client, window);
+      outcomes.push({ ...outcome, day: window.day });
+      if (outcome.status !== 'reported') break;
+    }
+  }
+  return { status: 'checked', outcomes };
+}
+
 type LedgerFindingCounts = Record<ManagedUsageReconciliationFinding, number>;
 
 interface LedgerReconciliation {
@@ -159,7 +220,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const window = yesterdayWindow(new Date());
+  const now = new Date();
+  const window = yesterdayWindow(now);
   const outcomes: ProviderOutcome[] = [];
   for (const client of PROVIDER_COST_REPORT_CLIENTS) {
     outcomes.push(await runClient(client, window));
@@ -201,6 +263,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const catchUp = await catchUpMissingDays(now, outcomes);
+  const catchUpFailed =
+    catchUp.status === 'failed' || catchUp.outcomes.some((outcome) => outcome.status === 'failed');
+  if (catchUpFailed) {
+    logger.error(
+      {
+        event: 'provider_cost_catch_up_failed',
+        days: catchUp.outcomes
+          .filter((outcome) => outcome.status === 'failed')
+          .map((outcome) => `${outcome.provider}:${outcome.day}`),
+        detail: catchUp.detail,
+      },
+      'A provider cost report for an earlier day could not be recovered',
+    );
+  }
+
   const ledger = await reconcileLedger(window);
 
   return NextResponse.json(
@@ -208,8 +286,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       day: window.day,
       reported: outcomes.filter((outcome) => outcome.status === 'reported').length,
       providers: outcomes,
+      catchUp,
       ledger,
     },
-    { status: failed.length > 0 || ledger.status === 'failed' ? 500 : 200 },
+    {
+      status: failed.length > 0 || catchUpFailed || ledger.status === 'failed' ? 500 : 200,
+    },
   );
 }

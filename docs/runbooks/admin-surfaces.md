@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-12
+Last updated: 2026-11-11
 
 The three administrative surfaces in `apps/web`, who each one admits, and what
 can be done from it. Read this before granting anyone access to any of them: two
@@ -71,21 +71,23 @@ overview: `overview`, `feedback`, `users`, `waitlist`, `product`, `costs`,
 `routing`, `rollout`, `quota`, `flags`, `services`, `dashboards`, `routes`,
 `economics`, `content`, `privacy`, `support`, `jobs`.
 
-| Tab         | Panel                       | What it is for                                                                                |
-| ----------- | --------------------------- | --------------------------------------------------------------------------------------------- |
-| `waitlist`  | `WaitlistPanel`             | who joined a waitlist, with consent on record, and the CSV export; see the section below      |
-| `costs`     | `OperatorCostsPanel`        | spend against providers                                                                       |
-| `routing`   | `RoutingHealthPanel`        | route health and breaker state                                                                |
-| `rollout`   | `ModelRolloutPanel`         | staged model rollout                                                                          |
-| `quota`     | `FreeQuotaAttestationPanel` | free quota model gates and the console check record; see `docs/runbooks/free-quota-models.md` |
-| `flags`     | `FeatureFlagsPanel`         | feature flag state                                                                            |
-| `services`  | `ServiceHealthPanel`        | dependency health                                                                             |
-| `routes`    | `RouteEconomicsPanel`       | per-route cost and margin                                                                     |
-| `economics` | `EconomicsSummaryPanel`     | the aggregate economic picture                                                                |
-| `content`   | `ContentTakedownPanel`      | content takedown                                                                              |
-| `privacy`   | `PrivacyRequestsPanel`      | data subject access and erasure requests                                                      |
-| `support`   | `SupportHandoffQueuePanel`  | the support handoff queue                                                                     |
-| `jobs`      | `BackgroundJobsPanel`       | background job state                                                                          |
+| Tab          | Panel                                                 | What it is for                                                                                                  |
+| ------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `waitlist`   | `UpgradeAccessPanel`, `WaitlistPanel`                 | paid upgrade access and who joined a waitlist, with consent on record and the CSV export; see the section below |
+| `product`    | `ProductMetricsPanel`                                 | product metrics                                                                                                 |
+| `costs`      | `OperatorCostsPanel`                                  | spend against providers                                                                                         |
+| `routing`    | `RoutingHealthPanel`                                  | route health and breaker state                                                                                  |
+| `rollout`    | `ModelRolloutPanel`                                   | staged model rollout                                                                                            |
+| `quota`      | `FreeQuotaAttestationPanel`                           | free quota model gates and the console check record; see `docs/runbooks/free-quota-models.md`                   |
+| `flags`      | `FeatureFlagsPanel`                                   | feature flag state                                                                                              |
+| `services`   | `ServiceHealthPanel`                                  | dependency health                                                                                               |
+| `dashboards` | `ServiceDashboardsPanel`                              | service dashboards                                                                                              |
+| `routes`     | `RouteEconomicsPanel`                                 | per-route cost and margin                                                                                       |
+| `economics`  | `EconomicsSummaryPanel`                               | the aggregate economic picture                                                                                  |
+| `content`    | `CopyrightNoticeQueuePanel`, `ContentTakedownPanel`   | the copyright notice queue and content takedown                                                                 |
+| `privacy`    | `PrivacyRequestsPanel`                                | data subject access and erasure requests                                                                        |
+| `support`    | `SupportHandoffQueuePanel`, `SupportTicketQueuePanel` | the support handoff queue and the support ticket queue                                                          |
+| `jobs`       | `BackgroundJobsPanel`                                 | background job state                                                                                            |
 
 `/operator` deliberately does not sit under `/admin`. That tree's layout admits
 an organisation owner or admin, and nesting the operator dashboard inside it

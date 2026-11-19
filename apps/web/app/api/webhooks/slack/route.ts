@@ -112,6 +112,13 @@ async function handleSlackEvent(request: NextRequest): Promise<NextResponse> {
     },
   });
 
+  if (outcomes.some((outcome) => outcome.outcome === 'failed')) {
+    return NextResponse.json(
+      { error: 'Event could not be queued; redeliver' },
+      { status: 503, headers: { 'Retry-After': '10' } },
+    );
+  }
+
   return NextResponse.json({
     received: true,
     matched: outcomes.length,

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 ## Monorepo Shape
 
@@ -81,7 +81,7 @@ explicit handoff rather than background sync.
 
 ## Provider Strategy
 
-OpenAI, Anthropic, Vercel AI SDK, and provider SDKs are adapter dependencies, not AGI architecture. AGI owns:
+OpenAI, Anthropic, and other provider SDKs are adapter dependencies, not AGI architecture. AGI owns:
 
 - runtime event schema,
 - privacy modes,
@@ -99,7 +99,8 @@ Local -> BYOK handoffs are preview-only transfers. A confirmed fork persists the
 
 The retained Tauri implementation contains the repository's first local
 heavy-compute paths, but D-2026-09-15-04 makes Electron the sole public Desktop
-and that shell is managed-cloud-only for inference. The Tauri details below are
+and its chat is managed-cloud-only for inference while its local coding
+sessions run the CLI. The Tauri details below are
 implementation inventory, not public release evidence. Web and Mobile should
 request, track, preview, download, and share generated files. Mobile should not
 be the first heavy local PDF/PPTX/DOCX compute surface. Generated-file status,
@@ -132,7 +133,7 @@ Retained Tauri Local and legacy non-canonical tool activity uses the compact eve
 
 Hosted inline search results used by Web and public Electron follow the same compact trace pattern and keep citations attached to assistant responses.
 
-Public Electron connector customization uses the hosted account-scoped connector service and its web settings UI. It reports `localMcp: false`; retained Tauri `ConnectorGallery` and local MCP configuration remain internal and do not authorize public Desktop local-MCP claims.
+Public Electron connector customization uses the hosted account-scoped connector service and its web settings UI. Local MCP servers run through the bundled `agi` app-server and are managed on the Developer settings page; the device profile reports `localMcp: true` when that CLI serves MCP. Retained Tauri `ConnectorGallery` remains internal.
 
 Public Electron project editing uses the hosted Web project and settings owners, so project state stays on the shared account contract rather than a private Desktop copy.
 

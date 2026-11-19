@@ -134,6 +134,47 @@ describe('Library recovery copy', () => {
     expect(result.current.assets).toEqual([{ id: 'account-b-asset' }]);
   });
 
+  it('does not keep presenting the last quota after a refresh fails', async () => {
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({
+        assets: [],
+        hasMore: false,
+        nextOffset: null,
+        storageUsedBytes: 10,
+        storageLimitBytes: 100,
+      })
+      .mockRejectedValueOnce(new Error('offline'));
+
+    const { result } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.storageUsedBytes).toBe(10));
+    expect(result.current.storageLimitBytes).toBe(100);
+
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.storageUsedBytes).toBeNull();
+    expect(result.current.storageLimitBytes).toBeNull();
+  });
+
+  it('does not show the previous account quota to the next account', async () => {
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({
+        assets: [],
+        hasMore: false,
+        nextOffset: null,
+        storageUsedBytes: 10,
+        storageLimitBytes: 100,
+      })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+
+    const { result, rerender } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.storageUsedBytes).toBe(10));
+
+    mockOwnerId = 'account-b';
+    rerender({});
+    expect(result.current.storageUsedBytes).toBeNull();
+    expect(result.current.storageLimitBytes).toBeNull();
+  });
+
   it('removes a successfully deleted file from the offline page', async () => {
     mockFetchLibraryPage.mockResolvedValue({
       assets: [{ id: 'asset-a' }],
@@ -164,5 +205,64 @@ describe('Library recovery copy', () => {
 
     expect(result.current.assets).toHaveLength(1);
     expect(useLibraryCacheStore.getState().readLibraryPage('account-a')).toHaveLength(1);
+  });
+
+  it('rebases the continuation offset after a loaded file is removed', async () => {
+    const firstPage = Array.from({ length: 24 }, (_, index) => ({ id: `asset-${index}` }));
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({ assets: firstPage, hasMore: true, nextOffset: 24 })
+      .mockResolvedValueOnce({ assets: [{ id: 'asset-24' }], hasMore: false, nextOffset: null });
+    mockDeleteLibraryAsset.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.assets).toHaveLength(24));
+    await act(async () => result.current.removeAsset('asset-3'));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.assets).toHaveLength(24));
+
+    expect(mockFetchLibraryPage).toHaveBeenNthCalledWith(2, {
+      offset: 23,
+      limit: 24,
+      search: '',
+      sort: 'modified',
+    });
+    expect(result.current.assets.map((asset) => asset.id)).toContain('asset-24');
+  });
+
+  it('discards a continuation page requested before a removal shifted the result set', async () => {
+    const firstPage = Array.from({ length: 24 }, (_, index) => ({ id: `asset-${index}` }));
+    let finishSecondPage: ((page: unknown) => void) | undefined;
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({ assets: firstPage, hasMore: true, nextOffset: 24 })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSecondPage = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ assets: [{ id: 'asset-24' }], hasMore: false, nextOffset: null });
+    mockDeleteLibraryAsset.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.assets).toHaveLength(24));
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.loadingMore).toBe(true));
+    await act(async () => result.current.removeAsset('asset-3'));
+    await act(async () => {
+      finishSecondPage?.({ assets: [{ id: 'asset-25' }], hasMore: true, nextOffset: 48 });
+    });
+    await waitFor(() => expect(result.current.loadingMore).toBe(false));
+
+    expect(result.current.assets.map((asset) => asset.id)).not.toContain('asset-25');
+    act(() => result.current.loadMore());
+    await waitFor(() =>
+      expect(result.current.assets.map((asset) => asset.id)).toContain('asset-24'),
+    );
+    expect(mockFetchLibraryPage).toHaveBeenNthCalledWith(3, {
+      offset: 23,
+      limit: 24,
+      search: '',
+      sort: 'modified',
+    });
   });
 });

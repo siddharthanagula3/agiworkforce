@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createInstance } from 'i18next';
 import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { baseInitOptions } from '@agiworkforce/i18n';
-import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
+import { billingPlanCapabilityPlanLabels, PRODUCT_NAMES } from '@agiworkforce/types';
 
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { invalidatePalettePlugins } from '@features/chat/services/palette-plugin-catalog';
@@ -153,7 +153,7 @@ function renderMenu(overrides: Partial<ComposerPlusMenuProps> = {}) {
 }
 
 function palette() {
-  return screen.getByRole('menu', { name: 'AGI Work tools' });
+  return screen.getByRole('menu', { name: `${PRODUCT_NAMES.work} tools` });
 }
 
 describe('ComposerPlusMenu, chat mode', () => {
@@ -163,8 +163,12 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(screen.getByRole('button', { name: 'Skills' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Connectors' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Plugins' })).toBeInTheDocument();
-    expect(screen.queryByRole('menu', { name: 'AGI Work tools' })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Search the AGI Work palette')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menu', { name: `${PRODUCT_NAMES.work} tools` }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(`Search the ${PRODUCT_NAMES.work} palette`),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Attach from local folder' }),
     ).not.toBeInTheDocument();
@@ -181,7 +185,7 @@ describe('ComposerPlusMenu, chat mode', () => {
     expect(props.closeMenu).toHaveBeenCalled();
   });
 
-  it('keeps the Study row out of the AGI Work palette', () => {
+  it(`keeps the Study row out of the ${PRODUCT_NAMES.work} palette`, () => {
     renderMenu({ workPalette: true });
 
     expect(screen.queryByRole('link', { name: 'Study' })).not.toBeInTheDocument();
@@ -354,7 +358,7 @@ describe('ComposerPlusMenu, chat mode', () => {
   });
 });
 
-describe('ComposerPlusMenu, AGI Work palette', () => {
+describe(`ComposerPlusMenu, ${PRODUCT_NAMES.work} palette`, () => {
   beforeEach(() => {
     invalidatePalettePlugins();
     vi.stubGlobal(
@@ -419,7 +423,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
   it('filters the rows above the search field as the query is typed', () => {
     renderMenu({ workPalette: true });
 
-    fireEvent.change(screen.getByLabelText('Search the AGI Work palette'), {
+    fireEvent.change(screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`), {
       target: { value: 'gmail' },
     });
 
@@ -431,7 +435,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
   it('reaches the skill, folder and plugin catalogs from the same query', async () => {
     const { props } = renderMenu({ workPalette: true });
 
-    fireEvent.change(screen.getByLabelText('Search the AGI Work palette'), {
+    fireEvent.change(screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`), {
       target: { value: 're' },
     });
 
@@ -448,7 +452,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
   it('sends the typed term to the plugin route once, after the debounce', async () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     renderMenu({ workPalette: true });
-    const field = screen.getByLabelText('Search the AGI Work palette');
+    const field = screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`);
 
     for (const value of ['a', 'ad', 'ado', 'adob', 'adobe']) {
       fireEvent.change(field, { target: { value } });
@@ -461,7 +465,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
   it('asks the route again for a different term rather than filtering one page', async () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     renderMenu({ workPalette: true });
-    const field = screen.getByLabelText('Search the AGI Work palette');
+    const field = screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`);
 
     fireEvent.change(field, { target: { value: 'adobe' } });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
@@ -475,7 +479,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
     const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     renderMenu({ workPalette: true });
 
-    fireEvent.change(screen.getByLabelText('Search the AGI Work palette'), {
+    fireEvent.change(screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`), {
       target: { value: '   ' },
     });
 
@@ -497,7 +501,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
   it('says so when nothing matches the query', async () => {
     renderMenu({ workPalette: true });
 
-    fireEvent.change(screen.getByLabelText('Search the AGI Work palette'), {
+    fireEvent.change(screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`), {
       target: { value: 'zzzzz' },
     });
 
@@ -513,7 +517,7 @@ describe('ComposerPlusMenu, AGI Work palette', () => {
         '[role="menuitem"], [role="menuitemcheckbox"], [data-composer-palette-search]',
       ),
     );
-    expect(items.at(-1)).toBe(screen.getByLabelText('Search the AGI Work palette'));
+    expect(items.at(-1)).toBe(screen.getByLabelText(`Search the ${PRODUCT_NAMES.work} palette`));
 
     await waitFor(() => expect(document.activeElement).toBe(items[0]));
 
@@ -675,7 +679,7 @@ describe('ComposerPlusMenu while connectors are coming soon', () => {
     expect(screen.queryByRole('menuitemcheckbox', { name: 'Gmail' })).not.toBeInTheDocument();
   });
 
-  it('shows the AGI Work palette a locked connectors item and no manage link', () => {
+  it(`shows the ${PRODUCT_NAMES.work} palette a locked connectors item and no manage link`, () => {
     const { props } = renderMenu({ workPalette: true });
 
     const item = within(palette()).getByRole('menuitem', { name: 'Connectors, Coming soon' });

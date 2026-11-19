@@ -133,6 +133,10 @@ const NAME_BUILDING_CHARS: &[(char, &str)] = &[
     ('>', "redirection"),
 ];
 
+const TYPOGRAPHIC_QUOTES: &[char] = &[
+    '\u{2018}', '\u{2019}', '\u{201A}', '\u{201B}', '\u{201C}', '\u{201D}', '\u{201E}',
+];
+
 /// Inspect a PowerShell command for safety concerns. Returns the list of
 /// warnings.
 ///
@@ -218,6 +222,11 @@ pub fn command_shape(command: &str) -> CommandShape {
     let mut chars = command.chars().peekable();
 
     while let Some(ch) = chars.next() {
+        if TYPOGRAPHIC_QUOTES.contains(&ch) {
+            return CommandShape::Unconstrained(format!(
+                "uses {ch:?}, which PowerShell reads as a quote"
+            ));
+        }
         if let Some(open) = quote {
             // A double-quoted span is not literal: PowerShell expands `$var`
             // and runs `$(...)` inside it, and the backtick escapes the
@@ -246,6 +255,11 @@ pub fn command_shape(command: &str) -> CommandShape {
             '\'' | '"' => {
                 quote = Some(ch);
                 current.push(ch);
+            }
+            '#' => {
+                return CommandShape::Unconstrained(
+                    "uses `#` (comment), whose text PowerShell does not run as written".into(),
+                )
             }
             '|' => segments.push(std::mem::take(&mut current)),
             ';' | '\n' | '\r' => {
@@ -417,12 +431,13 @@ async fn invoke(
         "-Command".into(),
         req.command.clone(),
     ];
+    let timeout_sec = req.timeout_sec.max(1);
     crate::sandbox::execute_sandboxed_program_with_timeout(
         &manager,
         interpreter,
         &args,
         Some(&working_dir),
-        Some(std::time::Duration::from_secs(req.timeout_sec.max(1))),
+        Some(std::time::Duration::from_secs(timeout_sec)),
     )
     .await
     .map_err(|error| {
@@ -430,10 +445,7 @@ async fn invoke(
             .downcast_ref::<std::io::Error>()
             .is_some_and(|error| error.kind() == std::io::ErrorKind::TimedOut)
         {
-            anyhow::anyhow!(
-                "PowerShell command timed out after {}s (timeout_sec)",
-                req.timeout_sec
-            )
+            anyhow::anyhow!("PowerShell command timed out after {timeout_sec}s (timeout_sec)")
         } else {
             anyhow::anyhow!("invoke {interpreter}: {error}")
         }
@@ -790,6 +802,52 @@ mod allowlist_gate_tests {
     #[test]
     fn doubled_quote_stays_inside_the_string() {
         assert!(command_shape("Write-Output 'it''s | Remove-Item'").is_constrained());
+    }
+
+    #[test]
+    fn quote_inside_a_line_comment_cannot_hide_a_statement() {
+        for newline in ["\n", "\r\n"] {
+            for quote in ['\'', '"'] {
+                let command = format!(
+                    "Write-Output ok # {quote}{newline}Write-Warning marker{newline}# {quote}"
+                );
+                assert!(
+                    !command_shape(&command).is_constrained(),
+                    "comment quote hid a statement: {command:?}"
+                );
+                assert!(refusal_for(&command, true, false).is_some());
+            }
+        }
+    }
+
+    #[test]
+    fn block_comment_is_unconstrained() {
+        assert!(!command_shape("Get-Date <# ' #>").is_constrained());
+    }
+
+    #[test]
+    fn hash_inside_a_real_string_stays_constrained() {
+        assert!(command_shape("Select-String '#region'").is_constrained());
+        assert!(command_shape("Write-Output \"a # b\"").is_constrained());
+    }
+
+    #[test]
+    fn multiline_single_quoted_data_stays_constrained() {
+        assert!(command_shape("Write-Output 'line one\nline two'").is_constrained());
+    }
+
+    #[test]
+    fn typographic_quote_cannot_close_a_span_the_scanner_thinks_is_open() {
+        for command in [
+            "Write-Output \u{2018}x'; Write-Warning marker; Write-Output \u{2018}y'",
+            "Write-Output 'x\u{2019}; Write-Warning marker; Write-Output \u{2019}y'",
+            "Write-Output \u{201C}x\"; Write-Warning marker; Write-Output \u{201C}y\"",
+        ] {
+            assert!(
+                !command_shape(command).is_constrained(),
+                "typographic quote hid a statement: {command:?}"
+            );
+        }
     }
 
     #[test]

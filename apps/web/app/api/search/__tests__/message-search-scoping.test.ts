@@ -56,6 +56,16 @@ vi.mock('@/lib/services/active-workspace-service', async () => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
   resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
+vi.mock('@/lib/server/data-region', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readStoredOrganizationRegion: vi.fn(async () => ({
+    effective: 'us',
+    requested: null,
+    requestedAt: null,
+    provisioned: true,
+    missing: [],
+  })),
+}));
 
 import { GET } from '@/app/api/search/route';
 import {

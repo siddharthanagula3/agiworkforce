@@ -18,6 +18,7 @@ import {
   PLATFORM_ADMIN_ENV_VAR,
   isPlatformAdmin,
 } from '@/features/admin/lib/platform-admin-access';
+import { isAppError } from '@/lib/errors';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import type { FlagSubject } from '@/lib/feature-flags/evaluate-flags';
 import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
@@ -25,6 +26,7 @@ import { managedCloudDataRegion } from '@/lib/server/data-region';
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { withSpan, type ActiveSpan } from '@/lib/observability/span';
+import { buildRunDetachedStream } from './durable-stream-bounds';
 import { claimLiveDurableStream, isDurableTransportCoolingDown } from './durable-stream-liveness';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
@@ -50,6 +52,7 @@ import {
   type CloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from './durable-initial-turns';
+import { CloudAgentCapabilityRefusedError } from './cloud-agent-capability-refusal';
 import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import {
   connectorToolNames,
@@ -76,6 +79,16 @@ function workFlagSubject(input: StartCloudAgentWorkflowExecutionInput): FlagSubj
     clientVersion: null,
     internalStaff: isPlatformAdmin(input.userId, process.env[PLATFORM_ADMIN_ENV_VAR]),
   };
+}
+
+async function assertWorkAdmitted(input: StartCloudAgentWorkflowExecutionInput): Promise<void> {
+  if (input.processed.chatRequest.work_mode !== 'agiwork') return;
+  try {
+    await assertCapabilityAvailable(workFlagSubject(input), WORK_CAPABILITY, 'Work');
+  } catch (error) {
+    if (isAppError(error) && error.userSafe) throw new CloudAgentCapabilityRefusedError(error);
+    throw error;
+  }
 }
 
 export interface StartCloudAgentWorkflowExecutionInput {
@@ -107,7 +120,7 @@ export async function startCloudAgentWorkflowExecution(
   readable: WorkflowReadableStream<Uint8Array>;
   cancel: () => Promise<void>;
 }> {
-  await assertCapabilityAvailable(workFlagSubject(input), WORK_CAPABILITY, 'Work');
+  await assertWorkAdmitted(input);
   return withSpan(
     CLOUD_AGENT_ENQUEUE_SPAN,
     {
@@ -122,6 +135,16 @@ export async function startCloudAgentWorkflowExecution(
     },
     (span) => enqueueCloudAgentWorkflow(input, span),
   );
+}
+
+export class CloudAgentWorkflowUncertainStartError extends Error {
+  constructor(
+    readonly workflowRunId: string,
+    cause: unknown,
+  ) {
+    super('An admitted durable agent turn could not be stopped', { cause });
+    this.name = 'CloudAgentWorkflowUncertainStartError';
+  }
 }
 
 async function enqueueCloudAgentWorkflow(
@@ -148,7 +171,11 @@ async function enqueueCloudAgentWorkflow(
       workflowRunId: workflowRun.runId,
     });
   } catch (error) {
-    await cancel().catch(() => undefined);
+    const stopped = await cancel().then(
+      () => true,
+      () => false,
+    );
+    if (!stopped) throw new CloudAgentWorkflowUncertainStartError(workflowRun.runId, error);
     throw error;
   }
 
@@ -263,24 +290,44 @@ export async function runCloudAgentTurn(
     };
   };
 
+  const handOffToAdmittedWorkflow = (
+    workflowRunId: string,
+    reason: CloudAgentTransportDegradeReason,
+    error?: unknown,
+  ): CloudAgentTurnTransport => {
+    if (input.onDurableUnavailable === 'fail') {
+      throw error instanceof Error ? error : new Error(`Durable transport unavailable: ${reason}`);
+    }
+    logger.error(
+      {
+        ...(error ? { error } : {}),
+        reason,
+        userId: input.userId,
+        runId: input.runId,
+        workflowRunId,
+        requestId: input.processed.requestId,
+      },
+      'Admitted durable agent turn could not be stopped; the client follows it in the run journal',
+    );
+    return {
+      transport: 'durable',
+      workflowRunId,
+      readable: buildRunDetachedStream(input.runId),
+      degradedReason: reason,
+    };
+  };
+
   if (!areDurableInitialTurnsEnabled()) return degrade('kill_switch');
   if (await isDurableTransportCoolingDown()) return degrade('transport_cooling_down');
 
+  let workflow: Awaited<ReturnType<typeof startCloudAgentWorkflowExecution>>;
   try {
-    const workflow = await startCloudAgentWorkflowExecution(input);
-    const live = await claimLiveDurableStream(workflow.readable);
-    if (!live) {
-      // Correctness: the inline turn must not start until this cancel is issued,
-      // or the same turn runs twice and settles twice.
-      await workflow.cancel().catch(() => undefined);
-      return degrade('workflow_stream_stalled');
-    }
-    return {
-      transport: 'durable',
-      workflowRunId: workflow.workflowRunId,
-      readable: live,
-    };
+    workflow = await startCloudAgentWorkflowExecution(input);
   } catch (error) {
+    if (error instanceof CloudAgentCapabilityRefusedError) throw error.refusal;
+    if (error instanceof CloudAgentWorkflowUncertainStartError) {
+      return handOffToAdmittedWorkflow(error.workflowRunId, 'workflow_start_failed', error);
+    }
     return degrade(
       error instanceof CloudAgentWorkflowBillingUnavailableError
         ? 'no_reservation'
@@ -288,6 +335,29 @@ export async function runCloudAgentTurn(
       error,
     );
   }
+
+  const live = await claimLiveDurableStream(workflow.readable);
+  if (live) {
+    return {
+      transport: 'durable',
+      workflowRunId: workflow.workflowRunId,
+      readable: live,
+    };
+  }
+  const stopped = await workflow.cancel().then(
+    () => true,
+    (error: unknown) => {
+      logger.warn(
+        { error, runId: input.runId, workflowRunId: workflow.workflowRunId },
+        'Cancelling a stalled durable agent turn failed',
+      );
+      return false;
+    },
+  );
+  if (!stopped) {
+    return handOffToAdmittedWorkflow(workflow.workflowRunId, 'workflow_stream_stalled');
+  }
+  return degrade('workflow_stream_stalled');
 }
 
 /**

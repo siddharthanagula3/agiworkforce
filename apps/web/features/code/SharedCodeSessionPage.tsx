@@ -142,6 +142,9 @@ function OwnedSharedCodeSessionPage({ token, api: injectedApi }: SharedCodeSessi
                           .filter(Boolean)
                           .join(' ')}
                       </p>
+                      {shared.turnsTruncated === true && (
+                        <p className={styles['statusLine']}>{CODE_COPY.earlierTurnsNotShown}</p>
+                      )}
                       {items.length === 0 ? (
                         <p className={styles['statusLine']}>{CODE_COPY.sharedEmpty}</p>
                       ) : (

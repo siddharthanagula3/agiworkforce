@@ -20,6 +20,12 @@ import {
   type StripeCogsImportSummary,
 } from '@/lib/services/cogs-ledger-service';
 import {
+  claimCogsImportCoverage,
+  cogsImportCoverageBehind,
+  completeCogsImportCoverage,
+  releaseCogsImportCoverage,
+} from '@/lib/services/cogs-import-coverage';
+import {
   resolveReconciliationOutcome,
   type AlertDelivery,
   type ReconciliationFailure,
@@ -67,6 +73,9 @@ interface ReconcileSummary {
     feesRecorded: number;
     adjustmentsRecorded: number;
     discountsRecorded: number;
+    coveredSince: string;
+    coveredUntil: string;
+    behind: boolean;
   };
 }
 
@@ -154,16 +163,60 @@ async function runStripeReconciliation(): Promise<StripeReconciliationSummary | 
   });
 }
 
-const COGS_IMPORT_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
+interface CogsImportRun {
+  summary: StripeCogsImportSummary;
+  coveredSince: Date;
+  coveredUntil: Date;
+  behind: boolean;
+}
 
-async function runCogsImport(): Promise<StripeCogsImportSummary | null> {
-  const until = new Date();
-  const activity = await readStripeCostActivity({
-    since: new Date(until.getTime() - COGS_IMPORT_LOOKBACK_MS),
-    until,
-  });
-  if (!activity) return null;
-  return importStripeCogsAdjustments({ activity, db: getNeonDb() });
+async function runCogsImport(now: Date): Promise<CogsImportRun | null> {
+  if (!getStripeClientOrNull()) return null;
+  const db = getNeonDb();
+  const claim = await claimCogsImportCoverage(db, now);
+  if (!claim) {
+    logger.info(
+      { event: 'cogs_stripe_import_in_progress' },
+      'Another run holds the Stripe cost import; this run left it alone',
+    );
+    return null;
+  }
+
+  try {
+    const activity = await readStripeCostActivity(claim.window);
+    if (!activity) {
+      await releaseCogsImportCoverage(db, claim, null);
+      return null;
+    }
+    const summary = await importStripeCogsAdjustments({ activity, db });
+    const advanced = await completeCogsImportCoverage(db, claim, now);
+    if (!advanced) {
+      throw new Error('The Stripe cost import lease expired before its coverage was recorded');
+    }
+    return {
+      summary,
+      coveredSince: claim.window.since,
+      coveredUntil: claim.window.until,
+      behind: cogsImportCoverageBehind(claim.window.until, now),
+    };
+  } catch (error) {
+    try {
+      await releaseCogsImportCoverage(
+        db,
+        claim,
+        error instanceof Error ? error.message : String(error),
+      );
+    } catch (releaseError) {
+      logger.error(
+        {
+          event: 'cogs_stripe_import_release_failed',
+          error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+        },
+        'The Stripe cost import lease could not be released; it expires on its own',
+      );
+    }
+    throw error;
+  }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -224,9 +277,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     stripeFailure = 'stripe_reconciliation_failed';
   }
 
-  let cogsSummary: StripeCogsImportSummary | null = null;
+  let cogsRun: CogsImportRun | null = null;
+  let cogsCoverageBehind: ReconciliationFailure | null = null;
   try {
-    cogsSummary = await runCogsImport();
+    cogsRun = await runCogsImport(new Date());
+    if (cogsRun?.behind) {
+      logger.error(
+        {
+          event: 'cogs_stripe_import_coverage_behind',
+          coveredUntil: cogsRun.coveredUntil.toISOString(),
+        },
+        'Stripe cost import is still catching up; the COGS ledger is incomplete after the covered time',
+      );
+      cogsCoverageBehind = 'cogs_import_coverage_behind';
+    }
   } catch (error) {
     logger.error(
       {
@@ -237,6 +301,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
     stripeFailure ??= 'cogs_import_failed';
   }
+  stripeFailure ??= cogsCoverageBehind;
 
   if (stripeSummary?.alert) {
     const alert = buildStripeDivergenceAlert(stripeSummary);
@@ -325,12 +390,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     };
   }
 
-  if (cogsSummary) {
+  if (cogsRun) {
     responseBody.cogs = {
-      examined: cogsSummary.examined,
-      feesRecorded: cogsSummary.feesRecorded,
-      adjustmentsRecorded: cogsSummary.adjustmentsRecorded,
-      discountsRecorded: cogsSummary.discountsRecorded,
+      examined: cogsRun.summary.examined,
+      feesRecorded: cogsRun.summary.feesRecorded,
+      adjustmentsRecorded: cogsRun.summary.adjustmentsRecorded,
+      discountsRecorded: cogsRun.summary.discountsRecorded,
+      coveredSince: cogsRun.coveredSince.toISOString(),
+      coveredUntil: cogsRun.coveredUntil.toISOString(),
+      behind: cogsRun.behind,
     };
   }
 

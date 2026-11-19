@@ -78,8 +78,9 @@ describe('delete-account dialog matches what deletion actually does', () => {
     expect(cancelRoute).toMatch(
       /export async function POST\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'legacy' \}\);\s*\}/,
     );
+    expect(cancelScheduleRoute).toContain('MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH');
     expect(cancelScheduleRoute).toMatch(
-      /export async function PUT\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'required-pair' \}\);\s*\}/,
+      /export async function PUT\(request: NextRequest\) \{[\s\S]*?return handleAccountDeletionCancellation\(request, \{ kind: 'required-pair' \}\);\s*\}/,
     );
   });
 });

@@ -156,3 +156,83 @@ describe('typing what was dictated', () => {
     expect(bar.close).toHaveBeenCalled();
   });
 });
+
+describe('turning dictation into other apps off', () => {
+  function held<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  it('opens no bar for a press whose target check settles after the switch is turned off', async () => {
+    const dictation = createDictationElsewhere(deps);
+    const target = held<DictationApp | null>();
+    deps.frontApp.mockReturnValueOnce(target.promise);
+
+    const press = dictation.handlePress();
+    dictation.closeAll();
+    target.resolve(NOTES);
+
+    expect(await press).toBe(true);
+    expect(deps.openBar).not.toHaveBeenCalled();
+    expect(dictation.isListening()).toBe(false);
+  });
+
+  it('opens one bar when the shortcut is pressed twice before the target is known', async () => {
+    const dictation = createDictationElsewhere(deps);
+    const target = held<DictationApp | null>();
+    deps.frontApp.mockReturnValueOnce(target.promise);
+
+    const first = dictation.handlePress();
+    expect(await dictation.handlePress()).toBe(true);
+    target.resolve(NOTES);
+    expect(await first).toBe(true);
+
+    expect(deps.openBar).toHaveBeenCalledTimes(1);
+  });
+
+  it('copies nothing and notifies nothing for a finish whose target check settles after the switch is turned off', async () => {
+    for (const settled of [null, NOTES, { ...NOTES, pid: 9 }]) {
+      vi.clearAllMocks();
+      const dictation = await listening();
+      const target = held<DictationApp | null>();
+      deps.frontApp.mockReturnValueOnce(target.promise);
+
+      const finishing = dictation.finish(BAR_ID, 'hello');
+      dictation.closeAll();
+      target.resolve(settled);
+
+      await expect(finishing).rejects.toThrow('Dictation was turned off.');
+      expect(deps.copyText).not.toHaveBeenCalled();
+      expect(deps.typeText).not.toHaveBeenCalled();
+      expect(deps.notify).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not fall back to the clipboard when typing fails after the switch was turned off', async () => {
+    const dictation = await listening();
+    let refuse!: (error: Error) => void;
+    deps.typeText.mockReturnValueOnce(
+      new Promise<undefined>((_, reject) => {
+        refuse = reject;
+      }),
+    );
+
+    const finishing = dictation.finish(BAR_ID, 'hello');
+    await vi.waitFor(() => expect(deps.typeText).toHaveBeenCalled());
+    dictation.closeAll();
+    refuse(new Error('Accessibility is off'));
+
+    await expect(finishing).rejects.toThrow('Dictation was turned off.');
+    expect(deps.copyText).not.toHaveBeenCalled();
+  });
+
+  it('lets a press after turning it back on start a fresh dictation', async () => {
+    const dictation = createDictationElsewhere(deps);
+    dictation.closeAll();
+    expect(await dictation.handlePress()).toBe(true);
+    expect(deps.openBar).toHaveBeenCalledTimes(1);
+  });
+});

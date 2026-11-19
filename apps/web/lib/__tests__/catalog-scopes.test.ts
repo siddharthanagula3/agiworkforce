@@ -265,9 +265,7 @@ describe('the pages that print a scope keep the scope and its definition reachab
 const BARE_COUNT_READ =
   /MARKETING\.(?:models|providers)\b|\bapproximateCount\b|\b(?:BYOK_PROVIDER_IDS|CLI_KEY_PROVIDERS|SELF_HOSTED_KEY_PROVIDERS)\.length/;
 
-const PENDING_BARE_COUNT_SITES: Record<string, readonly string[]> = {
-  'L03-WP5': ['features/marketing/components/MarketingLanding.tsx'],
-};
+const PENDING_BARE_COUNT_SITES: Record<string, readonly string[]> = {};
 
 function sourcesUnder(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

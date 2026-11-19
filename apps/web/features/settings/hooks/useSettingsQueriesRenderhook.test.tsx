@@ -154,6 +154,33 @@ describe('useWorkspaceAudit · interactive session', () => {
   });
 });
 
+describe('useAuditLogs · renderHook', () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+  });
+
+  it('fails a malformed history instead of reporting no recorded activity', async () => {
+    fetchMock.mockResolvedValue(makeResponse({ error: 'unexpected' }));
+
+    const { useAuditLogs } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useAuditLogs({}), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+
+  it('keeps a genuinely empty history empty', async () => {
+    fetchMock.mockResolvedValue(makeResponse({ entries: [], hasMore: false }));
+
+    const { useAuditLogs } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useAuditLogs({}), { wrapper: makeWrapper() });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toEqual({ entries: [], hasMore: false });
+  });
+});
+
 describe('team administration mutations · renderHook', () => {
   beforeEach(async () => {
     fetchMock.mockReset();

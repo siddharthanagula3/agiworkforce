@@ -22,8 +22,10 @@ import { buildCustomInstructionInput } from '../instructions';
 import { getActiveCloudProject } from '../projects/activeProject';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { rateParticipantAnswer } from '../feedback/answerRating';
+import { recordCompletedTurnUsage } from '../../data/turnUsage';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
 import { assertRunnableStartedThread } from '../../integrations/developerSessionValidation';
+import { resolveContextEditor, withheldEditorFileNotice } from '../../data/composerContext';
 
 interface EditorContext {
   fileName: string;
@@ -31,23 +33,34 @@ interface EditorContext {
   selectedText: string;
   surroundingCode: string;
   workspaceName: string;
+  withheldNotice?: string;
 }
 
-function gatherEditorContext(): EditorContext {
+async function gatherEditorContext(): Promise<EditorContext> {
   const editor = vscode.window.activeTextEditor;
   const workspaceName = getWorkspaceDisplayName();
+  const empty: EditorContext = {
+    fileName: '',
+    languageId: '',
+    selectedText: '',
+    surroundingCode: '',
+    workspaceName,
+  };
 
-  if (editor === undefined) {
+  if (editor === undefined || !Config.editorContextAutoAttach()) return empty;
+
+  const resolved = await resolveContextEditor(editor);
+  if (typeof resolved === 'string') {
+    const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
     return {
-      fileName: '',
-      languageId: '',
-      selectedText: '',
-      surroundingCode: '',
-      workspaceName,
+      ...empty,
+      fileName: relativePath,
+      languageId: editor.document.languageId,
+      withheldNotice: withheldEditorFileNotice(relativePath, resolved),
     };
   }
 
-  const { document, selection } = editor;
+  const { document, selection } = resolved;
   const contextLines = Config.contextLines();
 
   const selectedText = document.getText(selection);
@@ -268,6 +281,7 @@ function threadResultMetadata(
 
 function buildRuntimeTurnInput(request: vscode.ChatRequest, ctx: EditorContext): string {
   const parts = [buildUserMessage(request, ctx)];
+  if (ctx.withheldNotice !== undefined) parts.push(ctx.withheldNotice);
   if (ctx.fileName !== '') {
     parts.push(`Active file: ${ctx.fileName} (${ctx.languageId}).`);
   }
@@ -285,7 +299,7 @@ function buildRuntimeTurnInput(request: vscode.ChatRequest, ctx: EditorContext):
 }
 
 export function createChatHandler(
-  _secrets: vscode.SecretStorage,
+  secrets: vscode.SecretStorage,
   conversationTreeProvider?: ConversationTreeProvider,
   globalState?: vscode.ExtensionContext['globalState'],
   localRuntimes?: LocalRuntimePool,
@@ -320,7 +334,10 @@ export function createChatHandler(
       return { errorDetails: { message } };
     }
 
-    const editorCtx = gatherEditorContext();
+    const editorCtx = await gatherEditorContext();
+    if (editorCtx.withheldNotice !== undefined) {
+      stream.markdown(`> **${PRODUCT_NAMES.code}**: ${editorCtx.withheldNotice}\n\n`);
+    }
     const promptReferenceInputs = await buildPromptReferenceInputs(request.references ?? []);
     const planOnly = Config.agentMode() === 'plan' && !isExecutionConfirmation(request.prompt);
     if (planOnly) {
@@ -346,7 +363,7 @@ export function createChatHandler(
     const memoryInput =
       workspaceState === undefined
         ? undefined
-        : buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
+        : buildMemoryContextInput((await getAccountMemoryStore()?.turnFacts()) ?? []);
     const historicalAuthority = localThreadAuthorityFromHistory(context);
     let threadId = historicalAuthority?.id;
     let threadAuthority: LocalThreadAuthorityMetadata | undefined;
@@ -355,6 +372,7 @@ export function createChatHandler(
       requestedAuthorityDiffers(historicalAuthority, requestedModel);
     if (boundaryChanged) threadId = undefined;
     let turnId: string | undefined;
+    let servedModel: string | undefined;
     let terminal = false;
     let cancelled = token.isCancellationRequested;
     let cancellationError: string | undefined;
@@ -489,7 +507,17 @@ export function createChatHandler(
             }
           }
         })();
+      } else if (event.type === 'turn_model') {
+        servedModel = event.model;
       } else if (event.type === 'turn_completed') {
+        recordCompletedTurnUsage(secrets, {
+          model: servedModel ?? model,
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          ...(event.managedRequestIds === undefined
+            ? {}
+            : { managedRequestIds: event.managedRequestIds }),
+        });
         conversationTreeProvider?.refresh();
         finish();
       } else if (event.type === 'turn_interrupted') {
@@ -550,6 +578,7 @@ export function createChatHandler(
           : buildCustomInstructionInput(
               { globalState, workspaceState },
               {
+                project: activeProject ?? null,
                 projectAppliedByServer:
                   activeProject !== undefined && threadAuthority?.trustMode === 'managed',
               },

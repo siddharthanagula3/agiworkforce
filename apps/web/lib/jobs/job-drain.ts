@@ -1,7 +1,7 @@
 import 'server-only';
 
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { DEFAULT_DATA_REGION, type DataRegionId } from '@agiworkforce/compliance';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
@@ -68,8 +68,8 @@ export interface DrainBackgroundJobsOptions {
   handlers: JobHandlerRegistry;
   budgetMs: number;
   maxInFlight: number;
-  now?: () => number;
   region?: DataRegionId;
+  now?: () => number;
 }
 
 function jobTimeoutError(job: BackgroundJob): Error {
@@ -167,6 +167,10 @@ async function runJob(
         {
           domain: 'queue',
           kind: 'consumer',
+          tenant: {
+            ...(job.organizationId === null ? {} : { organizationId: job.organizationId }),
+            ...(job.userId === null ? {} : { userId: job.userId }),
+          },
           attributes: {
             [OBSERVABILITY_ATTRIBUTE.queueName]: job.queue,
             [OBSERVABILITY_ATTRIBUTE.queueJobId]: job.id,

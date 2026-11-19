@@ -2,8 +2,10 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-import { retentionEnforcement } from '@/lib/server/retention/enforcement';
-import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
+import {
+  isRetentionSweepEnabled,
+  listOrganizationsWithRetentionPolicy,
+} from '@/lib/server/retention/enforcement';
 import {
   HOLD_COLUMNS,
   countActiveLegalHolds,
@@ -17,6 +19,7 @@ import {
   type LegalHoldResourceType,
   type LegalHoldScope,
 } from './legal-hold-gate';
+import { serializeHoldPlacement } from './legal-hold-placement';
 
 export {
   HOLD_COLUMNS,
@@ -107,6 +110,7 @@ export async function createLegalHold(
     : null;
 
   return db.transaction(async (tx) => {
+    await serializeHoldPlacement(tx, input.organizationId);
     const [row] = await tx.query<{ id: string }>(
       `insert into public.legal_holds
          (organization_id, name, reason, scope, subject_user_id, resource_types, created_by_user_id)
@@ -213,14 +217,13 @@ export async function sweepOrganizationRetention(
     [organizationId],
   );
 
-  // A recorded window on a plan that sells enterprise controls is a commitment
-  // rather than an owner's preference, so it is swept either way.
-  const enforcement = retentionEnforcement({
-    plan: policy ? await resolveOrganizationEntitlementPlan(organizationId) : null,
-    retentionDays: policy?.retention_days ?? null,
-    retentionEnforced: policy?.retention_enforced ?? false,
-  });
-  if (!policy || (!enforcement.enforced && !enforcement.required)) {
+  if (
+    !policy ||
+    !isRetentionSweepEnabled({
+      retentionDays: policy.retention_days,
+      retentionEnforced: policy.retention_enforced,
+    })
+  ) {
     return { organizationId, outcome: 'not_enforced' };
   }
 
@@ -319,7 +322,7 @@ export async function sweepOrganizationRetention(
                where candidate.organization_id = $1
                  and candidate.updated_at < $2
                  and ${exclusion.sql}
-               limit $4
+               limit $${3 + exclusion.params.length}
             )
             returning id
          ), revoked_shares as (
@@ -409,20 +412,8 @@ async function sweepRoutineRuns(
 export async function listOrganizationsWithRetentionEnforced(
   db: DatabaseAdapter,
 ): Promise<string[]> {
-  const rows = await db.query<{ organization_id: string }>(
-    `select policy.organization_id
-       from public.organization_admin_policies policy
-       left join lateral (
-         select max(sweep.created_at) as last_swept_at
-           from public.organization_retention_sweeps sweep
-          where sweep.organization_id = policy.organization_id
-            and sweep.dry_run = false
-       ) last_sweep on true
-      where policy.retention_enforced = true
-      order by last_sweep.last_swept_at asc nulls first, policy.organization_id`,
-    [],
-  );
-  return rows.map((row) => row.organization_id);
+  const rows = await listOrganizationsWithRetentionPolicy(db);
+  return rows.filter(isRetentionSweepEnabled).map((row) => row.organizationId);
 }
 
 export interface RetentionBacklog {
@@ -468,7 +459,15 @@ export async function readRetentionBacklog(
       limit 1`,
     [organizationId],
   );
-  if (!policy || !policy.retention_enforced) return empty;
+  if (
+    !policy ||
+    !isRetentionSweepEnabled({
+      retentionDays: policy.retention_days,
+      retentionEnforced: policy.retention_enforced,
+    })
+  ) {
+    return empty;
+  }
 
   const retentionDays = policy.retention_days;
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000).toISOString();

@@ -1,11 +1,11 @@
 use super::*;
 use crate::code_sessions::{
-    accept_archive, accept_delete, accept_rename, accept_search, delete_params, discard_params,
-    remove_thread, rename_params, replace_thread, search_params,
+    accept_archive, accept_delete, accept_rename, delete_params, discard_params, remove_thread,
+    rename_params, replace_thread,
 };
 use agiworkforce_protocol::developer_session::{
     AcknowledgedResponse, ThreadDeleteResponse, ThreadIdParams, ThreadReadResponse,
-    ThreadRenameResponse, ThreadSearchResponse, ThreadStatus, ThreadSummary,
+    ThreadRenameResponse, ThreadStatus, ThreadSummary,
 };
 
 impl Desktop {
@@ -19,92 +19,15 @@ impl Desktop {
         self.code_sessions.operation.is_none() && !self.loading && !self.session_running(thread_id)
     }
 
-    pub(super) fn search_code_sessions(&mut self, cx: &mut Context<Self>) {
-        if self.code_sessions.operation.is_some()
-            || !self
-                .capabilities
-                .as_ref()
-                .is_some_and(|caps| caps.thread_search)
-        {
-            return;
-        }
-        let request = match search_params(
-            &self.code_sessions.query,
-            self.code_sessions.include_archived,
-        ) {
-            Ok(request) => request,
-            Err(error) => {
-                self.code_sessions.error = Some(error.to_string());
-                cx.notify();
-                return;
-            }
-        };
-        let client = match self.client() {
-            Ok(client) => client,
-            Err(error) => {
-                self.code_sessions.error = Some(error.to_string());
-                cx.notify();
-                return;
-            }
-        };
-        let operation = self.code_sessions.begin();
-        let generation = self.generation;
-        let task = self.executor.spawn(async move {
-            client
-                .request::<ThreadSearchResponse>(method::THREAD_SEARCH, request)
-                .await
-        });
-        cx.spawn(async move |view, cx| {
-            let result = task
-                .await
-                .context("Session search stopped")
-                .and_then(|result| result.map_err(Into::into))
-                .and_then(accept_search);
-            let _ = view.update(cx, |view, cx| {
-                if view.generation != generation || view.code_sessions.operation != Some(operation)
-                {
-                    return;
-                }
-                view.code_sessions.operation = None;
-                match result {
-                    Ok(hits) => {
-                        view.code_sessions.hits = hits;
-                        view.code_sessions.showing_search = true;
-                        view.code_sessions.error = None;
-                    }
-                    Err(error) => {
-                        view.code_sessions.error = Some(crate::code_sessions::error_message(&error))
-                    }
-                }
-                cx.notify();
-            });
-        })
-        .detach();
-        cx.notify();
-    }
-
     pub(super) fn toggle_archived_sessions(&mut self, cx: &mut Context<Self>) {
         if self.code_sessions.operation.is_some() || self.loading {
             return;
         }
         self.code_sessions.include_archived = !self.code_sessions.include_archived;
-        if self.code_sessions.showing_search {
-            self.search_code_sessions(cx);
-        } else {
-            self.load_sessions(false, cx);
+        if self.code_search.results().is_some() {
+            self.search_sessions(cx);
         }
-    }
-
-    pub(super) fn clear_code_search(&mut self, cx: &mut Context<Self>) {
-        if self.code_sessions.operation.is_some() {
-            return;
-        }
-        self.code_sessions.showing_search = false;
-        self.code_sessions.hits.clear();
-        self.code_sessions.query.clear();
-        self.code_sessions.reset_query = true;
-        self.code_sessions.error = None;
-        cx.notify();
+        self.load_sessions(false, cx);
     }
 
     pub(super) fn begin_code_rename(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -270,6 +193,7 @@ impl Desktop {
                             }
                             if !view.code_sessions.include_archived {
                                 remove_thread(&mut view.threads, &archived_id);
+                                view.code_search.remove_thread(&archived_id);
                             }
                             view.code_sessions.notice = Some(
                                 "Session archived. Unarchive it before sending another message."
@@ -476,9 +400,7 @@ impl Desktop {
         match accept_delete(&request, &response) {
             Ok(kept) => {
                 remove_thread(&mut self.threads, thread_id);
-                self.code_sessions
-                    .hits
-                    .retain(|hit| hit.thread.id != thread_id);
+                self.code_search.remove_thread(thread_id);
                 self.drafts.remove(thread_id);
                 if self
                     .conversation
@@ -514,11 +436,7 @@ impl Desktop {
                 conversation.transcript.thread = thread.clone();
             }
         }
-        for hit in &mut self.code_sessions.hits {
-            if hit.thread.id == thread.id {
-                hit.thread = thread.clone();
-            }
-        }
+        self.code_search.replace_thread(&thread);
         let _ = replace_thread(&mut self.threads, thread);
     }
 

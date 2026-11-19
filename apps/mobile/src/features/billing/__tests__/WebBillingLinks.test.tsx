@@ -1,3 +1,7 @@
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 const mockGetStorefront = jest.fn();
 
 jest.mock('expo-iap', () => ({

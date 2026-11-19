@@ -47,6 +47,8 @@ const {
   liveArtifactMissingConnectors,
   readConversationOriginPrivacyMode,
   readOwnedRunnableArtifact,
+  removeLiveArtifact,
+  setLiveArtifactRefreshPolicy,
 } = await import('../artifact-runtime-service');
 
 const OWNER = { userId: 'user-1', organizationId: null };
@@ -277,5 +279,51 @@ describe('bindingCovers', () => {
     expect(bindingCovers(null, ['slack'])).toBe(false);
     expect(bindingCovers({ connectors: ['slack'] }, ['slack'])).toBe(true);
     expect(bindingCovers({ connectors: ['slack'] }, ['slack', 'linear'])).toBe(false);
+  });
+});
+
+describe('live binding writes', () => {
+  it('changes the refresh policy only inside the selected workspace', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([{ artifact_id: 'a1' }])
+      .mockResolvedValueOnce([]);
+    await setLiveArtifactRefreshPolicy(
+      { query } as never,
+      { userId: 'user-1', organizationId: 'org-1' },
+      'a1',
+      'manual',
+    );
+    const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('update public.live_artifacts');
+    expect(sql).toContain('conversations.id = live_artifacts.conversation_id');
+    expect(sql).toContain('conversations.deleted_at is null');
+    expect(sql).toContain('conversations.organization_id is not distinct from $4::uuid');
+    expect(params).toEqual(['user-1', 'a1', 'manual', 'org-1']);
+  });
+
+  it('answers no binding without a read when the workspace holds none', async () => {
+    const query = vi.fn().mockResolvedValueOnce([]);
+    await expect(
+      setLiveArtifactRefreshPolicy(
+        { query } as never,
+        { userId: 'user-1', organizationId: null },
+        'a1',
+        'manual',
+      ),
+    ).resolves.toBeNull();
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes a binding only inside the selected workspace', async () => {
+    const query = vi.fn().mockResolvedValueOnce([]);
+    await expect(
+      removeLiveArtifact({ query } as never, { userId: 'user-1', organizationId: null }, 'a1'),
+    ).resolves.toBe(false);
+    const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('delete from public.live_artifacts');
+    expect(sql).toContain('conversations.id = live_artifacts.conversation_id');
+    expect(sql).toContain('conversations.organization_id is not distinct from $3::uuid');
+    expect(params).toEqual(['user-1', 'a1', null]);
   });
 });

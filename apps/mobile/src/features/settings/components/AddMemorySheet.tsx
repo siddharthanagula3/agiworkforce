@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, TextInput, View } from 'react-native';
 import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -13,11 +13,13 @@ interface AddMemorySheetProps {
   editingMemory: MemoryEntry | null;
   onClose: () => void;
   onDelete?: (id: string) => void;
-  onSave: (content: string, category?: string) => void;
-  onUpdate: (id: string, content: string) => void;
+  onSave: (content: string, category?: string) => Promise<string | null>;
+  onUpdate: (id: string, content: string) => Promise<string | null>;
   open: boolean;
   isCloud?: boolean;
 }
+
+const SAVE_FAILED_MESSAGE = 'Could not save this memory. Try again.';
 
 export function AddMemorySheet({
   editingMemory,
@@ -30,14 +32,25 @@ export function AddMemorySheet({
 }: AddMemorySheetProps) {
   const colors = useThemeColors();
   const [content, setContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const editorSession = useRef(0);
 
   useEffect(() => {
+    editorSession.current += 1;
+    setSaving(false);
+    setSaveError(null);
     if (!open) return;
     setContent(editingMemory ? editingMemory.fact : '');
   }, [editingMemory, open]);
 
+  const handleChangeText = useCallback((next: string) => {
+    setContent(next);
+    setSaveError(null);
+  }, []);
+
   const isEditing = editingMemory !== null;
-  const canSave = content.trim().length > 0;
+  const canSave = content.trim().length > 0 && !saving;
 
   const handleClose = useCallback(() => {
     const discard = () => {
@@ -51,19 +64,32 @@ export function AddMemorySheet({
     }
   }, [content, editingMemory, onClose]);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     const trimmed = content.trim();
-    if (!trimmed) return;
+    if (!trimmed || saving) return;
 
-    if (isEditing && editingMemory) {
-      onUpdate(editingMemory.id, trimmed);
-    } else {
-      onSave(trimmed);
+    const session = editorSession.current;
+    setSaving(true);
+    setSaveError(null);
+    let failure: string | null;
+    try {
+      failure =
+        isEditing && editingMemory
+          ? await onUpdate(editingMemory.id, trimmed)
+          : await onSave(trimmed);
+    } catch {
+      failure = SAVE_FAILED_MESSAGE;
     }
+    if (session !== editorSession.current) return;
 
+    setSaving(false);
+    if (failure) {
+      setSaveError(failure);
+      return;
+    }
     setContent('');
     onClose();
-  }, [content, editingMemory, isEditing, onClose, onSave, onUpdate]);
+  }, [content, editingMemory, isEditing, onClose, onSave, onUpdate, saving]);
 
   const handleDelete = useCallback(() => {
     if (!editingMemory || !onDelete) return;
@@ -155,7 +181,7 @@ export function AddMemorySheet({
             autoCorrect={false}
             maxLength={MANAGED_MEMORY_MAX_CONTENT_CHARS}
             multiline
-            onChangeText={setContent}
+            onChangeText={handleChangeText}
             placeholder="What should AGI remember?"
             placeholderTextColor={colors.textMuted}
             returnKeyType="default"
@@ -175,6 +201,16 @@ export function AddMemorySheet({
             }}
             value={content}
           />
+
+          {saveError ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+              style={{ color: colors.agentError, fontSize: typeScale.caption, marginTop: 8 }}
+            >
+              {saveError}
+            </Text>
+          ) : null}
 
           {isEditing && onDelete ? (
             <Pressable

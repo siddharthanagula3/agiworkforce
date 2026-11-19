@@ -5,6 +5,7 @@ import {
   DeveloperEvalResultSchema,
   DeveloperEvalRunListSchema,
   DeveloperEvalRunSchema,
+  DeveloperEvalRunStartSchema,
   DeveloperPromptListSchema,
   DeveloperPromptResponseSchema,
   DeveloperPromptVersionListSchema,
@@ -14,6 +15,7 @@ import {
   type DeveloperEvalResult,
   type DeveloperEvalResultInput,
   type DeveloperEvalRun,
+  type DeveloperEvalRunStart,
   type DeveloperPrompt,
   type DeveloperPromptVersion,
   type DeveloperPromptVersionInput,
@@ -44,6 +46,7 @@ async function call<T>(
 
 const CaseResponse = z.object({ case: DeveloperEvalCaseSchema });
 const RunResponse = z.object({ run: DeveloperEvalRunSchema });
+const RunStartResponse = z.object({ run: DeveloperEvalRunStartSchema });
 const ResultResponse = z.object({ result: DeveloperEvalResultSchema });
 
 const promptPath = (promptId: string, leaf = '') =>
@@ -68,7 +71,7 @@ export interface PromptsApi {
     promptId: string,
     version: number,
     checkKind: DeveloperEvalCheckKind,
-  ): Promise<DeveloperEvalRun>;
+  ): Promise<DeveloperEvalRunStart>;
   run(promptId: string, runId: string): Promise<DeveloperEvalRun>;
   recordResult(
     promptId: string,
@@ -114,7 +117,8 @@ export const promptsApi: PromptsApi = {
   runs: async (promptId) =>
     (await call(DeveloperEvalRunListSchema, promptPath(promptId, 'runs'), 'GET')).runs,
   startRun: async (promptId, version, checkKind) =>
-    (await call(RunResponse, promptPath(promptId, 'runs'), 'POST', { version, checkKind })).run,
+    (await call(RunStartResponse, promptPath(promptId, 'runs'), 'POST', { version, checkKind }))
+      .run,
   run: async (promptId, runId) =>
     (await call(RunResponse, promptPath(promptId, `runs/${encodeURIComponent(runId)}`), 'GET')).run,
   recordResult: async (promptId, runId, input) =>

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { autostart } from '@agiworkforce/desktop-command-client';
@@ -34,7 +35,9 @@ describe('LaunchAtLoginSetting', () => {
 
     expect(toggle).not.toBeChecked();
     expect(
-      screen.getByText('Start AGI Desktop automatically when you sign in to this device.'),
+      screen.getByText(
+        `Start ${PRODUCT_NAMES.desktop} automatically when you sign in to this device.`,
+      ),
     ).toBeVisible();
   });
 

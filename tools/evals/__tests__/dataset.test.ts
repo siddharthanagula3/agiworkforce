@@ -91,6 +91,18 @@ describe('parseDataset', () => {
     };
     expect(() => parseDataset(broken)).toThrow(/positive integer limit/);
   });
+
+  it('reads a project beside a declared memory, and refuses one without it or of another kind', () => {
+    const inProject = { ...validCase, memory: 'on', project: 'with_files' };
+
+    expect(parseDataset({ ...valid, cases: [inProject] }).cases[0]?.project).toBe('with_files');
+    expect(() =>
+      parseDataset({ ...valid, cases: [{ ...validCase, project: 'with_files' }] }),
+    ).toThrow(/declares through memory/);
+    expect(() =>
+      parseDataset({ ...valid, cases: [{ ...inProject, project: 'without_files' }] }),
+    ).toThrow(/project must be one of with_files/);
+  });
 });
 
 describe('committed corpora', () => {

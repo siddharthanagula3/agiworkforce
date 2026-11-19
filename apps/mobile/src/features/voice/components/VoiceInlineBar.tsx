@@ -8,7 +8,14 @@ import { Text } from '@/components/ui/Text';
 import { colors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
+import {
+  AttachmentPreview,
+  type Attachment,
+} from '@/src/features/chat/components/AttachmentPreview';
 import { VoiceOrb } from './VoiceOrb';
+import { VoiceStateGlow } from './VoiceStateGlow';
+
+const GLOW_HEIGHT = 280;
 
 export type VoiceInlinePhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -18,10 +25,18 @@ export interface VoiceInlineBarProps {
   audioLevel?: number;
   muted?: boolean;
   notice?: string | null;
+  attachments?: Attachment[];
+  attachmentPrivacyLabel?: string;
+  onRemoveAttachment?: (id: string) => void;
   onAttach?: () => void;
   onOpenKeyboard?: () => void;
   onToggleMic: () => void;
   onExit: () => void;
+}
+
+function micActionLabel(muted: boolean, phase: VoiceInlinePhase): string {
+  if (muted) return 'Unmute microphone';
+  return phase === 'idle' ? 'Start listening' : 'Mute microphone';
 }
 
 export function VoiceInlineBar({
@@ -30,6 +45,9 @@ export function VoiceInlineBar({
   audioLevel = 0,
   muted = false,
   notice = null,
+  attachments = [],
+  attachmentPrivacyLabel,
+  onRemoveAttachment,
   onAttach,
   onOpenKeyboard,
   onToggleMic,
@@ -44,6 +62,8 @@ export function VoiceInlineBar({
     if (hapticsEnabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     fn();
   };
+
+  const micLabel = micActionLabel(muted, phase);
 
   const pillStyle = {
     flex: 1,
@@ -63,7 +83,7 @@ export function VoiceInlineBar({
           onPress={tap(onAttach)}
           accessibilityRole="button"
           accessibilityLabel="Add attachment"
-          hitSlop={10}
+          hitSlop={12}
         >
           <Plus size={22} color={colors.textSecondary} />
         </Pressable>
@@ -80,6 +100,8 @@ export function VoiceInlineBar({
       style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
+      <VoiceStateGlow phase={muted ? 'idle' : phase} height={GLOW_HEIGHT} />
+
       {notice ? (
         <Text
           testID="voice-inline-notice"
@@ -97,6 +119,16 @@ export function VoiceInlineBar({
       <View style={{ alignItems: 'center', marginBottom: 14 }}>
         <VoiceOrb phase={phase} audioLevel={audioLevel} />
       </View>
+
+      {attachments.length > 0 && onRemoveAttachment ? (
+        <View testID="voice-inline-attachments" style={{ marginHorizontal: -16, marginBottom: 10 }}>
+          <AttachmentPreview
+            attachments={attachments}
+            onRemove={onRemoveAttachment}
+            privacyShortLabel={attachmentPrivacyLabel}
+          />
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {onOpenKeyboard ? (
@@ -118,7 +150,7 @@ export function VoiceInlineBar({
         <Pressable
           onPress={tap(onToggleMic)}
           accessibilityRole="button"
-          accessibilityLabel={muted ? 'Unmute microphone' : 'Mute microphone'}
+          accessibilityLabel={micLabel}
           accessibilityState={{ selected: muted }}
           style={{
             width: 48,

@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 use super::{project_path, CloudError, CloudSession, Route};
 use crate::platform::runtime::session::PrivacyMode;
+use crate::terminal_text::sanitize_terminal_text;
 
 const PRESIGN_PATH: &str = "/api/uploads/presign";
 const UPLOAD_PROTOCOL_VERSION: u32 = 2;
@@ -25,6 +26,18 @@ struct Presign {
 #[derive(Deserialize)]
 struct Registered {
     file: KnowledgeFile,
+    #[serde(default)]
+    notice: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KnowledgeIndexing {
+    pub status: String,
+    #[serde(default)]
+    pub chunk_count: u64,
+    #[serde(default)]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,6 +46,44 @@ pub struct KnowledgeFile {
     pub id: String,
     pub file_name: String,
     pub byte_count: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub indexing: Option<KnowledgeIndexing>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
+}
+
+impl KnowledgeFile {
+    pub fn receipt(&self, project_name: &str) -> String {
+        let file_name = sanitize_terminal_text(&self.file_name);
+        let project_name = sanitize_terminal_text(project_name);
+        let mut receipt = match non_empty(self.summary.as_deref()) {
+            Some(summary) => format!(
+                "Added {file_name} to '{project_name}'. {}",
+                sanitize_terminal_text(summary)
+            ),
+            None => format!(
+                "Added {file_name} to '{project_name}'. Chats in the project, and managed turns in a directory linked to it, can search it."
+            ),
+        };
+        if let Some(notice) = non_empty(self.notice.as_deref()) {
+            receipt.push('\n');
+            receipt.push_str(&sanitize_terminal_text(notice));
+        }
+        if let Some(indexing) = self.indexing.as_ref().filter(|i| i.status == "failed") {
+            receipt.push_str("\nIndexing failed");
+            if let Some(error) = non_empty(indexing.error.as_deref()) {
+                receipt.push_str(": ");
+                receipt.push_str(&sanitize_terminal_text(error));
+            }
+        }
+        receipt
+    }
+}
+
+fn non_empty(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
 }
 
 pub async fn add_file(
@@ -102,7 +153,10 @@ pub async fn add_file(
         )
         .await;
     match registered {
-        Ok(registered) => Ok(registered.file),
+        Ok(registered) => Ok(KnowledgeFile {
+            notice: registered.notice,
+            ..registered.file
+        }),
         Err(error) => {
             let cleanup: Result<serde_json::Value, CloudError> = session
                 .client
@@ -121,5 +175,86 @@ pub async fn add_file(
             }
             Err(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn registered(body: serde_json::Value) -> KnowledgeFile {
+        let registered: Registered = serde_json::from_value(body).expect("decodes");
+        KnowledgeFile {
+            notice: registered.notice,
+            ..registered.file
+        }
+    }
+
+    #[test]
+    fn a_readable_source_is_announced_as_searchable() {
+        let file = registered(serde_json::json!({
+            "file": {
+                "id": "f1",
+                "fileName": "notes.md",
+                "byteCount": 12,
+                "summary": null,
+                "indexing": null
+            }
+        }));
+        let receipt = file.receipt("Plans");
+        assert!(receipt.contains("can search it"), "{receipt}");
+    }
+
+    #[test]
+    fn an_unreadable_image_carries_the_servers_readability_summary_instead_of_the_search_claim() {
+        let file = registered(serde_json::json!({
+            "file": {
+                "id": "f2",
+                "fileName": "chart.png",
+                "byteCount": 90,
+                "summary": "Not readable: text is not extracted from images, so only this file name reaches the model."
+            }
+        }));
+        let receipt = file.receipt("Plans");
+        assert!(receipt.contains("Not readable"), "{receipt}");
+        assert!(!receipt.contains("can search it"), "{receipt}");
+        let json = serde_json::to_value(&file).expect("serializes");
+        assert!(json["summary"]
+            .as_str()
+            .is_some_and(|summary| summary.starts_with("Not readable")));
+    }
+
+    #[test]
+    fn the_envelope_notice_and_a_failed_index_reach_the_receipt() {
+        let file = registered(serde_json::json!({
+            "file": {
+                "id": "f3",
+                "fileName": "scan.pdf",
+                "byteCount": 90,
+                "summary": "Scanned pages were left unread.",
+                "indexing": {
+                    "status": "failed",
+                    "chunkCount": 0,
+                    "semantic": false,
+                    "attempts": 3,
+                    "error": "embedding unavailable",
+                    "indexedAt": null
+                }
+            },
+            "notice": "Some pages were withheld."
+        }));
+        let receipt = file.receipt("Plans");
+        assert!(
+            receipt.contains("Scanned pages were left unread."),
+            "{receipt}"
+        );
+        assert!(receipt.contains("Some pages were withheld."), "{receipt}");
+        assert!(
+            receipt.contains("Indexing failed: embedding unavailable"),
+            "{receipt}"
+        );
+        let json = serde_json::to_value(&file).expect("serializes");
+        assert_eq!(json["notice"], "Some pages were withheld.");
+        assert_eq!(json["indexing"]["status"], "failed");
     }
 }

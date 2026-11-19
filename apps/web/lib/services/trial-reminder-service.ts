@@ -135,7 +135,7 @@ async function remindTrial(
     );
   }
 
-  const { recorded, emailed } = await sendBillingNotice(db, {
+  const { recorded, emailed, settled } = await sendBillingNotice(db, {
     userId: trial.user_id,
     title: `Your ${plan} trial ends on ${formatDay(trialEnd)}`,
     message:
@@ -149,10 +149,21 @@ async function remindTrial(
       ? { label: 'Cancel your trial', url: cancelUrl }
       : { label: 'Manage your plan', url: absoluteUrl('/settings/billing') },
   });
+  if (emailed || settled) {
+    await db.execute(
+      `update public.subscriptions
+          set trial_reminder_settled_for = $2
+        where user_id = $1
+          and stripe_subscription_id = $2`,
+      [trial.user_id, subscription.id],
+    );
+  }
   if (!emailed) {
     logger.error(
-      { userId: trial.user_id, subscriptionId: subscription.id, recorded },
-      'Trial reminder was not emailed; a reminder recorded in the app is not sent again',
+      { userId: trial.user_id, subscriptionId: subscription.id, recorded, settled },
+      settled
+        ? 'Trial reminder email can never be delivered; the reminder stays in the app only'
+        : 'Trial reminder was not emailed; the email is retried until the trial ends',
     );
     return 'unsent';
   }
@@ -173,15 +184,11 @@ export async function remindConvertingTrials(
         and subscription_row.cancel_at_period_end is not true
         and subscription_row.current_period_end > now()
         and subscription_row.current_period_end <= now() + make_interval(days => $1)
-        and not exists (
-              select 1
-                from public.notifications notice
-               where notice.user_id = subscription_row.user_id
-                 and notice.dedupe_key = $2::text || subscription_row.stripe_subscription_id
-            )
+        and subscription_row.trial_reminder_settled_for
+              is distinct from subscription_row.stripe_subscription_id
       order by subscription_row.current_period_end
-      limit $3`,
-    [TRIAL_REMINDER_DAYS, TRIAL_ENDING_NOTICE, maxReminders + 1],
+      limit $2`,
+    [TRIAL_REMINDER_DAYS, maxReminders + 1],
   );
   const summary: TrialReminderSummary = {
     reminded: 0,

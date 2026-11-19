@@ -12,6 +12,7 @@ export interface ArtifactChanges {
   runs: ArtifactChangeRun[];
   added: number;
   removed: number;
+  changed: boolean;
 }
 
 const MAX_EDIT_DISTANCE = 1_000;
@@ -119,7 +120,13 @@ function collect(
     else grouped.push({ kind: op, tokens: [token] });
   }
   const runs = grouped.map(({ kind, tokens }) => ({ kind, text: tokens.join(joiner) }));
-  return { unit, runs: unit === 'word' ? joinReplacements(runs) : runs, added, removed };
+  return {
+    unit,
+    runs: unit === 'word' ? joinReplacements(runs) : runs,
+    added,
+    removed,
+    changed: grouped.some(({ kind }) => kind !== 'same'),
+  };
 }
 
 function joinReplacements(runs: readonly ArtifactChangeRun[]): ArtifactChangeRun[] {

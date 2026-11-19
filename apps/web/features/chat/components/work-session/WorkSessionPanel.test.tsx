@@ -9,6 +9,7 @@ import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore } from '@shared/stores/cowork-folder-store';
 import { onLocalFolderAttachRequest } from '../Composer/ComposerPlusMenu';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 type DesktopHostModule = typeof import('@/features/desktop-host/lib/host');
 
@@ -228,7 +229,9 @@ describe('WorkSessionPanel', () => {
 
     render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
 
-    expect(screen.getByRole('complementary', { name: 'AGI Work session dock' })).toBeVisible();
+    expect(
+      screen.getByRole('complementary', { name: `${PRODUCT_NAMES.work} session dock` }),
+    ).toBeVisible();
     expect(screen.getByText('Sources')).toBeVisible();
     expect(screen.getByText('Outputs')).toBeVisible();
     expect(screen.getByText('Context')).toBeVisible();
@@ -348,7 +351,9 @@ describe('WorkSessionPanel', () => {
     const { unmount } = render(
       <WorkSessionPanel messages={workMessages()} open onClose={onClose} agiWork />,
     );
-    expect(screen.getByRole('button', { name: 'Close AGI Work session dock' })).toHaveFocus();
+    expect(
+      screen.getByRole('button', { name: `Close ${PRODUCT_NAMES.work} session dock` }),
+    ).toHaveFocus();
 
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();

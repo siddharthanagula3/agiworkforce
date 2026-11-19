@@ -7,12 +7,23 @@ const mockCreateIOSReminder = jest.fn();
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockParams: { title?: string; due?: string } = {};
+const mockFocus: { blur: (() => void) | null } = { blur: null };
 
-jest.mock('expo-router', () => ({
-  ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
-  useLocalSearchParams: () => mockParams,
-  useRouter: () => ({ canGoBack: () => true, back: mockBack, replace: mockReplace }),
-}));
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react');
+  return {
+    ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+    useLocalSearchParams: () => mockParams,
+    useRouter: () => ({ canGoBack: () => true, back: mockBack, replace: mockReplace }),
+    useFocusEffect: (callback: () => (() => void) | void) => {
+      useEffect(() => {
+        const cleanup = callback();
+        mockFocus.blur = cleanup ?? null;
+        return cleanup;
+      }, [callback]);
+    },
+  };
+});
 
 jest.mock('../src/features/reminders/service', () => {
   const actual = jest.requireActual('../src/features/reminders/service');
@@ -86,6 +97,54 @@ describe('Apple Reminder review screen', () => {
       expect.any(Array),
     );
   });
+
+  it('submits the exact Siri instant when the prefilled date and time are unchanged', async () => {
+    const siri = new Date(2031, 4, 6, 14, 7, 42, 250);
+    mockParams.due = siri.toISOString();
+    const screen = render(<ReminderReviewScreen />);
+
+    fireEvent.press(screen.getByLabelText('Create Reminder'));
+
+    await waitFor(() => {
+      expect(mockCreateIOSReminder).toHaveBeenCalledWith({
+        title: 'Call the dentist',
+        due: { dueDate: siri, allDay: false },
+      });
+    });
+  });
+
+  it.each([
+    ['unmounted', (screen: ReturnType<typeof render>) => screen.unmount()],
+    ['covered by another screen', () => mockFocus.blur?.()],
+  ])(
+    'reports a reminder that finishes after the review was %s without navigating',
+    async (_label, leave) => {
+      let resolveCreate: (id: string) => void = () => undefined;
+      mockCreateIOSReminder.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolveCreate = resolve;
+        }),
+      );
+      const alert = jest.spyOn(Alert, 'alert');
+      const screen = render(<ReminderReviewScreen />);
+
+      fireEvent.press(screen.getByLabelText('Create Reminder'));
+      await waitFor(() => expect(mockCreateIOSReminder).toHaveBeenCalledTimes(1));
+      leave(screen);
+      resolveCreate('reminder-id');
+
+      await waitFor(() => {
+        expect(alert).toHaveBeenCalledWith(
+          'Reminder Created',
+          'The reviewed reminder was added to Apple Reminders.',
+        );
+      });
+      const buttons = alert.mock.calls[0]?.[2] ?? [];
+      buttons.forEach((button) => button.onPress?.());
+      expect(mockBack).not.toHaveBeenCalled();
+      expect(mockReplace).not.toHaveBeenCalled();
+    },
+  );
 
   it('shows a settings recovery action when Reminders permission is denied', async () => {
     const denied = new ReminderCreationError('permission-denied');

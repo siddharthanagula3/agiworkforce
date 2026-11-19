@@ -97,7 +97,7 @@ function buildAlert(
     '',
     severity === 'critical'
       ? 'CRITICAL means the platform cannot serve requests. Follow docs/runbooks/incident-response.md.'
-      : 'WARNING means billing is degraded while chat keeps working. Follow docs/runbooks/incident-response.md.',
+      : `WARNING means the core checks passed and these did not: ${failed.join(', ')}. It does not show that any capability completed a request. Follow docs/runbooks/incident-response.md.`,
   ];
   return { subject, text: lines.join('\n') };
 }

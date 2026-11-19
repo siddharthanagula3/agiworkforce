@@ -148,6 +148,84 @@ describe('saveContentReport, MAX_STORED_REPORTS cap (100)', () => {
   });
 });
 
+function seedQueuedReport(id: string): void {
+  const queued: ContentReport = {
+    id,
+    messageId: 'queued',
+    conversationId: 'conv-001',
+    contentExcerpt: 'Queued while offline.',
+    category: 'harmful',
+    userNote: '',
+    createdAt: '2026-11-01T10:00:00.000Z',
+    emailHandoffOpened: false,
+    serverAcknowledged: false,
+    uploadConsented: true,
+  };
+  mockStorage.set(MMKV_KEY, JSON.stringify([queued]));
+}
+
+describe('saveContentReport, queued reports survive the history cap', () => {
+  it('keeps a report the user agreed to send through more than 100 later reports', async () => {
+    seedQueuedReport('rpt_queued');
+    const queued = { id: 'rpt_queued' };
+
+    for (let i = 0; i < MAX_STORED_REPORTS + 5; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    const reports = getContentReports();
+    expect(reports.map((entry: ContentReport) => entry.id)).toContain(queued.id);
+    expect(queuedContentReports().map((entry) => entry.id)).toEqual([queued.id]);
+    expect(reports.length).toBe(MAX_STORED_REPORTS + 1);
+  });
+
+  it('caps only the unsent and acknowledged history, newest first', async () => {
+    seedQueuedReport('rpt_queued');
+    const queued = { id: 'rpt_queued' };
+    mockApiPost.mockResolvedValue({ success: true });
+    for (let i = 0; i < MAX_STORED_REPORTS; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    const reports = getContentReports();
+    const history = reports.filter((entry: ContentReport) => entry.id !== queued.id);
+    expect(history.length).toBe(MAX_STORED_REPORTS);
+    expect(history[0]?.messageId).toBe(String(MAX_STORED_REPORTS - 1));
+    expect(reports.some((entry: ContentReport) => entry.id === queued.id)).toBe(true);
+  });
+
+  it('sends a queued report that survived the cap once the device reconnects', async () => {
+    seedQueuedReport('rpt_queued');
+    const queued = { id: 'rpt_queued' };
+    for (let i = 0; i < MAX_STORED_REPORTS + 1; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    mockApiPost.mockResolvedValue({ success: true });
+    await expect(flushQueuedContentReports()).resolves.toBe(1);
+
+    expect(mockApiPost).toHaveBeenLastCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({ reportId: queued.id }),
+      { consentedReport: true },
+    );
+    expect(queuedContentReports()).toEqual([]);
+  });
+
+  it('lets a report fall out of the history once it has been sent', async () => {
+    seedQueuedReport('rpt_sent');
+    const sent = { id: 'rpt_sent' };
+    mockApiPost.mockResolvedValue({ success: true });
+    await flushQueuedContentReports();
+
+    for (let i = 0; i < MAX_STORED_REPORTS; i++) {
+      await saveContentReport(makeParams({ messageId: String(i) }));
+    }
+
+    expect(getContentReports().map((entry: ContentReport) => entry.id)).not.toContain(sent.id);
+  });
+});
+
 describe('getContentReports', () => {
   it('returns empty array when no reports have been saved', () => {
     expect(getContentReports()).toEqual([]);

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { HERO } from '../features/marketing/components/landing/landing-content';
 import { routeIsServed } from './route-availability';
 
 const ROUTES = ['/', '/dev/landing-preview'];
@@ -12,7 +13,7 @@ const SHEET_LINKS = [
   'Pricing',
   'Contact sales',
   'Sign in',
-  'Try AGI Chat',
+  HERO.primary.label,
 ];
 
 for (const route of ROUTES) {
@@ -54,7 +55,7 @@ for (const route of ROUTES) {
       }
 
       await expect(nav.getByRole('link', { name: 'Pricing' })).toHaveAttribute('href', '/pricing');
-      await expect(nav.getByRole('link', { name: 'Try AGI Chat' })).toHaveAttribute(
+      await expect(nav.getByRole('link', { name: HERO.primary.label })).toHaveAttribute(
         'href',
         /^\/login\?redirectTo=/,
       );

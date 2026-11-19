@@ -62,6 +62,7 @@ const mocks = vi.hoisted(() => ({
   delivered: vi.fn(),
   finalize: vi.fn(),
   closeCancelled: vi.fn(),
+  closeExhausted: vi.fn(),
 }));
 
 vi.mock('@/lib/api-auth', async () => ({
@@ -105,6 +106,7 @@ vi.mock('@/lib/server/image-generation-jobs', async () => {
     getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
     listImageGenerationJobAssetIds: (...args: unknown[]) => mocks.assetIds(...args),
     closeCancelledImageGenerationJob: (...args: unknown[]) => mocks.closeCancelled(...args),
+    closeExhaustedImageGenerationJob: (...args: unknown[]) => mocks.closeExhausted(...args),
   };
 });
 
@@ -191,6 +193,7 @@ describe('GET /api/media/image/status', () => {
     mocks.assetIds.mockResolvedValue([]);
     mocks.finalize.mockResolvedValue({ settlementStatus: 'succeeded', requestStatus: 'released' });
     mocks.closeCancelled.mockResolvedValue(null);
+    mocks.closeExhausted.mockResolvedValue(null);
     mocks.runAttempt.mockResolvedValue({
       job: job(),
       images: [],
@@ -245,6 +248,56 @@ describe('GET /api/media/image/status', () => {
     expect(response.status).toBe(200);
     expect(mocks.finalize).not.toHaveBeenCalled();
     expect(mocks.closeCancelled).not.toHaveBeenCalled();
+  });
+
+  it('closes a job whose final attempt was abandoned, releasing its reservation without a new attempt', async () => {
+    const abandoned = job({
+      status: 'processing',
+      attempts: 3,
+      claimToken: 'claim-token-1234',
+      claimExpiresAt: new Date(Date.now() - 120_000).toISOString(),
+    });
+    mocks.getJob.mockResolvedValue(abandoned);
+    mocks.closeExhausted.mockResolvedValue({
+      ...abandoned,
+      status: 'failed',
+      retryable: false,
+      publicError: 'This image did not finish after every allowed attempt.',
+      claimToken: null,
+      claimExpiresAt: null,
+      terminalAt: new Date().toISOString(),
+    });
+
+    const response = await GET(statusRequest(JOB_ID));
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(body['status']).toBe('failed');
+    expect(body['retryable']).toBe(false);
+    const settled = mocks.finalize.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(settled['outcome']).toBe('failed');
+    expect((settled['usage'] as Record<string, unknown>)['reason']).toBe('attempts_exhausted');
+    expect(mocks.closeExhausted).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: JOB_ID, userId: 'user-1', billingOutcome: 'released' }),
+    );
+    expect(mocks.runAttempt).not.toHaveBeenCalled();
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it('leaves the final attempt alone while it still holds the claim', async () => {
+    mocks.getJob.mockResolvedValue(
+      job({
+        status: 'processing',
+        attempts: 3,
+        claimToken: 'claim-token-1234',
+        claimExpiresAt: new Date(Date.now() + 120_000).toISOString(),
+      }),
+    );
+
+    const response = await GET(statusRequest(JOB_ID));
+
+    expect(response.status).toBe(200);
+    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.closeExhausted).not.toHaveBeenCalled();
   });
 
   it('refuses a job that does not belong to the caller', async () => {

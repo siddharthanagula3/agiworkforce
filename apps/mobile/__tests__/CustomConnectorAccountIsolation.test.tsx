@@ -41,6 +41,7 @@ jest.mock('@/services/connectors', () => ({
 }));
 
 import { AddCustomConnectorModal } from '../src/features/settings/cloud-connectors/AddCustomConnectorModal';
+import { ApiHttpError } from '../services/apiErrors';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -139,5 +140,23 @@ describe('AddCustomConnectorModal account isolation', () => {
       ).toBeTruthy(),
     );
     expect(screen.queryByText(/authToken leaked/)).toBeNull();
+  });
+
+  it('shows the reason the server gives instead of blaming the URL', async () => {
+    mockAddCustomConnector.mockRejectedValue(
+      new ApiHttpError('Connectors are coming soon.', 403, 'connectors_unavailable'),
+    );
+    const screen = render(
+      <SafeAreaProvider initialMetrics={METRICS}>
+        <AddCustomConnectorModal visible onClose={jest.fn()} onAdded={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    fireEvent.changeText(screen.getByLabelText('Connector name'), 'My tools');
+    fireEvent.changeText(screen.getByLabelText('Connector URL'), 'https://tools.example.com/sse');
+    fireEvent.press(screen.getByLabelText('Add connector'));
+
+    expect(await screen.findByText('Connectors are coming soon.')).toBeTruthy();
+    expect(screen.queryByText(/Check its URL/)).toBeNull();
   });
 });

@@ -1,8 +1,9 @@
 # Enterprise billing operator runbook
 
-Status: Draft. Nothing below has been exercised end to end in Stripe test mode.
+Status: Draft. Exercised in Stripe test mode on 2026-09-04 (section 10); the
+mailbox item and section 2.2 in live mode are still open.
 Owner: Founder / billing operator
-Last updated: 2026-09-20
+Last updated: 2026-11-11
 
 This runbook is the operator procedure for provisioning, collecting, and
 enforcing an AGI Enterprise contract in Stripe. It describes the target design
@@ -13,12 +14,14 @@ packages in this repository: the webhook and cron handlers
 enforcement (`apps/web/lib/services/organization-policy-evaluator.ts`,
 `apps/web/lib/services/organization-policy-gate.ts`), and the usage-metering
 cron (`apps/web/lib/services/enterprise-usage-metering.ts`,
-`apps/web/app/api/cron/report-enterprise-usage`). As of this writing those
-service and cron files do not yet exist in the repository; the migration that
-backs all of them, `apps/web/db/neon/0163_enterprise_billing_contracts.sql`,
-is marked NOT YET APPLIED. Before following any step below against a real
-customer, confirm the referenced files exist, read as described, and pass
-their own tests. **Do not repeat any claim from this runbook to a customer or
+`apps/web/app/api/cron/report-enterprise-usage`). Those files exist, and the
+migration behind them, `apps/web/db/neon/0163_enterprise_billing_contracts.sql`,
+is applied, as are the later ones the collection sweep and the overage reporter
+below rely on: `0400_billing_collection_owner_notice_and_review_cursor.sql`,
+`0401_overage_pending_destination.sql` and `0402_overage_contract_closeout.sql`
+(production is at migration 0421). Before following any step below
+against a real customer, read the referenced files as described and run their
+own tests. **Do not repeat any claim from this runbook to a customer or
 on a public page until the test-mode lifecycle checklist in the last section
 has been run and passed in full**, per the founder's decision recorded in the
 work package spec this runbook was written against.
@@ -253,9 +256,24 @@ daily `report-enterprise-usage` cron (WP-C) reports new overage since the
 last report to the meter behind `overage_stripe_price_id` via
 `stripe.billing.meterEvents.create`. Each report is first claimed as pending in
 the contract's `overage_*` columns (0367), so a retry resends the same
-identifier and value, and is committed once Stripe accepts it.
+identifier and value, and is committed once Stripe accepts it. The pending
+report also stores the customer and overage price it was claimed for (0401),
+and a retry sends to those, not to the contract's current values.
 A contract with no overage price configured is skipped and logged once, not
 retried daily.
+
+When a contract ends, the overage it used before `ended_at` that was never
+reported is forgiven, never billed. The same cron closes out each ended
+contract once per `ended_at` (0402): it sends nothing to Stripe, records the
+written-off amount, time and reason (`contract_ended`) in the contract's
+`overage_closeout_*` and `overage_written_off_*` columns, clears any pending
+report and keeps its identifier in
+`overage_written_off_unconfirmed_identifier`, and moves the reported baseline
+past the written-off amount so a reactivated contract never bills it. The
+cron's response lists each closeout under `results[].closeout` with the run's
+`closedOut` count and `writtenOffCents` total. A non-null unconfirmed
+identifier means Stripe's outcome for that event was unknown: look it up in
+the meter's event history before treating its amount as unbilled.
 
 `getOrganizationMonthToDateSpendCents` sums `provider_cost_events` by that
 table's own `organization_id` column, set at settlement time to the funding
@@ -333,7 +351,7 @@ to advance time rather than waiting real days for the 30/60/90 checkpoints.
       actions once the contract reaches `read_only`, while reads, exports,
       and settings remain reachable, and that no data is deleted at any
       stage.
-      Verified 2026-09-04 in test mode over HTTP: with the QA contract's `collection_stage` set to `read_only` and `oldest_open_invoice_due_at` 100 days overdue, a signed-in `POST /api/llm/v1/chat/completions` was refused (`billing_read_only`) while `GET /api/chat/conversations` still returned 200; row restored after. Exercised via a throwaway Playwright spec under `apps/web/e2e`, deleted after the run, so no path is quoted here for an operator to look for. Found and worked around `BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY` (`audit/registers/known-flaws.md`): the contract's `ended_at` from an earlier cancel never clears on a new active subscription, which would otherwise have hidden this org from the gate entirely.
+      Verified 2026-09-04 in test mode over HTTP: with the QA contract's `collection_stage` set to `read_only` and `oldest_open_invoice_due_at` 100 days overdue, a signed-in `POST /api/llm/v1/chat/completions` was refused (`billing_read_only`) while `GET /api/chat/conversations` still returned 200; row restored after. Exercised via a throwaway Playwright spec under `apps/web/e2e`, deleted after the run, so no path is quoted here for an operator to look for. Found and worked around a defect, recorded then as `BILLING-ENTERPRISE-CONTRACT-ENDED-AT-STICKY`, that has no row in `audit/registers/known-flaws.md` now: the contract's `ended_at` from an earlier cancel never clears on a new active subscription, which would otherwise have hidden this org from the gate entirely.
 - [x] If an overage price is configured, generate managed-usage spend past
       the included allowance and confirm the usage-metering cron reports
       overage to the correct meter exactly once per day, with no

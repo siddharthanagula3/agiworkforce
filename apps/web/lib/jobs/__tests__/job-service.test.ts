@@ -174,6 +174,18 @@ describe('claimJobs', () => {
     expect(params[4]).toBe(5);
   });
 
+  it('never claims a job whose cancellation was recorded', async () => {
+    const query = vi.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes('pg_advisory_xact_lock')) return [];
+      return [jobRow];
+    });
+
+    await claimJobs(database(query), { limit: 5 });
+
+    const [claimSql] = query.mock.calls[1] as unknown as [string];
+    expect(claimSql).toContain('job.cancel_requested_at is null');
+  });
+
   it('claims nothing when no queue is asked for', async () => {
     const query = vi.fn();
     await expect(claimJobs(database(query), { queues: [], limit: 5 })).resolves.toEqual([]);
@@ -270,6 +282,17 @@ describe('lease reaping and pruning', () => {
       JOB_QUEUE_NAMES.map((queue) => JOB_QUEUE_POLICIES[queue].backoffMaxSeconds),
       'lease_expired',
     ]);
+  });
+
+  it('leaves a job with a recorded cancellation for the cancellation reaper', async () => {
+    const execute = vi.fn(async () => 1);
+    await reapExpiredJobLeases(database(vi.fn(), execute));
+
+    const statements = (execute.mock.calls as unknown as unknown[][]).map((call) =>
+      String(call[0]),
+    );
+    expect(statements).toHaveLength(2);
+    for (const sql of statements) expect(sql).toContain('cancel_requested_at is null');
   });
 
   it('keeps lease maintenance to two statements when every queue is empty', async () => {

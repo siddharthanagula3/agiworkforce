@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { Conversation, ChatMessage } from '../lib/types';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import { composerTextWithIncoming } from '@agiworkforce/utils/composer-incoming';
 import { getTemporalGroup } from '../lib/utils';
 
 const noopStorage: Storage = {
@@ -290,7 +291,7 @@ export const useChatStore = create<ChatState>()(
             conversationId === undefined ? state.activeConversationId : conversationId;
           const key = composerDraftKey(targetConversationId);
           const existing = state.draftsByConversation[key] ?? '';
-          const next = existing ? `${existing}\n\n${content}` : content;
+          const next = composerTextWithIncoming(existing, content);
           state.draftsByConversation[key] = next;
           if (targetConversationId === state.activeConversationId) {
             state.draftContent = next;

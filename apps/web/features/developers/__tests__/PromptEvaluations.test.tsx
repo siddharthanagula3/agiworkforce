@@ -67,6 +67,7 @@ function fakeApi(): PromptsApi {
       caseCount: 2,
       createdAt: '2026-10-19T00:00:00.000Z',
       results: [],
+      cases,
     })),
     run: vi.fn(),
     recordResult: vi.fn(async (_p, _r, input) => {
@@ -74,6 +75,7 @@ function fakeApi(): PromptsApi {
       return {
         ...input,
         id: `0190a000-0000-7000-8000-0000000000d${resultIndex}`,
+        expectedOutput: null,
         passed: input.output?.includes('Billing') ? true : input.output ? false : null,
         grade: null,
       };
@@ -87,6 +89,7 @@ function fakeApi(): PromptsApi {
       latencyMs: 10,
       inputTokens: 5,
       outputTokens: 1,
+      expectedOutput: 'Billing',
       passed: true,
       grade,
     })),
@@ -124,6 +127,89 @@ describe('PromptEvaluations', () => {
     const results = await screen.findByRole('region', { name: 'Run results' });
     await waitFor(() => expect(within(results).getByText('Pass')).toBeInTheDocument());
     expect(within(results).getByText('Fail')).toBeInTheDocument();
+  });
+
+  it('runs the cases the server admitted when this tab holds a stale case list', async () => {
+    runGatewayCompletion.mockResolvedValue({
+      content: 'Billing',
+      latencyMs: 12,
+      inputTokens: 8,
+      outputTokens: 1,
+    });
+    const api = fakeApi();
+    vi.mocked(api.cases).mockResolvedValue([cases[0]!]);
+    const onCasesChange = vi.fn();
+    render(
+      <PromptEvaluations
+        api={api}
+        prompt={prompt}
+        versions={[version]}
+        variables={['ticket']}
+        onCasesChange={onCasesChange}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Run all cases' }));
+    await waitFor(() => expect(api.recordResult).toHaveBeenCalledTimes(2));
+    expect(
+      vi
+        .mocked(api.recordResult)
+        .mock.calls.map(([, , result]) => result.caseId)
+        .sort(),
+    ).toEqual(cases.map((entry) => entry.id).sort());
+    expect(onCasesChange).toHaveBeenLastCalledWith(2);
+  });
+
+  it('shows the expectation a reopened run was graded against, not the edited case', async () => {
+    const api = fakeApi();
+    vi.mocked(api.runs).mockResolvedValue([
+      {
+        id: RUN_ID,
+        version: 2,
+        checkKind: 'contains',
+        caseCount: 1,
+        createdAt: '2026-10-19T00:00:00.000Z',
+        passed: 1,
+        failed: 0,
+        graded: 0,
+        averageGrade: null,
+      },
+    ]);
+    vi.mocked(api.run).mockResolvedValue({
+      id: RUN_ID,
+      version: 2,
+      checkKind: 'contains',
+      caseCount: 1,
+      createdAt: '2026-10-19T00:00:00.000Z',
+      results: [
+        {
+          id: '0190a000-0000-7000-8000-0000000000d1',
+          caseId: cases[0]!.id,
+          renderedInput: 'Route: Refund',
+          output: 'Billing',
+          error: null,
+          latencyMs: 10,
+          inputTokens: 5,
+          outputTokens: 1,
+          expectedOutput: 'Frozen expectation',
+          passed: false,
+          grade: null,
+        },
+      ],
+    });
+    render(
+      <PromptEvaluations
+        api={api}
+        prompt={prompt}
+        versions={[version]}
+        variables={['ticket']}
+        onCasesChange={vi.fn()}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Version 2 ·/ }));
+    const results = await screen.findByRole('region', { name: 'Run results' });
+    await userEvent.click(within(results).getByRole('button', { name: 'Route: Refund' }));
+    expect(within(results).getByText('Expected, with the difference')).toBeInTheDocument();
+    expect(results).toHaveTextContent('Frozen expectation');
   });
 
   it('records a gateway failure as an error result instead of dropping the case', async () => {

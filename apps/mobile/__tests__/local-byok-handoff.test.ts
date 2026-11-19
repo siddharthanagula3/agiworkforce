@@ -38,6 +38,11 @@ jest.mock('@/src/features/memory/services/consolidation', () => ({
 }));
 
 jest.mock('../lib/mmkv', () => ({
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store) => {
     if (store && store.persist && typeof store.persist.rehydrate === 'function') {
@@ -54,6 +59,10 @@ jest.mock('../lib/mmkv', () => ({
 import { useChatStore } from '../stores/chatStore';
 import { api, apiFetch } from '../services/api';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 import { useProjectStore } from '../src/features/projects/store';
 import { retrieveMemoryContext } from '../src/features/memory/store';
 import { buildPersonalContextBlocks } from '../src/features/memory/services/personalContext';
@@ -187,10 +196,15 @@ describe('mobile local conversation forks', () => {
   it('does not create a local fallback conversation while Cloud mode is selected', async () => {
     useProjectStore.getState().setActiveProject('local-project');
     useChatAppModeStore.setState({ appMode: 'cloud' });
+    activateCloudAccount('local-byok-owner');
 
-    await expect(useChatStore.getState().createConversation('Cloud attempt')).rejects.toThrow(
-      'AGI Cloud conversation could not be created.',
-    );
+    try {
+      await expect(useChatStore.getState().createConversation('Cloud attempt')).rejects.toThrow(
+        'AGI Cloud conversation could not be created.',
+      );
+    } finally {
+      __resetCloudAccountSessionForTests();
+    }
 
     expect(
       useChatStore

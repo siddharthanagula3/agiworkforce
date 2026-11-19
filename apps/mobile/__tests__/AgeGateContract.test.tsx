@@ -54,10 +54,15 @@ jest.mock('expo-router', () => {
 
 let mockSignedIn = false;
 const mockSignOut = jest.fn(() => Promise.resolve());
+const mockSignOutAllAccounts = jest.fn(() => Promise.resolve());
 
 jest.mock('@/src/features/auth/store', () => ({
   useAuthStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ isClerkSignedIn: mockSignedIn, signOut: mockSignOut }),
+    selector({
+      isClerkSignedIn: mockSignedIn,
+      signOut: mockSignOut,
+      signOutAllAccounts: mockSignOutAllAccounts,
+    }),
 }));
 
 beforeAll(() => {
@@ -152,6 +157,7 @@ describe('the age screen when the answer does not work', () => {
     clearAgeGate();
     mockReplace.mockClear();
     mockSignOut.mockClear();
+    mockSignOutAllAccounts.mockClear();
     mockSignedIn = false;
     mockSearchParams = {};
     mockTimeZone = DEFAULT_TIME_ZONE;
@@ -277,7 +283,7 @@ describe('the age screen when the answer does not work', () => {
     expect(mockReplace).toHaveBeenCalledWith('/(app)');
   });
 
-  it('lets a signed-in person refused an account sign out to Local chat', async () => {
+  it('signs every account on the phone out when a person refused an account signs out', async () => {
     mockSignedIn = true;
     confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
     render(<AgeGateScreen />);
@@ -285,7 +291,8 @@ describe('the age screen when the answer does not work', () => {
     fireEvent.press(screen.getByTestId('age-gate-refused-sign-out-btn'));
 
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)'));
-    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(mockSignOutAllAccounts).toHaveBeenCalledTimes(1);
+    expect(mockSignOut).not.toHaveBeenCalled();
   });
 });
 

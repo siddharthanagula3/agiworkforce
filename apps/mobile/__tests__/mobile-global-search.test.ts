@@ -45,6 +45,7 @@ const artifacts: MobileArtifact[] = [
 const libraryImages: LibraryImage[] = [
   {
     id: 'image-1',
+    assetId: '11111111-1111-4111-8111-111111111111',
     conversationId: 'chat-title',
     imageUrl: '/api/files/11111111-1111-4111-8111-111111111111',
     prompt: 'Launch poster',
@@ -89,7 +90,11 @@ describe('Mobile global search projection', () => {
       }),
     ]);
     expect(result.library).toEqual([
-      expect.objectContaining({ id: 'image-1', title: 'Launch poster' }),
+      expect.objectContaining({
+        id: 'image-1',
+        targetId: '11111111-1111-4111-8111-111111111111',
+        title: 'Launch poster',
+      }),
     ]);
     expect(result.artifacts).toEqual([
       expect.objectContaining({ id: 'artifact-1', title: 'Deployment notes' }),
@@ -205,5 +210,34 @@ describe('Mobile global search projection', () => {
     expect(result.chats.map((row) => row.id)).toEqual(['local-1', 'cloud-1']);
     expect(result.chats[0]!.title).toBe('Launch checklist');
     expect(result.projects.map((row) => row.id)).toEqual(['proj-local', 'proj-cloud']);
+  });
+
+  it('keeps server chats outside the listed conversations out of a filtered search', () => {
+    const result = buildMobileGlobalSearchGroups({
+      query: 'launch',
+      conversations: [
+        {
+          id: 'pinned-1',
+          title: 'Pinned plan',
+          createdAt: '',
+          updatedAt: '',
+          messageCount: 1,
+          pinned: true,
+        },
+      ] as never,
+      conversationContentMatchIds: new Set<string>(),
+      projects: [],
+      files: [],
+      libraryImages: [],
+      artifacts: [],
+      remoteChats: [
+        { id: 'pinned-1', title: 'Server copy', subtitle: 'Matched message content' },
+        { id: 'unpinned-1', title: 'Launch retro', subtitle: 'Matched message content' },
+      ],
+      remoteChatsOnlyFromConversations: true,
+    });
+
+    expect(result.chats.map((row) => row.id)).toEqual(['pinned-1']);
+    expect(result.chats[0]!.subtitle).toBe('Matched message content');
   });
 });

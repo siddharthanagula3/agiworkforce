@@ -61,8 +61,37 @@ describe('Apple Reminders service', () => {
     expect(reminderDueInputsFromISO(local.toISOString())).toEqual({
       dateInput: '2031-05-06',
       timeInput: '14:07',
+      instant: local,
     });
-    expect(reminderDueInputsFromISO('not-a-date')).toEqual({ dateInput: '', timeInput: '' });
+    expect(reminderDueInputsFromISO('not-a-date')).toEqual({
+      dateInput: '',
+      timeInput: '',
+      instant: null,
+    });
+  });
+
+  it('keeps the exact Siri instant when the reviewed date and time are unchanged', () => {
+    const now = new Date(2031, 0, 1, 8, 0);
+    const siri = new Date(2031, 4, 6, 14, 7, 42, 500);
+    const prefill = reminderDueInputsFromISO(siri.toISOString());
+
+    const unchanged = parseReminderDueInputs(
+      ` ${prefill.dateInput} `,
+      prefill.timeInput,
+      now,
+      prefill,
+    );
+    expect(unchanged).toEqual({ dueDate: siri, allDay: false });
+
+    const edited = parseReminderDueInputs(prefill.dateInput, '14:08', now, prefill);
+    expect(edited?.dueDate).toEqual(new Date(2031, 4, 6, 14, 8, 0, 0));
+
+    const allDay = parseReminderDueInputs(prefill.dateInput, '', now, prefill);
+    expect(allDay?.allDay).toBe(true);
+
+    expect(() =>
+      parseReminderDueInputs(prefill.dateInput, prefill.timeInput, new Date(2032, 0, 1), prefill),
+    ).toThrow('future date and time');
   });
 
   it('requests permission on explicit create and saves one timed reminder with an alarm', async () => {
@@ -110,6 +139,85 @@ describe('Apple Reminders service', () => {
     >({ code: 'permission-denied' });
     expect(mockRequestRemindersPermissions).not.toHaveBeenCalled();
     expect(mockCreateReminder).not.toHaveBeenCalled();
+  });
+
+  describe('local clock changes', () => {
+    const MINUTE_MS = 60_000;
+
+    function findTransition(
+      towardEarlierClock: boolean,
+    ): { at: number; shiftMinutes: number } | null {
+      const end = new Date(2031, 0, 1).getTime();
+      for (let time = new Date(2030, 0, 1).getTime(); time < end; time += 60 * MINUTE_MS) {
+        const before = new Date(time).getTimezoneOffset();
+        const after = new Date(time + 60 * MINUTE_MS).getTimezoneOffset();
+        if (before === after || after > before !== towardEarlierClock) continue;
+        let at = time + 15 * MINUTE_MS;
+        while (new Date(at).getTimezoneOffset() === before) at += 15 * MINUTE_MS;
+        return { at, shiftMinutes: Math.abs(after - before) };
+      }
+      return null;
+    }
+
+    function wallFields(at: number, deltaMinutes: number): { date: string; time: string } {
+      const local = new Date(at);
+      const wall = new Date(
+        Date.UTC(
+          local.getFullYear(),
+          local.getMonth(),
+          local.getDate(),
+          local.getHours(),
+          local.getMinutes(),
+        ) +
+          deltaMinutes * MINUTE_MS,
+      );
+      const pad = (value: number) => String(value).padStart(2, '0');
+      return {
+        date: `${wall.getUTCFullYear()}-${pad(wall.getUTCMonth() + 1)}-${pad(wall.getUTCDate())}`,
+        time: `${pad(wall.getUTCHours())}:${pad(wall.getUTCMinutes())}`,
+      };
+    }
+
+    const now = new Date(2029, 0, 1);
+    const springForward = findTransition(false);
+    const fallBack = findTransition(true);
+    // llm-guardrail-allow: clock-change cases need a runner timezone that observes daylight saving
+    const itWithClockChanges = springForward && fallBack ? it : it.skip;
+
+    itWithClockChanges('rejects a typed time that the clock change skips', () => {
+      const { at, shiftMinutes } = springForward!;
+      const skipped = wallFields(at, -shiftMinutes / 2);
+      expect(() => parseReminderDueInputs(skipped.date, skipped.time, now)).toThrow(
+        expect.objectContaining({ code: 'time-nonexistent' }),
+      );
+    });
+
+    itWithClockChanges('asks for another time when a typed time happens twice', () => {
+      const { at, shiftMinutes } = fallBack!;
+      const repeated = wallFields(at, shiftMinutes / 2);
+      expect(() => parseReminderDueInputs(repeated.date, repeated.time, now)).toThrow(
+        expect.objectContaining({ code: 'time-ambiguous' }),
+      );
+    });
+
+    itWithClockChanges('preserves each Siri instant inside a repeated local hour', () => {
+      const { at, shiftMinutes } = fallBack!;
+      const first = new Date(at + (shiftMinutes / 2 - shiftMinutes) * MINUTE_MS);
+      const second = new Date(at + (shiftMinutes / 2) * MINUTE_MS);
+      const firstPrefill = reminderDueInputsFromISO(first.toISOString());
+      const secondPrefill = reminderDueInputsFromISO(second.toISOString());
+      expect(firstPrefill.dateInput).toBe(secondPrefill.dateInput);
+      expect(firstPrefill.timeInput).toBe(secondPrefill.timeInput);
+
+      expect(
+        parseReminderDueInputs(firstPrefill.dateInput, firstPrefill.timeInput, now, firstPrefill)
+          ?.dueDate,
+      ).toEqual(first);
+      expect(
+        parseReminderDueInputs(secondPrefill.dateInput, secondPrefill.timeInput, now, secondPrefill)
+          ?.dueDate,
+      ).toEqual(second);
+    });
   });
 
   it('never calls the iOS Reminder APIs on Android', async () => {

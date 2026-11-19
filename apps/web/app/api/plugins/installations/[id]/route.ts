@@ -14,10 +14,15 @@ import {
   setWebPluginEnabled,
   uninstallWebPlugin,
 } from '@/lib/services/plugin-installation-service';
-import { pluginHasDependentsResponse } from '@/features/plugins/server/directory/install-responses';
 import {
+  pluginDependenciesUnavailableResponse,
+  pluginHasDependentsResponse,
+} from '@/features/plugins/server/directory/install-responses';
+import {
+  dependenciesUnavailableMessage,
   dependentsRefusalMessage,
   listRegistryDependents,
+  listUnmetRegistryDependencies,
 } from '@/features/plugins/server/directory/installed-dependents';
 
 export const runtime = 'nodejs';
@@ -53,7 +58,15 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
-  if (!body.data.enabled) {
+  if (body.data.enabled) {
+    const unmet = await listUnmetRegistryDependencies(db, userId, params.data.id);
+    if (unmet.length > 0) {
+      return pluginDependenciesUnavailableResponse(
+        dependenciesUnavailableMessage(params.data.id, unmet),
+        unmet,
+      );
+    }
+  } else {
     const dependents = await listRegistryDependents(db, userId, params.data.id);
     if (dependents.length > 0) {
       if (!body.data.withDependents) {

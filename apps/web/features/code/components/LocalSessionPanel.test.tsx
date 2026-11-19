@@ -1095,8 +1095,22 @@ describe('archiving a local session', () => {
     return onArchived;
   }
 
+  it('says the session can be restored from the sidebar on a CLI that restores', async () => {
+    const user = userEvent.setup();
+    renderArchivable();
+
+    await user.click(screen.getByRole('button', { name: 'Archive session' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Fix the build is archived.');
+    expect(dialog).toHaveTextContent('choose Show archived in the sidebar, then Restore');
+    expect(dialog).not.toHaveTextContent('agi session unarchive');
+  });
+
   it('asks first, saying where the session goes and the command that brings it back', async () => {
     const user = userEvent.setup();
+    capabilities = new Set(
+      DEVELOPER_RUNTIME_CAPABILITIES.filter((capability) => capability !== 'thread_unarchive'),
+    );
     archiveDeveloperThread.mockResolvedValue(true);
     const onArchived = renderArchivable();
 

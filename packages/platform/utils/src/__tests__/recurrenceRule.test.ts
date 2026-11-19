@@ -31,4 +31,35 @@ describe('bounded recurrence normalization', () => {
       expect(() => normalizeRecurrenceRule(input, 'UTC', NOW)).toThrow();
     }
   });
+
+  it('refuses a DTSTART with seconds instead of moving it to another minute', () => {
+    for (const start of ['20300101T090059', '20300101T090030Z']) {
+      expect(() =>
+        normalizeRecurrenceRule(`DTSTART:${start}\nRRULE:FREQ=DAILY`, 'UTC', NOW),
+      ).toThrow('DTSTART must start on a whole minute');
+    }
+  });
+
+  it('refuses seconds past 59 in DTSTART and UNTIL', () => {
+    expect(() =>
+      normalizeRecurrenceRule('DTSTART:20300101T090099\nRRULE:FREQ=DAILY', 'UTC', NOW),
+    ).toThrow('DTSTART is not a valid date and time');
+    expect(() =>
+      normalizeRecurrenceRule(
+        'DTSTART:20300101T090000\nRRULE:FREQ=DAILY;UNTIL=20300201T000099Z',
+        'UTC',
+        NOW,
+      ),
+    ).toThrow('UNTIL is not a valid date and time');
+  });
+
+  it('keeps accepting whole-minute starts and an end-of-day UNTIL', () => {
+    expect(
+      normalizeRecurrenceRule(
+        'DTSTART:20300101T090000\nRRULE:FREQ=DAILY;UNTIL=20300201T235959Z',
+        'UTC',
+        NOW,
+      ),
+    ).toBe('DTSTART:20300101T090000\nRRULE:FREQ=DAILY;UNTIL=20300201T235900Z');
+  });
 });

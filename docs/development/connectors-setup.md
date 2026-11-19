@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-10-31
+Last updated: 2026-11-11
 
 What a deployment must hold before each connector in the directory can be
 connected from the browser, with the exact environment variable names. Values
@@ -80,9 +80,9 @@ Four URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL`:
   accept one by URL: `<origin>/.well-known/oauth-client-metadata`. It lists only
   the redirect URI above and declares `application_type` `web`.
 - Native client metadata documents, one per app so each consent screen names
-  it: `<origin>/.well-known/oauth-client-metadata/cli` ("AGI Workforce CLI")
-  and `<origin>/.well-known/oauth-client-metadata/desktop` ("AGI Workforce
-  Desktop"). Each lists the loopback redirects `http://127.0.0.1/callback` and
+  it: `<origin>/.well-known/oauth-client-metadata/cli` ("CLI") and
+  `<origin>/.well-known/oauth-client-metadata/desktop` ("Desktop"), the names in
+  `PRODUCT_NAMES`. Each lists the loopback redirects `http://127.0.0.1/callback` and
   `http://localhost/callback`, which a server must accept on any port, and
   declares `application_type` `native`. Keeping loopback redirects out of the
   web document means no local process can present itself as the hosted app.
@@ -527,8 +527,7 @@ with a scope per server
 - Optional pre-registered app: https://linear.app/settings/api, OAuth
   applications. Descriptor `authorizationUrl` `https://linear.app/oauth/authorize`,
   `tokenUrl` `https://api.linear.app/oauth/token`.
-- Scopes permitted: `read`, `write`, `issues:create`, `comments:create`,
-  `app:assignable`, `app:mentionable`.
+- Scopes permitted: `read`, `write`, `issues:create`, `comments:create`.
 - Variables, optional: `CONNECTOR_OAUTH_LINEAR_CLIENT_ID`,
   `CONNECTOR_OAUTH_LINEAR_CLIENT_SECRET`.
 

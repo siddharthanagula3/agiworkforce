@@ -140,6 +140,7 @@ import {
   VoiceInputButton,
   type VoiceInputHandle,
 } from '@/src/features/voice/components/VoiceInputButton';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
 
@@ -385,7 +386,9 @@ describe('VoiceInputButton recording ownership', () => {
         fireEvent(view.getByTestId('voice-input-button'), 'pressIn');
         jest.advanceTimersByTime(300);
       });
-      fireEvent(view.getByTestId('voice-input-button'), 'pressOut');
+      act(() => {
+        ownerHandler(view.getByTestId('voice-input-button'), 'onPressOut')();
+      });
       const session = recording();
       await act(async () => finishStart(session));
       expect(session.stop).toHaveBeenCalledTimes(1);

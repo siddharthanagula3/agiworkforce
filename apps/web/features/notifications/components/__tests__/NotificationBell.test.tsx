@@ -4,7 +4,11 @@ import type { NotificationFeedResponse } from '../../lib/notification-target';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
-  session: { isLoaded: true, isSignedIn: true },
+  session: { isLoaded: true, isSignedIn: true, userId: 'user-a' } as {
+    isLoaded: boolean;
+    isSignedIn: boolean;
+    userId?: string;
+  },
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
@@ -104,6 +108,22 @@ describe('NotificationBell', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('could not be marked as read');
     expect(screen.getByRole('button', { name: 'Notifications, 1 unread' })).toBeInTheDocument();
+  });
+
+  it('drops the previous account feed when the signed-in account changes', async () => {
+    const view = render(<NotificationBell />);
+    expect(
+      await screen.findByRole('button', { name: 'Notifications, 1 unread' }),
+    ).toBeInTheDocument();
+
+    fetchMock.mockImplementation(async () => new Response(null, { status: 503 }));
+    mocks.session = { isLoaded: true, isSignedIn: true, userId: 'user-b' };
+    view.rerender(<NotificationBell />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: /unread/ })).not.toBeInTheDocument();
   });
 
   it('offers a retry when the feed cannot load', async () => {

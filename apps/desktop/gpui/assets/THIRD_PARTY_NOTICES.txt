@@ -590,7 +590,7 @@ core_maths 0.1.1 (MIT)
   Copyright (c) 2024 Robert Bastian
   License text: 3
 
-core-foundation 0.10.0 (MIT OR Apache-2.0)
+core-foundation 0.10.1 (MIT OR Apache-2.0)
   https://github.com/servo/core-foundation-rs
   Copyright (c) 2012-2013 Mozilla Foundation
   License text: 1, 2
@@ -858,7 +858,7 @@ either 1.19.0 (MIT OR Apache-2.0)
   Copyright (c) 2015
   License text: 1, 2
 
-encoding_rs 0.8.42 ((Apache-2.0 OR MIT) AND BSD-3-Clause)
+encoding_rs 0.8.44 ((Apache-2.0 OR MIT) AND BSD-3-Clause)
   https://docs.rs/encoding_rs/
   Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
   License text: 2, 17, 22
@@ -1191,7 +1191,7 @@ glob 0.3.4 (MIT OR Apache-2.0)
   Copyright (c) 2014 The Rust Project Developers
   License text: 1, 2
 
-globset 0.4.20 (Unlicense OR MIT)
+globset 0.4.21 (Unlicense OR MIT)
   https://github.com/BurntSushi/ripgrep
   Copyright (c) 2015 Andrew Gallant
   License text: 5, 11, 12

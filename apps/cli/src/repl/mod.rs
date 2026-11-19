@@ -61,7 +61,7 @@ pub async fn run_repl(
     auto_approve_safe: bool,
     quiet: bool,
     provider_override: Option<&str>,
-    permission_mode: crate::cli_options::PermissionMode,
+    permission_mode: crate::cli_options::LaunchPermissionMode,
     auto_approve_plan: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
@@ -97,6 +97,7 @@ pub async fn run_repl(
         crate::path_security::registered_additional_workspace_roots(),
     )?;
     session.apply_ui_config(config);
+    crate::apply_saved_effort(&mut session, config);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
@@ -106,10 +107,13 @@ pub async fn run_repl(
         session.fallback_chain = Some(fallback_chain);
     }
     session.session_name = session_name;
-    session.permission_mode = permission_mode;
+    session.permission_mode = permission_mode.mode;
     session.auto_approve_plan = auto_approve_plan;
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
-    if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
+    if matches!(
+        permission_mode.mode,
+        crate::cli_options::PermissionMode::Plan
+    ) {
         session.plan_mode = true;
     }
     // Wire --agent: load the named agent definition and apply overrides to the session.
@@ -145,10 +149,12 @@ pub async fn run_repl(
         );
     }
 
+    let mode_before_load = session.permission_mode;
     match (resume_messages, resume_managed_session) {
         (Some(messages), Some((mut managed_session, path))) => {
             managed_session.messages = messages;
             session.load_managed_conversation(managed_session, path)?;
+            session.settle_loaded_permission_mode(permission_mode, mode_before_load);
             reset_loaded_session_stats(&mut session);
         }
         (Some(messages), None) => {
@@ -157,6 +163,7 @@ pub async fn run_repl(
         }
         (None, Some((managed_session, path))) => {
             session.load_managed_conversation(managed_session, path)?;
+            session.settle_loaded_permission_mode(permission_mode, mode_before_load);
             reset_loaded_session_stats(&mut session);
         }
         (None, None) => {
@@ -186,6 +193,7 @@ pub async fn run_repl(
     //
     // NOTE: tui_app.rs:2661 has the same (true,true) blocking call and is a
     // known sibling, it is out of scope for this fix.
+    mcp_config_options.remember_for_restart();
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
         let privacy_mode = session.privacy_mode;
@@ -280,8 +288,8 @@ pub async fn run_repl(
                             }
                         }
                         SlashResult::Logout => {
-                            match crate::app_server::account::sign_out_of_every_provider().await {
-                                Ok(signed_out) => output::print_info(&signed_out.message()),
+                            match crate::sign_out_of_account_keeping_keys().await {
+                                Ok(message) => output::print_info(&message),
                                 Err(error) => {
                                     output::print_error(&format!("Could not log out: {error:#}"))
                                 }
@@ -729,7 +737,7 @@ pub async fn run_repl(
     output::print_session_cost(
         session.total_input_tokens,
         session.total_output_tokens,
-        session.turn_count,
+        session.cost_ledger.turns,
         session.cost_ledger.total_usd,
         crate::design_system::AccessMode::for_provider(&session.provider),
     );
@@ -782,10 +790,15 @@ fn with_security_review_scope(input: &str) -> Option<String> {
 
 async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
     match session.reload_if_changed_on_disk() {
-        Ok(true) => output::print_info(
-            "This conversation continued in another app; your message continues from its saved version.",
-        ),
-        Ok(false) => {}
+        Ok(Some(saved_mode)) => {
+            output::print_info(
+                "This conversation continued in another app; your message continues from its saved version.",
+            );
+            if let Some(saved) = saved_mode {
+                output::print_info(&kept_mode_notice(saved, session.permission_mode));
+            }
+        }
+        Ok(None) => {}
         Err(error) => output::print_warn(&format!(
             "This conversation changed in another app and could not be reloaded: {error:#}"
         )),
@@ -793,18 +806,24 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
     let spinner = output::create_spinner("Thinking...");
     let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
     let md_cb = std::sync::Arc::clone(&md);
+    let spinner_cb = spinner.clone();
+    session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
     let result = session
         .send(
             config,
             &full_input,
             Box::new(move |chunk| {
+                if !spinner_cb.is_finished() {
+                    spinner_cb.finish_and_clear();
+                }
                 if let Ok(mut renderer) = md_cb.lock() {
                     output::print_assistant_chunk_formatted(&mut renderer, chunk);
                 }
             }),
         )
         .await;
+    session.transcript_renderer = None;
 
     spinner.finish_and_clear();
 
@@ -858,6 +877,17 @@ pub(super) fn reset_loaded_session_stats(session: &mut AgentSession) {
         .iter()
         .filter(|message| message.role == "user")
         .count() as u32;
+}
+
+pub(super) fn kept_mode_notice(
+    saved: crate::cli_options::PermissionMode,
+    kept: crate::cli_options::PermissionMode,
+) -> String {
+    format!(
+        "The session was saved in {} mode; this terminal stays in {} mode.",
+        saved.name(),
+        kept.name()
+    )
 }
 
 fn collect_multiline(first_line: &str, editor: &mut DefaultEditor) -> Result<String> {
@@ -915,7 +945,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
     };
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: session.additional_context_dirs(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
         require_confirmation: false,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
@@ -951,7 +981,7 @@ pub async fn run_user_shell_command(
     };
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: session.additional_context_dirs(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
         require_confirmation,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
@@ -983,7 +1013,7 @@ async fn run_advisor_question(
     };
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: Vec::new(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
         require_confirmation: false,
         auto_approve_safe: true,
         auto_approve_edits: false,

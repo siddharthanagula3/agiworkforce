@@ -152,9 +152,8 @@ function OwnedMemorySummaryCard({
         >
           What AGI knows about you
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
-          A summary of your saved memories. It changes nothing: edit or delete the memories below to
-          change what AGI remembers.
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
+          A summary only. Edit or delete memories below to change it.
         </p>
       </div>
 

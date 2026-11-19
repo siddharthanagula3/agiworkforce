@@ -49,7 +49,8 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   cancelSessionForOwner: vi.fn(),
   claimExpiredWaitingBatch: vi.fn(),
   claimExpiredWaitingSession: vi.fn(),
@@ -212,3 +213,5 @@ describe('POST /api/support/handoff/agent/[sessionId]/messages', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/support/handoff/store');

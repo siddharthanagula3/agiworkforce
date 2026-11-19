@@ -11,6 +11,7 @@ import {
 import { buildExtensionStatusBarText } from '../core/statusBar';
 import { commandLabel } from '../core/runInlineCommand';
 import { activate } from '../extension';
+import { t } from '../l10n';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 describe('commandLabel', () => {
@@ -183,7 +184,7 @@ describe('inline completions first-run privacy notice', () => {
     } as unknown as vscode.ExtensionContext;
   }
 
-  function configureInlineCompletions(enabled: boolean, globalValue?: boolean): void {
+  function configureInlineCompletions(enabled: boolean, globalValue: boolean = enabled): void {
     vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
       () =>
         ({
@@ -242,8 +243,8 @@ describe('inline completions first-run privacy notice', () => {
     activate(activationContext(true));
     await vi.waitFor(() =>
       expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith(
-        expect.stringContaining('need AGI Cloud sign-in or an AGI API key'),
-        expect.anything(),
+        t('advancedFeatures.inlineNeedsCredential'),
+        t('advancedFeatures.openAccount'),
       ),
     );
   });
@@ -257,5 +258,57 @@ describe('inline completions first-run privacy notice', () => {
 
     expect(privacyNotices()).toEqual([]);
     expect(context.globalState.get(NOTICE_KEY)).toBeUndefined();
+  });
+
+  it('sends nothing until the notice is closed, then completes only in files on disk', async () => {
+    configureInlineCompletions(true);
+    let closeNotice!: () => void;
+    vi.mocked(vscode.window.showInformationMessage).mockImplementation(((message: string) =>
+      String(message).includes('surrounding code are sent')
+        ? new Promise((resolve) => {
+            closeNotice = () => resolve(undefined);
+          })
+        : Promise.resolve(undefined)) as never);
+    const context = activationContext();
+
+    activate(context);
+    await vi.waitFor(() => expect(privacyNotices()).toHaveLength(1));
+    expect(vscode.languages.registerInlineCompletionItemProvider).not.toHaveBeenCalled();
+
+    closeNotice();
+    await vi.waitFor(() =>
+      expect(vscode.languages.registerInlineCompletionItemProvider).toHaveBeenCalledOnce(),
+    );
+    expect(
+      vi.mocked(vscode.languages.registerInlineCompletionItemProvider).mock.calls[0]?.[0],
+    ).toEqual({ scheme: 'file' });
+    expect(context.globalState.get(NOTICE_KEY)).toBe(true);
+  });
+
+  it('shows the notice when the user turns completions on after activation', async () => {
+    configureInlineCompletions(false);
+    const configurationListeners: Array<(event: vscode.ConfigurationChangeEvent) => void> = [];
+    vi.mocked(vscode.workspace.onDidChangeConfiguration).mockImplementation(((
+      listener: (event: vscode.ConfigurationChangeEvent) => void,
+    ) => {
+      configurationListeners.push(listener);
+      return new vscode.Disposable(() => undefined);
+    }) as never);
+    const context = activationContext();
+    activate(context);
+    expect(privacyNotices()).toEqual([]);
+
+    configureInlineCompletions(true);
+    for (const listener of configurationListeners) {
+      listener({
+        affectsConfiguration: (section: string) =>
+          section === 'agiWorkforce.inlineCompletions.enabled',
+      } as vscode.ConfigurationChangeEvent);
+    }
+
+    await vi.waitFor(() => expect(privacyNotices()).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(vscode.languages.registerInlineCompletionItemProvider).toHaveBeenCalledOnce(),
+    );
   });
 });

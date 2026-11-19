@@ -53,6 +53,8 @@ export const OWN_ROW_OPERATIONS = Object.freeze({
 export const OWN_ROW_READERS = Object.freeze({
   'apps/web/app/api/user/delete-account/route.ts':
     'Deleting an account cancels the subscription the user personally pays for; a seat is not theirs to cancel.',
+  'apps/web/lib/server/account-deletion-plan-renewal.ts':
+    'Undoing a deletion turns renewal back on for the Stripe subscription the user personally pays for; a seat has no renewal of theirs to restore.',
 });
 
 const SKIP_DIRECTORY = /^(?:\.|node_modules$|\.next$|dist$|build$|coverage$|__tests__$|__mocks__$)/;

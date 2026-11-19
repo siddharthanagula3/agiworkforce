@@ -1,16 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from '../providers/codeActionProvider';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const token = { isCancellationRequested: false } as vscode.CancellationToken;
 
 const document = {
   uri: vscode.Uri.file('/workspace/src/app.ts'),
   languageId: 'typescript',
+  lineAt: (line: number) => ({ range: new vscode.Range(line, 0, line, 40) }),
 } as unknown as vscode.TextDocument;
 
-function diagnostic(message: string): vscode.Diagnostic {
-  return { message, severity: vscode.DiagnosticSeverity.Error } as unknown as vscode.Diagnostic;
+function diagnostic(
+  message: string,
+  range: vscode.Range = new vscode.Range(0, 2, 0, 5),
+): vscode.Diagnostic {
+  return {
+    message,
+    range,
+    severity: vscode.DiagnosticSeverity.Error,
+  } as unknown as vscode.Diagnostic;
 }
 
 function actionsFor(
@@ -35,9 +44,22 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(CARET, [diagnostic('error TS2304')]);
 
     expect(actions).toHaveLength(1);
-    expect(actions[0]!.title).toBe('Fix with AGI Code');
+    expect(actions[0]!.title).toBe(`Fix with ${PRODUCT_NAMES.code}`);
     expect(actions[0]!.command?.command).toBe('agi-workforce.fix');
     expect(actions[0]!.kind).toBe(vscode.CodeActionKind.QuickFix);
+  });
+
+  it('hands the quick fix the lines of the diagnostics it was offered for, so a bare caret is enough', () => {
+    const actions = actionsFor(CARET, [
+      diagnostic('first', new vscode.Range(4, 6, 4, 9)),
+      diagnostic('second', new vscode.Range(6, 1, 7, 3)),
+    ]);
+
+    const [target] = actions[0]!.command?.arguments ?? [];
+    expect(target).toMatchObject({
+      start: { line: 4, character: 0 },
+      end: { line: 7, character: 40 },
+    });
   });
 
   it('attaches the reported diagnostics to the quick fix without claiming preference', () => {
@@ -61,9 +83,9 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(MULTILINE);
 
     expect(actions.map((action) => action.title)).toEqual([
-      'Refactor with AGI Code',
-      'Explain with AGI Code',
-      'Generate Tests with AGI Code',
+      `Refactor with ${PRODUCT_NAMES.code}`,
+      `Explain with ${PRODUCT_NAMES.code}`,
+      `Generate Tests with ${PRODUCT_NAMES.code}`,
     ]);
     expect(actions.map((action) => action.command?.command)).toEqual([
       'agi-workforce.refactor',
@@ -84,10 +106,10 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(MULTILINE, [diagnostic('unused variable')]);
 
     expect(actions.map((action) => action.title)).toEqual([
-      'Fix with AGI Code',
-      'Refactor with AGI Code',
-      'Explain with AGI Code',
-      'Generate Tests with AGI Code',
+      `Fix with ${PRODUCT_NAMES.code}`,
+      `Refactor with ${PRODUCT_NAMES.code}`,
+      `Explain with ${PRODUCT_NAMES.code}`,
+      `Generate Tests with ${PRODUCT_NAMES.code}`,
     ]);
   });
 

@@ -73,11 +73,19 @@ describe('isMessageContinuable', () => {
     );
   });
 
-  it('offers Continue when a stop-finished answer still reads as cut off', () => {
-    // A provider can end a turn mid-sentence and report finish_reason stop.
+  it('trusts a finished turn over the truncation heuristic', () => {
+    expect(
+      isMessageContinuable(
+        assistantMessage({ content: '17 \u00d7 23 = 391', metadata: { finishReason: 'stop' } }),
+      ),
+    ).toBe(false);
     expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
-      true,
+      false,
     );
+  });
+
+  it('falls back to the truncation heuristic only when no finish reason was recorded', () => {
+    expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(true);
   });
 
   it('does NOT offer Continue when the partial content is empty', () => {

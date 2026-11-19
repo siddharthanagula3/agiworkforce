@@ -495,6 +495,8 @@ export const STORAGE_COST_SHARE_OF_PRICE = 0.01;
 
 export const DOWNLOAD_COST_SHARE_OF_PRICE = 0.03;
 
+export const DOWNLOAD_COST_SHARE_CEILING_OF_PRICE = 0.035;
+
 const BYTES_PER_GIB = 1024 ** 3;
 
 function usdPerGib(feature: 'object_storage_gib_month' | 'network_egress_gib'): number | null {

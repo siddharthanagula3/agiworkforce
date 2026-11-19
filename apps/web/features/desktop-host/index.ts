@@ -13,6 +13,9 @@ export {
   answerDeveloperApproval,
   answerDeveloperUserInput,
   archiveDeveloperThread,
+  unarchiveDeveloperThread,
+  renameDeveloperThread,
+  pinDeveloperThread,
   cancelLocalChat,
   deleteDeveloperThread,
   forkDeveloperThread,
@@ -79,14 +82,39 @@ export {
   startBackgroundLocalCommand,
   openLocalPreview,
   readPreviewConsoleErrors,
+  openBrowserPane,
+  navigateBrowserPane,
+  stepBrowserPane,
+  setBrowserPaneBounds,
+  hideBrowserPane,
+  readBrowserSites,
+  removeBrowserSite,
+  blockBrowserSite,
+  clearBrowserPaneData,
+  onBrowserPaneState,
+  browserPaneSupported,
+  listDeveloperMcpServers,
+  addDeveloperMcpServer,
+  removeDeveloperMcpServer,
+  setDeveloperMcpServerEnabled,
+  testDeveloperMcpServer,
+  developerMcpServerTools,
+  openDeveloperMcpConfig,
+  openDeveloperTerminal,
+  writeDeveloperTerminal,
+  resizeDeveloperTerminal,
+  closeDeveloperTerminal,
+  onDeveloperTerminal,
   startLocalCommand,
   writeLocalCommandPolicy,
   writeWorkspaceText,
   writeLocalModelSettings,
   type LocalChatDelta,
   type LocalChatRun,
+  type LocalBackgroundCommandStart,
   type LocalCommandOutput,
   type LocalCommandRun,
+  type DeveloperTerminalOutput,
 } from './lib/runtime-client';
 export {
   executeDeviceStep,
@@ -103,6 +131,26 @@ export {
   type BrowserHandoff,
   type BrowserHandoffOutcome,
 } from './lib/browser-handoff';
+export {
+  bootSimulator,
+  copySimulatorClipboard,
+  deleteSimulatorCapture,
+  onSimulatorChanged,
+  pressSimulatorHome,
+  readSimulatorCapture,
+  readSimulatorFrame,
+  readSimulatorSettings,
+  readSimulatorStatus,
+  revealSimulatorCapture,
+  sendClipboardToSimulator,
+  setSimulatorAppearance,
+  setSimulatorStatusBar,
+  shutdownSimulator,
+  simulatorPaneSupported,
+  startSimulatorRecording,
+  stopSimulatorRecording,
+  takeSimulatorScreenshot,
+} from './lib/simulator-client';
 export { downloadInWindow } from './lib/in-window-download';
 export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
 export { useDesktopExternalLinks } from './hooks/use-desktop-external-links';
@@ -112,7 +160,7 @@ export { useHostShortcuts, type HostShortcutRow } from './hooks/use-host-shortcu
 export { CODE_AGENT_MODE_CYCLE_ROW, CODE_AGENT_MODE_CYCLE_SHORTCUT } from './lib/code-shortcuts';
 export { useHostNavigation, type HostNavigationControls } from './hooks/use-host-navigation';
 export { useWindowZoom } from './hooks/use-window-zoom';
-export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
+export { useDesktopVoiceHotkey, useDesktopWindowHidden } from './hooks/use-desktop-voice-hotkey';
 export { usePairedDesktop, type PairedDesktop } from './hooks/use-paired-desktop';
 export { ContinueOnDesktop, type ContinueOnDesktopProps } from './components/ContinueOnDesktop';
 export { DesktopHostMount } from './components/DesktopHostMount';

@@ -227,13 +227,72 @@ function blocksOf(
   return out;
 }
 
+function collectDefinitions(node: MarkdownNode, into: Map<string, string>): void {
+  if (node.type === 'definition' && node.identifier && node.url !== undefined) {
+    if (!into.has(node.identifier)) into.set(node.identifier, node.url);
+  }
+  for (const child of node.children ?? []) collectDefinitions(child, into);
+}
+
+function resolveReferences(
+  node: MarkdownNode,
+  definitions: ReadonlyMap<string, string>,
+): MarkdownNode {
+  const children = node.children?.map((child) => resolveReferences(child, definitions));
+  const url = node.identifier ? definitions.get(node.identifier) : undefined;
+  if (node.type === 'linkReference') return { ...node, type: 'link', url, children };
+  if (node.type === 'imageReference') return { ...node, type: 'image', url };
+  return children ? { ...node, children } : node;
+}
+
 export function markdownToDocumentBlocks(source: string): DocumentBlock[] {
-  const tree = documentProcessor.runSync(
+  const parsed = documentProcessor.runSync(
     documentProcessor.parse(source),
   ) as unknown as MarkdownNode;
+  const definitions = new Map<string, string>();
+  collectDefinitions(parsed, definitions);
+  const tree = resolveReferences(parsed, definitions);
   const footnotes: DocumentBlock[] = [];
   const blocks = blocksOf(tree.children, footnotes);
   return footnotes.length > 0 ? [...blocks, { kind: 'rule' }, ...footnotes] : blocks;
+}
+
+const BLOCK_TEXT_SEPARATOR = '\n';
+
+function inlinesRenderedText(inlines: readonly DocumentInline[]): string {
+  return inlines
+    .map((inline) => {
+      if (inline.kind === 'text') return inline.text;
+      return inline.kind === 'math' ? inline.tex : '';
+    })
+    .join('');
+}
+
+function blockRenderedText(block: DocumentBlock): string[] {
+  switch (block.kind) {
+    case 'heading':
+    case 'paragraph':
+      return [inlinesRenderedText(block.inlines)];
+    case 'list':
+      return block.items.flatMap((item) => item.blocks.flatMap(blockRenderedText));
+    case 'quote':
+      return block.blocks.flatMap(blockRenderedText);
+    case 'table':
+      return block.rows.flatMap((row) => row.map(inlinesRenderedText));
+    case 'code':
+      return [block.text];
+    case 'math':
+      return [block.tex];
+    case 'rule':
+      return [];
+  }
+}
+
+export function markdownRenderedText(source: string): string {
+  return markdownToDocumentBlocks(source)
+    .flatMap(blockRenderedText)
+    .filter((text) => text !== '')
+    .join(BLOCK_TEXT_SEPARATOR);
 }
 
 export type DocumentDirection = 'ltr' | 'rtl';

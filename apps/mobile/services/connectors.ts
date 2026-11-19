@@ -7,7 +7,9 @@ import {
   type ConnectResult,
   type ConnectedConnector,
   type ConnectorDirectory,
+  type ConnectorDisconnectResult,
   type ConnectorOAuthStart,
+  type ConnectorOperationScope,
   type ConnectorToolPermission,
   type ConnectorToolPermissionLevel,
   type CustomConnectorResult,
@@ -42,6 +44,7 @@ import {
   ConnectorCredentialStatusResponseSchema,
   ConnectorDirectoryEntryResponseSchema,
   ConnectorDirectoryListResponseSchema,
+  ConnectorDirectoryStatsSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
   SaveConnectorCredentialResponseSchema,
   connectorCapabilitiesPath,
@@ -52,11 +55,16 @@ import {
   type ConnectorDirectoryEntry,
   type ConnectorDirectoryListResponse,
   type ConnectorDirectoryQuery,
+  type ConnectorPersonalSource,
   type SaveConnectorCredentialRequest,
 } from '@agiworkforce/cloud-contracts';
 
 import { api } from './api';
 import { ApiHttpError } from './apiErrors';
+import {
+  assertCloudAccountEpochCurrent,
+  captureCloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { API_URL } from '@/lib/constants';
 
 export { ConnectorPolicyError };
@@ -78,7 +86,7 @@ export type ConnectorListingCategory = ConnectorDirectoryCategory;
 export type ConnectorListingPage = Pick<
   ConnectorDirectoryListResponse,
   'entries' | 'nextCursor' | 'categories'
->;
+> & { stats?: { bootstrapComplete?: boolean } };
 
 export interface ConnectorListingFilter {
   search?: string;
@@ -94,6 +102,8 @@ const ListingPageSchema = ConnectorDirectoryListResponseSchema.pick({
   entries: true,
   nextCursor: true,
   categories: true,
+}).extend({
+  stats: ConnectorDirectoryStatsSchema.pick({ bootstrapComplete: true }).partial().optional(),
 });
 
 const SavedCredentialSchema = SaveConnectorCredentialResponseSchema.pick({ toolCount: true });
@@ -116,16 +126,25 @@ export function invalidateConnectorPolicy(): void {
   runtime.invalidatePolicy();
 }
 
+function captureOperationScope(): ConnectorOperationScope {
+  const account = captureCloudAccountEpoch();
+  const scope: ConnectorOperationScope = {
+    assertCurrent: () => assertCloudAccountEpochCurrent(account),
+  };
+  scope.assertCurrent();
+  return scope;
+}
+
 export async function fetchConnectorDirectory(): Promise<ConnectorDirectory> {
   return runtime.loadDirectory();
 }
 
 export async function startConnectorOAuth(connectorId: string): Promise<ConnectorOAuthStart> {
-  return runtime.startOAuth(connectorId);
+  return runtime.startOAuth(connectorId, captureOperationScope());
 }
 
 export async function connectConnector(connectorId: string): Promise<ConnectConnectorResult> {
-  const result = await runtime.connect(connectorId);
+  const result = await runtime.connect(connectorId, undefined, captureOperationScope());
   if (result.kind !== 'install-required') return result;
   return {
     kind: 'oauth-required',
@@ -135,8 +154,8 @@ export async function connectConnector(connectorId: string): Promise<ConnectConn
   };
 }
 
-export async function disconnectConnector(connectorId: string): Promise<void> {
-  await runtime.disconnect(connectorId);
+export async function disconnectConnector(connectorId: string): Promise<ConnectorDisconnectResult> {
+  return runtime.disconnect(connectorId);
 }
 
 export async function fetchConnectorToolPermissions(): Promise<ConnectorToolPermission[]> {
@@ -161,11 +180,11 @@ export async function resetConnectorToolPermission(
 export async function addCustomConnector(
   input: AddCustomConnectorInput,
 ): Promise<CustomConnectorResult> {
-  return runtime.addCustomConnector(input);
+  return runtime.addCustomConnector(input, captureOperationScope());
 }
 
-export async function deleteCustomConnector(id: string): Promise<void> {
-  await runtime.deleteCustomConnector(id);
+export async function deleteCustomConnector(id: string): Promise<ConnectorDisconnectResult> {
+  return runtime.deleteCustomConnector(id);
 }
 
 function listingHref(filter: ConnectorListingFilter): string {
@@ -187,6 +206,20 @@ export async function browseConnectorListings(
   const parsed = ListingPageSchema.safeParse(await api.get<unknown>(listingHref(filter)));
   if (!parsed.success) throw new ConnectorResponseError(INVALID_LISTING);
   return parsed.data;
+}
+
+export async function browsePersonalSourceListings(
+  source: ConnectorPersonalSource,
+): Promise<ConnectorListing[]> {
+  const params = new URLSearchParams({
+    personalSource: source,
+    limit: String(CONNECTOR_DIRECTORY_MAX_LIMIT),
+  });
+  const parsed = ListingPageSchema.safeParse(
+    await api.get<unknown>(`${CONNECTOR_DIRECTORY_PATH}?${params.toString()}`),
+  );
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_LISTING);
+  return parsed.data.entries.filter((entry) => entry.personalSources?.includes(source));
 }
 
 export async function fetchConnectorListing(id: string): Promise<ConnectorListing | null> {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { z } from 'zod';
 import {
   Button,
@@ -472,7 +473,7 @@ function OwnedEmailAddressChange({
                   if (acceptsEvent() && !lane.intent) setValue(event.target.value);
                 }}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
+                  if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
                     event.preventDefault();
                     submit();
                   }

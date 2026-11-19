@@ -164,6 +164,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: false,
     declared: true,
   },
+  render_answer_ui: {
+    actionClass: 'read',
+    reversible: true,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
   url_fetch: {
     actionClass: 'read',
     reversible: true,
@@ -189,6 +196,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
   },
   write_file: {
     actionClass: 'write',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
+  delete_file: {
+    actionClass: 'delete',
     reversible: false,
     acceptsUntrustedContent: false,
     createsEgressPath: false,
@@ -647,7 +661,7 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     actionClass: 'write',
     reversible: false,
     acceptsUntrustedContent: false,
-    createsEgressPath: false,
+    createsEgressPath: true,
     declared: true,
   },
 });

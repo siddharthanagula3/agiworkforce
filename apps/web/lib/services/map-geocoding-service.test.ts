@@ -179,6 +179,54 @@ describe('map place resolution keeps one request in one place', () => {
     expect(resolved!.places.every((place) => place.confident !== false)).toBe(true);
   });
 
+  it.each([
+    ['first', 'Chicago', ['Chicago'], ['Indianapolis', 'Cincinnati']],
+    ['middle', 'Indianapolis', ['Indianapolis'], ['Chicago', 'Cincinnati']],
+    ['last', 'Cincinnati', ['Cincinnati'], ['Chicago', 'Indianapolis']],
+  ])(
+    'reports the %s stop when it cannot be located',
+    async (_position, missing, unresolved, kept) => {
+      const cities: Record<string, { lat: string; lon: string }> = {
+        Chicago: { lat: '41.8781', lon: '-87.6298' },
+        Indianapolis: { lat: '39.7684', lon: '-86.1581' },
+        Cincinnati: { lat: '39.1031', lon: '-84.5120' },
+      };
+      stubGeocoder((query) => {
+        const name = Object.keys(cities).find((city) => query.includes(city));
+        if (!name || name === missing) return [];
+        const city = cities[name]!;
+        return [
+          {
+            lat: city.lat,
+            lon: city.lon,
+            display_name: `${name}, United States`,
+            category: 'place',
+            type: 'city',
+          },
+        ];
+      });
+
+      const resolved = await resolveMapView('Chicago to Indianapolis to Cincinnati', GRID);
+
+      expect(resolved!.unresolvedStops).toEqual(unresolved);
+      expect(resolved!.places.map((place) => place.label.split(',')[0])).toEqual(kept);
+    },
+  );
+
+  it('returns no map at all when every stop is unresolved', async () => {
+    stubGeocoder(() => []);
+
+    await expect(resolveMapView('Chicago to Indianapolis to Cincinnati', GRID)).resolves.toBeNull();
+  });
+
+  it('reports no unresolved stops when the whole trip resolves', async () => {
+    stubGeocoder((query) => (/art institute/i.test(query) ? [CHICAGO] : [MILLENNIUM_PARK_CHICAGO]));
+
+    const resolved = await resolveMapView('Art Institute of Chicago to Millennium Park', GRID);
+
+    expect(resolved!.unresolvedStops).toEqual([]);
+  });
+
   it('leaves a single place confident', async () => {
     stubGeocoder(() => [CHICAGO]);
     const resolved = await resolveMapView('Art Institute of Chicago', GRID);

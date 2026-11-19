@@ -52,7 +52,8 @@ import {
   listCloudCodeRuntimes,
 } from '@/lib/e2b/templates';
 import { providerProxyBaseUrl } from '@/lib/e2b/provider-proxy';
-import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
+import { managedCloudCodeSessionScope, type E2BSessionScope } from '@/lib/e2b/session-store';
+import { CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS } from './cloud-code-turn-budget';
 import {
   GitHubPullRequestError,
   createGitHubPullRequest,
@@ -71,6 +72,7 @@ import {
   type CloudCodePullRequestStatus,
 } from '@agiworkforce/cloud-contracts';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
+import { GitHubWriteAccessError, assertRepositoryIsWritable } from '@/lib/github-write-access';
 import {
   buildCloudCodePullRequestBody,
   buildValidationSummary,
@@ -145,6 +147,20 @@ const WORKING_BRANCH_SUFFIX_LENGTH = 8;
  */
 export const CLOUD_CODE_RUN_LEASE_SECONDS = 420;
 
+/**
+ * The sandbox scope of one Code session operation. The operation pauses the
+ * sandbox before it returns, so its hold and timeout end when its route could
+ * no longer be running rather than at the plan's longest sandbox run.
+ */
+function cloudCodeOperationScope(
+  ...scope: Parameters<typeof managedCloudCodeSessionScope>
+): E2BSessionScope {
+  return {
+    ...managedCloudCodeSessionScope(...scope),
+    releaseByMs: Date.now() + CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS,
+  };
+}
+
 export interface CloudCodeRunClaim {
   session: CloudCodeSession;
   /**
@@ -166,7 +182,10 @@ export interface CloudCodeOwner {
 }
 
 export class CloudCodeValidationError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason?: string,
+  ) {
     super(message);
     this.name = 'CloudCodeValidationError';
   }
@@ -466,37 +485,27 @@ function historyOutput(output: string | null): string {
   return text.slice(0, STEP_HISTORY_OUTPUT_LIMIT);
 }
 
-/**
- * Everything the Code transcript needs to redraw a session it did not run in
- * this tab: the turns, their outcome, and every tool each one ran.
- */
-export async function listCloudCodeAgentTurns(
+const TURN_COLUMNS = `id, goal, mode, state, stop_reason, steps_used, input_tokens, output_tokens,
+            cancel_requested_at, final_message, error_message, created_at`;
+
+async function attachTurnSteps(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
+  turnRows: AgentTurnRow[],
 ): Promise<CloudCodeAgentTurnRecord[]> {
-  validateCloudCodeSessionId(sessionId);
-  const scoped = ownerSql(owner, 2);
-  const turnRows = await db.query<AgentTurnRow>(
-    `select id, goal, mode, state, stop_reason, steps_used, input_tokens, output_tokens,
-            cancel_requested_at, final_message, error_message, created_at
-       from cloud_code_agent_turns
-      where session_id = $1 and ${scoped.clause}
-      order by created_at asc
-      limit ${TURN_HISTORY_LIMIT}`,
-    [sessionId, ...scoped.params],
-  );
   if (turnRows.length === 0) return [];
 
   const scopedTurns = ownerSql(owner, 2, 't');
+  const idPlaceholders = turnRows.map((_, index) => `$${4 + index}`).join(', ');
   const stepRows = await db.query<AgentStepRow>(
     `select s.turn_id, s.step_index, s.tool_name, s.tool_args, s.output, s.is_error
        from cloud_code_agent_steps s
        join cloud_code_agent_turns t on t.id = s.turn_id
-      where t.session_id = $1 and ${scopedTurns.clause}
+      where t.session_id = $1 and ${scopedTurns.clause} and t.id in (${idPlaceholders})
       order by s.turn_id, s.step_index asc
       limit ${STEP_HISTORY_LIMIT}`,
-    [sessionId, ...scopedTurns.params],
+    [sessionId, ...scopedTurns.params, ...turnRows.map((row) => row.id)],
   );
 
   const stepsByTurn = new Map<string, CloudCodeAgentStep[]>();
@@ -526,6 +535,68 @@ export async function listCloudCodeAgentTurns(
     createdAt: iso(row.created_at),
     steps: stepsByTurn.get(row.id) ?? [],
   }));
+}
+
+export interface CloudCodeAgentTurnWindow {
+  turns: CloudCodeAgentTurnRecord[];
+  truncated: boolean;
+}
+
+/**
+ * The newest turns of a session, oldest first, and whether older ones were
+ * left out. The newest window is the one a transcript, a result verdict and a
+ * reader that wants the latest outcome all need; the oldest turns are the ones
+ * a bounded read may drop.
+ */
+export async function readCloudCodeAgentTurnWindow(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeAgentTurnWindow> {
+  validateCloudCodeSessionId(sessionId);
+  const scoped = ownerSql(owner, 2);
+  const newestFirst = await db.query<AgentTurnRow>(
+    `select ${TURN_COLUMNS}
+       from cloud_code_agent_turns
+      where session_id = $1 and ${scoped.clause}
+      order by created_at desc, id desc
+      limit ${TURN_HISTORY_LIMIT + 1}`,
+    [sessionId, ...scoped.params],
+  );
+  const truncated = newestFirst.length > TURN_HISTORY_LIMIT;
+  const window = newestFirst.slice(0, TURN_HISTORY_LIMIT).reverse();
+  return { turns: await attachTurnSteps(db, owner, sessionId, window), truncated };
+}
+
+export async function listCloudCodeAgentTurns(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeAgentTurnRecord[]> {
+  return (await readCloudCodeAgentTurnWindow(db, owner, sessionId)).turns;
+}
+
+/**
+ * One turn by id, however many turns the session has. A caller waiting on a
+ * specific turn must not look for it in the bounded transcript window.
+ */
+export async function getCloudCodeAgentTurn(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  turnId: string,
+): Promise<CloudCodeAgentTurnRecord | null> {
+  validateCloudCodeSessionId(sessionId);
+  if (!UUID_RE.test(turnId)) return null;
+  const scoped = ownerSql(owner, 3);
+  const rows = await db.query<AgentTurnRow>(
+    `select ${TURN_COLUMNS}
+       from cloud_code_agent_turns
+      where session_id = $1 and id = $2 and ${scoped.clause}`,
+    [sessionId, turnId, ...scoped.params],
+  );
+  const [turn] = await attachTurnSteps(db, owner, sessionId, rows.slice(0, 1));
+  return turn ?? null;
 }
 
 function validateRepositoryUrl(value: unknown): string | null {
@@ -982,6 +1053,7 @@ interface GithubRepositoryInstallation {
   repo: string;
   fullName: string;
   verifiedRepositories: string[] | null;
+  writableRepositories: string[] | null;
 }
 
 async function resolveGithubInstallationForRepository(
@@ -1010,6 +1082,7 @@ async function resolveGithubInstallationForRepository(
     repo: parsed.repo,
     fullName: `${parsed.owner}/${parsed.repo}`,
     verifiedRepositories: match.verifiedRepositories,
+    writableRepositories: match.writableRepositories ?? null,
   };
 }
 
@@ -1051,6 +1124,16 @@ async function resolveGithubCloneCredential(
   );
   if (!match) return null;
   assertRepositoryIsVerified(match.installationId, match.verifiedRepositories, match.fullName);
+  if (Object.values(permissions).includes('write')) {
+    try {
+      assertRepositoryIsWritable(match.installationId, match.writableRepositories, match.fullName);
+    } catch (error) {
+      if (error instanceof GitHubWriteAccessError) {
+        throw new CloudCodeValidationError(error.message, error.reason);
+      }
+      throw error;
+    }
+  }
   const password = await getInstallationAccessToken(match.installationId, {
     repositories: [match.repo],
     permissions,
@@ -1232,7 +1315,7 @@ export const createCloudCodeSession = tracedCodeAction(
     }
 
     const sessionId = row.id;
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       validated.networkAccess,
@@ -1559,7 +1642,7 @@ export const runCloudCodeCommand = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -1646,7 +1729,10 @@ export const runCloudCodeCommand = tracedCodeAction(
   },
 );
 
-function validateNotebookCell(value: unknown): { code: string; language: NotebookCellLanguage } {
+export function validateNotebookCell(value: unknown): {
+  code: string;
+  language: NotebookCellLanguage;
+} {
   const record =
     typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
   const code = typeof record['code'] === 'string' ? record['code'] : '';
@@ -1709,7 +1795,7 @@ export const runCloudCodeNotebookCell = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -1793,7 +1879,7 @@ export async function writeCloudCodeNotebookFile(
   if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
-  const scope = managedCloudCodeSessionScope(
+  const scope = cloudCodeOperationScope(
     owner.userId,
     sessionId,
     claim.session.networkAccess,
@@ -1862,7 +1948,7 @@ export async function listCloudCodeNotebookFiles(
   if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
-  const scope = managedCloudCodeSessionScope(
+  const scope = cloudCodeOperationScope(
     owner.userId,
     sessionId,
     claim.session.networkAccess,
@@ -1887,8 +1973,9 @@ export async function listCloudCodeNotebookFiles(
     const entries = await executor.listFiles(claim.session.workspacePath);
     const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
     if (!released) throw new CloudCodeNotFoundError();
+    if (!entries) throw new CloudCodeUnavailableError('Sandbox files are unavailable. Try again.');
     const workspacePrefix = `${claim.session.workspacePath.replace(/\/+$/, '')}/`;
-    const files = (entries ?? [])
+    const files = entries
       .filter((entry) => !entry.isDir)
       .map((entry) => ({
         path: entry.path.startsWith(workspacePrefix)
@@ -1938,7 +2025,7 @@ export async function readCloudCodeNotebookFile(
   if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
-  const scope = managedCloudCodeSessionScope(
+  const scope = cloudCodeOperationScope(
     owner.userId,
     sessionId,
     claim.session.networkAccess,
@@ -2042,7 +2129,7 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -2068,11 +2155,17 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
       const status = await executor.git.status({ path: claim.session.workspacePath });
       if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
       if (files || parseGitPorcelainEntries(status.stdout).length > 0) {
-        const add = files
+        const chosen = files
           ? await stageChosenFiles(executor.git, claim.session.workspacePath, files, context)
-          : await executor.git.add({ path: claim.session.workspacePath, all: true });
+          : null;
+        const add =
+          chosen?.add ?? (await executor.git.add({ path: claim.session.workspacePath, all: true }));
         if (!add.ok) throw gitStepFailure('Staging changes failed', add, context);
-        const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
+        const commit = await executor.git.commit({
+          path: claim.session.workspacePath,
+          message,
+          ...(chosen ? { only: chosen.paths } : {}),
+        });
         if (!commit.ok) throw gitStepFailure('Commit failed', commit, context);
       }
       const push = await executor.git.push({
@@ -2146,7 +2239,7 @@ export const commitFileAndPushCloudCodeSession = tracedCodeAction(
     let executor: Awaited<ReturnType<typeof getE2BExecutor>> = null;
     try {
       executor = await getE2BExecutor(
-        managedCloudCodeSessionScope(
+        cloudCodeOperationScope(
           owner.userId,
           sessionId,
           claim.session.networkAccess,
@@ -2202,16 +2295,14 @@ async function stageChosenFiles(
   workspacePath: string,
   files: readonly string[],
   context: { userId: string; sessionId: string },
-): Promise<CommandExecutionResult> {
+): Promise<{ add: CommandExecutionResult; paths: string[] }> {
   const status = await git.status({ path: workspacePath });
   if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
   const chosen = selectChangedEntries(status.stdout, files);
-  return git.add({
-    path: workspacePath,
-    files: chosen.flatMap((entry) =>
-      entry.originalPath ? [entry.originalPath, entry.path] : [entry.path],
-    ),
-  });
+  const paths = chosen.flatMap((entry) =>
+    entry.originalPath ? [entry.originalPath, entry.path] : [entry.path],
+  );
+  return { add: await git.add({ path: workspacePath, files: paths }), paths };
 }
 
 export const discardCloudCodeSessionChanges = tracedCodeAction(
@@ -2235,7 +2326,7 @@ export const discardCloudCodeSessionChanges = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -2482,7 +2573,7 @@ export const readCloudCodeSessionChanges = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,

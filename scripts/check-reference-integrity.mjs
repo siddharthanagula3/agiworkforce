@@ -18,6 +18,7 @@ import {
   resolveReference,
   workspaceFiles,
 } from './lib/comment-scan.mjs';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const WRITE_BASELINE = process.argv.includes('--write-baseline');
 const AS_JSON = process.argv.includes('--json');
@@ -130,6 +131,7 @@ function ignoredPaths(candidates) {
   const sourceOf = ignoreQueryMap(candidates);
   try {
     const output = execFileSync('git', ['check-ignore', '--stdin'], {
+      maxBuffer: GIT_MAX_BUFFER,
       cwd: REPO_ROOT,
       encoding: 'utf8',
       input: [...sourceOf.keys()].join('\n'),

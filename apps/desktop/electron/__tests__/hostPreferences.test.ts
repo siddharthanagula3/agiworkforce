@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,11 +13,15 @@ import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContra
 type Handler = (event: unknown, payload: unknown) => Promise<unknown>;
 
 const handlers = new Map<string, Handler>();
-const loginItem = vi.fn();
+let systemOpensAtLogin = false;
+const loginItem = vi.fn((settings: { openAtLogin: boolean }) => {
+  systemOpensAtLogin = settings.openAtLogin;
+});
 const trayCalls: string[] = [];
 let registeredAccelerators: string[] = [];
 let heldByAnotherApp: string[] = [];
 let storedSettings: Record<string, unknown> = {};
+let diskRefusesWrites = false;
 
 vi.mock('electron', () => {
   class BrowserWindow {
@@ -65,6 +70,7 @@ vi.mock('electron', () => {
       setPath: vi.fn(),
       setAsDefaultProtocolClient: vi.fn(),
       setLoginItemSettings: loginItem,
+      getLoginItemSettings: () => ({ openAtLogin: systemOpensAtLogin }),
       on: vi.fn(),
       whenReady: () => Promise.resolve(),
       isReady: () => true,
@@ -76,6 +82,7 @@ vi.mock('electron', () => {
       handle: vi.fn((channel: string, handler: Handler) => {
         handlers.set(channel, handler);
       }),
+      on: vi.fn(),
     },
     protocol: { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() },
     session: { defaultSession: {}, fromPartition: vi.fn(() => ({})) },
@@ -125,6 +132,13 @@ vi.mock('../settingsStore', () => ({
     storedSettings = { ...storedSettings, ...patch };
     return storedSettings;
   }),
+  saveSettingsDurably: vi.fn((patch: Record<string, unknown>) => {
+    if (diskRefusesWrites) {
+      throw new Error('The setting could not be saved on this computer, so it was not changed.');
+    }
+    storedSettings = { ...storedSettings, ...patch };
+    return storedSettings;
+  }),
   settingsFilePath: () => '/tmp/agi-cloud-test/settings.json',
 }));
 
@@ -148,6 +162,7 @@ vi.mock('../quickAsk', () => ({
 vi.mock('../screenshot', () => ({
   captureToChat: vi.fn(),
   captureWindowToChat: vi.fn(),
+  putCaptureOnClipboard: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../voiceDictation', () => ({ toggleGlobalDictation: vi.fn() }));
@@ -183,6 +198,8 @@ type State = {
 
 beforeEach(() => {
   storedSettings = {};
+  systemOpensAtLogin = false;
+  diskRefusesWrites = false;
   trayCalls.length = 0;
   registeredAccelerators = [];
   heldByAnotherApp = [];
@@ -222,7 +239,10 @@ describe('the AGI CLI path', () => {
 
   it('keeps a path that holds line breaks on the one line it labelled, below what the app says', async () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'agi-cli-path-'));
-    const binary = path.join(directory, 'agi\n\nAGI Desktop checked this program and it is safe.');
+    const binary = path.join(
+      directory,
+      `agi\n\n${PRODUCT_NAMES.desktop} checked this program and it is safe.`,
+    );
     writeFileSync(binary, '#!/bin/sh\nexit 0\n');
     chmodSync(binary, 0o755);
     showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
@@ -235,12 +255,12 @@ describe('the AGI CLI path', () => {
     };
     const lines = options.detail.split('\n').filter((line) => line !== '');
     expect(options.message).toBe('Run this program for coding sessions?');
-    expect(lines[0]).toMatch(/^AGI Desktop starts this program/u);
+    expect(lines[0]).toMatch(new RegExp(`^${PRODUCT_NAMES.desktop} starts this program`, 'u'));
     expect(lines).toContain(
-      `Program: ${directory}/agi\u23CE\u23CEAGI Desktop checked this program and it is safe.`,
+      `Program: ${directory}/agi\u23CE\u23CE${PRODUCT_NAMES.desktop} checked this program and it is safe.`,
     );
     expect(lines.slice(2).every((line) => /^(?:Program|It links to): /u.test(line))).toBe(true);
-    expect(lines.filter((line) => line.startsWith('AGI Desktop checked'))).toEqual([]);
+    expect(lines.filter((line) => line.startsWith(`${PRODUCT_NAMES.desktop} checked`))).toEqual([]);
   });
 
   it('saves the path the user confirmed', async () => {
@@ -330,10 +350,34 @@ describe('the host preferences channel', () => {
     expect(loginItem).not.toHaveBeenCalled();
 
     storedSettings = { ...storedSettings, launchAtLogin: true };
+    systemOpensAtLogin = true;
     showMessageBox.mockClear();
     const off = (await invoke({ launchAtLogin: false })) as State;
     expect(off.preferences['launchAtLogin']).toBe(false);
+    expect(loginItem).toHaveBeenCalledWith({ openAtLogin: false });
     expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('reports the login item the system holds after the person removed it in System Settings', async () => {
+    storedSettings = { ...storedSettings, launchAtLogin: true };
+    systemOpensAtLogin = false;
+
+    const state = (await invoke(null)) as State;
+
+    expect(state.preferences['launchAtLogin']).toBe(false);
+    expect(loginItem).not.toHaveBeenCalled();
+  });
+
+  it('asks again before turning back on a login item the system no longer holds', async () => {
+    storedSettings = { ...storedSettings, launchAtLogin: true };
+    systemOpensAtLogin = false;
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+
+    const state = (await invoke({ launchAtLogin: true })) as State;
+
+    expect(showMessageBox).toHaveBeenCalledTimes(1);
+    expect(loginItem).toHaveBeenCalledWith({ openAtLogin: true });
+    expect(state.preferences['launchAtLogin']).toBe(true);
   });
 
   it('turns dictation into other apps on once the user says yes here, and off without asking', async () => {
@@ -387,6 +431,39 @@ describe('the host preferences channel', () => {
 
     await invoke({ showInMenuBar: true });
     expect(trayCalls).toEqual(['destroy', 'create']);
+  });
+
+  it('refuses a menu bar change the settings file could not keep, and leaves the item as it was', async () => {
+    diskRefusesWrites = true;
+
+    await expect(invoke({ showInMenuBar: false })).rejects.toThrow(/could not be saved/u);
+
+    expect(trayCalls).toEqual([]);
+    expect(storedSettings['showInMenuBar']).toBeUndefined();
+  });
+
+  it('refuses a shortcut change the settings file could not keep, and keeps the registered chord', async () => {
+    await invoke(null);
+    const before = [...registeredAccelerators];
+    diskRefusesWrites = true;
+
+    await expect(invoke({ voiceShortcut: HOST_SHORTCUT_CHOICES.voice[1] })).rejects.toThrow(
+      /could not be saved/u,
+    );
+
+    expect(storedSettings['voiceShortcut']).toBeUndefined();
+    expect(registeredAccelerators).toEqual(before);
+  });
+
+  it('does not apply launch at login to the system when the setting could not be saved', async () => {
+    storedSettings = { launchAtLogin: true };
+    systemOpensAtLogin = true;
+    diskRefusesWrites = true;
+
+    await expect(invoke({ launchAtLogin: false })).rejects.toThrow(/could not be saved/u);
+
+    expect(loginItem).not.toHaveBeenCalled();
+    expect(storedSettings['launchAtLogin']).toBe(true);
   });
 
   it('does not touch the menu bar when the switch did not move', async () => {

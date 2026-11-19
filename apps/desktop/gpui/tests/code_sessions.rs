@@ -1,12 +1,10 @@
 use agiworkforce_desktop_gpui::code_sessions::{
-    accept_delete, accept_rename, accept_search, delete_params, discard_params, remove_thread,
-    rename_params, replace_thread, search_params, KeptArchives,
+    accept_delete, accept_rename, delete_params, discard_params, remove_thread, rename_params,
+    replace_thread, row_label, KeptArchives,
 };
 use agiworkforce_protocol::developer_session::{
     AcknowledgedResponse, DeveloperSessionSource, DeveloperSessionTrustMode, ThreadDeleteResponse,
-    ThreadRenameResponse, ThreadSearchHit, ThreadSearchMatch, ThreadSearchResponse, ThreadStatus,
-    ThreadSummary, THREAD_SEARCH_DEFAULT_LIMIT, THREAD_SEARCH_MAX_LIMIT,
-    THREAD_SEARCH_QUERY_MAX_CHARS, THREAD_TITLE_MAX_CHARS,
+    ThreadRenameResponse, ThreadStatus, ThreadSummary, THREAD_TITLE_MAX_CHARS,
 };
 
 fn thread(id: &str, title: &str) -> ThreadSummary {
@@ -31,61 +29,14 @@ fn thread(id: &str, title: &str) -> ThreadSummary {
 }
 
 #[test]
-fn search_rejects_empty_nul_and_overlong_queries_and_bounds_the_page() {
-    assert!(search_params("  ", false).is_err());
-    assert!(search_params("bad\0query", false).is_err());
-    assert!(search_params(&"x".repeat(THREAD_SEARCH_QUERY_MAX_CHARS + 1), true).is_err());
-    let params = search_params("  Tokyo session  ", true).unwrap();
-    assert_eq!(params.query, "Tokyo session");
-    assert_eq!(params.limit, Some(THREAD_SEARCH_DEFAULT_LIMIT));
-    assert!(params.include_archived);
-}
-
-#[test]
-fn search_hits_need_a_session_and_a_real_match() {
-    let hit = ThreadSearchHit {
-        thread: thread("session", "Tokyo"),
-        title_matched: false,
-        matches: vec![ThreadSearchMatch {
-            message_index: 1,
-            role: "user".into(),
-            snippet: "Tokyo plan".into(),
-        }],
-    };
-    let accepted = accept_search(ThreadSearchResponse {
-        hits: vec![hit.clone()],
-    })
-    .unwrap();
-    assert_eq!(accepted, vec![hit]);
-    assert!(accept_search(ThreadSearchResponse {
-        hits: vec![ThreadSearchHit {
-            thread: thread("", "Tokyo"),
-            title_matched: true,
-            matches: Vec::new(),
-        }],
-    })
-    .is_err());
-    assert!(accept_search(ThreadSearchResponse {
-        hits: vec![ThreadSearchHit {
-            thread: thread("session", "Tokyo"),
-            title_matched: false,
-            matches: vec![ThreadSearchMatch {
-                message_index: 0,
-                role: "user".into(),
-                snippet: String::new(),
-            }],
-        }],
-    })
-    .is_err());
-    let too_many = vec![
-        ThreadSearchHit {
-            thread: thread("session", "Tokyo"),
-            title_matched: true,
-            matches: Vec::new(),
-        };
-        THREAD_SEARCH_MAX_LIMIT as usize + 1
-    ];
-    assert!(accept_search(ThreadSearchResponse { hits: too_many }).is_err());
+fn archived_sessions_are_labelled_in_the_list_and_in_search_results() {
+    let mut archived = thread("session", "Tokyo");
+    archived.status = ThreadStatus::Archived;
+    assert_eq!(row_label(&archived, "Tokyo".into()), "Archived: Tokyo");
+    assert_eq!(
+        row_label(&thread("session", "Tokyo"), "Tokyo · plan".into()),
+        "Tokyo · plan"
+    );
 }
 
 #[test]

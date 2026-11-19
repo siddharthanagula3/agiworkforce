@@ -61,4 +61,29 @@ describe('connector capability cache isolation', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('never delivers the previous account’s catalog to a panel that stays mounted', async () => {
+    let releaseFirst!: (value: unknown) => void;
+    const firstBody = new Promise((resolve) => {
+      releaseFirst = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: () => firstBody })
+      .mockResolvedValueOnce({ ok: true, json: async () => catalog('Second account') });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const panel = renderHook(() => useConnectorCapabilities('shared-ref'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    act(() => invalidateConnectorCapabilityCatalog());
+    await act(async () => {
+      releaseFirst(catalog('First account'));
+    });
+
+    await waitFor(() =>
+      expect(panel.result.current.catalog?.connectorLabel).toBe('Second account'),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

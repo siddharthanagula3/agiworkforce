@@ -416,3 +416,162 @@ describe('a connector sign-in started on the phone', () => {
     expect(result).toMatchObject({ kind: 'oauth-required', appReturn: true });
   });
 });
+
+describe('an operation scope retires work whose owner changed during the policy read', () => {
+  class OwnerChanged extends Error {}
+
+  function ownerScope() {
+    let current = true;
+    return {
+      retire: () => {
+        current = false;
+      },
+      scope: {
+        assertCurrent() {
+          if (!current) throw new OwnerChanged('owner changed');
+        },
+      },
+    };
+  }
+
+  function delayedPolicyRuntime(options?: { failPolicy?: boolean }) {
+    const calls: Call[] = [];
+    let settlePolicy!: () => void;
+    const policySettled = new Promise<void>((resolve) => {
+      settlePolicy = resolve;
+    });
+    const runtime = createConnectorRuntime({
+      surface: 'mobile',
+      endpoints: ENDPOINTS,
+      http: {
+        async get(path) {
+          calls.push({ method: 'GET', path });
+          if (path === ENDPOINTS.policy) {
+            await policySettled;
+            if (options?.failPolicy) throw new OwnerChanged('stale response');
+            return { organizationId: 'org_1', configured: false, policy: null };
+          }
+          return { connectorId: PERMITTED, authorizeUrl: 'https://provider.example/authorize' };
+        },
+        async post(path) {
+          calls.push({ method: 'POST', path });
+          return { connector: { id: 'x', shortId: 'x', name: 'x', url: 'https://x' } };
+        },
+        async put() {
+          return {};
+        },
+        async delete() {
+          return {};
+        },
+      },
+    });
+    return { runtime, calls, settlePolicy };
+  }
+
+  const FORM = { name: 'internal', url: 'https://mcp.example.com/sse', authToken: 'secret' };
+
+  for (const failPolicy of [false, true]) {
+    const label = failPolicy ? 'a failed' : 'a settled';
+
+    it(`dispatches no custom-connector POST when ${label} policy read lands after the owner retired`, async () => {
+      const { runtime, calls, settlePolicy } = delayedPolicyRuntime({ failPolicy });
+      const { scope, retire } = ownerScope();
+
+      const pending = runtime.addCustomConnector(FORM, scope);
+      retire();
+      settlePolicy();
+
+      await expect(pending).rejects.toBeInstanceOf(OwnerChanged);
+      expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
+    });
+
+    it(`starts no connect POST or sign-in when ${label} policy read lands after the owner retired`, async () => {
+      const { runtime, calls, settlePolicy } = delayedPolicyRuntime({ failPolicy });
+      const { scope, retire } = ownerScope();
+
+      const pending = runtime.connect(PERMITTED, undefined, scope);
+      retire();
+      settlePolicy();
+
+      await expect(pending).rejects.toBeInstanceOf(OwnerChanged);
+      expect(calls.filter((call) => call.path !== ENDPOINTS.policy)).toEqual([]);
+    });
+
+    it(`starts no sign-in when ${label} policy read lands after the owner retired`, async () => {
+      const { runtime, calls, settlePolicy } = delayedPolicyRuntime({ failPolicy });
+      const { scope, retire } = ownerScope();
+
+      const pending = runtime.startOAuth(PERMITTED, scope);
+      retire();
+      settlePolicy();
+
+      await expect(pending).rejects.toBeInstanceOf(OwnerChanged);
+      expect(calls.filter((call) => call.path !== ENDPOINTS.policy)).toEqual([]);
+    });
+  }
+
+  it('still dispatches the custom-connector POST while the owner is current', async () => {
+    const { runtime, calls, settlePolicy } = delayedPolicyRuntime();
+    const { scope } = ownerScope();
+
+    const pending = runtime.addCustomConnector(FORM, scope);
+    settlePolicy();
+
+    await expect(pending).resolves.toMatchObject({ shortId: 'x' });
+    expect(calls.filter((call) => call.method === 'POST')).toEqual([
+      { method: 'POST', path: ENDPOINTS.custom },
+    ]);
+  });
+
+  it('does not let a policy read started before invalidation repopulate the cache', async () => {
+    let reads = 0;
+    let settleFirst!: () => void;
+    const firstSettled = new Promise<void>((resolve) => {
+      settleFirst = resolve;
+    });
+    const runtime = createConnectorRuntime({
+      surface: 'mobile',
+      endpoints: ENDPOINTS,
+      http: {
+        async get() {
+          reads += 1;
+          if (reads === 1) {
+            await firstSettled;
+            throw new OwnerChanged('stale response');
+          }
+          return {
+            organizationId: 'org_1',
+            configured: true,
+            policy: {
+              allowedConnectors: [],
+              blockedConnectors: [BLOCKED],
+              allowCustomConnectors: false,
+              allowedPlugins: [],
+              blockedPlugins: [],
+              allowedMcpHosts: [],
+              updatedAt: '2026-09-17T00:00:00.000Z',
+            },
+          };
+        },
+        async post() {
+          return {};
+        },
+        async put() {
+          return {};
+        },
+        async delete() {
+          return {};
+        },
+      },
+    });
+
+    const retired = runtime.loadPolicy();
+    runtime.invalidatePolicy();
+    settleFirst();
+    await expect(retired).resolves.toBeNull();
+
+    const decision = await runtime.checkConnector(BLOCKED);
+    expect(decision.allowed).toBe(false);
+    expect(reads).toBe(2);
+  });
+});

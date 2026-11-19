@@ -6,11 +6,36 @@ import {
   openAIWireRequestToChatRequest,
   paragraphBreakBetween,
 } from '../openai-wire-compat';
+import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '../system-prompt-cache-boundary';
 
 const NOW = () => 1_750_000_000_000;
 const FIXTURE_MODEL_ID = 'fixture-wire-model';
 
 describe('openAIWireRequestToChatRequest', () => {
+  it('keeps a system message sent mid-conversation out of the cached system prefix', () => {
+    const history = [
+      { role: 'system' as const, content: 'agent prompt' },
+      { role: 'user' as const, content: 'explain' },
+      { role: 'assistant' as const, content: 'a task CLI' },
+    ];
+    const without = openAIWireRequestToChatRequest({
+      model: FIXTURE_MODEL_ID,
+      messages: [...history, { role: 'user', content: 'fix it' }],
+    });
+    const withLater = openAIWireRequestToChatRequest({
+      model: FIXTURE_MODEL_ID,
+      messages: [
+        ...history,
+        { role: 'system', content: '<attached_files/>' },
+        { role: 'user', content: 'fix it' },
+      ],
+    });
+
+    expect(without.system).toBe('agent prompt');
+    expect(withLater.system).toBe(`agent prompt${SYSTEM_PROMPT_CACHE_BOUNDARY}<attached_files/>`);
+    expect(withLater.messages).toEqual(without.messages);
+  });
+
   it('extracts system, maps tools and tool_choice, carries sampling params', () => {
     const req = openAIWireRequestToChatRequest({
       model: FIXTURE_MODEL_ID,

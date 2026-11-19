@@ -77,7 +77,7 @@ describe('purgeSoftDeletedResources', () => {
     expect(media?.skippedReason).toContain('cron/purge-deleted-media');
 
     const knowledge = result.tables.find((entry) => entry.table === 'project_knowledge_files');
-    expect(knowledge?.skippedReason).toContain('no sweep deletes those objects yet');
+    expect(knowledge?.skippedReason).toContain('cron/purge-deleted-media');
 
     const project = result.tables.find((entry) => entry.table === 'user_projects');
     expect(project?.skippedReason).toContain('project_knowledge_files');
@@ -110,7 +110,7 @@ describe('purgeSoftDeletedResources', () => {
     };
     for (const call of calls) {
       const table = tableOf(call.sql) || /from public\.(\w+) candidate/u.exec(call.sql)?.[1] || '';
-      expect(call.sql).toContain('legal_hold_custodians');
+      expect(call.sql).toContain('public.legal_hold_preserves(');
       expect(call.params).toContain(store[table]);
     }
   });

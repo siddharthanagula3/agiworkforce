@@ -1,3 +1,4 @@
+import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MemoryWindow } from '@/features/marketing/components/FeatureScenes';
@@ -86,8 +87,7 @@ export default function MemoryFeaturePage() {
               rows={[
                 {
                   label: 'Add',
-                  value:
-                    'A box above the list takes up to 280 characters. Press Add and the fact appears in the list straight away.',
+                  value: `A box above the list takes up to ${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters. Press Add and the fact appears in the list straight away.`,
                 },
                 {
                   label: 'Edit',

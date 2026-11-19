@@ -15,6 +15,10 @@ import {
 } from '@/lib/services/managed-memory-context-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
+  buildManagedComputeAccessGateResponse,
+  evaluateManagedComputeWorkspaceAccess,
+} from '@/lib/services/managed-compute-access';
+import {
   generateMemorySummary,
   memorySummaryFingerprint,
   readCachedMemorySummary,
@@ -71,6 +75,13 @@ async function handleCreateSummary(request: NextRequest) {
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const memories = await readMemories(db, userId, organizationId ?? null);
+  if (memories.length > 0) {
+    const access = await evaluateManagedComputeWorkspaceAccess(db, userId, 'web', {
+      organizationId: organizationId ?? null,
+    });
+    const gateResponse = buildManagedComputeAccessGateResponse(access);
+    if (gateResponse) return gateResponse;
+  }
   const planTier = await resolveEntitledPlanTier(db, userId, {
     workspaceOrganizationId: organizationId ?? null,
   });

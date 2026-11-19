@@ -1077,7 +1077,7 @@
     "item": "bottom-sheet",
     "surface": "apps/mobile",
     "status": "built",
-    "evidence": "apps/mobile/components/ui/BottomSheet.tsx:14 wraps @gorhom/bottom-sheet as a shared BottomSheet component; consumed by apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx, AddToChatSheet.tsx, ConversationExportSheet.tsx, apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx, apps/mobile/src/features/voice/components/VoiceSelector.tsx and others reached from live screens (models.tsx, chat/[id].tsx)."
+    "evidence": "Mobile sheets use @gorhom/bottom-sheet directly: apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx, AddToChatSheet.tsx, apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx and apps/mobile/src/features/voice/components/VoicePickerSheet.tsx, reached from live screens (models.tsx, chat/[id].tsx)."
   },
   {
     "item": "pull-to-refresh",

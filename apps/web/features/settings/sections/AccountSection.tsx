@@ -23,8 +23,16 @@ import {
   isBillingPlanTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
-import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
+import {
+  hasLiveBillingRelationship,
+  subscriptionAccessRank,
+} from '@/lib/services/subscription-access-policy';
 import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
+import {
+  STORE_BILLING_NAME,
+  STORE_SUBSCRIPTION_MANAGEMENT_URL,
+  isStoreBillingSource,
+} from '@/lib/billing/store-subscription-management';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
@@ -157,7 +165,7 @@ const rowLabelStyle: CSSProperties = {
 };
 
 const rowHintStyle: CSSProperties = {
-  fontSize: 14,
+  fontSize: 12,
   color: 'var(--text-3)',
   margin: 'var(--space-1) 0 0',
 };
@@ -366,8 +374,8 @@ export function AccountSection({
   const deleteAccountMutation = useDeleteAccount();
 
   const handleDeleteAccount = useCallback(() => {
-    if (!permitsDeletionAction(deleteStatusSnapshot, 'schedule')) return;
-    deleteAccountMutation.mutate();
+    if (!deleteStatusSnapshot || !permitsDeletionAction(deleteStatusSnapshot, 'schedule')) return;
+    deleteAccountMutation.mutate(deleteStatusSnapshot);
   }, [deleteAccountMutation, deleteStatusSnapshot]);
 
   const handleDeleteSuccessContinue = useCallback(() => {
@@ -393,10 +401,18 @@ export function AccountSection({
   const billingInitialized = useBillingStore((s) => s.initialized);
   const livePaidPlan = livePaidPlanOf(useBillingStore((s) => s.subscription));
   const livePlanLabel = livePaidPlan ? planLabelOf(livePaidPlan) : null;
-  const livePlanEnds = livePaidPlan?.cancel_at_period_end
+  const livePlanEnds = livePaidPlan
     ? formatBillingDateFromSeconds(livePaidPlan.current_period_end ?? null)
     : null;
-  const deleteBlockedByPlan = livePaidPlan !== null;
+  const deleteBlockedByPlan =
+    livePaidPlan !== null && subscriptionAccessRank(livePaidPlan.status) !== 2;
+  const endingPaidPlan = !deleteBlockedByPlan && livePaidPlan?.cancel_at_period_end === true;
+  const renewingPlanSource =
+    livePaidPlan && !deleteBlockedByPlan && !endingPaidPlan
+      ? (livePaidPlan.subscription_source ?? null)
+      : null;
+  const renewingStore = isStoreBillingSource(renewingPlanSource) ? renewingPlanSource : null;
+  const deletedReceiptStore = deleteAccountMutation.data?.storeBilling ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -488,27 +504,31 @@ export function AccountSection({
                 hint={
                   deleteBlockedByPlan ? (
                     <span data-testid="delete-account-plan-note">
-                      {livePaidPlan?.cancel_at_period_end ? (
-                        `You can delete your account once your ${livePlanLabel} plan ends${livePlanEnds ? ` on ${livePlanEnds}` : ''}.`
-                      ) : (
-                        <>
-                          {`Cancel your ${livePlanLabel} plan in `}
-                          <SettingsSectionLink
-                            section="billing"
-                            style={{
-                              color: 'var(--text-1)',
-                              textDecoration: 'underline',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Billing
-                          </SettingsSectionLink>
-                          {' before deleting your account.'}
-                        </>
-                      )}
+                      {`A ${livePlanLabel} payment is still being collected. You can delete once it settles.`}
+                    </span>
+                  ) : endingPaidPlan ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting ends your cancelled ${livePlanLabel} plan at erasure${livePlanEnds ? `, not ${livePlanEnds}` : ''}. Unused time is not refunded.`}
+                    </span>
+                  ) : renewingStore ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting does not cancel your ${livePlanLabel} plan. ${STORE_BILLING_NAME[renewingStore]} keeps charging until you `}
+                      <a
+                        href={STORE_SUBSCRIPTION_MANAGEMENT_URL[renewingStore]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+                      >
+                        cancel it there
+                      </a>
+                      .
+                    </span>
+                  ) : renewingPlanSource === 'stripe' ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting stops your ${livePlanLabel} plan renewing and ends it at erasure${livePlanEnds ? `, not ${livePlanEnds}` : ''}. Unused time is not refunded.`}
                     </span>
                   ) : (
-                    'Schedule permanent account deletion. You can cancel before the cancellation deadline.'
+                    'Schedule permanent account deletion. You can cancel before the deadline.'
                   )
                 }
               >
@@ -570,7 +590,7 @@ export function AccountSection({
                 label="User ID"
                 value={userId}
                 copyLabel="Copy user ID"
-                hint="Your account identifier. Share with support when reporting issues."
+                hint="Share this with support when reporting a problem."
               />
             </div>
 
@@ -592,7 +612,7 @@ export function AccountSection({
                   label="Organization ID"
                   value={organizationId}
                   copyLabel="Copy organization ID"
-                  hint="Identifies your workspace. Support will ask for this before anything workspace-wide."
+                  hint="Support asks for this before workspace-wide changes."
                 />
               </div>
             ) : null}
@@ -835,7 +855,7 @@ export function AccountSection({
             <p
               style={{
                 padding: 'var(--space-3) 0 0',
-                fontSize: 14,
+                fontSize: 12,
                 color: 'var(--text-3)',
                 margin: 0,
               }}
@@ -892,6 +912,17 @@ export function AccountSection({
                   sign out.
                 </p>
               )}
+              {deletedReceiptStore && (
+                <a
+                  data-testid="delete-account-store-billing-link"
+                  href={deletedReceiptStore.manageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 14, color: 'var(--text-1)', textDecoration: 'underline' }}
+                >
+                  {`Cancel your subscription in ${STORE_BILLING_NAME[deletedReceiptStore.store]}`}
+                </a>
+              )}
               <AlertDialogFooter>
                 <AlertDialogAction
                   data-testid="delete-account-success-continue"
@@ -911,9 +942,10 @@ export function AccountSection({
                 <AlertDialogDescription>
                   This schedules your account and Cloud chats, projects, memory and artifacts for
                   permanent deletion. You can cancel before the deadline shown after scheduling.
-                  Erasure is processed after that deadline and may take longer. Choose Continue
-                  after scheduling to sign out. If you change your mind, sign back in and cancel
-                  from Settings &gt; Account before the cancellation deadline.
+                  Erasure is processed after that deadline and may take longer. Anything the law or
+                  an active legal hold requires us to keep is kept. Choose Continue after scheduling
+                  to sign out. If you change your mind, sign back in and cancel from Settings &gt;
+                  Account before the cancellation deadline.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">

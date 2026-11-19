@@ -9,6 +9,7 @@ import {
   Prose,
 } from '@/features/marketing/components/system';
 import {
+  BROWSER_BRIDGE_DEFAULT_PORT,
   CONNECTORS_COMING_SOON_DETAIL,
   CONNECTORS_COMING_SOON_MESSAGE,
   connectorsReleased,
@@ -45,7 +46,7 @@ const PATTERNS = [
   {
     meta: 'Bridge',
     title: 'Native messaging bridge',
-    body: `The Chrome side panel can pair with Desktop on localhost:8787 for selections, captures, and queued messages. Panel chat remains Cloud. ${BRIDGE_SURFACE_STATES}`,
+    body: `The Chrome side panel pairs with Desktop over loopback on localhost:${BROWSER_BRIDGE_DEFAULT_PORT}, then hands it selections, captures, and queued messages through native messaging. Panel chat remains Cloud. ${BRIDGE_SURFACE_STATES}`,
   },
   {
     meta: 'Keys',
@@ -147,7 +148,7 @@ export default function IntegrationsPage() {
                 },
                 {
                   label: 'Local runtimes',
-                  value: `${CLI_LOCAL_RUNTIMES.label} in the CLI. Free, offline-capable after setup, no account required. Desktop is cloud only. ${CLI_AVAILABILITY_NOTE}`,
+                  value: `${CLI_LOCAL_RUNTIMES.label} in the CLI. Free, offline-capable after setup, no account required. Desktop chat is cloud only; Desktop local coding sessions reach them through the CLI. ${CLI_AVAILABILITY_NOTE}`,
                 },
                 {
                   label: 'MCP transports',
@@ -155,7 +156,7 @@ export default function IntegrationsPage() {
                 },
                 {
                   label: 'Native messaging',
-                  value: `Chrome MV3 extension to Desktop on localhost:8787. ${BRIDGE_SURFACE_STATES}`,
+                  value: `Chrome MV3 extension to Desktop, paired over loopback on localhost:${BROWSER_BRIDGE_DEFAULT_PORT}. ${BRIDGE_SURFACE_STATES}`,
                 },
                 {
                   label: 'Editor',

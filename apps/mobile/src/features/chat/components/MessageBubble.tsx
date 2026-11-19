@@ -25,6 +25,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  ArrowRight,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
@@ -90,8 +91,13 @@ import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyActio
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
-import { motion, typeScale } from '@/src/ui/theme/tokens';
-import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
+import { chatTypography, motion, typeScale } from '@/src/ui/theme/tokens';
+import {
+  getDisplayName,
+  getModelById,
+  getModelByIdForCloudAccess,
+  isAutoMode,
+} from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
   getMessageStreamErrorCode,
@@ -444,20 +450,28 @@ function modelSupportsThinking(modelId?: string): boolean {
   return def?.supportsThinking !== false;
 }
 
-function getProvenance(model?: string): { provider?: string; model?: string } | null {
+function getProvenance(message: ChatMessage): { provider?: string; model?: string } | null {
+  const { model, metadata } = message;
   if (!model) return null;
-  if (isAutoMode(model)) {
-    return { provider: 'Local Mode', model: 'Auto' };
+  const cloudTurn =
+    typeof metadata?.requestedModel === 'string' || typeof metadata?.resolvedModel === 'string';
+  const resolved =
+    typeof metadata?.resolvedModel === 'string' && !isAutoMode(metadata.resolvedModel)
+      ? metadata.resolvedModel
+      : undefined;
+  const answeredBy = resolved ?? model;
+  if (isAutoMode(answeredBy)) {
+    return cloudTurn ? { provider: 'AGI Cloud' } : { provider: 'Local Mode', model: 'Auto' };
   }
 
-  const def = getModelById(model);
-  if (!def) return null;
+  const def = getModelByIdForCloudAccess(answeredBy, true);
+  if (!def) return cloudTurn ? { provider: 'AGI Cloud' } : null;
 
   if (def.surface === 'local') {
     return { provider: 'Local Mode', model: def.name };
   }
 
-  return { provider: 'AGI Cloud' };
+  return { provider: 'AGI Cloud', model: def.name };
 }
 
 function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
@@ -480,6 +494,7 @@ interface MessageBubbleProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  onContinueMessage?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
   onScheduleMessage?: (messageId: string) => void;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
@@ -487,7 +502,7 @@ interface MessageBubbleProps {
   variant?: VariantInfo;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => boolean;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
   onResolveToolApproval?: (
     messageId: string,
@@ -547,6 +562,7 @@ export const MessageBubble = memo(function MessageBubble({
   onEditImageArea,
   onDeleteImageConversation,
   onRetryWithModel,
+  onContinueMessage,
   onBranch,
   onScheduleMessage,
   variant,
@@ -629,7 +645,7 @@ export const MessageBubble = memo(function MessageBubble({
     );
     return reference.success ? reference.data.runId : undefined;
   }, [message.metadata?.cloudAgentRun]);
-  const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
+  const assistantProvenance = isAssistant ? getProvenance(message) : null;
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const routeReceipt =
     isAssistant && !message.isStreaming ? autoRouteReceipt(message.metadata) : null;
@@ -948,9 +964,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   const handleSubmitEdit = useCallback(() => {
     const trimmed = editText.trim();
-    if (trimmed && onEditMessage) {
-      onEditMessage(message.id, trimmed);
-    }
+    if (trimmed && onEditMessage && !onEditMessage(message.id, trimmed)) return;
     setEditModalVisible(false);
   }, [editText, message.id, onEditMessage, setEditModalVisible]);
 
@@ -1187,6 +1201,9 @@ export const MessageBubble = memo(function MessageBubble({
   const streamingLabel = stopping ? 'Stopping…' : reconnecting ? 'Reconnecting…' : undefined;
   const finishReason = isAssistant ? message.metadata?.finishReason : undefined;
   const stoppedByUser = !isStreamingRow && finishReason === 'stopped';
+  const offersStreamFailureModelSwitch = Boolean(
+    onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)),
+  );
   const usageLine = isAssistant && !isStreamingRow ? answerUsageLine(message.metadata) : null;
   const refusedAnswer =
     !isStreamingRow && typeof finishReason === 'string' && REFUSAL_FINISH_REASONS.has(finishReason);
@@ -1194,15 +1211,27 @@ export const MessageBubble = memo(function MessageBubble({
   const skillUsed = isUser ? sentSkillName(message.metadata) : null;
   const bodyContent = quotedReply ? quotedReply.body : displayContent;
   const inlineCitations = research ? researchSources : message.citations;
-  const contentElements = useMemo(
-    () =>
-      renderMarkdownContent(bodyContent, themeColors, {
-        highlightCode: !isStreamingRow,
-        ...(inlineCitations ? { citations: inlineCitations } : {}),
-        ...(onFollowUp ? { onFollowUp } : {}),
-      }),
-    [bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp],
-  );
+  const contentElements = useMemo(() => {
+    if (isUser) {
+      return bodyContent
+        ? [
+            <Text
+              key="user-text"
+              testID="user-message-text"
+              selectable
+              style={{ ...chatTypography.body, color: themeColors.textPrimary }}
+            >
+              {bodyContent}
+            </Text>,
+          ]
+        : [];
+    }
+    return renderMarkdownContent(bodyContent, themeColors, {
+      highlightCode: !isStreamingRow,
+      ...(inlineCitations ? { citations: inlineCitations } : {}),
+      ...(onFollowUp ? { onFollowUp } : {}),
+    });
+  }, [isUser, bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp]);
 
   const imageWidth = Math.min(width - 80, 320);
   const isGroupedMessage = !isAssistant && !canonicalActivity;
@@ -1740,56 +1769,79 @@ export const MessageBubble = memo(function MessageBubble({
                     : streamFailureNoticeText(message)
                 }
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
                   gap: 6,
                   backgroundColor: themeColors.dangerSurface,
                   borderWidth: 1,
                   borderColor: themeColors.dangerBorder,
                   borderRadius: radii.md,
                   paddingHorizontal: 10,
-                  paddingVertical: 6,
+                  paddingVertical: 8,
                   marginTop: 4,
                   alignSelf: 'flex-start',
+                  maxWidth: '100%',
                 }}
               >
-                <AlertCircle size={13} color={themeColors.agentError} />
-                <Text style={{ fontSize: typeScale.caption, color: themeColors.textSecondary }}>
-                  {streamFailureNoticeText(message)}
-                </Text>
-                {onRetryMessage && (
-                  <>
-                    <RefreshCw size={12} color={themeColors.agentError} />
-                    <Text
-                      style={{
-                        fontSize: typeScale.caption,
-                        fontWeight: '600',
-                        color: themeColors.agentError,
-                      }}
-                    >
-                      Retry
-                    </Text>
-                  </>
-                )}
-                {onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)) && (
-                  <PressableBox
-                    onPress={onSwitchModel}
-                    accessibilityRole="button"
-                    accessibilityLabel="Switch model"
-                    hitSlop={6}
-                    testID="stream-error-switch-model"
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                  <View style={{ paddingTop: 2 }}>
+                    <AlertCircle size={13} color={themeColors.agentError} />
+                  </View>
+                  <Text
+                    testID="stream-failure-notice-text"
+                    style={{
+                      flexShrink: 1,
+                      fontSize: typeScale.caption,
+                      color: themeColors.textSecondary,
+                    }}
                   >
-                    <Text
-                      style={{
-                        fontSize: typeScale.caption,
-                        fontWeight: '600',
-                        color: themeColors.agentError,
-                      }}
-                    >
-                      Switch model
-                    </Text>
-                  </PressableBox>
-                )}
+                    {streamFailureNoticeText(message)}
+                  </Text>
+                </View>
+                {onRetryMessage || offersStreamFailureModelSwitch ? (
+                  <View
+                    testID="stream-failure-notice-actions"
+                    style={{
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 12,
+                      paddingLeft: 19,
+                    }}
+                  >
+                    {onRetryMessage && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <RefreshCw size={12} color={themeColors.agentError} />
+                        <Text
+                          style={{
+                            fontSize: typeScale.caption,
+                            fontWeight: '600',
+                            color: themeColors.agentError,
+                          }}
+                        >
+                          Retry
+                        </Text>
+                      </View>
+                    )}
+                    {offersStreamFailureModelSwitch && (
+                      <PressableBox
+                        onPress={onSwitchModel}
+                        accessibilityRole="button"
+                        accessibilityLabel="Switch model"
+                        hitSlop={6}
+                        testID="stream-error-switch-model"
+                      >
+                        <Text
+                          style={{
+                            fontSize: typeScale.caption,
+                            fontWeight: '600',
+                            color: themeColors.agentError,
+                          }}
+                        >
+                          Switch model
+                        </Text>
+                      </PressableBox>
+                    )}
+                  </View>
+                ) : null}
               </PressableBox>
             )}
 
@@ -1824,6 +1876,39 @@ export const MessageBubble = memo(function MessageBubble({
                   })
                 }
               />
+            ) : null}
+
+            {onContinueMessage && !isStreamingRow ? (
+              <PressableBox
+                onPress={() => onContinueMessage(message.id)}
+                accessibilityRole="button"
+                accessibilityLabel="Continue generating this response"
+                testID="continue-generating"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  gap: 6,
+                  minHeight: 44,
+                  marginTop: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: themeColors.border,
+                  backgroundColor: themeColors.neutralSurface,
+                }}
+              >
+                <ArrowRight size={14} color={themeColors.textPrimary} />
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                    color: themeColors.textPrimary,
+                  }}
+                >
+                  Continue generating
+                </Text>
+              </PressableBox>
             ) : null}
 
             {provenance && (

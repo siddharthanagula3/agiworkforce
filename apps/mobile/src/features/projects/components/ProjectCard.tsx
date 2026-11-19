@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
-import { Check } from 'lucide-react-native';
+import { Check, Pin } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
@@ -11,6 +11,8 @@ interface ProjectCardProject {
   name: string;
   description: string;
   updatedAt: string;
+  pinned?: boolean;
+  archived?: boolean;
   iconId?: string | null;
   accentId?: string | null;
 }
@@ -47,7 +49,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
           borderWidth: 1,
           borderColor: isActive ? colors.accentBorder : colors.border,
         }}
-        accessibilityLabel={`Project: ${project.name}${isActive ? ', active' : ''}`}
+        accessibilityLabel={`Project: ${project.name}${isActive ? ', active' : ''}${project.pinned ? ', pinned' : ''}${project.archived ? ', archived' : ''}`}
         accessibilityRole="button"
         accessibilityHint="Tap to open, long press for options"
       >
@@ -65,9 +67,12 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
             >
               <Icon size={20} color={accent ?? (isActive ? colors.teal : colors.textMuted)} />
             </View>
-            <View className="flex-1">
+            <View className="flex-1 flex-row items-center gap-1.5">
+              {project.pinned ? (
+                <Pin size={12} color={colors.textMuted} fill={colors.textMuted} />
+              ) : null}
               <Text
-                className="text-[15px] font-semibold"
+                className="text-[15px] font-semibold flex-shrink"
                 style={{ color: colors.textPrimary }}
                 numberOfLines={1}
               >

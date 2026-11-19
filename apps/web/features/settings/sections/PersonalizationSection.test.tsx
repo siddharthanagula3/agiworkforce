@@ -104,13 +104,16 @@ describe('PersonalizationSection layout', () => {
     expect(screen.queryByRole('slider')).toBeNull();
   });
 
-  it('draws no text smaller than 14px', async () => {
+  it('draws only explanations at 12px and no text smaller', async () => {
     const { container } = render(<PersonalizationSection />);
     await waitFor(() =>
       expect(screen.getByRole('combobox', { name: /Response style/ })).toBeEnabled(),
     );
 
-    expect(container.querySelector('[class*="text-xs"], [class*="text-[1"]')).toBeNull();
+    for (const small of container.querySelectorAll('[class*="text-xs"]')) {
+      expect(small).toHaveClass('text-muted-foreground');
+    }
+    expect(container.querySelector('[class*="text-[1"]')).toBeNull();
     expect(container.querySelector('[class*="text-caption"]')).toBeNull();
   });
 });

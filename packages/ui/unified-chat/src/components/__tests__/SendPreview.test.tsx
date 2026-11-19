@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { summarizeSendPreview, type SendPreviewPresentation } from '@agiworkforce/types';
+import {
+  PRIVACY_MODE_DISPLAY,
+  summarizeSendPreview,
+  type SendPreviewPresentation,
+} from '@agiworkforce/types';
 import { SendPreview } from '../SendPreview';
 
 const LOCAL_MODEL_LABEL = 'Local Model Fixture';
@@ -41,17 +45,17 @@ describe('SendPreview', () => {
     expect(screen.getByText(/your API key/i)).toBeDefined();
   });
 
-  it('renders the Managed gateway call-out for ManagedNative behind the disclosure', () => {
+  it('renders the Cloud gateway call-out for ManagedNative behind the disclosure', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'ManagedNative',
     });
     render(<SendPreview presentation={presentation} />);
-    expect(screen.getByText('Sent through AGI Managed gateway')).toBeDefined();
-    expect(screen.getByText('Managed')).toBeDefined();
-    expect(screen.queryByText(/managed-mode retention/i)).toBeNull();
+    expect(screen.getByText('Sent through Cloud gateway')).toBeDefined();
+    expect(screen.getByText(PRIVACY_MODE_DISPLAY.managed.shortLabel)).toBeDefined();
+    expect(screen.queryByText(/Cloud retention and access controls/i)).toBeNull();
 
     fireEvent.click(screen.getByText(/Show details/i));
-    expect(screen.getByText(/managed-mode retention/i)).toBeDefined();
+    expect(screen.getByText(/Cloud retention and access controls/i)).toBeDefined();
   });
 
   it('exposes provider-mode + stays-local data attributes for host wiring', () => {
@@ -134,7 +138,7 @@ describe('SendPreview', () => {
     });
     render(<SendPreview presentation={presentation} variant="compact" />);
 
-    expect(screen.getByText('Managed cloud')).toBeDefined();
+    expect(screen.getByText(PRIVACY_MODE_DISPLAY.managed.label)).toBeDefined();
     expect(screen.queryByText(presentation.bannerCopy)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /show send details/i }));

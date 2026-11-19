@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronRight, NotebookPen } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button, Spinner } from '@agiworkforce/ui';
+import { Button, Spinner, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   listProjectKnowledgeFiles,
@@ -133,7 +133,11 @@ function ProjectNotesSession({
     }
   };
 
-  const dirty = state.status === 'ready' && draft !== state.saved;
+  const dirty = !readOnly && state.status === 'ready' && draft !== state.saved;
+  const { dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty,
+    description: 'Your notes have not been saved. If you leave now, they will be lost.',
+  });
 
   return (
     <section
@@ -200,6 +204,7 @@ function ProjectNotesSession({
           )}
         </div>
       ) : null}
+      {discardDialog}
     </section>
   );
 }

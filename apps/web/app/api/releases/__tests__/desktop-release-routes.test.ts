@@ -362,6 +362,57 @@ describe('desktop release routes', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('serves the requested version with a cacheable response only when it is the release on offer', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      if (String(input) === CLOUD_ARM64_DMG_URL) return new Response('arm64-dmg-bytes');
+      return Response.json([cloudDesktopRelease()]);
+    });
+
+    const response = await downloadDesktop(
+      makeRequest('https://agi.example/api/download?platform=mac&arch=arm64&version=1.2.0'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+    expect(await response.text()).toBe('arm64-dmg-bytes');
+  });
+
+  it('sends a request for a superseded version back to the download page without any installer bytes', async () => {
+    fetchMock.mockImplementation(async () => Response.json([cloudDesktopRelease()]));
+
+    const response = await downloadDesktop(
+      makeRequest('https://agi.example/api/download?platform=mac&arch=arm64&version=1.1.0'),
+    );
+
+    expect(response.status).toBe(303);
+    expect(new URL(response.headers.get('location') ?? '').pathname).toBe('/download');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(fetchMock).not.toHaveBeenCalledWith(CLOUD_ARM64_DMG_URL, expect.any(Object));
+  });
+
+  it('never lets a shared cache hold the installer of an unversioned latest request', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      if (String(input) === CLOUD_ARM64_DMG_URL) return new Response('arm64-dmg-bytes');
+      return Response.json([cloudDesktopRelease()]);
+    });
+
+    const response = await downloadDesktop(
+      makeRequest('https://agi.example/api/download?platform=mac&arch=arm64'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('rejects an oversized version before fetching a release', async () => {
+    const response = await downloadDesktop(
+      makeRequest(`https://agi.example/api/download?platform=mac&version=${'9'.repeat(65)}`),
+    );
+
+    expect(response.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('preserves the download route allowlist for selected release assets', async () => {
     const untrustedUrl = `https://downloads.evil.example/${CLOUD_ARM64_DMG}`;
     fetchMock.mockResolvedValueOnce(

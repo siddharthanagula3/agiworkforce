@@ -59,7 +59,7 @@ describe('the workspace policy covers every managed-compute route', () => {
       const text = source(route);
       const at = text.indexOf('buildOrganizationPolicyGateResponse(');
       const call = text.slice(at, at + 420);
-      expect(call, `${route} must pass a surface`).toMatch(/surface:/);
+      expect(call, `${route} must pass a surface`).toMatch(/\bsurface\s*[:,]/);
     }
   });
 

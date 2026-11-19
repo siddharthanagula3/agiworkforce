@@ -6,7 +6,6 @@ import {
   BILLING_PLAN_PRICING,
   getModelsForTierAndSurface,
   managedUsageMultiplier,
-  managedUsageMultipliers,
   MIN_PURCHASABLE_SEATS,
   type BillingPlanPricing,
 } from '@agiworkforce/types';
@@ -232,7 +231,6 @@ describe('public billing truth', () => {
   it('aligns both locales with the canonical paid-plan usage ratios', () => {
     expect(managedUsageMultiplier('pro', 'basic')).toBe(5);
     expect(managedUsageMultiplier('max', 'pro')).toBe(5);
-    const topPlanOverPro = managedUsageMultipliers('max_15x', 'pro');
 
     for (const locale of ['en', 'es']) {
       const pricing = JSON.parse(
@@ -246,7 +244,7 @@ describe('public billing truth', () => {
           `${locale}/pricing.json ${key} states a usage multiple the catalog computes`,
         ).not.toMatch(/five times|cinco veces|pro-level|nivel pro|\d+x/i);
       }
-      expect(BILLING_PLAN_PRICING.max_15x.label).toBe(`Max ${topPlanOverPro?.fiveHour}x`);
+      expect(BILLING_PLAN_PRICING.max_15x.label).not.toMatch(/\d+x/i);
       expect(pricing['compareSubheading']).toContain('{{topPlan}}');
       expect(pricing['compareSubheading']).not.toMatch(/Max \d+x/i);
       for (const key of [

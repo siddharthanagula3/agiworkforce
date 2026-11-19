@@ -22,8 +22,8 @@ import {
 export type { ContentFilterResult } from '@agiworkforce/types';
 
 export const MINOR_SAFE_REFUSAL =
-  "This content isn't available in AGI for users under the minimum age in your region. " +
-  'If you believe this is an error, a parent or guardian can adjust age settings in Settings > Privacy.';
+  "Minor-safe mode is on for this device, so AGI can't help with this request. " +
+  'Settings > Parental Controls explains how this mode works.';
 
 /** Refusal shown when an adult has opted in to the stricter safety preference. */
 export const REDUCED_SENSITIVE_CONTENT_REFUSAL =

@@ -29,9 +29,8 @@ async function fetchCatalog(connectorRef: string): Promise<ConnectorCapabilityCa
       if (!response.ok) throw new Error(`Capability discovery failed (${response.status})`);
       const parsed = ConnectorCapabilityCatalogSchema.safeParse(await response.json());
       if (!parsed.success) throw new Error('Capability discovery returned invalid data');
-      if (requestGeneration === generation) {
-        cache.set(connectorRef, { value: parsed.data, fetchedAt: Date.now() });
-      }
+      if (requestGeneration !== generation) return fetchCatalog(connectorRef);
+      cache.set(connectorRef, { value: parsed.data, fetchedAt: Date.now() });
       return parsed.data;
     })
     .finally(() => {

@@ -85,6 +85,7 @@ function loadStoredFavourites(): Promise<readonly string[] | null> {
 export function useModelFavourites(): ModelFavourites {
   const [favouriteModelIds, setFavouriteModelIds] = useState<readonly string[]>([]);
   const currentRef = useRef<readonly string[]>([]);
+  const editedLocallyRef = useRef(false);
 
   const apply = useCallback((ids: readonly string[]) => {
     currentRef.current = ids;
@@ -98,7 +99,7 @@ export function useModelFavourites(): ModelFavourites {
     currentRef.current = deviceIds;
     setFavouriteModelIds(deviceIds);
     void loadStoredFavourites().then((ids) => {
-      if (cancelled || !ids) return;
+      if (cancelled || !ids || editedLocallyRef.current) return;
       apply(ids);
     });
     return () => {
@@ -112,6 +113,7 @@ export function useModelFavourites(): ModelFavourites {
       const next = previous.includes(modelId)
         ? previous.filter((id) => id !== modelId)
         : [...previous, modelId];
+      editedLocallyRef.current = true;
       apply(next);
       storedFavourites = Promise.resolve(next);
       void persistFavourites(next).then((saved) => {

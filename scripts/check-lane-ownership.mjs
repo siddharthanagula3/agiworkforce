@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -69,10 +70,7 @@ function repeatedArgValues(flagName) {
 }
 
 function gitLines(args) {
-  const result = spawnSync('git', args, {
-    cwd: root,
-    encoding: 'utf8',
-  });
+  const result = spawnSync('git', args, { maxBuffer: GIT_MAX_BUFFER, cwd: root, encoding: 'utf8' });
   if (result.status !== 0) {
     errors.push(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);
     return [];

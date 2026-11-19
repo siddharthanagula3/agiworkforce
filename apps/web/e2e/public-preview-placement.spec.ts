@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { PRODUCT_NAMES, productNameWithArticle } from '@agiworkforce/types';
 import { PUBLIC_APPROVED_FADES } from './lib/public-mask-paint';
 
 type Device =
@@ -41,27 +42,27 @@ const RATIO_TOLERANCE = 0.01;
 const EDGE_TOLERANCE_PX = 0.5;
 const SETTLE_TIMEOUT_MS = 5000;
 
-const WEB = 'Authored example of the AGI Chat interface';
-const DESKTOP = 'Authored example of the AGI Desktop app window';
+const WEB = `Authored example of the ${PRODUCT_NAMES.chat} interface`;
+const DESKTOP = `Authored example of the ${PRODUCT_NAMES.desktop} app window`;
 const CHROME = 'Authored example of the AGI side panel in Chrome';
 const SIDE_PANEL = 'Authored example of the AGI Chrome side panel';
-const EDITOR = 'Authored example of AGI Code for VS Code';
-const TERMINAL = 'Authored example of the AGI CLI in a terminal';
-const PHONE = 'Authored example of the AGI Mobile chat screen';
+const EDITOR = `Authored example of ${PRODUCT_NAMES.code} for VS Code`;
+const TERMINAL = `Authored example of the ${PRODUCT_NAMES.cli} in a terminal`;
+const PHONE = `Authored example of the ${PRODUCT_NAMES.mobile} chat screen`;
 const APPROVAL = 'Authored example of a tool waiting for approval in a chat';
 const FILE_EDIT = 'Authored example of a file edit waiting for approval in a chat';
 const ARTIFACT = 'Authored example of an artifact open beside a chat';
 const PROJECT = 'Authored example of a project page with its settings open';
-const MEMORY = 'Authored example of the Memory settings in AGI Chat';
+const MEMORY = `Authored example of the Memory settings in ${PRODUCT_NAMES.chat}`;
 const RESEARCH = 'Authored example of a research plan waiting to start';
 const CONSOLE = 'Authored example of the AGI workspace console';
-const COMPOSER = 'Authored example of the AGI Chat composer';
-const WORK_RUN = 'Authored example of an AGI Work run in AGI Chat';
+const COMPOSER = `Authored example of the ${PRODUCT_NAMES.chat} composer`;
+const WORK_RUN = `Authored example of ${productNameWithArticle('work')} run in ${PRODUCT_NAMES.chat}`;
 const IMAGE = 'Authored example of a generated image in a chat';
 const VIDEO_GENERATING = 'Authored example of a video being generated in a chat';
 const VIDEO_READY = 'Authored example of a finished video in a chat';
-const VOICE_SESSION = 'Authored example of a voice session in AGI Chat';
-const VOICE_DICTATION = 'Authored example of dictation recording in the AGI Chat composer';
+const VOICE_SESSION = `Authored example of a voice session in ${PRODUCT_NAMES.chat}`;
+const VOICE_DICTATION = `Authored example of dictation recording in the ${PRODUCT_NAMES.chat} composer`;
 const WEB_PROOF = 'Authored example of a reply with its artifact, actions and model';
 const RESEARCH_ASK = 'Authored example of a Deep Research question in the composer';
 const RESEARCH_PLAN_STEP = 'Authored example of a research plan to review before it starts';
@@ -135,7 +136,7 @@ const PLACEMENTS: Record<string, readonly Caller[]> = {
   '/chrome-extension': [hero('agi-fl-chrome-hero-title', SIDE_PANEL, 'panel')],
   '/vscode-extension': [
     hero('agi-vscode-hero-title', EDITOR, 'editor'),
-    section('agi-fl-dev-title-agi-code', TERMINAL, 'terminal'),
+    section(`agi-fl-dev-title-${PRODUCT_NAMES.code.toLowerCase()}`, TERMINAL, 'terminal'),
   ],
   '/mobile': [
     hero('agi-mobile-hero-title', PHONE, 'phone'),

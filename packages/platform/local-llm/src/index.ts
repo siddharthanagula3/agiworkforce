@@ -10,13 +10,18 @@ export {
 } from './selector';
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
+export { DOWNLOAD_PROGRESS_STEP, reportProgressBySteps } from './progress';
 export {
   tier2LoadModel,
   tier2Generate,
   tier2Release,
   tier2IsVisionReady,
   executorchVlmPresetInfo,
+  tier2IsPresetDownloaded,
+  tier2AssertPresetDownloaded,
+  Tier2ModelNotDownloadedError,
   _setLLMModuleForTesting,
+  _setPresetDownloadedCheckForTesting,
   type Tier2LoadOptions,
 } from './tier2';
 export {

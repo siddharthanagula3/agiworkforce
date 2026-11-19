@@ -30,6 +30,7 @@ jest.mock('@/src/features/chat/components/VideoPlayerModal', () => ({
 }));
 
 import { GeneratedVideo } from '@/src/features/chat/components/GeneratedVideo';
+import { ownerHandler } from '@/test-utils/ownerProps';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -123,8 +124,8 @@ describe('GeneratedVideo operation ownership', () => {
     const pending = deferred<ReturnType<typeof player>>();
     mockPrepare.mockReturnValueOnce(pending.promise);
     const screen = render(video('https://example.com/a.mp4'));
-    const play = screen.getByLabelText('Play generated video').props.onPress;
-    const save = screen.getByLabelText('Save video').props.onPress;
+    const play = ownerHandler(screen.getByLabelText('Play generated video'), 'onPress');
+    const save = ownerHandler(screen.getByLabelText('Save video'), 'onPress');
     act(() => {
       play();
       save();

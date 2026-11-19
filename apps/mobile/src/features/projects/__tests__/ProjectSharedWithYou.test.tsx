@@ -25,14 +25,18 @@ jest.mock('@/lib/safeOpenURL', () => ({
 const mockCreateConversation = jest.fn();
 const mockLoadMessages = jest.fn().mockResolvedValue(undefined);
 const mockDeleteConversation = jest.fn().mockResolvedValue(undefined);
-jest.mock('@/stores/chatStore', () => ({
-  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      createConversation: mockCreateConversation,
-      loadMessages: mockLoadMessages,
-      deleteConversation: mockDeleteConversation,
-    }),
-}));
+let mockConversations: Array<{ id: string }> = [];
+jest.mock('@/stores/chatStore', () => {
+  const state = () => ({
+    createConversation: mockCreateConversation,
+    loadMessages: mockLoadMessages,
+    deleteConversation: mockDeleteConversation,
+    conversations: mockConversations,
+  });
+  const useChatStore = (selector: (value: Record<string, unknown>) => unknown) => selector(state());
+  useChatStore.getState = state;
+  return { useChatStore };
+});
 
 jest.mock('@/services/managedCloudProjects', () => ({
   managedCloudProjects: { getProject: jest.fn() },
@@ -53,6 +57,10 @@ import {
   projectsSharedWithMe,
   type ProjectSharingOverview,
 } from '@/src/features/projects/projectSharing';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 
 const ME = 'member-1';
 const OWNER = 'owner-1';
@@ -118,9 +126,20 @@ function overview(): ProjectSharingOverview {
   };
 }
 
+function nothingShared(): ProjectSharingOverview {
+  return {
+    ...overview(),
+    sharedProjects: [],
+    sharedConversations: [],
+    sharedArtifacts: [],
+    sharedConnectors: [],
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockStorage.clear();
+  __resetCloudAccountSessionForTests();
 });
 
 type AlertButton = { text: string; style?: string; onPress?: () => void };
@@ -151,6 +170,35 @@ describe('projects shared with the member', () => {
     expect(screen.queryByText('Board pack')).toBeNull();
   });
 
+  it('stays hidden when nothing is shared and no empty message is asked for', async () => {
+    (api.get as jest.Mock).mockResolvedValue(nothingShared());
+    render(<SharedWithYouSection />);
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByTestId('projects-shared-empty')).toBeNull();
+    expect(screen.queryByTestId('projects-shared-with-you')).toBeNull();
+  });
+
+  it('shows the empty message once loading finishes when nothing is shared', async () => {
+    (api.get as jest.Mock).mockResolvedValue(nothingShared());
+    render(<SharedWithYouSection emptyMessage="Nothing is shared with you yet." />);
+
+    expect(await screen.findByText('Nothing is shared with you yet.')).toBeTruthy();
+  });
+
+  it('offers a retry instead of the empty message when shared projects cannot load', async () => {
+    (api.get as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    render(<SharedWithYouSection emptyMessage="Nothing is shared with you yet." />);
+
+    expect(await screen.findByText('Shared projects could not be loaded.')).toBeTruthy();
+    expect(screen.queryByText('Nothing is shared with you yet.')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Retry loading shared projects'));
+
+    expect(await screen.findByLabelText('Roadmap, shared by Dana. Can edit')).toBeTruthy();
+  });
+
   it('opens a shared project read-only with what is shared', async () => {
     (managedCloudProjects.getProject as jest.Mock).mockResolvedValue({
       id: 'p-open',
@@ -172,13 +220,62 @@ describe('projects shared with the member', () => {
           }
         : overview(),
     );
+    activateCloudAccount(ME);
     render(<SharedProjectScreen projectId="p-open" />);
 
     expect(await screen.findByTestId('shared-project-access')).toHaveTextContent(
       'Shared with you by Dana · Can view',
     );
     expect(screen.getByText('Use the brand voice.')).toBeTruthy();
-    expect(screen.getByText('No files in this project.')).toBeTruthy();
+    expect(await screen.findByText('No files in this project.')).toBeTruthy();
+  });
+
+  it('says the files could not be loaded, not that the project is empty, and retries in place', async () => {
+    (managedCloudProjects.getProject as jest.Mock).mockResolvedValue({
+      id: 'p-open',
+      ownerUserId: OWNER,
+      name: 'Brand book',
+      sharedAccess: 'read',
+      isOrgShared: true,
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+      allowedSurfaces: ['web'],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
+    let filesFail = true;
+    (api.get as jest.Mock).mockImplementation(async (path: string) => {
+      if (!path.includes('knowledge')) return overview();
+      if (filesFail) throw new ApiHttpError('files unavailable', 500);
+      return {
+        files: [
+          {
+            id: 'f-1',
+            projectId: 'p-open',
+            fileName: 'brand-guide.pdf',
+            mimeType: 'application/pdf',
+            byteCount: 10,
+            checksumSha256: 'a'.repeat(64),
+            sourceSurface: 'web',
+            addedByUserId: OWNER,
+            addedAt: '2026-10-01T00:00:00.000Z',
+            storageUri: 'storage://f-1',
+          },
+        ],
+      };
+    });
+    activateCloudAccount(ME);
+    render(<SharedProjectScreen projectId="p-open" />);
+
+    expect(await screen.findByText('Could not load this project’s files.')).toBeTruthy();
+    expect(screen.getByTestId('shared-project-access')).toBeTruthy();
+    expect(screen.queryByText('No files in this project.')).toBeNull();
+
+    filesFail = false;
+    fireEvent.press(screen.getByLabelText('Retry loading project files'));
+
+    expect(await screen.findByText('brand-guide.pdf')).toBeTruthy();
+    expect(screen.queryByText('Could not load this project’s files.')).toBeNull();
   });
 
   it('lists chats, artifacts and connectors others shared with me and opens them', async () => {
@@ -267,6 +364,36 @@ describe('projects shared with the member', () => {
       ?.onPress?.();
 
     await waitFor(() => expect(mockDeleteConversation).toHaveBeenCalledWith('copy-2'));
+    await waitFor(() =>
+      expect(alert.mock.calls.at(-1)?.[1]).toBe(
+        'The shared messages could not be copied, so no new conversation was kept.',
+      ),
+    );
+  });
+
+  it('does not claim the copy was discarded when it could not be deleted', async () => {
+    (api.get as jest.Mock).mockImplementation(async (path: string) =>
+      path.startsWith('/api/share/')
+        ? { title: 'Launch retro', messages: [{ role: 'user', content: 'Hi' }] }
+        : overview(),
+    );
+    (api.post as jest.Mock).mockRejectedValue(new Error('HTTP 500'));
+    mockCreateConversation.mockResolvedValue('copy-3');
+    mockConversations = [{ id: 'copy-3' }];
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    (alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>)
+      .find((button) => button.text === 'Continue in a new chat')
+      ?.onPress?.();
+
+    await waitFor(() => expect(mockDeleteConversation).toHaveBeenCalledWith('copy-3'));
+    await waitFor(() =>
+      expect(alert.mock.calls.at(-1)?.[1]).toContain('The partial copy is still in your chats'),
+    );
+    expect(alert.mock.calls.at(-1)?.[1]).not.toContain('no new conversation was kept');
+    mockConversations = [];
   });
 
   it('says an expired shared chat has expired and creates nothing', async () => {
@@ -392,5 +519,76 @@ describe('projects shared with the member', () => {
 
     expect(await screen.findByTestId('shared-project-hidden')).toBeTruthy();
     expect(useRouter().replace).toHaveBeenCalledWith('/(app)/(tabs)/projects');
+  });
+
+  describe('when the sharing overview cannot be read', () => {
+    const sharedProject = {
+      id: 'p-open',
+      ownerUserId: OWNER,
+      name: 'Brand book',
+      instructions: 'Use the brand voice.',
+      sharedAccess: 'read',
+      isOrgShared: true,
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+      allowedSurfaces: ['web'],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    };
+
+    function overviewUnavailable() {
+      (managedCloudProjects.getProject as jest.Mock).mockResolvedValue(sharedProject);
+      (api.get as jest.Mock).mockImplementation(async (path: string) => {
+        if (path.includes('knowledge')) return { files: [] };
+        throw new ApiHttpError('overview unavailable', 500);
+      });
+    }
+
+    it('keeps a sharer I hid hidden', async () => {
+      activateCloudAccount(ME);
+      mockStorage.set(`shared-with-you:hidden-sharers:v1:${ME}`, JSON.stringify([OWNER]));
+      overviewUnavailable();
+      render(<SharedProjectScreen projectId="p-open" />);
+
+      expect(await screen.findByTestId('shared-project-hidden')).toBeTruthy();
+      expect(screen.queryByText('Brand book')).toBeNull();
+      expect(screen.queryByText('Use the brand voice.')).toBeNull();
+    });
+
+    it('still offers Hide for a sharer I have not hidden', async () => {
+      activateCloudAccount(ME);
+      overviewUnavailable();
+      render(<SharedProjectScreen projectId="p-open" />);
+
+      expect(await screen.findByLabelText('Hide sharer')).toBeTruthy();
+      expect(screen.getByText('Brand book')).toBeTruthy();
+    });
+
+    it('shows no shared content when the account cannot be identified', async () => {
+      overviewUnavailable();
+      render(<SharedProjectScreen projectId="p-open" />);
+
+      expect(await screen.findByText('This shared project could not be opened.')).toBeTruthy();
+      expect(screen.queryByText('Brand book')).toBeNull();
+      expect(screen.queryByText('Use the brand voice.')).toBeNull();
+    });
+
+    it('shows no shared content when the account changed while it loaded', async () => {
+      activateCloudAccount(ME);
+      overviewUnavailable();
+      let release!: () => void;
+      (managedCloudProjects.getProject as jest.Mock).mockReturnValue(
+        new Promise((resolve) => {
+          release = () => resolve(sharedProject);
+        }),
+      );
+      render(<SharedProjectScreen projectId="p-open" />);
+
+      activateCloudAccount('member-2');
+      release();
+
+      expect(await screen.findByText('This shared project could not be opened.')).toBeTruthy();
+      expect(screen.queryByText('Brand book')).toBeNull();
+    });
   });
 });

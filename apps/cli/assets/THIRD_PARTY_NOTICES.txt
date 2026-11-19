@@ -508,7 +508,7 @@ core_maths 0.1.1 (MIT)
   Copyright (c) 2024 Robert Bastian
   License text: 4
 
-core-foundation 0.10.0 (MIT OR Apache-2.0)
+core-foundation 0.10.1 (MIT OR Apache-2.0)
   https://github.com/servo/core-foundation-rs
   Copyright (c) 2012-2013 Mozilla Foundation
   License text: 1, 2
@@ -827,7 +827,7 @@ encode_unicode 1.0.0 (Apache-2.0 OR MIT)
   https://github.com/tormol/encode_unicode
   License text: 2, 65
 
-encoding_rs 0.8.42 ((Apache-2.0 OR MIT) AND BSD-3-Clause)
+encoding_rs 0.8.44 ((Apache-2.0 OR MIT) AND BSD-3-Clause)
   https://docs.rs/encoding_rs/
   Copyright © WHATWG (Apple, Google, Mozilla, Microsoft).
   License text: 2, 15, 16
@@ -1105,7 +1105,7 @@ glob 0.3.4 (MIT OR Apache-2.0)
   Copyright (c) 2014 The Rust Project Developers
   License text: 1, 2
 
-globset 0.4.20 (Unlicense OR MIT)
+globset 0.4.21 (Unlicense OR MIT)
   https://github.com/BurntSushi/ripgrep
   Copyright (c) 2015 Andrew Gallant
   License text: 3, 10, 11
@@ -1586,7 +1586,7 @@ lsp-types 0.94.1 (MIT)
   Copyright (c) 2016 Markus Westerlind
   License text: 3
 
-lzma-rust2 0.22.0 (Apache-2.0)
+lzma-rust2 0.24.0 (Apache-2.0)
   https://github.com/hasenbanck/lzma-rust2/
   License text: 2
 
@@ -3014,7 +3014,7 @@ two-face 0.5.2+bat-0.26.1 (MIT OR Apache-2.0)
 type1-encoding-parser 0.1.1 (MIT)
   https://github.com/jrmuizel/type1-encoding-parser
 
-typed-path 0.12.4 (MIT OR Apache-2.0)
+typed-path 0.13.0 (MIT OR Apache-2.0)
   https://github.com/chipsenkbeil/typed-path
   License text: 1, 5
 
@@ -3193,7 +3193,7 @@ wayland-sys 0.31.11 (MIT)
   Copyright (c) 2015 Elinor Berger
   License text: 1
 
-webbrowser 1.2.5 (MIT OR Apache-2.0)
+webbrowser 1.2.6 (MIT OR Apache-2.0)
   https://github.com/amodm/webbrowser-rs
   Copyright (c) 2015-2022 Amod Malviya
   License text: 3, 17
@@ -3470,7 +3470,7 @@ zerovec-derive 0.11.7 (Unicode-3.0)
   Copyright © 2020-2024 Unicode, Inc.
   License text: 8
 
-zip 9.0.5 (MIT)
+zip 9.3.0 (MIT)
   https://github.com/zip-rs/zip2
   Copyright (c) 2014 Mathijs van de Nes
   License text: 3

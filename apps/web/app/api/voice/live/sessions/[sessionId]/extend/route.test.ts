@@ -15,6 +15,7 @@ type ScanModule8 = typeof import('@/lib/services/managed-usage-request-service')
 type ScanModule10 = typeof import('../../lib/voice-session-budget');
 type ScanModule11 = typeof import('../../lib/voice-session-store');
 type ScanModule12 = typeof import('@/lib/voice/free-voice-allowance');
+type ScanModule13 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const mocks = vi.hoisted(() => ({
   csrf: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   userScopedDb: vi.fn(),
   entitlement: vi.fn(),
   reserveStep: vi.fn(),
+  assertTierUnitAllowance: vi.fn(),
   readReservation: vi.fn(),
   getSession: vi.fn(),
   touchSession: vi.fn(),
@@ -73,6 +75,10 @@ vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule8>()),
   reserveManagedUsageProviderStep: (...args: unknown[]) => mocks.reserveStep(...args),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule13>()),
+  assertTierUnitAllowance: (...args: unknown[]) => mocks.assertTierUnitAllowance(...args),
 }));
 vi.mock('@/lib/voice/free-voice-allowance', async (importOriginal) => ({
   ...(await importOriginal<ScanModule12>()),
@@ -150,6 +156,7 @@ beforeEach(() => {
     extensionMicrousd: null,
   });
   mocks.reserveStep.mockResolvedValue({ operationResult: 'extended' });
+  mocks.assertTierUnitAllowance.mockResolvedValue({});
 });
 
 describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
@@ -175,6 +182,40 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
       quotaFeature: 'voice_live',
     });
     expect(mocks.touchSession).toHaveBeenCalled();
+  });
+
+  it('checks the monthly voice minutes before it reserves the block', async () => {
+    await extend({ block: 3 });
+
+    expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        planTier: 'pro',
+        unit: 'voice_minutes',
+        requestedUnits: 2,
+      }),
+    );
+    expect(mocks.assertTierUnitAllowance.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.reserveStep.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('refuses the block and reserves nothing once the monthly voice minutes are used', async () => {
+    mocks.assertTierUnitAllowance.mockRejectedValue(
+      new ManagedUsageRequestError(
+        'Your plan’s monthly voice allowance is used up.',
+        429,
+        'voice_minutes_monthly_limit_reached',
+      ),
+    );
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(429);
+    expect(await errorBody(response)).toMatchObject({
+      code: 'voice_minutes_monthly_limit_reached',
+    });
+    expect(mocks.reserveStep).not.toHaveBeenCalled();
   });
 
   it('prices a Free session that holds no allowance grant at the free backend', async () => {

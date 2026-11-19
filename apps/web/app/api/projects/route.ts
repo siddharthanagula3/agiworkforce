@@ -4,8 +4,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  buildWorkspaceAccessGateResponse,
+  buildWorkspaceFeatureGateResponse,
+} from '@/lib/managed-compute-gate';
 import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -43,7 +45,10 @@ async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(
@@ -70,7 +75,12 @@ async function handleGetProjects(request: NextRequest) {
   const sharedProjectIds =
     sharedScope?.organizationId === organizationId ? sharedScope.projectIds : [];
 
-  const params: unknown[] = [userId, limit + 1, offset, sharedProjectIds, organizationId];
+  const params: unknown[] = [userId, limit + 1, sharedProjectIds, organizationId];
+  let offsetClause = '';
+  if (!cursor) {
+    params.push(offset);
+    offsetClause = `offset $${params.length}`;
+  }
   const keyset = keysetSql({
     sortColumn: PAGE_SORT_COLUMN,
     idColumn: 'id',
@@ -95,17 +105,17 @@ async function handleGetProjects(request: NextRequest) {
                    from web_conversations c
                   where c.project_id = p.id::text
                     and c.user_id = $1
-                    and c.organization_id is not distinct from $5::uuid
+                    and c.organization_id is not distinct from $4::uuid
                     and c.deleted_at is null
                     and coalesce(c.is_temporary, false) = false) as conversation_count
            from user_projects p
           where p.deleted_at is null
-             and p.organization_id is not distinct from $5::uuid
-             and (p.user_id = $1 or p.id = any($4::uuid[]))
+             and p.organization_id is not distinct from $4::uuid
+             and (p.user_id = $1 or p.id = any($3::uuid[]))
        ) projects
        ${keyset.where ? `where ${keyset.where}` : ''}
        ${keyset.orderBy}
-       limit $2 ${cursor ? '' : 'offset $3'}`,
+       limit $2 ${offsetClause}`,
       params,
     );
   } catch (error) {
@@ -126,7 +136,7 @@ async function handleGetProjects(request: NextRequest) {
 }
 
 async function handleCreateProject(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
@@ -138,7 +148,7 @@ async function handleCreateProject(request: NextRequest) {
     userId,
     request,
     'projects',
-    resolveCloudChatSurface(request),
+    surface ?? 'unknown',
   );
   if (featureGate) return featureGate;
 

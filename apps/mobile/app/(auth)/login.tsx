@@ -1,6 +1,6 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Alert, ScrollView, Text, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -32,9 +32,16 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import { deviceAccountErrorMessage } from '@/src/features/accounts/deviceAccounts';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { MobileSignUp } from '@/src/features/auth/components/MobileSignUp';
 import { MobileSignIn } from '@/src/features/auth/components/MobileSignIn';
+import {
+  ADD_ACCOUNT_PARAM,
+  ADD_ACCOUNT_PARAM_VALUE,
+  endCloudAccountAddition,
+  isCloudAccountAdditionOpenFor,
+} from '@/src/features/auth/services/accountAddition';
 
 export default function LoginScreen() {
   const [authMode, setAuthMode] = useState<'signIn' | 'signUp'>('signIn');
@@ -59,10 +66,25 @@ export default function LoginScreen() {
     termsStatus === 'required' &&
     termsConfirmation?.userId === userId &&
     termsConfirmation?.version === termsVersion;
-  const params = useLocalSearchParams<{ postAuthIntent?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    postAuthIntent?: string | string[];
+    addAccount?: string | string[];
+  }>();
   const postAuthIntent = parsePostAuthIntent(params[POST_AUTH_INTENT_PARAM]);
+  const [additionFromUserId] = useState<string | null>(() =>
+    params[ADD_ACCOUNT_PARAM] === ADD_ACCOUNT_PARAM_VALUE &&
+    isSignedIn &&
+    userId &&
+    isCloudAccountAdditionOpenFor(userId)
+      ? userId
+      : null,
+  );
+  const addingAccount = additionFromUserId !== null && userId === additionFromUserId;
+  const additionRef = useRef({ additionFromUserId, userId });
+  additionRef.current = { additionFromUserId, userId };
 
   useLayoutEffect(() => {
+    if (additionFromUserId) return;
     if (postAuthIntent) {
       stagePostAuthIntent(postAuthIntent);
       completePendingPostAuthIntentForLoadedSession({
@@ -78,6 +100,7 @@ export default function LoginScreen() {
     clearPostAuthIntent();
     resetPostAuthDestinationToLocal();
   }, [
+    additionFromUserId,
     cloudUnlocked,
     isLoaded,
     isSignedIn,
@@ -90,6 +113,11 @@ export default function LoginScreen() {
 
   useEffect(
     () => () => {
+      const addition = additionRef.current;
+      if (addition.additionFromUserId) {
+        endCloudAccountAddition({ cancelled: addition.userId === addition.additionFromUserId });
+        return;
+      }
       if (!isAgeGateConfirmed()) return;
       const completion = completionRef.current;
       if (
@@ -105,6 +133,12 @@ export default function LoginScreen() {
   );
 
   const handleDismiss = () => {
+    if (addingAccount) {
+      endCloudAccountAddition({ cancelled: true });
+      if (router.canGoBack()) router.back();
+      else router.replace('/(app)/settings');
+      return;
+    }
     clearPostAuthIntent();
     resetPostAuthDestinationToLocal();
     router.replace('/(app)');
@@ -112,11 +146,16 @@ export default function LoginScreen() {
 
   const handleSignOut = () => {
     handleDismiss();
-    void useAuthStore.getState().signOut();
+    void useAuthStore
+      .getState()
+      .signOut()
+      .catch((error: unknown) => {
+        Alert.alert('Log out failed', deviceAccountErrorMessage(error, 'sign-out'));
+      });
   };
 
   if (!FEATURES.auth) return <Redirect href="/(app)" />;
-  if (isLoaded && isSignedIn) {
+  if (isLoaded && isSignedIn && !addingAccount) {
     if (termsUserId === userId && (termsStatus === 'required' || termsStatus === 'error')) {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
@@ -273,8 +312,12 @@ export default function LoginScreen() {
         <Pressable
           testID="cloud-sign-in-dismiss"
           accessibilityRole="button"
-          accessibilityLabel="Close Cloud sign in"
-          accessibilityHint="Returns to Local Mode"
+          accessibilityLabel={addingAccount ? 'Close add account' : 'Close Cloud sign in'}
+          accessibilityHint={
+            addingAccount
+              ? 'Returns to Settings without changing accounts'
+              : 'Returns to Local Mode'
+          }
           onPress={handleDismiss}
           style={({ pressed }) => ({
             width: 44,
@@ -287,9 +330,23 @@ export default function LoginScreen() {
           <X size={20} color={colors.textPrimary} strokeWidth={2} />
         </Pressable>
       </View>
+      {addingAccount ? (
+        <Text
+          testID="cloud-add-account-notice"
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.subhead,
+            textAlign: 'center',
+            paddingHorizontal: 24,
+          }}
+        >
+          Your other accounts stay signed in on this phone.
+        </Text>
+      ) : null}
       <View style={{ flex: 1 }} testID="cloud-sign-in-screen">
         {authMode === 'signIn' && !nativeSignInFallback ? (
           <MobileSignIn
+            addingAccount={addingAccount}
             postAuthIntent={postAuthIntent}
             onNativeFallback={() => setNativeSignInFallback(true)}
             onSignUp={() => {

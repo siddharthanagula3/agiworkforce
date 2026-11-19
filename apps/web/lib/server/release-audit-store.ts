@@ -162,3 +162,24 @@ export async function readReleaseEvents(query: ReleaseEventQuery = {}): Promise<
   );
   return rows.map(toReleaseEvent);
 }
+
+export interface LatestReleaseEventQuery {
+  event: ReleaseEventName;
+  outcome?: ReleaseOutcome;
+}
+
+export async function readLatestReleaseEvent(
+  query: LatestReleaseEventQuery,
+): Promise<ReleaseEvent | null> {
+  const rows = await getNeonDb().query<ReleaseEventRow>(
+    `select ${SELECTED_COLUMNS}
+       from public.release_events
+      where event = $1
+        and ($2::text is null or outcome = $2)
+      order by recorded_at desc, id desc
+      limit 1`,
+    [query.event, query.outcome ?? null],
+  );
+  const [row] = rows;
+  return row ? toReleaseEvent(row) : null;
+}

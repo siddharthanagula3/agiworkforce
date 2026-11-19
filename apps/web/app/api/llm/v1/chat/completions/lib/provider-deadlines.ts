@@ -7,6 +7,7 @@ import {
   MAX_OVERLOAD_RETRIES,
   classifyError,
   computeDelay,
+  retryAfterExceedsCeiling,
   sleep,
   type ErrorCategory,
 } from '@agiworkforce/provider-runtime';
@@ -205,10 +206,15 @@ function sameRouteRetryDelayMs(error: unknown, state: SameRouteRetryState): numb
       : MAX_SAME_ROUTE_RETRY_ATTEMPTS;
   if (state.attempt >= maxAttempts) return null;
 
-  const delayMs = Math.min(
-    computeDelay(state.attempt, classified.retryAfterSeconds, BASE_DELAY_MS, MAX_BACKOFF_MS),
+  const requestedByProvider = classified.retryAfterSeconds !== undefined;
+  if (retryAfterExceedsCeiling(classified.retryAfterSeconds)) return null;
+  const computedMs = computeDelay(
+    state.attempt,
+    classified.retryAfterSeconds,
+    BASE_DELAY_MS,
     MAX_BACKOFF_MS,
   );
+  const delayMs = requestedByProvider ? computedMs : Math.min(computedMs, MAX_BACKOFF_MS);
   if (state.grantedFirstTokenMs === undefined) return delayMs;
 
   const turnElapsedMs = impliedTurnElapsedMs(state.grantedFirstTokenMs, state.elapsedMs);
@@ -217,6 +223,7 @@ function sameRouteRetryDelayMs(error: unknown, state: SameRouteRetryState): numb
   // but a slower failure, so it is not a retry worth taking.
   const roomMs = TURN_FIRST_TOKEN_BUDGET_MS - turnElapsedMs - MIN_CHILD_DEADLINE_MS;
   if (roomMs <= 0) return null;
+  if (requestedByProvider && delayMs > roomMs) return null;
   return Math.min(delayMs, roomMs);
 }
 

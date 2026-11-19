@@ -31,8 +31,8 @@
   },
   "devDependencies": {
     "@upstash/ratelimit": "^2.2.0",
-    "@upstash/redis": "^1.39.0",
-    "ioredis": "^5.11.1",
+    "@upstash/redis": "^1.41.0",
+    "ioredis": "^6.0.0",
     "vitest": "^4.1.12"
   }
 }

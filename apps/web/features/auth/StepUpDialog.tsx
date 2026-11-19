@@ -1,5 +1,6 @@
 'use client';
 
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   useCallback,
   useEffect,
@@ -307,7 +308,12 @@ export function StepUpDialog({
         disabled={busy}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && value.trim().length > 0 && !busy) {
+          if (
+            event.key === 'Enter' &&
+            value.trim().length > 0 &&
+            !busy &&
+            !isImeComposingKey(event.nativeEvent)
+          ) {
             event.preventDefault();
             void submit();
           }

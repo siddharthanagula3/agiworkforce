@@ -169,3 +169,28 @@ describe('cloudSettingsMapping, identity namespace the server actually reads', (
     expect(personalization.instructions).toBe('Cite sources.');
   });
 });
+
+describe('cloudSettingsMapping, accents the app no longer offers', () => {
+  beforeEach(() => {
+    useCloudSettingsStore.setState({ accentColor: 'blue' });
+  });
+
+  it('falls back to the default accent when another device syncs a retired accent', () => {
+    applyCloudSettings({ appearance: { accentColor: 'amber' as never } });
+
+    expect(useCloudSettingsStore.getState().accentColor).toBe('neutral');
+  });
+
+  it('keeps an accent the app still offers', () => {
+    applyCloudSettings({ appearance: { accentColor: 'rose' } });
+
+    expect(useCloudSettingsStore.getState().accentColor).toBe('rose');
+  });
+
+  it('falls back to the default accent when a saved retired accent is restored', () => {
+    const merge = useCloudSettingsStore.persist.getOptions().merge!;
+    const restored = merge({ accentColor: 'amber' }, useCloudSettingsStore.getState());
+
+    expect(restored.accentColor).toBe('neutral');
+  });
+});

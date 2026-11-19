@@ -506,6 +506,69 @@ describe('LiveVoiceSession', () => {
     expect(mockState.peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.mute' });
   });
 
+  it('mutes the microphone before it reaches the peer when muted while acquiring', async () => {
+    let enabledWhenAdded: boolean | null = null;
+    mockState.peer.addTrack = (track: unknown) => {
+      enabledWhenAdded = (track as { enabled: boolean }).enabled;
+      return {};
+    };
+    await LiveVoiceSession.start({
+      authority: voiceAuthority(),
+      voice: null,
+      conversationId: 'conv_1',
+      language: null,
+      isMuted: () => true,
+      callbacks: callbacks(),
+    });
+
+    expect(enabledWhenAdded).toBe(false);
+    expect(mockState.tracks[0]?.enabled).toBe(false);
+    mockState.peer.channel.receive({ type: 'session.started' });
+    expect(mockState.peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.mute' });
+  });
+
+  it('applies a mute chosen while the session was being built', async () => {
+    let muted = false;
+    mockApiFetch.mockImplementationOnce(async () => {
+      muted = true;
+      return createdResponse();
+    });
+    await LiveVoiceSession.start({
+      authority: voiceAuthority(),
+      voice: null,
+      conversationId: 'conv_1',
+      language: null,
+      isMuted: () => muted,
+      callbacks: callbacks(),
+    });
+
+    expect(mockState.tracks[0]?.enabled).toBe(false);
+    mockState.peer.channel.receive({ type: 'session.started' });
+    expect(mockState.peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.mute' });
+  });
+
+  it('restores the microphone when the mute was lifted while the session was being built', async () => {
+    let muted = true;
+    mockApiFetch.mockImplementationOnce(async () => {
+      muted = false;
+      return createdResponse();
+    });
+    await LiveVoiceSession.start({
+      authority: voiceAuthority(),
+      voice: null,
+      conversationId: 'conv_1',
+      language: null,
+      isMuted: () => muted,
+      callbacks: callbacks(),
+    });
+
+    expect(mockState.tracks[0]?.enabled).toBe(true);
+    mockState.peer.channel.receive({ type: 'session.started' });
+    expect(mockState.peer.channel.sent.at(-1)).toMatchObject({
+      type: 'session.input_audio.unmute',
+    });
+  });
+
   it('closes on the session.closed acknowledgement and stops the microphone', async () => {
     const { session, cb } = await startSession();
 
@@ -570,6 +633,14 @@ describe('LiveVoiceSession', () => {
     } finally {
       nativeModules['WebRTCModule'] = saved;
     }
+  });
+
+  it('names an insecure server instead of failing voice with a generic connection error', () => {
+    expect(liveVoiceUnavailableReason('http://localhost:3000')).toBe(
+      LIVE_VOICE_MESSAGE.insecureServer,
+    );
+    expect(liveVoiceUnavailableReason('not a url')).toBe(LIVE_VOICE_MESSAGE.insecureServer);
+    expect(liveVoiceUnavailableReason('https://agiworkforce.com')).toBeNull();
   });
 
   it('keeps Local Mode and a signed-out session on the turn-based path', () => {

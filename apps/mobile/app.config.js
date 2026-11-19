@@ -4,6 +4,7 @@ const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(
 const hostedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
+const { nativePurchases } = require('./src/features/billing/storePurchases.json');
 
 if (
   (appEnv === 'production' || appEnv === 'preview') &&
@@ -28,8 +29,9 @@ function envIsTruthy(name) {
 
 const SPLASH_BACKGROUND_LIGHT = '#ffffff';
 const SPLASH_BACKGROUND_DARK = '#000000';
-// PNGs are 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
-const SPLASH_IMAGE_WIDTH = 220;
+const SPLASH_SYMBOL = './assets/agi-symbol.png';
+// The symbol is at least 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
+const SPLASH_IMAGE_WIDTH = 72;
 
 const CAMERA_PURPOSE =
   'AGI Mobile uses the camera to scan documents and attach photos to your chats.';
@@ -97,6 +99,7 @@ const config = {
     },
     entitlements: {
       'com.apple.developer.declared-age-range': true,
+      'com.apple.developer.kernel.increased-memory-limit': true,
       'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
     },
     privacyManifests: {
@@ -179,6 +182,9 @@ const config = {
     },
     package: 'com.agiworkforce.app',
     versionCode: 1,
+    ...(process.env.GOOGLE_SERVICES_JSON
+      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+      : {}),
     allowBackup: false,
     permissions: ['RECORD_AUDIO'],
     blockedPermissions: [
@@ -186,6 +192,10 @@ const config = {
       'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
       'android.permission.ACCESS_MEDIA_LOCATION',
       'android.permission.SYSTEM_ALERT_WINDOW',
+      // The Play Billing library declares this permission whenever it is
+      // linked, and Play labels a listing "In-app purchases" from it. A build
+      // that sells nothing must not carry it.
+      ...(nativePurchases ? [] : ['com.android.vending.BILLING']),
     ],
     intentFilters: [
       {
@@ -229,12 +239,12 @@ const config = {
     [
       'expo-splash-screen',
       {
-        image: './assets/splash-lockup.png',
+        image: SPLASH_SYMBOL,
         imageWidth: SPLASH_IMAGE_WIDTH,
         resizeMode: 'contain',
         backgroundColor: SPLASH_BACKGROUND_LIGHT,
         dark: {
-          image: './assets/splash-lockup-dark.png',
+          image: SPLASH_SYMBOL,
           backgroundColor: SPLASH_BACKGROUND_DARK,
         },
       },

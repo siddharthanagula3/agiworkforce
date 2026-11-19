@@ -10,7 +10,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 export const TEMPORARY_CHAT_CLOUD_EXPLAINER =
-  "Won't appear in history or use memory, and is deleted after 30 days.";
+  "Won't appear in history or use memory, and is normally deleted after 30 days.";
 export const TEMPORARY_CHAT_LOCAL_EXPLAINER =
   "Won't be saved or use memory, and attachments never leave this device.";
 
@@ -23,6 +23,10 @@ const DATA_USE_ROUTE = '/(app)/settings/cloud-privacy';
 
 let hasShownThisSession = false;
 
+export function __resetTemporaryChatBannerForTests(): void {
+  hasShownThisSession = false;
+}
+
 export function TemporaryChatBanner() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -33,7 +37,11 @@ export function TemporaryChatBanner() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (isTemporaryChat && !hasShownThisSession) {
+    if (!isTemporaryChat) {
+      setVisible(false);
+      return;
+    }
+    if (!hasShownThisSession) {
       hasShownThisSession = true;
       setVisible(true);
     }

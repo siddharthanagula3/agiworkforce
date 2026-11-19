@@ -1,6 +1,7 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
+const PROPOSAL_SCHEME = 'agi-diff-proposal';
 const STALE_DIFF_MESSAGE = `${PRODUCT_NAMES.code}: this file changed since the edit was proposed, so nothing was applied. Ask again to get a fresh edit.`;
 
 export interface DiffSession {
@@ -17,6 +18,36 @@ export interface DiffSession {
   readonly filePath?: string;
   readonly batchId?: string;
   readonly confidence?: 'high' | 'medium' | 'low';
+}
+
+function comparePositions(a: vscode.Position, b: vscode.Position): number {
+  return a.line !== b.line ? a.line - b.line : a.character - b.character;
+}
+
+function rangesConflict(a: vscode.Range, b: vscode.Range): boolean {
+  const reachesOther =
+    comparePositions(a.start, b.end) <= 0 && comparePositions(b.start, a.end) <= 0;
+  if (!reachesOther) return false;
+  if (a.isEmpty || b.isEmpty) return true;
+  return comparePositions(a.start, b.end) < 0 && comparePositions(b.start, a.end) < 0;
+}
+
+function isStaleIn(session: DiffSession, document: vscode.TextDocument): boolean {
+  if (session.range.isEmpty) {
+    const version = (document as { version?: number }).version;
+    return (
+      version !== undefined &&
+      session.documentVersion !== undefined &&
+      version !== session.documentVersion
+    );
+  }
+  return document.getText(session.range) !== session.originalText;
+}
+
+interface BulkAcceptOutcome {
+  stale: number;
+  conflicting: number;
+  failed: number;
 }
 
 interface DiffLine {
@@ -53,6 +84,46 @@ function computeDiffSummary(originalText: string, newText: string): DiffSummary 
     removed: diffs.filter((d) => d.kind === 'removed').length,
     modified: diffs.filter((d) => d.kind === 'modified').length,
   };
+}
+
+function proposalUri(session: Pick<DiffSession, 'id' | 'uri'>): vscode.Uri {
+  return session.uri.with({ scheme: PROPOSAL_SCHEME, query: session.id });
+}
+
+function sessionDecorations(
+  session: Pick<DiffSession, 'range'>,
+  document: Pick<vscode.TextDocument, 'lineCount' | 'lineAt'>,
+): {
+  replaced: vscode.DecorationOptions[];
+  insertions: vscode.DecorationOptions[];
+  all: vscode.DecorationOptions[];
+} {
+  const lastLine = Math.max(0, document.lineCount - 1);
+  const firstLine = Math.min(session.range.start.line, lastLine);
+  if (session.range.isEmpty) {
+    const insertions = [
+      {
+        range: new vscode.Range(firstLine, 0, firstLine, 0),
+        hoverMessage: new vscode.MarkdownString(
+          'Proposed code is inserted here. The diff beside this editor shows it.',
+        ),
+      },
+    ];
+    return { replaced: [], insertions, all: insertions };
+  }
+  const endsAtLineStart =
+    session.range.end.character === 0 && session.range.end.line > session.range.start.line;
+  const finalLine = Math.min(session.range.end.line - (endsAtLineStart ? 1 : 0), lastLine);
+  const replaced: vscode.DecorationOptions[] = [];
+  for (let line = firstLine; line <= finalLine; line += 1) {
+    replaced.push({
+      range: new vscode.Range(line, 0, line, document.lineAt(line).text.length),
+      hoverMessage: new vscode.MarkdownString(
+        'Replaced by the proposed code. The diff beside this editor shows the new text.',
+      ),
+    });
+  }
+  return { replaced, insertions: [], all: replaced };
 }
 
 export class DiffCodeLensProvider implements vscode.CodeLensProvider {
@@ -167,11 +238,8 @@ export class DiffCodeLensProvider implements vscode.CodeLensProvider {
 }
 
 export class DiffDecorationProvider implements vscode.Disposable {
-  private readonly _addedDecoration: vscode.TextEditorDecorationType;
-  private readonly _removedDecoration: vscode.TextEditorDecorationType;
-  private readonly _modifiedDecoration: vscode.TextEditorDecorationType;
-  private readonly _addedGutter: vscode.TextEditorDecorationType;
-  private readonly _removedGutter: vscode.TextEditorDecorationType;
+  private readonly _replacedDecoration: vscode.TextEditorDecorationType;
+  private readonly _insertionGutter: vscode.TextEditorDecorationType;
   private readonly _activeDiffs = new Map<string, DiffSession>();
   private _rejectedStash: DiffSession[] = [];
   private _nextId = 0;
@@ -179,47 +247,19 @@ export class DiffDecorationProvider implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[] = [];
 
   constructor() {
-    this._addedDecoration = vscode.window.createTextEditorDecorationType({
-      isWholeLine: true,
-      backgroundColor: new vscode.ThemeColor('diffEditor.insertedLineBackground'),
-      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.addedForeground'),
-      overviewRulerLane: vscode.OverviewRulerLane.Full,
-      before: { contentText: ' ', backgroundColor: '#22c55e', width: '2px', margin: '0 4px 0 0' },
-    });
-
-    this._removedDecoration = vscode.window.createTextEditorDecorationType({
+    this._replacedDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
       backgroundColor: new vscode.ThemeColor('diffEditor.removedLineBackground'),
-      overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.deletedForeground'),
-      overviewRulerLane: vscode.OverviewRulerLane.Full,
-      textDecoration: 'line-through rgba(239, 68, 68, 0.5)',
-      before: { contentText: ' ', backgroundColor: '#ef4444', width: '2px', margin: '0 4px 0 0' },
-    });
-
-    this._modifiedDecoration = vscode.window.createTextEditorDecorationType({
-      isWholeLine: true,
-      backgroundColor: new vscode.ThemeColor('diffEditor.unchangedRegionBackground'),
       overviewRulerColor: new vscode.ThemeColor('editorOverviewRuler.modifiedForeground'),
       overviewRulerLane: vscode.OverviewRulerLane.Full,
       before: { contentText: ' ', backgroundColor: '#f59e0b', width: '2px', margin: '0 4px 0 0' },
     });
 
-    this._addedGutter = vscode.window.createTextEditorDecorationType({
+    this._insertionGutter = vscode.window.createTextEditorDecorationType({
       isWholeLine: false,
       before: {
         contentText: '+',
         color: '#22c55e',
-        fontWeight: 'bold',
-        width: '1ch',
-        margin: '0 2px 0 0',
-      },
-    });
-
-    this._removedGutter = vscode.window.createTextEditorDecorationType({
-      isWholeLine: false,
-      before: {
-        contentText: '-',
-        color: '#ef4444',
         fontWeight: 'bold',
         width: '1ch',
         margin: '0 2px 0 0',
@@ -232,9 +272,23 @@ export class DiffDecorationProvider implements vscode.Disposable {
     this._disposables.push(
       vscode.window.onDidChangeActiveTextEditor((e) => {
         if (e !== undefined) this._applyDecorationsToEditor(e);
+        this._syncCursorContext();
       }),
+      vscode.window.onDidChangeTextEditorSelection(() => this._syncCursorContext()),
       vscode.workspace.onDidCloseTextDocument((doc) => this._clearSessionsForUri(doc.uri)),
+      vscode.workspace.registerTextDocumentContentProvider(PROPOSAL_SCHEME, {
+        provideTextDocumentContent: (uri) => this._proposedDocumentText(uri),
+      }),
     );
+  }
+
+  private _diffUnderCursor = false;
+
+  private _syncCursorContext(): void {
+    const underCursor = this.currentSession() !== undefined;
+    if (underCursor === this._diffUnderCursor) return;
+    this._diffUnderCursor = underCursor;
+    void vscode.commands.executeCommand('setContext', 'agi-workforce.diffUnderCursor', underCursor);
   }
 
   showDiff(
@@ -249,63 +303,57 @@ export class DiffDecorationProvider implements vscode.Disposable {
     },
   ): DiffSession {
     const id = `diff-${++this._nextId}`;
-    const diffResult = diffLines(originalText, newText);
-    const addedOpts: vscode.DecorationOptions[] = [];
-    const removedOpts: vscode.DecorationOptions[] = [];
-    const modifiedOpts: vscode.DecorationOptions[] = [];
-    const addedGutterOpts: vscode.DecorationOptions[] = [];
-    const removedGutterOpts: vscode.DecorationOptions[] = [];
-    const lastLine = Math.max(0, editor.document.lineCount - 1);
-
-    for (const diff of diffResult) {
-      const line = Math.min(range.start.line + diff.editorLine, lastLine);
-      const docLine = editor.document.lineAt(line);
-      const opt: vscode.DecorationOptions = {
-        range: new vscode.Range(line, 0, line, docLine.text.length),
-      };
-      if (diff.kind === 'added') {
-        addedOpts.push(opt);
-        addedGutterOpts.push({
-          range: new vscode.Range(line, 0, line, 0),
-          hoverMessage: new vscode.MarkdownString('**+** Line added'),
-        });
-      } else if (diff.kind === 'removed') {
-        removedOpts.push(opt);
-        removedGutterOpts.push({
-          range: new vscode.Range(line, 0, line, 0),
-          hoverMessage: new vscode.MarkdownString('**-** Line removed'),
-        });
-      } else {
-        modifiedOpts.push(opt);
-      }
-    }
-
     const documentVersion = (editor.document as { version?: number }).version;
-    const sessionBase: Omit<DiffSession, 'filePath' | 'batchId' | 'confidence'> = {
+    const session: DiffSession = {
       id,
       uri: editor.document.uri,
       range,
       originalText,
       newText,
       ...(documentVersion === undefined ? {} : { documentVersion }),
-      decorations: [...addedOpts, ...removedOpts, ...modifiedOpts],
-    };
-    const session: DiffSession = {
-      ...sessionBase,
+      decorations: sessionDecorations({ range }, editor.document).all,
       ...(options?.filePath !== undefined ? { filePath: options.filePath } : {}),
       ...(options?.batchId !== undefined ? { batchId: options.batchId } : {}),
       ...(options?.confidence !== undefined ? { confidence: options.confidence } : {}),
     };
 
     this._activeDiffs.set(id, session);
-    editor.setDecorations(this._addedDecoration, addedOpts);
-    editor.setDecorations(this._removedDecoration, removedOpts);
-    editor.setDecorations(this._modifiedDecoration, modifiedOpts);
-    editor.setDecorations(this._addedGutter, addedGutterOpts);
-    editor.setDecorations(this._removedGutter, removedGutterOpts);
+    this._applyDecorationsToEditor(editor);
     this.codeLensProvider.refresh(this._activeDiffs);
     void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', true);
+    this._syncCursorContext();
+    void vscode.commands.executeCommand(
+      'vscode.diff',
+      session.uri,
+      proposalUri(session),
+      `${session.filePath ?? vscode.workspace.asRelativePath(session.uri)}: proposed change`,
+      { preview: true, preserveFocus: true, viewColumn: vscode.ViewColumn.Beside },
+    );
     return session;
+  }
+
+  private async _proposedDocumentText(uri: vscode.Uri): Promise<string> {
+    const session = this._activeDiffs.get(uri.query);
+    if (session === undefined) return '';
+    const document = await vscode.workspace.openTextDocument(session.uri);
+    const text = document.getText();
+    return (
+      text.slice(0, document.offsetAt(session.range.start)) +
+      session.newText +
+      text.slice(document.offsetAt(session.range.end))
+    );
+  }
+
+  private async _closeProposalTabs(sessions: readonly DiffSession[]): Promise<void> {
+    const proposals = new Set(sessions.map((session) => proposalUri(session).toString()));
+    const tabs = vscode.window.tabGroups.all
+      .flatMap((group) => group.tabs)
+      .filter(
+        (tab) =>
+          tab.input instanceof vscode.TabInputTextDiff &&
+          proposals.has(tab.input.modified.toString()),
+      );
+    if (tabs.length > 0) await vscode.window.tabGroups.close(tabs);
   }
 
   /// Whether the text this edit was written against is still the text on screen.
@@ -318,15 +366,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
   private async _isStale(session: DiffSession): Promise<boolean> {
     try {
       const document = await vscode.workspace.openTextDocument(session.uri);
-      if (session.range.isEmpty) {
-        const version = (document as { version?: number }).version;
-        return (
-          version !== undefined &&
-          session.documentVersion !== undefined &&
-          version !== session.documentVersion
-        );
-      }
-      return document.getText(session.range) !== session.originalText;
+      return isStaleIn(session, document);
     } catch {
       return true;
     }
@@ -409,6 +449,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
     this.codeLensProvider.refresh(this._activeDiffs);
     void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', true);
+    this._syncCursorContext();
     return restored;
   }
 
@@ -419,16 +460,11 @@ export class DiffDecorationProvider implements vscode.Disposable {
     if (sessions.length === 0) return undefined;
 
     const cursorLine = editor.selection.active.line;
-    let closest: DiffSession | undefined;
-    let minDist = Infinity;
-    for (const s of sessions) {
-      const dist = Math.abs(s.range.start.line - cursorLine);
-      if (dist < minDist) {
-        minDist = dist;
-        closest = s;
-      }
-    }
-    return closest;
+    return sessions.find(
+      (session) =>
+        session.range.start.line <= cursorLine &&
+        cursorLine <= Math.max(session.range.start.line, session.range.end.line),
+    );
   }
 
   async acceptCurrentDiff(): Promise<boolean> {
@@ -468,22 +504,66 @@ export class DiffDecorationProvider implements vscode.Disposable {
       existing.push(session);
       byUri.set(key, existing);
     }
-    let stale = 0;
+    const total: BulkAcceptOutcome = { stale: 0, conflicting: 0, failed: 0 };
     for (const uriSessions of byUri.values()) {
-      uriSessions.sort((a, b) => b.range.start.line - a.range.start.line);
-      for (const session of uriSessions) {
-        if (!(await this.acceptDiff(session.id, { quiet: true }))) {
-          stale += 1;
-        }
-      }
+      const outcome = await this._acceptDocumentSessions(uriSessions);
+      total.stale += outcome.stale;
+      total.conflicting += outcome.conflicting;
+      total.failed += outcome.failed;
     }
-    if (stale > 0) {
+    if (total.stale > 0) {
       vscode.window.showWarningMessage(
-        stale === 1
+        total.stale === 1
           ? STALE_DIFF_MESSAGE
-          : `${PRODUCT_NAMES.code}: ${stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
+          : `${PRODUCT_NAMES.code}: ${total.stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
       );
     }
+    if (total.conflicting > 0) {
+      vscode.window.showWarningMessage(
+        `${PRODUCT_NAMES.code}: ${total.conflicting} ${total.conflicting === 1 ? 'edit was' : 'edits were'} not applied because ${total.conflicting === 1 ? 'it overlaps' : 'they overlap'} another edit in the same place. Accept ${total.conflicting === 1 ? 'it' : 'them'} one at a time.`,
+      );
+    }
+    if (total.failed > 0) {
+      vscode.window.showWarningMessage(
+        `${PRODUCT_NAMES.code}: ${total.failed} ${total.failed === 1 ? 'edit' : 'edits'} could not be applied and ${total.failed === 1 ? 'is' : 'are'} still waiting for review.`,
+      );
+    }
+  }
+
+  private async _acceptDocumentSessions(
+    uriSessions: readonly DiffSession[],
+  ): Promise<BulkAcceptOutcome> {
+    const outcome: BulkAcceptOutcome = { stale: 0, conflicting: 0, failed: 0 };
+    const ordered = [...uriSessions].sort((a, b) => comparePositions(b.range.start, a.range.start));
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(ordered[0]!.uri);
+    } catch {
+      outcome.stale = ordered.length;
+      return outcome;
+    }
+
+    const wsEdit = new vscode.WorkspaceEdit();
+    const accepted: DiffSession[] = [];
+    for (const session of ordered) {
+      if (!this._activeDiffs.has(session.id)) continue;
+      if (isStaleIn(session, document)) {
+        outcome.stale += 1;
+      } else if (accepted.some((other) => rangesConflict(other.range, session.range))) {
+        outcome.conflicting += 1;
+      } else {
+        wsEdit.replace(session.uri, session.range, session.newText);
+        accepted.push(session);
+      }
+    }
+    if (accepted.length === 0) return outcome;
+
+    if (await vscode.workspace.applyEdit(wsEdit)) {
+      for (const session of accepted) this._removeSession(session.id);
+    } else {
+      outcome.failed = accepted.length;
+    }
+    return outcome;
   }
 
   private _rejectSessions(sessions: readonly DiffSession[]): void {
@@ -499,7 +579,9 @@ export class DiffDecorationProvider implements vscode.Disposable {
   }
 
   private _removeSession(sessionId: string): void {
+    const session = this._activeDiffs.get(sessionId);
     this._activeDiffs.delete(sessionId);
+    if (session !== undefined) void this._closeProposalTabs([session]).catch(() => undefined);
     for (const editor of vscode.window.visibleTextEditors) {
       this._applyDecorationsToEditor(editor);
     }
@@ -507,13 +589,18 @@ export class DiffDecorationProvider implements vscode.Disposable {
     if (this._activeDiffs.size === 0) {
       void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', false);
     }
+    this._syncCursorContext();
   }
 
   private _clearSessionsForUri(uri: vscode.Uri): void {
     const uriStr = uri.toString();
+    const cleared: DiffSession[] = [];
     for (const [id, session] of this._activeDiffs) {
-      if (session.uri.toString() === uriStr) this._activeDiffs.delete(id);
+      if (session.uri.toString() !== uriStr) continue;
+      this._activeDiffs.delete(id);
+      cleared.push(session);
     }
+    if (cleared.length > 0) void this._closeProposalTabs(cleared).catch(() => undefined);
     this._rejectedStash = this._rejectedStash.filter(
       (session) => session.uri.toString() !== uriStr,
     );
@@ -521,55 +608,25 @@ export class DiffDecorationProvider implements vscode.Disposable {
     if (this._activeDiffs.size === 0) {
       void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', false);
     }
+    this._syncCursorContext();
   }
 
   private _applyDecorationsToEditor(editor: vscode.TextEditor): void {
-    const addedOpts: vscode.DecorationOptions[] = [];
-    const removedOpts: vscode.DecorationOptions[] = [];
-    const modifiedOpts: vscode.DecorationOptions[] = [];
-    const addedGutterOpts: vscode.DecorationOptions[] = [];
-    const removedGutterOpts: vscode.DecorationOptions[] = [];
-    const lastLine = Math.max(0, editor.document.lineCount - 1);
-
+    const replaced: vscode.DecorationOptions[] = [];
+    const insertions: vscode.DecorationOptions[] = [];
     for (const session of this._activeDiffs.values()) {
       if (session.uri.toString() !== editor.document.uri.toString()) continue;
-      for (const diff of diffLines(session.originalText, session.newText)) {
-        const line = Math.min(session.range.start.line + diff.editorLine, lastLine);
-        const docLine = editor.document.lineAt(line);
-        const opt: vscode.DecorationOptions = {
-          range: new vscode.Range(line, 0, line, docLine.text.length),
-        };
-        if (diff.kind === 'added') {
-          addedOpts.push(opt);
-          addedGutterOpts.push({
-            range: new vscode.Range(line, 0, line, 0),
-            hoverMessage: new vscode.MarkdownString('**+** Line added'),
-          });
-        } else if (diff.kind === 'removed') {
-          removedOpts.push(opt);
-          removedGutterOpts.push({
-            range: new vscode.Range(line, 0, line, 0),
-            hoverMessage: new vscode.MarkdownString('**-** Line removed'),
-          });
-        } else {
-          modifiedOpts.push(opt);
-        }
-      }
+      const decorations = sessionDecorations(session, editor.document);
+      replaced.push(...decorations.replaced);
+      insertions.push(...decorations.insertions);
     }
-
-    editor.setDecorations(this._addedDecoration, addedOpts);
-    editor.setDecorations(this._removedDecoration, removedOpts);
-    editor.setDecorations(this._modifiedDecoration, modifiedOpts);
-    editor.setDecorations(this._addedGutter, addedGutterOpts);
-    editor.setDecorations(this._removedGutter, removedGutterOpts);
+    editor.setDecorations(this._replacedDecoration, replaced);
+    editor.setDecorations(this._insertionGutter, insertions);
   }
 
   dispose(): void {
-    this._addedDecoration.dispose();
-    this._removedDecoration.dispose();
-    this._modifiedDecoration.dispose();
-    this._addedGutter.dispose();
-    this._removedGutter.dispose();
+    this._replacedDecoration.dispose();
+    this._insertionGutter.dispose();
     for (const d of this._disposables) d.dispose();
     this._activeDiffs.clear();
     this._rejectedStash = [];

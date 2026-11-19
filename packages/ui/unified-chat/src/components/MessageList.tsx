@@ -24,7 +24,7 @@ interface MessageListProps {
   onToolApprove?: (messageId: string, toolCallId: string) => void;
   onToolReject?: (messageId: string, toolCallId: string) => void;
   approvalTurnExpired?: boolean;
-  onEditMessage?: (messageId: string, newContent: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => boolean | void;
   onFollowUp?: (text: string) => void;
   messageActions?: MessageActionSlots;
 }

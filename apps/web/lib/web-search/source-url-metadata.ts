@@ -93,6 +93,22 @@ export async function resolveSourceUrlMetadataRedirects(
   metadata: Record<string, unknown>,
   overrides: RedirectResolutionOverrides = {},
 ): Promise<Record<string, unknown> | null> {
+  const publisherUrlByRedirect = await resolveSourceUrlRedirectMap(metadata, overrides);
+  return publisherUrlByRedirect
+    ? applySourceUrlRedirectMap(metadata, publisherUrlByRedirect)
+    : null;
+}
+
+/**
+ * The publisher URL behind each routing redirect cited under the citation keys,
+ * or null when none was cited or none resolved. Kept apart from
+ * {@link applySourceUrlRedirectMap} so a writer that must re-read the row after
+ * this network wait can apply the same answers to the latest metadata.
+ */
+export async function resolveSourceUrlRedirectMap(
+  metadata: Record<string, unknown>,
+  overrides: RedirectResolutionOverrides = {},
+): Promise<ReadonlyMap<string, string> | null> {
   const storedRedirects = new Set<string>();
   for (const key of SOURCE_URL_METADATA_KEYS) {
     collectRoutingRedirects(metadata[key], storedRedirects);
@@ -111,7 +127,22 @@ export async function resolveSourceUrlMetadataRedirects(
       publisherUrlByRedirect.set(redirect, publisherUrl);
     }
   });
-  if (publisherUrlByRedirect.size === 0) return null;
+  return publisherUrlByRedirect.size > 0 ? publisherUrlByRedirect : null;
+}
+
+/**
+ * The citation keys of `metadata` with every mapped redirect substituted, or
+ * null when no href under them is in the map.
+ */
+export function applySourceUrlRedirectMap(
+  metadata: Record<string, unknown>,
+  publisherUrlByRedirect: ReadonlyMap<string, string>,
+): Record<string, unknown> | null {
+  const cited = new Set<string>();
+  for (const key of SOURCE_URL_METADATA_KEYS) {
+    collectRoutingRedirects(metadata[key], cited);
+  }
+  if (![...cited].some((redirect) => publisherUrlByRedirect.has(redirect))) return null;
 
   const patch: Record<string, unknown> = {};
   for (const key of SOURCE_URL_METADATA_KEYS) {

@@ -451,7 +451,9 @@ async function readTriggerMailbox(
     });
     outcome.matched += outcomes.length;
     outcome.queued += outcomes.filter((entry) => entry.outcome === 'enqueued').length;
+    if (outcomes.some((entry) => entry.outcome === 'failed')) outcome.retry = true;
   }
+  if (outcome.retry) return outcome;
   if (readThrough) await advanceHistory(db, trigger, readThrough);
   return outcome;
 }

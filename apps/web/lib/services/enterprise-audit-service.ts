@@ -47,15 +47,23 @@ interface AuditEventRow {
   severity: 'info' | 'warning' | 'critical';
   metadata: Record<string, unknown> | null;
   created_at: string;
+  created_at_cursor?: string;
 }
 
+const CURSOR_TIMESTAMP = `to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
 const COLUMNS = `id, organization_id, actor_user_id, surface, action, resource_type,
-  resource_id, outcome, severity, metadata, created_at`;
+  resource_id, outcome, severity, metadata, created_at,
+  ${CURSOR_TIMESTAMP} as created_at_cursor`;
 
 function toIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'string') return value;
   return new Date(0).toISOString();
+}
+
+function cursorFor(row: AuditEventRow): AuditCursor {
+  return { createdAt: row.created_at_cursor ?? toIso(row.created_at), id: row.id };
 }
 
 export function formatAuditEvent(row: AuditEventRow): EnterpriseAuditEvent {
@@ -135,7 +143,7 @@ export async function listAuditEvents(
 
   return {
     events: page.map(formatAuditEvent),
-    nextCursor: hasMore && last ? { createdAt: toIso(last.created_at), id: last.id } : null,
+    nextCursor: hasMore && last ? cursorFor(last) : null,
   };
 }
 
@@ -172,7 +180,7 @@ export async function* iterateAuditEventsForExport(
 
     const last = rows[rows.length - 1];
     if (!last) return;
-    cursor = { createdAt: toIso(last.created_at), id: last.id };
+    cursor = cursorFor(last);
   }
 }
 

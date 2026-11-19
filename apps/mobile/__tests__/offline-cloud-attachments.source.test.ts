@@ -45,8 +45,8 @@ describe('offline Cloud attachment refusal source shape', () => {
     expect(offlineBranch).toContain('content: finalText');
     expect(offlineBranch).toContain('model: selectedModel');
     expect(offlineBranch).toContain('return true;');
-    expect(source.slice(onlineSendStart)).toContain(
-      'sendMessage(id, finalText, selectedModel, attachments, sendOptions)',
+    expect(source.slice(onlineSendStart)).toMatch(
+      /sendMessage\(id, finalText, selectedModel, attachments, \{\s*\.\.\.sendOptions,/,
     );
   });
 });

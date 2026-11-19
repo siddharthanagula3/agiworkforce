@@ -161,9 +161,9 @@ describe('what a shared page tells its reader about AI', () => {
     expect(AUP).toContain('headed &ldquo;Read-only shared session&rdquo;');
   });
 
-  it('marks a shared artifact as shared from AGI', () => {
-    expect(ARTIFACT).toContain("t('artifactPublish.sharedFrom', 'Shared from AGI')");
-    expect(AUP).toContain('&ldquo;Shared from AGI&rdquo;');
+  it('marks a shared artifact as a shared conversation', () => {
+    expect(ARTIFACT).toContain("t('artifactPublish.sharedFrom', 'Shared conversation')");
+    expect(AUP).toContain('&ldquo;Shared conversation&rdquo;');
   });
 
   it('prints no AI-generated statement on either page, which is what the policy admits', () => {
@@ -432,7 +432,9 @@ describe('the privacy policy additions', () => {
     expect(read('app/api/feedback/route.ts')).toContain(
       "`${SCREENSHOT_KEY_PREFIX}/${userId ?? 'anonymous'}/",
     );
-    expect(erasure).toContain('if (table === FEEDBACK_TABLE && feedbackScreenshots.failed > 0) {');
+    expect(erasure).toMatch(
+      /\(table === FEEDBACK_TABLE \|\| table === FEEDBACK_SCREENSHOT_CLEANUP_TABLE\) &&\s*feedbackScreenshots\.failed > 0\s*\) \{\s*tables\[table\] = \{ deleted: false, retainedForRetry: true \};/u,
+    );
     expect(PRIVACY).toContain('deletes any screenshot you attached to feedback from storage');
     expect(PRIVACY).toContain('the record is kept and the next run tries again');
   });

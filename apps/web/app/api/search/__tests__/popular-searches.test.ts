@@ -4,12 +4,12 @@ import { NextRequest } from 'next/server';
 const {
   mockGetClerkAuthUser,
   mockNeonQuery,
-  mockReadOrganizationRegion,
+  mockReadStoredOrganizationRegion,
   mockResolveActiveOrganizationId,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
-  mockReadOrganizationRegion: vi.fn(),
+  mockReadStoredOrganizationRegion: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
 }));
 
@@ -57,7 +57,7 @@ vi.mock('@/lib/server/rls-db', async () => ({
 vi.mock('@/lib/server/data-region', async () => ({
   ...(await vi.importActual<DataRegionModule>('@/lib/server/data-region')),
 
-  readOrganizationRegion: mockReadOrganizationRegion,
+  readStoredOrganizationRegion: mockReadStoredOrganizationRegion,
 }));
 
 vi.mock('@/lib/services/active-workspace-service', async () => ({
@@ -101,7 +101,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
-  mockReadOrganizationRegion.mockResolvedValue({
+  mockReadStoredOrganizationRegion.mockResolvedValue({
     effective: 'us',
     requested: null,
     requestedAt: null,
@@ -198,7 +198,7 @@ describe('search-history workspace scope', () => {
   });
 
   it('refuses to clear history from a workspace whose region is not served here', async () => {
-    mockReadOrganizationRegion.mockResolvedValue({
+    mockReadStoredOrganizationRegion.mockResolvedValue({
       effective: 'eu',
       requested: 'eu',
       requestedAt: null,

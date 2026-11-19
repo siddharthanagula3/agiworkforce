@@ -280,7 +280,10 @@ describe('executePlacesSearch', () => {
     });
 
     await expect(
-      executePlacesSearch({ query: 'coffee' }, { toolCallId: 'call-8', provider, billing: BILLING }),
+      executePlacesSearch(
+        { query: 'coffee' },
+        { toolCallId: 'call-8', provider, billing: BILLING },
+      ),
     ).rejects.toThrow('socket hang up');
     expect(settlePlacesSearchCall).toHaveBeenCalledWith(BILLING, {
       admission: RESERVED_ADMISSION,
@@ -322,6 +325,26 @@ describe('formatPlacesResultForModel', () => {
     expect(rendered).toContain('https://www.saintfrankcoffee.com/');
     expect(rendered).toContain("the user's local time");
     expect(rendered).toContain('Powered by the stub');
+  });
+
+  it('labels fallback regular hours so they are not read as today-specific', async () => {
+    const provider = stubProvider({
+      search: async () => ({
+        ok: true,
+        providerId: 'stub_places',
+        attribution: 'Powered by the stub',
+        places: [{ ...RECORDED_PLACE, hoursKind: 'regular' }],
+        billableCalls: 1,
+      }),
+    });
+    const outcome = await executePlacesSearch(
+      { query: 'best coffee' },
+      { toolCallId: 'call-11', provider, now: () => FIXED_NOW },
+    );
+
+    const rendered = formatPlacesResultForModel(outcome);
+    expect(rendered).toContain('Regular hours: Monday: 7:00 AM - 6:00 PM');
+    expect(rendered).not.toMatch(/^\s+Hours:/m);
   });
 
   it('says plainly that nothing matched instead of inviting a remembered answer', async () => {

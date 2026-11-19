@@ -11,15 +11,16 @@ import {
   type CloudCodeSharedSession,
   type CloudCodeSharedVisibility,
 } from '@agiworkforce/types';
+import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 import {
   CloudCodeNotFoundError,
   CloudCodeValidationError,
   getCloudCodeSession,
-  listCloudCodeAgentTurns,
   listCloudCodeTerminalEntries,
   mapCloudCodeSession,
+  readCloudCodeAgentTurnWindow,
   validateCloudCodeSessionId,
   type CloudCodeOwner,
 } from './cloud-code-session-service';
@@ -133,6 +134,7 @@ export async function openSharedCloudCodeSession(
     [token],
   );
   if (!grant) return null;
+  await assertTenantNotLockedDown(grant.organization_id);
 
   const ownerDb = getNeonDb();
   const owner: CloudCodeOwner = {
@@ -148,9 +150,9 @@ export async function openSharedCloudCodeSession(
   ) {
     throw new CloudCodeSharedRepositoryError(cloudCodeRepositoryLabel(session.repositoryUrl));
   }
-  const [terminalEntries, turns, ownerName] = await Promise.all([
+  const [terminalEntries, { turns, truncated }, ownerName] = await Promise.all([
     listCloudCodeTerminalEntries(ownerDb, owner, grant.session_id),
-    listCloudCodeAgentTurns(ownerDb, owner, grant.session_id),
+    readCloudCodeAgentTurnWindow(ownerDb, owner, grant.session_id),
     readOwnerName(ownerDb, grant.owner_user_id),
   ]);
   return {
@@ -166,5 +168,6 @@ export async function openSharedCloudCodeSession(
     updatedAt: session.updatedAt,
     terminalEntries,
     turns,
+    turnsTruncated: truncated,
   };
 }

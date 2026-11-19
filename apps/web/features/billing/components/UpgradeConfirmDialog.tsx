@@ -20,6 +20,7 @@ import {
   type CheckoutTrialTerms,
   type UpgradeChargeBreakdown,
   type UpgradePromotionSummary,
+  type UpgradeRecurringTerms,
 } from '../services/stripe-payments';
 import { UpgradePromotionCode } from './UpgradePromotionCode';
 import {
@@ -27,7 +28,12 @@ import {
   formatCatalogPrice,
   type SelectablePaidPlan,
 } from '../lib/plan-display';
-import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
+import {
+  formatBillingDate,
+  formatBillingMoney,
+  formatRecurringMoney,
+  formatRenewalTerms,
+} from '../lib/billing-format';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export interface UpgradeConfirmRequest {
@@ -78,6 +84,7 @@ export function UpgradeConfirmDialog({
     currency: string;
     previewToken: string;
     charge: UpgradeChargeBreakdown | null;
+    recurring: UpgradeRecurringTerms;
     grandfatheredNotice: string | null;
   } | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -120,6 +127,7 @@ export function UpgradeConfirmDialog({
             currency: r.currency,
             previewToken: r.previewToken,
             charge: r.charge,
+            recurring: r.recurring,
             grandfatheredNotice: r.grandfatheredNotice,
           });
         }
@@ -155,12 +163,23 @@ export function UpgradeConfirmDialog({
   const planLabel = display.pricing.label;
   const unitPriceUsd = getPublishedPlanPriceUsd(request.plan, request.billingInterval);
   const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';
-  const recurringPrice =
+  const catalogRecurringPrice =
     unitPriceUsd === null
       ? `the ${request.billingInterval} ${planLabel} price`
       : `${formatCatalogPrice(unitPriceUsd * (request.seats ?? 1))}/${intervalWord}`;
+  const renewalTerms = amountDue
+    ? formatRenewalTerms(amountDue.recurring, request.billingInterval)
+    : `${catalogRecurringPrice} plus tax`;
 
-  const summaryPrice = unitPriceUsd === null ? null : recurringPrice;
+  const summaryPrice = amountDue
+    ? formatRecurringMoney(
+        amountDue.recurring.amountCents,
+        amountDue.recurring.currency,
+        request.billingInterval,
+      )
+    : unitPriceUsd === null
+      ? null
+      : catalogRecurringPrice;
   const summaryBillingLine = checkoutRequired?.trial
     ? `First charge ${formatRenewalDate(checkoutRequired.trial.convertsAt)}`
     : amountDue?.charge?.renewsAt
@@ -183,6 +202,7 @@ export function UpgradeConfirmDialog({
         currency: result.currency,
         previewToken: result.previewToken,
         charge: result.charge,
+        recurring: result.recurring,
         grandfatheredNotice: result.grandfatheredNotice,
       });
       setPromotion(result.promotion);
@@ -257,7 +277,7 @@ export function UpgradeConfirmDialog({
                   : amountDue
                     ? amountDue.charge
                       ? 'Review the charge before it goes to your saved card.'
-                      : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${recurringPrice} plus tax.`
+                      : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${renewalTerms}.`
                     : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>
@@ -361,8 +381,8 @@ export function UpgradeConfirmDialog({
             */}
             <p className="mt-3 text-xs text-[color:var(--text-3)]">
               {amountDue.charge.renewsAt
-                ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}, then ${recurringPrice} plus tax.`
-                : `Then ${recurringPrice} plus tax at each renewal.`}
+                ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}, then ${renewalTerms}.`
+                : `Then ${renewalTerms} at each renewal.`}
             </p>
           </section>
         ) : null}

@@ -6,6 +6,8 @@ export type PaymentProviderId = (typeof PAYMENT_PROVIDER_IDS)[number];
 
 export const CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX = 'Refund for charge ';
 
+export const REFUND_REQUEST_METADATA_KEY = 'refund_request_id';
+
 export type NormalizedSubscriptionStatus =
   | 'active'
   | 'trialing'
@@ -189,6 +191,7 @@ export interface NormalizedCharge {
 }
 
 export interface NormalizedSubscriptionPayment {
+  subscriptionReference: string | null;
   servicePeriod: NormalizedPeriod | null;
   withdrawalConsent: NormalizedWithdrawalConsent | null;
 }
@@ -210,7 +213,9 @@ export interface ChargeRefundInput {
 }
 
 export type ChargeRefundResult =
-  { outcome: 'refunded'; refund: NormalizedRefund } | { outcome: 'rejected'; code: string | null };
+  | { outcome: 'refunded'; refund: NormalizedRefund }
+  | { outcome: 'pending'; refund: NormalizedRefund }
+  | { outcome: 'rejected'; code: string | null };
 
 export interface PurchaseVerificationInput {
   reference: string;

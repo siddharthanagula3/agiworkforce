@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { presentableAuditRowClause } from '../../activity/activity-presentation';
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -29,13 +30,16 @@ async function handleGetActions(request: NextRequest) {
   }
 
   try {
+    const params: unknown[] = [userId];
+    const presentable = presentableAuditRowClause(params);
     const rows = await db.query<{ event_type: string }>(
-      `select distinct event_type
-       from public.security_audit_logs
-       where user_id = $1
-       order by event_type asc
+      `select distinct sal.event_type
+       from public.security_audit_logs sal
+       where sal.user_id = $1
+         and ${presentable}
+       order by sal.event_type asc
        limit 200`,
-      [userId],
+      params,
     );
 
     return NextResponse.json({ actions: rows.map((r) => r.event_type) });

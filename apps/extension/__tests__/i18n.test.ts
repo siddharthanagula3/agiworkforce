@@ -40,6 +40,7 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/tasksSheet.ts',
   'src/features/side-panel/phoneSheet.ts',
   'src/features/computer-use/browserTurnActivity.ts',
+  'src/features/cloud-bridge/conversationHistoryPull.ts',
   'src/features/options/destinations.ts',
   'src/features/options/desktop-pairing-rows.ts',
   'src/features/options/keyboard-shortcut-rows.ts',
@@ -53,6 +54,8 @@ const LOCALIZED_SOURCES = [
   'src/features/onboarding/welcome-page.ts',
   'src/features/side-panel/onboardingPrompt.ts',
   'src/background/task-notifications.ts',
+  'src/features/side-panel/autofillSummary.ts',
+  'src/features/background/editable-selection.ts',
 ] as const;
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;

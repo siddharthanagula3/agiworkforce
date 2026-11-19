@@ -49,6 +49,26 @@ export const SecurityScanDecisionRequestSchema = z
   .strict();
 export type SecurityScanDecisionRequest = z.infer<typeof SecurityScanDecisionRequestSchema>;
 
+export const SECURITY_SCAN_DELIVERY_STATUS = {
+  pending: 'pending',
+  pushed: 'pushed',
+  failed: SECURITY_SCAN_STATUS.failed,
+} as const;
+export const SECURITY_SCAN_DELIVERY_ERROR_MAX_LENGTH = 1000;
+
+export const SecurityScanDeliverySchema = z
+  .object({
+    status: z.enum([
+      SECURITY_SCAN_DELIVERY_STATUS.pending,
+      SECURITY_SCAN_DELIVERY_STATUS.pushed,
+      SECURITY_SCAN_DELIVERY_STATUS.failed,
+    ]),
+    pullRequestUrl: z.string().nullable(),
+    error: z.string().max(SECURITY_SCAN_DELIVERY_ERROR_MAX_LENGTH).nullable(),
+  })
+  .strict();
+export type SecurityScanDeliveryResult = z.infer<typeof SecurityScanDeliverySchema>;
+
 export const SecurityScanFindingSchema = z
   .object({
     id: z.string().regex(SECURITY_SCAN_FINDING_ID_PATTERN),
@@ -63,6 +83,7 @@ export const SecurityScanFindingSchema = z
     patch: z.string().min(1).max(20_000),
     state: z.enum(SECURITY_SCAN_FINDING_STATES),
     decidedAt: z.string().nullable(),
+    delivery: SecurityScanDeliverySchema.nullable().optional(),
   })
   .strict();
 export type SecurityScanFinding = z.infer<typeof SecurityScanFindingSchema>;
@@ -154,12 +175,6 @@ export interface SecurityScanStateResponse {
 
 export interface SecurityScanResponse {
   report: SecurityScanCompletedReport;
-}
-
-export interface SecurityScanDeliveryResult {
-  status: 'pushed' | typeof SECURITY_SCAN_STATUS.failed;
-  pullRequestUrl: string | null;
-  error: string | null;
 }
 
 export interface SecurityScanDecisionResponse {

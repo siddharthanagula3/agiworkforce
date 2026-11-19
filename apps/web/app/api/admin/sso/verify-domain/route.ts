@@ -8,6 +8,7 @@ import type { SSOConnectionRow } from '@/lib/server/neon-types';
 import { SSO_CONNECTION_SELECT_COLUMNS, toConnectionView } from '@/lib/server/sso/connection-view';
 import {
   domainVerificationInstructions,
+  isDomainChallengeExpired,
   issueDomainVerificationToken,
   verifyDomainOwnership,
 } from '@/lib/server/sso/domain-verification';
@@ -127,7 +128,12 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    const outcome = await verifyDomainOwnership(row.domain, row.domain_verification_token);
+    const challengeToken = row.domain_verification_token;
+    const lookup = await verifyDomainOwnership(row.domain, challengeToken);
+    const outcome: Awaited<ReturnType<typeof verifyDomainOwnership>> =
+      lookup.verified && isDomainChallengeExpired(challengeToken)
+        ? { verified: false, reason: 'challenge_expired' }
+        : lookup;
 
     if (!outcome.verified) {
       await logSecurityEvent({
@@ -174,8 +180,10 @@ export async function POST(request: NextRequest): Promise<Response> {
         `update sso_connections
            set domain_verified_at = now(), domain_verification_token = null
          where id = $1
+           and domain_verification_token = $2
+           and domain_verified_at is null
          returning ${SSO_CONNECTION_SELECT_COLUMNS}`,
-        [row.id],
+        [row.id, challengeToken],
       );
     } catch (err: unknown) {
       if ((err as { code?: string })?.code === '23505') {
@@ -189,7 +197,35 @@ export async function POST(request: NextRequest): Promise<Response> {
       throw err;
     }
 
-    const result = updated[0] ?? row;
+    const result = updated[0];
+    if (!result) {
+      const [current] = await principal.db.query<SSOConnectionRow>(
+        `select ${SSO_CONNECTION_SELECT_COLUMNS} from sso_connections where id = $1 limit 1`,
+        [row.id],
+      );
+      if (!current) {
+        return NextResponse.json({ error: 'SSO connection not found' }, { status: 404 });
+      }
+      if (current.domain_verified_at) {
+        return NextResponse.json({
+          verified: true,
+          connection: toConnectionView(current),
+          message: `Domain "${current.domain}" is already verified.`,
+        });
+      }
+      return NextResponse.json(
+        {
+          verified: false,
+          error:
+            'A new verification challenge was issued while this check was running. Publish the new TXT record, then verify again.',
+          code: 'CHALLENGE_REPLACED',
+          domainVerification: current.domain_verification_token
+            ? domainVerificationInstructions(current.domain, current.domain_verification_token)
+            : null,
+        },
+        { status: 409 },
+      );
+    }
 
     logger.info(
       { userId: principal.userId, connectionId: row.id, domain: row.domain },
@@ -258,16 +294,21 @@ export async function PUT(request: NextRequest): Promise<Response> {
       `update sso_connections
          set domain_verification_token = $2, domain_verified_at = null
        where id = $1
+         and is_active = false
        returning ${SSO_CONNECTION_SELECT_COLUMNS}`,
       [row.id, token],
     );
 
     const result = updated[0];
     if (!result) {
-      return ssoErrorResponse(new Error('challenge update returned no row'), {
-        userId: principal.userId,
-        connectionId: row.id,
-      });
+      return NextResponse.json(
+        {
+          error:
+            'This connection changed while the challenge was being reissued. Reload it, and deactivate it before reissuing a domain challenge.',
+          code: 'CONNECTION_CHANGED',
+        },
+        { status: 409 },
+      );
     }
 
     await logSecurityEvent({

@@ -147,6 +147,17 @@ interface OwnedEntryRow {
   version: string;
   declared_skills: unknown;
   content_hash: string;
+  files: unknown;
+}
+
+function ownedEntryFiles(value: unknown): OwnedEntryFile[] {
+  const list: unknown = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((item: unknown) => {
+    if (typeof item !== 'object' || item === null) return [];
+    const { path, content } = item as { path?: unknown; content?: unknown };
+    return typeof path === 'string' && typeof content === 'string' ? [{ path, content }] : [];
+  });
 }
 
 export interface CreateSubmissionInput {
@@ -162,7 +173,15 @@ export async function createSubmission(
 ): Promise<PluginSubmissionSummary | null> {
   const [entry] = await db.query<OwnedEntryRow>(
     `select entries.id, entries.plugin_key, entries.name, entries.description, entries.version,
-            entries.declared_skills, entries.content_hash
+            entries.declared_skills, entries.content_hash,
+            coalesce(
+              (select jsonb_agg(
+                        jsonb_build_object('path', files.path, 'content', files.content)
+                        order by files.path asc)
+                 from public.plugin_marketplace_entry_files files
+                where files.entry_id = entries.id),
+              '[]'::jsonb
+            ) as files
        from public.plugin_marketplace_entries entries
        join public.plugin_marketplace_sources sources on sources.id = entries.source_id
       where entries.id = $1 and sources.user_id = $2 and sources.kind = any($3::text[])
@@ -170,15 +189,7 @@ export async function createSubmission(
     [input.entryId, userId, OWNED_SOURCE_KINDS],
   );
   if (!entry) return null;
-  const files = await db.query<OwnedEntryFile>(
-    `select files.path, files.content
-       from public.plugin_marketplace_entry_files files
-       join public.plugin_marketplace_entries entries on entries.id = files.entry_id
-       join public.plugin_marketplace_sources sources on sources.id = entries.source_id
-      where files.entry_id = $1 and sources.user_id = $2
-      order by files.path asc`,
-    [entry.id, userId],
-  );
+  const files = ownedEntryFiles(entry.files);
   if (files.length === 0) {
     throw createError
       .validation('This plugin has no files stored with it, so it cannot be reviewed.')

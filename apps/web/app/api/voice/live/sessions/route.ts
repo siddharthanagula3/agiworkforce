@@ -44,6 +44,10 @@ import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
+import {
+  LIVE_VOICE_SESSION_OPERATION,
+  assertTierUnitAllowance,
+} from '@/lib/services/tier-unit-quota-service';
 import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
   finalizeManagedUsageRequest,
@@ -80,6 +84,7 @@ import {
 } from '@/lib/voice/live-voice-tools';
 import {
   describeLiveSessionFailure,
+  LIVE_VOICE_BLOCK_MINUTES,
   LIVE_VOICE_BLOCK_SECONDS,
   LIVE_VOICE_FEATURE,
   LIVE_VOICE_LEASE_SECONDS,
@@ -350,6 +355,13 @@ async function handleCreateLiveSession(request: NextRequest) {
           VOICE_USAGE_NOT_IN_PLAN.message,
         );
       }
+      await assertTierUnitAllowance({
+        db: scoped.db,
+        userId,
+        planTier,
+        unit: 'voice_minutes',
+        requestedUnits: LIVE_VOICE_BLOCK_MINUTES,
+      });
       reservation = await reserveManagedUsageRequest({
         db: scoped.db,
         userId,
@@ -363,6 +375,10 @@ async function handleCreateLiveSession(request: NextRequest) {
         planTier,
         isFlagship: false,
         quotaFeature: LIVE_VOICE_FEATURE,
+        reservedUsage: {
+          operation: LIVE_VOICE_SESSION_OPERATION,
+          billedSeconds: LIVE_VOICE_BLOCK_SECONDS,
+        },
         conversationId,
       });
     } else {

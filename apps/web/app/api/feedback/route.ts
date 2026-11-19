@@ -5,11 +5,20 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
+import {
+  CLEAR_FEEDBACK_SCREENSHOT_SQL,
+  RECORD_FEEDBACK_SCREENSHOT_SQL,
+} from '@/lib/server/feedback-screenshot-cleanup';
 import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import { getOptionalAuthUser } from '@/lib/api-auth';
-import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
+import {
+  deletePrivateObject,
+  isPrivateObjectStorageConfigured,
+  putPrivateObject,
+} from '@/lib/server/object-storage';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
@@ -35,7 +44,11 @@ const DELETE_RESPONSE_RATING_SQL = `delete from public.feedback
           and metadata->>'feedback_context' = 'response_rating'
           and metadata->>'message_id' = $2`;
 
-async function storeScreenshot(dataUrl: string, userId: string | null): Promise<string | null> {
+async function storeScreenshot(
+  db: DatabaseAdapter,
+  dataUrl: string,
+  userId: string | null,
+): Promise<string | null> {
   const match = SCREENSHOT_DATA_URL.exec(dataUrl);
   if (!match) throw createError.badRequest('Screenshot must be a PNG, JPEG or WebP data URL');
   const [, format, base64] = match as unknown as [string, string, string];
@@ -49,13 +62,51 @@ async function storeScreenshot(dataUrl: string, userId: string | null): Promise<
   }
   const extension = format === 'jpeg' ? 'jpg' : format;
   const key = `${SCREENSHOT_KEY_PREFIX}/${userId ?? 'anonymous'}/${Date.now()}_${secureFilenameSegment()}.${extension}`;
-  await putPrivateObject({
-    key,
-    data,
-    contentType: `image/${format}`,
-    contentLength: data.byteLength,
-  });
+  try {
+    await db.execute(RECORD_FEEDBACK_SCREENSHOT_SQL, [key, userId]);
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      'feedback screenshot dropped: its cleanup record could not be written',
+    );
+    return null;
+  }
+  try {
+    await putPrivateObject({
+      key,
+      data,
+      contentType: `image/${format}`,
+      contentLength: data.byteLength,
+    });
+  } catch (error) {
+    await discardScreenshot(db, key, userId);
+    throw error;
+  }
   return key;
+}
+
+async function discardScreenshot(
+  db: DatabaseAdapter,
+  key: string,
+  userId: string | null,
+): Promise<void> {
+  try {
+    await deletePrivateObject(key);
+  } catch (error) {
+    logger.error(
+      { error, userId, objectKey: key },
+      'Failed to discard the screenshot of a feedback report that was not stored; its cleanup record stays for the sweep',
+    );
+    return;
+  }
+  try {
+    await db.execute(CLEAR_FEEDBACK_SCREENSHOT_SQL, [key]);
+  } catch (error) {
+    logger.warn(
+      { error, userId, objectKey: key },
+      'The cleanup record of a discarded feedback screenshot could not be cleared; the sweep clears it',
+    );
+  }
 }
 
 const ResponseRatingTarget = z.object({
@@ -272,6 +323,34 @@ async function submitResponseRating(request: NextRequest, feedback: Feedback) {
   return NextResponse.json({ success: true });
 }
 
+async function insertReport(
+  db: DatabaseAdapter,
+  row: unknown[],
+  screenshotKey: string | null,
+): Promise<void> {
+  if (!screenshotKey) {
+    await db.query(INSERT_FEEDBACK_SQL, row);
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx.execute(INSERT_FEEDBACK_SQL, row);
+    await tx.execute(CLEAR_FEEDBACK_SCREENSHOT_SQL, [screenshotKey]);
+  });
+}
+
+function reportStoreFailure(error: unknown, userId: string | null, feedback: Feedback) {
+  logger.error(
+    {
+      error,
+      userId,
+      feedbackContext: feedback.metadata.feedback_context ?? null,
+      source: feedback.metadata.source ?? 'desktop',
+    },
+    'Failed to store feedback',
+  );
+  return createError.internal('Failed to submit feedback');
+}
+
 async function submitReport(request: NextRequest, feedback: Feedback) {
   const reportLimitResponse = await withRateLimit(request, 'mobile-feedback');
   if (reportLimitResponse) return reportLimitResponse;
@@ -282,30 +361,28 @@ async function submitReport(request: NextRequest, feedback: Feedback) {
       : null;
 
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
+  let db: DatabaseAdapter;
+  try {
+    const ownerDb = getNeonDb();
+    db = userId ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null }) : ownerDb;
+  } catch (error) {
+    throw reportStoreFailure(error, userId, feedback);
+  }
   const screenshotKey = feedback.screenshot
-    ? await storeScreenshot(feedback.screenshot.data_url, userId)
+    ? await storeScreenshot(db, feedback.screenshot.data_url, userId)
     : null;
 
-  const ownerDb = getNeonDb();
-  const db = userId
-    ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null })
-    : ownerDb;
   try {
-    await db.query(INSERT_FEEDBACK_SQL, feedbackRow(userId, feedback, { logs, screenshotKey }));
+    await insertReport(db, feedbackRow(userId, feedback, { logs, screenshotKey }), screenshotKey);
   } catch (error) {
-    logger.error(
-      {
-        error,
-        userId,
-        feedbackContext: feedback.metadata.feedback_context ?? null,
-        source: feedback.metadata.source ?? 'desktop',
-      },
-      'Failed to store feedback',
-    );
-    throw createError.internal('Failed to submit feedback');
+    if (screenshotKey) await discardScreenshot(db, screenshotKey, userId);
+    throw reportStoreFailure(error, userId, feedback);
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    ...(feedback.screenshot ? { screenshot_stored: screenshotKey !== null } : {}),
+  });
 }
 
 async function handleSubmitFeedback(request: NextRequest) {

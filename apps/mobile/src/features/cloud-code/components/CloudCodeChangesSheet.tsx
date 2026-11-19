@@ -47,6 +47,7 @@ import {
 import { CloudCodeLineCountsText } from './CloudCodeChangesCard';
 import type { CloudCodeChangesView } from '../useCloudCodeChanges';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { CodeLinesScroller } from '@/src/features/settings/code/CodeLinesScroller';
 
 const ICON_SIZE = 16;
 const EXIT_CODE_OK = 0;
@@ -108,9 +109,8 @@ function DiffBody({ body }: { body: string }) {
   } as const;
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
+    <CodeLinesScroller
+      testID="cloud-code-diff"
       style={{ borderRadius: radii.md, backgroundColor: colors.surfaceHover }}
       contentContainerStyle={{ padding: 10 }}
     >
@@ -130,7 +130,7 @@ function DiffBody({ body }: { body: string }) {
           </Text>
         ))}
       </View>
-    </ScrollView>
+    </CodeLinesScroller>
   );
 }
 

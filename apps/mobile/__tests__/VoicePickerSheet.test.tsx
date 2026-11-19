@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockSheetProps: { current: Record<string, unknown> | null } = { current: null };
 const mockSheetCalls = { snapToIndex: jest.fn(), close: jest.fn() };
@@ -32,6 +32,11 @@ jest.mock('@gorhom/bottom-sheet', () => {
     BottomSheetView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
   };
 });
+const mockGetVoicesForLanguage = jest.fn();
+jest.mock('@/src/features/voice/services/tts', () => ({
+  ...jest.requireActual('@/src/features/voice/services/tts'),
+  getVoicesForLanguage: (...args: unknown[]) => mockGetVoicesForLanguage(...args),
+}));
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import {
   VoicePickerSheet,
@@ -57,7 +62,14 @@ describe('VoicePickerSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSheetProps.current = null;
-    useSettingsStore.setState({ selectedPresetId: null, hapticsEnabled: false });
+    mockGetVoicesForLanguage.mockReset().mockResolvedValue([]);
+    useSettingsStore.setState({
+      selectedPresetId: null,
+      selectedVoiceId: null,
+      speechRate: 1,
+      speechPitch: 1,
+      hapticsEnabled: false,
+    });
   });
 
   it('is a bottom sheet that sizes to its content and drags down to dismiss', () => {
@@ -148,6 +160,54 @@ describe('VoicePickerSheet', () => {
 
     expect(useSettingsStore.getState().selectedPresetId).toBe(first.id);
     expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the preset speed, pitch and installed voice that the Voice settings apply', async () => {
+    const preset = VOICE_PRESETS[1]!;
+    const matchingVoice = {
+      identifier: 'com.apple.voice.match',
+      name: preset.voiceKeywords[0]!,
+      quality: 'Default',
+      language: 'en-US',
+    };
+    mockGetVoicesForLanguage.mockResolvedValue([matchingVoice]);
+    const onStart = jest.fn();
+    const { getByLabelText } = renderSheet({ onStart });
+    await waitFor(() => expect(mockGetVoicesForLanguage).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent(getByLabelText('Voices'), 'momentumScrollEnd', {
+      nativeEvent: { contentOffset: { x: 750, y: 0 } },
+    });
+    fireEvent.press(getByLabelText(`Start voice with ${preset.name}`));
+
+    const settings = useSettingsStore.getState();
+    expect(settings.selectedPresetId).toBe(preset.id);
+    expect(settings.speechRate).toBe(preset.rate);
+    expect(settings.speechPitch).toBe(preset.pitch);
+    expect(settings.selectedVoiceId).toBe(matchingVoice.identifier);
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the chosen system voice when the installed voices could not be read', async () => {
+    mockGetVoicesForLanguage.mockRejectedValue(new Error('no voices'));
+    useSettingsStore.setState({ selectedVoiceId: 'com.apple.voice.kept' });
+    const first = VOICE_PRESETS[0]!;
+    const { getByLabelText } = renderSheet();
+    await waitFor(() => expect(mockGetVoicesForLanguage).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByLabelText(`Start voice with ${first.name}`));
+
+    const settings = useSettingsStore.getState();
+    expect(settings.selectedPresetId).toBe(first.id);
+    expect(settings.speechRate).toBe(first.rate);
+    expect(settings.speechPitch).toBe(first.pitch);
+    expect(settings.selectedVoiceId).toBe('com.apple.voice.kept');
   });
 
   it('does NOT change the saved voice when dismissed', () => {

@@ -40,3 +40,35 @@ describe('SendErrorBanner recovery action', () => {
     expect(queryByTestId('send-error-action')).toBeNull();
   });
 });
+
+describe('SendErrorBanner when the failed turn already shows the sentence', () => {
+  it('stays out of the way when it has nothing more to offer', () => {
+    const { toJSON } = render(
+      <SendErrorBanner
+        error={NO_MODEL}
+        detailShownInTurn
+        onRetry={jest.fn()}
+        onDismiss={jest.fn()}
+      />,
+    );
+    expect(toJSON()).toBeNull();
+  });
+
+  it('keeps only its recovery action, without repeating the sentence or Retry', () => {
+    const onPress = jest.fn();
+    const { getByTestId, getByText, queryByText } = render(
+      <SendErrorBanner
+        error={NO_MODEL}
+        detailShownInTurn
+        action={{ label: 'Open Models', onPress }}
+        onRetry={jest.fn()}
+        onDismiss={jest.fn()}
+      />,
+    );
+    expect(queryByText(NO_MODEL)).toBeNull();
+    expect(queryByText('Retry')).toBeNull();
+    expect(getByText('Reply failed')).toBeTruthy();
+    fireEvent.press(getByTestId('send-error-action'));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});

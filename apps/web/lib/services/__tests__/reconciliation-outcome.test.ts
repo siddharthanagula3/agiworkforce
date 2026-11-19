@@ -116,6 +116,12 @@ describe('failure precedence', () => {
     ).toMatchObject({ status: 500, reason: 'cogs_import_failed' });
   });
 
+  it('does not let a current-window success hide a cost import that is still behind', () => {
+    expect(
+      resolveReconciliationOutcome(input({ stripeFailure: 'cogs_import_coverage_behind' })),
+    ).toMatchObject({ status: 500, reason: 'cogs_import_coverage_behind' });
+  });
+
   it('does not turn a delivered divergence alert into a failure', () => {
     expect(
       resolveReconciliationOutcome(input({ stripeDivergenceAlertDelivered: true })),

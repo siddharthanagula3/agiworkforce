@@ -86,12 +86,20 @@ jest.mock('../services/api', () => ({
   resetApiAccountState: jest.fn(),
 }));
 
+jest.mock('../services/connectors', () => ({
+  invalidateConnectorPolicy: jest.fn(),
+}));
+
 jest.mock('../src/features/chat/upload/uploadLifecycle', () => ({
   useUploadLifecycleStore: { getState: jest.fn() },
 }));
 
 jest.mock('../services/notifications', () => ({
   notificationCenterStore: { clear: jest.fn() },
+}));
+
+jest.mock('../src/features/notifications/accountFeed', () => ({
+  useAccountNotificationFeed: { getState: jest.fn() },
 }));
 
 jest.mock('../services/backgroundFetch', () => ({
@@ -201,11 +209,17 @@ const { useScheduleStore } = require('../src/features/schedules/store') as {
 const { resetApiAccountState } = require('../services/api') as {
   resetApiAccountState: jest.Mock;
 };
+const { invalidateConnectorPolicy } = require('../services/connectors') as {
+  invalidateConnectorPolicy: jest.Mock;
+};
 const { useUploadLifecycleStore } = require('../src/features/chat/upload/uploadLifecycle') as {
   useUploadLifecycleStore: { getState: jest.Mock };
 };
 const { notificationCenterStore } = require('../services/notifications') as {
   notificationCenterStore: { clear: jest.Mock };
+};
+const { useAccountNotificationFeed } = require('../src/features/notifications/accountFeed') as {
+  useAccountNotificationFeed: { getState: jest.Mock };
 };
 const { resetBackgroundFetchAccountState } = require('../services/backgroundFetch') as {
   resetBackgroundFetchAccountState: jest.Mock;
@@ -234,6 +248,12 @@ import { mmkvStorage } from '../lib/mmkv';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { applyCloudSettings, toCloudSettings } from '../services/cloudSettingsMapping';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
+import {
+  stageComposerAttachments,
+  stageComposerText,
+  takeComposerAttachments,
+  takeComposerText,
+} from '@/src/features/chat/composerHandoff';
 
 describe('clearLocalCloudAccountState', () => {
   const resetCloudSync = jest.fn();
@@ -252,6 +272,7 @@ describe('clearLocalCloudAccountState', () => {
   const clearCloudSearch = jest.fn();
   const clearManagedCloudAccess = jest.fn();
   const resetCloudUploads = jest.fn();
+  const resetAccountNotificationFeed = jest.fn();
   let mmkvReadyCallbacks: Array<() => void>;
 
   beforeEach(() => {
@@ -290,6 +311,7 @@ describe('clearLocalCloudAccountState', () => {
     useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
     useUploadLifecycleStore.getState.mockReturnValue({ reset: resetCloudUploads });
+    useAccountNotificationFeed.getState.mockReturnValue({ reset: resetAccountNotificationFeed });
   });
 
   it('clears account A Cloud data before account B while preserving Local data', () => {
@@ -322,8 +344,10 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCapabilitySwitches).toHaveBeenCalledTimes(1);
     expect(clearSchedules).toHaveBeenCalledTimes(1);
     expect(resetApiAccountState).toHaveBeenCalledTimes(1);
+    expect(invalidateConnectorPolicy).toHaveBeenCalledTimes(1);
     expect(resetCloudUploads).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
+    expect(resetAccountNotificationFeed).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
     expect(useCloudSettingsStore.getState()).toEqual(useCloudSettingsStore.getInitialState());
@@ -332,6 +356,18 @@ describe('clearLocalCloudAccountState', () => {
 
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
+  });
+
+  it('drops shared text and files staged for account A before account B opens a composer', () => {
+    stageComposerText('new-chat', 'Account A shared text');
+    stageComposerAttachments('new-chat', [
+      { id: 'share-a', uri: 'file:///cache/a.pdf', mimeType: 'application/pdf', fileName: 'a.pdf' },
+    ]);
+
+    clearLocalCloudAccountState();
+
+    expect(takeComposerText('new-chat')).toBe('');
+    expect(takeComposerAttachments('new-chat')).toEqual([]);
   });
 
   it('clears prior account memory consent even when the next settings omit capabilities', () => {

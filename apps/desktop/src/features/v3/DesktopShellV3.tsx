@@ -797,7 +797,7 @@ export function DesktopShellV3({
                     onRerunWork={(draft) => {
                       handleNewChat();
                       const chat = useSharedChatStore.getState();
-                      chat.setDraftContent(draft);
+                      chat.appendDraftContent(draft);
                       chat.setPendingWorkMode('agiwork');
                     }}
                   />

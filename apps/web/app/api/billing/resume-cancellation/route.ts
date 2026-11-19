@@ -14,6 +14,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { requireManagedStripeSubscription } from '@/lib/server/stripe-upgrade-subscription';
 import {
+  ScheduledChangeReleasedError,
   currentPlanOf,
   keepCurrentPlan,
   readPlanChangeState,
@@ -43,6 +44,26 @@ async function handleResume(request: NextRequest): Promise<NextResponse> {
   try {
     kept = await keepCurrentPlan(stripe, managed, `keep-plan:${userId}:${idempotencyKey}`);
   } catch (error) {
+    if (error instanceof ScheduledChangeReleasedError) {
+      logger.error({ error, userId }, 'Resuming the plan stopped after the schedule release');
+      await recordAuditEvent({
+        userId,
+        eventType: 'plan_changed',
+        request,
+        detail: {
+          resourceType: 'subscription',
+          resourceId: managed.subscriptionId,
+          source: 'settings_billing',
+          planTier: plan,
+          status: 'schedule_released',
+        },
+      });
+      throw createError
+        .serviceUnavailable(
+          'Your scheduled plan change was removed, but your plan could not be fully resumed. Refresh to see your current plan, then try again if it still ends.',
+        )
+        .asUserSafe();
+    }
     logger.error({ error, userId }, 'Keeping the current plan failed in Stripe');
     throw createError
       .serviceUnavailable('Your plan could not be resumed. Nothing was changed; please try again.')

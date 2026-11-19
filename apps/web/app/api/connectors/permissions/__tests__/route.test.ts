@@ -27,6 +27,12 @@ import { recordAuditEvent } from '@/lib/security-audit';
 
 type SecurityAuditModule = typeof import('@/lib/security-audit');
 
+const mockGeneration = vi.fn(async (_sql: string, _params: unknown[]) => [{ generation: '1' }]);
+const routedQuery = (sql: string, params: unknown[]) =>
+  sql.includes('connector_permission_generations')
+    ? mockGeneration(sql, params)
+    : mockQuery(sql, params);
+
 function req(body?: unknown, search = ''): NextRequest {
   return new NextRequest(`http://localhost:3000/api/connectors/permissions${search}`, {
     method: body ? 'PUT' : 'GET',
@@ -92,9 +98,14 @@ function modeledRevocationTransaction(
   });
   const transactionQuery = vi.fn();
   const transactionExecute = vi.fn();
+  const generationsAdvanced: string[] = [];
   const transaction = vi.fn(async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
     const pending = snapshot();
     transactionQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (sql.includes('insert into public.connector_permission_generations')) {
+        generationsAdvanced.push(params[1] as string);
+        return [{ generation: String(generationsAdvanced.length) }];
+      }
       if (sql === 'select public.revoke_connector_tool_session_grants($1, $2) as removed') {
         const before = pending.grants.length;
         pending.grants = pending.grants.filter(
@@ -281,7 +292,7 @@ describe('modeled connector revocation transaction boundaries, not SQL or RLS ex
       expect(fixture.snapshot()).toEqual(before);
       expect(recordAuditEvent).not.toHaveBeenCalled();
       expect(fixture.transaction).toHaveBeenCalledOnce();
-      expect(fixture.transactionQuery).toHaveBeenCalledTimes(method === 'PUT' ? 2 : 1);
+      expect(fixture.transactionQuery).toHaveBeenCalledTimes(method === 'PUT' ? 3 : 2);
       expect(fixture.transactionExecute).toHaveBeenCalledTimes(method === 'DELETE' ? 1 : 0);
       expect(fixture.outside).not.toHaveBeenCalled();
     },
@@ -312,7 +323,7 @@ describe('modeled connector revocation transaction boundaries, not SQL or RLS ex
       );
       expect(recordAuditEvent).not.toHaveBeenCalled();
       expect(fixture.transaction).toHaveBeenCalledOnce();
-      expect(fixture.transactionQuery).toHaveBeenCalledTimes(method === 'PUT' ? 2 : 1);
+      expect(fixture.transactionQuery).toHaveBeenCalledTimes(method === 'PUT' ? 3 : 2);
       expect(fixture.transactionExecute).toHaveBeenCalledTimes(method === 'DELETE' ? 1 : 0);
       expect(fixture.outside).not.toHaveBeenCalled();
     },
@@ -323,14 +334,14 @@ describe('/api/connectors/permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUserScopedDb.mockResolvedValue({
-      db: { query: mockQuery, execute: mockExecute, transaction: mockTransaction },
+      db: { query: routedQuery, execute: mockExecute, transaction: mockTransaction },
       userId: 'user-owner',
       organizationId: 'org-active',
     });
     mockCsrf.mockResolvedValue(null);
     mockTransaction.mockImplementation(
       async (operation: (tx: DatabaseAdapter) => Promise<unknown>) =>
-        operation({ query: mockQuery, execute: mockExecute } as unknown as DatabaseAdapter),
+        operation({ query: routedQuery, execute: mockExecute } as unknown as DatabaseAdapter),
     );
     mockQuery.mockImplementation(async (sql: string, params: unknown[]) =>
       sql.includes('insert into public.connector_tool_permissions')
@@ -480,7 +491,7 @@ describe('/api/connectors/permissions', () => {
     let committed = false;
     mockTransaction.mockImplementation(
       async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
-        const result = await operation({ query: mockQuery } as unknown as DatabaseAdapter);
+        const result = await operation({ query: routedQuery } as unknown as DatabaseAdapter);
         committed = true;
         return result;
       },
@@ -497,7 +508,7 @@ describe('/api/connectors/permissions', () => {
     mockTransaction.mockImplementation(
       async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
         const result = await operation({
-          query: mockQuery,
+          query: routedQuery,
           execute: mockExecute,
         } as unknown as DatabaseAdapter);
         expect(recordAuditEvent).not.toHaveBeenCalled();
@@ -521,6 +532,46 @@ describe('/api/connectors/permissions', () => {
     expect(mockTransaction).toHaveBeenCalledOnce();
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['PUT', () => PUT(req({ connectorId: 'github', toolName: 'list', level: 'ask' }))],
+    ['DELETE', () => DELETE(deleteReq('?connectorId=github&toolName=list'))],
+    ['DELETE all', () => DELETE(deleteReq('?connectorId=github'))],
+  ])(
+    '%s advances the connector permission generation first, inside its transaction',
+    async (_name, send) => {
+      let inside = false;
+      let advancedInside = false;
+      mockTransaction.mockImplementation(
+        async (operation: (tx: DatabaseAdapter) => Promise<unknown>) => {
+          inside = true;
+          try {
+            return await operation({
+              query: routedQuery,
+              execute: mockExecute,
+            } as unknown as DatabaseAdapter);
+          } finally {
+            inside = false;
+          }
+        },
+      );
+      mockGeneration.mockImplementationOnce(async () => {
+        advancedInside = inside;
+        return [{ generation: '2' }];
+      });
+
+      const response = await send();
+
+      expect(response.status).toBe(200);
+      expect(advancedInside).toBe(true);
+      const [sql, params] = mockGeneration.mock.calls[0]!;
+      expect(sql).toContain('generation + 1');
+      expect(params).toEqual(['user-owner', 'github']);
+      expect(mockGeneration.mock.invocationCallOrder[0]).toBeLessThan(
+        Math.min(...mockQuery.mock.invocationCallOrder, ...mockExecute.mock.invocationCallOrder),
+      );
+    },
+  );
 
   it('DELETE revokes one tool verdict, owner-scoped (CON-5)', async () => {
     const res = await DELETE(deleteReq('?connectorId=github&toolName=post_issue_comment'));

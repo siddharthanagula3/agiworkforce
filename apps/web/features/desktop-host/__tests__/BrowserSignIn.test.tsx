@@ -10,6 +10,7 @@ import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { AuthFlow } from '@/features/auth/AuthFlow';
 import { DesktopBrowserSignIn } from '../components/DesktopBrowserSignIn';
 import { beginBrowserSignIn, cancelBrowserSignIn } from '../lib/browser-sign-in';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const localPassword = vi.hoisted(() => vi.fn());
 type IdentityAuthModule = typeof import('@/features/auth/IdentityAuthAdapter');
@@ -182,6 +183,8 @@ it('leaves older Desktop login usable without probing unsupported native command
   expect(invoke).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Continue', hidden: true })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Continue in your browser' })).toBeDisabled();
-  expect(screen.getByText(/Update AGI Desktop to use browser sign-in/)).toBeVisible();
+  expect(
+    screen.getByText(new RegExp(`Update ${PRODUCT_NAMES.desktop} to use browser sign-in`)),
+  ).toBeVisible();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

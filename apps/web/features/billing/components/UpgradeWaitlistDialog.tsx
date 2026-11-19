@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { Check } from 'lucide-react';
 import {
   Button,
@@ -176,7 +177,7 @@ function UpgradeWaitlistForm({ waitlist }: { waitlist: UpgradeWaitlist }) {
           aria-describedby={waitlist.codeError ? codeErrorId : undefined}
           onChange={(event) => waitlist.changeCode(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
               event.preventDefault();
               void waitlist.redeem();
             }

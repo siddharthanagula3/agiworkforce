@@ -205,6 +205,7 @@ export interface WebChatMessageMetadata {
   imageGenAspect?: string;
   imageGenModel?: string;
   imageRetryAt?: string;
+  imageJobId?: string;
   imageData?: unknown;
   videoUrl?: string;
   thumbnailUrl?: string;

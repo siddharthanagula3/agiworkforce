@@ -152,50 +152,71 @@ function severityFor(series: AnomalySeries, ratio: number): AnomalySeverity | nu
   return null;
 }
 
+export interface AnomalyEvaluation {
+  alerts: AnomalyAlert[];
+  failed: { id: AnomalySeriesId; error: string }[];
+}
+
+async function evaluateSeries(
+  series: AnomalySeries,
+  now: Date,
+  db: DatabaseAdapter,
+): Promise<AnomalyAlert | null> {
+  const recentFrom = new Date(now.getTime() - ANOMALY_RECENT_HOURS * HOUR_MS);
+  const baselineFrom = new Date(recentFrom.getTime() - ANOMALY_BASELINE_DAYS * DAY_MS);
+
+  const recent = await measureAnomalySeries(series, recentFrom, now, db);
+  if (recent.samples < ANOMALY_MIN_SAMPLES || recent.measured === null) return null;
+
+  const baseline = await measureAnomalySeries(series, baselineFrom, recentFrom, db);
+  if (baseline.samples < ANOMALY_MIN_SAMPLES || baseline.measured === null) return null;
+  if (baseline.measured <= 0) return null;
+
+  const ratio = recent.measured / baseline.measured;
+  const severity = severityFor(series, ratio);
+  if (severity === null) return null;
+
+  return {
+    id: series.id,
+    sloId: series.sloId,
+    unit: series.unit,
+    statement: series.statement,
+    severity,
+    recent: recent.measured,
+    baseline: baseline.measured,
+    ratio,
+    threshold: severity === 'critical' ? series.criticalRatio : series.warningRatio,
+    samples: recent.samples,
+    baselineSamples: baseline.samples,
+    dedupeKey: `slo-anomaly:${series.id}:${severity}`,
+    owner: findOperationalDomain(series.sloId),
+  };
+}
+
 /**
  * The recent window against the week behind it, excluding the recent window so
  * the spike cannot raise its own baseline. Both sides need enough samples: a
  * quiet hour whose single expensive turn doubles the p95 is noise, and an alert
- * that fires on noise is one nobody reads.
+ * that fires on noise is one nobody reads. A series that could not be read is
+ * reported as failed, never as normal, and does not discard the other series.
  */
 export async function evaluateAnomalies(
   now: Date = new Date(),
   db: DatabaseAdapter = getNeonDb(),
-): Promise<AnomalyAlert[]> {
+): Promise<AnomalyEvaluation> {
   const alerts: AnomalyAlert[] = [];
-  const recentFrom = new Date(now.getTime() - ANOMALY_RECENT_HOURS * HOUR_MS);
-  const baselineFrom = new Date(recentFrom.getTime() - ANOMALY_BASELINE_DAYS * DAY_MS);
+  const failed: AnomalyEvaluation['failed'] = [];
 
   for (const series of ANOMALY_SERIES) {
-    const recent = await measureAnomalySeries(series, recentFrom, now, db);
-    if (recent.samples < ANOMALY_MIN_SAMPLES || recent.measured === null) continue;
-
-    const baseline = await measureAnomalySeries(series, baselineFrom, recentFrom, db);
-    if (baseline.samples < ANOMALY_MIN_SAMPLES || baseline.measured === null) continue;
-    if (baseline.measured <= 0) continue;
-
-    const ratio = recent.measured / baseline.measured;
-    const severity = severityFor(series, ratio);
-    if (severity === null) continue;
-
-    alerts.push({
-      id: series.id,
-      sloId: series.sloId,
-      unit: series.unit,
-      statement: series.statement,
-      severity,
-      recent: recent.measured,
-      baseline: baseline.measured,
-      ratio,
-      threshold: severity === 'critical' ? series.criticalRatio : series.warningRatio,
-      samples: recent.samples,
-      baselineSamples: baseline.samples,
-      dedupeKey: `slo-anomaly:${series.id}:${severity}`,
-      owner: findOperationalDomain(series.sloId),
-    });
+    try {
+      const alert = await evaluateSeries(series, now, db);
+      if (alert) alerts.push(alert);
+    } catch (error) {
+      failed.push({ id: series.id, error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
-  return alerts;
+  return { alerts, failed };
 }
 
 const RATIO_DECIMALS = 2;

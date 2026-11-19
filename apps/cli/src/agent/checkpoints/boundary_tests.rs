@@ -411,8 +411,8 @@ fn checkpoint_unavailable_grant_allows_empty_assignment_but_never_new_grants() {
     assert!(session.checkpoint_file_authority().is_none());
 }
 
-#[test]
-fn checkpoint_actual_session_grants_ignore_other_scoped_roots() {
+#[tokio::test]
+async fn checkpoint_actual_session_grants_ignore_other_scoped_roots() {
     let fixture = Fixture::new();
     let owned = fixture.workspace.join("ordinary.txt");
     std::fs::write(&owned, b"owned before bytes").unwrap();
@@ -422,22 +422,26 @@ fn checkpoint_actual_session_grants_ignore_other_scoped_roots() {
     );
     let mut session = session_in(&fixture);
     session.save_checkpoint();
-    crate::path_security::scope_workspace_paths_sync(
-        fixture.outside.clone(),
+    crate::path_security::scope_workspace_paths(
+        Some(fixture.outside.clone()),
         vec![fixture.outside.clone()],
-        || {
-            session.note_file_edit_started(
-                "outside-call",
-                "write_file",
-                &serde_json::json!({"path": outside.path}),
-                Some(&fixture.outside),
-            );
-            session.note_file_edit_started(
-                "owned-call",
-                "write_file",
-                &serde_json::json!({"path": owned}),
-                Some(&fixture.outside),
-            );
+        async {
+            session
+                .note_file_edit_started(
+                    "outside-call",
+                    "write_file",
+                    &serde_json::json!({"path": outside.path}),
+                    Some(&fixture.outside),
+                )
+                .await;
+            session
+                .note_file_edit_started(
+                    "owned-call",
+                    "write_file",
+                    &serde_json::json!({"path": owned}),
+                    Some(&fixture.outside),
+                )
+                .await;
             assert_eq!(session.checkpoint_log.tracked_files(0), 1);
             assert!(!session
                 .checkpoint_log
@@ -448,13 +452,14 @@ fn checkpoint_actual_session_grants_ignore_other_scoped_roots() {
             let outcome = session.rewind_to(0, super::RewindMode::Code).unwrap();
             assert_eq!(outcome.files.unwrap().restored, vec![owned.clone()]);
         },
-    );
+    )
+    .await;
     outside.assert_unchanged();
     assert_eq!(std::fs::read(owned).unwrap(), b"owned before bytes");
 }
 
-#[test]
-fn checkpoint_extra_grant_works_then_revocation_refuses_old_and_new_capture() {
+#[tokio::test]
+async fn checkpoint_extra_grant_works_then_revocation_refuses_old_and_new_capture() {
     let fixture = Fixture::new();
     let path = fixture.outside.join("ordinary.txt");
     std::fs::write(&path, b"extra before bytes").unwrap();
@@ -463,12 +468,14 @@ fn checkpoint_extra_grant_works_then_revocation_refuses_old_and_new_capture() {
         .add_context_dir(fixture.outside.to_str().unwrap())
         .unwrap();
     session.save_checkpoint();
-    session.note_file_edit_started(
-        "granted-call",
-        "write_file",
-        &serde_json::json!({"path": path}),
-        Some(&fixture.workspace),
-    );
+    session
+        .note_file_edit_started(
+            "granted-call",
+            "write_file",
+            &serde_json::json!({"path": path}),
+            Some(&fixture.workspace),
+        )
+        .await;
     std::fs::write(&path, b"extra edited bytes").unwrap();
     let granted = session
         .rewind_to(0, super::RewindMode::Code)
@@ -489,18 +496,20 @@ fn checkpoint_extra_grant_works_then_revocation_refuses_old_and_new_capture() {
     assert!(revoked.restored.is_empty());
     assert_eq!(std::fs::read(&path).unwrap(), b"revoked current bytes");
     session.save_checkpoint();
-    session.note_file_edit_started(
-        "revoked-call",
-        "edit_file",
-        &serde_json::json!({"path": path}),
-        Some(&fixture.workspace),
-    );
+    session
+        .note_file_edit_started(
+            "revoked-call",
+            "edit_file",
+            &serde_json::json!({"path": path}),
+            Some(&fixture.workspace),
+        )
+        .await;
     assert_eq!(session.checkpoint_log.tracked_files(1), 0);
 }
 
 #[cfg(unix)]
-#[test]
-fn checkpoint_remapped_extra_root_revokes_by_original_grant_name() {
+#[tokio::test]
+async fn checkpoint_remapped_extra_root_revokes_by_original_grant_name() {
     let fixture = Fixture::new();
     let extra = fixture.store.join("extra");
     std::fs::create_dir(&extra).unwrap();
@@ -513,12 +522,14 @@ fn checkpoint_remapped_extra_root_revokes_by_original_grant_name() {
     let mut session = session_in(&fixture);
     session.add_context_dir(extra.to_str().unwrap()).unwrap();
     session.save_checkpoint();
-    session.note_file_edit_started(
-        "extra-call",
-        "write_file",
-        &serde_json::json!({"path": path}),
-        Some(&fixture.workspace),
-    );
+    session
+        .note_file_edit_started(
+            "extra-call",
+            "write_file",
+            &serde_json::json!({"path": path}),
+            Some(&fixture.workspace),
+        )
+        .await;
     replace_parent_with_symlink(&extra, &fixture.outside);
     session.remove_context_dir(extra.to_str().unwrap()).unwrap();
     assert!(session.additional_context_dirs().is_empty());
@@ -531,8 +542,8 @@ fn checkpoint_remapped_extra_root_revokes_by_original_grant_name() {
     outside.assert_unchanged();
 }
 
-#[test]
-fn checkpoint_persisted_workspace_string_cannot_mint_file_authority() {
+#[tokio::test]
+async fn checkpoint_persisted_workspace_string_cannot_mint_file_authority() {
     let fixture = Fixture::new();
     let outside = Sentinel::new(
         fixture.outside.join("ordinary.txt"),
@@ -552,19 +563,21 @@ fn checkpoint_persisted_workspace_string_cannot_mint_file_authority() {
         .unwrap();
     assert!(session.checkpoint_file_authority().is_none());
     session.save_checkpoint();
-    session.note_file_edit_started(
-        "persisted-path-call",
-        "write_file",
-        &serde_json::json!({"path": outside.path}),
-        Some(&fixture.outside),
-    );
+    session
+        .note_file_edit_started(
+            "persisted-path-call",
+            "write_file",
+            &serde_json::json!({"path": outside.path}),
+            Some(&fixture.outside),
+        )
+        .await;
     assert_eq!(session.checkpoint_log.tracked_files(0), 0);
     assert!(session.checkpoint_log.memory_blobs.is_empty());
     outside.assert_unchanged();
 }
 
-#[test]
-fn checkpoint_failed_edit_comparison_uses_current_grant() {
+#[tokio::test]
+async fn checkpoint_failed_edit_comparison_uses_current_grant() {
     let fixture = Fixture::new();
     let path = fixture.outside.join("ordinary.txt");
     std::fs::write(&path, b"extra before bytes").unwrap();
@@ -573,25 +586,86 @@ fn checkpoint_failed_edit_comparison_uses_current_grant() {
         .add_context_dir(fixture.outside.to_str().unwrap())
         .unwrap();
     session.save_checkpoint();
-    session.note_file_edit_started(
-        "unchanged-call",
-        "edit_file",
-        &serde_json::json!({"path": path}),
-        Some(&fixture.workspace),
-    );
+    session
+        .note_file_edit_started(
+            "unchanged-call",
+            "edit_file",
+            &serde_json::json!({"path": path}),
+            Some(&fixture.workspace),
+        )
+        .await;
     session.note_file_edit_finished("unchanged-call", false);
     assert!(session.checkpoint_log.checkpoints()[0].files.is_empty());
-    session.note_file_edit_started(
-        "revoked-call",
-        "edit_file",
-        &serde_json::json!({"path": path}),
-        Some(&fixture.workspace),
-    );
+    session
+        .note_file_edit_started(
+            "revoked-call",
+            "edit_file",
+            &serde_json::json!({"path": path}),
+            Some(&fixture.workspace),
+        )
+        .await;
     session
         .remove_context_dir(fixture.outside.to_str().unwrap())
         .unwrap();
     session.note_file_edit_finished("revoked-call", false);
     assert_eq!(session.checkpoint_log.checkpoints()[0].files.len(), 1);
+}
+
+#[tokio::test]
+async fn checkpoint_rewind_restores_both_names_of_a_renaming_patch() {
+    let fixture = Fixture::new();
+    let before = fixture.workspace.join("before.txt");
+    let after = fixture.workspace.join("after.txt");
+    std::fs::write(&before, b"renamed bytes\n").unwrap();
+    let mut session = session_in(&fixture);
+    session.save_checkpoint();
+    session
+        .note_file_edit_started(
+            "rename-call",
+            "apply_patch",
+            &serde_json::json!({
+                "patch": "diff --git a/before.txt b/after.txt\nsimilarity index 100%\nrename from before.txt\nrename to after.txt\n"
+            }),
+            Some(&fixture.workspace),
+        )
+        .await;
+    std::fs::rename(&before, &after).unwrap();
+    let outcome = session
+        .rewind_to(0, super::RewindMode::Code)
+        .unwrap()
+        .files
+        .unwrap();
+    assert_eq!(std::fs::read(&before).unwrap(), b"renamed bytes\n");
+    assert!(!after.exists());
+    assert_eq!(outcome.removed, vec![after]);
+    assert_eq!(outcome.restored, vec![before]);
+}
+
+#[tokio::test]
+async fn checkpoint_patch_capture_ignores_a_hunk_line_that_looks_like_a_header() {
+    let fixture = Fixture::new();
+    let script = fixture.workspace.join("notes.sql");
+    let unrelated = fixture.workspace.join("other.txt");
+    std::fs::write(&script, b"-- other.txt\nkeep\n").unwrap();
+    std::fs::write(&unrelated, b"unrelated bytes").unwrap();
+    let mut session = session_in(&fixture);
+    session.save_checkpoint();
+    session
+        .note_file_edit_started(
+            "comment-call",
+            "apply_patch",
+            &serde_json::json!({
+                "patch": "--- a/notes.sql\n+++ b/notes.sql\n@@ -1,2 +1 @@\n--- other.txt\n keep\n"
+            }),
+            Some(&fixture.workspace),
+        )
+        .await;
+    let captured: Vec<PathBuf> = session.checkpoint_log.checkpoints()[0]
+        .files
+        .iter()
+        .map(|snapshot| snapshot.path.clone())
+        .collect();
+    assert_eq!(captured, vec![script]);
 }
 
 #[test]
@@ -847,7 +921,7 @@ async fn checkpoint_revision_private_namespace_refuses_actual_reader_and_writer(
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(fixture.workspace.clone()),
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         },
     )
     .await
@@ -873,7 +947,7 @@ async fn checkpoint_revision_private_namespace_refuses_actual_reader_and_writer(
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(fixture.workspace.clone()),
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         },
     )
     .await
@@ -1069,4 +1143,67 @@ fn checkpoint_memory_to_disk_uses_selected_storage_owner_and_reload() {
         vec![path.clone()]
     );
     assert_eq!(std::fs::read(path).unwrap(), b"owned before bytes");
+}
+
+#[test]
+fn checkpoint_restore_keeps_the_earliest_image_of_one_destination_named_two_ways() {
+    let fixture = Fixture::new();
+    let nested = fixture.workspace.join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    let path = fixture.workspace.join("aliased.txt");
+    let mut spelled = fixture.workspace.clone().into_os_string();
+    for part in ["nested", "..", "aliased.txt"] {
+        spelled.push(std::path::MAIN_SEPARATOR_STR);
+        spelled.push(part);
+    }
+    let alias = PathBuf::from(spelled);
+    assert_ne!(alias, path);
+    std::fs::write(&path, b"original bytes").unwrap();
+    fixture.in_workspace(|| {
+        let authority = fixture.authority();
+        let mut log = CheckpointLog::in_memory();
+        log.push(0, "synthetic checkpoint prompt".to_string());
+        assert!(log.capture(&path, Some(&authority)));
+        std::fs::write(&path, b"intermediate bytes").unwrap();
+        assert!(log.capture(&alias, Some(&authority)));
+        std::fs::write(&path, b"final bytes").unwrap();
+        let report = log.restore_files(0, Some(&authority));
+        assert_eq!(std::fs::read(&path).unwrap(), b"original bytes");
+        assert_eq!(report.restored, vec![path]);
+    });
+}
+
+#[test]
+fn checkpoint_restore_marks_a_failed_saved_copy_retryable() {
+    use sha2::{Digest, Sha256};
+
+    let fixture = Fixture::new();
+    let target = fixture.workspace.join("ordinary.txt");
+    std::fs::write(&target, b"owned current bytes").unwrap();
+    let digest = crate::hex::encode(&Sha256::digest(b"saved bytes that were never stored"));
+    fixture.in_workspace(|| {
+        let authority = fixture.authority();
+        let log = fixture.load_snapshot(&target, digest);
+        let report = log.restore_files(0, Some(&authority));
+        assert_eq!(report.skipped.len(), 1);
+        assert!(report.retryable);
+    });
+}
+
+#[test]
+fn checkpoint_restore_does_not_mark_an_untracked_file_retryable() {
+    let fixture = Fixture::new();
+    let outside = Sentinel::new(
+        fixture.outside.join("ordinary.txt"),
+        b"synthetic outside bytes",
+    );
+    fixture.in_workspace(|| {
+        let authority = fixture.authority();
+        let mut log = CheckpointLog::in_memory();
+        log.push(0, "synthetic checkpoint prompt".to_string());
+        log.capture(&outside.path, Some(&authority));
+        let report = log.restore_files(0, Some(&authority));
+        assert!(!report.retryable);
+        assert!(report.restored.is_empty());
+    });
 }

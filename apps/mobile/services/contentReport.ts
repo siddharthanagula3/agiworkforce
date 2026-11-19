@@ -86,6 +86,15 @@ const MMKV_KEY = 'content-reports:v1';
 const MAX_EXCERPT_LEN = 500;
 const MAX_STORED_REPORTS = 100;
 
+function isQueued(report: ContentReport): boolean {
+  return report.uploadConsented === true && !report.serverAcknowledged;
+}
+
+function capHistory(reports: ContentReport[]): ContentReport[] {
+  let history = 0;
+  return reports.filter((report) => isQueued(report) || ++history <= MAX_STORED_REPORTS);
+}
+
 function readReports(): ContentReport[] {
   const raw = storage.getString(MMKV_KEY);
   if (!raw) return [];
@@ -217,7 +226,7 @@ export async function saveContentReport(params: {
   };
 
   const existing = readReports();
-  const updated = [report, ...existing].slice(0, MAX_STORED_REPORTS);
+  const updated = capHistory([report, ...existing]);
   writeReports(updated);
 
   // Primary sink: the server trust-and-safety intake. Falls back to on-device
@@ -274,7 +283,7 @@ export async function sendStoredContentReport(reportId: string): Promise<ReportD
 }
 
 export function queuedContentReports(): ContentReport[] {
-  return readReports().filter((entry) => entry.uploadConsented && !entry.serverAcknowledged);
+  return readReports().filter(isQueued);
 }
 
 let flushing: Promise<number> | null = null;

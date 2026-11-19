@@ -63,6 +63,8 @@ pub struct CodeSessionDetail {
     pub session: CodeSession,
     #[serde(default)]
     pub turns: Vec<CodeTurn>,
+    #[serde(default, rename = "turnsTruncated")]
+    pub turns_truncated: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -284,6 +286,10 @@ pub fn render_detail(detail: &CodeSessionDetail, url: &str) -> String {
         lines.push(String::new());
         lines.push("No turns yet.".to_string());
     }
+    if detail.turns_truncated {
+        lines.push(String::new());
+        lines.push("Showing the latest turns; earlier turns are not shown.".to_string());
+    }
     for turn in &detail.turns {
         lines.push(String::new());
         lines.push(format!("> {}", turn.goal.trim()));
@@ -302,4 +308,35 @@ pub fn render_detail(detail: &CodeSessionDetail, url: &str) -> String {
         }
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn detail(value: serde_json::Value) -> CodeSessionDetail {
+        serde_json::from_value(value).expect("detail")
+    }
+
+    #[test]
+    fn a_detail_without_the_truncation_flag_is_complete() {
+        let parsed = detail(serde_json::json!({
+            "session": { "id": "s1" },
+            "turns": [{ "goal": "fix it", "finalMessage": "done" }],
+        }));
+        assert!(!parsed.turns_truncated);
+        assert!(!render_detail(&parsed, "https://example.test/code").contains("earlier turns"));
+    }
+
+    #[test]
+    fn a_truncated_detail_says_earlier_turns_are_not_shown() {
+        let parsed = detail(serde_json::json!({
+            "session": { "id": "s1" },
+            "turns": [{ "goal": "fix it", "finalMessage": "done" }],
+            "turnsTruncated": true,
+        }));
+        assert!(parsed.turns_truncated);
+        assert!(render_detail(&parsed, "https://example.test/code")
+            .contains("earlier turns are not shown"));
+    }
 }

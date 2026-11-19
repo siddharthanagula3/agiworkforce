@@ -100,8 +100,8 @@ describe('POST /api/auth/logout', () => {
 
     expect(response.status).toBe(200);
     expect(mocks.execute).toHaveBeenCalledWith(
-      expect.stringContaining('UPDATE device_refresh_tokens'),
-      ['22222222-2222-4222-8222-222222222222'],
+      expect.stringContaining('public.device_refresh_token_families'),
+      ['22222222-2222-4222-8222-222222222222', 'device-user', expect.any(String)],
     );
   });
 });

@@ -19,10 +19,53 @@ export const CLERK_NATIVE_AUTH_OPTIONS = {
   treatPendingAsSignedOut: false,
 } as const;
 
+/**
+ * Clerk never reports loaded when its environment call fails (an offline
+ * launch, a disabled instance), so nothing may wait on it for longer than this.
+ */
+export const CLERK_LOAD_SETTLE_MS = 8_000;
+
 type TokenMinter = (options?: { template?: string; skipCache?: boolean }) => Promise<string | null>;
 
 let tokenMinter: TokenMinter | null = null;
 let userIdGetter: (() => string | null) | null = null;
+let unansweredSession: { answered: Promise<void>; answer: () => void } | null = null;
+
+/**
+ * A request minted before Clerk has loaded leaves without a credential and is
+ * refused, which reads as an expired session. Callers wait for Clerk's answer
+ * instead, signed in or signed out, bounded by the settle window.
+ */
+export function holdTokensUntilClerkAnswers(): void {
+  if (unansweredSession || tokenMinter) return;
+  let answer = (): void => undefined;
+  const answered = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  unansweredSession = { answered, answer };
+}
+
+function releaseHeldTokens(): void {
+  unansweredSession?.answer();
+  unansweredSession = null;
+}
+
+async function clerkAnswer(): Promise<void> {
+  const held = unansweredSession;
+  if (!held) return;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      held.answered,
+      new Promise<void>((resolve) => {
+        deadline = setTimeout(resolve, CLERK_LOAD_SETTLE_MS);
+      }),
+    ]);
+  } finally {
+    if (deadline !== undefined) clearTimeout(deadline);
+  }
+  if (unansweredSession === held) releaseHeldTokens();
+}
 
 export function setClerkTokenMinter(
   mint: TokenMinter | null,
@@ -30,6 +73,7 @@ export function setClerkTokenMinter(
 ): void {
   tokenMinter = mint;
   userIdGetter = getUserId;
+  releaseHeldTokens();
 }
 
 let templateMissingWarned = false;
@@ -79,6 +123,7 @@ function currentMinter(): TokenMinter | null {
 async function mintWith(
   read: (mint: TokenMinter) => Promise<string | null>,
 ): Promise<string | null> {
+  await clerkAnswer();
   const mint = currentMinter();
   if (!mint) return null;
   try {

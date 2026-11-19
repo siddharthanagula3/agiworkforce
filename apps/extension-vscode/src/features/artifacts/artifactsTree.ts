@@ -131,19 +131,27 @@ export class ArtifactsTreeProvider
       ];
     }
 
-    /*
-     * Publishing is optional and its table can be absent in an environment that
-     * never enabled it, so a failed read demotes every row to unpublished
-     * rather than emptying a view whose primary listing succeeded.
-     */
-    const published = await resolution.client
-      .listPublishedArtifacts()
-      .catch((): ManagedCloudPublishedArtifact[] => []);
+    let published: ManagedCloudPublishedArtifact[] = [];
+    let publicationFailure: unknown;
+    try {
+      published = await resolution.client.listPublishedArtifacts();
+    } catch (error) {
+      publicationFailure = error;
+    }
     const publishedByArtifactId = new Map(published.map((entry) => [entry.artifactId, entry]));
-
-    return artifacts.map(
+    const rows: vscode.TreeItem[] = artifacts.map(
       (artifact) => new ArtifactTreeItem(artifact, publishedByArtifactId.get(artifact.id)),
     );
+    if (publicationFailure === undefined) return rows;
+    return [
+      new ArtifactNoticeItem(
+        'Published status could not be loaded',
+        `Rows below may be published. ${describeArtifactFailure(publicationFailure)}`,
+        'warning',
+        { command: REFRESH_ARTIFACTS_COMMAND, title: 'Retry' },
+      ),
+      ...rows,
+    ];
   }
 
   dispose(): void {

@@ -98,11 +98,12 @@ function makeContext(
 let appStateListener: ((state: string) => void) | undefined;
 
 describe('push delivery preference sync', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockApiPost.mockResolvedValue(undefined);
     appStateListener = undefined;
+    await useNotificationPrefsStore.persist.rehydrate();
     jest
       .spyOn(AppState, 'addEventListener')
       .mockImplementation((_event: string, handler: (state: string) => void) => {
@@ -110,7 +111,13 @@ describe('push delivery preference sync', () => {
         return { remove: jest.fn() } as unknown as ReturnType<typeof AppState.addEventListener>;
       });
     useNotificationPrefsStore.setState({
-      categoryEnabled: { chat_replies: true, tasks: true, product: false },
+      categoryEnabled: {
+        chat_replies: true,
+        tasks: true,
+        scheduled_tasks: true,
+        product_updates: false,
+        product: false,
+      },
       quietHours: {
         enabled: true,
         days: EVERY_DAY,
@@ -136,8 +143,11 @@ describe('push delivery preference sync', () => {
     expect(body.preferences.categories).toEqual({
       chat_replies: true,
       tasks: true,
+      scheduled_tasks: true,
+      product_updates: false,
       product: false,
     });
+    expect(body.preferences.eventTypes.product_update).toBe(false);
     expect(MobilePushPreferencesSchema.safeParse(body.preferences).success).toBe(true);
     expect(body.preferences.quietHours).toEqual({
       enabled: true,
@@ -163,6 +173,25 @@ describe('push delivery preference sync', () => {
     expect(quietHoursExemptEventTypes).toContain('agent_approval_needed');
   });
 
+  it('keeps opt-in groups off on the server when the stored value lacks them', async () => {
+    useNotificationPrefsStore.setState({
+      categoryEnabled: {
+        chat_replies: true,
+        tasks: true,
+        scheduled_tasks: true,
+      } as never,
+    });
+
+    await registerForPushNotifications(makeContext());
+
+    const { eventTypes } = bodyOfCall(0).preferences;
+    expect(eventTypes.product_update).toBe(false);
+    expect(eventTypes.status_update).toBe(false);
+    expect(eventTypes.heartbeat_info).toBe(false);
+    expect(eventTypes.chat_message).toBe(true);
+    expect(eventTypes.schedule_run).toBe(true);
+  });
+
   it('re-syncs the server copy when a category is switched off', async () => {
     await registerForPushNotifications(makeContext());
     expect(mockApiPost).toHaveBeenCalledTimes(1);
@@ -176,8 +205,48 @@ describe('push delivery preference sync', () => {
     expect(body.preferences.categories.tasks).toBe(false);
     expect(body.preferences.eventTypes.task_completed).toBe(false);
     expect(body.preferences.eventTypes.agent_approval_needed).toBe(false);
-    expect(body.preferences.eventTypes.schedule_run).toBe(false);
+    expect(body.preferences.eventTypes.schedule_run).toBe(true);
     expect(body.preferences.eventTypes.chat_message).toBe(true);
+  });
+
+  it('tells the server when scheduled tasks alone are muted and product updates are on', async () => {
+    await registerForPushNotifications(makeContext());
+
+    useNotificationPrefsStore.getState().setCategoryEnabled('scheduled_tasks', false);
+    useNotificationPrefsStore.getState().setCategoryEnabled('product_updates', true);
+    jest.runOnlyPendingTimers();
+    await settle();
+
+    const body = bodyOfCall(1);
+    expect(body.preferences.eventTypes.schedule_run).toBe(false);
+    expect(body.preferences.eventTypes.schedule_triggered).toBe(false);
+    expect(body.preferences.eventTypes.task_completed).toBe(true);
+    expect(body.preferences.eventTypes.agent_approval_needed).toBe(true);
+    expect(body.preferences.eventTypes.product_update).toBe(true);
+    expect(body.preferences.eventTypes.status_update).toBe(false);
+  });
+
+  it('syncs a category switched off while the first registration is still in flight', async () => {
+    let resolveFirst!: () => void;
+    mockApiPost.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const registration = beginPushRegistration('expo-token-a', makeContext());
+    const first = postPushRegistration(registration);
+    await settle();
+
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
+    resolveFirst();
+    await expect(first).resolves.toBe(true);
+    jest.runOnlyPendingTimers();
+    await settle();
+
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+    expect(bodyOfCall(0).preferences.categories.tasks).toBe(true);
+    expect(bodyOfCall(1).preferences.categories.tasks).toBe(false);
+    expect(bodyOfCall(1).preferences.eventTypes.task_completed).toBe(false);
   });
 
   it('turns off only chat reply pushes when chat replies are switched off', async () => {

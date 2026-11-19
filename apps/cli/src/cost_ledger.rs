@@ -181,6 +181,36 @@ pub fn dollars_for_completions(completions: &[CompletionUsage]) -> f64 {
     completions.iter().map(CompletionUsage::dollars).sum()
 }
 
+tokio::task_local! {
+    static SIDE_REQUESTS: std::cell::RefCell<Vec<CompletionUsage>>;
+}
+
+/// Runs `future` and returns every provider request a tool made inside it on
+/// the turn's behalf, such as an advisor consultation, so the turn's spend
+/// and budget include them.
+pub async fn collect_side_requests<F: std::future::Future>(
+    future: F,
+) -> (F::Output, Vec<CompletionUsage>) {
+    SIDE_REQUESTS
+        .scope(std::cell::RefCell::new(Vec::new()), async move {
+            let output = future.await;
+            let requests =
+                SIDE_REQUESTS.with(|requests| std::mem::take(&mut *requests.borrow_mut()));
+            (output, requests)
+        })
+        .await
+}
+
+pub fn record_side_request(usage: CompletionUsage) {
+    let _ = SIDE_REQUESTS.try_with(|requests| requests.borrow_mut().push(usage));
+}
+
+pub fn side_request_dollars_so_far() -> f64 {
+    SIDE_REQUESTS
+        .try_with(|requests| dollars_for_completions(&requests.borrow()))
+        .unwrap_or(0.0)
+}
+
 /// A spend cap and what has been charged against it. The cloud Work runtime
 /// enforces the same shape, so a refusal means the same thing on either engine.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -535,6 +565,37 @@ mod tests {
         assert!(
             (dollars_for_completions(&[included, metered.clone()]) - metered.dollars()).abs()
                 < 1e-12
+        );
+    }
+
+    #[tokio::test]
+    async fn a_tool_side_request_is_returned_with_the_turn_and_counted_while_it_runs() {
+        let model = first_paid_catalog_model();
+        let advisor = CompletionUsage {
+            model: model.clone(),
+            input_tokens: 40_000,
+            output_tokens: 1_024,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            included_in_subscription: false,
+        };
+        assert!(advisor.dollars() > 0.0);
+
+        let recorded = advisor.clone();
+        let (seen_during, requests) = collect_side_requests(async move {
+            assert_eq!(side_request_dollars_so_far(), 0.0);
+            record_side_request(recorded);
+            side_request_dollars_so_far()
+        })
+        .await;
+        assert!((seen_during - advisor.dollars()).abs() < 1e-12);
+        assert_eq!(requests, vec![advisor.clone()]);
+
+        record_side_request(advisor);
+        assert_eq!(
+            side_request_dollars_so_far(),
+            0.0,
+            "outside a turn nothing collects and nothing is counted"
         );
     }
 

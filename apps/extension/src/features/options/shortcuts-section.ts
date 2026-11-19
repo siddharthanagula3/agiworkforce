@@ -493,6 +493,7 @@ function buildRecordingRows(
   let target: { id: number; origin: string } | null = null;
   let recording = false;
   let awaitingName = false;
+  let draftGeneration = 0;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   const stopPoll = (): void => {
@@ -511,6 +512,20 @@ function buildRecordingRows(
     } catch {
       return false;
     }
+  };
+
+  const awaitName = (status: string): void => {
+    recording = false;
+    stopPoll();
+    draftGeneration += 1;
+    awaitingName = true;
+    saveConfirm.disabled = false;
+    saveDiscard.disabled = false;
+    button.textContent = t('optRecordStart');
+    saveBox.hidden = false;
+    saveName.value = '';
+    saveName.focus();
+    announce(status);
   };
 
   button.addEventListener('click', () => {
@@ -532,26 +547,32 @@ function buildRecordingRows(
             announce(response?.error ?? t('optRecordStartFailed'), true);
             return;
           }
+          draftGeneration += 1;
           target = tab;
           recording = true;
+          awaitingName = false;
           saveBox.hidden = true;
           button.textContent = t('optRecordStop');
           const host = new URL(tab.origin).host;
           announce(t('optRecordRecording', [host]));
+          const generation = draftGeneration;
           pollTimer = setInterval(() => {
-            void send<SuccessResponse & { actions?: unknown[] }>({
+            void send<SuccessResponse & { actions?: unknown[]; stoppedBy?: unknown }>({
               type: 'GET_RECORDED_ACTIONS',
               tabId: tab.id,
             })
               .then((response) => {
-                if (response?.success) {
-                  announce(
-                    t('optRecordCount', [
-                      new URL(tab.origin).host,
-                      String(response.actions?.length ?? 0),
-                    ]),
-                  );
+                if (!response?.success || !recording || generation !== draftGeneration) return;
+                if (response.stoppedBy === 'navigation') {
+                  awaitName(t('optRecordStoppedByNavigation'));
+                  return;
                 }
+                announce(
+                  t('optRecordCount', [
+                    new URL(tab.origin).host,
+                    String(response.actions?.length ?? 0),
+                  ]),
+                );
               })
               .catch(() => undefined);
           }, 1500);
@@ -565,14 +586,11 @@ function buildRecordingRows(
           announce(response?.error ?? t('optRecordStopFailed'), true);
           return;
         }
-        recording = false;
-        stopPoll();
-        awaitingName = true;
-        button.textContent = t('optRecordStart');
-        saveBox.hidden = false;
-        saveName.value = '';
-        saveName.focus();
-        announce(t('optRecordNameIt'));
+        awaitName(
+          (response as { stoppedBy?: unknown }).stoppedBy === 'navigation'
+            ? t('optRecordStoppedByNavigation')
+            : t('optRecordNameIt'),
+        );
       } catch {
         announce(recording ? t('optRecordStopFailed') : t('optRecordStartFailed'), true);
       } finally {
@@ -582,6 +600,7 @@ function buildRecordingRows(
   });
 
   saveDiscard.addEventListener('click', () => {
+    draftGeneration += 1;
     saveBox.hidden = true;
     awaitingName = false;
     target = null;
@@ -600,6 +619,7 @@ function buildRecordingRows(
     }
     if (!awaitingName || !target) return;
     const tab = target;
+    const generation = draftGeneration;
     saveConfirm.disabled = true;
     void (async () => {
       try {
@@ -607,11 +627,13 @@ function buildRecordingRows(
           type: 'GET_RECORDED_ACTIONS',
           tabId: tab.id,
         });
+        if (generation !== draftGeneration) return;
         const actions = recorded?.actions ?? [];
         if (!recorded?.success || actions.length === 0) {
           saveError.textContent = t('optRecordNothing');
           return;
         }
+        saveDiscard.disabled = true;
         const saved = await send<SuccessResponse>({
           type: 'SAVE_SHORTCUT',
           name,
@@ -619,20 +641,27 @@ function buildRecordingRows(
           startUrl: tab.origin,
         });
         if (!saved?.success) {
-          saveError.textContent = saved?.error ?? t('spShortcutSaveFailed');
+          if (generation === draftGeneration) {
+            saveError.textContent = saved?.error ?? t('spShortcutSaveFailed');
+          }
           return;
         }
-        saveError.textContent = '';
-        saveName.removeAttribute('aria-invalid');
-        saveBox.hidden = true;
-        awaitingName = false;
-        target = null;
+        if (generation === draftGeneration) {
+          saveError.textContent = '';
+          saveName.removeAttribute('aria-invalid');
+          saveBox.hidden = true;
+          awaitingName = false;
+          target = null;
+        }
         announce(t('optShortcutCreated', [name]));
         await refreshList();
       } catch {
-        saveError.textContent = t('spShortcutSaveFailed');
+        if (generation === draftGeneration) saveError.textContent = t('spShortcutSaveFailed');
       } finally {
-        saveConfirm.disabled = false;
+        if (generation === draftGeneration) {
+          saveConfirm.disabled = false;
+          saveDiscard.disabled = false;
+        }
       }
     })();
   });

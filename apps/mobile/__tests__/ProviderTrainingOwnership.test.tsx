@@ -62,10 +62,15 @@ jest.mock('@/components/ui/Button', () => {
     ),
   };
 });
-jest.mock('lucide-react-native', () => ({ EyeOff: () => null }));
+jest.mock('lucide-react-native', () => ({
+  EyeOff: () => null,
+  MessageSquare: () => null,
+  Mic: () => null,
+}));
 
-import { ProviderTrainingOptOutGroup } from '@/src/features/settings/cloud-privacy/ProviderTrainingOptOutGroup';
+import { TrainingPreferenceGroups } from '@/src/features/settings/cloud-privacy/TrainingPreferenceGroups';
 import { useAuthStore } from '@/src/features/auth/store';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   activateCloudAccount,
@@ -111,7 +116,7 @@ beforeEach(() => {
 });
 
 async function readyScreen() {
-  const screen = render(<ProviderTrainingOptOutGroup />);
+  const screen = render(<TrainingPreferenceGroups />);
   await waitFor(() =>
     expect(
       screen.getByLabelText('Only use models that do not train on your chats').props.disabled,
@@ -123,7 +128,7 @@ async function readyScreen() {
 describe('owned provider training choices', () => {
   it('does not read when the loaded Clerk identity disagrees with the account epoch', () => {
     useAuthStore.setState({ clerkUserId: 'account-b' });
-    const screen = render(<ProviderTrainingOptOutGroup />);
+    const screen = render(<TrainingPreferenceGroups />);
     expect(mockFetch).not.toHaveBeenCalled();
     expect(
       screen.getByLabelText('Only use models that do not train on your chats').props.disabled,
@@ -132,8 +137,10 @@ describe('owned provider training choices', () => {
 
   it('takes a synchronous lease, forwards the epoch, and retires the original ready callback', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = ownerHandler(
+      screen.getByLabelText('Only use models that do not train on your chats'),
+      'onValueChange',
+    );
     const pending = deferred<ReturnType<typeof response>>();
     mockFetch.mockImplementationOnce(() => pending.promise);
     act(() => {
@@ -173,8 +180,10 @@ describe('owned provider training choices', () => {
     'rejects a saved callback after %s leaves and returns',
     async (kind) => {
       const screen = await readyScreen();
-      const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-        .onValueChange;
+      const saved = ownerHandler(
+        screen.getByLabelText('Only use models that do not train on your chats'),
+        'onValueChange',
+      );
       act(() => {
         if (kind === 'account') {
           activateCloudAccount('account-b');
@@ -208,8 +217,10 @@ describe('owned provider training choices', () => {
 
   it('does not dispatch reads or saved choices in Local mode', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = ownerHandler(
+      screen.getByLabelText('Only use models that do not train on your chats'),
+      'onValueChange',
+    );
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
       saved(true);
@@ -223,7 +234,7 @@ describe('owned provider training choices', () => {
   it('retires delayed body parsing and keeps the replacement read busy', async () => {
     const body = deferred<unknown>();
     mockFetch.mockResolvedValueOnce({ ...response(null), json: () => body.promise });
-    const screen = render(<ProviderTrainingOptOutGroup />);
+    const screen = render(<TrainingPreferenceGroups />);
     await act(async () => {});
     const replacement = deferred<ReturnType<typeof response>>();
     mockFetch.mockImplementationOnce(() => replacement.promise);
@@ -303,8 +314,10 @@ describe('owned provider training choices', () => {
 
   it('preserves an acknowledged opt-out when readback fails and offers a working read retry', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = ownerHandler(
+      screen.getByLabelText('Only use models that do not train on your chats'),
+      'onValueChange',
+    );
     mockFetch.mockResolvedValueOnce(receipt(true)).mockRejectedValueOnce(new Error('read failed'));
     act(() => saved(true));
     await waitFor(() =>
@@ -318,7 +331,7 @@ describe('owned provider training choices', () => {
     ).toBe(true);
     act(() => saved(true));
     expect(putCalls()).toHaveLength(1);
-    fireEvent.press(screen.getByLabelText('Retry loading model training setting'));
+    fireEvent.press(screen.getByLabelText('Retry loading model training settings'));
     await waitFor(() =>
       expect(
         screen.getByLabelText('Only use models that do not train on your chats').props.disabled,
@@ -353,14 +366,16 @@ describe('owned provider training choices', () => {
 
   it('keeps an uncertain save unavailable when reconciliation fails until an explicit read succeeds', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = ownerHandler(
+      screen.getByLabelText('Only use models that do not train on your chats'),
+      'onValueChange',
+    );
     mockFetch
       .mockRejectedValueOnce(new Error('lost write response'))
       .mockRejectedValueOnce(new Error('read unavailable'));
     act(() => saved(true));
     await waitFor(() =>
-      expect(screen.getByLabelText('Retry loading model training setting')).toBeTruthy(),
+      expect(screen.getByLabelText('Retry loading model training settings')).toBeTruthy(),
     );
     expect(screen.getByText(/The save could not be confirmed/)).toBeTruthy();
     expect(screen.queryByText(/was saved as/)).toBeNull();
@@ -370,7 +385,7 @@ describe('owned provider training choices', () => {
     act(() => saved(false));
     expect(putCalls()).toHaveLength(1);
     mockFetch.mockResolvedValueOnce(response(choice(true)));
-    fireEvent.press(screen.getByLabelText('Retry loading model training setting'));
+    fireEvent.press(screen.getByLabelText('Retry loading model training settings'));
     await waitFor(() =>
       expect(
         screen.getByLabelText('Only use models that do not train on your chats').props.disabled,
@@ -384,8 +399,10 @@ describe('owned provider training choices', () => {
 
   it('requires a refreshed revision and new choice after a precondition conflict', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = ownerHandler(
+      screen.getByLabelText('Only use models that do not train on your chats'),
+      'onValueChange',
+    );
     mockFetch
       .mockResolvedValueOnce(response({}, 412))
       .mockResolvedValueOnce(response(choice(false, 'new-revision')));
@@ -409,14 +426,17 @@ describe('owned provider training choices', () => {
 
   it('leaves malformed GET unavailable and consumes duplicate read retries synchronously', async () => {
     mockFetch.mockResolvedValueOnce(response({}));
-    const screen = render(<ProviderTrainingOptOutGroup />);
+    const screen = render(<TrainingPreferenceGroups />);
     await waitFor(() =>
-      expect(screen.getByLabelText('Retry loading model training setting')).toBeTruthy(),
+      expect(screen.getByLabelText('Retry loading model training settings')).toBeTruthy(),
     );
     expect(
       screen.getByLabelText('Only use models that do not train on your chats').props.disabled,
     ).toBe(true);
-    const retry = screen.getByLabelText('Retry loading model training setting').props.onPress;
+    const retry = ownerHandler(
+      screen.getByLabelText('Retry loading model training settings'),
+      'onPress',
+    );
     const pending = deferred<ReturnType<typeof response>>();
     mockFetch.mockImplementationOnce(() => pending.promise);
     act(() => {

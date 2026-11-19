@@ -1,14 +1,16 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use super::session::validate_summary_text;
 
 pub const WRITER_LEASE_EXTENSION: &str = "writer-lease";
+pub const WRITER_LEASE_ARBITER_EXTENSION: &str = "writer-lease-lock";
 pub const WRITER_LEASE_TTL: std::time::Duration = std::time::Duration::from_secs(120);
 pub const WRITER_LEASE_RENEW_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 const HOLDER_LABEL_MAX_UTF16: usize = 200;
@@ -67,11 +69,46 @@ pub enum LeaseClaim {
 /// The identity every lease this process takes is held under. The first
 /// caller names it; a process is one writer however many threads it runs.
 pub fn process_writer(label: &str) -> &'static WriterIdentity {
-    static IDENTITY: OnceLock<WriterIdentity> = OnceLock::new();
-    IDENTITY.get_or_init(|| WriterIdentity {
+    PROCESS_WRITER.get_or_init(|| WriterIdentity {
         id: uuid::Uuid::new_v4().to_string(),
         label: format!("{label} (pid {})", std::process::id()),
     })
+}
+
+static PROCESS_WRITER: OnceLock<WriterIdentity> = OnceLock::new();
+static CLAIMED_SESSIONS: Mutex<BTreeSet<PathBuf>> = Mutex::new(BTreeSet::new());
+
+/// Hand back every lease this process holds, so the next client to open one
+/// of its sessions takes it without reporting an abandoned writer. Called when
+/// the process ends on purpose; a crash never reaches it, and that lease is
+/// still reported as abandoned.
+pub fn release_process_leases() {
+    if let Some(identity) = PROCESS_WRITER.get() {
+        release_claimed_by(identity);
+    }
+}
+
+fn claimed_sessions() -> std::sync::MutexGuard<'static, BTreeSet<PathBuf>> {
+    CLAIMED_SESSIONS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn release_claimed_by(identity: &WriterIdentity) {
+    let claimed: Vec<PathBuf> = claimed_sessions().iter().cloned().collect();
+    for session_path in claimed {
+        match release(&session_path, identity) {
+            Ok(Some(_)) => {
+                claimed_sessions().remove(&session_path);
+            }
+            Ok(None) => {}
+            Err(error) => tracing::debug!(
+                %error,
+                path = %session_path.display(),
+                "session writer lease not released"
+            ),
+        }
+    }
 }
 
 pub fn holder_summary(
@@ -101,10 +138,38 @@ pub fn holder_summary(
 }
 
 pub fn lease_path(session_path: &Path) -> PathBuf {
+    beside(session_path, WRITER_LEASE_EXTENSION)
+}
+
+pub fn arbiter_path(session_path: &Path) -> PathBuf {
+    beside(session_path, WRITER_LEASE_ARBITER_EXTENSION)
+}
+
+fn beside(session_path: &Path, extension: &str) -> PathBuf {
     let mut path = session_path.as_os_str().to_os_string();
     path.push(".");
-    path.push(WRITER_LEASE_EXTENSION);
+    path.push(extension);
     PathBuf::from(path)
+}
+
+/// Every claim, takeover and release of one session's lease runs while this
+/// is held, so two processes never both decide the lease is theirs.
+fn lock_arbiter(session_path: &Path) -> Result<fs::File> {
+    let path = arbiter_path(session_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .with_context(|| format!("Failed to open writer lease lock {}", path.display()))?;
+    file.lock()
+        .with_context(|| format!("Failed to lock writer lease lock {}", path.display()))?;
+    Ok(file)
 }
 
 /// The current lease, or `None` when nobody holds one. An unreadable or
@@ -132,6 +197,7 @@ pub fn take_over(session_path: &Path, identity: &WriterIdentity) -> Result<Lease
 
 /// Give the lease up if `identity` holds it. Returns the lease released.
 pub fn release(session_path: &Path, identity: &WriterIdentity) -> Result<Option<WriterLease>> {
+    let _arbiter = lock_arbiter(session_path)?;
     let Some(current) = read(session_path) else {
         return Ok(None);
     };
@@ -151,6 +217,8 @@ fn claim_at(
     now: DateTime<Utc>,
     force: bool,
 ) -> Result<LeaseClaim> {
+    let _arbiter = lock_arbiter(session_path)?;
+    claimed_sessions().insert(session_path.to_path_buf());
     let current = read(session_path);
     let acquired_at = match current.as_ref() {
         Some(lease) if lease.holder_id == identity.id => lease.acquired_at,
@@ -216,40 +284,37 @@ fn serialized(lease: &WriterLease) -> Result<Vec<u8>> {
 
 fn write_new(session_path: &Path, lease: &WriterLease) -> Result<bool> {
     let path = lease_path(session_path);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    let temp = staged(&path, lease)?;
+    match temp.persist_noclobber(&path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(error) => Err(anyhow::anyhow!(
+            "Failed to publish writer lease {}: {}",
+            path.display(),
+            error.error
+        )),
     }
-    let mut file = match fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-    {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
-        Err(error) => {
-            return Err(error)
-                .with_context(|| format!("Failed to create writer lease {}", path.display()))
-        }
-    };
-    file.write_all(&serialized(lease)?)
-        .with_context(|| format!("Failed to write writer lease {}", path.display()))?;
-    Ok(true)
 }
 
 fn replace(session_path: &Path, lease: &WriterLease) -> Result<()> {
     let path = lease_path(session_path);
-    let dir = path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("writer lease path has no parent"))?;
-    let temp = tempfile::NamedTempFile::new_in(dir)
-        .with_context(|| format!("Failed to stage writer lease in {}", dir.display()))?;
-    fs::write(temp.path(), serialized(lease)?)
-        .with_context(|| format!("Failed to stage writer lease {}", temp.path().display()))?;
-    temp.persist(&path).map_err(|error| {
+    staged(&path, lease)?.persist(&path).map_err(|error| {
         anyhow::anyhow!("Failed to replace writer lease {}: {error}", path.display())
     })?;
     Ok(())
+}
+
+fn staged(path: &Path, lease: &WriterLease) -> Result<tempfile::NamedTempFile> {
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("writer lease path has no parent"))?;
+    fs::create_dir_all(dir).with_context(|| format!("Failed to create {}", dir.display()))?;
+    let bytes = serialized(lease)?;
+    let mut temp = tempfile::NamedTempFile::new_in(dir)
+        .with_context(|| format!("Failed to stage writer lease in {}", dir.display()))?;
+    temp.write_all(&bytes)
+        .with_context(|| format!("Failed to stage writer lease in {}", dir.display()))?;
+    Ok(temp)
 }
 
 #[cfg(unix)]
@@ -375,6 +440,47 @@ mod tests {
     }
 
     #[test]
+    fn a_clean_exit_hands_back_every_lease_so_the_next_open_reports_no_abandoned_writer() {
+        let dir = tempdir().expect("tempdir");
+        let first = session_path(dir.path());
+        let second = dir.path().join("thread-2.jsonl");
+        let quitting = identity(&uuid::Uuid::new_v4().to_string());
+        let other = identity(&uuid::Uuid::new_v4().to_string());
+        claim(&first, &quitting).expect("first session");
+        claim(&second, &other).expect("second session");
+        take_over(&second, &quitting).expect("second session taken");
+        claim(&first, &quitting).expect("renewed");
+
+        release_claimed_by(&quitting);
+
+        assert!(!lease_path(&first).exists());
+        assert!(!lease_path(&second).exists());
+        let resumed = identity(&uuid::Uuid::new_v4().to_string());
+        assert!(matches!(
+            claim(&first, &resumed).expect("resume"),
+            LeaseClaim::Acquired(_)
+        ));
+        assert!(matches!(
+            claim(&second, &resumed).expect("resume"),
+            LeaseClaim::Acquired(_)
+        ));
+    }
+
+    #[test]
+    fn a_lease_another_writer_holds_survives_this_process_exiting() {
+        let dir = tempdir().expect("tempdir");
+        let path = session_path(dir.path());
+        let exiting = identity(&uuid::Uuid::new_v4().to_string());
+        let holder = identity(&uuid::Uuid::new_v4().to_string());
+        claim(&path, &exiting).expect("first claim");
+        take_over(&path, &holder).expect("taken over");
+
+        release_claimed_by(&exiting);
+
+        assert_eq!(read(&path).expect("lease").holder_id, holder.id);
+    }
+
+    #[test]
     fn a_tampered_lease_never_locks_a_writer_out() {
         let dir = tempdir().expect("tempdir");
         let path = session_path(dir.path());
@@ -384,5 +490,67 @@ mod tests {
             claim(&path, &identity("a")).expect("claim"),
             LeaseClaim::HeldBy(_)
         ));
+    }
+
+    fn live_lease(id: &str, now: DateTime<Utc>) -> WriterLease {
+        WriterLease {
+            holder_id: id.to_string(),
+            holder_label: format!("writer {id}"),
+            pid: std::process::id(),
+            acquired_at: now,
+            renewed_at: now,
+            expires_at: now + chrono::Duration::from_std(WRITER_LEASE_TTL).unwrap(),
+        }
+    }
+
+    #[test]
+    fn a_claim_waits_for_a_claim_in_progress_and_does_not_take_its_unfinished_lease() {
+        let dir = tempdir().expect("tempdir");
+        let path = session_path(dir.path());
+        let now = Utc::now();
+        let in_progress = lock_arbiter(&path).expect("first claimant holds the arbiter");
+        fs::write(lease_path(&path), b"").unwrap();
+
+        let contender = {
+            let path = path.clone();
+            std::thread::spawn(move || claim_at(&path, &identity("b"), now, false))
+        };
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        assert!(
+            !contender.is_finished(),
+            "a second claim must wait while the first is deciding"
+        );
+
+        replace(&path, &live_lease("a", now)).expect("first claimant publishes");
+        drop(in_progress);
+
+        match contender
+            .join()
+            .expect("contender thread")
+            .expect("contender claim")
+        {
+            LeaseClaim::HeldBy(holder) => assert_eq!(holder.holder_id, "a"),
+            other => panic!("the unfinished lease must not be taken: {other:?}"),
+        }
+        assert_eq!(read(&path).expect("lease").holder_id, "a");
+    }
+
+    #[test]
+    fn a_new_lease_is_published_whole_and_never_over_an_existing_one() {
+        let dir = tempdir().expect("tempdir");
+        let path = session_path(dir.path());
+        let now = Utc::now();
+
+        assert!(write_new(&path, &live_lease("a", now)).expect("first publish"));
+        assert_eq!(read(&path), Some(live_lease("a", now)));
+        assert!(!write_new(&path, &live_lease("b", now)).expect("second publish"));
+        assert_eq!(read(&path).expect("lease").holder_id, "a");
+
+        let entries: Vec<String> = fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, vec!["thread-1.jsonl.writer-lease".to_string()]);
     }
 }

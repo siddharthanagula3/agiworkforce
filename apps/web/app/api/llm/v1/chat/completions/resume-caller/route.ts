@@ -15,14 +15,14 @@ import {
   CloudAgentApprovalCheckpointExpiredError,
   CloudAgentApprovalCheckpointNotFoundError,
 } from '@/lib/services/cloud-agent-run-service';
-import type { AuthGateSuccess } from '../lib/auth-gate';
+import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import {
   admitToolResultResume,
   continueToolResultResume,
   toolResultResumeError,
-} from '../lib/tool-result-resume';
-export { toolResultResumeOptions as OPTIONS } from '../lib/tool-result-resume';
+} from '@/app/api/llm/v1/chat/completions/lib/tool-result-resume';
+export { toolResultResumeOptions as OPTIONS } from '@/app/api/llm/v1/chat/completions/lib/tool-result-resume';
 
 export const maxDuration = 300;
 
@@ -120,7 +120,11 @@ async function handleCallerResume(request: NextRequest, authResult: AuthGateSucc
 }
 
 export const POST = withCorsRoute(
-  withErrorHandler((request: NextRequest) =>
-    admitToolResultResume(request, (authResult) => handleCallerResume(request, authResult)),
-  ),
+  withErrorHandler(async (request: NextRequest) => {
+    const authResult = await runAuthGate(request);
+    if (!authResult.ok) return authResult.response;
+    return admitToolResultResume(request, authResult, () =>
+      handleCallerResume(request, authResult),
+    );
+  }),
 );

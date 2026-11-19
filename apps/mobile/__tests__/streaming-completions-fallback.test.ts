@@ -122,6 +122,35 @@ describe('completions stream fallback (RN null response.body)', () => {
     });
   });
 
+  it('names a continuation as one, so the gateway does not budget it as a fresh turn', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => SSE,
+    } as unknown as Response);
+
+    const { callbacks } = makeCallbacks();
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000031',
+      },
+      callbacks,
+      undefined,
+      { purpose: 'continue' },
+    );
+
+    const init = guardedFetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'agi.chat.mobile.continue.0190a000-0000-7000-8000-000000000031',
+    );
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('purpose');
+  });
+
   it('reports a response-handler failure instead of treating it as malformed SSE', async () => {
     if (!FREE_CHAT_MODEL_ID) throw new Error('Expected a provider-funded Free chat offering.');
     const { streamFreeQuotaChat } = await loadStreamingService();
@@ -271,6 +300,82 @@ describe('completions stream fallback (RN null response.body)', () => {
     const sentBody = JSON.parse(init.body as string);
     expect(sentBody.thinking_mode).toBe(false);
     expect('thinking' in sentBody).toBe(false);
+  });
+
+  it('sends the device time zone so a scheduled chat task defaults to the phone zone', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => 'data: [DONE]\n',
+    } as unknown as Response);
+    const resolvedOptions = jest
+      .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockReturnValue({ timeZone: 'Asia/Kolkata' } as Intl.ResolvedDateTimeFormatOptions);
+
+    try {
+      const { callbacks } = makeCallbacks();
+      await streamChat(
+        {
+          model: MODEL_ID,
+          messages: [],
+          stream: true,
+          operationId: '0190a000-0000-7000-8000-000000000041',
+        },
+        callbacks,
+      );
+      await streamChat(
+        {
+          model: MODEL_ID,
+          messages: [],
+          stream: true,
+          operationId: '0190a000-0000-7000-8000-000000000042',
+          client_timezone: 'Europe/Paris',
+        },
+        callbacks,
+      );
+    } finally {
+      resolvedOptions.mockRestore();
+    }
+
+    const first = JSON.parse((guardedFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const second = JSON.parse((guardedFetchMock.mock.calls[1][1] as RequestInit).body as string);
+    expect(first.client_timezone).toBe('Asia/Kolkata');
+    expect(second.client_timezone).toBe('Europe/Paris');
+  });
+
+  it('omits the time zone when the device cannot report one', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => 'data: [DONE]\n',
+    } as unknown as Response);
+    const resolvedOptions = jest
+      .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockImplementation(() => {
+        throw new Error('Intl unavailable');
+      });
+
+    try {
+      const { callbacks } = makeCallbacks();
+      await streamChat(
+        {
+          model: MODEL_ID,
+          messages: [],
+          stream: true,
+          operationId: '0190a000-0000-7000-8000-000000000043',
+        },
+        callbacks,
+      );
+    } finally {
+      resolvedOptions.mockRestore();
+    }
+
+    const body = JSON.parse((guardedFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect('client_timezone' in body).toBe(false);
   });
 
   it('sends only the durable run id and decisions when resuming an approval', async () => {
@@ -559,6 +664,7 @@ describe('completions stream fallback (RN null response.body)', () => {
           ),
         })
         .mockRejectedValueOnce(new TypeError('Network request failed')),
+      cancel: jest.fn().mockResolvedValue(undefined),
       releaseLock: jest.fn(),
     };
     const now = '2026-07-17T20:00:00.000Z';
@@ -620,6 +726,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
     );
     expect(postCalls).toHaveLength(1);
+    expect(reader.cancel).toHaveBeenCalledTimes(1);
     expect(guardedFetchMock).toHaveBeenNthCalledWith(
       2,
       `https://api.agi.test${runPath}?after=0&limit=100`,

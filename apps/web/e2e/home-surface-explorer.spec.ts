@@ -1,12 +1,13 @@
 import { expect, test } from '@playwright/test';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const surfaces = [
-  ['AGI Desktop', '/desktop'],
-  ['AGI Chat', '/web'],
-  ['AGI CLI', '/cli'],
-  ['AGI Extension', '/chrome-extension'],
-  ['AGI Code for VS Code', '/vscode-extension'],
-  ['AGI Mobile', '/mobile'],
+  [PRODUCT_NAMES.desktop, '/desktop'],
+  [PRODUCT_NAMES.chat, '/web'],
+  [PRODUCT_NAMES.cli, '/cli'],
+  [PRODUCT_NAMES.extension, '/chrome-extension'],
+  [`${PRODUCT_NAMES.code} for VS Code`, '/vscode-extension'],
+  [PRODUCT_NAMES.mobile, '/mobile'],
 ] as const;
 
 for (const theme of ['dark', 'light'] as const) {

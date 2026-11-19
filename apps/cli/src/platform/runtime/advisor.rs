@@ -219,6 +219,7 @@ pub async fn consult(req: AdvisorRequest, privacy: PrivacyMode) -> Result<Adviso
         None,
     )
     .await?;
+    crate::cost_ledger::record_side_request(advisor_usage(&model, &result));
 
     // Prefer the accumulated streaming text; fall back to result.text.
     let collected = answer_chunks.lock().unwrap().join("");
@@ -233,6 +234,23 @@ pub async fn consult(req: AdvisorRequest, privacy: PrivacyMode) -> Result<Adviso
         model_used: model,
         tokens: result.input_tokens + result.output_tokens,
     })
+}
+
+fn advisor_usage(
+    requested_model: &str,
+    result: &models::CompletionResult,
+) -> crate::cost_ledger::CompletionUsage {
+    crate::cost_ledger::CompletionUsage {
+        model: result
+            .resolved_model
+            .clone()
+            .unwrap_or_else(|| requested_model.to_string()),
+        input_tokens: result.input_tokens,
+        output_tokens: result.output_tokens,
+        cache_read_tokens: result.cache_read_input_tokens,
+        cache_write_tokens: result.cache_creation_input_tokens,
+        included_in_subscription: result.via_subscription,
+    }
 }
 
 #[cfg(test)]
@@ -344,6 +362,45 @@ mod tests {
         )
         .expect_err("a device model is outside a BYOK session's boundary");
         assert!(error.to_string().contains("outside this"), "{error}");
+    }
+
+    #[test]
+    fn an_advisor_answer_keeps_its_own_request_receipt() {
+        let result = models::CompletionResult {
+            text: "answer".to_string(),
+            tool_calls: Vec::new(),
+            input_tokens: 1_200,
+            output_tokens: 300,
+            cache_read_input_tokens: 40,
+            cache_creation_input_tokens: 5,
+            via_subscription: false,
+            stop_reason: Some("stop".to_string()),
+            stop: None,
+            reasoning_output_tokens: 0,
+            managed_request_id: None,
+            resolved_model: Some("served-advisor".to_string()),
+        };
+        let usage = advisor_usage("requested-advisor", &result);
+        assert_eq!(
+            usage,
+            crate::cost_ledger::CompletionUsage {
+                model: "served-advisor".to_string(),
+                input_tokens: 1_200,
+                output_tokens: 300,
+                cache_read_tokens: 40,
+                cache_write_tokens: 5,
+                included_in_subscription: false,
+            }
+        );
+
+        let included = models::CompletionResult {
+            via_subscription: true,
+            resolved_model: None,
+            ..result
+        };
+        let usage = advisor_usage("requested-advisor", &included);
+        assert_eq!(usage.model, "requested-advisor");
+        assert!(usage.included_in_subscription);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-01
+Last updated: 2026-11-13
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -23,18 +23,6 @@ of the UI gap campaign. Each `DEF-` or `REF-` id below is a campaign row still
 waiting on the founder; it closes when the action named beside it is done.
 Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
-## [Deploy] Apply migrations 0368 to 0391, then deploy main (decision 2)
-
-- `scripts/config/production-migrations-applied.json` records production through 0367 (2026-10-18);
-  0368 to 0391 are on main and not recorded as applied there, and the pre-deploy migration check blocks main until they are.
-- Action: apply them to staging, check, then to production with `--confirm-production`, then deploy.
-  A production apply cannot be undone, so it runs only at a time you choose.
-- Until then: connector tools fail closed (0381); published apps cannot use connectors, organization
-  daily activity is missing and Slack channel replies fail (0383 to 0389); usage promotions (0390) and
-  the artifact AI cap (0391, which needs 0380) cannot be switched on.
-- Done when `pnpm db:migrate -- status --target production` lists 0391 and the JSON record is updated.
-  Impact: RELEASE-BLOCKING.
-
 ## [Models] One paid probe before video comes back (decision 1)
 
 - You chose `gemini-omni-1.1-flash` for video; its adapter is merged (`0ed375f365`). The `google/veo`
@@ -47,7 +35,7 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
 - Built in `5daa5cb754` and its review fixes: banked limit resets and time-boxed limit uplifts as runtime
   promotions with a cost ceiling and a fail-closed switch. No amount is in code.
-- Action: after 0390 is applied, create the promotions with live values in the admin route, then turn on
+- Action: 0390 is applied in production; create the promotions with live values in the admin route, then turn on
   the `billing_usage_promotions` flag. Rows: DEF-0029, DEF-0510, DEF-0512, DEF-1687, DEF-1802,
   DEF-2062, DEF-2314, DEF-3162, DEF-3272, DEF-3343.
 
@@ -55,15 +43,15 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
 - DEF-0333: the redesign is merged (`7f4a4b93be`, `180b298342`, `81a310f8d5`) and passed independent
   review; it stays off behind `AGI_ARTIFACT_AI_ENABLED`.
-- Action: confirm the per-app call counts in `maxArtifactAiCallsPerApp` (`billing-catalog.ts`), apply
-  0391 after 0380, then set `AGI_ARTIFACT_AI_ENABLED=1`. Counsel approves the consent line saying the
+- Action: confirm the per-app call counts in `maxArtifactAiCallsPerApp` (`billing-catalog.ts`), then set
+  `AGI_ARTIFACT_AI_ENABLED=1` (0380 and 0391 are applied in production). Counsel approves the consent line saying the
   app may save output where its publisher can read it.
 
 ## [Connectors] Release switch (decision 16)
 
 - You decided on 2026-10-22 to keep every connector Coming soon for now. To release one: register its
   OAuth app (the three connector entries below), write the Gmail data rule (`founder-decisions.md`
-  item 42), apply 0381, then approve flipping `CONNECTOR_RELEASE_STATE`.
+  item 42), then approve flipping `CONNECTOR_RELEASE_STATE`.
 - Rows waiting on it: DEF-0723, DEF-0743, DEF-0767, DEF-1240, DEF-1920, DEF-2027, DEF-2054, DEF-2074,
   DEF-2083, DEF-2137, DEF-2141, DEF-2166, DEF-3236, DEF-3240, DEF-3262, DEF-3342.
 
@@ -76,12 +64,20 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 - Slack app configuration: set the Interactivity Request URL to
   `https://agiworkforce.com/api/webhooks/slack-interactions` so the in-Slack Approve and Deny buttons work.
 
-## [Mobile] Merge Codex's store-release branch and re-pin the submission test
+## [Mobile] First store release: the steps only you can take
 
-- `apps/mobile/__tests__/ios-store-submission-config.test.ts` was reported red on main on 2026-10-23:
-  its reviewer notes pin cloud-billing line numbers, and Codex's `codex/mobile-store-release` branch
-  rewrites the store-listing files. Agents do not edit Codex's work, so merging that branch and
-  re-pinning the notes is yours. Not re-run in this pass.
+- Version 1 ships free with no in-app purchases (`apps/mobile/src/features/billing/storePurchases.json`). The listings,
+  reviewer notes and `apps/mobile/__tests__/ios-store-submission-config.test.ts` describe that build
+  and the test is green again. Every remaining console, credential, device and decision step is in
+  `docs/runbooks/mobile-store-first-release.md`, in order.
+- Phone sign-in to Cloud works in production from `main` (`568584454a`, part of the release
+  `e822c4fda6` live since 2026-11-13). The local branch `hotfix/mobile-native-session`
+  (`a8e278c62e`) is no longer served.
+- No store build can start before 2026-11-12: the Expo patch update the release check requires is
+  held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
+  step 7 item 1).
+- `codex/mobile-store-release` (2026-10-17) is not needed for this: its free-first idea was
+  reimplemented on current code. Whether to keep or delete that branch is yours.
 
 ## [Legal] Register a DMCA designated agent (decision 32)
 
@@ -140,29 +136,34 @@ Each line is one approval; engineering edits the page and its claim test after i
   `apps/web/app/acceptable-use/page.tsx` (about line 118) says connector tools are "capped by plan",
   while Free now has none.
 - Chrome extension history search is built opt-in (`apps/extension/src/features/computer-use/historySearch.ts`)
-  and neither `/privacy` nor `/agent-permissions` mentions it; whether it stays is in `open-questions.md`.
+  and both policy pages now describe it: `/privacy` since commit `6ade64b7b9` (with the console and
+  network lines the extension reads during browser control), and `/agent-permissions` in a Browsing
+  history row of "Computer use in Chrome" dated 2026-11-13. Approve that wording or send it to counsel;
+  whether the feature stays is in `open-questions.md`.
 
 ## [Release] GitHub environments and variables the release workflows read (F3, F4, F6 to F10)
 
 **Why founder assistance is required**
 Every release workflow is correct but reads configuration that does not exist: environments `macos-release`,
-`vscode-marketplace`, `chrome-web-store`, `mobile-store-release`, `production-fly` are missing, the repository has
-zero variables, and repository secrets cannot be listed with the agent token. This entry is the configuration half of
-"Cut signed releases", "Chrome Web Store public key", "Signed protocol-7 CLI release" and the mobile store entry.
-**Exact action**
+`cli-release`, `vscode-marketplace`, `open-vsx` and `chrome-web-store` are missing and no tag ruleset exists
+(`gh api` GETs, 2026-11-11; `mobile-store-release` and `production-fly` exist), the only repository variables are the mobile ones, and repository secrets cannot be listed with the
+agent token. This entry is the configuration half of
+"Cut signed releases", "Chrome Web Store public key", "Signed CLI release before the Marketplace listing" and the mobile store entry.
+**Exact action** In this order: protection before any credential, because a workflow that names a missing environment creates it unprotected, and a repository secret is readable by a workflow on any pushed branch.
 
 1. Run `gh secret list` with admin rights and share the names present.
-2. Create the five environments above, each allowing its tag pattern (`v-cloud-desktop-*`/`v-desktop-*`, `v-vscode-*`, `v-ext-*`, `v-mobile-*`).
-3. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
-4. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
-5. `vscode-marketplace`: `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`; an Open VSX token.
-6. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`: `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`.
-7. `mobile-store-release`: secrets `EXPO_TOKEN`, `ASC_API_KEY_ID`, `ASC_API_KEY_ISSUER_ID`, `ASC_API_PRIVATE_KEY_BASE64`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64`; variables `ASC_APP_ID`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`.
-8. `NPM_TOKEN` able to publish `@agiworkforce/cli`; make the Homebrew tap public or give the release job write access.
+2. Before any signing key, publish identity or store credential exists, protect the four store and CLI release environments `cli-release`, `vscode-marketplace`, `open-vsx` and `chrome-web-store`: each with the owner as required reviewer, "Allow administrators to bypass configured protection rules" deselected, and a deployment policy of its tags only (`v-cli-*`, `v-vscode-*`, `v-vscode-*`, `v-ext-*`; no branch, so a `workflow_dispatch` from a branch cannot reach them). In the same step add the `release-tags` tag ruleset that lets only a repository admin create, move or delete `v-cli-*`, `v-vscode-*` and `v-ext-*` tags. Exact `gh api` commands: `docs/runbooks/cli-release.md`, "First release" step 2. Then run `node scripts/release/check-release-environments.mjs` (read-only `gh api` GETs) and continue only when it prints `OK`.
+3. Create `macos-release` allowing `v-cloud-desktop-*` and `v-desktop-*` (`mobile-store-release` already allows `v-mobile-*`); `.github/rulesets/README.md` walks `.github/rulesets/environments.json` for it. That walk rewrites every listed environment, and the file still gives `vscode-marketplace` and `chrome-web-store` a `main` branch policy, so until it lists the four release environments tag-only, create `macos-release` with the same `PUT` and tag `POST` as step 2 instead, and rerun the probe after any walk.
+4. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
+5. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
+6. `vscode-marketplace`, only after step 2: an Entra federated credential whose subject is exactly `repo:siddharthanagula3/agiworkforce:environment:vscode-marketplace` (bound to the environment, and through its tag-only policy to `v-vscode-*` tags), then `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`. Open VSX needs no token: its trusted publisher names repository, workflow and environment `open-vsx`, plus the repository variable `OPEN_VSX_PUBLISH`, which is set only after the lead has added the pinned `ovsx` development dependency (Open VSX step 1). Commands: `docs/runbooks/vscode-marketplace-publish.md`, "First submission" and "Open VSX".
+7. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`, only after step 2: a Google workload-identity provider whose condition admits only this repository's `chrome-web-store` environment on a tag, and `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`. Commands: `docs/runbooks/chrome-web-store-publish.md`, "First submission" step 6.
+8. `mobile-store-release`: still missing secret `EXPO_TOKEN` and variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`; the App Store Connect and Play secrets, `ASC_APP_ID` and the live `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` are set (checked 2026-11-10). Steps: `docs/runbooks/mobile-store-first-release.md`.
+9. CLI, only after step 2: `AGI_CLI_RELEASE_SIGNING_KEY` (a P-256 key whose public half is pinned in `apps/web/public/install.sh`) as an environment secret of `cli-release`, never a repository secret (`gh secret set AGI_CLI_RELEASE_SIGNING_KEY --env cli-release`); the probe fails if a repository secret of that name exists. Optional `SENTRY_DSN_CLI`, as a repository secret: the build jobs that read it run in no environment, so a `cli-release` copy is never read. The public half is pinned with `node scripts/release/release-signing-key.mjs pin agi-cli-release.pub`, not by hand (`docs/runbooks/cli-release.md`, step 6). The CLI ships only through the signed install script, so it needs no npm token or Homebrew tap. Steps: `docs/runbooks/cli-release.md`.
 
 **Where** GitHub repository settings (environments, secrets, variables); Apple, Azure, Microsoft Entra, Google Cloud, Expo, npm.
 **Needed input** Accounts and about two hours.
-**How to verify completion** Tags `v-cli-1.7.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-0.3.0`, `v-ext-1.2.0`, `v-mobile-1.2.0` each produce a green release run.
+**How to verify completion** `node scripts/release/check-release-environments.mjs` prints `OK`, then tags `v-cli-0.0.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-<version in apps/extension-vscode/package.json>`, `v-ext-1.2.0`, `v-mobile-0.0.1` each produce a green release run.
 **What remains after founder action** Pushing the tags and verifying each release (agent).
 **Impact** RELEASE-BLOCKING (CLI, both desktops, VS Code, Chrome, mobile)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -294,7 +295,7 @@ Dashboard.
 
 1. Decide go-live timing.
 2. On the CLI's live restricted key enable Products:Write and Features:Write.
-3. Create the live Team, Basic and Max 15x products and prices to match
+3. Create the live Team, Basic and Ultra products and prices to match
    `packages/contracts/types/src/billing-catalog.ts`; archive the five active
    live prices that contradict it; revoke the temporary write permission.
 4. Repoint every Vercel `STRIPE_PRICE_*` variable in the same change as the
@@ -332,37 +333,37 @@ implemented but unverified, and every claim must describe it that way.
 **Impact** FEATURE-BLOCKING (enterprise SSO cannot be verified or claimed)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Mobile] Store submission accounts, products, listing facts
+## [Mobile] Selling plans in the app (deferred: version 1 sells nothing)
 
 **Why founder assistance is required**
-Apple and Google agreements, merchant profiles, products and contact details
-exist only in the store consoles and belong to the account owner.
+Apple and Google agreements, merchant profiles, products and tax registrations
+exist only in the store consoles and belong to the account owner. None of this
+is needed for the free version 1; its steps are in
+`docs/runbooks/mobile-store-first-release.md`.
 **Exact action**
 
 1. Sign the Apple Paid Applications agreement and apply to the Small Business Program.
 2. Create the Play Console merchant profile (permanent).
-3. Create the five subscriptions and four top-ups in both stores with the ids in `apps/mobile/store-listing/*.json`.
-4. Copy the App Store Connect Issuer ID and create the Play service-account JSON for `pnpm release:asc-probe` and `release:preflight`.
-5. Replace the three `__FOUNDER_TO_FILL__` phone fields and supply the two `__DESIGN_TO_PRODUCE__` graphics.
-6. Register India OIDAR, EU OSS and UK VAT before the first sale.
+3. Finish the products in both stores as `docs/runbooks/mobile-store-products.md` lists them (the App Store ones were created on 2026-10-21 and are unattached).
+4. Register India OIDAR, EU OSS and UK VAT before the first sale.
 
-**Where** App Store Connect, Google Play Console, `apps/mobile/store-listing/`, `apps/mobile/eas.json`.
-**Needed input** Signatures, a contact phone, tax registrations, about ninety minutes.
-**How to verify completion** `pnpm --filter @agiworkforce/mobile release:preflight` passes for the production profile; no placeholder tokens remain in the listing files.
-**What remains after founder action** Sandbox purchase verification, then `MOBILE_IAP_ENABLED=true`.
-**Impact** RELEASE-BLOCKING (mobile stores)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+**Where** App Store Connect, Google Play Console, `apps/mobile/src/features/billing/storePurchases.json`, `apps/mobile/store-listing/`.
+**Needed input** Signatures, tax registrations, about ninety minutes.
+**How to verify completion** Sandbox purchases verify on both stores as section 8 of the products runbook describes.
+**What remains after founder action** `nativePurchases: true`, listings and reviewer notes rewritten for a selling build, a new store review, then `MOBILE_IAP_ENABLED=true`.
+**Impact** FEATURE-BLOCKING (in-app sales only; not the first release)
+**Status** DEFERRED BY THE OWNER, 2026-11-10
 
 ## [Mobile / India] RBI auto-renewal ceiling and Razorpay
 
 **Why founder assistance is required**
 Pricing under the RBI ceiling is a commercial call; Razorpay's support for
 recurring payments from a foreign entity is a sales conversation.
-**Exact action** Pick how Max 15x and Team are sold in India (under the ceiling, annual or invoice only, seat cap, or not yet); decide the INR top-up rate; ask Razorpay sales whether recurring subscriptions are available to a foreign entity; get an accountant's view on OIDAR GST.
+**Exact action** Pick how Ultra and Team are sold in India (under the ceiling, annual or invoice only, seat cap, or not yet); decide the INR top-up rate; ask Razorpay sales whether recurring subscriptions are available to a foreign entity; get an accountant's view on OIDAR GST.
 **Where** Pricing decision, Razorpay sales, accountant.
 **Needed input** One pricing decision and one external conversation.
 **How to verify completion** The decision is recorded in `docs/decisions/`; if Razorpay proceeds, its answer picks the integration shape.
-**What remains after founder action** Decided 2026-09-15 (D-2026-09-15-18): until Razorpay, the accountant and counsel resolve the questions above, Max 15x and Team are invoice or assisted-sales only in India and there is no INR top-up conversion; engineering enforces that in checkout now.
+**What remains after founder action** Decided 2026-09-15 (D-2026-09-15-18): until Razorpay, the accountant and counsel resolve the questions above, Ultra and Team are invoice or assisted-sales only in India and there is no INR top-up conversion; engineering enforces that in checkout now.
 **Impact** FEATURE-BLOCKING (India only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -493,9 +494,14 @@ template that stamps a `surface` claim, and JWT templates are created in the
 Clerk dashboard.
 **Exact action** In the Clerk dashboard, JWT templates, on both the
 development and the production instance: create a template named `agi-mobile`
-with the claims `{"surface": "mobile"}` and the default lifetime. Then confirm
-`CLERK_AUTHORIZED_PARTIES` on the production web deployment lists the web
-origin and the published extension's `chrome-extension://<id>` origin.
+with the claims `{"surface": "mobile"}` and the default lifetime. Then set
+`CLERK_AUTHORIZED_PARTIES` on the production web deployment to the web origin
+and the extension's `chrome-extension://<item id>` origin, for example
+`https://agiworkforce.com,chrome-extension://<item id>`, and redeploy production
+so the value takes effect before the Chrome submission; the release of
+2026-11-13 left the variable unchanged. Without the extension origin, extension sign-in
+appears to succeed and then every API call answers 401. Steps and check:
+`docs/runbooks/chrome-web-store-publish.md`, "First submission" step 8.
 **Where** The claim and template name are `SURFACE_TOKEN_CLAIM` and
 `MOBILE_SESSION_TOKEN_TEMPLATE` in `packages/contracts/types/src/surface-binding.ts`;
 the binding is `bindSurfaceFromClaims` in `apps/web/lib/free-chat-surface-policy.ts`;
@@ -539,15 +545,15 @@ The published item's key is visible only in the Web Store dashboard.
 **Impact** FEATURE-BLOCKING (store-exact release only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [VS Code] Signed protocol-7 CLI release
+## [VS Code] Signed CLI release before the Marketplace listing
 
 **Why founder assistance is required**
 Publishing a signed multi-platform binary needs signing and distribution
 credentials that are not in the repository.
-**Exact action** Provide code-signing credentials and a release channel for the `agi` CLI (protocol 7, 1.7.1 or later) across the Marketplace platforms.
+**Exact action** Provide code-signing credentials and a release channel for the `agi` CLI, version `MINIMUM_SUPPORTED_RUNTIME_VERSION` or later speaking `DEVELOPER_SESSION_PROTOCOL_VERSION` (both in `packages/contracts/types/src/developer-session-versioning.ts`; 0.0.1 and protocol 8 on 2026-11-11), on every platform the Marketplace listing serves. The extension is published only after this (`docs/runbooks/vscode-marketplace-publish.md`, "Before the first submission").
 **Where** Signing accounts, release infrastructure.
 **Needed input** Credentials and a channel decision.
-**How to verify completion** The VS Code extension completes a developer-session turn against the published CLI.
+**How to verify completion** In a clean VS Code profile, **Code: Install AGI CLI** installs the published CLI and the extension completes a developer-session turn against it.
 **What remains after founder action** The release pipeline (engineering).
 **Impact** FEATURE-BLOCKING (VS Code developer sessions)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -649,8 +655,8 @@ that 400 for every Anthropic model while OpenAI, Google, DeepSeek, Qwen, Moonsho
 answered normally.
 **What remains after founder action** Nothing in code. Since 2026-09-15 the plan parks the unfunded route and serves the same models through the proxy route, so they answer, but the first token arrives after about 4.1 seconds on the cheapest Claude model (dev log 15:37 UTC: the provider span took 4109 ms of a 4306 ms turn, the gateway's own work under 200 ms) where the direct route answered in about a second; beside ChatGPT or Claude that reads as a slow product. Until it is done every
 Anthropic model is served slowly for everyone, not only for event visitors:
-every Anthropic model in the catalogue sits on this one account, so a paying Pro
-or Max subscriber who selects any of them gets a provider error, and they are
+every Anthropic model in the catalogue sits on this one account, so a paying Premium,
+Max or Ultra subscriber who selects any of them gets a provider error, and they are
 held out of the event allowlist for the same reason.
 
 The outage is now handled rather than merely classified: an unfunded provider
@@ -815,6 +821,47 @@ force-updating a pushed branch is not a call to make unasked.
 **Impact** PRECAUTIONARY
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [Release] First CLI version number: 0.0.1 or 1.0.0
+
+**Why founder assistance is required** Which version a product first ships
+under is a product call. `apps/cli/Cargo.toml` and
+`MINIMUM_SUPPORTED_RUNTIME_VERSION` say `0.0.1`, and `docs/runbooks/cli-release.md`
+step 8 tags `v-cli-0.0.1`, while the site's changelog announces "CLI v1.0"
+(2026-05-03, `apps/web/lib/changelog-entries.ts`) for archives on a release the
+repository no longer holds.
+**The consequence either way** Shipping `0.0.1` leaves a public page that
+names a higher version than the first installable one, and anyone still
+holding one of the old 1.x binaries is told by `agi update` that their build is
+newer than the published release, so it never updates them; they must
+reinstall with the install script. Shipping `1.0.0` instead means raising the
+version in `apps/cli/Cargo.toml` (Cargo updates `Cargo.lock`) and tagging
+`v-cli-1.0.0`; it presents
+the first signed build as a stable 1.0 rather than a preview.
+**Exact action** Choose `0.0.1` (no change) or `1.0.0`, before runbook step 8.
+**Impact** NON-BLOCKING (either choice can ship)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [CLI] Copilot sign-in: stay removed, or add a real route
+
+**Why founder assistance is required** Whether the CLI offers a provider at
+all is a product call, and sending requests to GitHub's service with a Copilot
+sign-in from a third-party tool is a terms question only the owner can accept.
+**What changed** Until 2026-11-12 a Copilot sign-in silently took every turn
+addressed to another provider, even with `--provider` set and a working key
+for that provider (finding MR-03 in the 2026-11-11 model routing review). That
+capture is removed. The model catalog has no Copilot provider, so nothing
+could then use the sign-in; first-run setup no longer offers it and
+`agi login copilot` says it is not available. `agi logout --all` still deletes
+a token saved by an earlier build.
+**The consequence either way** Leaving it removed means a user with only a
+Copilot subscription has no way to use it in the CLI. Adding it back properly
+means a catalog provider entry with its own model list and trust label, an
+explicit `--provider` route, and the owner's acceptance of GitHub's terms for
+that use.
+**Exact action** Choose "stay removed" (no change) or "add a Copilot route".
+**Impact** NON-BLOCKING (the CLI ships either way)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Release] Cut signed releases so the verification instructions work
 
 **Why founder assistance is required**
@@ -835,21 +882,19 @@ carries a `.sig` beside each artifact and a notarized macOS build, and
 **What remains after founder action** Nothing. The download controls already
 resolve against the live release API, so they start offering the platforms the
 moment assets exist.
-**The concrete consequence, measured 2026-09-12** Both documented CLI install
-routes fail for the public right now, so this is not only about verification:
+**The concrete consequence, re-measured 2026-11-11** The CLI has no release
+at all (`gh release list` shows none), so the one documented install route,
+`apps/web/public/install.sh`, stops with "No signed AGI CLI release is
+published yet". `install.sh` also pins no release key yet, so a tag pushed
+today stops at the workflow's pinned-key check before building. Homebrew is not
+a documented route (D-2026-09-15-24) and the tap repository is still private.
+The CLI steps, including a manual build run that proves every platform before
+a key exists, are in `docs/runbooks/cli-release.md`.
 
-1. `apps/web/public/install.sh` fetches `SHA256SUMS` and `SHA256SUMS.sigstore.json`
-   before it will unpack anything. The only published CLI release carries
-   neither, so the script exits 1 with "Release signature metadata is missing;
-   refusing to install unverified bytes." The guard is correct; there is simply
-   nothing signed to verify against.
-2. The Homebrew tap repository `siddharthanagula3/homebrew-tap` is private
-   (`gh api repos/siddharthanagula3/homebrew-tap --jq .private` returns `true`),
-   so `brew install` cannot resolve it for anyone outside the account.
-
-**Impact** LAUNCH-BLOCKING (both published install paths fail, and on the
-verification path a missing file is indistinguishable from a tampered one to
-the user who is checking precisely because they do not trust the download)
+**Impact** LAUNCH-BLOCKING (the documented CLI install route has nothing to
+install, and on the verification path a missing file is indistinguishable from
+a tampered one to the user who is checking precisely because they do not trust
+the download)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 Decided 2026-09-15 (D-2026-09-15-24): public CLI and Electron releases use the signed workflows and no install path is advertised while its assets or signatures are missing; engineering removes the dangling paths from the docs now.
@@ -1068,4 +1113,205 @@ been pushed.
 **Also waiting on a Preview** `/legal/open-source` is no longer force-static (decision 14); confirm on a Preview that it reads `public/legal/third-party-notices.json`.
 **What remains after founder action** The Preview browser pass for the rows registered in `audit/prior-audits/signed-in-web-audit-2026-10-03.md` and `audit/prior-audits/public-comparison-2026-10-04.md`, and the signed-in Preview session of Study that gates `L18-D3`.
 **Impact** EXTERNAL-APPROVAL
+**Status** FOUNDER ACTION REQUIRED
+
+## [Chrome extension] Confirm the 2026-11-12 store-policy calls before the first submission
+
+**Why founder assistance is required**
+A Chrome Web Store policy review on 2026-11-12 found four places where the listing or the privacy
+text could be read as untrue. The lead settled them with reversible calls so the listing could be
+fixed now; each is a product or disclosure call the founder reserves.
+**Decisions taken, reversible**
+
+1. Homepage URL is the site root, `https://agiworkforce.com`, for the first submission, because
+   `/chrome-extension` says the extension is coming soon. It moves to `/chrome-extension` after
+   approval (`docs/runbooks/chrome-web-store-publish.md`, First submission step 14).
+2. A page attach keeps sending the current contents of the page's visible form fields (except
+   password, payment card, one-time code, PIN and Social Security number fields), and this is now
+   disclosed in the extension's Data handling text, the listing and `/privacy`, instead of removed.
+3. Stricter wins on the Privacy tab: Personal communications and Location are ticked (page content
+   the user attaches or approves for browser control; time-zone name only).
+4. `/privacy` takes the change as a further, material revision of its unpublished 2026-11-11
+   version rather than a new 2026-11-12 version (`docs/compliance/policy-versions.json`).
+   **Exact action** Say yes, or name the call to reverse. To stop sending the time zone instead of
+   ticking Location, or to stop sending form contents instead of disclosing them, ask for the code
+   change; the listing and `/privacy` then change back with it.
+   **Where** `apps/extension/docs/chrome-web-store-listing.md` (Data use disclosures, Listing fields).
+   **Needed input** One answer.
+   **How to verify completion** The Dashboard's Privacy tab matches the listing document when the item
+   is submitted.
+   **What remains after founder action** Nothing in engineering unless a call is reversed.
+   **Impact** NON-BLOCKING
+   **Status** FOUNDER ACTION REQUIRED
+
+## [Remote Control] Set the relay's standing address, then deploy the relay
+
+**Why founder assistance is required**
+The 2026-11-12 relay fixes make the relay ask the web app whether each live pairing may continue
+(account, sign-in, plan, workspace policy). In production the relay refuses every registration until
+it has that address, so the order matters, and deploys and Fly settings are the owner's. The web
+app in production (`e822c4fda6`, live since 2026-11-13) already serves `/api/pair/standing`; the
+relay on Fly is not yet deployed from the same code, and no Fly secret has been set for it.
+**Exact action**
+
+1. Set `SIGNALING_STANDING_URL=https://<canonical web host>/api/pair/standing` on the relay's Fly
+   app, and confirm `SIGNALING_INTERNAL_SECRET` is identical on the relay and the web app.
+2. Unset any `WS_MESSAGE_LIMIT`, `TRUSTED_PROXY_HOPS` or `TRUST_PROXY` value set on Fly, so the
+   reviewed values in `services/signaling-server/fly.toml` apply.
+3. Deploy the relay, then check `/admin/config-backup` shows nothing missing.
+4. Confirm the relay's database and the web app's database are the same one: account erasure now
+   deletes Remote Control pairing rows through the web app.
+5. Confirm nothing else (a CDN or second proxy) sits in front of Fly for the relay's hostname.
+6. Nothing to set for `SIGNALING_PAIRING_MAX_LIFETIME_MS`: the relay now ignores a value above
+   seven days and logs that once at start, so the 2026-11-11 privacy text (a pairing record is
+   kept at most seven days plus about an hour) holds whatever Fly sets.
+7. The privacy text that describes the seven-day cap and the expiry sweep is live in production
+   ahead of this relay deploy. The owner decided on 2026-11-13 that nothing is deployed or changed
+   on Fly until he says so, and accepted that Remote Control may show an error meanwhile. Until the
+   relay is deployed the cap and the sweep the page describes are not enforced, so deploy the
+   relay before Remote Control is offered to customers.
+   **Where** The Fly app for the relay; `services/signaling-server/README.md`.
+   **Needed input** The owner's go-ahead for Fly, then the deploy.
+   **How to verify completion** A phone pairs with `agi rc`, a long reply streams without being
+   cut, and turning Remote Control off for the workspace ends the pairing within about a minute.
+   **What remains after founder action** Nothing in engineering.
+   **Impact** BLOCKING for the relay deploy only: deploying the relay without step 1 stops Remote
+   Control for everyone until it is set.
+   **Status** FOUNDER ACTION REQUIRED
+
+## [Code and CLI sign-in] Decide whether a refresh credential used twice within seconds still revokes the device session
+
+**Why founder assistance is required**
+Two VS Code windows can renew the same device session at the same moment. The server treats the
+second use of a refresh credential as a stolen-credential replay, revokes the whole session family
+and signs the user out everywhere. The 2026-11-12 client fix makes a window re-read the stored
+credential before renewing and adopt a session another window already renewed, which narrows the
+race but cannot close it when both requests are in flight. Closing it changes the replay-detection
+policy and its audit trail, which is a security decision.
+**Exact action** Choose one:
+
+1. Keep today's rule (any second use revokes). Simultaneous renewals stay a rare forced sign-in.
+2. Recommended: for a short window after first use (30 to 60 seconds), when the family is not
+   revoked, answer a new non-revoking refusal and issue nothing. The client then adopts the stored
+   session. A thief inside the window gains no credential.
+3. Return the same successor within the window. That needs the successor stored encrypted for the
+   grace period.
+   **Where** `apps/web/app/api/auth/device/refresh/route.ts`; the error list in
+   `packages/contracts/cloud-contracts/src/device-authorization.ts`; `rotateAccountSession` in
+   `apps/extension-vscode/src/utils/api.ts`.
+   **Needed input** The choice, and the window length for option 2 or 3.
+   **How to verify completion** Two windows renewing together both stay signed in, and a replay
+   after the window still revokes the family.
+   **What remains after founder action** Engineering implements the chosen option on the server and
+   in the two clients.
+   **Impact** NOT BLOCKING for any release.
+   **Status** FOUNDER DECISION REQUIRED
+
+## [Release 2026-11-13] What the branch merges did not carry over, and the calls they left open
+
+**Why founder assistance is required**
+On 2026-11-13 the owner had every web-related branch merged into main, and that main
+(`e822c4fda6`) is the web app in production since the same day. Several branches forked in October, about 1,300 commits before main's tip. In the web app and the shared
+packages a branch's lines were kept unless main had changed the same lines, where main's lines won.
+Git now lists those branches as merged, so the work below is on no open branch list, yet it is not
+on main. Each line names the branch it came from and the commit that still holds it. The owner had
+the merged branch names deleted from GitHub the same day; every commit named here is in main's
+history, so `git show <commit>` still reads it.
+
+**Not carried over**
+
+- Everything the October branches changed in the Chrome extension, the Code extension, the CLI, the
+  Rust crates and the mobile app (`test/extensions-integration`, `feat/intelligent-ui`,
+  `feat/desktop-parity`, `feat/one-product-account-billing`, `feat/prompt-v11-2026-10-15`,
+  `codex/fix-main-ci-security-final-20261108`). Main rewrote and audited those trees after the
+  branches forked, so they stay exactly as main had them.
+- `codex/capability-resource-sync` `58b99e0485`, retain imported connector requirements: every
+  line collided with newer code on main.
+- `feat/prompt-v11-2026-10-15` chat system prompt version 11 (`323f808f93`, `64c11a4f83`,
+  `eb79c093bc`): main has its own published versions 11 to 15. Releasing the branch prompt needs
+  a prompt release under a new number.
+- `feat/one-product-account-billing` `f57bc4dfb3`, refuse a store purchase while a payment dispute
+  is open, and `bd2f9112b8`, store refund sizing (main's `e2f0bd2c47` replaced it).
+- `feat/intelligent-ui` `a769b7a1ab`: charging a step that failed, dropped or was stopped, and
+  per-turn platform notices placed inside the user message (a user or a document could imitate
+  them, so they are back in the system role).
+- `feat/intelligent-ui` `0af2a22ebe`: the CLI file-removal guard and trash module.
+- `ext/vscode-working` `c05d97f648`: a typed refusal (its own error code, the pin and where it is
+  set) when a Code extension chat asks for a cloud model under a Local privacy pin, and the pin on
+  the local model list so the picker can hide those models. Main's CLI still refuses that start,
+  as an invalid request without the typed detail. The one piece the merge had carried, an error
+  code constant in the shared contract with nothing reading or sending it, is removed.
+- `test/extensions-integration` `ac7d0098e9`, connector tool schemas chosen regardless of the
+  turn, and `852340984d`, cross-origin access for every origin the identity provider authorizes.
+- `test/extensions-integration`: the MCP Logs button (the CLI never advertises it; a dead
+  `developer_mcp_logs` command remains in the desktop dispatcher and shared contract), duplicate
+  find and chat-navigation listeners, the withheld-folder link notice on the Code page, and
+  opening the free-model section on paid plans.
+- `codex/fix-main-ci-security-final-20261108` `f9058e35e8`: its rewrites of four security guards
+  and the looser database-isolation rule. Main's guards stand.
+
+**Exact action** Decide each of these; none blocks the web app in production.
+
+1. Store purchases during a payment dispute: re-apply `f57bc4dfb3` before in-app purchases launch,
+   or accept that only the web checkout refuses.
+2. Whether a failed, dropped or stopped model step is ever charged. If yes, it has to apply to
+   every provider, not only Anthropic. Today it is not charged, except main's existing estimate
+   when visible text had already streamed.
+3. Prompt caching is on by default for first-party apps since this release
+   (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`); main cached only when the
+   client asked. Cache writes cost more with the provider and cache reads less. Keep or revert.
+4. A failed background-workflow turn with no provider call is now free
+   (`apps/web/lib/workflows/steps/settle-workflow-invocation.ts`); main charged the reservation
+   estimate. Keep or revert.
+5. A billing renewal writes the same ledger row an operator reset does, so with migration 0396 a
+   renewal also restarts the 5-hour and weekly usage windows. Keep or give renewals their own row.
+6. `/privacy` says no connector "can be connected yet" while connectors are selectively released.
+   An Opus pass should correct the sentence.
+7. Which of the not-carried items above are worth redoing against today's code.
+
+**Where** The branches named above, all pushed to the repository.
+**Needed input** The choices.
+**How to verify completion** Each numbered item has a recorded decision, and each not-carried item
+is either redone on main or closed here.
+**What remains after founder action** Engineering redoes the chosen items against current main.
+**Impact** NOT BLOCKING.
+**Status** FOUNDER DECISION REQUIRED
+
+## [Prompts] Measure `chat.system@16` and move the chat prompt pin
+
+**Why founder assistance is required**
+Moving the pin changes what every customer's assistant is told, and the release ledger accepts a
+canary or stable record only with a measured eval run behind it. A live run calls paid provider
+routes, and two of the three slots the current pin was measured on sit on the Anthropic account,
+which has no API credit (see "[Providers] The Anthropic account has no API credit").
+
+Customers are still served `chat.system@6`. It names the assistant "AGI Workforce" and says nothing
+about artifacts, the chat's setup, Settings, or what the assistant must never produce.
+`chat.system@16`, internal since 2026-11-13, joins the two later lineages into one version and adds
+tone, mistakes, hard limits, wellbeing, professional advice, evenhandedness, copyright and consent
+before an action with consequences. A platform admin can try it now by enabling the
+`prompt.chat.system` flag with the variant `v16`; nobody else is served it.
+
+**Exact action**
+
+1. Fund the routes the run needs, then run both arms on each slot the pin was measured on:
+   `pnpm evals:live --model <modelKey> --chat-prompt-version <6 or 16> --sample 3 --suites golden,refusal,jailbreak,chat,chat-prompt`
+2. Compare the arms as `tools/evals/README.md` describes under live measurement. Refusal and
+   jailbreak must be no lower than version 6 on any slot; register row
+   `WEB-CHAT-PROMPT-V14-REFUSAL-REGRESSION-01` records the version that failed this.
+3. If it holds, say so, and engineering records canary then stable for `chat.system@16` with that
+   run as the quality signal, sets `CHAT_SYSTEM_PROMPT_PINNED_VERSION` to 16, and pins
+   `voice.live_instructions` to version 2 in the same change, because the ledger test requires the
+   chat, voice and guest identities to agree.
+4. Say deploy, so the web app serves the new pin.
+
+**Where** `tools/evals`, `packages/ai/model-registry/catalog/routing-policies.json`,
+`apps/web/lib/prompts/chat-system-prompt.ts`.
+**Needed input** Provider credit for the run, and the go-ahead to move the pin.
+**How to verify completion** `apps/web/lib/prompts/__tests__/chat-system-prompt-output.test.ts`
+asserts the new pin and its channel, and a production chat answers "AGI" when asked who it is.
+**What remains after founder action** The `chat-prompt` corpus has no rows for the sections
+version 16 adds, so the run above measures regressions against version 6, not the new behaviour.
+Engineering adds those rows before the next version is measured.
+**Impact** NOT BLOCKING. Production keeps serving version 6 until this is done.
 **Status** FOUNDER ACTION REQUIRED

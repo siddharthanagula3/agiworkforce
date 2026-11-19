@@ -22,3 +22,5 @@ export class GitHubInstallationAccessError extends Error {
 export function gitHubInstallationAccessDenied(status: number): boolean {
   return status === 401 || status === 403 || status === 404;
 }
+
+export const GITHUB_RECONNECT_REQUIRED_REASON = 'github_reconnect_required';

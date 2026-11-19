@@ -9,7 +9,7 @@ export type TranscriptNoticeSurface = 'framed' | 'bare';
 
 export interface TranscriptNoticeAction {
   label: string;
-  ariaLabel: string;
+  ariaLabel?: string;
   icon?: Icon;
   onClick: () => void;
 }

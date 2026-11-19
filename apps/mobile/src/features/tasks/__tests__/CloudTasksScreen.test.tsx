@@ -10,6 +10,7 @@ const mockFollowRun = jest.fn();
 const mockResumeRun = jest.fn();
 const mockCancelRun = jest.fn();
 const mockStartCloudWorkRun = jest.fn();
+const mockGetConversation = jest.fn();
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -55,6 +56,10 @@ jest.mock('@/services/streaming', () => ({
     resumeRun: mockResumeRun,
     cancelRun: mockCancelRun,
   }),
+}));
+
+jest.mock('@/services/managedCloudChat', () => ({
+  managedCloudChat: { getConversation: (...args: unknown[]) => mockGetConversation(...args) },
 }));
 
 jest.mock('../startWork', () => ({
@@ -200,13 +205,14 @@ describe('Cloud tasks screen', () => {
     );
   });
 
-  it('runs a finished task again and offers it as a routine', async () => {
+  it('offers a finished task as a routine and reopens its full original request for review', async () => {
+    const FULL_GOAL = `Summarise overnight support tickets. ${'Group them by customer and flag churn risk. '.repeat(8)}`;
     const FINISHED = {
       ...RUN,
       state: 'completed',
       pendingApproval: null,
       conversationId: '22222222-2222-4222-8222-222222222222',
-      conversationPreview: 'Summarise overnight support tickets',
+      conversationPreview: FULL_GOAL.slice(0, 200),
     };
     mockListRuns.mockResolvedValue({ runs: [FINISHED], nextCursor: null });
     mockFollowRun.mockImplementation(
@@ -215,22 +221,35 @@ describe('Cloud tasks screen', () => {
         return { run: FINISHED, lastSequence: -1 };
       },
     );
+    mockGetConversation.mockResolvedValue({
+      messages: [
+        {
+          role: 'user',
+          content: 'An unrelated earlier question',
+          createdAt: '2026-08-20T09:00:00.000Z',
+        },
+        { role: 'user', content: FULL_GOAL, createdAt: '2026-08-27T10:00:01.000Z' },
+        { role: 'assistant', content: 'Done', createdAt: '2026-08-27T10:30:00.000Z' },
+      ],
+      hasMore: false,
+    });
     mockStartCloudWorkRun.mockResolvedValue({ conversationId: 'conv-new', goal: {} });
-    const { findByText, getByText } = render(<CloudTasksScreen />);
+    const { findByText, getByText, findByLabelText } = render(<CloudTasksScreen />);
 
-    fireEvent.press(await findByText('Summarise overnight support tickets'));
+    fireEvent.press(await findByText(FULL_GOAL.slice(0, 200)));
     expect(await findByText('Make it a routine')).toBeTruthy();
     fireEvent.press(getByText('Run again'));
+
+    const objective = await findByLabelText('Task objective');
+    expect(objective.props.value).toBe(FULL_GOAL.trim());
+    expect(mockStartCloudWorkRun).not.toHaveBeenCalled();
+
+    fireEvent.press(await findByLabelText('Start task'));
     await waitFor(() =>
-      expect(mockStartCloudWorkRun).toHaveBeenCalledWith({
-        goal: 'Summarise overnight support tickets',
-      }),
-    );
-    await waitFor(() =>
-      expect(mockPush).toHaveBeenCalledWith({
-        pathname: '/(app)/chat/[id]',
-        params: { id: 'conv-new' },
-      }),
+      expect(mockStartCloudWorkRun).toHaveBeenCalledWith(
+        expect.objectContaining({ goal: FULL_GOAL.trim() }),
+        expect.any(Function),
+      ),
     );
   });
 });

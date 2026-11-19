@@ -21,7 +21,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: vi.fn(async () => null),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOperatorMappedConnectorIds: () => new Set<string>(),
   getUserGithubInstallations: vi.fn(async () => []),
   getUserCustomConnectorSummaries: vi.fn(async () => []),
@@ -147,3 +148,5 @@ describe('support actions, the exclusion list', () => {
     expect(mocks.db!.proposals).toHaveLength(0);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/user-connector-tools');

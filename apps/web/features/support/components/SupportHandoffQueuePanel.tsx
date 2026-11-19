@@ -9,11 +9,14 @@ import { useHandoffThread } from '../hooks/useHandoffThread';
 import {
   SUPPORT_MAX_MESSAGE_LENGTH,
   claimHandoffSession,
+  fetchAgentActiveSessions,
   fetchAgentHandoffMessages,
   fetchAgentQueue,
   sendAgentHandoffMessage,
 } from '../lib/support-client';
 import {
+  type HandoffPresenceState,
+  type SupportHandoffClaimedView,
   type SupportHandoffQueueEntryView,
   SUPPORT_AGENT_PRESENCE_PATH,
 } from '@agiworkforce/cloud-contracts/support';
@@ -26,13 +29,7 @@ const FIELD_CLASS =
 const ACTION_CLASS =
   'rounded-full border border-border px-4 py-2 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50';
 
-interface ClaimedSession {
-  sessionId: string;
-  referenceId: string;
-  summary: string;
-  contactEmail: string;
-  pollIntervalMs: number;
-}
+type ClaimedSession = SupportHandoffClaimedView;
 
 function formatDeadline(value: string | null): string {
   if (!value) return 'no deadline recorded';
@@ -42,8 +39,82 @@ function formatDeadline(value: string | null): string {
   return seconds === 0 ? 'past its deadline' : `${seconds}s left`;
 }
 
-function AgentThread({ session }: { session: ClaimedSession }) {
-  const [draft, setDraft] = useState('');
+function SessionContext({ session }: { session: ClaimedSession }) {
+  const { transcript, attemptedActions, citations, accountContext } = session;
+  if (
+    transcript.length === 0 &&
+    attemptedActions.length === 0 &&
+    citations.length === 0 &&
+    !accountContext
+  ) {
+    return null;
+  }
+
+  return (
+    <details className="mt-3 rounded-xl border border-border px-3 py-2" open>
+      <summary className="cursor-pointer text-xs font-medium">
+        What the visitor already went through
+      </summary>
+      {accountContext ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {accountContext.signedIn ? 'Signed in' : 'Signed out'}
+          {accountContext.planTier ? ` · plan ${accountContext.planTier}` : ''}
+          {accountContext.subscriptionStatus ? ` · ${accountContext.subscriptionStatus}` : ''}
+          {accountContext.usagePercentage !== null
+            ? ` · ${String(Math.round(accountContext.usagePercentage))}% of usage used`
+            : ''}
+        </p>
+      ) : null}
+      {transcript.length > 0 ? (
+        <ol
+          className="mt-2 flex max-h-48 flex-col gap-1 overflow-y-auto"
+          aria-label="Earlier conversation"
+        >
+          {transcript.map((turn, index) => (
+            <li key={`${String(index)}-${turn.at}`} data-role={turn.role} className="text-xs">
+              <span className="font-medium">
+                {turn.role === 'user'
+                  ? 'Visitor'
+                  : turn.role === 'assistant'
+                    ? 'Assistant'
+                    : 'Note'}
+                :
+              </span>{' '}
+              {turn.content}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+      {attemptedActions.length > 0 ? (
+        <ul className="mt-2 flex flex-col gap-1" aria-label="Actions already attempted">
+          {attemptedActions.map((action, index) => (
+            <li key={`${String(index)}-${action.at}`} className="text-xs text-muted-foreground">
+              {action.action}: {action.outcome.replace('_', ' ')}
+              {action.detail ? ` (${action.detail})` : ''}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {citations.length > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Sources shown: {citations.map((citation) => citation.title).join(', ')}
+        </p>
+      ) : null}
+    </details>
+  );
+}
+
+function AgentThread({
+  session,
+  draft,
+  onDraftChange,
+  onDismiss,
+}: {
+  session: ClaimedSession;
+  draft: string;
+  onDraftChange: (sessionId: string, value: string) => void;
+  onDismiss: (sessionId: string) => void;
+}) {
   const thread = useHandoffThread({
     sessionId: session.sessionId,
     pollIntervalMs: session.pollIntervalMs,
@@ -58,7 +129,7 @@ function AgentThread({ session }: { session: ClaimedSession }) {
     const body = draft.trim();
     if (!connected || thread.sending || body.length === 0) return;
     thread.send(body);
-    setDraft('');
+    onDraftChange(session.sessionId, '');
   };
 
   return (
@@ -68,6 +139,8 @@ function AgentThread({ session }: { session: ClaimedSession }) {
       {session.contactEmail ? (
         <p className="mt-1 text-xs text-muted-foreground">Reply-to {session.contactEmail}</p>
       ) : null}
+
+      <SessionContext session={session} />
 
       <ol className="mt-4 flex max-h-72 flex-col gap-2 overflow-y-auto" aria-label="Messages">
         {thread.messages.map((message) => (
@@ -117,7 +190,7 @@ function AgentThread({ session }: { session: ClaimedSession }) {
           disabled={!connected || thread.sending}
           placeholder={connected ? 'Reply to this visitor' : 'This conversation is closed.'}
           onChange={(event) => {
-            setDraft(event.target.value);
+            onDraftChange(session.sessionId, event.target.value);
             if (thread.sendError) thread.clearSendError();
           }}
         />
@@ -131,9 +204,18 @@ function AgentThread({ session }: { session: ClaimedSession }) {
       </form>
 
       {!connected ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          This conversation is {thread.status}, so it takes no more messages.
-        </p>
+        <div className="mt-2 flex items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            This conversation is {thread.status}, so it takes no more messages.
+          </p>
+          <button
+            type="button"
+            className={ACTION_CLASS}
+            onClick={() => onDismiss(session.sessionId)}
+          >
+            Done
+          </button>
+        </div>
       ) : null}
 
       {thread.sendError ? (
@@ -151,6 +233,24 @@ function PresenceControl() {
   const [state, setState] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [heartbeat, setHeartbeat] = useState<{ name: string; intervalMs: number } | null>(null);
+
+  const post = useCallback(async (status: 'online' | 'offline', name: string) => {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const response = await fetch(SUPPORT_AGENT_PRESENCE_PATH, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ status, displayName: name }),
+    });
+    const body = (await response.json().catch(() => null)) as {
+      presence?: Partial<HandoffPresenceState>;
+      warning?: string;
+    } | null;
+    if (!response.ok) {
+      throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
+    }
+    return body;
+  }, []);
 
   const set = useCallback(
     async (status: 'online' | 'offline') => {
@@ -161,30 +261,40 @@ function PresenceControl() {
       }
       setSaving(true);
       setError(null);
+      if (status === 'offline') setHeartbeat(null);
       try {
-        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-        const response = await fetch(SUPPORT_AGENT_PRESENCE_PATH, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ status, displayName: name }),
-        });
-        const body = (await response.json().catch(() => null)) as {
-          presence?: { status?: string };
-          warning?: string;
-        } | null;
-        if (!response.ok) {
-          throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
-        }
-        setState(body?.presence?.status ?? status);
+        const body = await post(status, name);
+        const resolved = body?.presence?.status ?? status;
+        const intervalMs = body?.presence?.heartbeatIntervalMs;
+        setState(resolved);
         setWarning(body?.warning ?? null);
+        setHeartbeat(
+          resolved === 'online' && typeof intervalMs === 'number' && intervalMs > 0
+            ? { name, intervalMs }
+            : null,
+        );
       } catch (cause) {
         setError(toUserMessage(cause, 'Could not update your presence.'));
       } finally {
         setSaving(false);
       }
     },
-    [displayName],
+    [displayName, post],
   );
+
+  useEffect(() => {
+    if (!heartbeat) return;
+    const timer = window.setInterval(() => {
+      post('online', heartbeat.name).then(
+        () => setError(null),
+        (cause: unknown) =>
+          setError(toUserMessage(cause, 'Could not keep you online. Visitors may not reach you.')),
+      );
+    }, heartbeat.intervalMs);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [heartbeat, post]);
 
   return (
     <section className={CARD_CLASS} aria-label="Your availability">
@@ -245,8 +355,12 @@ export function SupportHandoffQueuePanel() {
   const [queueError, setQueueError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
-  const [claimed, setClaimed] = useState<ClaimedSession | null>(null);
+  const [sessions, setSessions] = useState<ClaimedSession[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [activeError, setActiveError] = useState<string | null>(null);
   const mounted = useRef(true);
+  const activeRestored = useRef(false);
 
   useEffect(() => {
     mounted.current = true;
@@ -255,15 +369,45 @@ export function SupportHandoffQueuePanel() {
     };
   }, []);
 
+  const adopt = useCallback((incoming: ClaimedSession[]) => {
+    setSessions((current) => {
+      const known = new Set(current.map((entry) => entry.sessionId));
+      const added = incoming.filter((entry) => !known.has(entry.sessionId));
+      return added.length > 0 ? [...current, ...added] : current;
+    });
+    setSelectedId((current) => current ?? incoming[0]?.sessionId ?? null);
+  }, []);
+
   const load = useCallback(async () => {
-    const next = await fetchAgentQueue();
+    const [next, active] = await Promise.all([
+      fetchAgentQueue(),
+      activeRestored.current ? Promise.resolve(null) : fetchAgentActiveSessions(),
+    ]);
     if (!mounted.current) return;
+    if (active) {
+      activeRestored.current = true;
+      setActiveError(null);
+      adopt(active);
+    } else if (!activeRestored.current) {
+      setActiveError('Conversations you already took could not be read just now.');
+    }
     if (!next) {
       setQueueError('The waiting queue could not be read just now.');
       return;
     }
     setQueueError(null);
     setQueue(next);
+  }, [adopt]);
+
+  const changeDraft = useCallback((sessionId: string, value: string) => {
+    setDrafts((current) => ({ ...current, [sessionId]: value }));
+  }, []);
+
+  const dismiss = useCallback((sessionId: string) => {
+    setSessions((current) => current.filter((entry) => entry.sessionId !== sessionId));
+    setDrafts((current) =>
+      Object.fromEntries(Object.entries(current).filter(([id]) => id !== sessionId)),
+    );
   }, []);
 
   useEffect(() => {
@@ -288,17 +432,19 @@ export function SupportHandoffQueuePanel() {
         void load();
         return;
       }
-      setClaimed({
-        sessionId: result.sessionId,
-        referenceId: entry.referenceId,
-        summary: result.summary || entry.summary,
-        contactEmail: result.contactEmail,
-        pollIntervalMs: result.pollIntervalMs,
-      });
+      const taken = {
+        ...result.session,
+        referenceId: result.session.referenceId || entry.referenceId,
+        summary: result.session.summary || entry.summary,
+      };
+      adopt([taken]);
+      setSelectedId(taken.sessionId);
       void load();
     },
-    [load],
+    [adopt, load],
   );
+
+  const selected = sessions.find((entry) => entry.sessionId === selectedId) ?? sessions[0] ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -361,7 +507,40 @@ export function SupportHandoffQueuePanel() {
         ) : null}
       </section>
 
-      {claimed ? <AgentThread session={claimed} /> : null}
+      {activeError ? (
+        <p className="text-xs text-danger" role="status">
+          {activeError}
+        </p>
+      ) : null}
+
+      {sessions.length > 1 ? (
+        <nav className="flex flex-wrap gap-2" aria-label="Conversations you have taken">
+          {sessions.map((entry) => (
+            <button
+              key={entry.sessionId}
+              type="button"
+              className={
+                entry.sessionId === selected?.sessionId ? `${ACTION_CLASS} bg-muted` : ACTION_CLASS
+              }
+              aria-current={entry.sessionId === selected?.sessionId ? 'true' : undefined}
+              onClick={() => setSelectedId(entry.sessionId)}
+            >
+              {entry.referenceId}
+              {drafts[entry.sessionId]?.trim() ? ' (draft)' : ''}
+            </button>
+          ))}
+        </nav>
+      ) : null}
+
+      {selected ? (
+        <AgentThread
+          key={selected.sessionId}
+          session={selected}
+          draft={drafts[selected.sessionId] ?? ''}
+          onDraftChange={changeDraft}
+          onDismiss={dismiss}
+        />
+      ) : null}
     </div>
   );
 }

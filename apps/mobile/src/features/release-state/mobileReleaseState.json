@@ -35,7 +35,7 @@
       "listingId": null,
       "listingUrl": null,
       "subscriptionManagementUrl": null,
-      "evidence": "Zero v-mobile-* tags in this repository and no App Store Connect listing has been verified. store-listing/LISTING-METADATA-IOS.json is a submission draft, not evidence of a live listing; it also records in_app_purchases:false and that no StoreKit product exists, so an 'apple' subscription source cannot legitimately occur yet."
+      "evidence": "Zero v-mobile-* tags in this repository and no App Store Connect listing has been verified. store-listing/LISTING-METADATA-IOS.json is a submission draft, not evidence of a live listing; it records in_app_purchases:false because src/features/billing/storePurchases.json turns native purchases off, so this build sells nothing through StoreKit and an 'apple' subscription source cannot legitimately occur yet."
     },
     "google": {
       "store": "google",
@@ -44,7 +44,7 @@
       "listingId": null,
       "listingUrl": null,
       "subscriptionManagementUrl": null,
-      "evidence": "Zero v-mobile-* tags in this repository and no Google Play listing has been verified. store-listing/LISTING-METADATA-ANDROID.json is a submission draft and records that no Google Play Billing products exist, so a 'google' subscription source cannot legitimately occur yet."
+      "evidence": "Zero v-mobile-* tags in this repository and no Google Play listing has been verified. store-listing/LISTING-METADATA-ANDROID.json is a submission draft and records has_in_app_products:false because src/features/billing/storePurchases.json turns native purchases off, so this build sells nothing through Google Play Billing and a 'google' subscription source cannot legitimately occur yet."
     }
   }
 }

@@ -1,34 +1,37 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ScrollView, TextInput, View } from 'react-native';
-import { PressableBox } from '@/components/ui/PressableBox';
 import {
-  Check,
-  ChevronRight,
-  CircleHelp,
-  FileEdit,
-  FilePlus,
-  FlaskConical,
-  Send,
-  ShieldAlert,
-  Square,
-  X,
-} from 'lucide-react-native';
-import {
-  REMOTE_CODE_LIMITS,
-  managedUsageBucketLabel,
-  type RemoteCodeDiff,
-  type RemoteCodeToolRecord,
-} from '@agiworkforce/types';
+  KeyboardAvoidingView,
+  ScrollView,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
+import { ArrowDown, ArrowLeft, MoreHorizontal } from 'lucide-react-native';
+import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
-import { Switch } from '@/components/ui/Switch';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import { useAuthStore } from '@/src/features/auth/store';
-import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { CloudCodeLineCountsText } from '@/src/features/cloud-code/components/CloudCodeChangesCard';
+import {
+  CloudCodeTaskBubble,
+  CloudCodeWorkingRow,
+} from '@/src/features/cloud-code/components/CloudCodeTranscript';
+import { SessionComposerField } from '@/src/features/cloud-code/components/SessionComposerField';
+import {
+  CLOUD_CODE_SCREEN_TITLE,
+  cloudCodeChangeCountsLabel,
+  cloudCodeFileCountLabel,
+} from '@/src/features/cloud-code/presentation';
+import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConversationModal';
+import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
+import { radii, useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import {
   answerCodeApproval,
+  answerCodeQuestion,
   attachCodeSession,
   detachCodeSession,
   interruptCodeTurn,
@@ -40,28 +43,30 @@ import {
   useRemoteCodePreferences,
   useRemoteCodeStore,
 } from '../remote-code/store';
+import { CodeSessionChangesSheet } from './CodeSessionChangesSheet';
+import {
+  CodeApprovalCard,
+  CodeQuestionCard,
+  CodeQueuedBubble,
+  CodeReplyRow,
+  CodeThoughtRow,
+  CodeWorkGroup,
+} from './CodeSessionParts';
 import {
   CLOUD_SESSION_LABEL,
   codeSessionStatusColor,
   codeSessionStatusLabel,
 } from './CodeSessionsCard';
+import {
+  CODE_SESSION_COPY as COPY,
+  buildCodeSessionTimeline,
+  codeChangedFileCount,
+  codeWorkingLabel,
+  countDiffLines,
+  type CodeTimelineItem,
+} from './codeSessionTimeline';
 
-const REMOTE_SESSION_LABEL = 'Remote session';
-
-export function countDiffLines(diffs: readonly RemoteCodeDiff[]): {
-  added: number;
-  removed: number;
-} {
-  let added = 0;
-  let removed = 0;
-  for (const diff of diffs) {
-    for (const line of diff.patch.split('\n')) {
-      if (line.startsWith('+') && !line.startsWith('+++')) added += 1;
-      else if (line.startsWith('-') && !line.startsWith('---')) removed += 1;
-    }
-  }
-  return { added, removed };
-}
+const STICK_TO_BOTTOM_DISTANCE = 80;
 
 interface CodeSessionViewProps {
   rootId: string;
@@ -72,121 +77,52 @@ interface CodeSessionViewProps {
    * down a list of everything else this session is waiting on.
    */
   focusApprovalId?: string;
+  onBack: () => void;
 }
 
-function SectionTitle({ children }: { children: string }) {
-  return <Text className="mb-2 text-sm uppercase tracking-wider text-white/40">{children}</Text>;
-}
-
-const TOOL_STATE_LABELS: Record<RemoteCodeToolRecord['state'], string> = {
-  running: 'Running',
-  done: 'Done',
-  failed: 'Failed',
-};
-
-function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
+function TimelineRow({ item }: { item: CodeTimelineItem }) {
   const colors = useThemeColors();
-  const [expanded, setExpanded] = useState(false);
-  const failed = tool.state === 'failed';
 
-  return (
-    <View>
-      <PressableBox
-        onPress={() => setExpanded((open) => !open)}
-        disabled={!tool.output}
-        accessibilityRole="button"
-        accessibilityState={{ expanded, disabled: !tool.output }}
-        accessibilityLabel={`${TOOL_STATE_LABELS[tool.state]}: ${tool.summary}`}
-        style={{ minHeight: 44 }}
-        className="flex-row items-center gap-2"
-      >
-        <Text
-          className="text-sm"
-          style={{ minWidth: 64, color: failed ? colors.agentError : colors.textMuted }}
-        >
-          {TOOL_STATE_LABELS[tool.state]}
-        </Text>
-        <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
-          {tool.summary || tool.name}
-        </Text>
-        {tool.output ? (
-          <View style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
-            <ChevronRight size={12} color={colors.textMuted} />
-          </View>
-        ) : null}
-      </PressableBox>
-      {expanded && tool.output ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <Text
-            variant="mono"
-            selectable
-            className="text-sm"
-            style={{ color: failed ? colors.agentError : colors.textSecondary }}
-          >
-            {tool.output}
-          </Text>
-        </ScrollView>
-      ) : null}
-    </View>
-  );
+  switch (item.kind) {
+    case 'user':
+      return <CloudCodeTaskBubble text={item.text} />;
+    case 'queued':
+      return <CodeQueuedBubble text={item.text} />;
+    case 'reply':
+      return <CodeReplyRow text={item.text} />;
+    case 'partial':
+      return <View>{renderMarkdownContent(item.text, colors)}</View>;
+    case 'thinking':
+      return <CodeThoughtRow text={item.text} live={item.live} />;
+    case 'work':
+      return <CodeWorkGroup tools={item.tools} />;
+  }
 }
 
-function PlanUsageLine() {
+export function CodeSessionView({
+  rootId,
+  threadId,
+  focusApprovalId,
+  onBack,
+}: CodeSessionViewProps) {
   const colors = useThemeColors();
   const router = useRouter();
-  const clerkUserId = useAuthStore((state) => state.clerkUserId);
-  const ownerId = useCloudUsageStore((state) => state.ownerId);
-  const cached = useCloudUsageStore((state) => state.snapshot);
-  const refresh = useCloudUsageStore((state) => state.refresh);
-  const snapshot = clerkUserId && ownerId === clerkUserId ? cached : null;
-
-  useEffect(() => {
-    if (clerkUserId) void refresh();
-  }, [clerkUserId, refresh]);
-
-  if (!snapshot) return null;
-  const parts = [
-    snapshot.sessionResetAt !== null
-      ? `${managedUsageBucketLabel('session')} ${Math.round(snapshot.sessionUsagePercentage)}%`
-      : null,
-    snapshot.weeklyResetAt !== null
-      ? `${managedUsageBucketLabel('weekly')} ${Math.round(snapshot.weeklyUsagePercentage)}%`
-      : null,
-    `${managedUsageBucketLabel('period')} ${Math.round(snapshot.usagePercentage)}%`,
-  ].filter((part): part is string => part !== null);
-
-  return (
-    <PressableBox
-      onPress={() =>
-        router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
-      }
-      accessibilityRole="link"
-      accessibilityLabel={`Plan usage: ${parts.join(', ')}. See detailed usage`}
-      style={{ minHeight: 32, justifyContent: 'center' }}
-    >
-      <Text className="text-sm" style={{ color: colors.textMuted }} numberOfLines={1}>
-        {`Plan usage · ${parts.join(' · ')}`}
-      </Text>
-    </PressableBox>
-  );
-}
-
-export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessionViewProps) {
-  const colors = useThemeColors();
+  const keyboard = useKeyboardSafeComposer('screen');
   const thread = useRemoteCodeStore(
     (state) => state.threads[remoteCodeThreadKey(rootId, threadId)] ?? null,
   );
-  const [guidance, setGuidance] = useState('');
-  const steerByDefault = useRemoteCodePreferences((state) => state.followUpBehavior === 'steer');
-  const [interruptFirst, setInterruptFirst] = useState(steerByDefault);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [diffOpen, setDiffOpen] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const diffTop = useRef(0);
   const summary = useRemoteCodeStore((state) =>
     state.sessions.find((session) => session.rootId === rootId && session.threadId === threadId),
   );
+  const steer = useRemoteCodePreferences((state) => state.followUpBehavior === 'steer');
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [changesOpen, setChangesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const nearBottom = useRef(true);
 
   useEffect(() => {
     void attachCodeSession(rootId, threadId);
@@ -195,24 +131,106 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
     };
   }, [rootId, threadId]);
 
-  const transcriptLoaded = thread?.transcript != null;
   const syncedAt = thread?.syncedAt;
   useEffect(() => {
-    if (transcriptLoaded && syncedAt) void requestCodeTranscript(rootId, threadId, null);
-  }, [rootId, syncedAt, threadId, transcriptLoaded]);
+    if (syncedAt) void requestCodeTranscript(rootId, threadId, null);
+  }, [rootId, syncedAt, threadId]);
+
+  const timeline = useMemo(() => (thread ? buildCodeSessionTimeline(thread) : []), [thread]);
+
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const near =
+      contentSize.height - (contentOffset.y + layoutMeasurement.height) < STICK_TO_BOTTOM_DISTANCE;
+    nearBottom.current = near;
+    setAwayFromLatest(!near);
+  }, []);
+
+  const handleContentSizeChange = useCallback(() => {
+    if (nearBottom.current) scrollRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    nearBottom.current = true;
+    setAwayFromLatest(false);
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const header = (
+    <View
+      style={{
+        minHeight: 56,
+        paddingHorizontal: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+      }}
+    >
+      <PressableBox
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        hitSlop={8}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <ArrowLeft size={20} color={colors.textSecondary} />
+      </PressableBox>
+      <View style={{ flex: 1 }}>
+        <Text
+          numberOfLines={1}
+          accessibilityRole="header"
+          style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '600' }}
+        >
+          {thread?.title || CLOUD_CODE_SCREEN_TITLE}
+        </Text>
+        {summary?.folder ? (
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            {[summary.folder, summary.branch].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
+      </View>
+      {summary?.location === 'cloud' ? <Badge label={CLOUD_SESSION_LABEL} /> : null}
+      {thread?.status === 'running' ? (
+        <LoadingIndicator size="small" accessibilityLabel={codeSessionStatusLabel('running')} />
+      ) : thread && (thread.status === 'awaiting_approval' || thread.status === 'failed') ? (
+        <Badge
+          label={codeSessionStatusLabel(thread.status)}
+          color={codeSessionStatusColor(thread.status)}
+        />
+      ) : null}
+      {thread ? (
+        <PressableBox
+          onPress={() => setMenuOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={COPY.more}
+          hitSlop={8}
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <MoreHorizontal size={20} color={colors.textSecondary} />
+        </PressableBox>
+      ) : null}
+    </View>
+  );
 
   if (!thread) {
     return (
-      <View className="flex-1 items-center justify-center px-8">
-        <Text className="text-center text-sm text-white/50">Opening the session on Desktop…</Text>
+      <View style={{ flex: 1 }}>
+        {header}
+        <View
+          style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}
+        >
+          <Text style={{ color: colors.textMuted, textAlign: 'center' }}>{COPY.opening}</Text>
+        </View>
       </View>
     );
   }
 
   const running = thread.activeTurnId !== null;
-  const trimmed = guidance.trim();
-  const canSend =
-    !sending && trimmed.length > 0 && trimmed.length <= REMOTE_CODE_LIMITS.guidanceLength;
+  const trimmed = draft.trim();
+  const empty = trimmed.length === 0;
+  const stopInSendSlot = running && empty;
+  const canSend = !sending && !empty && trimmed.length <= REMOTE_CODE_LIMITS.guidanceLength;
+  const waiting = thread.pendingApprovals.length + thread.pendingQuestions.length > 0;
   const orderedApprovals =
     focusApprovalId === undefined
       ? thread.pendingApprovals
@@ -220,402 +238,238 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           ...thread.pendingApprovals.filter((a) => a.requestId === focusApprovalId),
           ...thread.pendingApprovals.filter((a) => a.requestId !== focusApprovalId),
         ];
-  const generated = thread.fileChanges.filter((change) => change.kind === 'created');
-  const modified = thread.fileChanges.filter((change) => change.kind === 'modified');
+  const changedFiles = codeChangedFileCount(thread);
   const diffCounts = countDiffLines(thread.diffs);
-  const location = [summary?.folder, summary?.branch].filter(Boolean).join(' · ');
-
-  const toggleDiff = () => {
-    const opening = !diffOpen;
-    setDiffOpen(opening);
-    if (opening) scrollRef.current?.scrollTo({ y: diffTop.current, animated: true });
-  };
+  const lastRun = thread.testRuns[thread.testRuns.length - 1];
+  const hasChanges = changedFiles > 0 || thread.testRuns.length > 0;
+  const earliest = thread.transcript?.messages[0]?.index;
 
   const handleSend = async () => {
     if (!canSend) return;
-    setSending(true);
+    const text = trimmed;
+    setDraft('');
     setSendError(null);
-    const sent = await steerCodeSession(rootId, threadId, trimmed, running && interruptFirst);
-    if (sent) {
-      setGuidance('');
-      setInterruptFirst(steerByDefault);
-    } else {
-      setSendError('Guidance was not sent. Check the Desktop connection and try again.');
+    setSending(true);
+    nearBottom.current = true;
+    const sent = await steerCodeSession(rootId, threadId, text, running && steer);
+    if (!sent) {
+      setDraft((current) => (current.trim() ? current : text));
+      setSendError(COPY.sendFailed);
     }
     setSending(false);
   };
 
-  return (
-    <ScrollView
-      ref={scrollRef}
-      className="flex-1"
-      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 12 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View className="flex-row items-center gap-2">
-        <Text className="flex-1 text-base font-medium text-white" numberOfLines={2}>
-          {thread.title}
-        </Text>
-        <Badge
-          label={codeSessionStatusLabel(thread.status)}
-          color={codeSessionStatusColor(thread.status)}
-        />
-      </View>
+  const handleStop = () => {
+    if (thread.activeTurnId) void interruptCodeTurn(rootId, threadId, thread.activeTurnId);
+  };
 
-      <View className="gap-2">
-        {location ? (
-          <Text className="text-sm text-white/50" numberOfLines={1}>
-            {location}
-          </Text>
-        ) : null}
-        <View className="flex-row flex-wrap items-center gap-2">
-          <Badge
-            label={summary?.location === 'cloud' ? CLOUD_SESSION_LABEL : REMOTE_SESSION_LABEL}
-          />
-          {thread.diffs.length > 0 ? (
+  const go = (route: string) => router.push(route as Parameters<typeof router.push>[0]);
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={keyboard.behavior}
+      keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
+    >
+      {header}
+      <ActionMenuSheet
+        dismissLabel="Dismiss session actions"
+        menu={{
+          visible: menuOpen,
+          title: thread.title,
+          close: () => setMenuOpen(false),
+          actions: [
+            ...(hasChanges
+              ? [{ key: 'changes', label: COPY.changes, run: () => setChangesOpen(true) }]
+              : []),
+            {
+              key: 'usage',
+              label: COPY.planUsage,
+              run: () => go('/(app)/settings/cloud-usage'),
+            },
+            { key: 'device', label: COPY.device, run: () => go('/(app)/companion') },
+          ],
+        }}
+      />
+      <CodeSessionChangesSheet
+        visible={changesOpen}
+        thread={thread}
+        onClose={() => setChangesOpen(false)}
+      />
+
+      <View style={{ flex: 1 }}>
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 8,
+            paddingBottom: 20,
+            gap: 14,
+          }}
+          keyboardShouldPersistTaps="handled"
+          onScroll={handleScroll}
+          scrollEventThrottle={64}
+          onContentSizeChange={handleContentSizeChange}
+        >
+          {thread.transcript?.hasEarlier && earliest !== undefined ? (
             <PressableBox
-              onPress={toggleDiff}
+              onPress={() => void requestCodeTranscript(rootId, threadId, earliest)}
               accessibilityRole="button"
-              accessibilityState={{ expanded: diffOpen }}
-              accessibilityLabel={`Diff, ${diffCounts.added} added, ${diffCounts.removed} removed`}
-              style={{ minHeight: 44 }}
-              className="flex-row items-center gap-1.5 rounded-full border border-white/10 px-3 active:bg-white/5"
+              style={{ minHeight: 44, alignSelf: 'center', justifyContent: 'center' }}
             >
-              <Text className="text-sm font-medium text-white">Diff</Text>
-              <Text className="text-sm" style={{ color: colors.agentSuccess }}>
-                {`+${diffCounts.added}`}
-              </Text>
-              <Text className="text-sm" style={{ color: colors.agentError }}>
-                {`-${diffCounts.removed}`}
+              <Text
+                style={{
+                  color: colors.textSecondary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
+              >
+                {COPY.loadEarlier}
               </Text>
             </PressableBox>
           ) : null}
-        </View>
-      </View>
 
-      <PlanUsageLine />
+          {timeline.map((item) => (
+            <TimelineRow key={item.key} item={item} />
+          ))}
 
-      {thread.hostMessage ? (
-        <Text className="text-sm" style={{ color: colors.agentError }} accessibilityRole="alert">
-          {thread.hostMessage}
-        </Text>
-      ) : null}
-
-      {orderedApprovals.map((approval) => (
-        <Card key={approval.requestId} variant="elevated">
-          <View className="flex-row items-center gap-2 mb-2">
-            <ShieldAlert size={15} color={colors.agentWarning} />
+          {thread.hostMessage ? (
             <Text
-              className="flex-1 text-sm font-medium text-white"
-              accessibilityRole={approval.requestId === focusApprovalId ? 'alert' : undefined}
-            >
-              {approval.summary}
-            </Text>
-          </View>
-          {approval.detail ? (
-            <Text variant="mono" className="mb-3 text-sm text-white/60">
-              {approval.detail}
-            </Text>
-          ) : null}
-          {thread.approvalHolds[approval.requestId] ? (
-            <Text
-              className="mb-3 text-sm"
-              style={{
-                color:
-                  thread.approvalHolds[approval.requestId]?.status === 'refused'
-                    ? colors.agentError
-                    : colors.agentWarning,
-              }}
               accessibilityRole="alert"
+              selectable
+              style={{ color: colors.agentError, fontSize: typeScale.footnote, lineHeight: 19 }}
             >
-              {thread.approvalHolds[approval.requestId]?.message}
+              {thread.hostMessage}
             </Text>
           ) : null}
-          <View className="flex-row gap-2">
-            <PressableBox
-              onPress={() =>
+
+          {running && !waiting ? <CloudCodeWorkingRow label={codeWorkingLabel(thread)} /> : null}
+
+          {orderedApprovals.map((approval) => (
+            <CodeApprovalCard
+              key={approval.requestId}
+              approval={approval}
+              hold={thread.approvalHolds[approval.requestId]}
+              focused={approval.requestId === focusApprovalId}
+              onAnswer={(approved) =>
                 void answerCodeApproval(
                   rootId,
                   threadId,
                   approval.turnId,
                   approval.requestId,
-                  false,
+                  approved,
                 )
               }
-              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-lg bg-red-500/10 py-2.5 active:bg-red-500/20"
-              accessibilityRole="button"
-              accessibilityLabel={`Deny ${approval.summary}`}
-            >
-              <X size={14} color={colors.agentError} />
-              <Text className="text-sm font-semibold" style={{ color: colors.agentError }}>
-                Deny
-              </Text>
-            </PressableBox>
-            <PressableBox
-              onPress={() =>
-                void answerCodeApproval(rootId, threadId, approval.turnId, approval.requestId, true)
+            />
+          ))}
+
+          {thread.pendingQuestions.map((question) => (
+            <CodeQuestionCard
+              key={question.requestId}
+              question={question}
+              hold={thread.approvalHolds[question.requestId]}
+              onAnswer={(answer) =>
+                answerCodeQuestion(rootId, threadId, question.turnId, question.requestId, answer)
               }
-              className="flex-1 flex-row items-center justify-center gap-1.5 rounded-lg py-2.5"
-              style={({ pressed }) => ({
-                backgroundColor: pressed ? colors.textPrimary : colors.teal,
-              })}
-              accessibilityRole="button"
-              accessibilityLabel={`Approve ${approval.summary}`}
-            >
-              <Check size={14} color={colors.accentText} />
-              <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
-                Approve
-              </Text>
-            </PressableBox>
-          </View>
-        </Card>
-      ))}
+            />
+          ))}
+        </ScrollView>
 
-      {thread.pendingQuestions.map((question) => (
-        <Card key={question.requestId} variant="elevated">
-          <View className="flex-row items-start gap-2">
-            <CircleHelp size={15} color={colors.agentWarning} />
-            <Text className="flex-1 text-sm font-medium text-white">{question.question}</Text>
-          </View>
-          <Text className="mt-2 text-sm text-white/60">Answer on your computer</Text>
-        </Card>
-      ))}
+        {awayFromLatest ? (
+          <PressableBox
+            onPress={jumpToLatest}
+            accessibilityRole="button"
+            accessibilityLabel={COPY.jumpToLatest}
+            style={{
+              position: 'absolute',
+              bottom: 12,
+              alignSelf: 'center',
+              width: 40,
+              height: 40,
+              borderRadius: radii.full,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceElevated,
+            }}
+          >
+            <ArrowDown size={18} color={colors.textPrimary} />
+          </PressableBox>
+        ) : null}
+      </View>
 
-      <Card variant="elevated">
-        <SectionTitle>{running ? 'Steer this run' : 'Next turn'}</SectionTitle>
-        <View className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-          <TextInput
-            value={guidance}
-            onChangeText={setGuidance}
-            placeholder={
-              running ? 'Guidance for the next turn' : 'What should this session do next?'
+      <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, gap: 6 }}>
+        {hasChanges ? (
+          <PressableBox
+            onPress={() => setChangesOpen(true)}
+            testID="remote-code-changes-pill"
+            accessibilityRole="button"
+            accessibilityLabel={
+              changedFiles > 0
+                ? `${cloudCodeFileCountLabel(changedFiles)} changed. ${cloudCodeChangeCountsLabel(diffCounts)}`
+                : COPY.tests
             }
-            placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={REMOTE_CODE_LIMITS.guidanceLength}
-            className="min-h-[64px] text-sm text-white"
-            style={{ textAlignVertical: 'top' }}
-            accessibilityLabel="Guidance for this session"
-            editable={!sending}
-          />
-          {running ? (
-            <View className="flex-row items-center justify-between pt-2">
-              <Text className="flex-1 text-sm text-white/50">Stop the current turn first</Text>
-              <Switch
-                value={interruptFirst}
-                onValueChange={setInterruptFirst}
-                accessibilityLabel="Stop the current turn before sending guidance"
-              />
-            </View>
-          ) : null}
-          <View className="flex-row items-center justify-end gap-2 pt-2">
-            {running && thread.activeTurnId ? (
-              <PressableBox
-                onPress={() => void interruptCodeTurn(rootId, threadId, thread.activeTurnId ?? '')}
-                className="flex-row items-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-2 active:bg-red-500/20"
-                accessibilityRole="button"
-                accessibilityLabel="Stop the current turn"
-              >
-                <Square size={12} color={colors.agentError} />
-                <Text className="text-sm font-semibold" style={{ color: colors.agentError }}>
-                  Stop
+            style={{
+              minHeight: 36,
+              alignSelf: 'center',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              paddingHorizontal: 14,
+              borderRadius: radii.full,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceElevated,
+            }}
+          >
+            {changedFiles > 0 ? (
+              <>
+                <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                  {cloudCodeFileCountLabel(changedFiles)}
                 </Text>
-              </PressableBox>
+                {thread.diffs.length > 0 ? <CloudCodeLineCountsText counts={diffCounts} /> : null}
+              </>
             ) : null}
-            <PressableBox
-              onPress={() => void handleSend()}
-              disabled={!canSend}
-              className={`flex-row items-center gap-1.5 rounded-lg px-3 py-2 ${canSend ? '' : 'bg-white/10'}`}
-              style={
-                canSend
-                  ? ({ pressed }) => ({
-                      backgroundColor: pressed ? colors.textPrimary : colors.teal,
-                    })
-                  : undefined
-              }
-              accessibilityRole="button"
-              accessibilityLabel="Send guidance"
-            >
-              <Send size={13} color={canSend ? colors.accentText : colors.textMuted} />
+            {lastRun ? (
               <Text
-                className="text-sm font-semibold"
-                style={{ color: canSend ? colors.accentText : colors.textMuted }}
+                style={{
+                  color: lastRun.status === 'passed' ? colors.agentSuccess : colors.agentError,
+                  fontSize: typeScale.subhead,
+                }}
               >
-                {sending ? 'Sending…' : 'Send'}
+                {lastRun.status === 'passed' ? 'Tests passed' : 'Tests failed'}
               </Text>
-            </PressableBox>
-          </View>
-          {sendError ? (
-            <Text
-              className="mt-2 text-sm"
-              style={{ color: colors.agentError }}
-              accessibilityRole="alert"
-            >
-              {sendError}
-            </Text>
-          ) : null}
-        </View>
-        {thread.queuedGuidance.length > 0 ? (
-          <Text className="mt-2 text-sm text-white/50">
-            {`Queued for the next turn: ${thread.queuedGuidance.join(' · ')}`}
+            ) : null}
+          </PressableBox>
+        ) : null}
+        <SessionComposerField
+          value={draft}
+          placeholder={
+            running ? (steer ? COPY.steerPlaceholder : COPY.queuePlaceholder) : COPY.placeholder
+          }
+          inputLabel={COPY.inputLabel}
+          primaryState={stopInSendSlot ? 'streaming' : 'idle'}
+          primaryDisabled={stopInSendSlot ? false : !canSend}
+          primaryLabel={stopInSendSlot ? COPY.stop : running && !steer ? COPY.queue : COPY.send}
+          maxLength={REMOTE_CODE_LIMITS.guidanceLength}
+          onChangeText={setDraft}
+          onPrimary={stopInSendSlot ? handleStop : () => void handleSend()}
+        />
+        {sendError ? (
+          <Text
+            accessibilityRole="alert"
+            style={{
+              color: colors.agentError,
+              fontSize: typeScale.footnote,
+              paddingHorizontal: 16,
+            }}
+          >
+            {sendError}
           </Text>
         ) : null}
-      </Card>
-
-      {running && thread.partialResponse ? (
-        <Card variant="elevated">
-          <SectionTitle>Working</SectionTitle>
-          <Text className="text-sm text-white">{thread.partialResponse}</Text>
-        </Card>
-      ) : null}
-
-      {thread.tools.length > 0 ? (
-        <Card variant="elevated">
-          <SectionTitle>Commands and tools</SectionTitle>
-          {thread.tools.map((tool) => (
-            <ToolRow key={tool.toolCallId} tool={tool} />
-          ))}
-        </Card>
-      ) : null}
-
-      {thread.testRuns.length > 0 ? (
-        <Card variant="elevated">
-          <SectionTitle>Test results</SectionTitle>
-          <View className="gap-3">
-            {[...thread.testRuns].reverse().map((run) => (
-              <View key={run.toolCallId}>
-                <View className="flex-row items-center gap-2">
-                  <FlaskConical
-                    size={13}
-                    color={run.status === 'passed' ? colors.agentSuccess : colors.agentError}
-                  />
-                  <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
-                    {run.command}
-                  </Text>
-                  <Badge
-                    label={run.status === 'passed' ? 'Passed' : 'Failed'}
-                    color={run.status === 'passed' ? 'green' : 'red'}
-                  />
-                </View>
-                <Text className="mt-1 text-sm text-white/50">
-                  {[
-                    run.passed !== null ? `${run.passed} passed` : null,
-                    run.failed !== null ? `${run.failed} failed` : null,
-                    run.skipped !== null ? `${run.skipped} skipped` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ') || 'No counts in the output'}
-                </Text>
-                {run.status === 'failed' && run.output ? (
-                  <Text variant="mono" className="mt-1 text-sm text-white/60">
-                    {run.output}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
-          </View>
-        </Card>
-      ) : null}
-
-      {thread.fileChanges.length > 0 ? (
-        <Card variant="elevated">
-          <SectionTitle>Changes</SectionTitle>
-          {generated.map((change) => (
-            <View key={`created:${change.path}`} className="flex-row items-center gap-2 py-0.5">
-              <FilePlus size={12} color={colors.agentSuccess} />
-              <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
-                {change.path}
-              </Text>
-              <Text className="text-sm text-white/40">New file</Text>
-            </View>
-          ))}
-          {modified.map((change) => (
-            <View key={`modified:${change.path}`} className="flex-row items-center gap-2 py-0.5">
-              <FileEdit size={12} color={colors.agentActive} />
-              <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
-                {change.path}
-              </Text>
-            </View>
-          ))}
-        </Card>
-      ) : null}
-
-      {thread.diffs.length > 0 ? (
-        <View
-          onLayout={(event) => {
-            diffTop.current = event.nativeEvent.layout.y;
-          }}
-          className="gap-3"
-        >
-          {diffOpen
-            ? thread.diffs.map((diff) => (
-                <Card key={`diff:${diff.path}`} variant="elevated">
-                  <SectionTitle>{`Diff · ${diff.path}`}</SectionTitle>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View>
-                      {diff.patch.split('\n').map((line, index) => (
-                        <Text
-                          key={index}
-                          variant="mono"
-                          className="text-sm"
-                          style={{
-                            color: line.startsWith('+')
-                              ? colors.agentSuccess
-                              : line.startsWith('-')
-                                ? colors.agentError
-                                : colors.textSecondary,
-                          }}
-                        >
-                          {line || ' '}
-                        </Text>
-                      ))}
-                    </View>
-                  </ScrollView>
-                  {diff.truncated ? (
-                    <Text className="mt-2 text-sm text-white/40">
-                      The diff is longer than a phone view. Open it on Desktop to read the rest.
-                    </Text>
-                  ) : null}
-                </Card>
-              ))
-            : null}
-        </View>
-      ) : null}
-
-      {thread.messages.length > 0 || thread.transcript ? (
-        <Card variant="elevated">
-          <SectionTitle>Conversation</SectionTitle>
-          {thread.transcript?.hasEarlier || !thread.transcript ? (
-            <PressableBox
-              onPress={() =>
-                void requestCodeTranscript(
-                  rootId,
-                  threadId,
-                  thread.transcript?.messages[0]?.index ?? null,
-                )
-              }
-              accessibilityRole="button"
-              style={{ minHeight: 44, justifyContent: 'center' }}
-            >
-              <Text className="text-sm font-semibold" style={{ color: colors.teal }}>
-                {thread.transcript ? 'Load earlier messages' : 'Show the full conversation'}
-              </Text>
-            </PressableBox>
-          ) : null}
-          <View className="gap-2">
-            {(thread.transcript?.messages ?? thread.messages).map((message, index) => (
-              <View key={'index' in message ? `m${message.index}` : index}>
-                <Text className="text-sm text-white/40">
-                  {message.role === 'user' ? 'You' : 'AGI'}
-                </Text>
-                <Text selectable className="text-sm text-white">
-                  {message.text}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </Card>
-      ) : null}
-    </ScrollView>
+      </View>
+    </KeyboardAvoidingView>
   );
 }

@@ -19,10 +19,16 @@ export const highContrastColors: ColorScheme = agiMobileHighContrastColors.dark;
 
 export const highContrastLightColors: ColorScheme = agiMobileHighContrastColors.light;
 
-export type AccentToken = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
+export type AccentToken = 'neutral' | 'green' | 'blue' | 'violet' | 'rose';
 
 const accentSwatches: Record<AccentToken, { light: string; dark: string }> =
   agiMobileAccentSwatches;
+
+export function accentTokenFrom(value: unknown): AccentToken {
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(accentSwatches, value)
+    ? (value as AccentToken)
+    : 'neutral';
+}
 
 export function getColors(
   mode: 'dark' | 'light' | 'system',

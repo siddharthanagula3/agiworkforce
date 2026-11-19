@@ -42,19 +42,28 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            await github.rest.reactions.createForIssueComment({
+            const reaction = {
               owner: context.repo.owner,
               repo: context.repo.repo,
               comment_id: context.payload.comment.id,
               content: 'eyes'
-            });
+            };
+            try {
+              if (context.eventName === 'pull_request_review_comment') {
+                await github.rest.reactions.createForPullRequestReviewComment(reaction);
+              } else {
+                await github.rest.reactions.createForIssueComment(reaction);
+              }
+            } catch (error) {
+              core.warning(`Could not react to the command comment: ${error.message}`);
+            }
 
       - name: Handle help command
         if: steps.parse.outputs.command == 'help'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const helpText = '## AGI Workforce Bot\n\nAvailable commands:\n- `/agi help` - Show this help message\n- `/agi review` - Review the PR for code quality and common issues\n- `/agi explain` - Explain the changes in this PR\n- `/agi check` - Run build checks and report status\n- `/agi stats` - Show PR statistics (files changed, lines, complexity)';
+            const helpText = '## AGI Workforce Bot\n\nAvailable commands:\n- `/agi help` - Show this help message\n- `/agi review` - Review the PR for code quality and common issues\n- `/agi explain` - Explain the changes in this PR\n- `/agi check` - Report the status of the checks on the latest commit\n- `/agi stats` - Show PR statistics (files changed, lines, complexity)';
             const issueNumber = context.issue.number;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -68,12 +77,16 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const { data: files } = await github.rest.pulls.listFiles({
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
               per_page: 100
             });
+            const FILE_LIST_LIMIT = 3000;
+            const fileListNote = files.length >= FILE_LIST_LIMIT
+              ? `GitHub lists at most ${FILE_LIST_LIMIT} files for a pull request, so these totals cover only the first ${FILE_LIST_LIMIT}.\n\n`
+              : '';
 
             let summary = '## PR Change Summary\n\n';
             let totalAdditions = 0;
@@ -87,7 +100,7 @@ jobs:
               byType[ext] = (byType[ext] || 0) + 1;
             }
 
-            summary += `**${files.length}** files changed: **+${totalAdditions}** / **-${totalDeletions}**\n\n`;
+            summary += `**${files.length}** files changed: **+${totalAdditions}** / **-${totalDeletions}**\n\n${fileListNote}`;
             summary += '### Files by type\n';
             for (const [ext, count] of Object.entries(byType).sort((a, b) => b[1] - a[1])) {
               summary += `- .${ext}: ${count} files\n`;
@@ -120,20 +133,7 @@ jobs:
               pull_number: context.issue.number
             });
 
-            const { data: files } = await github.rest.pulls.listFiles({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number,
-              per_page: 100
-            });
-
-            const { data: reviews } = await github.rest.pulls.listReviews({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number
-            });
-
-            const { data: commits } = await github.rest.pulls.listCommits({
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
@@ -143,12 +143,14 @@ jobs:
             let stats = '## PR Statistics\n\n';
             stats += '| Metric | Value |\n';
             stats += '|--------|-------|\n';
-            stats += `| Commits | ${commits.length} |\n`;
-            stats += `| Files changed | ${files.length} |\n`;
+            stats += `| Commits | ${pr.commits} |\n`;
+            stats += `| Files changed | ${pr.changed_files} |\n`;
             stats += `| Additions | +${pr.additions} |\n`;
             stats += `| Deletions | -${pr.deletions} |\n`;
             stats += `| Reviews | ${reviews.length} |\n`;
-            const mergeableIcon = pr.mergeable ? 'OK' : 'CONFLICT';
+            const mergeableIcon = pr.mergeable === null || pr.mergeable === undefined
+              ? 'UNKNOWN (GitHub is still computing it)'
+              : pr.mergeable ? 'OK' : 'CONFLICT';
             const draftStatus = pr.draft ? 'Yes' : 'No';
             stats += `| Mergeable | ${mergeableIcon} |\n`;
             stats += `| Draft | ${draftStatus} |\n`;
@@ -165,19 +167,39 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const { data: checks } = await github.rest.checks.listForRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: context.payload.pull_request?.head.sha || context.sha
-            });
+            const readHeadSha = async () => {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number
+              });
+              return pr.head.sha;
+            };
 
-            let report = '## Build Check Status\n\n';
-            if (checks.check_runs.length === 0) {
+            let headSha = await readHeadSha();
+            let runs = [];
+            let settled = false;
+            for (let attempt = 0; attempt < 3 && !settled; attempt++) {
+              runs = await github.paginate(github.rest.checks.listForRef, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: headSha,
+                per_page: 100
+              });
+              const currentSha = await readHeadSha();
+              settled = currentSha === headSha;
+              headSha = currentSha;
+            }
+
+            let report = `## Build Check Status\n\nCommit \`${headSha.slice(0, 12)}\`\n\n`;
+            if (!settled) {
+              report += 'The pull request head changed while these checks were being read. Run `/agi check` again.\n';
+            } else if (runs.length === 0) {
               report += 'No check runs found for this commit.\n';
             } else {
               report += '| Check | Status | Conclusion |\n';
               report += '|-------|--------|------------|\n';
-              for (const run of checks.check_runs) {
+              for (const run of runs) {
                 const icon = run.conclusion === 'success' ? 'PASS' :
                              run.conclusion === 'failure' ? 'FAIL' : 'PENDING';
                 report += `| ${run.name} | ${run.status} | ${icon} |\n`;
@@ -196,12 +218,13 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const { data: files } = await github.rest.pulls.listFiles({
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
               per_page: 100
             });
+            const FILE_LIST_LIMIT = 3000;
 
             let review = '## Automated PR Review\n\n';
 
@@ -225,11 +248,15 @@ jobs:
                 review += `- ${issue}\n`;
               }
             } else {
-              review += 'No obvious issues found.\n';
+              review += files.length >= FILE_LIST_LIMIT
+                ? `No obvious issues found in the first ${FILE_LIST_LIMIT} files.\n`
+                : 'No obvious issues found.\n';
             }
 
             review += '\n### Summary\n';
-            review += `- Files changed: ${files.length}\n`;
+            review += files.length >= FILE_LIST_LIMIT
+              ? `- Files reviewed: the first ${FILE_LIST_LIMIT} (GitHub lists no more)\n`
+              : `- Files changed: ${files.length}\n`;
 
             const rustFiles = files.filter(f => f.filename.endsWith('.rs')).length;
             const tsFiles = files.filter(f => f.filename.endsWith('.ts') || f.filename.endsWith('.tsx')).length;

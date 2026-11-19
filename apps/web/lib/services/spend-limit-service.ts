@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { creditsFromCents, creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { dispatchSpendAlertIfDue } from '@/lib/services/spend-alert-service';
 
 export type SpendEnforcement = 'off' | 'notify' | 'block';
@@ -88,10 +89,15 @@ function toNumber(value: string | number | null | undefined): number {
  * every governed turn, and the two could disagree if a write landed between
  * them. Returns no row when the workspace has no limit, which reads as
  * ungoverned.
+ *
+ * The sum covers every member's completed requests, so it is read through the
+ * privileged adapter: a caller-scoped adapter only sees that caller's own rows
+ * and would report, and cache for everyone, an undercounted total. Callers
+ * authorize the organization before asking.
  */
 export async function readSpendState(
-  db: DatabaseAdapter,
   organizationId: string,
+  db: DatabaseAdapter = getNeonDb(),
 ): Promise<SpendState> {
   const [row] = await db.query<LimitAndSpendRow>(
     `select l.monthly_cap_cents,
@@ -153,9 +159,8 @@ export async function readSpendState(
  * briefly overshooting a cap.
  */
 export async function evaluateSpendLimit(
-  db: DatabaseAdapter,
   organizationId: string | null,
-  options: { now?: number } = {},
+  options: { now?: number; db?: DatabaseAdapter } = {},
 ): Promise<SpendDecision> {
   if (!organizationId) return UNGOVERNED;
 
@@ -165,7 +170,7 @@ export async function evaluateSpendLimit(
 
   let state: SpendState;
   try {
-    state = await readSpendState(db, organizationId);
+    state = await readSpendState(organizationId, options.db);
   } catch (error) {
     logger.error(
       { error, organizationId },

@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   withRateLimit: vi.fn(() => null),
   getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -17,7 +20,8 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   handleCorsPreflightRequest: vi.fn(() => null),
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
@@ -26,7 +30,8 @@ const { mockGetClerkAuthUser } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getClerkAuthUser: mockGetClerkAuthUser,
 }));
 
@@ -46,7 +51,8 @@ function routeQuery(sql: string, params: unknown[]) {
   return Promise.resolve([]);
 }
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getNeonDb: vi.fn(() => ({
     query: routeQuery,
     execute: vi.fn().mockResolvedValue(1),
@@ -77,7 +83,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-vi.mock('@/lib/services/credit-service', () => ({
+vi.mock('@/lib/services/credit-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
@@ -164,7 +171,7 @@ describe('Me API', () => {
         expect(data.plan).toBeDefined();
         expect(data.plan.tier).toBe('pro');
         expect(data.plan.status).toBe('active');
-        expect(data.plan.display_name).toBe('Pro');
+        expect(data.plan.display_name).toBe(getBillingPlanPricing('pro').label);
       });
 
       it('should default to free tier when subscription is missing', async () => {
@@ -310,3 +317,10 @@ describe('Me API', () => {
     });
   });
 });
+
+type ImportedModule5 = typeof import('@/lib/rate-limit');
+type ImportedModule4 = typeof import('@/lib/logger');
+type ImportedModule3 = typeof import('@/lib/cors');
+type ImportedModule2 = typeof import('@/lib/api-auth');
+type ImportedModule1 = typeof import('@/lib/server/neon-db');
+type ImportedModule0 = typeof import('@/lib/services/credit-service');

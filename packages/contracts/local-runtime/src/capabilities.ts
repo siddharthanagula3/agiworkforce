@@ -19,6 +19,7 @@ export const DESKTOP_CAPABILITIES = [
   'computer.use',
   'application.control',
   'screen.capture',
+  'simulator.control',
   'clipboard.read',
   'microphone',
   'local.inference',

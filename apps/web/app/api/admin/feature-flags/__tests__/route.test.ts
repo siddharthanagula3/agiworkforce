@@ -39,7 +39,8 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...args),
 }));
 
-vi.mock('@/lib/feature-flags/flag-store', () => ({
+vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   ensureFlagDefinition: vi.fn(async () => undefined),
   listFlagDefinitions: (...args: unknown[]) => mocks.listFlagDefinitions(...args),
   getFlagDefinition: (...args: unknown[]) => mocks.getFlagDefinition(...args),
@@ -273,3 +274,5 @@ describe('feature flag admin API', () => {
     expect(response.status).toBe(404);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/feature-flags/flag-store');

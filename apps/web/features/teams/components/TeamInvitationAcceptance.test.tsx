@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const authState = vi.hoisted(() => ({ isLoaded: true, isSignedIn: false }));
+const authState = vi.hoisted(() => ({
+  isLoaded: true,
+  isSignedIn: false,
+  userId: null as string | null,
+  sessionId: null as string | null,
+}));
 const getAuthToken = vi.hoisted(() => vi.fn(async () => 'auth-token'));
 const getCsrfToken = vi.hoisted(() => vi.fn(async () => 'csrf-token'));
 
@@ -30,6 +35,8 @@ describe('TeamInvitationAcceptance', () => {
     vi.clearAllMocks();
     authState.isLoaded = true;
     authState.isSignedIn = false;
+    authState.userId = null;
+    authState.sessionId = null;
     window.sessionStorage.clear();
     window.history.replaceState(null, '', '/invite');
   });
@@ -70,6 +77,76 @@ describe('TeamInvitationAcceptance', () => {
     const teamSettingsLink = screen.getByRole('link', { name: 'Open team settings' });
     expect(teamSettingsLink).toHaveAttribute('href', '/settings/team');
     expect(teamSettingsLink).not.toHaveAttribute('data-next-link');
+  });
+
+  it('drops an acceptance receipt once the signed-in account changes', async () => {
+    authState.isSignedIn = true;
+    authState.userId = 'user-a';
+    authState.sessionId = 'session-a';
+    window.sessionStorage.setItem('agi.team.invitation-token', INVITE_TOKEN);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ membership: { role: 'member' } }),
+    } as Response);
+
+    const view = render(<TeamInvitationAcceptance />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }));
+    await waitFor(() => expect(screen.getByText('Invitation accepted as member.')).toBeVisible());
+
+    authState.userId = 'user-b';
+    authState.sessionId = 'session-b';
+    view.rerender(<TeamInvitationAcceptance />);
+
+    expect(screen.queryByText('Invitation accepted as member.')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open team settings' })).toBeNull();
+  });
+
+  it('drops an acceptance receipt after sign-out', async () => {
+    authState.isSignedIn = true;
+    authState.userId = 'user-a';
+    authState.sessionId = 'session-a';
+    window.sessionStorage.setItem('agi.team.invitation-token', INVITE_TOKEN);
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ membership: { role: 'member' } }),
+    } as Response);
+
+    const view = render(<TeamInvitationAcceptance />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }));
+    await waitFor(() => expect(screen.getByText('Invitation accepted as member.')).toBeVisible());
+
+    authState.isSignedIn = false;
+    authState.userId = null;
+    authState.sessionId = null;
+    view.rerender(<TeamInvitationAcceptance />);
+
+    expect(screen.queryByText('Invitation accepted as member.')).toBeNull();
+  });
+
+  it('does not publish a response that settles after the account changed', async () => {
+    authState.isSignedIn = true;
+    authState.userId = 'user-a';
+    authState.sessionId = 'session-a';
+    window.sessionStorage.setItem('agi.team.invitation-token', INVITE_TOKEN);
+    let release!: (response: Response) => void;
+    vi.spyOn(global, 'fetch').mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        release = resolve;
+      }),
+    );
+
+    const view = render(<TeamInvitationAcceptance />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept invitation' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledOnce());
+
+    authState.userId = 'user-b';
+    authState.sessionId = 'session-b';
+    view.rerender(<TeamInvitationAcceptance />);
+    release({ ok: true, json: async () => ({ membership: { role: 'member' } }) } as Response);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText('Invitation accepted as member.')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open team settings' })).toBeNull();
   });
 
   it('shows the server email-boundary error and retains the token for a retry', async () => {

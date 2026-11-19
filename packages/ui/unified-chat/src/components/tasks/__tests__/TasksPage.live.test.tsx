@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TasksPage, TASK_JOURNAL_POLL_INTERVAL_MS } from '../TasksPage';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, PRODUCT_NAMES } from '@agiworkforce/types';
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000aa';
 
@@ -58,7 +58,11 @@ function client(overrides: Partial<ManagedCloudAgentRunClient>): ManagedCloudAge
 }
 
 async function openDetails() {
-  fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+    }),
+  );
 }
 
 async function advanceUntilCalled(

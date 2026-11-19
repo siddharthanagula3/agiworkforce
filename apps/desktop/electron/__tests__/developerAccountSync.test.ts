@@ -59,6 +59,55 @@ describe('reconcileDeveloperAccount', () => {
     expect(host.seen[3]?.params).toEqual({ refresh: true });
   });
 
+  it('records the ownership of a completed sign-in even when the model refresh then fails', async () => {
+    const recordOwnership = vi.fn();
+    const call = vi.fn(async (method: string) => {
+      if (method === 'account/status') return SIGNED_OUT_HOST;
+      if (method === 'account/login') return LOGIN;
+      if (method === 'account/login/wait') return COMPLETED;
+      throw new Error('The app-server did not answer model/list in time.');
+    });
+    const shell = bridge({ signedIn: true, email: 'qa@agiworkforce.com' });
+
+    await expect(reconcileDeveloperAccount(call, shell, false, recordOwnership)).rejects.toThrow(
+      'did not answer model/list',
+    );
+
+    expect(recordOwnership).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it('records no ownership when the sign-in never completes', async () => {
+    const recordOwnership = vi.fn();
+    const host = hostCalls({
+      'account/status': SIGNED_OUT_HOST,
+      'account/login': LOGIN,
+      'account/login/wait': { outcome: 'expired', account: { signedIn: false } },
+    });
+    const shell = bridge({ signedIn: true, email: 'qa@agiworkforce.com' });
+
+    await expect(
+      reconcileDeveloperAccount(host.call, shell, false, recordOwnership),
+    ).rejects.toThrow();
+
+    expect(recordOwnership).not.toHaveBeenCalled();
+  });
+
+  it('records the release of the credential before the model refresh on a sign-out', async () => {
+    const recordOwnership = vi.fn();
+    const call = vi.fn(async (method: string) => {
+      if (method === 'account/status') return { signedIn: true, email: 'qa@agiworkforce.com' };
+      if (method === 'account/logout') return null;
+      throw new Error('The app-server closed.');
+    });
+    const shell = bridge({ signedIn: false, email: null });
+
+    await expect(reconcileDeveloperAccount(call, shell, true, recordOwnership)).rejects.toThrow(
+      'The app-server closed.',
+    );
+
+    expect(recordOwnership).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
   it('approves only the code that account/login returned', async () => {
     const host = hostCalls({
       'account/status': SIGNED_OUT_HOST,

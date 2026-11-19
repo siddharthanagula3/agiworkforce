@@ -30,7 +30,7 @@ const {
   finalize: vi.fn(),
   complete: vi.fn(),
   selectRoute: vi.fn(),
-  db: { query: vi.fn(), execute: vi.fn() },
+  db: { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() },
 }));
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
@@ -128,6 +128,7 @@ describe('Siri managed usage reservation', () => {
     });
     db.query.mockResolvedValue([{ id: 'conversation-1' }]);
     db.execute.mockResolvedValue(1);
+    db.transaction.mockImplementation(async (run: (tx: typeof db) => Promise<unknown>) => run(db));
   });
 
   it('reserves the selected route estimate and settles the actual measured usage', async () => {
@@ -189,6 +190,34 @@ describe('Siri managed usage reservation', () => {
     ).rejects.toMatchObject({ status: 400, code: 'content_policy_violation' });
     expect(reserve).not.toHaveBeenCalled();
     expect(complete).not.toHaveBeenCalled();
+  });
+
+  it('saves the question and the answer in one transaction', async () => {
+    await answerMobileIntentAsk(input);
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(db.query).toHaveBeenCalledTimes(2);
+    expect(db.execute).toHaveBeenCalledOnce();
+  });
+
+  it('retries a failed save and still returns the answer with the saved chat', async () => {
+    db.transaction.mockRejectedValueOnce(new Error('transient write failure'));
+    await expect(answerMobileIntentAsk(input)).resolves.toEqual({
+      text: 'Your calendar is empty.',
+      conversationId: 'conversation-1',
+    });
+    expect(db.transaction).toHaveBeenCalledTimes(2);
+    expect(complete).toHaveBeenCalledOnce();
+  });
+
+  it('delivers the answered text without a chat id when the save keeps failing', async () => {
+    db.transaction.mockRejectedValue(new Error('database unavailable'));
+    await expect(answerMobileIntentAsk(input)).resolves.toEqual({
+      text: 'Your calendar is empty.',
+      conversationId: null,
+    });
+    expect(complete).toHaveBeenCalledOnce();
+    expect(finalize).toHaveBeenCalledOnce();
+    expect(finalize).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'completed' }));
   });
 
   it('does not start the provider when the usage reservation is refused', async () => {

@@ -199,6 +199,107 @@ describe('shared LibraryView', () => {
     expect((listPage.mock.calls[1]![0] as URLSearchParams).get('offset')).toBe('24');
   });
 
+  describe('pagination cursor', () => {
+    const SECOND = { ...ITEM, id: 'asset-2', file_name: 'data.csv' };
+
+    async function deleteFirstRow() {
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      await waitFor(() => expect(screen.queryByText('quarterly-report.pdf')).toBeNull());
+    }
+
+    it('rebases the next offset after a loaded row is deleted so no unseen row is skipped', async () => {
+      const listPage = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse({ items: [ITEM, SECOND], has_more: true, next_offset: 2 }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ items: [], has_more: false, next_offset: null }));
+      render(<LibraryView transport={makeTransport({ listPage })} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      await deleteFirstRow();
+      fireEvent.click(screen.getByTestId('library-show-more'));
+
+      await waitFor(() => expect(listPage).toHaveBeenCalledTimes(2));
+      expect((listPage.mock.calls[1]![0] as URLSearchParams).get('offset')).toBe('1');
+    });
+
+    it('leaves the offset alone when the delete is refused', async () => {
+      const listPage = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse({ items: [ITEM, SECOND], has_more: true, next_offset: 2 }),
+        )
+        .mockResolvedValueOnce(jsonResponse({ items: [], has_more: false, next_offset: null }));
+      const transport = makeTransport({
+        listPage,
+        deleteItem: vi.fn(async () => jsonResponse({ success: false })),
+      });
+      render(<LibraryView transport={transport} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      openRowMenu('quarterly-report.pdf');
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      await waitFor(() => expect(transport.deleteItem).toHaveBeenCalled());
+      fireEvent.click(screen.getByTestId('library-show-more'));
+
+      await waitFor(() => expect(listPage).toHaveBeenCalledTimes(2));
+      expect((listPage.mock.calls[1]![0] as URLSearchParams).get('offset')).toBe('2');
+    });
+
+    it('drops a page that was requested before a row was removed', async () => {
+      let resolveMore: (response: Response) => void = () => undefined;
+      const listPage = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonResponse({ items: [ITEM, SECOND], has_more: true, next_offset: 2 }),
+        )
+        .mockImplementationOnce(() => new Promise<Response>((resolve) => (resolveMore = resolve)));
+      render(<LibraryView transport={makeTransport({ listPage })} />);
+      await screen.findByText('quarterly-report.pdf');
+
+      fireEvent.click(screen.getByTestId('library-show-more'));
+      await waitFor(() => expect(listPage).toHaveBeenCalledTimes(2));
+      await deleteFirstRow();
+      resolveMore(
+        jsonResponse({
+          items: [{ ...ITEM, id: 'asset-3', file_name: 'late.txt' }],
+          has_more: true,
+          next_offset: 3,
+        }),
+      );
+
+      await waitFor(() => expect(screen.getByTestId('library-show-more')).toBeTruthy());
+      await waitFor(() =>
+        expect((screen.getByTestId('library-show-more') as HTMLButtonElement).disabled).toBe(false),
+      );
+      expect(screen.queryByText('late.txt')).toBeNull();
+    });
+
+    it('offers no Show more while a replacement load is pending', async () => {
+      let resolveReplacement: (response: Response) => void = () => undefined;
+      const listPage = vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ items: [ITEM], has_more: true, next_offset: 24 }))
+        .mockImplementationOnce(
+          () => new Promise<Response>((resolve) => (resolveReplacement = resolve)),
+        );
+      render(<LibraryView transport={makeTransport({ listPage })} />);
+      await screen.findByTestId('library-show-more');
+
+      fireEvent.click(screen.getByRole('tab', { name: 'Images' }));
+      await waitFor(() => expect(listPage).toHaveBeenCalledTimes(2));
+
+      expect(screen.queryByTestId('library-show-more')).toBeNull();
+      resolveReplacement(jsonResponse({ items: [SECOND], has_more: false, next_offset: null }));
+      expect(await screen.findByText('data.csv')).toBeTruthy();
+      expect(listPage).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('filter tabs', () => {
     it('asks the host for the active kinds instead of filtering the loaded page', async () => {
       const transport = makeTransport();

@@ -10,7 +10,11 @@ jest.mock('../lib/mmkv', () => ({
 import { ManagedMediaImageGenerationRequestSchema } from '@agiworkforce/cloud-contracts';
 import { ApiPaywallError } from '../services/api';
 import { CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
-import { runImageGenerationTurn } from '../src/features/chat/actions/runImageGenerationTurn';
+import {
+  clearCloudImageGenerationState,
+  runImageGenerationTurn,
+  takeImageEditRetry,
+} from '../src/features/chat/actions/runImageGenerationTurn';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -370,5 +374,329 @@ describe('runImageGenerationTurn', () => {
       'The reference image could not be read from this device.',
     );
     expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+  });
+
+  describe('stopping before the job is admitted', () => {
+    const referenceEdit = {
+      conversationId: 'conversation-1',
+      displayText: 'make it a poster',
+      prompt: 'make it a poster',
+      model: 'registry-image-route',
+      operation: 'edit' as const,
+      sourceImage: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', fileName: 'photo.jpg' },
+      referenceImages: [
+        { uri: 'file:///guide.jpg', mimeType: 'image/jpeg', fileName: 'guide.jpg' },
+      ],
+      ownerId: 'default-test-account',
+    };
+
+    beforeEach(() => {
+      clearCloudImageGenerationState();
+    });
+
+    it('submits nothing when Stop lands while the reference image is being read', async () => {
+      const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+      let stopped = false;
+      const generate = jest.fn();
+      const readReferenceImage = jest.fn(async () => {
+        stopped = true;
+        return 'cmVmZXJlbmNl';
+      });
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        { generate, getUri: () => null, readReferenceImage, isStopped: () => stopped },
+      );
+
+      expect(generate).not.toHaveBeenCalled();
+      expect(callbacks.fail).not.toHaveBeenCalled();
+      expect(callbacks.complete).not.toHaveBeenCalled();
+      expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+      expect(outcome).toEqual({
+        status: 'cancelled',
+        assistantMessageId: 'assistant-1',
+        stopped: true,
+      });
+    });
+
+    it('submits nothing when Stop lands while a guide image is being read', async () => {
+      const callbacks = createCallbacks();
+      let stopped = false;
+      const generate = jest.fn();
+      const readReferenceImage = jest.fn(async (uri: string) => {
+        if (uri === 'file:///guide.jpg') stopped = true;
+        return 'Ynl0ZXM=';
+      });
+
+      await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        { generate, getUri: () => null, readReferenceImage, isStopped: () => stopped },
+      );
+
+      expect(readReferenceImage).toHaveBeenCalledTimes(2);
+      expect(generate).not.toHaveBeenCalled();
+    });
+
+    it('does not report a failed read as a failure once the user has stopped', async () => {
+      const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+      let stopped = false;
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        {
+          generate: jest.fn(),
+          getUri: () => null,
+          readReferenceImage: async () => {
+            stopped = true;
+            throw new Error('read failed');
+          },
+          isStopped: () => stopped,
+        },
+      );
+
+      expect(callbacks.fail).not.toHaveBeenCalled();
+      expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+      expect(outcome.stopped).toBe(true);
+    });
+
+    it('does not present a result that lands after Stop', async () => {
+      const callbacks = createCallbacks();
+      let stopped = false;
+      const generate = jest.fn(async () => {
+        stopped = true;
+        return {
+          success: true,
+          persisted: true,
+          images: [{ url: '/api/files/00000000-0000-0000-0000-000000000005' }],
+          model: 'registry-image-route',
+        };
+      });
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        {
+          generate,
+          getUri: (image) => image?.url ?? null,
+          readReferenceImage: async () => 'Ynl0ZXM=',
+          isStopped: () => stopped,
+        },
+      );
+
+      expect(callbacks.complete).not.toHaveBeenCalled();
+      expect(outcome.stopped).toBe(true);
+    });
+
+    it('keeps the exact request, reference included, so Retry after Stop replays it', async () => {
+      let stopped = false;
+      await runImageGenerationTurn(
+        { ...referenceEdit, ...createCallbacks() },
+        {
+          generate: jest.fn(),
+          getUri: () => null,
+          readReferenceImage: async () => {
+            stopped = true;
+            return 'Ynl0ZXM=';
+          },
+          isStopped: () => stopped,
+        },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(referenceEdit);
+    });
+
+    it('does not remember a stopped plain generation as an edit', async () => {
+      await runImageGenerationTurn(
+        {
+          conversationId: 'conversation-1',
+          displayText: 'a cat',
+          prompt: 'a cat',
+          model: 'registry-image-route',
+          ownerId: 'default-test-account',
+          ...createCallbacks(),
+        },
+        { generate: jest.fn(), getUri: () => null, isStopped: () => true },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+    });
+
+    it('still submits when nobody stopped the turn', async () => {
+      const generate = jest.fn(async () => ({
+        success: true,
+        persisted: true,
+        images: [{ url: '/api/files/00000000-0000-0000-0000-000000000006' }],
+        model: 'registry-image-route',
+      }));
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...createCallbacks() },
+        {
+          generate,
+          getUri: (image) => image?.url ?? null,
+          readReferenceImage: async () => 'Ynl0ZXM=',
+          isStopped: () => false,
+        },
+      );
+
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(outcome).toEqual({ status: 'completed', assistantMessageId: 'assistant-1' });
+    });
+  });
+
+  describe('retrying a failed edit', () => {
+    const areaEdit = {
+      conversationId: 'conversation-1',
+      displayText: 'make this area blue',
+      prompt: 'make this area blue',
+      model: 'registry-image-route',
+      operation: 'inpaint' as const,
+      sourceImageBase64: 'c291cmNlLWJ5dGVz',
+      maskImageBase64: 'bWFzay1ieXRlcw==',
+      ownerId: 'default-test-account',
+    };
+
+    beforeEach(() => {
+      clearCloudImageGenerationState();
+    });
+
+    async function failAreaEdit() {
+      const callbacks = createCallbacks();
+      const generate = jest.fn(async () => {
+        throw new Error('provider unavailable');
+      });
+      const outcome = await runImageGenerationTurn(
+        { ...areaEdit, ...callbacks },
+        { generate, getUri: () => null },
+      );
+      expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+    }
+
+    it('hands back the exact source, mask and operation of a failed area edit', async () => {
+      await failAreaEdit();
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(areaEdit);
+    });
+
+    it('replays the area edit as a contract-valid inpaint request', async () => {
+      await failAreaEdit();
+      const retry = takeImageEditRetry('assistant-1', 'default-test-account');
+      const callbacks = createCallbacks();
+      const generate = jest.fn(async () => ({
+        success: true,
+        persisted: true,
+        images: [{ url: '/api/files/00000000-0000-0000-0000-000000000003' }],
+        model: 'registry-image-route',
+      }));
+
+      await runImageGenerationTurn(
+        { ...(retry as NonNullable<typeof retry>), ...callbacks },
+        { generate, getUri: (image) => image?.url ?? null },
+      );
+
+      expect(generate).toHaveBeenCalledWith(
+        {
+          prompt: 'make this area blue',
+          model: 'registry-image-route',
+          operation: 'inpaint',
+          source_image: { b64_json: 'c291cmNlLWJ5dGVz' },
+          mask_image: { b64_json: 'bWFzay1ieXRlcw==' },
+        },
+        { operationId: 'assistant-1' },
+      );
+      expect(
+        ManagedMediaImageGenerationRequestSchema.safeParse(generate.mock.calls[0]?.[0]).success,
+      ).toBe(true);
+    });
+
+    it('hands a failed retry back only once and only to the account that ran it', async () => {
+      await failAreaEdit();
+
+      expect(takeImageEditRetry('assistant-1', 'another-account')).toBeNull();
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).not.toBeNull();
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+    });
+
+    it('forgets remembered edits when the Cloud account state is cleared', async () => {
+      await failAreaEdit();
+      clearCloudImageGenerationState();
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+    });
+
+    it('remembers a failed reference edit with its ordered guide images', async () => {
+      const callbacks = createCallbacks();
+      const edit = {
+        conversationId: 'conversation-1',
+        displayText: 'blend these',
+        prompt: 'blend these',
+        model: 'registry-image-route',
+        operation: 'edit' as const,
+        sourceImage: { uri: 'file:///a.jpg', mimeType: 'image/jpeg', fileName: 'a.jpg' },
+        referenceImages: [
+          { uri: 'file:///b.jpg', mimeType: 'image/jpeg', fileName: 'b.jpg' },
+          { uri: 'file:///c.jpg', mimeType: 'image/jpeg', fileName: 'c.jpg' },
+        ],
+        ownerId: 'default-test-account',
+      };
+
+      await runImageGenerationTurn(
+        { ...edit, ...callbacks },
+        {
+          generate: jest.fn(async () => {
+            throw new Error('provider unavailable');
+          }),
+          getUri: () => null,
+          readReferenceImage: async () => 'Ynl0ZXM=',
+        },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(edit);
+    });
+
+    it('does not remember a failed plain generation, a completed edit or a refused paywall edit', async () => {
+      const plain = createCallbacks();
+      await runImageGenerationTurn(
+        {
+          conversationId: 'conversation-1',
+          displayText: 'a cat',
+          prompt: 'a cat',
+          model: 'registry-image-route',
+          ownerId: 'default-test-account',
+          ...plain,
+        },
+        {
+          generate: jest.fn(async () => {
+            throw new Error('provider unavailable');
+          }),
+          getUri: () => null,
+        },
+      );
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+
+      await runImageGenerationTurn(
+        { ...areaEdit, ...createCallbacks() },
+        {
+          generate: jest.fn(async () => ({
+            success: true,
+            persisted: true,
+            images: [{ url: '/api/files/00000000-0000-0000-0000-000000000004' }],
+            model: 'registry-image-route',
+          })),
+          getUri: (image) => image?.url ?? null,
+        },
+      );
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+
+      await runImageGenerationTurn(
+        { ...areaEdit, ...createCallbacks() },
+        {
+          generate: jest.fn(async () => {
+            throw new ApiPaywallError('image_quota', 'pro', 'Monthly image limit reached');
+          }),
+          getUri: () => null,
+        },
+      );
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+    });
   });
 });

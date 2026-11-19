@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 const stripeMocks = vi.hoisted(() => ({
   retrieveSubscription: vi.fn(),
@@ -258,6 +259,31 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).not.toHaveProperty('proration_date');
   });
 
+  it('quotes the renewal in the selected price currency with its tax treatment', async () => {
+    pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+      priceId: 'price_max_15x_monthly_inr',
+      currency: 'inr',
+      amountMinor: 999_900,
+    });
+
+    expect(await (await POST(makeRequest())).json()).toMatchObject({
+      recurringAmountCents: 999_900,
+      recurringCurrency: 'inr',
+      recurringTaxBehavior: 'inclusive',
+    });
+
+    pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+      priceId: 'price_max_15x_monthly',
+      currency: 'usd',
+      amountMinor: 20_000,
+    });
+    expect(await (await POST(makeRequest())).json()).toMatchObject({
+      recurringAmountCents: 20_000,
+      recurringCurrency: 'usd',
+      recurringTaxBehavior: 'exclusive',
+    });
+  });
+
   it('reads the profile row through the rls scoped handle when the subscription has no stored customer', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
@@ -388,7 +414,7 @@ describe('POST /api/upgrade/preview', () => {
       amountDueNowCents: 0,
       charge: { totalCents: -8_300, totalDueTodayCents: 0, creditToBalanceCents: 8_300 },
       grandfatheredNotice: expect.stringContaining(
-        'If you already pay yearly for Pro, nothing changes.',
+        `If you already pay yearly for ${getBillingPlanPricing('pro').label}, nothing changes.`,
       ),
     });
     expect(stripeMocks.createInvoicePreview).toHaveBeenCalledWith(
@@ -406,7 +432,11 @@ describe('POST /api/upgrade/preview', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      error: { message: expect.stringContaining('Max 20x is not sold with yearly billing') },
+      error: {
+        message: expect.stringContaining(
+          `${getBillingPlanPricing('max_15x').label} is not sold with yearly billing`,
+        ),
+      },
     });
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });

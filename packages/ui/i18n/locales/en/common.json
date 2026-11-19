@@ -206,15 +206,31 @@
       "open": "Set up {{name}}",
       "dismiss": "Hide app suggestions",
       "optionalLink": "Connect your apps (optional)"
-    },
-    "agiWorkExamples": "Example tasks",
-    "agiWorkIntro": "Describe a task and it keeps running in the cloud until it's done.",
-    "agiWorkExampleHint": "Puts this example in the message box",
-    "agiWork": {
-      "p1": "Summarize this week's GitHub pull requests for the team",
-      "p2": "Build a mobile release checklist from our open issues",
-      "p3": "Turn my unread Slack threads into a to-do list",
-      "p4": "Update the project deck with the latest numbers from Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "Published sites",
+    "schedules": "Schedules",
+    "reports": "Reports",
+    "organizeChats": "Organize chats",
+    "newChat": "New chat",
+    "inOneList": "In one list",
+    "byProject": "By project",
+    "recents": "Recents",
+    "noRecentChats": "No recent chats",
+    "seeAllChats": "See all chats",
+    "seeAll": "See all",
+    "seeAllChatsIn": "See all chats in {{name}}",
+    "openProject": "Open project: {{name}}",
+    "openConversation": "Open conversation: {{title}}",
+    "openConversationUnread": "Open conversation: {{title}}, unread",
+    "showChatsIn": "Show chats in {{name}}",
+    "hideChatsIn": "Hide chats in {{name}}",
+    "notifications": "Notifications",
+    "helpAndAbout": "Help & About",
+    "usageRemaining": "Usage remaining",
+    "usageRemainingValue": "Usage remaining · {{value}}",
+    "usageRemainingChecking": "Usage remaining · Checking…",
+    "usageRemainingUnavailable": "Usage remaining · Unavailable"
   }
 }

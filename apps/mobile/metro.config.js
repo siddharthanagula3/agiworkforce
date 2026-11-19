@@ -31,4 +31,7 @@ nativeWindConfig.resolver.resolveRequest = (context, moduleName, platform) => {
   return nativeWindResolveRequest(context, moduleName, platform);
 };
 
+nativeWindConfig.transformer.babelTransformerPath =
+  require.resolve('./native/metro-mermaid-transformer.cjs');
+
 module.exports = nativeWindConfig;

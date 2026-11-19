@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { shellQuoteForCurrentPlatform } from '../platform/workspaceFolders';
+import * as vscode from 'vscode';
+import {
+  shellExecutableForCurrentPlatform,
+  shellQuoteForCurrentPlatform,
+} from '../platform/workspaceFolders';
 
 describe('shellQuoteForCurrentPlatform', () => {
   let originalPlatform: NodeJS.Platform;
@@ -72,5 +76,43 @@ describe('shellQuoteForCurrentPlatform', () => {
       expect(result).not.toContain('$');
       expect(result).toBe('"a b ""c"""');
     });
+  });
+});
+
+describe('shellExecutableForCurrentPlatform', () => {
+  const originalPlatform = process.platform;
+  const env = vscode.env as { shell?: string };
+  const originalShell = env.shell;
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform });
+    env.shell = originalShell;
+  });
+
+  function setup(platform: NodeJS.Platform, shell: string | undefined) {
+    Object.defineProperty(process, 'platform', { value: platform });
+    env.shell = shell;
+  }
+
+  it.each([
+    'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+    'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+    '/usr/bin/pwsh',
+  ])('invokes a quoted executable with the call operator under PowerShell %s', (shell) => {
+    setup('win32', shell);
+    expect(shellExecutableForCurrentPlatform('C:\\Tools\\agi.exe')).toBe('& "C:\\Tools\\agi.exe"');
+  });
+
+  it.each(['C:\\Windows\\System32\\cmd.exe', 'C:\\Program Files\\Git\\bin\\bash.exe', undefined])(
+    'leaves the quoted executable alone under %s',
+    (shell) => {
+      setup('win32', shell);
+      expect(shellExecutableForCurrentPlatform('C:\\Tools\\agi.exe')).toBe('"C:\\Tools\\agi.exe"');
+    },
+  );
+
+  it('never adds the call operator on POSIX, even for a PowerShell shell', () => {
+    setup('linux', '/usr/bin/pwsh');
+    expect(shellExecutableForCurrentPlatform('/opt/agi')).toBe("'/opt/agi'");
   });
 });

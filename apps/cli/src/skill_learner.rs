@@ -13,7 +13,7 @@
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::models::{ContentBlock, MessageContent};
 use crate::sessions;
@@ -43,6 +43,10 @@ pub struct LearnedSkill {
     pub confidence: f32,
     /// Session IDs where this pattern was observed.
     pub source_sessions: Vec<String>,
+}
+
+pub fn learned_skills_dir(home: &Path) -> PathBuf {
+    home.join("skills").join("learned")
 }
 
 pub struct SkillLearner;
@@ -103,8 +107,7 @@ impl SkillLearner {
 
         // Check if this skill already exists
         let skill_name = generate_skill_name(&current_sig);
-        let learned_dir = home.join("skills").join("learned");
-        let skill_path = learned_dir.join(format!("{}.md", skill_name));
+        let skill_path = learned_skills_dir(home).join(format!("{}.md", skill_name));
         if skill_path.exists() {
             return None;
         }
@@ -127,7 +130,7 @@ impl SkillLearner {
 
     /// Save a learned skill to `~/.agiworkforce/skills/learned/`.
     pub fn save_skill(home: &Path, skill: &LearnedSkill) -> Result<()> {
-        let learned_dir = home.join("skills").join("learned");
+        let learned_dir = learned_skills_dir(home);
         fs::create_dir_all(&learned_dir).context("Failed to create learned skills directory")?;
 
         // Enforce max learned skills

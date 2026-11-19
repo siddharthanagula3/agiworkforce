@@ -209,19 +209,28 @@ export function DesktopSettingsSection() {
     resolveCli();
   }, [resolveCli]);
 
+  const writes = useRef(0);
+
   useEffect(() => {
     if (!host) return;
     let cancelled = false;
-    host
-      .readPreferences()
-      .then((next) => {
-        if (!cancelled) setState(next);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setError(toUserMessage(cause, LOAD_FAILED));
-      });
+    const refresh = (reportFailure: boolean) => {
+      const writesBefore = writes.current;
+      host
+        .readPreferences()
+        .then((next) => {
+          if (!cancelled && writes.current === writesBefore) setState(next);
+        })
+        .catch((cause: unknown) => {
+          if (!cancelled && reportFailure) setError(toUserMessage(cause, LOAD_FAILED));
+        });
+    };
+    refresh(true);
+    const onFocus = () => refresh(false);
+    window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
+      window.removeEventListener('focus', onFocus);
     };
   }, [host]);
 
@@ -229,10 +238,36 @@ export function DesktopSettingsSection() {
     (patch: Partial<HostPreferences>): Promise<void> => {
       if (!host) return Promise.resolve();
       setError(null);
+      writes.current += 1;
       return host
         .writePreferences(patch)
         .then(setState)
         .catch((cause: unknown) => setError(toUserMessage(cause, SAVE_FAILED)));
+    },
+    [host],
+  );
+
+  const notificationWrites = useRef<Promise<void>>(Promise.resolve());
+  const editNotifications = useCallback(
+    (
+      edit: (current: HostAgentNotificationPreferences) => HostAgentNotificationPreferences,
+    ): Promise<void> => {
+      if (!host) return Promise.resolve();
+      const run = notificationWrites.current.then(async () => {
+        setError(null);
+        writes.current += 1;
+        try {
+          const fresh = await host.readPreferences();
+          const next = await host.writePreferences(
+            agentNotificationsWrite(edit(effectiveAgentNotifications(fresh.preferences))),
+          );
+          setState(next);
+        } catch (cause) {
+          setError(toUserMessage(cause, SAVE_FAILED));
+        }
+      });
+      notificationWrites.current = run;
+      return run;
     },
     [host],
   );
@@ -398,7 +433,7 @@ export function DesktopSettingsSection() {
               value={effectiveAgentNotifications(preferences)}
               offersDrawAttention={preferences.agentNotifications.drawAttention !== undefined}
               platform={host.platform}
-              onChange={(next) => write(agentNotificationsWrite(next))}
+              onChange={editNotifications}
             />
           )}
 
@@ -425,7 +460,9 @@ function AgentNotificationRows({
   value: HostAgentNotificationPreferences;
   offersDrawAttention: boolean;
   platform: string;
-  onChange: (next: HostAgentNotificationPreferences) => void;
+  onChange: (
+    edit: (current: HostAgentNotificationPreferences) => HostAgentNotificationPreferences,
+  ) => void;
 }) {
   const off = value.when === 'never';
   return (
@@ -434,9 +471,10 @@ function AgentNotificationRows({
         <select
           value={value.when}
           aria-label={NOTIFY_LABEL}
-          onChange={(event) =>
-            onChange({ ...value, when: event.target.value as HostAgentNotificationMode })
-          }
+          onChange={(event) => {
+            const when = event.target.value as HostAgentNotificationMode;
+            onChange((current) => ({ ...current, when }));
+          }}
           className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
         >
           {HOST_AGENT_NOTIFICATION_MODES.map((mode) => (
@@ -452,12 +490,14 @@ function AgentNotificationRows({
             checked={!off && !value.muted.includes(kind)}
             disabled={off}
             onCheckedChange={(checked) =>
-              onChange({
-                ...value,
+              onChange((current) => ({
+                ...current,
                 muted: checked
-                  ? value.muted.filter((muted) => muted !== kind)
-                  : [...value.muted, kind],
-              })
+                  ? current.muted.filter((muted) => muted !== kind)
+                  : current.muted.includes(kind)
+                    ? current.muted
+                    : [...current.muted, kind],
+              }))
             }
             aria-label={NOTIFY_KIND_ROWS[kind].label}
           />
@@ -467,7 +507,7 @@ function AgentNotificationRows({
         <Switch
           checked={!off && value.sound}
           disabled={off}
-          onCheckedChange={(sound) => onChange({ ...value, sound })}
+          onCheckedChange={(sound) => onChange((current) => ({ ...current, sound }))}
           aria-label={NOTIFY_SOUND_LABEL}
         />
       </Row>
@@ -476,7 +516,9 @@ function AgentNotificationRows({
           <Switch
             checked={!off && value.drawAttention === true}
             disabled={off}
-            onCheckedChange={(drawAttention) => onChange({ ...value, drawAttention })}
+            onCheckedChange={(drawAttention) =>
+              onChange((current) => ({ ...current, drawAttention }))
+            }
             aria-label={DRAW_ATTENTION_LABEL}
           />
         </Row>

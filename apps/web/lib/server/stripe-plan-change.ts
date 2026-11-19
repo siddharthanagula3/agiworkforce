@@ -553,19 +553,37 @@ export async function keepCurrentPlan(
   };
 }
 
+export class ScheduledChangeReleasedError extends Error {
+  constructor(cause: unknown) {
+    super('The scheduled plan change was released, but the plan could not be resumed', { cause });
+    this.name = 'ScheduledChangeReleasedError';
+  }
+}
+
 async function releaseAndResume(
   stripe: Stripe,
   subscription: Stripe.Subscription,
   idempotencyKey: string,
 ): Promise<Stripe.Subscription> {
   const scheduleId = idOf(subscription.schedule);
-  if (scheduleId) {
-    await stripe.subscriptionSchedules.release(
-      scheduleId,
-      {},
-      { idempotencyKey: `${idempotencyKey}:release` },
-    );
+  if (!scheduleId) return resumeSubscription(stripe, subscription, idempotencyKey);
+  await stripe.subscriptionSchedules.release(
+    scheduleId,
+    {},
+    { idempotencyKey: `${idempotencyKey}:release` },
+  );
+  try {
+    return await resumeSubscription(stripe, subscription, idempotencyKey);
+  } catch (error) {
+    throw new ScheduledChangeReleasedError(error);
   }
+}
+
+async function resumeSubscription(
+  stripe: Stripe,
+  subscription: Stripe.Subscription,
+  idempotencyKey: string,
+): Promise<Stripe.Subscription> {
   const expand = ['items.data.price'];
   if (subscription.cancel_at_period_end) {
     return stripe.subscriptions.update(

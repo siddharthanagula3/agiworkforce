@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PURCHASABLE_SEATS, MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
+import {
+  MAX_PURCHASABLE_SEATS,
+  MIN_PURCHASABLE_SEATS,
+  getBillingPlanPricing,
+} from '@agiworkforce/types';
 import {
   CheckoutRequestSchema,
   UpgradeApplyRequestSchema,
@@ -75,7 +79,7 @@ describe('checkout seat validation', () => {
     });
     expect(result.success).toBe(false);
     expect(result.success ? [] : result.error.issues.map((issue) => issue.message)).toContain(
-      'Pro is not sold with yearly billing. Choose monthly billing.',
+      `${getBillingPlanPricing('pro').label} is not sold with yearly billing. Choose monthly billing.`,
     );
   });
 

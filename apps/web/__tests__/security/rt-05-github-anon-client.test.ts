@@ -18,7 +18,8 @@ vi.mock('next/server', async (importOriginal) => ({
   },
 }));
 
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   requireEnv: (_key: string) => '',
   getOptionalEnv: (_key: string) => undefined,
 }));
@@ -26,8 +27,14 @@ vi.mock('@shared/utils/env', () => ({
 const { mockLogger } = vi.hoisted(() => ({
   mockLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  logger: mockLogger,
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
 vi.mock('@agiworkforce/types', async () => {
   const actual = await vi.importActual<ScanModule1>('@agiworkforce/types');
   return {
@@ -50,7 +57,8 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 const mockNeonQuery = vi.fn();
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
     execute: vi.fn().mockResolvedValue(1),
@@ -65,7 +73,8 @@ const { WEBHOOK_SECRET, hoistedCreateHmac } = vi.hoisted(() => {
   const cryptoMod = require('node:crypto') as typeof import('node:crypto');
   return { WEBHOOK_SECRET: 'test-webhook-secret', hoistedCreateHmac: cryptoMod.createHmac };
 });
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   listPrReviewCommentBodies: (...args: unknown[]) => mockListReviewComments(...args),
   postPrReview: (...args: unknown[]) => mockPostReview(...args),
   GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
@@ -74,14 +83,20 @@ vi.mock('@/lib/github-app', () => ({
     return sig === expected;
   },
   getInstallationAccessToken: async () => 'ghs_token_abc',
-  getPrDiff: async () => '+ added line',
+  getPrReviewSnapshot: async () => ({
+    diff: '+ added line',
+    truncated: false,
+    headSha: 'a'.repeat(40),
+  }),
+  getPrHeadSha: async () => 'a'.repeat(40),
   postIssueComment: vi.fn(async () => undefined),
   getGitHubIssue: vi.fn(async () => null),
   getGitHubPullRequestForTask: vi.fn(async () => null),
   listGitHubFailedChecks: vi.fn(async () => []),
 }));
 
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   isManagedComputePrivateBetaEnabled: () => true,
 }));
 
@@ -91,8 +106,10 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-vi.mock('@/lib/code-review/pipeline', () => ({
+vi.mock('@/lib/code-review/pipeline', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   reviewPullRequestDiff: (...args: unknown[]) => mockReviewPullRequestDiff(...args),
+  reviewCoverageIsPartial: () => false,
   reviewLineComments: () => [],
   reviewSummaryBody: () => '## AGI Code Review\n\nNo correctness or security defect found.',
 }));
@@ -223,3 +240,11 @@ describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
     expect(mockLogger.error).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule6 = typeof import('@shared/utils/env');
+type ImportedModule5 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('@/lib/rate-limit');
+type ImportedModule3 = typeof import('@/lib/server/neon-db');
+type ImportedModule2 = typeof import('@/lib/github-app');
+type ImportedModule1 = typeof import('@/lib/managed-compute-gate');
+type ImportedModule0 = typeof import('@/lib/code-review/pipeline');

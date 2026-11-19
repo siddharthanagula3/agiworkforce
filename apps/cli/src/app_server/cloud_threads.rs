@@ -7,7 +7,7 @@ use agiworkforce_protocol::developer_session::{
 };
 
 use crate::cloud::code_handoff::github_full_name;
-use crate::cloud::code_sessions::{self, CodeSession};
+use crate::cloud::code_sessions::{self, CodeSession, CodeSessionDetail};
 use crate::cloud::{CloudClient, CloudError};
 use crate::platform::runtime::session::PrivacyMode;
 
@@ -67,15 +67,15 @@ fn summary(session: &CodeSession) -> ThreadSummary {
     }
 }
 
-fn client() -> Option<CloudClient> {
-    CloudClient::connect(PrivacyMode::Managed).ok()
+pub async fn list(workspace: &Path) -> Vec<ThreadSummary> {
+    list_in(workspace, crate::account_privacy_mode()).await
 }
 
-pub async fn list(workspace: &Path) -> Vec<ThreadSummary> {
+async fn list_in(workspace: &Path, privacy: PrivacyMode) -> Vec<ThreadSummary> {
     let Some(repository) = workspace_repository(workspace) else {
         return Vec::new();
     };
-    let Some(client) = client() else {
+    let Ok(client) = CloudClient::connect(privacy) else {
         return Vec::new();
     };
     match code_sessions::list(&client, OPEN_SESSIONS).await {
@@ -95,10 +95,18 @@ pub async fn list(workspace: &Path) -> Vec<ThreadSummary> {
 }
 
 pub async fn read(session_id: &str) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
-    let client = client().ok_or_else(|| {
-        DeveloperSessionHostError::unavailable(
+    read_in(session_id, crate::account_privacy_mode()).await
+}
+
+async fn read_in(
+    session_id: &str,
+    privacy: PrivacyMode,
+) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+    let client = CloudClient::connect(privacy).map_err(|error| match error {
+        CloudError::NotManaged(_) => DeveloperSessionHostError::unavailable(error.to_string()),
+        _ => DeveloperSessionHostError::unavailable(
             "Sign in with `agi login` to read cloud Code sessions.",
-        )
+        ),
     })?;
     let detail = code_sessions::show(&client, session_id)
         .await
@@ -108,7 +116,11 @@ pub async fn read(session_id: &str) -> Result<ThreadReadResponse, DeveloperSessi
             }
             other => DeveloperSessionHostError::unavailable(other.to_string()),
         })?;
-    let messages = crate::cloud::code_teleport::history(&detail)
+    Ok(thread_read(&detail))
+}
+
+fn thread_read(detail: &CodeSessionDetail) -> ThreadReadResponse {
+    let messages = crate::cloud::code_teleport::history(detail)
         .iter()
         .enumerate()
         .map(|(index, message)| DeveloperMessage {
@@ -118,16 +130,16 @@ pub async fn read(session_id: &str) -> Result<ThreadReadResponse, DeveloperSessi
             turn_id: None,
         })
         .collect();
-    Ok(ThreadReadResponse {
+    ThreadReadResponse {
         child_tasks: None,
         thread: summary(&detail.session),
         messages,
-        transcript_truncated: false,
+        transcript_truncated: detail.turns_truncated,
         approvals: Vec::new(),
         file_changes: Vec::new(),
         plan: Vec::new(),
         todos: Vec::new(),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -152,5 +164,59 @@ mod tests {
         assert_eq!(cloud_session_id(&thread.id), Some("5f1c"));
         assert_eq!(cloud_session_id("5f1c"), None);
         assert_eq!(session_repository(&session).as_deref(), Some("acme/app"));
+    }
+
+    fn detail(truncated: bool) -> CodeSessionDetail {
+        serde_json::from_value(serde_json::json!({
+            "session": { "id": "5f1c", "title": "Fix the flaky test" },
+            "turns": [{ "goal": "fix it", "finalMessage": "fixed" }],
+            "turnsTruncated": truncated,
+        }))
+        .expect("detail")
+    }
+
+    #[test]
+    fn a_cloud_thread_read_reports_a_bounded_window_as_truncated() {
+        let read = thread_read(&detail(true));
+        assert_eq!(read.messages.len(), 2);
+        assert!(read.transcript_truncated);
+    }
+
+    #[test]
+    fn a_cloud_thread_read_of_a_whole_session_is_not_truncated() {
+        let read = thread_read(&detail(false));
+        assert_eq!(read.messages.len(), 2);
+        assert!(!read.transcript_truncated);
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_lists_or_reads_cloud_code_sessions() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git init");
+        std::process::Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/acme/app.git"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git remote");
+        assert_eq!(
+            workspace_repository(workspace.path()).as_deref(),
+            Some("acme/app")
+        );
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            assert!(list_in(workspace.path(), mode).await.is_empty());
+            let refused = read_in("5f1c", mode)
+                .await
+                .expect_err("a cloud session read must be refused outside Cloud mode");
+            assert!(
+                refused
+                    .to_string()
+                    .contains(&CloudError::NotManaged(mode).to_string()),
+                "{refused}"
+            );
+        }
     }
 }

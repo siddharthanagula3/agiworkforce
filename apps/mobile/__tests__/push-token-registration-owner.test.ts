@@ -71,8 +71,8 @@ describe('push-token registration ownership', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedPushTokenListener = undefined;
-    mockApiPost.mockResolvedValue(undefined);
-    mockGetExpoPushToken.mockResolvedValue({ data: 'expo-token-a' });
+    mockApiPost.mockReset().mockResolvedValue(undefined);
+    mockGetExpoPushToken.mockReset().mockResolvedValue({ data: 'expo-token-a' });
   });
 
   afterEach(() => {

@@ -55,6 +55,11 @@ export function localPreviewUrl(raw: unknown): string | null {
   return url.href;
 }
 
+export function localPreviewOrigin(raw: unknown): string | null {
+  const url = localPreviewUrl(raw);
+  return url === null ? null : new URL(url).origin;
+}
+
 // eslint-disable-next-line no-control-regex -- terminal colour codes are control characters by definition
 const TERMINAL_ESCAPES = /\u001b\[[0-9;?]*[A-Za-z]/gu;
 const LOOPBACK_URL_IN_TEXT =

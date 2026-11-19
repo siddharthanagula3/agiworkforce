@@ -81,14 +81,18 @@ jest.mock('@agiworkforce/i18n', () => ({
   languageFor: () => ({ code: 'en', nativeName: 'English' }),
 }));
 
-jest.mock('../src/i18n', () => ({}));
+jest.mock('../src/i18n', () => ({
+  DEVICE_LANGUAGE_PREFERENCE: 'device',
+  useLanguagePreferenceStore: (selector: (state: { preference: string }) => unknown) =>
+    selector({ preference: 'device' }),
+}));
 
 const mockSelectionHaptic = jest.fn(async () => undefined);
 jest.mock('expo-haptics', () => ({
   selectionAsync: () => mockSelectionHaptic(),
 }));
 
-import SettingsTabScreen from '../app/(app)/(tabs)/settings';
+import SettingsTabScreen from '../app/(app)/settings/index';
 import GeneralSettingsScreen from '../src/features/settings/general';
 import {
   DEFAULT_LOCAL_MODEL_ID,
@@ -186,6 +190,16 @@ describe('General settings auto-correct', () => {
     expect(getByTestId('settings.general.auto-correct').props.accessibilityLabel).toBe(
       'Auto-correct spelling. Off',
     );
+  });
+});
+
+describe('General settings app language row', () => {
+  it('shows Match device and opens the app language picker', () => {
+    const { getByLabelText } = render(<GeneralSettingsScreen />);
+
+    fireEvent.press(getByLabelText('App language. Match device'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/app-language');
   });
 });
 

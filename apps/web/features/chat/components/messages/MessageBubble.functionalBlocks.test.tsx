@@ -75,7 +75,7 @@ describe('functional outputs through the actual message dispatch', () => {
       await waitFor(() =>
         expect(container.querySelectorAll('[data-gallery-resource]')).toHaveLength(4),
       );
-      expect(container.querySelectorAll('img')).toHaveLength(4);
+      expect(container.querySelectorAll('img:not(.agi-mark)')).toHaveLength(4);
       expect(
         Array.from(container.querySelectorAll('[data-image-tool-card]')).map((slot) =>
           slot.getAttribute('data-image-tool-card'),
@@ -93,7 +93,7 @@ describe('functional outputs through the actual message dispatch', () => {
         'developer workspaceConcept 4',
       ]);
       expect(container.querySelectorAll('[data-generated-image-state="loading"]')).toHaveLength(4);
-      const images = Array.from(container.querySelectorAll('img'));
+      const images = Array.from(container.querySelectorAll('img:not(.agi-mark)'));
       [0, 2, 3].forEach((index) => fireEvent.load(images[index]!));
       fireEvent.error(images[1]!);
       expect(container.querySelectorAll('[data-generated-image-state="loaded"]')).toHaveLength(3);
@@ -282,7 +282,7 @@ describe('functional outputs through the actual message dispatch', () => {
     await waitFor(() =>
       expect(container.querySelectorAll('[data-gallery-resource]')).toHaveLength(4),
     );
-    expect(container.querySelectorAll('img')).toHaveLength(4);
+    expect(container.querySelectorAll('img:not(.agi-mark)')).toHaveLength(4);
     expect(screen.getAllByRole('button', { name: 'Copy image' })).toHaveLength(4);
     expect(screen.getAllByRole('button', { name: 'Share image' })).toHaveLength(4);
     expect(screen.getAllByRole('button', { name: 'More actions' })).toHaveLength(4);
@@ -321,7 +321,7 @@ describe('functional outputs through the actual message dispatch', () => {
       />,
     );
     expect(container.querySelectorAll('[data-gallery-resource]')).toHaveLength(4);
-    expect(container.querySelectorAll('img')).toHaveLength(4);
+    expect(container.querySelectorAll('img:not(.agi-mark)')).toHaveLength(4);
     expect(
       screen.getAllByTestId('deliverable-card').map((link) => link.getAttribute('href')),
     ).toEqual(files.map((file) => file.uri));

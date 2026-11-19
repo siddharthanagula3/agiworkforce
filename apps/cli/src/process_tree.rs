@@ -15,7 +15,7 @@ use std::io;
 use std::path::Path;
 use std::process::{Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex as StdMutex, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock, PoisonError};
 use std::time::Duration;
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
@@ -150,15 +150,40 @@ pub(crate) fn kill_all_process_trees() {
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     for entry in registry.entries.values() {
         if entry.terminal_session {
-            #[cfg(unix)]
-            {
-                if let Some(id) = entry.process_id {
-                    let _ = terminate_session_now(id);
-                }
-                continue;
-            }
+            stop_terminal_session(entry.process_id);
+        } else {
+            kill_process_group_now(entry.process_id);
         }
-        kill_process_group_now(entry.process_id);
+    }
+}
+
+#[cfg(unix)]
+fn stop_terminal_session(process_id: Option<u32>) {
+    if let Some(id) = process_id {
+        stop_session_or_group(id, terminate_session_now, |id| {
+            kill_process_group_now(Some(id))
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn stop_terminal_session(process_id: Option<u32>) {
+    signal_process_tree_on_drop(process_id);
+}
+
+#[cfg(unix)]
+fn stop_session_or_group(
+    id: u32,
+    terminate_session: impl FnOnce(u32) -> io::Result<()>,
+    kill_group: impl FnOnce(u32),
+) {
+    if let Err(error) = terminate_session(id) {
+        tracing::warn!(
+            process_id = id,
+            %error,
+            "terminal session cleanup failed; signalling its process group"
+        );
+        kill_group(id);
     }
 }
 
@@ -395,14 +420,11 @@ impl DetachedProcessTree {
     }
 
     pub(crate) fn kill(&self) {
-        #[cfg(unix)]
         if self.terminal_session {
-            if let Some(id) = self.process_id {
-                let _ = terminate_session_now(id);
-            }
-            return;
+            stop_terminal_session(self.process_id);
+        } else {
+            signal_process_tree_on_drop(self.process_id);
         }
-        signal_process_tree_on_drop(self.process_id);
     }
     #[cfg(unix)]
     pub(crate) fn track_terminal(process_id: u32) -> Self {
@@ -576,8 +598,10 @@ async fn output_in_group(
             let _ = pipe.write_all(&bytes).await;
         })
     });
-    let stdout_task = tokio::spawn(read_pipe(child_stdout));
-    let stderr_task = tokio::spawn(read_pipe(child_stderr));
+    let stdout_capture = PipeCapture::default();
+    let stderr_capture = PipeCapture::default();
+    let stdout_task = tokio::spawn(read_pipe(child_stdout, stdout_capture.clone()));
+    let stderr_task = tokio::spawn(read_pipe(child_stderr, stderr_capture.clone()));
 
     let (cancel_sender, cancel_receiver) = oneshot::channel();
     let (result_sender, result_receiver) = oneshot::channel();
@@ -594,6 +618,8 @@ async fn output_in_group(
             stdin_task,
             stdout_task,
             stderr_task,
+            stdout_capture,
+            stderr_capture,
         )
         .await;
         let _ = result_sender.send(result);
@@ -610,16 +636,30 @@ async fn output_in_group(
 fn configure_lifecycle(command: &mut Command) {
     command.kill_on_drop(true);
 
-    // A new group lets cancellation reach `sh -c` descendants, not just the
-    // shell itself. Tokio exposes this without a pre-exec unsafe block.
     #[cfg(unix)]
-    command.process_group(0);
+    lead_own_session(command);
 
     // CREATE_NEW_PROCESS_GROUP. `taskkill /T` below is the Windows tree-kill
     // primitive; the creation flag also prevents the child from sharing the
     // CLI's console process group.
     #[cfg(windows)]
     command.creation_flags(0x0000_0200);
+}
+
+/// A session of its own gives the child a process group that cancellation
+/// signals as a whole, reaching `sh -c` descendants, and no controlling
+/// terminal. A program that prompts on `/dev/tty` then fails at once instead
+/// of being stopped by job control until the timeout, and nothing the child
+/// starts can read from or push input into the terminal the CLI draws on.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn lead_own_session(command: &mut Command) {
+    unsafe {
+        command.pre_exec(|| {
+            nix::unistd::setsid()?;
+            Ok(())
+        });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -630,8 +670,10 @@ async fn supervise(
     cancel_receiver: oneshot::Receiver<()>,
     deadline: Option<Instant>,
     mut stdin_task: Option<JoinHandle<()>>,
-    stdout_task: JoinHandle<io::Result<Vec<u8>>>,
-    stderr_task: JoinHandle<io::Result<Vec<u8>>>,
+    stdout_task: JoinHandle<io::Result<()>>,
+    stderr_task: JoinHandle<io::Result<()>>,
+    stdout_capture: PipeCapture,
+    stderr_capture: PipeCapture,
 ) -> io::Result<Output> {
     let mut kill_guard = TreeKillGuard::new(process_id);
     let mut cancel_receiver = cancel_receiver;
@@ -649,7 +691,7 @@ async fn supervise(
             terminate_and_reap(&mut child, process_id).await;
             stop_io_tasks(&mut stdin_task, &mut stdout_task, &mut stderr_task).await;
             kill_guard.disarm();
-            return Err(io::Error::new(io::ErrorKind::TimedOut, "subprocess timed out"));
+            return Err(timed_out(&stdout_capture, &stderr_capture));
         }
         status = child.wait() => status?,
     };
@@ -665,7 +707,7 @@ async fn supervise(
         _ = wait_for_deadline(deadline) => PipeEvent::TimedOut,
         output = stdout_task.as_mut().expect("stdout task is present") => PipeEvent::Ready(output),
     };
-    let stdout = match stdout_event {
+    match stdout_event {
         PipeEvent::Cancelled => {
             terminate_and_reap(&mut child, process_id).await;
             stop_io_tasks(&mut stdin_task, &mut stdout_task, &mut stderr_task).await;
@@ -679,16 +721,13 @@ async fn supervise(
             terminate_and_reap(&mut child, process_id).await;
             stop_io_tasks(&mut stdin_task, &mut stdout_task, &mut stderr_task).await;
             kill_guard.disarm();
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "subprocess timed out",
-            ));
+            return Err(timed_out(&stdout_capture, &stderr_capture));
         }
         PipeEvent::Ready(output) => {
             stdout_task.take();
             join_pipe(output)?
         }
-    };
+    }
 
     let stderr_event = tokio::select! {
         biased;
@@ -696,7 +735,7 @@ async fn supervise(
         _ = wait_for_deadline(deadline) => PipeEvent::TimedOut,
         output = stderr_task.as_mut().expect("stderr task is present") => PipeEvent::Ready(output),
     };
-    let stderr = match stderr_event {
+    match stderr_event {
         PipeEvent::Cancelled => {
             terminate_and_reap(&mut child, process_id).await;
             stop_io_tasks(&mut stdin_task, &mut stdout_task, &mut stderr_task).await;
@@ -712,16 +751,13 @@ async fn supervise(
             terminate_and_reap(&mut child, process_id).await;
             stop_io_tasks(&mut stdin_task, &mut stdout_task, &mut stderr_task).await;
             kill_guard.disarm();
-            return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "subprocess timed out",
-            ));
+            return Err(timed_out(&stdout_capture, &stderr_capture));
         }
         PipeEvent::Ready(output) => {
             stderr_task.take();
             join_pipe(output)?
         }
-    };
+    }
 
     if let Some(task) = stdin_task.take() {
         let _ = task.await;
@@ -729,8 +765,8 @@ async fn supervise(
     kill_guard.disarm();
     Ok(Output {
         status,
-        stdout,
-        stderr,
+        stdout: stdout_capture.take(),
+        stderr: stderr_capture.take(),
     })
 }
 
@@ -738,18 +774,82 @@ async fn supervise(
 /// chatty child never stalls on a full pipe, but nothing more is held.
 pub(crate) const MAX_CAPTURED_PIPE_BYTES: u64 = 64 * 1024 * 1024;
 
-async fn read_pipe(pipe: impl AsyncRead + Unpin) -> io::Result<Vec<u8>> {
-    read_pipe_bounded(pipe, MAX_CAPTURED_PIPE_BYTES).await
+#[derive(Clone, Default)]
+struct PipeCapture(Arc<StdMutex<Vec<u8>>>);
+
+impl PipeCapture {
+    fn keep(&self, bytes: &[u8], limit: u64) {
+        let mut held = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let room = usize::try_from(limit)
+            .unwrap_or(usize::MAX)
+            .saturating_sub(held.len());
+        held.extend_from_slice(&bytes[..bytes.len().min(room)]);
+    }
+
+    fn take(&self) -> Vec<u8> {
+        std::mem::take(&mut *self.0.lock().unwrap_or_else(PoisonError::into_inner))
+    }
 }
 
-async fn read_pipe_bounded(mut pipe: impl AsyncRead + Unpin, limit: u64) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    (&mut pipe).take(limit).read_to_end(&mut bytes).await?;
-    tokio::io::copy(&mut pipe, &mut tokio::io::sink()).await?;
-    Ok(bytes)
+pub(crate) struct TimedOutOutput {
+    pub(crate) stdout: Vec<u8>,
+    pub(crate) stderr: Vec<u8>,
 }
 
-fn join_pipe(result: Result<io::Result<Vec<u8>>, tokio::task::JoinError>) -> io::Result<Vec<u8>> {
+impl TimedOutOutput {
+    pub(crate) fn of(error: &io::Error) -> Option<&Self> {
+        error.get_ref()?.downcast_ref::<Self>()
+    }
+}
+
+impl std::fmt::Debug for TimedOutOutput {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("TimedOutOutput")
+            .field("stdout_bytes", &self.stdout.len())
+            .field("stderr_bytes", &self.stderr.len())
+            .finish()
+    }
+}
+
+impl std::fmt::Display for TimedOutOutput {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("subprocess timed out")
+    }
+}
+
+impl std::error::Error for TimedOutOutput {}
+
+fn timed_out(stdout: &PipeCapture, stderr: &PipeCapture) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::TimedOut,
+        TimedOutOutput {
+            stdout: stdout.take(),
+            stderr: stderr.take(),
+        },
+    )
+}
+
+async fn read_pipe(pipe: impl AsyncRead + Unpin, capture: PipeCapture) -> io::Result<()> {
+    read_pipe_bounded(pipe, MAX_CAPTURED_PIPE_BYTES, capture).await
+}
+
+async fn read_pipe_bounded(
+    mut pipe: impl AsyncRead + Unpin,
+    limit: u64,
+    capture: PipeCapture,
+) -> io::Result<()> {
+    let mut chunk = vec![0u8; 64 * 1024];
+    loop {
+        let read = pipe.read(&mut chunk).await?;
+        if read == 0 {
+            return Ok(());
+        }
+        capture.keep(&chunk[..read], limit);
+    }
+}
+
+fn join_pipe(result: Result<io::Result<()>, tokio::task::JoinError>) -> io::Result<()> {
     result.map_err(|error| io::Error::other(format!("output reader task failed: {error}")))?
 }
 
@@ -762,8 +862,8 @@ async fn wait_for_deadline(deadline: Option<Instant>) {
 
 async fn stop_io_tasks(
     stdin_task: &mut Option<JoinHandle<()>>,
-    stdout_task: &mut Option<JoinHandle<io::Result<Vec<u8>>>>,
-    stderr_task: &mut Option<JoinHandle<io::Result<Vec<u8>>>>,
+    stdout_task: &mut Option<JoinHandle<io::Result<()>>>,
+    stderr_task: &mut Option<JoinHandle<io::Result<()>>>,
 ) {
     if let Some(task) = stdin_task.take() {
         task.abort();
@@ -782,7 +882,7 @@ async fn stop_io_tasks(
 enum PipeEvent {
     Cancelled,
     TimedOut,
-    Ready(Result<io::Result<Vec<u8>>, tokio::task::JoinError>),
+    Ready(Result<io::Result<()>, tokio::task::JoinError>),
 }
 
 async fn terminate_and_reap(child: &mut Child, process_id: Option<u32>) {
@@ -938,9 +1038,46 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    fn a_terminal_session_that_cannot_be_listed_still_has_its_process_group_killed() {
+        let signalled = std::cell::Cell::new(None);
+        stop_session_or_group(
+            4242,
+            |_| Err(io::Error::other("process listing failed")),
+            |id| signalled.set(Some(id)),
+        );
+        assert_eq!(signalled.get(), Some(4242));
+
+        let signalled = std::cell::Cell::new(None);
+        stop_session_or_group(4242, |_| Ok(()), |id| signalled.set(Some(id)));
+        assert_eq!(signalled.get(), None);
+    }
+
+    #[test]
     fn host_shell_commands_name_the_shell_by_absolute_path() {
         let command = shell_command("true");
         assert_eq!(command.as_std().get_program(), "/bin/sh");
+    }
+
+    #[tokio::test]
+    async fn a_command_leads_its_own_session_with_no_controlling_terminal() {
+        let _guard = CHILD_SPAWNING_TESTS.lock().await;
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", "exec sleep 5"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = ProcessTreeChild::spawn(command).expect("spawn");
+        let pid = Pid::from_raw(
+            i32::try_from(child.child_mut().id().expect("running child")).expect("pid"),
+        );
+        let session = nix::unistd::getsid(Some(pid));
+        let group = nix::unistd::getpgid(Some(pid));
+        child.terminate().await;
+
+        assert_eq!(session.expect("child session"), pid);
+        assert_eq!(group.expect("child process group"), pid);
+        assert_ne!(nix::unistd::getsid(None).expect("own session"), pid);
     }
 
     #[tokio::test]
@@ -954,9 +1091,12 @@ mod tests {
             .expect("spawn");
         let stdout = child.stdout.take().expect("stdout");
 
-        let kept = read_pipe_bounded(stdout, 1_000).await.expect("read");
+        let capture = PipeCapture::default();
+        read_pipe_bounded(stdout, 1_000, capture.clone())
+            .await
+            .expect("read");
 
-        assert_eq!(kept.len(), 1_000);
+        assert_eq!(capture.take().len(), 1_000);
         assert!(
             child.wait().await.expect("wait").success(),
             "the child was left writing into a pipe nobody read"
@@ -991,6 +1131,25 @@ mod tests {
             "timed-out descendant wrote its delayed sentinel"
         );
         assert_processes_absent(&process_ids);
+    }
+
+    #[tokio::test]
+    async fn a_timeout_keeps_the_output_read_before_it() {
+        let _serial = super::CHILD_SPAWNING_TESTS.lock().await;
+        let mut command = Command::new("sh");
+        command
+            .arg("-c")
+            .arg("echo started; echo warned >&2; exec sleep 30");
+
+        let error = output(command, None, Some(Duration::from_secs(1)))
+            .await
+            .expect_err("command must time out");
+
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        assert_eq!(error.to_string(), "subprocess timed out");
+        let partial = TimedOutOutput::of(&error).expect("the timeout carries the output");
+        assert_eq!(partial.stdout, b"started\n");
+        assert_eq!(partial.stderr, b"warned\n");
     }
 
     /// The signal path kills every tree, not just the caller's, because a

@@ -7,6 +7,8 @@ import {
   buildComputerUsePanel,
   describeCancellationReason,
 } from '../src/features/side-panel/computerUsePanel';
+import catalog from '../_locales/en/messages.json';
+import { USER_TAKEOVER_MAX_MS } from '../src/features/computer-use/runOwnership';
 import { settleAutomationAttempt, startAutomationAttempt } from '@agiworkforce/types';
 
 const sendMessage = vi.fn();
@@ -16,6 +18,24 @@ function stubChrome(): void {
     configurable: true,
     value: {
       runtime: { lastError: undefined, sendMessage },
+      i18n: {
+        getMessage: (key: string, substitutions: string[] = []) => {
+          const entry = (
+            catalog as Record<
+              string,
+              { message: string; placeholders?: Record<string, { content: string }> }
+            >
+          )[key];
+          if (!entry) return '';
+          return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+            (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+              /\$(\d)/g,
+              (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+            ),
+          );
+        },
+        getUILanguage: () => 'en',
+      },
       storage: {
         local: {
           get: vi.fn((_key: unknown, callback?: (items: Record<string, unknown>) => void) => {
@@ -28,6 +48,10 @@ function stubChrome(): void {
     },
   });
 }
+
+beforeEach(() => {
+  stubChrome();
+});
 
 describe('computer-use visible Stop lifecycle', () => {
   it('distinguishes generic browser-task failures from actual autofill failures', () => {
@@ -256,6 +280,77 @@ describe('computer-use visible Stop lifecycle', () => {
     expect(api.ownsRun('run-panel')).toBe(false);
   });
 
+  function inWindow(windowId: number): void {
+    (globalThis.chrome as unknown as { windows: unknown }).windows = {
+      getCurrent: vi.fn(async () => ({ id: windowId })),
+    };
+  }
+
+  function answerState(runId: string, windowId: number): void {
+    sendMessage.mockImplementation((message: { type: string }) =>
+      message.type === 'GET_COMPUTER_USE_STATE'
+        ? Promise.resolve({
+            success: true,
+            running: true,
+            runId,
+            runGeneration: 3,
+            tabId: 12,
+            windowId,
+          })
+        : Promise.resolve({ success: true, running: false }),
+    );
+  }
+
+  it('leaves a run that drives another window alone, and does not stop it on close', async () => {
+    inWindow(2);
+    answerState('cu_run_window_one', 1);
+    const api = buildComputerUsePanel();
+    document.body.appendChild(api.panelEl);
+
+    await vi.waitFor(() =>
+      expect(sendMessage).toHaveBeenCalledWith({ type: 'GET_COMPUTER_USE_STATE' }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(api.ownsRun('cu_run_window_one')).toBe(false);
+    expect(api.acceptsRunWindow(1)).toBe(false);
+    expect(api.acceptsRunWindow(2)).toBe(true);
+
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    expect(sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'CANCEL_COMPUTER_USE', runId: 'cu_run_window_one' }),
+    );
+  });
+
+  it('adopts a run in its own window and names that window when it closes', async () => {
+    inWindow(1);
+    answerState('cu_run_same_window', 1);
+    const api = buildComputerUsePanel();
+    document.body.appendChild(api.panelEl);
+
+    await vi.waitFor(() => expect(api.ownsRun('cu_run_same_window')).toBe(true));
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'CANCEL_COMPUTER_USE',
+      runId: 'cu_run_same_window',
+      reason: 'panel_closed',
+      windowId: 1,
+    });
+  });
+
+  it('ends a run at once when its approval is no longer waiting and the run is gone', async () => {
+    const api = buildComputerUsePanel();
+    document.body.appendChild(api.panelEl);
+    api.setRunState(true, 'cu_run_confirm', 4);
+    sendMessage.mockResolvedValue({ success: true, running: false });
+
+    api.confirmRunState();
+
+    await vi.waitFor(() => expect(api.ownsRun('cu_run_confirm')).toBe(false));
+    expect(api.panelEl.querySelector('.sp-cu-banner-sub')?.textContent).toContain(
+      'stopped reporting on this run',
+    );
+  });
+
   it('ignores delayed running and completion states from a superseded run', () => {
     const api = buildComputerUsePanel();
     api.setRunState(true, 'run-b', 2);
@@ -284,6 +379,17 @@ describe('every way a run can end has words for the user', () => {
     for (const reason of reasons) {
       expect(describeCancellationReason(reason), `no copy for "${reason}"`).toBeTruthy();
     }
+  });
+
+  it('says how long a paused task waited before it let go of the page', () => {
+    expect(describeCancellationReason('takeover_expired')).toContain('15 minutes');
+  });
+
+  it('says on Take over how long the task waits, instead of promising to wait forever', () => {
+    const api = buildComputerUsePanel();
+    const takeOver = api.panelEl.querySelector<HTMLButtonElement>('.sp-cu-takeover-btn');
+    expect(takeOver?.title).toContain(`${USER_TAKEOVER_MAX_MS / 60_000} minutes`);
+    expect(takeOver?.title).not.toMatch(/continues when you hand it back|\$MINUTES\$/);
   });
 
   it('tells the user in plain words that Chrome’s own Cancel stopped the run', () => {

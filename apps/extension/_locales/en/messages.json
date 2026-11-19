@@ -4,7 +4,7 @@
     "description": "chrome://extensions/shortcuts label for the _execute_action command"
   },
   "commandCapturePage": {
-    "message": "Capture current page",
+    "message": "Send a screenshot of the page to Desktop",
     "description": "chrome://extensions/shortcuts label for the capture_page command"
   },
   "menuAskAgi": {
@@ -230,7 +230,7 @@
     "description": "Autonomy chip tooltip while every browser action is confirmed first"
   },
   "spAutonomyFullAccessTooltip": {
-    "message": "AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
+    "message": "AGI acts on your approved sites without asking. It never completes a purchase and hands it back to you. It still asks before uploads, downloads, sign-ins and sensitive input.",
     "description": "Autonomy chip tooltip while the agent may act without asking"
   },
   "spAutonomyAskFirstAria": {
@@ -401,6 +401,30 @@
       }
     }
   },
+  "spAutofillFilled_one": {
+    "message": "Filled $COUNT$ field. Check it before you submit.",
+    "description": "Computer use banner after Run Autofill filled one field, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spAutofillFilled_other": {
+    "message": "Filled $COUNT$ fields. Check them before you submit.",
+    "description": "Computer use banner after Run Autofill filled fields, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "6"
+      }
+    }
+  },
+  "spAutofillNothingFilled": {
+    "message": "No fields were filled. Check the form before you submit.",
+    "description": "Computer use banner after Run Autofill ran but filled no field"
+  },
   "spDictationSectionTitle": {
     "message": "Dictation",
     "description": "Settings section title for side-panel voice input"
@@ -426,7 +450,7 @@
     "description": "Status while saving the in-page assistant preference"
   },
   "spPageAssistantEnabled": {
-    "message": "Page assistant enabled. Reload approved pages to show it.",
+    "message": "Page assistant enabled. It now shows on your approved sites.",
     "description": "Status after enabling the in-page assistant"
   },
   "spPageAssistantDisabled": {
@@ -1354,6 +1378,10 @@
   "spRetryNeedsAttachments": {
     "message": "The images or page from this message are no longer attached. Attach them again, then send.",
     "description": "Shown when a message is sent again after its images or page were cleared by a reload"
+  },
+  "spStoredReplyFailed": {
+    "message": "This reply did not finish. Retry to run it again.",
+    "description": "Failed turn text restored from account history when the original error text was not saved"
   },
   "spEmptyResponse": {
     "message": "No response was returned. Try again.",
@@ -2699,6 +2727,52 @@
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
   },
+  "spHistoryShareLocalOnly": {
+    "message": "Only chats saved to your account can be shared.",
+    "description": "Why Share is unavailable for a chat kept only in this browser"
+  },
+  "spHistoryShareSaveNow": {
+    "message": "Save changes now",
+    "description": "Saves a chat's unsaved changes to the account so it can be shared"
+  },
+  "spHistoryShareSaving": {
+    "message": "Saving this chat to your account.",
+    "description": "Shown while the chat's unsaved changes are being saved to the account so it can be shared"
+  },
+  "spHistoryShareSaved": {
+    "message": "Saved to your account. Create the link now.",
+    "description": "The chat's changes were saved to the account, so a share link can be created"
+  },
+  "spHistoryShareSaveAgainAt": {
+    "message": "You can save it again after $TIME$.",
+    "description": "The account asked to wait before the chat is saved again; says when Save changes now works again",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "3:42 PM"
+      }
+    }
+  },
+  "spHistoryShareSaveRefused": {
+    "message": "Your account does not allow this chat to be saved, so it cannot be shared.",
+    "description": "The account refused saving the chat for a reason retrying cannot fix, and gave no sentence of its own"
+  },
+  "spHistoryShareSaveFailed": {
+    "message": "This chat could not be saved to your account. Try again.",
+    "description": "Saving the chat's changes to the account failed and the server gave no reason"
+  },
+  "spHistoryShareWaitForReply": {
+    "message": "Wait for the reply to finish, then save this chat.",
+    "description": "The chat cannot be saved for sharing while an answer is still being written"
+  },
+  "spHistoryShareMirroringOff": {
+    "message": "Saving chats to your account is turned off. Turn it on in the extension settings, then share this chat.",
+    "description": "The chat cannot be saved for sharing because saving chats to the account is turned off in settings"
+  },
+  "spHistoryShareNotLoaded": {
+    "message": "Open this chat once so its messages load, then share it.",
+    "description": "A chat listed from the account has not been loaded on this device, so it cannot be shared yet"
+  },
   "spSchedulesDescriptionLabel": {
     "message": "Description (optional)",
     "description": "Label of the optional schedule description field"
@@ -3400,6 +3474,10 @@
     "message": "This browser cannot read text aloud.",
     "description": "Status when speech synthesis is unavailable."
   },
+  "optReadAloudLoadFailed": {
+    "message": "Your read-aloud settings could not be loaded. Reopen this page to try again.",
+    "description": "Status when the saved read-aloud voice and speed cannot be read, so the controls stay locked."
+  },
   "optKeyboardTitle": {
     "message": "Keyboard shortcuts",
     "description": "Options section title."
@@ -3408,8 +3486,16 @@
     "message": "Open side panel",
     "description": "Label of the open-panel keyboard command."
   },
+  "pageCaptureSentTitle": {
+    "message": "Page sent to Desktop",
+    "description": "Notification title after the capture shortcut delivered a screenshot to Desktop."
+  },
+  "pageCaptureSentMessage": {
+    "message": "A screenshot of the current page is waiting in Desktop.",
+    "description": "Notification text after the capture shortcut delivered a screenshot to Desktop."
+  },
   "optShortcutCapturePage": {
-    "message": "Capture page",
+    "message": "Send page screenshot to Desktop",
     "description": "Label of the capture-page keyboard command."
   },
   "optShortcutNotAssigned": {
@@ -3512,7 +3598,7 @@
     "description": "Row title for recording a workflow."
   },
   "optRecordHint": {
-    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Only approved sites can be recorded.",
+    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Only approved sites can be recorded, and recording stops when the page loads a new address.",
     "description": "Row hint for recording a workflow."
   },
   "optRecordStart": {
@@ -3524,7 +3610,7 @@
     "description": "Button that stops recording."
   },
   "optRecordCaptureValues": {
-    "message": "Capture typed values (passwords and sensitive fields are redacted)",
+    "message": "Capture typed values (passwords, card numbers, one-time codes, PINs and ID numbers are never recorded)",
     "description": "Checkbox label for recording typed values."
   },
   "optRecordNoTab": {
@@ -3563,6 +3649,10 @@
   "optRecordNameIt": {
     "message": "Recording stopped. Name it to save the shortcut.",
     "description": "Status after stopping a recording."
+  },
+  "optRecordStoppedByNavigation": {
+    "message": "Recording stopped because the page loaded a new address. Name it to save the steps recorded before that.",
+    "description": "Status when a recording ended because the recorded tab loaded a new page."
   },
   "optRecordNameLabel": {
     "message": "Shortcut name",
@@ -3681,7 +3771,7 @@
     "description": "Post-install limit."
   },
   "welcomeCannot2": {
-    "message": "Enter passwords or payment details for you.",
+    "message": "Type a password or payment detail without asking you first.",
     "description": "Post-install limit."
   },
   "welcomeCannot3": {
@@ -3782,6 +3872,10 @@
     "message": "AGI could not finish your task. Select to see why.",
     "description": "Chrome notification body when a browser task fails."
   },
+  "notifyBrowserStepWaiting": {
+    "message": "Open the AGI side panel to finish the browser step this reply is waiting on.",
+    "description": "Notification body when the side panel closed while a reply waited on a browser step"
+  },
   "notifyTaskInputTitle": {
     "message": "AGI needs your input",
     "description": "Chrome notification title when a task waits for approval."
@@ -3831,7 +3925,7 @@
     "description": "In-panel tour step one: how AGI uses your tabs."
   },
   "obTourShortcutsText": {
-    "message": "Press $OPEN$ to open AGI and $CAPTURE$ to attach the current page.",
+    "message": "Press $OPEN$ to open AGI and $CAPTURE$ to send a screenshot of the page to Desktop.",
     "description": "In-panel tour step two with the keyboard shortcuts currently bound in Chrome.",
     "placeholders": {
       "open": {
@@ -3877,12 +3971,38 @@
     "description": "Link at the foot of the approval-mode menu to the tool approvals help article."
   },
   "spFullAccessNotice": {
-    "message": "Full access is on. AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
+    "message": "Full access is on. AGI acts on your approved sites without asking. It never completes a purchase and hands it back to you. It still asks before uploads, downloads, sign-ins and sensitive input.",
     "description": "One-time composer notice after choosing Full access. Lists only always-ask reasons approvalPolicy.ts enforces."
   },
   "spFullAccessNoticeDismiss": {
     "message": "Dismiss the full access notice",
     "description": "Accessible label of the X that closes the Full access notice for good."
+  },
+  "spSelectionItem": {
+    "message": "Add selected text",
+    "description": "Plus-menu item that attaches the text highlighted on the current page to the next message"
+  },
+  "spSelectionNone": {
+    "message": "Select some text on the page first.",
+    "description": "Composer notice when Add selected text finds no highlighted text on the page"
+  },
+  "spSelectionInFormField": {
+    "message": "Text in a form field can't be added. Select text on the page itself.",
+    "description": "Composer notice when Add selected text finds the highlighted text inside a form field such as a text box"
+  },
+  "spSelectionWhileReplying": {
+    "message": "Wait for the reply to finish, then add the selected text.",
+    "description": "Composer notice when Add selected text is used while an answer is still streaming"
+  },
+  "spSelectionSiteNotApproved": {
+    "message": "Approve $HOST$ in Extension settings to add text selected there.",
+    "description": "Composer notice when Add selected text is used on a site that is not on the approved-sites list",
+    "placeholders": {
+      "host": {
+        "content": "$1",
+        "example": "example.com"
+      }
+    }
   },
   "spSelectionChipTitle": {
     "message": "Selected text · $HOST$",
@@ -4087,7 +4207,7 @@
     "description": "Body of the site access card when AGI only reads"
   },
   "spBrowserAccessActBody": {
-    "message": "AGI can act on this page for this task through Chrome's debugger. Chrome shows a banner during control. Auto asks before crucial actions; Ask first confirms every action. Full access still asks before protected actions. One-time access ends with the task or when you close this panel.",
+    "message": "AGI can act on this page for this task through Chrome's debugger. Chrome shows a banner during control. Screenshots and text from this page are sent to AGI Cloud during the task. Auto asks before crucial actions; Ask first confirms every action. Full access still asks before protected actions. One-time access ends with the task or when you close this panel.",
     "description": "Body of the site access card when AGI acts on the page"
   },
   "spBrowserAccessOnce": {
@@ -4183,8 +4303,32 @@
     "description": "Button that pauses AGI so the user can use the page"
   },
   "spBrowserTakeOverTitle": {
-    "message": "Pause AGI and use the page yourself. It continues when you hand it back.",
-    "description": "Tooltip of the Take over button"
+    "message": "Pause AGI and use the page yourself. If you do not hand it back within $MINUTES$ minutes, the task ends.",
+    "description": "Tooltip of the Take over button; states how long the paused task waits before it ends",
+    "placeholders": {
+      "minutes": {
+        "content": "$1",
+        "example": "15"
+      }
+    }
+  },
+  "cuTakeoverByUserReason": {
+    "message": "You have the page.",
+    "description": "Paused reason after the user pressed Take over; the takeover limit sentence follows it"
+  },
+  "cuTakeoverByInputReason": {
+    "message": "You started using the page, so AGI stopped acting on it.",
+    "description": "Paused reason after the user clicked or typed on the page during a task; the takeover limit sentence follows it"
+  },
+  "cuTakeoverLimit": {
+    "message": "If the page is not handed back within $MINUTES$ minutes, the task ends.",
+    "description": "Follows every paused reason, including one the model gave when it handed the page over; states the takeover limit",
+    "placeholders": {
+      "minutes": {
+        "content": "$1",
+        "example": "15"
+      }
+    }
   },
   "spBrowserHandBack": {
     "message": "Hand back",
@@ -4247,6 +4391,10 @@
   "spAccountLogOutWebKept": {
     "message": "Signed out here. The web session could not be ended.",
     "description": "Status after signing out when the web session could not be ended"
+  },
+  "spAccountLogOutProfileKept": {
+    "message": "Signed out here. The saved autofill profile could not be removed.",
+    "description": "Status after signing out when the saved autofill profile could not be removed"
   },
   "spAccountLogOutFailed": {
     "message": "Log out did not finish. Try again.",
@@ -4709,11 +4857,11 @@
     "description": "Autonomy chip while the agent acts on the task's sites and asks only before crucial actions"
   },
   "spAutonomyAutoDescription": {
-    "message": "Act on this task's sites, ask before buying, sending, deleting, signing in or downloading",
+    "message": "Act on this task's sites, ask before sending, deleting, signing in or downloading, never complete a purchase",
     "description": "One-line description of the Auto permission mode"
   },
   "spAutonomyAutoTooltip": {
-    "message": "AGI acts on the sites of this task without asking. It stops and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads a file.",
+    "message": "AGI acts on the sites of this task without asking. It never completes a purchase and hands it back to you. It stops and asks before it sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access, downloads a file, closes a tab or runs a tool the website supplies.",
     "description": "Autonomy chip tooltip in Auto mode"
   },
   "spAutonomyAutoAria": {
@@ -4745,6 +4893,10 @@
   "spRewriteSignIn": {
     "message": "Sign in to the extension, then select the text again.",
     "description": "Selected-text rewrite and insertion flow."
+  },
+  "spRewriteSiteNotApproved": {
+    "message": "Approve this site in Extension settings before rewriting text on it.",
+    "description": "Selected-text rewrite flow when the site is not on the approved-sites list."
   },
   "spRewriteUnavailable": {
     "message": "Rewrite unavailable",

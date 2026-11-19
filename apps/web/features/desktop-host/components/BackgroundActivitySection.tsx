@@ -66,7 +66,9 @@ export function BackgroundActivitySection() {
         event.kind === 'remote-control-changed' ||
         event.kind === 'browser-pairing-changed' ||
         (event.kind === 'developer-session' &&
-          (event.event.type === 'turn-started' || event.event.type === 'turn-finished'))
+          (event.event.type === 'turn-started' ||
+            event.event.type === 'turn-finished' ||
+            event.event.type === 'runtime-stopped'))
       ) {
         refresh();
       }

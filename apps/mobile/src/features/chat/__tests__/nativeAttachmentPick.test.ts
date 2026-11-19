@@ -117,7 +117,7 @@ for (const [route, mode] of [
     expect(native.match(new RegExp(`captureAttachmentOperation\\(${mode}\\)`, 'g'))).toHaveLength(
       4,
     );
-    expect(native.match(/runComposerAttachmentPick\(operation/g)).toHaveLength(4);
+    expect(native.match(/runComposerAttachmentPick\(\s*operation/g)).toHaveLength(4);
     expect(native).not.toContain('chatInputAttachRef.current?.addAttachments');
     expect(native).toMatch(
       /await ImagePicker.requestCameraPermissionsAsync\(\);\s+if \(!scope.isCurrent\(\)\) return \[\];/,

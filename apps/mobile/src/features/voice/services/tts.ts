@@ -121,15 +121,19 @@ export async function isSpeaking(): Promise<boolean> {
   return Speech.isSpeakingAsync();
 }
 
+async function readInstalledVoices(): Promise<VoiceInfo[]> {
+  const voices = await Speech.getAvailableVoicesAsync();
+  return voices.map((v) => ({
+    identifier: v.identifier,
+    name: v.name,
+    quality: v.quality,
+    language: v.language,
+  }));
+}
+
 export async function getAvailableVoices(): Promise<VoiceInfo[]> {
   try {
-    const voices = await Speech.getAvailableVoicesAsync();
-    return voices.map((v) => ({
-      identifier: v.identifier,
-      name: v.name,
-      quality: v.quality,
-      language: v.language,
-    }));
+    return await readInstalledVoices();
   } catch {
     return [];
   }
@@ -140,7 +144,7 @@ export async function getEnglishVoices(): Promise<VoiceInfo[]> {
 }
 
 export async function getVoicesForLanguage(languagePrefix: string): Promise<VoiceInfo[]> {
-  const voices = await getAvailableVoices();
+  const voices = await readInstalledVoices();
   const filtered = voices.filter((v) =>
     v.language.toLowerCase().startsWith(languagePrefix.toLowerCase()),
   );

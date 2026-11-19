@@ -186,6 +186,24 @@ describe('starting a skill recording', () => {
     expect(skillCaptureStatus().phase).toBe('idle');
   });
 
+  it('captures nothing when the indicator is stopped while the first check is pending', async () => {
+    screenShows(10);
+    let answer: (active: boolean) => void = () => {};
+    secureInputActive
+      .mockResolvedValueOnce(false)
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => (answer = resolve)));
+
+    const pending = start(appWindow(1));
+    await vi.waitFor(() => expect(secureInputActive).toHaveBeenCalledTimes(2));
+    overlay.onStop?.();
+    answer(false);
+    const outcome = await pending;
+
+    expect(outcome).toMatchObject({ started: false, reason: 'declined' });
+    expect(electron.getSources).not.toHaveBeenCalled();
+    expect(skillCaptureStatus().phase).toBe('idle');
+  });
+
   it('defaults the native prompt to Cancel', async () => {
     showDevicePrompt.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
     await start(appWindow(1));
@@ -378,6 +396,41 @@ describe('secure input on macOS', () => {
       frameCount: 1,
       secureInputSkips: 1,
     });
+  });
+
+  it('does not start a capture when the recording stopped while the check was pending', async () => {
+    screenShows(10, 200);
+    await start(appWindow(1));
+    let answer: (active: boolean) => void = () => {};
+    secureInputActive.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (answer = resolve)),
+    );
+
+    await nextSample();
+    const status = stopSkillCapture('user');
+    answer(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(status).toMatchObject({ phase: 'stopped', stoppedBy: 'user', frameCount: 1 });
+    expect(electron.getSources).toHaveBeenCalledTimes(1);
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'stopped', frameCount: 1 });
+  });
+
+  it('does not start a capture for a discarded recording when its check answers late', async () => {
+    screenShows(10, 200);
+    await start(appWindow(1));
+    let answer: (active: boolean) => void = () => {};
+    secureInputActive.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (answer = resolve)),
+    );
+
+    await nextSample();
+    discardSkillCapture();
+    answer(false);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(electron.getSources).toHaveBeenCalledTimes(1);
+    expect(skillCaptureStatus().phase).toBe('idle');
   });
 
   it('is not consulted on Windows', async () => {

@@ -125,6 +125,7 @@ export type DeveloperEvalResultInput = z.infer<typeof DeveloperEvalResultInputSc
 export const DeveloperEvalResultSchema = DeveloperEvalResultInputSchema.extend({
   id: z.string().uuid(),
   caseId: z.string().uuid().nullable(),
+  expectedOutput: z.string().nullable(),
   passed: z.boolean().nullable(),
   grade: z.number().int().min(1).max(5).nullable(),
 });
@@ -143,6 +144,11 @@ export const DeveloperEvalRunSchema = z.object({
   results: z.array(DeveloperEvalResultSchema),
 });
 export type DeveloperEvalRun = z.infer<typeof DeveloperEvalRunSchema>;
+
+export const DeveloperEvalRunStartSchema = DeveloperEvalRunSchema.extend({
+  cases: z.array(DeveloperEvalCaseSchema).min(1),
+});
+export type DeveloperEvalRunStart = z.infer<typeof DeveloperEvalRunStartSchema>;
 
 export const DeveloperEvalRunListSchema = z.object({
   runs: z.array(

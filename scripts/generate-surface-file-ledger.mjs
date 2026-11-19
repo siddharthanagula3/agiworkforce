@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 const outputDir = path.join(root, 'audit/anthropic-apps-parity');
@@ -13,9 +14,21 @@ const surfaceRoots = [
   { surface: 'cli', ownerLane: 'cli-app', prefix: 'apps/cli/src/' },
   { surface: 'rust-engine', ownerLane: 'rust-platform', prefix: 'crates/' },
   { surface: 'shared-types', ownerLane: 'shared-contracts', prefix: 'packages/contracts/types/' },
-  { surface: 'shared-runtime', ownerLane: 'shared-runtime', prefix: 'packages/client/client-runtime/' },
-  { surface: 'shared-runtime', ownerLane: 'shared-runtime', prefix: 'packages/ai/provider-runtime/' },
-  { surface: 'provider-adapters', ownerLane: 'provider-adapters', prefix: 'packages/ai/providers/' },
+  {
+    surface: 'shared-runtime',
+    ownerLane: 'shared-runtime',
+    prefix: 'packages/client/client-runtime/',
+  },
+  {
+    surface: 'shared-runtime',
+    ownerLane: 'shared-runtime',
+    prefix: 'packages/ai/provider-runtime/',
+  },
+  {
+    surface: 'provider-adapters',
+    ownerLane: 'provider-adapters',
+    prefix: 'packages/ai/providers/',
+  },
   { surface: 'provider-adapters', ownerLane: 'provider-adapters', prefix: 'packages/ai/routing/' },
   { surface: 'mcp-connectors', ownerLane: 'mcp-connectors', prefix: 'packages/tools/mcp/' },
   { surface: 'unified-chat', ownerLane: 'shared-runtime', prefix: 'packages/ui/unified-chat/' },
@@ -23,7 +36,11 @@ const surfaceRoots = [
 ];
 
 function git(args) {
-  return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+  return execFileSync('git', args, {
+    maxBuffer: GIT_MAX_BUFFER,
+    cwd: root,
+    encoding: 'utf8',
+  }).trim();
 }
 
 function trackedFiles() {

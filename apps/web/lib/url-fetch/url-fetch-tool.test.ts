@@ -274,6 +274,102 @@ describe('content-type allowlist', () => {
   });
 });
 
+describe('declared character encodings', () => {
+  function bytesResponse(bytes: number[], contentType: string): Response {
+    return new Response(new Uint8Array(bytes), {
+      status: 200,
+      headers: { 'content-type': contentType },
+    });
+  }
+
+  async function read(response: Response) {
+    resolvePublic();
+    return executeUrlFetch(
+      { url: 'https://example.com/doc' },
+      { fetchImpl: fetchReturning(response) },
+    );
+  }
+
+  it('decodes a windows-1252 text response by its declared charset', async () => {
+    const outcome = await read(
+      bytesResponse(
+        [0x46, 0x65, 0x65, 0x3a, 0x20, 0x80, 0x31, 0x30],
+        'text/plain; charset=windows-1252',
+      ),
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.content).toBe('Fee: €10');
+  });
+
+  it('accepts a quoted, differently cased charset label', async () => {
+    const outcome = await read(
+      bytesResponse([0x63, 0x61, 0x66, 0xe9], 'text/plain; Charset="ISO-8859-1"'),
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.content).toBe('café');
+  });
+
+  it('decodes an HTML body and its title by the charset declared in a meta tag', async () => {
+    const html =
+      '<html><head><meta charset="windows-1252"><title>Caf\u00e9</title></head><body>Price \u20ac5</body></html>';
+    const body = [...html].map((ch) => {
+      if (ch === '\u00e9') return 0xe9;
+      if (ch === '\u20ac') return 0x80;
+      return ch.charCodeAt(0);
+    });
+    const outcome = await read(bytesResponse(body, 'text/html'));
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.title).toBe('Caf\u00e9');
+      expect(outcome.content).toContain('Price \u20ac5');
+    }
+  });
+
+  it('prefers the header charset over a conflicting meta tag', async () => {
+    const outcome = await read(
+      bytesResponse(
+        [...'<meta charset="windows-1252">'].map((ch) => ch.charCodeAt(0)).concat([0xc3, 0xa9]),
+        'text/html; charset=utf-8',
+      ),
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.content).toContain('\u00e9');
+  });
+
+  it('keeps UTF-8 as the default and strips a UTF-8 byte order mark', async () => {
+    const outcome = await read(
+      bytesResponse([0xef, 0xbb, 0xbf, 0xe2, 0x82, 0xac, 0x35], 'text/plain'),
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.content).toBe('\u20ac5');
+  });
+
+  it('lets a UTF-16 byte order mark override a conflicting declared charset', async () => {
+    const outcome = await read(
+      bytesResponse([0xff, 0xfe, 0xac, 0x20, 0x35, 0x00], 'text/plain; charset=utf-8'),
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.content).toBe('\u20ac5');
+  });
+
+  it('refuses an unsupported declared charset instead of returning altered text', async () => {
+    const outcome = await read(bytesResponse([0x41, 0x80], 'text/plain; charset=x-not-a-charset'));
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.errorCode).toBe('unsupported_content_type');
+      expect(outcome.error).toContain('x-not-a-charset');
+    }
+  });
+
+  it('does not echo markup from a hostile charset label', async () => {
+    const outcome = await read(
+      bytesResponse([0x41], 'text/plain; charset="<script>alert(1)</script>"'),
+    );
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.error).not.toContain('<');
+  });
+});
+
 describe('HTTP errors', () => {
   it.each([404, 403, 500, 503])('maps HTTP %s to url_not_accessible', async (status) => {
     resolvePublic();

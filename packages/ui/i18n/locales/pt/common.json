@@ -206,15 +206,31 @@
       "open": "Configurar {{name}}",
       "dismiss": "Ocultar sugestões de apps",
       "optionalLink": "Conecte seus apps (opcional)"
-    },
-    "agiWorkExamples": "Tarefas de exemplo",
-    "agiWorkIntro": "Descreva uma tarefa e ela continua na nuvem até terminar.",
-    "agiWorkExampleHint": "Coloca este exemplo na caixa de mensagem",
-    "agiWork": {
-      "p1": "Resuma os pull requests do GitHub desta semana para a equipe",
-      "p2": "Monte um checklist de lançamento mobile a partir das nossas issues abertas",
-      "p3": "Transforme minhas conversas não lidas do Slack em uma lista de tarefas",
-      "p4": "Atualize a apresentação do projeto com os números mais recentes do Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "Sites publicados",
+    "schedules": "Agendamentos",
+    "reports": "Relatórios",
+    "organizeChats": "Organizar chats",
+    "newChat": "Novo chat",
+    "inOneList": "Em uma lista",
+    "byProject": "Por projeto",
+    "recents": "Recentes",
+    "noRecentChats": "Nenhum chat recente",
+    "seeAllChats": "Ver todos os chats",
+    "seeAll": "Ver tudo",
+    "seeAllChatsIn": "Ver todos os chats em {{name}}",
+    "openProject": "Abrir projeto: {{name}}",
+    "openConversation": "Abrir conversa: {{title}}",
+    "openConversationUnread": "Abrir conversa: {{title}}, não lida",
+    "showChatsIn": "Mostrar chats em {{name}}",
+    "hideChatsIn": "Ocultar chats em {{name}}",
+    "notifications": "Notificações",
+    "helpAndAbout": "Ajuda e sobre",
+    "usageRemaining": "Uso restante",
+    "usageRemainingValue": "Uso restante · {{value}}",
+    "usageRemainingChecking": "Uso restante · Verificando…",
+    "usageRemainingUnavailable": "Uso restante · Indisponível"
   }
 }

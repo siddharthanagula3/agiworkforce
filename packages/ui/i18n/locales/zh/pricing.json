@@ -171,7 +171,7 @@
   "basicCta": "获取 Basic",
   "perMonthBilledMonthly": "每月，按月计费",
   "proTierBody": "适合日常工作，提供研究和图像生成。",
-  "proFeature2": "同时进行 4 个对话，最多 150 个连接器工具",
+  "proFeature2": "同时进行 3 个对话，最多 150 个连接器工具",
   "proCta": "获取 {{plan}}",
   "maxTierBody": "适合需要旗舰模型的高强度日常工作。",
   "maxFeature2": "高峰时段优先访问",

@@ -1,12 +1,6 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
-let mockCurrentConversationId: string | null = null;
-jest.mock('@/stores/chatStore', () => ({
-  useChatStore: (selector: (s: { currentConversationId: string | null }) => unknown) =>
-    selector({ currentConversationId: mockCurrentConversationId }),
-}));
-
 const mockFetchUsageSnapshot = jest.fn();
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
@@ -51,9 +45,6 @@ function isNamed(id: string): boolean {
 const effortModel = catalog.find(
   (model) => isNamed(model.id) && getModelEffortOptions(model.id).length > 1,
 );
-const plainModel = catalog.find(
-  (model) => isNamed(model.id) && getModelEffortOptions(model.id).length === 0,
-);
 
 const fastModel = requireCatalogModel(
   (model) => model.provider === 'anthropic' && model.fastTier !== undefined,
@@ -70,14 +61,12 @@ function renderLabel(onPress = jest.fn()) {
 
 describe('composer model label', () => {
   beforeEach(() => {
-    mockCurrentConversationId = null;
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });
     useSettingsStore.setState({ hapticsEnabled: false });
   });
 
-  it('has catalog models to exercise both effort shapes', () => {
+  it('has a catalog model with effort steps to exercise', () => {
     expect(effortModel).toBeDefined();
-    expect(plainModel).toBeDefined();
   });
 
   it('renders the display name and never the wire id', () => {
@@ -93,43 +82,18 @@ describe('composer model label', () => {
     expect(getByTestId('chat.composer.model')).toHaveStyle({ minHeight: 44, minWidth: 44 });
   });
 
-  it('suffixes the effort the next turn will carry', () => {
+  it('names the model only and leaves reasoning effort to the effort button', () => {
     const options = getModelEffortOptions(effortModel!.id);
     const chosen = options[options.length - 1] as PickerEffort;
     useModelStore.setState({ selectedModel: effortModel!.id });
     useAgentControlStore.getState().setProjectDefault('__default__', { effort: chosen });
 
-    const { getByText, getByTestId } = renderLabel();
+    const { queryByText, getByTestId } = renderLabel();
 
-    expect(getByText(EFFORT_LABEL[chosen])).toBeTruthy();
-    expect(getByTestId('chat.composer.model').props.accessibilityLabel).toContain(
-      `reasoning effort ${EFFORT_LABEL[chosen]}`,
+    expect(queryByText(EFFORT_LABEL[chosen])).toBeNull();
+    expect(getByTestId('chat.composer.model').props.accessibilityLabel).toBe(
+      `Model: ${getShortDisplayName(effortModel!.id, tier)}`,
     );
-  });
-
-  it("prefers the open conversation's effort override over the project default", () => {
-    const options = getModelEffortOptions(effortModel!.id);
-    const projectDefault = options[0] as PickerEffort;
-    const override = options[options.length - 1] as PickerEffort;
-    useModelStore.setState({ selectedModel: effortModel!.id });
-    useAgentControlStore.getState().setProjectDefault('__default__', { effort: projectDefault });
-    useAgentControlStore.getState().setEffort('conversation-1', override);
-    mockCurrentConversationId = 'conversation-1';
-
-    const { getByText, queryByText } = renderLabel();
-
-    expect(getByText(EFFORT_LABEL[override])).toBeTruthy();
-    expect(queryByText(EFFORT_LABEL[projectDefault])).toBeNull();
-  });
-
-  it('renders no effort suffix for a model with no effort axis', () => {
-    useModelStore.setState({ selectedModel: plainModel!.id });
-    useAgentControlStore.getState().setProjectDefault('__default__', { effort: 'high' });
-
-    const { getByText, queryByText } = renderLabel();
-
-    expect(getByText(getShortDisplayName(plainModel!.id, tier))).toBeTruthy();
-    expect(queryByText(EFFORT_LABEL.high)).toBeNull();
   });
 
   describe('fast mode token', () => {

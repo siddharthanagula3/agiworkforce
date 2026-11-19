@@ -18,6 +18,17 @@ describe('replaceImageInHtml', () => {
     expect(next).toContain(`<img src="${PNG}"><img src="same.png">`);
   });
 
+  it('drops the responsive candidates of the replaced image even when its source is unique', () => {
+    const source =
+      '<main><img id="hero" src="old-default.png" srcset="old-responsive.png 2x" sizes="50vw"><img src="b.png" srcset="b-2x.png 2x"></main>';
+    const next = replaceImageInHtml(source, '#hero', PNG)!;
+    const hero = new DOMParser().parseFromString(next, 'text/html').querySelector('#hero')!;
+    expect(hero.getAttribute('src')).toBe(PNG);
+    expect(hero.hasAttribute('srcset')).toBe(false);
+    expect(next).toContain('<img src="b.png" srcset="b-2x.png 2x">');
+    expect(next).not.toContain('old-responsive.png');
+  });
+
   it('refuses a selector that does not name an image', () => {
     expect(replaceImageInHtml('<p>hi</p>', 'p', PNG)).toBeNull();
     expect(replaceImageInHtml('<p>hi</p>', 'img', PNG)).toBeNull();

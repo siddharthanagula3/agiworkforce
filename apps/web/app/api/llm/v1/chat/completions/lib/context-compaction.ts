@@ -125,14 +125,28 @@ interface PersistedMessageRow {
 
 /**
  * The visible messages a stored summary claims to cover, each at the row
- * version it held when the summary was written. A delete or an edit inside the
- * span leaves the boundary id untouched while changing what the span says, so
- * the cache is validated against this rather than against the boundary alone.
+ * version it held when the summary was written, paired with the text the
+ * request actually dropped at that position. A delete or an edit inside the
+ * span leaves the boundary id untouched while changing what the span says, and
+ * switching to a sibling branch keeps the same chronological rows while the
+ * dropped text belongs to another path, so the cache is validated against both
+ * rather than against the boundary alone.
  */
-function summaryCoverageDigest(rows: readonly PersistedMessageRow[]): string {
+function summaryCoverageDigest(
+  rows: readonly PersistedMessageRow[],
+  droppedText: readonly string[],
+): string {
   const hash = createHash('sha256');
-  for (const row of rows) hash.update(`${row.id}:${row.server_version}\n`);
+  rows.forEach((row, index) => {
+    hash.update(`${row.id}:${row.server_version}:${droppedText[index] ?? ''}\n`);
+  });
   return hash.digest('hex');
+}
+
+function droppedMessageFingerprint(message: TrimmableMessage): string {
+  return createHash('sha256')
+    .update(JSON.stringify([message.role, message.content]))
+    .digest('hex');
 }
 
 async function generateCompactionSummary(params: {
@@ -142,6 +156,7 @@ async function generateCompactionSummary(params: {
   planTier: string;
   conversationId: string;
   boundaryMessageId: string;
+  coverageDigest: string;
   priorSummary: string | null;
   spanMessages: readonly TrimmableMessage[];
   resolveEconomyRoute: () => AutoRouteDecision;
@@ -184,11 +199,12 @@ async function generateCompactionSummary(params: {
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const wireMode = resolveWireMode(dispatchProvider);
 
-  const idempotencyKey = `context-compaction:${params.conversationId}:${params.boundaryMessageId}`;
+  const idempotencyKey = `context-compaction:${params.conversationId}:${params.coverageDigest.slice(0, 40)}`;
   const requestHash = fingerprintManagedUsageRequest({
     kind: 'context_compaction',
     conversationId: params.conversationId,
     boundaryMessageId: params.boundaryMessageId,
+    coverageDigest: params.coverageDigest,
     priorSummary: params.priorSummary,
     provider: route.provider,
     model: route.modelKey,
@@ -267,9 +283,10 @@ async function resolveCompactionSummary(params: {
   droppedMessages: readonly TrimmableMessage[];
   resolveEconomyRoute: () => AutoRouteDecision;
 }): Promise<string> {
-  const persistableCount = params.droppedMessages.filter(
-    (message) => message.role === 'user' || message.role === 'assistant',
-  ).length;
+  const droppedText = params.droppedMessages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map(droppedMessageFingerprint);
+  const persistableCount = droppedText.length;
   if (persistableCount === 0) {
     throw new Error(
       'dropped span has no persisted user or assistant message to anchor a boundary to',
@@ -313,7 +330,7 @@ async function resolveCompactionSummary(params: {
   }
   const boundaryMessageId = ids[persistableCount - 1];
   if (!boundaryMessageId) throw new Error('could not resolve a compaction boundary message id');
-  const coverageDigest = summaryCoverageDigest(persistedRows);
+  const coverageDigest = summaryCoverageDigest(persistedRows, droppedText);
 
   const cachedSummary = conversation.compaction_summary ?? null;
   const cachedBoundaryId = conversation.compaction_summary_through_message_id ?? null;
@@ -325,7 +342,7 @@ async function resolveCompactionSummary(params: {
     const cachedIndex = ids.indexOf(cachedBoundaryId);
     const stillCovers =
       cachedIndex !== -1 &&
-      summaryCoverageDigest(persistedRows.slice(0, cachedIndex + 1)) === cachedDigest;
+      summaryCoverageDigest(persistedRows.slice(0, cachedIndex + 1), droppedText) === cachedDigest;
     if (stillCovers && cachedIndex === persistableCount - 1) return cachedSummary;
     if (stillCovers) {
       priorSummary = cachedSummary;
@@ -340,6 +357,7 @@ async function resolveCompactionSummary(params: {
     planTier: params.planTier,
     conversationId: params.conversationId,
     boundaryMessageId,
+    coverageDigest,
     priorSummary,
     spanMessages,
     resolveEconomyRoute: params.resolveEconomyRoute,

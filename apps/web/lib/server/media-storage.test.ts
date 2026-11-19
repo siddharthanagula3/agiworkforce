@@ -481,6 +481,22 @@ describe('storeMedia', () => {
     expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
   });
 
+  it('deletes the unsealed staging twin along with a sealed attachment', async () => {
+    const staging = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.png';
+
+    await deleteStoredMedia(sealedChatAttachmentPathname(staging));
+
+    expect(deletePrivateObject).toHaveBeenCalledWith(sealedChatAttachmentPathname(staging));
+    expect(deletePrivateObject).toHaveBeenCalledWith(staging);
+  });
+
+  it('reports a failed staging twin deletion so the row is kept for another attempt', async () => {
+    const staging = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.png';
+    deletePrivateObject.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('down'));
+
+    await expect(deleteStoredMedia(sealedChatAttachmentPathname(staging))).rejects.toThrow('down');
+  });
+
   it('never tries the public bucket for a sealed pathname, which only the private bucket can hold', async () => {
     const pathname = sealedChatAttachmentPathname(
       'chat-attachments/user-abc/1700000000000_abcdefghijklm.png',

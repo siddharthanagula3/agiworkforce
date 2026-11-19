@@ -16,7 +16,34 @@ import {
 
 const roots = [];
 
-function sessionSource({ events, terminal, pendingMute = true }) {
+const DIRECT_CLOSE = `  async close(): Promise<void> {
+    this.closing = true;
+    this.dispose();
+  }`;
+const DELEGATING_CLOSE = `  close(): Promise<void> {
+    this.closePromise ??= this.closeOnce();
+    return this.closePromise;
+  }
+
+  private async closeOnce(): Promise<void> {
+    this.closing = true;
+    this.dispose();
+  }`;
+const DELEGATING_CLOSE_WITHOUT_DISPOSE = `  close(): Promise<void> {
+    this.closePromise ??= this.closeOnce();
+    return this.closePromise;
+  }
+
+  private async closeOnce(): Promise<void> {
+    this.closing = true;
+  }`;
+
+const CLOSE_HANDING_TO_FAIL = `  close(): void {
+    this.closing = true;
+    this.fail();
+  }`;
+
+function sessionSource({ events, terminal, pendingMute = true, close = DIRECT_CLOSE }) {
   return `
 const DELEGATION_TERMINAL_EVENTS = new Set([
 ${terminal.map((entry) => `  '${entry}',`).join('\n')}
@@ -31,10 +58,7 @@ ${pendingMute ? '      this.pendingMuted = muted;' : '      return;'}
     this.sendMuteState(muted);
   }
 
-  async close(): Promise<void> {
-    this.closing = true;
-    this.dispose();
-  }
+${close}
 
   dispose(): void {
     this.disposed = true;
@@ -136,6 +160,32 @@ test('a mute dropped before the session starts is reported', () => {
   const failures = checkVoiceSessionParity(makeRoot({ pendingMute: false }));
   assert.ok(
     failures.some((failure) => failure.startsWith('web: a mute chosen')),
+    failures.join('; '),
+  );
+});
+
+test('a close that hands off to a method which disposes passes', () => {
+  assert.deepEqual(checkVoiceSessionParity(makeRoot({}, { close: DELEGATING_CLOSE })), []);
+});
+
+test('a close that hands off to a method which never disposes is reported', () => {
+  const failures = checkVoiceSessionParity(
+    makeRoot({}, { close: DELEGATING_CLOSE_WITHOUT_DISPOSE }),
+  );
+  assert.ok(
+    failures.some((failure) =>
+      failure.includes('mobile: close ends the session without disposing'),
+    ),
+    failures.join('; '),
+  );
+});
+
+test('a close that only hands off to another ending method is reported', () => {
+  const failures = checkVoiceSessionParity(makeRoot({}, { close: CLOSE_HANDING_TO_FAIL }));
+  assert.ok(
+    failures.some((failure) =>
+      failure.includes('mobile: close ends the session without disposing'),
+    ),
     failures.join('; '),
   );
 });

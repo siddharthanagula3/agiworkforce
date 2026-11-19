@@ -7,11 +7,21 @@ import { DeveloperRequestLogPageSchema } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { decodeKeysetCursor, isTimestampUuidCursor } from '@/lib/identity/pagination';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { listDeveloperRequestLogs } from '@/lib/services/developer-request-log-service';
 
-const BeforeSchema = z.iso.datetime({ offset: true }).nullable();
+const LegacyBeforeSchema = z.iso.datetime({ offset: true });
+const CursorSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine((value) => {
+    const cursor = decodeKeysetCursor(value);
+    return cursor !== null && isTimestampUuidCursor(cursor);
+  });
+const BeforeSchema = z.union([LegacyBeforeSchema, CursorSchema]).nullable();
 
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'developer-console');

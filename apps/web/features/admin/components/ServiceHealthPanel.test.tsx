@@ -33,7 +33,7 @@ const SUMMARY = {
     { queue: 'cloud-agent-turn', depth: 3, inFlight: 9, oldestWaitingAt: null },
     { queue: 'credit-settlement', depth: 0, inFlight: 0, oldestWaitingAt: null },
   ],
-  files: { uploaded: 7, extracted: 6, withoutText: 1, extractionRate: 6 / 7, extractionP50Ms: 90 },
+  files: { uploaded: 7, extracted: 6, withoutText: 1, extractionRate: 6 / 7 },
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -60,6 +60,7 @@ describe('ServiceHealthPanel', () => {
     const files = await screen.findByRole('region', { name: 'File processing' });
     expect(within(files).getByText('85.7%')).toBeInTheDocument();
     expect(within(files).getByText('1 without text')).toBeInTheDocument();
+    expect(within(files).queryByText('Median extraction')).not.toBeInTheDocument();
 
     const remote = screen.getByRole('region', { name: 'Remote connection health' });
     expect(within(remote).getByText('25.0%')).toBeInTheDocument();

@@ -140,6 +140,69 @@ describe('duplicate tiles', () => {
   });
 });
 
+describe('a refused connectors load', () => {
+  const SESSION_EXPIRED = /Your session expired/;
+
+  function stubRefusal(status: number, body: unknown) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) => {
+        const url = String(input);
+        if (url.includes('/api/connectors/custom')) {
+          return { ok: true, status: 200, json: async () => ({ connectors: [] }) };
+        }
+        if (url.includes('/api/github/installations')) {
+          return { ok: true, status: 200, json: async () => ({ installations: [] }) };
+        }
+        return { ok: false, status, json: async () => body };
+      }),
+    );
+  }
+
+  async function shownError(): Promise<string> {
+    renderAdapter();
+    await waitFor(() => {
+      expect(directoryOptions.current?.['connectorsError']).toEqual(expect.any(String));
+    });
+    return directoryOptions.current?.['connectorsError'] as string;
+  }
+
+  it('shows the workspace sentence for a workspace policy refusal', async () => {
+    const sentence =
+      'Your workspace administrator only allows access from certain countries, and this request came from somewhere else.';
+    stubRefusal(403, {
+      error: { type: 'organization_policy', code: 'region_not_allowed', message: sentence },
+    });
+    expect(await shownError()).toBe(sentence);
+  });
+
+  it('shows the lockdown sentence rather than asking to sign in again', async () => {
+    const sentence =
+      'This workspace is locked down while an incident is investigated. Contact support.';
+    stubRefusal(403, { error: { code: 'FORBIDDEN', message: sentence } });
+    expect(await shownError()).toBe(sentence);
+  });
+
+  it('does not read another refusal as an expired session', async () => {
+    stubRefusal(403, {});
+    expect(await shownError()).not.toMatch(SESSION_EXPIRED);
+  });
+
+  it('keeps the expired session wording for a 401', async () => {
+    stubRefusal(401, { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+    expect(await shownError()).toMatch(SESSION_EXPIRED);
+  });
+
+  it('says a 503 is temporary', async () => {
+    stubRefusal(503, {
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' },
+    });
+    const shown = await shownError();
+    expect(shown).toMatch(/temporarily unavailable. Try again/);
+    expect(shown).not.toMatch(SESSION_EXPIRED);
+  });
+});
+
 describe('a connector that has stopped answering', () => {
   it('warns on the row rather than leaving it reading as connected', async () => {
     stubFetch([], {

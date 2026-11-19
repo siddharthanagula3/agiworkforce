@@ -4,6 +4,7 @@ import type { AppServerCapabilities } from '../../integrations/localRuntimeClien
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 
 export const CLI_CAPABILITY_REQUIREMENT = `Needs AGI CLI ${MINIMUM_SUPPORTED_RUNTIME_VERSION}`;
+export const CLI_WORKSPACE_REQUIREMENT = 'Open a trusted workspace to reach the AGI CLI.';
 
 export const CLI_CAPABILITY_METHODS = {
   skills: 'listSkills',
@@ -253,14 +254,25 @@ async function advertisedCapabilities(
 }
 
 export class CliCapabilityAdapter {
-  constructor(private readonly runtimes: LocalRuntimePool | undefined) {}
+  constructor(
+    private readonly runtimes: LocalRuntimePool | undefined,
+    private readonly pinnedRoot?: string,
+  ) {}
+
+  async pinToWorkspace(): Promise<CliCapabilityAdapter | undefined> {
+    if (this.runtimes === undefined) return undefined;
+    const workspace = await getActiveWorkspaceFolder();
+    return workspace === undefined
+      ? undefined
+      : new CliCapabilityAdapter(this.runtimes, workspace.uri.fsPath);
+  }
 
   private async host(): Promise<CapabilityHost | undefined> {
     if (this.runtimes === undefined) return undefined;
-    const workspace = await getActiveWorkspaceFolder();
-    if (workspace === undefined) return undefined;
+    const root = this.pinnedRoot ?? (await getActiveWorkspaceFolder())?.uri.fsPath;
+    if (root === undefined) return undefined;
     try {
-      return this.runtimes.forWorkspace(workspace.uri.fsPath) as unknown as CapabilityHost;
+      return this.runtimes.forWorkspace(root) as unknown as CapabilityHost;
     } catch {
       return undefined;
     }
@@ -269,7 +281,7 @@ export class CliCapabilityAdapter {
   async call<T>(capability: CliCapability, ...params: unknown[]): Promise<CliCapabilityResult<T>> {
     const host = await this.host();
     if (host === undefined) {
-      return { status: 'unavailable', reason: 'Open a trusted workspace to reach the AGI CLI.' };
+      return { status: 'unavailable', reason: CLI_WORKSPACE_REQUIREMENT };
     }
     const method = host[CLI_CAPABILITY_METHODS[capability]];
     if (typeof method !== 'function') {

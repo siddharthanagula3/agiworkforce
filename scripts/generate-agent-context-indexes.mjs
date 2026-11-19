@@ -6,6 +6,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { buildKnowledgeGraph, renderKnowledgeGraph } from './knowledge-graph.mjs';
+
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const outDir = path.join(repoRoot, 'docs', 'agent-context', 'generated');
 
@@ -286,17 +288,46 @@ export function renderIndexes() {
   };
 }
 
-function main() {
+async function modelIdBearingPathTest() {
+  const registryGuard = await import('./check-no-hardcoded-model-ids.mjs');
+  const tokens = registryGuard.loadCanonicalModelIdTokens(repoRoot);
+  return (filePath) =>
+    registryGuard.findModelIdOccurrences(filePath, tokens).length > 0 ||
+    registryGuard.findRetiredModelFamilyOccurrences(filePath).length > 0;
+}
+
+export async function renderKnowledgeGraphIndexes(indexes) {
+  const purposes = Object.fromEntries(
+    indexes['module-summaries.json'].units.map((unit) => [unit.path, unit.purpose]),
+  );
+  const graph = buildKnowledgeGraph(repoRoot, {
+    dependencyGraph: indexes['dependency-graph.json'],
+    purposes,
+  });
+  return renderKnowledgeGraph(graph, { isOpaquePath: await modelIdBearingPathTest() });
+}
+
+async function main() {
   const indexes = renderIndexes();
   fs.mkdirSync(outDir, { recursive: true });
   for (const [fileName, value] of Object.entries(indexes)) {
     fs.writeFileSync(path.join(outDir, fileName), serialize(value));
   }
+
+  const graphFiles = await renderKnowledgeGraphIndexes(indexes);
+  const graphDir = path.join(outDir, 'knowledge-graph');
+  fs.rmSync(graphDir, { recursive: true, force: true });
+  for (const [relative, content] of Object.entries(graphFiles)) {
+    const target = path.join(outDir, relative);
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, content);
+  }
+
   console.log(
-    `Wrote ${Object.keys(indexes).length} generated indexes to ${path.relative(repoRoot, outDir)}`,
+    `Wrote ${Object.keys(indexes).length} generated indexes and ${Object.keys(graphFiles).length} knowledge graph files to ${path.relative(repoRoot, outDir)}`,
   );
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+  await main();
 }

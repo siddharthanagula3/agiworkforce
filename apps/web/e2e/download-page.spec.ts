@@ -1,7 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const WIDTHS = [1440, 390, 320] as const;
 const MIN_TARGET_PX = 44;
+const MAC_HEADING = `${PRODUCT_NAMES.desktop} for Mac`;
 
 async function publishMacRelease(page: Page) {
   await page.route('**/api/releases/desktop-cloud/latest', (route) =>
@@ -55,11 +57,11 @@ for (const colorScheme of ['dark', 'light'] as const) {
         await publishMacRelease(page);
         await page.goto('/download');
 
-        await expect(page.getByRole('heading', { level: 1 })).toHaveText('AGI Desktop for Mac');
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText(MAC_HEADING);
         const hero = page.locator('.agi-dl-hero');
         await expect(hero.getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
           'href',
-          /\/api\/download\?platform=mac&arch=(arm64|x64)$/,
+          /\/api\/download\?platform=mac&arch=(arm64|x64)&version=1\.2\.0$/,
         );
         await page.getByText('Verify your download').click();
         await expect(page.getByRole('list', { name: 'Installer checksums' })).toBeVisible();
@@ -75,7 +77,7 @@ test.describe('/download on a touch screen', () => {
   test('every control in the page body takes a 44px tap', async ({ page }) => {
     await publishMacRelease(page);
     await page.goto('/download');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('AGI Desktop for Mac');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(MAC_HEADING);
 
     const controls = page.locator('main').locator('a[href], button, summary, input');
     const count = await controls.count();

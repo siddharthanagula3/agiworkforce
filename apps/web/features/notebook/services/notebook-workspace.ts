@@ -4,7 +4,7 @@ import type {
   NotebookCellOutput,
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
-import type { NotebookApi, NotebookFile } from './notebook-api';
+import { NotebookApiError, type NotebookApi, type NotebookFile } from './notebook-api';
 
 export type NotebookCellStatus = 'idle' | 'running' | 'ok' | 'error';
 export type NotebookCellKind = 'code' | 'markdown';
@@ -43,6 +43,11 @@ interface Bucket {
   pending: symbol | null;
   filesGeneration: number;
   listeners: Set<() => void>;
+}
+function rejectedBeforeRun(error: unknown): string | null {
+  return error instanceof NotebookApiError && error.status === 400
+    ? toUserMessage(error, 'The notebook could not be run.')
+    : null;
 }
 export function isRunnableCell(cell: NotebookCell): boolean {
   return cell.kind === 'code' && cell.code.trim().length > 0;
@@ -251,15 +256,17 @@ export function createNotebookWorkspace(
           ),
         });
         return result.session;
-      } catch {
-        if (current())
+      } catch (error) {
+        if (current()) {
+          const rejection = rejectedBeforeRun(error);
           publish(bucket, {
             cells: bucket.state.cells.map((cell) =>
               cell.id === cellId
-                ? { ...cell, status: 'error', outputs: [], error: UNKNOWN_EXECUTION }
+                ? { ...cell, status: 'error', outputs: [], error: rejection ?? UNKNOWN_EXECUTION }
                 : cell,
             ),
           });
+        }
         return null;
       } finally {
         owner.finish();
@@ -271,6 +278,7 @@ export function createNotebookWorkspace(
       const owner = begin(sessionId, 'all');
       if (!owner) return null;
       const { bucket, request, current } = owner;
+      const cellsBeforeRun = bucket.state.cells;
       publish(bucket, {
         lastRun: null,
         runAllError: null,
@@ -322,16 +330,23 @@ export function createNotebookWorkspace(
           },
         });
         return result.session;
-      } catch {
-        if (current())
-          publish(bucket, {
-            cells: bucket.state.cells.map((cell) =>
-              cell.status === 'running'
-                ? { ...cell, status: 'error', outputs: [], error: UNKNOWN_EXECUTION }
-                : cell,
-            ),
-            runAllError: UNKNOWN_EXECUTION,
-          });
+      } catch (error) {
+        if (current()) {
+          const rejection = rejectedBeforeRun(error);
+          publish(
+            bucket,
+            rejection
+              ? { cells: cellsBeforeRun, runAllError: rejection }
+              : {
+                  cells: bucket.state.cells.map((cell) =>
+                    cell.status === 'running'
+                      ? { ...cell, status: 'error', outputs: [], error: UNKNOWN_EXECUTION }
+                      : cell,
+                  ),
+                  runAllError: UNKNOWN_EXECUTION,
+                },
+          );
+        }
         return null;
       } finally {
         owner.finish();

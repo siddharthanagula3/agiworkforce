@@ -68,9 +68,28 @@ describe('ThinkingTagSplitter', () => {
       ...privateSplitter.flush(true),
     ];
     expect(textOf(parts, 'text')).toBe('');
-    expect(textOf(parts, 'thinking')).toBe('private</think');
+    expect(textOf(parts, 'thinking')).toBe('private');
     expect(privateSplitter.closeThinking()).toBe(true);
     expect(privateSplitter.closeThinking()).toBe(false);
+  });
+
+  it('discards a withheld public prefix once, so a replay of it cannot be followed by a second copy', () => {
+    const splitter = new ThinkingTagSplitter();
+    expect(textOf(splitter.push('x <'), 'text')).toBe('x ');
+    expect(splitter.discardPendingPublic()).toBe(1);
+    expect(splitter.retainedCharacters).toBe(0);
+    expect(splitter.flush(true)).toEqual([]);
+  });
+
+  it('never discards a private reasoning tail', () => {
+    const splitter = new ThinkingTagSplitter();
+    splitter.push('<thinking>private</think');
+    expect(splitter.discardPendingPublic()).toBe(0);
+    expect(splitter.retainedCharacters).toBe('</think'.length);
+    expect(splitter.push('ing>after')).toEqual([
+      { type: 'thinking-end' },
+      { type: 'text', text: 'after' },
+    ]);
   });
 
   it('does not retain reasoning bodies and cannot leak a private suffix after closing', () => {
@@ -81,5 +100,22 @@ describe('ThinkingTagSplitter', () => {
     splitter.closeThinking();
     expect(splitter.retainedCharacters).toBe(0);
     expect(textOf(splitter.push('public'), 'text')).toBe('public');
+  });
+
+  it('drops a closing tag cut off by the end of the stream instead of showing it as thinking', () => {
+    const splitter = new ThinkingTagSplitter();
+    const parts = [
+      ...splitter.push('<thinking>Checking the tax rate</thin'),
+      ...splitter.flush(true),
+    ];
+    const thinking = parts.flatMap((part) => (part.type === 'thinking' ? [part.text] : []));
+    expect(thinking.join('')).toBe('Checking the tax rate');
+  });
+
+  it('keeps a trailing angle bracket that ends the answer text', () => {
+    const splitter = new ThinkingTagSplitter();
+    const parts = [...splitter.push('Use a <'), ...splitter.flush(true)];
+    const text = parts.flatMap((part) => (part.type === 'text' ? [part.text] : []));
+    expect(text.join('')).toBe('Use a <');
   });
 });

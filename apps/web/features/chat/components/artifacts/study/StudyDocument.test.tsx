@@ -5,8 +5,13 @@ import { buildQuizFollowUp } from './QuizView';
 import {
   gradeShortAnswer,
   parseFlashcards,
+  MAX_CARDS,
+  MAX_QUESTIONS,
+  MAX_TEXT,
   parseQuiz,
+  serializeQuiz,
   studySegments,
+  studySourceIsLossless,
   type ShortAnswerQuestion,
 } from './study-set';
 import { flashcardsPrintHtml, printHtml, quizPrintHtml } from './study-print';
@@ -185,4 +190,184 @@ describe('study sets', () => {
     ]);
     expect(prompt).toContain('What should I study next');
   });
+});
+
+describe('study set round trips', () => {
+  const FRANCE = {
+    title: 'Capitals',
+    questions: [
+      {
+        type: 'multiple_choice',
+        question: 'Which is the capital of France?',
+        options: ['Rome', 'Paris', 'Berlin'],
+        answer: 1,
+        explanation: '',
+      },
+    ],
+  };
+
+  function blankFirstOptionAndSave(onSave: (value: string) => void) {
+    const content = `~~~quiz\n${JSON.stringify(FRANCE)}\n~~~`;
+    render(<StudyDocument content={content} editable onSave={onSave} />);
+    fireEvent.click(screen.getByTestId('study-edit'));
+    const editor = screen.getByTestId('quiz-editor');
+    fireEvent.change(within(editor).getByLabelText('Option 1'), { target: { value: '' } });
+    return within(editor).getByTestId('study-editor-save') as HTMLButtonElement;
+  }
+
+  it('refuses to save a quiz whose distractor was cleared, so the correct answer cannot shift', () => {
+    const onSave = vi.fn();
+    const save = blankFirstOptionAndSave(onSave);
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('keeps the correct answer after removing an earlier option through the editor', () => {
+    const onSave = vi.fn();
+    const content = `~~~quiz\n${JSON.stringify(FRANCE)}\n~~~`;
+    render(<StudyDocument content={content} editable onSave={onSave} />);
+    fireEvent.click(screen.getByTestId('study-edit'));
+    const editor = screen.getByTestId('quiz-editor');
+    fireEvent.click(within(editor).getByLabelText('Remove option 1'));
+    fireEvent.click(within(editor).getByTestId('study-editor-save'));
+    const saved = onSave.mock.calls[0]![0] as string;
+    const question = parseQuiz((studySegments(saved)[0] as { source: string }).source)!
+      .questions[0] as { options: string[]; answer: number };
+    expect(question.options[question.answer]).toBe('Paris');
+  });
+
+  it('reads a numeric answer against the original option positions when an option is blank', () => {
+    const quiz = parseQuiz(
+      JSON.stringify({
+        questions: [
+          { question: 'a', options: ['', 'Paris', 'Berlin'], answer: 1 },
+          { question: 'b', options: ['', 'Paris', 'Berlin'], answer: 2 },
+        ],
+      }),
+    )!;
+    expect(quiz.questions).toMatchObject([
+      { options: ['Paris', 'Berlin'], answer: 0 },
+      { options: ['Paris', 'Berlin'], answer: 1 },
+    ]);
+  });
+
+  it('rejects a question whose numeric answer points at a blank option', () => {
+    expect(
+      parseQuiz(
+        JSON.stringify({
+          questions: [{ question: 'a', options: ['', 'Paris', 'Berlin'], answer: 0 }],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it('serializes and re-reads every question of a quiz without changing its answers', () => {
+    const quiz = parseQuiz(JSON.stringify(QUIZ))!;
+    expect(parseQuiz(serializeQuiz(quiz))).toEqual(quiz);
+  });
+});
+
+describe('study set editor limits', () => {
+  const question = (n: number) => ({
+    type: 'short_answer',
+    question: `Q${n}`,
+    answer: `A${n}`,
+    explanation: '',
+  });
+  const quizSource = (count: number) =>
+    JSON.stringify({
+      title: 'Big',
+      questions: Array.from({ length: count }, (_, i) => question(i)),
+    });
+  const cardsSource = (count: number) =>
+    JSON.stringify({
+      title: 'Big',
+      cards: Array.from({ length: count }, (_, i) => ({ front: `F${i}`, back: `B${i}` })),
+    });
+
+  it('stops adding questions at the limit the reader enforces', () => {
+    render(
+      <StudyDocument
+        content={`~~~quiz\n${quizSource(MAX_QUESTIONS)}\n~~~`}
+        editable
+        onSave={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('study-edit'));
+    const editor = screen.getByTestId('quiz-editor');
+    expect(
+      (within(editor).getByRole('button', { name: 'Multiple choice' }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (within(editor).getByRole('button', { name: 'Short answer' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect((within(editor).getByTestId('study-editor-save') as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
+
+  it('stops adding cards at the limit the reader enforces', () => {
+    render(
+      <StudyDocument
+        content={`~~~flashcards\n${cardsSource(MAX_CARDS)}\n~~~`}
+        editable
+        onSave={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('study-edit'));
+    const editor = screen.getByTestId('flashcards-editor');
+    expect(
+      (within(editor).getByRole('button', { name: 'Add card' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('bounds every text field to the length the reader keeps', () => {
+    render(<StudyDocument content={DOC} editable onSave={vi.fn()} />);
+    fireEvent.click(screen.getAllByTestId('study-edit')[0]!);
+    const editor = screen.getByTestId('quiz-editor');
+    expect(within(editor).getAllByLabelText('Question')[0]!.getAttribute('maxlength')).toBe(
+      String(MAX_TEXT),
+    );
+    expect(within(editor).getByLabelText('Option 1').getAttribute('maxlength')).toBe(
+      String(MAX_TEXT),
+    );
+  });
+
+  it('keeps the exact-boundary set editable and reads it whole', () => {
+    expect(studySourceIsLossless('quiz', quizSource(MAX_QUESTIONS))).toBe(true);
+    expect(studySourceIsLossless('flashcards', cardsSource(MAX_CARDS))).toBe(true);
+    const longest = 'x'.repeat(MAX_TEXT);
+    expect(
+      studySourceIsLossless(
+        'flashcards',
+        JSON.stringify({ cards: [{ front: 'f', back: longest }] }),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['one question over', 'quiz', quizSource(MAX_QUESTIONS + 1)],
+    ['one card over', 'flashcards', cardsSource(MAX_CARDS + 1)],
+    [
+      'a back one character over',
+      'flashcards',
+      JSON.stringify({ cards: [{ front: 'f', back: 'x'.repeat(MAX_TEXT + 1) }] }),
+    ],
+    [
+      'a dropped malformed question',
+      'quiz',
+      JSON.stringify({ questions: [question(1), { question: 'no answer' }] }),
+    ],
+  ] as const)(
+    'does not offer to rewrite a source that the reader would shorten: %s',
+    (_name, kind, source) => {
+      expect(studySourceIsLossless(kind, source)).toBe(false);
+      const fence = kind === 'quiz' ? 'quiz' : 'flashcards';
+      render(<StudyDocument content={`~~~${fence}\n${source}\n~~~`} editable onSave={vi.fn()} />);
+      expect(screen.queryByTestId('study-edit')).not.toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent(/editing is off/);
+    },
+  );
 });

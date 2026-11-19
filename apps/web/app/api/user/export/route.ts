@@ -24,7 +24,11 @@ import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-e
 import { BETA_INVITE_EXPORT_SECTION } from '@/lib/server/beta-invite-export-section';
 import { requestDataExportArchive } from '@/lib/server/data-export-archive';
 import { requireCsrfToken } from '@/lib/csrf';
-import type { DataExportArchiveResponse } from '@agiworkforce/cloud-contracts';
+import type {
+  DataExportArchiveResponse,
+  DataExportCompleteness,
+  DataExportCompletenessStatus,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -743,15 +747,9 @@ const securityAuditLogExportSchema = z.object({
   created_at: timestampSchema,
 });
 
-export type ExportCompletenessStatus = 'complete' | 'partial';
+export type ExportCompletenessStatus = DataExportCompletenessStatus;
 
-export interface ExportCompleteness {
-  status: ExportCompletenessStatus;
-  unavailable_sections: string[];
-  skipped_rows: Array<{ section: string; count: number }>;
-  truncated_sections: Array<{ section: string; limit: number }>;
-  retry: string;
-}
+export type ExportCompleteness = DataExportCompleteness;
 
 /**
  * Row cap for the two highest-cardinality sections. An uncapped read of either
@@ -1236,6 +1234,7 @@ const githubInstallationExportSchema = z.object({
   pr_review_enabled: z.boolean(),
   review_model: z.string().nullable(),
   verified_repositories: z.array(z.string()).nullable(),
+  writable_repositories: z.array(z.string()).nullable(),
   ownership_verified_at: nullableTimestampSchema,
   created_at: timestampSchema,
 });
@@ -1567,6 +1566,14 @@ const developerEvalRunExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const developerEvalRunCaseExportSchema = z.object({
+  run_id: z.string(),
+  case_id: z.string(),
+  position: z.number().int(),
+  variables: z.unknown(),
+  expected_output: z.string().nullable(),
+});
+
 const developerEvalResultExportSchema = z.object({
   id: z.string(),
   run_id: z.string(),
@@ -1574,6 +1581,7 @@ const developerEvalResultExportSchema = z.object({
   rendered_input: z.string(),
   output: z.string().nullable(),
   error: z.string().nullable(),
+  expected_output: z.string().nullable(),
   latency_ms: z.number().int().nullable(),
   passed: z.boolean().nullable(),
   grade: z.number().int().nullable(),
@@ -2016,7 +2024,7 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     section: 'github_installations',
     table: 'github_installations',
     sql: `select id, installation_id, account_login, account_type, pr_review_enabled,
-                 review_model, verified_repositories, ownership_verified_at, created_at
+                 review_model, verified_repositories, writable_repositories, ownership_verified_at, created_at
           from github_installations
           where user_id = $1
           order by created_at asc`,
@@ -2307,10 +2315,21 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     rowLimit: EXPORT_ROW_LIMIT,
   },
   {
+    section: 'developer_eval_run_cases',
+    table: 'developer_eval_run_cases',
+    sql: `select run_id, case_id, position, variables, expected_output
+          from developer_eval_run_cases
+          where user_id = $1
+          order by run_id, position
+          limit 1000`,
+    schema: developerEvalRunCaseExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
     section: 'developer_eval_results',
     table: 'developer_eval_results',
-    sql: `select id, run_id, case_id, rendered_input, output, error, latency_ms, passed, grade,
-                 created_at, updated_at
+    sql: `select id, run_id, case_id, rendered_input, output, error, expected_output, latency_ms,
+                 passed, grade, created_at, updated_at
           from developer_eval_results
           where user_id = $1
           order by created_at desc
@@ -2349,6 +2368,8 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
 ];
 
 export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
+  signaling_sessions:
+    'Remote Control pairing records: the pairing code, the paired device ids and the rotating relay credential. A live credential, not subject content, and the relay deletes each one an hour after it expires.',
   token_credits:
     "The internal credit ledger: allocation, consumption, flagship caps and the microUSD columns behind them. That is this product's cost accounting, not the subject's personal data. What the subject actually did is exported as top_up_purchases and the managed usage summary.",
   managed_usage_requests:
@@ -2371,6 +2392,12 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'The pairing secret a device redeems. The device it belongs to is exported as desktop_devices, mobile_devices or device_authorizations.',
   device_refresh_tokens:
     'Live refresh credentials. What the subject would want, which device and when it was registered, is exported as desktop_devices and mobile_devices.',
+  connector_permission_generations:
+    'A counter of how many times a connector permission changed, used to refuse approvals made against an older setting; the settings themselves are exported as connector_tool_permissions and connector_account_states.',
+  device_refresh_token_families:
+    'Which refresh credential families have been ended; token state, not subject content. The devices themselves are exported as desktop_devices and mobile_devices.',
+  feedback_screenshot_cleanups:
+    'A short-lived record of a screenshot upload that has not yet been attached to a report, kept so the file can be removed; storage housekeeping, not subject content. Submitted reports are exported as feedback.',
   revoked_jwts:
     'The deny list a signed-out token is checked against; token state, not subject content.',
   mcp_app_payloads:

@@ -33,6 +33,7 @@
     "product.memory_fact_extraction@3": "sha256:8de084d7cb0662b6ef9353948e24f7ce5619deab672fb1921ed0d1d59c61bbb2",
     "product.memory_fact_extraction_all_topics@1": "sha256:efe64ca58c9d7222a007ef00467865646b4cd5cc0773549f36045c1c004d7a85",
     "product.memory_fact_extraction_all_topics@2": "sha256:30f06130c863619bae754415ec25d528c9b5d7895d845c3326bfab39ab44cead",
-    "chat.system@15": "sha256:11598f2acd181264112dd6854bec5e995f37c4c413e84ac89f3b2e1475401ab9"
+    "chat.system@15": "sha256:11598f2acd181264112dd6854bec5e995f37c4c413e84ac89f3b2e1475401ab9",
+    "chat.system@16": "sha256:d09cf52ac5b181e6b00eb94d20f70e6527b6e58e2add89a88c39d10e8678dfcc"
   }
 }

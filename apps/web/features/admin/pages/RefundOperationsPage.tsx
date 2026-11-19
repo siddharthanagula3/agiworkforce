@@ -54,6 +54,13 @@ interface RefundOutcome {
   planEnded: boolean;
 }
 
+interface DecisionOutcome {
+  customerNotified: boolean;
+}
+
+const NOT_NOTIFIED_NOTICE =
+  'The decision is saved, but the customer notification could not be recorded, so they have not been told. Write to them yourself.';
+
 function toMinorUnits(value: string, currency: string): number | null {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount <= 0) return null;
@@ -305,13 +312,15 @@ export default function RefundOperationsPage() {
       onConfirm: async () => {
         setError(null);
         try {
-          await post({
+          const { customerNotified } = await post<DecisionOutcome>({
             action: 'store_refund',
             requestId: request.id,
             amountCents: null,
             note: `Refunded through ${store}.`,
           });
-          setNotice(`The request is closed as refunded by ${store} and the customer was told.`);
+          setNotice(
+            `The request is closed as refunded by ${store}. ${customerNotified ? 'The customer was told.' : NOT_NOTIFIED_NOTICE}`,
+          );
           await loadPending();
           if (account) await lookUp(account.userId);
         } catch (storeRefundError) {
@@ -337,8 +346,14 @@ export default function RefundOperationsPage() {
       onConfirm: async () => {
         setError(null);
         try {
-          await post({ action: 'decline', requestId: request.id, note: recordedNote });
-          setNotice('The request was declined and the customer was told why.');
+          const { customerNotified } = await post<DecisionOutcome>({
+            action: 'decline',
+            requestId: request.id,
+            note: recordedNote,
+          });
+          setNotice(
+            `The request was declined. ${customerNotified ? 'The customer was told why.' : NOT_NOTIFIED_NOTICE}`,
+          );
           setDeclining(null);
           setDeclineNote('');
           await loadPending();

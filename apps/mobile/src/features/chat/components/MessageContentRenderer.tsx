@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, ScrollView, Alert, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
+import { CodeLinesScroller } from '@/src/features/settings/code/CodeLinesScroller';
 import { MathBlock } from './MathBlock';
 import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
@@ -10,30 +11,62 @@ import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
 import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import {
-  classifyExternalLink,
-  getSystemIntentPrompt,
-} from '@/src/features/chat/utils/externalUrls';
-import {
   tokenizeCode,
   syntaxTokenColor,
   type SyntaxToken,
 } from '@/src/features/chat/utils/syntaxHighlight';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { classifyAssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
 import { AssistantSurface, canRenderAssistantSurface } from './AssistantSurface';
-import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
+import type { CitationSource } from './CitationChip';
+import { protectEscapes, renderInlineMarkdown, restoreEscapes } from './MarkdownInline';
+import { MarkdownImage } from './MarkdownImage';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
-import { Download } from 'lucide-react-native';
+import { Download, Square, SquareCheck } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
-import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
-import { GeneratedImage } from './GeneratedImage';
+import { artifactSourceExtension } from '@/src/features/chat/utils/artifactExport';
 
-const MIN_TABLE_COLUMN_WIDTH = 120;
+const MIN_TABLE_COLUMN_WIDTH = 48;
 const MAX_TABLE_COLUMN_WIDTH = 260;
+const MIN_FITTED_COLUMN_WIDTH = 72;
+const MIN_SCROLLED_COLUMN_WIDTH = 120;
 const WIDE_TABLE_GUTTER = 24;
+const TABLE_COLUMN_CHARACTER_WIDTH = 8;
+const TABLE_COLUMN_GAP = 12;
+const TABLE_LONG_TOKEN_LENGTH = 24;
+const MIN_LONG_TOKEN_COLUMN_WIDTH = 144;
+const MARKDOWN_LINK_TARGET = /\]\([^)]*\)/g;
+
+function clampTableColumnWidth(width: number): number {
+  return Math.min(MAX_TABLE_COLUMN_WIDTH, Math.max(MIN_TABLE_COLUMN_WIDTH, width));
+}
+
+export function markdownTableNaturalWidth(cells: readonly string[]): number {
+  const longestCell = cells.reduce((longest, cell) => Math.max(longest, cell.length), 0);
+  return clampTableColumnWidth(longestCell * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_GAP);
+}
+
+/**
+ * The narrowest a column may get: wide enough for its longest word on one
+ * line. A token too long to keep whole (a link, a path, a hash) breaks
+ * wherever it must, so it only asks for a width that is comfortable to read.
+ */
+export function markdownTableWordWidth(cells: readonly string[]): number {
+  let width = 0;
+  for (const cell of cells) {
+    for (const token of cell.replace(MARKDOWN_LINK_TARGET, ']').split(/\s+/)) {
+      width = Math.max(
+        width,
+        token.length > TABLE_LONG_TOKEN_LENGTH
+          ? MIN_LONG_TOKEN_COLUMN_WIDTH
+          : token.length * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_GAP,
+      );
+    }
+  }
+  return Math.min(MAX_TABLE_COLUMN_WIDTH, width);
+}
 
 export function wideTableOverflow(input: {
   tableWidth: number;
@@ -45,211 +78,82 @@ export function wideTableOverflow(input: {
   const widest = Math.max(containerWidth, paneWidth - WIDE_TABLE_GUTTER * 2);
   return Math.max(0, Math.min(tableWidth, widest) - containerWidth);
 }
-const TABLE_COLUMN_CHARACTER_WIDTH = 8;
-const TABLE_COLUMN_PADDING = 16;
-const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
-const ESCAPE_SENTINEL_BASE = 0xe000;
-const ESCAPE_SENTINELS = /[\ue021-\ue07e]/g;
-const INLINE_MATH = /(?<![\\$])\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)/g;
 
-function codeSpanEnd(text: string, open: number): number {
-  const close = text.indexOf('`', open + 1);
-  return close === -1 || text.slice(open + 1, close).includes('\n') ? -1 : close;
+export interface MarkdownTableLayout {
+  /** Fitted tables show every column at once; scrolled ones have too many to read that way. */
+  mode: 'fit' | 'scroll';
+  widths: number[];
+  overflow: number;
 }
 
-function inlineMathEnd(text: string, open: number): number {
-  if (text[open - 1] === '$' || text[open + 1] === '$') return -1;
-  const close = text.indexOf('$', open + 1);
-  if (close <= open + 1 || text.slice(open + 1, close).includes('\n')) return -1;
-  return text[close - 1] === '\\' || text[close + 1] === '$' ? -1 : close;
-}
-
-function protectEscapes(text: string): string {
-  let out = '';
-  let idx = 0;
-  while (idx < text.length) {
-    const ch = text[idx]!;
-    const next = text[idx + 1];
-    if (ch === '\\' && next !== undefined && ESCAPABLE_PUNCTUATION.test(next)) {
-      out += String.fromCharCode(ESCAPE_SENTINEL_BASE + next.charCodeAt(0));
-      idx += 2;
-      continue;
-    }
-    const spanEnd =
-      ch === '`' ? codeSpanEnd(text, idx) : ch === '$' ? inlineMathEnd(text, idx) : -1;
-    if (spanEnd !== -1) {
-      out += text.slice(idx, spanEnd + 1);
-      idx = spanEnd + 1;
-      continue;
-    }
-    out += ch;
-    idx += 1;
-  }
-  return out;
-}
-
-function restoreEscapes(text: string, keepBackslash = false): string {
-  return text.replace(ESCAPE_SENTINELS, (sentinel) => {
-    const literal = String.fromCharCode(sentinel.charCodeAt(0) - ESCAPE_SENTINEL_BASE);
-    return keepBackslash ? `\\${literal}` : literal;
-  });
-}
-
-function openAssistantLink(url: string): void {
-  const kind = classifyExternalLink(url);
-  if (kind === 'http') {
-    void openUntrustedUrlInAppBrowser(url);
-    return;
-  }
-  if (kind !== 'system-intent') return;
-  const prompt = getSystemIntentPrompt(url);
-  if (!prompt) return;
-  Alert.alert(prompt.title, prompt.message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Open', onPress: () => Linking.openURL(url).catch(() => undefined) },
-  ]);
-}
-
-export function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  const mathRegex = new RegExp(INLINE_MATH);
-  let lastIdx = 0;
-  let keyCounter = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = mathRegex.exec(text)) !== null) {
-    if (match.index > lastIdx) {
-      parts.push(restoreEscapes(text.slice(lastIdx, match.index)));
-    }
-    parts.push(
-      <MathBlock
-        key={`${keyBase}-imath-${keyCounter++}`}
-        latex={restoreEscapes(match[1]!.trim(), true)}
-        display={false}
-      />,
-    );
-    lastIdx = match.index + match[0].length;
+/**
+ * A table is shown whole whenever each column can keep a readable width: at
+ * its natural size when that fits, otherwise narrowed with the text wrapping
+ * inside the cells, never below the column's longest word. Only a table with
+ * more columns than the width can hold scrolls sideways.
+ */
+export function markdownTableLayout(input: {
+  naturalWidths: readonly number[];
+  wordWidths: readonly number[];
+  containerWidth: number;
+  paneWidth: number;
+}): MarkdownTableLayout {
+  const { naturalWidths, wordWidths, paneWidth } = input;
+  const roomiest = Math.max(0, paneWidth - WIDE_TABLE_GUTTER * 2);
+  const containerWidth = input.containerWidth > 0 ? input.containerWidth : roomiest;
+  const widest = Math.max(containerWidth, roomiest);
+  const total = (widths: readonly number[]) => widths.reduce((sum, width) => sum + width, 0);
+  const natural = total(naturalWidths);
+  if (natural <= widest) {
+    return {
+      mode: 'fit',
+      widths: [...naturalWidths],
+      overflow: wideTableOverflow({ tableWidth: natural, containerWidth, paneWidth }),
+    };
   }
 
-  if (lastIdx < text.length) {
-    parts.push(restoreEscapes(text.slice(lastIdx)));
+  const floors = naturalWidths.map((width, index) =>
+    Math.min(width, Math.max(MIN_FITTED_COLUMN_WIDTH, wordWidths[index] ?? 0)),
+  );
+  const spare = widest - total(floors);
+  if (spare >= 0) {
+    const wanted = naturalWidths.map((width, index) => width - (floors[index] ?? 0));
+    const wantedTotal = total(wanted);
+    return {
+      mode: 'fit',
+      widths: floors.map((floor, index) =>
+        wantedTotal > 0 ? floor + (spare * (wanted[index] ?? 0)) / wantedTotal : floor,
+      ),
+      overflow: widest - containerWidth,
+    };
   }
-  return parts;
+
+  const widths = naturalWidths.map((width) => Math.max(width, MIN_SCROLLED_COLUMN_WIDTH));
+  return {
+    mode: 'scroll',
+    widths,
+    overflow: wideTableOverflow({ tableWidth: total(widths), containerWidth, paneWidth }),
+  };
 }
+const FOOTNOTE_LINE_HEIGHT = 20;
+const TASK_MARKER_SIZE = 16;
+const listItemPattern = /^(\s*)(?:([-*+])|(\d{1,9})([.)]))\s+(.+)$/;
+const taskItemPattern = /^\[([ xX])\]\s+(.*)$/;
+const quoteLinePattern = /^ {0,3}>[ \t]?/;
+const footnoteDefinitionPattern = /^\[\^([^\]\s]+)\]:\s?(.*)$/;
+const thematicBreakPattern = /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+const continuationIndentPattern = /^(?: {2,}|\t)\S/;
+const fullLineImagePattern = /^!\[([^\]]*)\]\(\s*<?([^()<>\s]+)>?(?:\s+"[^"]*")?\s*\)$/;
+const nestedBullets = ['\u2022', '\u25E6', '\u25AA\uFE0E'];
 
-export function renderInlineMarkdown(
-  source: string,
-  keyBase = 'inline',
-  renderColors: ColorScheme = defaultColors,
-  citations: readonly CitationSource[] = [],
-): React.ReactNode[] {
-  const text = protectEscapes(source);
-  const parts: React.ReactNode[] = [];
-  const inlineRegex =
-    /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\[(\d{1,3})\](?!\())/g;
-  let lastIdx = 0;
-  let inlineMatch: RegExpExecArray | null;
-  let inlineKey = 0;
-
-  while ((inlineMatch = inlineRegex.exec(text)) !== null) {
-    if (inlineMatch.index > lastIdx) {
-      const plain = text.slice(lastIdx, inlineMatch.index);
-      parts.push(...renderInlineMath(plain, `${keyBase}-pre-${inlineKey}`));
-    }
-
-    if (inlineMatch[2]) {
-      parts.push(
-        <Text
-          key={`bold-${keyBase}-${inlineKey++}`}
-          style={{ color: renderColors.textPrimary, fontWeight: '700' }}
-        >
-          {restoreEscapes(inlineMatch[2])}
-        </Text>,
-      );
-    } else if (inlineMatch[3]) {
-      parts.push(
-        <Text
-          key={`italic-${keyBase}-${inlineKey++}`}
-          style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
-        >
-          {restoreEscapes(inlineMatch[3])}
-        </Text>,
-      );
-    } else if (inlineMatch[4]) {
-      parts.push(
-        <Text
-          key={`strike-${keyBase}-${inlineKey++}`}
-          style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
-        >
-          {restoreEscapes(inlineMatch[4])}
-        </Text>,
-      );
-    } else if (inlineMatch[5]) {
-      parts.push(
-        <Text
-          key={`code-${keyBase}-${inlineKey++}`}
-          style={{
-            fontFamily: 'Menlo',
-            fontSize: typeScale.footnote,
-            backgroundColor: renderColors.surfaceHover,
-            color: renderColors.textPrimary,
-          }}
-        >
-          {` ${restoreEscapes(inlineMatch[5], true)} `}
-        </Text>,
-      );
-    } else if (inlineMatch[6] && inlineMatch[7]) {
-      const linkText = restoreEscapes(inlineMatch[6]);
-      const linkUrl = restoreEscapes(inlineMatch[7]);
-      parts.push(
-        <Text
-          key={`link-${keyBase}-${inlineKey++}`}
-          style={{
-            color: renderColors.teal,
-            textDecorationLine: 'underline',
-          }}
-          onPress={() => openAssistantLink(linkUrl)}
-          accessibilityRole="link"
-          accessibilityLabel={linkText}
-        >
-          {linkText}
-        </Text>,
-      );
-    } else if (inlineMatch[8]) {
-      const marker = Number(inlineMatch[8]);
-      const citation = citations[marker - 1];
-      if (citation && canPreviewCitation(citation)) {
-        parts.push(
-          <Text
-            key={`cite-${keyBase}-${inlineKey++}`}
-            style={{ color: renderColors.teal, fontWeight: '600' }}
-            onPress={() => previewCitation(citation)}
-            accessibilityRole="link"
-            accessibilityLabel={`Citation ${marker}: ${citation.title || citation.url}`}
-          >
-            {`[${marker}]`}
-          </Text>,
-        );
-      } else {
-        parts.push(inlineMatch[0]);
-      }
-    }
-
-    lastIdx = inlineMatch.index + inlineMatch[0].length;
-  }
-
-  if (lastIdx < text.length) {
-    parts.push(...renderInlineMath(text.slice(lastIdx), `${keyBase}-post`));
-  }
-
-  return parts;
-}
-
-const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
-const accountImagePattern = /^!\[([^\]]*)\]\(<?([^()<>\s]+)>?\)$/;
-const nestedBullets = ['•', '◦', '▪'];
-
-type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+type ParsedListItem = {
+  depth: number;
+  marker: string;
+  ordered: boolean;
+  text: string;
+  task: 'done' | 'open' | null;
+};
+type TableAlignment = 'left' | 'center' | 'right' | undefined;
 
 const TABLE_SORT_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -273,12 +177,16 @@ type TableSort = { column: number; direction: 'ascending' | 'descending' } | nul
 function MarkdownTable({
   rows,
   columnWidths,
+  columnWordWidths,
+  alignments,
   keyBase,
   renderColors,
   citations,
 }: {
   rows: string[][];
   columnWidths: number[];
+  columnWordWidths: number[];
+  alignments: readonly TableAlignment[];
   keyBase: string;
   renderColors: ColorScheme;
   citations: readonly CitationSource[];
@@ -296,104 +204,124 @@ function MarkdownTable({
   const sortable = body.length > 1;
   const { contentWidth: paneWidth } = useResponsiveLayout();
   const [containerWidth, setContainerWidth] = useState(0);
-  const tableWidth = columnWidths.reduce((total, width) => total + width, 0) + 2;
-  const overflow = wideTableOverflow({ tableWidth, containerWidth, paneWidth });
+  const layout = markdownTableLayout({
+    naturalWidths: columnWidths,
+    wordWidths: columnWordWidths,
+    containerWidth,
+    paneWidth,
+  });
+  const fitted = layout.mode === 'fit';
 
   const cellStyle = (colIdx: number) => ({
-    width: columnWidths[colIdx],
-    borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
-    borderRightColor: renderColors.border,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    ...(fitted
+      ? { flexGrow: layout.widths[colIdx] ?? 1, flexShrink: 1, flexBasis: 0, minWidth: 0 }
+      : { width: layout.widths[colIdx] }),
+    paddingRight: colIdx < numCols - 1 ? TABLE_COLUMN_GAP : 0,
+    paddingVertical: 8,
     justifyContent: 'center' as const,
   });
+
+  const tableRows = (
+    <>
+      <View
+        style={{
+          flexDirection: 'row',
+          borderBottomWidth: 1,
+          borderBottomColor: renderColors.border,
+        }}
+      >
+        {Array.from({ length: numCols }).map((_, colIdx) => {
+          const label = header[colIdx] ?? '';
+          const active = sort?.column === colIdx ? sort.direction : null;
+          const next = active === 'ascending' ? 'descending' : 'ascending';
+          const content = (
+            <Text
+              style={{
+                fontSize: typeScale.footnote,
+                color: renderColors.textPrimary,
+                fontWeight: '600',
+                lineHeight: 19,
+                textAlign: alignments[colIdx] ?? 'left',
+              }}
+            >
+              {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
+              {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
+            </Text>
+          );
+          return sortable ? (
+            <Pressable
+              key={`${keyBase}-th-${colIdx}`}
+              style={cellStyle(colIdx)}
+              onPress={() => setSort({ column: colIdx, direction: next })}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
+              accessibilityHint={`Sorts the table by this column, ${next}`}
+            >
+              {content}
+            </Pressable>
+          ) : (
+            <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
+              {content}
+            </View>
+          );
+        })}
+      </View>
+      {sortedBody.map((row, rowIdx) => (
+        <View
+          key={`${keyBase}-tr-${rowIdx}`}
+          style={{
+            flexDirection: 'row',
+            borderBottomWidth: rowIdx < sortedBody.length - 1 ? StyleSheet.hairlineWidth : 0,
+            borderBottomColor: renderColors.border,
+          }}
+        >
+          {Array.from({ length: numCols }).map((_, colIdx) => (
+            <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  color: renderColors.textSecondary,
+                  fontWeight: '400',
+                  lineHeight: 19,
+                  textAlign: alignments[colIdx] ?? 'left',
+                }}
+                selectable
+              >
+                {renderInlineMarkdown(
+                  row[colIdx] || '',
+                  `${keyBase}-tdil-${rowIdx}-${colIdx}`,
+                  renderColors,
+                  citations,
+                )}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </>
+  );
+  const frameStyle = { marginVertical: 8, marginHorizontal: -layout.overflow / 2 };
 
   return (
     <View
       onLayout={(event: LayoutChangeEvent) => setContainerWidth(event.nativeEvent.layout.width)}
       testID="markdown-table-frame"
     >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        style={{ marginVertical: 8, marginHorizontal: -overflow / 2 }}
-        testID="markdown-table"
-        contentContainerStyle={{
-          borderWidth: 1,
-          borderColor: renderColors.border,
-          borderRadius: 4,
-          overflow: 'hidden',
-          flexDirection: 'column',
-        }}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            borderBottomWidth: 1,
-            borderBottomColor: renderColors.border,
-            backgroundColor: renderColors.surfaceHover,
-          }}
-        >
-          {Array.from({ length: numCols }).map((_, colIdx) => {
-            const label = header[colIdx] ?? '';
-            const active = sort?.column === colIdx ? sort.direction : null;
-            const next = active === 'ascending' ? 'descending' : 'ascending';
-            const content = (
-              <Text
-                style={{
-                  fontSize: typeScale.footnote,
-                  color: renderColors.textPrimary,
-                  fontWeight: '500',
-                  lineHeight: 19,
-                }}
-              >
-                {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
-                {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
-              </Text>
-            );
-            return sortable ? (
-              <Pressable
-                key={`${keyBase}-th-${colIdx}`}
-                style={cellStyle(colIdx)}
-                onPress={() => setSort({ column: colIdx, direction: next })}
-                accessibilityRole="button"
-                accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
-                accessibilityHint={`Sorts the table by this column, ${next}`}
-              >
-                {content}
-              </Pressable>
-            ) : (
-              <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
-                {content}
-              </View>
-            );
-          })}
+      {fitted ? (
+        <View style={frameStyle} testID="markdown-table">
+          {tableRows}
         </View>
-        {sortedBody.map((row, rowIdx) => (
-          <View key={`${keyBase}-tr-${rowIdx}`} style={{ flexDirection: 'row' }}>
-            {Array.from({ length: numCols }).map((_, colIdx) => (
-              <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
-                <Text
-                  style={{
-                    fontSize: typeScale.footnote,
-                    color: renderColors.textSecondary,
-                    fontWeight: '400',
-                    lineHeight: 19,
-                  }}
-                  selectable
-                >
-                  {renderInlineMarkdown(
-                    row[colIdx] || '',
-                    `${keyBase}-tdil-${rowIdx}-${colIdx}`,
-                    renderColors,
-                    citations,
-                  )}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          style={frameStyle}
+          testID="markdown-table"
+          contentContainerStyle={{ flexDirection: 'column' }}
+        >
+          {tableRows}
+        </ScrollView>
+      )}
       <Pressable
         onPress={() => {
           void exportSourceFile(markdownTableToCsv([header, ...sortedBody]), 'table', 'csv')
@@ -429,8 +357,21 @@ function collectListItems(
   let idx = start;
 
   while (idx < lines.length) {
-    const match = lines[idx]!.match(listItemPattern);
-    if (!match) break;
+    const line = lines[idx]!;
+    const previous = items[items.length - 1];
+    if (previous && !listItemPattern.test(line) && !thematicBreakPattern.test(line)) {
+      const continuation =
+        continuationIndentPattern.test(line) ||
+        (line.trim() === '' &&
+          continuationIndentPattern.test(lines[idx + 1] ?? '') &&
+          !listItemPattern.test(lines[idx + 1] ?? ''));
+      if (!continuation) break;
+      if (line.trim()) previous.text += `\n${line.trim()}`;
+      idx++;
+      continue;
+    }
+    const match = line.match(listItemPattern);
+    if (!match || thematicBreakPattern.test(line)) break;
 
     const indent = match[1]!.replace(/\t/g, '  ').length;
     while (indentStack.length > 0 && indent < indentStack[indentStack.length - 1]!) {
@@ -442,11 +383,15 @@ function collectListItems(
 
     const depth = indentStack.length - 1;
     const ordered = match[3] !== undefined;
+    const task = ordered ? null : taskItemPattern.exec(match[5]!);
     items.push({
       depth,
       ordered,
-      marker: ordered ? `${match[3]}.` : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
-      text: match[4]!,
+      marker: ordered
+        ? `${match[3]}${match[4]}`
+        : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
+      text: task ? task[2]! : match[5]!,
+      task: task ? (task[1] === ' ' ? 'open' : 'done') : null,
     });
     idx++;
   }
@@ -474,22 +419,22 @@ function renderTextSegment(
   while (idx < lines.length) {
     const line = lines[idx]!;
 
-    const imageMatch = accountImagePattern.exec(restoreEscapes(line).trim());
-    if (imageMatch && resolveGeneratedImageUri(imageMatch[2]!)) {
+    const imageMatch = fullLineImagePattern.exec(restoreEscapes(line).trim());
+    if (imageMatch) {
       nodes.push(
         <View key={`${keyBase}-img-${idx}`} style={{ marginVertical: 6 }}>
-          <GeneratedImage imageUrl={imageMatch[2]!} revisedPrompt={imageMatch[1] || undefined} />
+          <MarkdownImage src={imageMatch[2]!} alt={imageMatch[1]!.trim()} colors={renderColors} />
         </View>,
       );
       idx++;
       continue;
     }
 
-    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    const headerMatch = line.match(/^ {0,3}(#{1,6})\s+(.+)$/);
     if (headerMatch) {
       const level = headerMatch[1]!.length;
-      const headerText = headerMatch[2]!;
-      const sectionId = context.sectionId?.(headerText.replace(/\s+#+\s*$/, ''), level) ?? null;
+      const headerText = headerMatch[2]!.replace(/\s+#+\s*$/, '');
+      const sectionId = context.sectionId?.(headerText, level) ?? null;
       const onHeadingLayout = context.onHeadingLayout;
       const headingTypography =
         level === 1
@@ -527,45 +472,108 @@ function renderTextSegment(
       continue;
     }
 
-    if (line.startsWith('> ')) {
+    if (quoteLinePattern.test(line)) {
+      const start = idx;
       const quoteLines: string[] = [];
-      while (idx < lines.length && lines[idx]!.startsWith('> ')) {
-        const body = lines[idx]!.slice(2);
-        if (body.trim().length > 0) {
-          quoteLines.push(body);
+      while (idx < lines.length && quoteLinePattern.test(lines[idx]!)) {
+        quoteLines.push(lines[idx]!.replace(quoteLinePattern, ''));
+        idx++;
+      }
+      nodes.push(
+        <View
+          key={`${keyBase}-bq-${start}`}
+          testID="markdown-blockquote"
+          style={{
+            borderLeftWidth: 2,
+            borderLeftColor: renderColors.border,
+            paddingLeft: 12,
+            marginVertical: 4,
+          }}
+        >
+          {renderTextSegment(
+            quoteLines.join('\n'),
+            `${keyBase}-bq${start}`,
+            { ...renderColors, textPrimary: renderColors.textSecondary },
+            { citations },
+          )}
+        </View>,
+      );
+      continue;
+    }
+
+    if (footnoteDefinitionPattern.test(line)) {
+      const start = idx;
+      const notes: { label: string; text: string }[] = [];
+      while (idx < lines.length) {
+        const current = lines[idx]!;
+        const definition = footnoteDefinitionPattern.exec(current);
+        if (definition) {
+          notes.push({ label: restoreEscapes(definition[1]!), text: definition[2]! });
+        } else if (continuationIndentPattern.test(current) && notes.length > 0) {
+          notes[notes.length - 1]!.text += `\n${current.trim()}`;
+        } else if (!(
+          current.trim() === '' && footnoteDefinitionPattern.test(lines[idx + 1] ?? '')
+        )) {
+          break;
         }
         idx++;
       }
       nodes.push(
         <View
-          key={`${keyBase}-bq-${idx}`}
+          key={`${keyBase}-fn-${start}`}
+          accessibilityLabel="Footnotes"
           style={{
-            borderLeftWidth: 3,
-            borderLeftColor: renderColors.teal,
-            paddingLeft: 10,
-            paddingVertical: 4,
-            marginVertical: 4,
-            backgroundColor: renderColors.surfaceBase,
-            borderRadius: 4,
+            marginTop: 8,
+            paddingTop: 8,
+            gap: 4,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: renderColors.border,
           }}
         >
-          <Text
-            style={{
-              ...chatTypography.body,
-              fontStyle: 'italic',
-              color: renderColors.textSecondary,
-            }}
-            selectable
-          >
-            {renderInlineMarkdown(
-              quoteLines.join('\n'),
-              `${keyBase}-bqil-${idx}`,
-              renderColors,
-              citations,
-            )}
-          </Text>
+          {notes.map((note, i) => (
+            <View key={`${keyBase}-fn-${start}-${i}`} style={{ flexDirection: 'row', gap: 6 }}>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  lineHeight: FOOTNOTE_LINE_HEIGHT,
+                  color: renderColors.textSecondary,
+                }}
+              >{`${note.label}.`}</Text>
+              <Text
+                selectable
+                style={{
+                  fontSize: typeScale.footnote,
+                  lineHeight: FOOTNOTE_LINE_HEIGHT,
+                  flex: 1,
+                  color: renderColors.textSecondary,
+                }}
+              >
+                {renderInlineMarkdown(
+                  note.text,
+                  `${keyBase}-fnil-${start}-${i}`,
+                  renderColors,
+                  citations,
+                )}
+              </Text>
+            </View>
+          ))}
         </View>,
       );
+      continue;
+    }
+
+    if (thematicBreakPattern.test(line)) {
+      nodes.push(
+        <View
+          key={`${keyBase}-hr-${idx}`}
+          style={{
+            height: 1,
+            backgroundColor: renderColors.border,
+            marginVertical: 8,
+          }}
+        />,
+      );
+      idx++;
       continue;
     }
 
@@ -579,17 +587,35 @@ function renderTextSegment(
               key={`${keyBase}-li-${idx}-${i}`}
               style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 + item.depth * 16 }}
             >
-              <Text
-                style={{
-                  ...chatTypography.body,
-                  color: renderColors.teal,
-                  ...(item.ordered
-                    ? { minWidth: 18, textAlign: 'right' as const }
-                    : { width: 12, textAlign: 'center' as const }),
-                }}
-              >
-                {item.marker}
-              </Text>
+              {item.task ? (
+                <View
+                  accessible
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: item.task === 'done', disabled: true }}
+                  style={{
+                    height: chatTypography.body.lineHeight,
+                    justifyContent: 'center',
+                  }}
+                >
+                  {item.task === 'done' ? (
+                    <SquareCheck size={TASK_MARKER_SIZE} color={renderColors.textPrimary} />
+                  ) : (
+                    <Square size={TASK_MARKER_SIZE} color={renderColors.textSecondary} />
+                  )}
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    ...chatTypography.body,
+                    color: renderColors.textPrimary,
+                    ...(item.ordered
+                      ? { minWidth: 18, textAlign: 'right' as const }
+                      : { width: 12, textAlign: 'center' as const }),
+                  }}
+                >
+                  {item.marker}
+                </Text>
+              )}
               <Text
                 style={{
                   ...chatTypography.body,
@@ -636,6 +662,11 @@ function renderTextSegment(
           separatorLine.includes('-')
         ) {
           const tableRows: string[][] = [];
+          const alignments: TableAlignment[] = parseTableRow(separatorLine).map((cell) => {
+            const left = cell.startsWith(':');
+            const right = cell.endsWith(':');
+            return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined;
+          });
 
           const headerRow = parseTableRow(line);
           tableRows.push(headerRow);
@@ -651,24 +682,16 @@ function renderTextSegment(
 
           if (tableRows.length > 0) {
             const numCols = Math.max(...tableRows.map((row) => row.length));
-            const columnWidths = Array.from({ length: numCols }, (_, colIdx) => {
-              const longestCell = tableRows.reduce(
-                (longest, row) => Math.max(longest, (row[colIdx] ?? '').length),
-                0,
-              );
-              return Math.min(
-                MAX_TABLE_COLUMN_WIDTH,
-                Math.max(
-                  MIN_TABLE_COLUMN_WIDTH,
-                  longestCell * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_PADDING,
-                ),
-              );
-            });
+            const columns = Array.from({ length: numCols }, (_, colIdx) =>
+              tableRows.map((row) => row[colIdx] ?? ''),
+            );
             nodes.push(
               <MarkdownTable
                 key={`${keyBase}-table-${idx}`}
                 rows={tableRows}
-                columnWidths={columnWidths}
+                columnWidths={columns.map(markdownTableNaturalWidth)}
+                columnWordWidths={columns.map(markdownTableWordWidth)}
+                alignments={alignments}
                 keyBase={`${keyBase}-t${idx}`}
                 renderColors={renderColors}
                 citations={citations}
@@ -680,21 +703,6 @@ function renderTextSegment(
       }
     }
 
-    if (/^(---|\*\*\*|___)$/.test(line.trim())) {
-      nodes.push(
-        <View
-          key={`${keyBase}-hr-${idx}`}
-          style={{
-            height: 1,
-            backgroundColor: renderColors.border,
-            marginVertical: 8,
-          }}
-        />,
-      );
-      idx++;
-      continue;
-    }
-
     if (line.trim()) {
       nodes.push(
         <Text
@@ -702,7 +710,12 @@ function renderTextSegment(
           style={{ ...chatTypography.body, color: renderColors.textPrimary }}
           selectable
         >
-          {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
+          {renderInlineMarkdown(
+            line.replace(/(?:\\| {2,})$/, ''),
+            `${keyBase}-pil-${idx}`,
+            renderColors,
+            citations,
+          )}
         </Text>,
       );
     } else if (idx > 0 && idx < lines.length - 1) {
@@ -715,6 +728,72 @@ function renderTextSegment(
 }
 
 const PLAIN_TEXT_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['text', 'txt', 'plaintext']);
+const DIFF_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['diff', 'patch', 'udiff']);
+const CODE_LINE_STYLE = { fontSize: typeScale.footnote, lineHeight: 19, fontFamily: 'Menlo' };
+
+type DiffLineKind = 'added' | 'removed' | 'context';
+
+const DIFF_LINE_LABELS: Record<DiffLineKind, string> = {
+  added: 'Added line: ',
+  removed: 'Removed line: ',
+  context: '',
+};
+
+function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith('+')) return 'added';
+  if (line.startsWith('-')) return 'removed';
+  return 'context';
+}
+
+function diffLineFill(kind: DiffLineKind, colors: ColorScheme): string {
+  if (kind === 'added') return colors.diffAddedFill;
+  if (kind === 'removed') return colors.diffRemovedFill;
+  return colors.transparent;
+}
+
+function diffLineInk(kind: DiffLineKind, colors: ColorScheme): string {
+  if (kind === 'added') return colors.diffAddedText;
+  if (kind === 'removed') return colors.diffRemovedText;
+  return colors.textPrimary;
+}
+
+function DiffCodeLines({ code, colors }: { code: string; colors: ColorScheme }) {
+  return (
+    <CodeLinesScroller
+      showsIndicator
+      testID="markdown-diff"
+      style={{ paddingTop: 2, paddingBottom: 10 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
+      <View style={{ flexGrow: 1 }}>
+        {code.split('\n').map((line, lineIdx) => {
+          const kind = diffLineKind(line);
+          return (
+            <View
+              key={`${lineIdx}-${line}`}
+              accessible
+              accessibilityLabel={`${DIFF_LINE_LABELS[kind]}${line}`}
+              testID={`markdown-diff-line-${kind}`}
+              style={{ paddingHorizontal: 12, backgroundColor: diffLineFill(kind, colors) }}
+            >
+              <Text style={{ ...CODE_LINE_STYLE, color: diffLineInk(kind, colors) }} selectable>
+                {line || ' '}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </CodeLinesScroller>
+  );
+}
+
+function downloadCodeBlock(code: string, fenceLanguage: string | undefined): void {
+  void exportSourceFile(code, 'code', artifactSourceExtension(fenceLanguage))
+    .then((result) => shareFile(result.uri))
+    .catch(() => {
+      Alert.alert('Download failed', 'Could not save this code as a file. Try again.');
+    });
+}
 
 function renderCodeCard(
   key: string,
@@ -724,21 +803,15 @@ function renderCodeCard(
   renderColors: ColorScheme,
 ): React.ReactElement {
   const languageLabel = fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
-  const codeTokens: SyntaxToken[] = highlightCode
-    ? tokenizeCode(codeContent, fenceLanguage)
-    : [{ text: codeContent, type: 'plain' }];
+  const isDiff = DIFF_FENCE_LANGUAGES.has(fenceLanguage?.toLowerCase() ?? '');
+  const codeTokens: SyntaxToken[] =
+    highlightCode && !isDiff
+      ? tokenizeCode(codeContent, fenceLanguage)
+      : [{ text: codeContent, type: 'plain' }];
   const wrapsLongLines =
     !fenceLanguage || PLAIN_TEXT_FENCE_LANGUAGES.has(fenceLanguage.toLowerCase());
   const codeText = (
-    <Text
-      style={{
-        fontSize: typeScale.footnote,
-        lineHeight: 19,
-        fontFamily: 'Menlo',
-        color: renderColors.textPrimary,
-      }}
-      selectable
-    >
+    <Text style={{ ...CODE_LINE_STYLE, color: renderColors.textPrimary }} selectable>
       {codeTokens.map((token, tokenIdx) =>
         token.type === 'plain' ? (
           token.text
@@ -786,23 +859,35 @@ function renderCodeCard(
         >
           {languageLabel}
         </Text>
-        <CodeBlockCopyButton code={codeContent} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          {highlightCode ? (
+            <Pressable
+              onPress={() => downloadCodeBlock(codeContent, fenceLanguage)}
+              hitSlop={11}
+              accessibilityRole="button"
+              accessibilityLabel="Download code"
+              style={{
+                padding: 4,
+                borderRadius: 4,
+                backgroundColor: renderColors.neutralSurface,
+              }}
+            >
+              <Download size={14} color={renderColors.textMuted} />
+            </Pressable>
+          ) : null}
+          <CodeBlockCopyButton code={codeContent} />
+        </View>
       </View>
-      {wrapsLongLines ? (
-        <View style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}>{codeText}</View>
+      {isDiff ? (
+        <DiffCodeLines code={codeContent} colors={renderColors} />
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          scrollEventThrottle={16}
-          style={{
-            paddingTop: 2,
-            paddingBottom: 10,
-            paddingHorizontal: 12,
-          }}
+        <CodeLinesScroller
+          alwaysWrap={wrapsLongLines}
+          showsIndicator
+          style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}
         >
           {codeText}
-        </ScrollView>
+        </CodeLinesScroller>
       )}
     </View>
   );
@@ -862,6 +947,13 @@ export function renderMarkdownContent(
             fence={classified}
             colors={renderColors}
             onFollowUp={options.onFollowUp}
+            streaming={!highlightCode}
+            renderBody={(body) =>
+              renderMarkdownContent(body, renderColors, {
+                highlightCode,
+                ...(options.onFollowUp ? { onFollowUp: options.onFollowUp } : {}),
+              })
+            }
           />,
         );
         lastIndex = match.index + match[0].length;

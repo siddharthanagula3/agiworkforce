@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart3, Check, MessageCircleDashed, Package, Pencil, Share2, X } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { useChatStore } from '../stores/chatStore';
 
 /**
@@ -80,6 +81,7 @@ export function ConversationHeader({
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => {
+            if (isImeComposingKey(e.nativeEvent)) return;
             if (e.key === 'Enter') commitRename();
             if (e.key === 'Escape') setEditing(false);
           }}

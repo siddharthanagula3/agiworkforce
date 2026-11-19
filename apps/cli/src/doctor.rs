@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 
 use crate::config::CliConfig;
-use crate::mcp::{McpManager, McpTransport};
+use crate::mcp::{McpManager, McpServerConfig, McpTransport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -58,6 +58,7 @@ pub fn run_doctor(config: &CliConfig, json: bool) -> Result<()> {
 
 pub fn collect_doctor_report(config: &CliConfig) -> DoctorReport {
     let mut checks = Vec::new();
+    checks.push(config_file_check());
     checks.extend(runtime_dependency_checks());
     checks.extend(auth_checks());
     checks.extend(sandbox_checks());
@@ -151,29 +152,80 @@ pub fn format_text_report(report: &DoctorReport) -> String {
     lines.join("\n")
 }
 
+fn config_file_check() -> DoctorCheck {
+    match CliConfig::config_path() {
+        Ok(path) => config_file_check_at(&path),
+        Err(err) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Fail,
+            format!("could not resolve the config file: {err:#}"),
+            vec![],
+        ),
+    }
+}
+
+fn config_file_check_at(path: &Path) -> DoctorCheck {
+    if !path.exists() {
+        return check(
+            "config.file",
+            "config file",
+            DoctorStatus::Pass,
+            format!(
+                "{} does not exist yet; built-in defaults apply",
+                path.display()
+            ),
+            vec![],
+        );
+    }
+    match CliConfig::load_from(path) {
+        Ok(_) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Pass,
+            format!("{} loads", path.display()),
+            vec![],
+        ),
+        Err(err) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Fail,
+            format!("{err:#}"),
+            vec![format!(
+                "agi runs on built-in defaults until {} is fixed or moved aside",
+                path.display()
+            )],
+        ),
+    }
+}
+
 fn runtime_dependency_checks() -> Vec<DoctorCheck> {
     let mut checks = Vec::new();
-    for (id, binary, required) in [
-        ("runtime.git", "git", true),
-        ("runtime.shell", "sh", true),
-        ("runtime.rg", "rg", false),
-        ("runtime.node", "node", false),
-        ("runtime.cargo", "cargo", false),
+    for (id, binary, required, absent_note) in [
+        ("runtime.git", "git", true, ""),
+        ("runtime.shell", "sh", true, ""),
+        ("runtime.rg", "rg", false, "file search falls back to grep"),
+        (
+            "runtime.node",
+            "node",
+            false,
+            "only needed by tools that run on Node",
+        ),
+        (
+            "runtime.cargo",
+            "cargo",
+            false,
+            "only needed for Rust projects",
+        ),
     ] {
         let available = command_available(binary);
-        let status = if available {
-            DoctorStatus::Pass
-        } else if required {
-            DoctorStatus::Fail
-        } else {
-            DoctorStatus::Warn
-        };
+        let status = runtime_dependency_status(available, required);
         let message = if available {
             format!("`{binary}` is available")
         } else if required {
             format!("required runtime `{binary}` is missing")
         } else {
-            format!("optional runtime `{binary}` is missing")
+            format!("optional runtime `{binary}` is not installed, {absent_note}")
         };
         checks.push(check(
             id,
@@ -184,6 +236,14 @@ fn runtime_dependency_checks() -> Vec<DoctorCheck> {
         ));
     }
     checks
+}
+
+fn runtime_dependency_status(available: bool, required: bool) -> DoctorStatus {
+    if available || !required {
+        DoctorStatus::Pass
+    } else {
+        DoctorStatus::Fail
+    }
 }
 
 fn command_available(binary: &str) -> bool {
@@ -415,10 +475,20 @@ fn writable_path_check(id: &str, title: &str, path: &Path) -> DoctorCheck {
 }
 
 fn mcp_checks() -> Vec<DoctorCheck> {
-    match McpManager::load_configs() {
+    mcp_check_results(
+        McpManager::load_configs(),
+        McpManager::default_config_problems(None),
+    )
+}
+
+fn mcp_check_results(
+    loaded: Result<HashMap<String, McpServerConfig>>,
+    load_problems: Vec<String>,
+) -> Vec<DoctorCheck> {
+    match loaded {
         Ok(configs) => {
             let mut transport_counts: BTreeMap<&'static str, usize> = BTreeMap::new();
-            let mut invalid = Vec::new();
+            let mut invalid = load_problems;
             for (name, config) in &configs {
                 match config.as_transport() {
                     McpTransport::Stdio { command, .. } => {
@@ -663,25 +733,39 @@ fn git_hygiene_checks() -> Vec<DoctorCheck> {
         return checks;
     }
 
-    let current_branch = layout.head.to_string();
-    let branches = stale_branches(60).unwrap_or_default();
+    checks.push(stale_branches_check(
+        &layout.head.to_string(),
+        stale_branches(60),
+    ));
+    checks
+}
+
+fn stale_branches_check(current_branch: &str, branches: Option<Vec<String>>) -> DoctorCheck {
+    let details = vec![format!("current branch: {current_branch}")];
+    let Some(branches) = branches else {
+        return check(
+            "git.stale_branches",
+            "stale branches",
+            DoctorStatus::Unknown,
+            "branch list could not be read",
+            details,
+        );
+    };
     let status = if branches.is_empty() {
         DoctorStatus::Pass
     } else {
         DoctorStatus::Warn
     };
-    checks.push(check(
+    let message = format!("{} branch(es) older than 60 days", branches.len());
+    let mut details = details;
+    details.extend(branches.into_iter().take(20));
+    check(
         "git.stale_branches",
         "stale branches",
         status,
-        format!("{} branch(es) older than 60 days", branches.len()),
-        {
-            let mut details = vec![format!("current branch: {current_branch}")];
-            details.extend(branches.into_iter().take(20));
-            details
-        },
-    ));
-    checks
+        message,
+        details,
+    )
 }
 
 /// The repository's shape as one check: a detached HEAD, a bare checkout, a
@@ -773,6 +857,25 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_config_file_that_does_not_parse_fails_the_check_and_names_the_file() {
+        let home = tempfile::tempdir().expect("temp home");
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[default]\nprovider = \"oll").expect("write config");
+
+        let result = config_file_check_at(&path);
+
+        assert_eq!(result.status, DoctorStatus::Fail);
+        assert!(
+            result.message.contains(&path.display().to_string()),
+            "{}",
+            result.message
+        );
+
+        std::fs::write(&path, "[default]\nstream = true\n").expect("write config");
+        assert_eq!(config_file_check_at(&path).status, DoctorStatus::Pass);
+    }
+
+    #[test]
     fn summary_prefers_fail_over_warn() {
         let checks = vec![
             check("a", "A", DoctorStatus::Pass, "ok", vec![]),
@@ -835,11 +938,97 @@ mod tests {
     }
 
     #[test]
+    fn a_branch_list_that_could_not_be_read_is_unknown_not_a_pass() {
+        let result = stale_branches_check("main", None);
+
+        assert_eq!(result.status, DoctorStatus::Unknown);
+        assert!(!result.message.contains("0 branch(es)"));
+        assert_eq!(result.details, vec!["current branch: main".to_string()]);
+    }
+
+    #[test]
+    fn an_empty_branch_list_passes_and_stale_branches_warn() {
+        let empty = stale_branches_check("main", Some(Vec::new()));
+        assert_eq!(empty.status, DoctorStatus::Pass);
+        assert_eq!(empty.message, "0 branch(es) older than 60 days");
+
+        let stale = (0..25)
+            .map(|index| format!("old-{index}: older than 60 days"))
+            .collect::<Vec<_>>();
+        let warned = stale_branches_check("main", Some(stale));
+        assert_eq!(warned.status, DoctorStatus::Warn);
+        assert_eq!(warned.message, "25 branch(es) older than 60 days");
+        assert_eq!(warned.details.len(), 21);
+    }
+
+    #[test]
+    fn mcp_load_problems_fail_the_check_instead_of_passing_with_zero_servers() {
+        let problems = vec!["/home/u/.agiworkforce/mcp.json: invalid JSON: EOF".to_string()];
+
+        let results = mcp_check_results(Ok(HashMap::new()), problems.clone());
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].status, DoctorStatus::Fail);
+        assert!(results[0].details.contains(&problems[0]));
+    }
+
+    #[test]
+    fn an_empty_mcp_configuration_without_problems_still_passes() {
+        let results = mcp_check_results(Ok(HashMap::new()), Vec::new());
+
+        assert_eq!(results[0].status, DoctorStatus::Pass);
+        assert_eq!(results[0].message, "0 configured server(s)");
+    }
+
+    #[test]
+    fn a_valid_server_keeps_its_inventory_beside_a_load_problem() {
+        let servers: HashMap<String, McpServerConfig> = serde_json::from_value(serde_json::json!({
+            "docs": { "command": "node", "args": ["server.js"] }
+        }))
+        .expect("server config");
+
+        let results = mcp_check_results(
+            Ok(servers),
+            vec!["mcp.json: server `broken` skipped: invalid".to_string()],
+        );
+
+        assert_eq!(results[0].status, DoctorStatus::Fail);
+        assert_eq!(results[0].message, "1 configured server(s)");
+        assert!(results[0].details.contains(&"stdio: 1".to_string()));
+    }
+
+    #[test]
     fn http_url_validation_requires_host() {
         assert!(is_http_url("https://api.openai.com/v1"));
         assert!(is_http_url("http://localhost:11434"));
         assert!(!is_http_url("file:///tmp/model.sock"));
         assert!(!is_http_url("not a url"));
+    }
+
+    #[test]
+    fn an_absent_optional_runtime_does_not_degrade_the_verdict() {
+        assert_eq!(runtime_dependency_status(false, false), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(true, false), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(true, true), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(false, true), DoctorStatus::Fail);
+        let checks = vec![
+            check(
+                "runtime.rg",
+                "runtime dependency: rg",
+                runtime_dependency_status(false, false),
+                "optional runtime `rg` is not installed",
+                vec![],
+            ),
+            check(
+                "runtime.git",
+                "runtime dependency: git",
+                runtime_dependency_status(false, true),
+                "required runtime `git` is missing",
+                vec![],
+            ),
+        ];
+        assert_eq!(summarize_checks(&checks[..1]).overall, DoctorStatus::Pass);
+        assert_eq!(summarize_checks(&checks).overall, DoctorStatus::Fail);
     }
 
     #[test]

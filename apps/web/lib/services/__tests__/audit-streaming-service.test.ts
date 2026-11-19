@@ -18,20 +18,30 @@ const { mockGetKeyValueStore } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mockGetKeyValueStore }));
 
-const { mockOrganizationKeyRing, testKeyRing } = vi.hoisted(() => {
+const { mockOrganizationKeyRing, mockKeyFence, testKeyRing } = vi.hoisted(() => {
   const ring = { active: { id: 'test-key', material: Buffer.alloc(32, 7) }, retired: [] };
   return {
     testKeyRing: ring,
-    mockOrganizationKeyRing: vi.fn(async () => ({
+    mockOrganizationKeyRing: vi.fn(async (_db?: unknown) => ({
       ring,
       source: 'platform_derived',
       descriptor: null,
       keyVersion: ring.active.id,
     })),
+    mockKeyFence: vi.fn(
+      async (
+        db: unknown,
+        _organizationId: string,
+        _mode: string,
+        run: (tx: unknown) => Promise<unknown>,
+      ) => run(db),
+    ),
   };
 });
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   organizationKeyRing: mockOrganizationKeyRing,
+  withOrganizationKeyFence: mockKeyFence,
 }));
 
 import {
@@ -218,6 +228,54 @@ describe('upsertAuditDestination', () => {
     expect(params[2]).toBe(hashSecret(saved.secret));
     expect(params[3]).not.toBe(saved.secret);
     expect(String(params[3])).not.toContain(saved.secret);
+  });
+
+  it('resolves the ring and writes the ciphertext inside the sealing fence', async () => {
+    const order: string[] = [];
+    const tx = {
+      query: vi.fn(async (sql: string) => {
+        order.push(
+          /insert into public\.organization_audit_destinations/i.test(sql) ? 'write' : 'other',
+        );
+        return [
+          {
+            organization_id: ORG,
+            endpoint_url: 'https://siem.example.test/hook',
+            secret_prefix: 'ignored',
+            enabled: true,
+            last_delivered_at: null,
+            last_delivered_id: null,
+            last_attempt_at: null,
+            last_status: null,
+            consecutive_failures: 0,
+            created_at: NOW.toISOString(),
+          },
+        ];
+      }),
+    } as unknown as DatabaseAdapter;
+    const db = { query: vi.fn(), execute: vi.fn() } as unknown as DatabaseAdapter;
+    mockOrganizationKeyRing.mockImplementationOnce(async (resolvedAgainst: unknown) => {
+      order.push(resolvedAgainst === tx ? 'ring-in-fence' : 'ring-outside-fence');
+      return {
+        ring: testKeyRing,
+        source: 'platform_derived',
+        descriptor: null,
+        keyVersion: testKeyRing.active.id,
+      };
+    });
+    mockKeyFence.mockImplementationOnce(async (_db, _org, mode, run) => {
+      order.push(`fence:${mode}`);
+      return run(tx);
+    });
+
+    await upsertAuditDestination(db, ORG, {
+      endpointUrl: 'https://siem.example.test/hook',
+      enabled: true,
+      createdByUserId: 'user-1',
+    });
+
+    expect(order).toEqual(['fence:sealing', 'ring-in-fence', 'write']);
+    expect(db.query).not.toHaveBeenCalled();
   });
 });
 
@@ -601,7 +659,7 @@ describe('drainAuditDestination', () => {
     const read = h.query.mock.calls.find((c) =>
       /from public\.enterprise_audit_events/i.test(String(c[0])),
     );
-    expect((read?.[1] as unknown[]).at(-1)).toBe(AUDIT_STREAM_BATCH);
+    expect((read?.[1] as unknown[])[1]).toBe(AUDIT_STREAM_BATCH);
   });
 
   it('always binds the organization as the first parameter', async () => {
@@ -765,3 +823,5 @@ describe('the published schema document', () => {
     expect(SCHEMA_DOC).toContain(AUDIT_SIGNATURE_HEADER);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

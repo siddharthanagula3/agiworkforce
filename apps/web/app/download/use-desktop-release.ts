@@ -28,8 +28,8 @@ export const ARCHITECTURE_LABELS: Record<MacArchitecture, string> = {
   x64: 'Intel Mac',
 };
 
-export function macDownloadHref(architecture: MacArchitecture): string {
-  return `/api/download?platform=mac&arch=${architecture}`;
+export function macDownloadHref(architecture: MacArchitecture, version: string): string {
+  return `/api/download?platform=mac&arch=${architecture}&version=${encodeURIComponent(version)}`;
 }
 
 function isDesktopManifest(
@@ -55,10 +55,18 @@ function isDesktopManifest(
   );
 }
 
-function parseChecksums(value: unknown): InstallerChecksum[] {
-  if (!value || typeof value !== 'object') return [];
+interface PublishedChecksums {
+  version: string;
+  installers: InstallerChecksum[];
+}
+
+function parseChecksums(value: unknown): PublishedChecksums | null {
+  if (!value || typeof value !== 'object') return null;
+  const version = (value as Record<string, unknown>)['version'];
   const installers = (value as Record<string, unknown>)['installers'];
-  if (!Array.isArray(installers)) return [];
+  if (typeof version !== 'string' || version.trim() === '' || !Array.isArray(installers)) {
+    return null;
+  }
   const parsed: InstallerChecksum[] = [];
   for (const entry of installers) {
     if (!entry || typeof entry !== 'object') continue;
@@ -74,7 +82,7 @@ function parseChecksums(value: unknown): InstallerChecksum[] {
       sha256,
     });
   }
-  return parsed;
+  return { version, installers: parsed };
 }
 
 interface DesktopRelease {
@@ -88,9 +96,10 @@ interface DesktopRelease {
 
 export function useDesktopRelease(): DesktopRelease {
   const [availability, setAvailability] = useState<DesktopAvailability>({ state: 'loading' });
-  const [checksums, setChecksums] = useState<InstallerChecksum[]>([]);
+  const [published, setPublished] = useState<PublishedChecksums | null>(null);
   const [detected, setDetected] = useState<DetectedArchitecture>('unknown');
   const requestId = useRef(0);
+  const checksumRequestId = useRef(0);
 
   const checkRelease = useCallback(async (signal?: AbortSignal) => {
     const currentRequest = ++requestId.current;
@@ -127,11 +136,13 @@ export function useDesktopRelease(): DesktopRelease {
   }, []);
 
   const checkChecksums = useCallback(async (signal?: AbortSignal) => {
+    const currentRequest = ++checksumRequestId.current;
     try {
       const response = await fetch('/api/download/checksums', { cache: 'no-store', signal });
-      setChecksums(response.ok ? parseChecksums(await response.json()) : []);
+      const parsed = response.ok ? parseChecksums(await response.json()) : null;
+      if (currentRequest === checksumRequestId.current) setPublished(parsed);
     } catch {
-      setChecksums([]);
+      if (!signal?.aborted && currentRequest === checksumRequestId.current) setPublished(null);
     }
   }, []);
 
@@ -154,6 +165,11 @@ export function useDesktopRelease(): DesktopRelease {
     };
   }, []);
 
+  const retry = useCallback(() => {
+    void checkRelease();
+    void checkChecksums();
+  }, [checkRelease, checkChecksums]);
+
   const offered =
     availability.state === 'available'
       ? MAC_ARCHITECTURES.filter((architecture) => availability.architectures[architecture])
@@ -164,11 +180,14 @@ export function useDesktopRelease(): DesktopRelease {
   return {
     availability,
     offered,
-    checksums: checksums.filter(
-      (checksum) => checksum.architecture === null || offered.includes(checksum.architecture),
-    ),
+    checksums:
+      availability.state === 'available' && published?.version === availability.version
+        ? published.installers.filter(
+            (checksum) => checksum.architecture === null || offered.includes(checksum.architecture),
+          )
+        : [],
     detected,
     recommended,
-    retry: () => void checkRelease(),
+    retry,
   };
 }

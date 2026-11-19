@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   readAgentAccess: vi.fn(),
   shareAgent: vi.fn(),
   listWorkspaceMembers: vi.fn(),
+  readWorkspaceMember: vi.fn(),
   recordWorkspaceAuditEvent: vi.fn(),
   serviceQuery: vi.fn(),
 }));
@@ -45,6 +46,7 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
 vi.mock('@/lib/services/organization-member-admin-service', async (importOriginal) => ({
   ...(await importOriginal<MemberAdminModule>()),
   listWorkspaceMembers: mocks.listWorkspaceMembers,
+  readWorkspaceMember: mocks.readWorkspaceMember,
 }));
 vi.mock('@/lib/workspace-audit', async (importOriginal) => ({
   ...(await importOriginal<WorkspaceAuditModule>()),
@@ -71,6 +73,7 @@ describe('/api/custom-agents/[id]/share', () => {
     mocks.shareAgent.mockResolvedValue(agentRow({ visibility: 'people' }));
     mocks.readAgentAccess.mockResolvedValue(new Set([TEAMMATE]));
     mocks.listWorkspaceMembers.mockResolvedValue(MEMBERS);
+    mocks.readWorkspaceMember.mockResolvedValue({ userId: OWNER, status: 'active' });
     mocks.serviceQuery.mockResolvedValue([{ name: 'Acme' }]);
     mocks.recordWorkspaceAuditEvent.mockResolvedValue(undefined);
   });
@@ -81,6 +84,11 @@ describe('/api/custom-agents/[id]/share', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(mocks.requireOwnedAgent).toHaveBeenCalledWith(expect.anything(), OWNER, AGENT_ID);
+    expect(mocks.readWorkspaceMember).toHaveBeenCalledWith(
+      expect.anything(),
+      ORGANIZATION_ID,
+      OWNER,
+    );
     expect(mocks.listWorkspaceMembers).toHaveBeenCalledWith(
       expect.anything(),
       ORGANIZATION_ID,
@@ -110,6 +118,23 @@ describe('/api/custom-agents/[id]/share', () => {
       members: [],
     });
     expect(mocks.listWorkspaceMembers).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['has left the workspace', null],
+    ['was suspended in the workspace', { userId: OWNER, status: 'suspended' }],
+  ])('GET gives no workspace directory to an owner who %s', async (_label, membership) => {
+    mocks.readWorkspaceMember.mockResolvedValue(membership);
+    const response = await GET(agentRequest(PATH), agentContext());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      visibility: 'private',
+      workspaceName: null,
+      members: [],
+    });
+    expect(mocks.listWorkspaceMembers).not.toHaveBeenCalled();
+    expect(mocks.serviceQuery).not.toHaveBeenCalled();
   });
 
   it('PUT shares with the named people and records it in the workspace audit log', async () => {

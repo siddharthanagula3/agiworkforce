@@ -1,15 +1,10 @@
-import { useCallback, useMemo, useRef } from 'react';
-import { Alert, TextInput, View } from 'react-native';
+import { useMemo } from 'react';
+import { View } from 'react-native';
 import { SlidersHorizontal } from 'lucide-react-native';
 import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
 import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
-import { cleanupVoiceDictation } from '@agiworkforce/utils/voice';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import { SendButton } from '@/src/features/chat/components/SendButton';
-import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
-import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
-import { useCapability } from '@/src/lib/Capabilities';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -18,10 +13,8 @@ import {
   cloudCodeChangeCountsLabel,
 } from '../presentation';
 import { CloudCodeLineCountsText } from './CloudCodeChangesCard';
+import { SessionComposerField } from './SessionComposerField';
 
-const DICTATION_FAILED_TITLE = "Didn't catch that";
-const DICTATION_FAILED_BODY = "Audio isn't saved, so say it again.";
-const DICTATION_UNAVAILABLE_TITLE = 'Voice input unavailable';
 const SEND_LABEL = 'Send to this session';
 const INPUT_LABEL = 'Message for this session';
 
@@ -51,38 +44,11 @@ export function CloudCodeComposer({
   onOpenChanges?: () => void;
 }) {
   const colors = useThemeColors();
-  const voiceAllowed = useCapability('canUseVoice');
-  const latestValue = useRef(value);
-  latestValue.current = value;
   const empty = value.trim().length === 0;
   const totals = useMemo(
     () => (changes ? cloudCodeChangeTotals(changes.files, changes.diff) : null),
     [changes],
   );
-
-  const handleTranscription = useCallback(
-    (transcript: string) => {
-      const cleaned = cleanupVoiceDictation(transcript);
-      if (!cleaned) {
-        Alert.alert(DICTATION_FAILED_TITLE, DICTATION_FAILED_BODY);
-        return;
-      }
-      const current = latestValue.current;
-      const next = current.trim() ? `${current} ${cleaned}` : cleaned;
-      latestValue.current = next;
-      onChangeText(next);
-    },
-    [onChangeText],
-  );
-
-  const handleVoiceError = useCallback((message: string, permissionDenied?: boolean) => {
-    if (permissionDenied) showVoicePermissionAlert(message);
-    else Alert.alert(DICTATION_UNAVAILABLE_TITLE, message);
-  }, []);
-
-  const handleVoiceFailure = useCallback(() => {
-    Alert.alert(DICTATION_FAILED_TITLE, DICTATION_FAILED_BODY);
-  }, []);
 
   return (
     <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 6, gap: 6 }}>
@@ -111,66 +77,26 @@ export function CloudCodeComposer({
           <CloudCodeLineCountsText counts={totals} />
         </Pressable>
       ) : null}
-      <View
-        style={{
-          minHeight: 52,
-          flexDirection: 'row',
-          alignItems: 'flex-end',
-          gap: 8,
-          borderRadius: radii['3xl'],
-          borderWidth: 1,
-          borderColor: colors.composerBorder,
-          backgroundColor: colors.inputSurface,
-          paddingLeft: 16,
-          paddingRight: 10,
-          paddingVertical: 8,
-        }}
-      >
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={
-            working
-              ? CLOUD_CODE_SESSION_COPY.runningPlaceholder
-              : CLOUD_CODE_SESSION_COPY.composerPlaceholder
-          }
-          placeholderTextColor={colors.textMuted}
-          multiline
-          accessibilityLabel={INPUT_LABEL}
-          style={{
-            flex: 1,
-            maxHeight: 140,
-            paddingVertical: 6,
-            color: colors.textPrimary,
-            fontSize: typeScale.callout,
-            lineHeight: 22,
-            textAlignVertical: 'top',
-          }}
-        />
-        {voiceAllowed ? (
-          <View style={{ paddingBottom: 1 }}>
-            <VoiceInputButton
-              onTranscription={handleTranscription}
-              onError={handleVoiceError}
-              onFailure={handleVoiceFailure}
-            />
-          </View>
-        ) : null}
-        <View style={{ paddingBottom: 2 }}>
-          <SendButton
-            state={working ? 'streaming' : 'idle'}
-            disabled={working ? stopping : empty}
-            onPress={working ? onStop : onSend}
-            accessibilityLabel={
-              working
-                ? stopping
-                  ? CLOUD_CODE_SESSION_COPY.stoppingTurn
-                  : CLOUD_CODE_SESSION_COPY.stopTurn
-                : SEND_LABEL
-            }
-          />
-        </View>
-      </View>
+      <SessionComposerField
+        value={value}
+        placeholder={
+          working
+            ? CLOUD_CODE_SESSION_COPY.runningPlaceholder
+            : CLOUD_CODE_SESSION_COPY.composerPlaceholder
+        }
+        inputLabel={INPUT_LABEL}
+        primaryState={working ? 'streaming' : 'idle'}
+        primaryDisabled={working ? stopping : empty}
+        primaryLabel={
+          working
+            ? stopping
+              ? CLOUD_CODE_SESSION_COPY.stoppingTurn
+              : CLOUD_CODE_SESSION_COPY.stopTurn
+            : SEND_LABEL
+        }
+        onChangeText={onChangeText}
+        onPrimary={working ? onStop : onSend}
+      />
       <Pressable
         onPress={onOpenOptions}
         accessibilityRole="button"

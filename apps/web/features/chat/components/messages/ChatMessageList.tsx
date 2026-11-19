@@ -11,6 +11,7 @@ import React, {
   memo,
 } from 'react';
 import { MessageSearch } from './MessageSearch';
+import { matchingGroupIndexes, type RenderedTextCache } from '../../lib/message-search';
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
@@ -153,9 +154,8 @@ function streamErrorReason(message: ChatMessage): string {
 const TURN_NOTICE_LINK_CLASS =
   'flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11 pointer-coarse:min-w-11';
 const SWITCH_MODEL_ACTION_LABEL = 'Switch model';
-const SWITCH_MODEL_ACTION_ARIA = 'Open the model picker';
 const RETRY_ACTION_LABEL = 'Retry';
-const RETRY_ACTION_ARIA = 'Regenerate this response';
+const RETRY_ACTION_ARIA = 'Retry this response';
 
 const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
   'provider_quota_exhausted',
@@ -1495,19 +1495,11 @@ const ChatMessageListComponent = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
-  const searchMatches = useMemo(() => {
-    const needle = searchQuery.trim().toLowerCase();
-    if (!needle) return [] as number[];
-    return groups.reduce<number[]>((acc, group, index) => {
-      const hit = group.messages.some((message) =>
-        typeof message.content === 'string'
-          ? message.content.toLowerCase().includes(needle)
-          : false,
-      );
-      if (hit) acc.push(index);
-      return acc;
-    }, []);
-  }, [groups, searchQuery]);
+  const renderedTextCache = useRef<RenderedTextCache>(new Map());
+  const searchMatches = useMemo(
+    () => matchingGroupIndexes(groups, searchQuery, renderedTextCache.current),
+    [groups, searchQuery],
+  );
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
@@ -1840,7 +1832,6 @@ const ChatMessageListComponent = ({
               type="button"
               onClick={() => openModelPicker()}
               className={TURN_NOTICE_LINK_CLASS}
-              aria-label={SWITCH_MODEL_ACTION_ARIA}
             >
               {SWITCH_MODEL_ACTION_LABEL}
             </button>
@@ -1966,7 +1957,6 @@ const ChatMessageListComponent = ({
               message="Response stopped."
               action={{
                 label: 'Try again',
-                ariaLabel: 'Regenerate this response',
                 icon: RefreshCw,
                 onClick: () => onRegenerate?.(lastMessage.id),
               }}
@@ -1996,7 +1986,7 @@ const ChatMessageListComponent = ({
                 onRegenerate
                   ? {
                       label: 'Retry',
-                      ariaLabel: 'Regenerate this response',
+                      ariaLabel: RETRY_ACTION_ARIA,
                       icon: RefreshCw,
                       onClick: () => onRegenerate(lastMessage.id),
                     }

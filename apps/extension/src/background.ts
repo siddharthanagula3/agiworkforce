@@ -31,7 +31,14 @@ import {
   type ScheduledTaskFetch,
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
-import type { ChatChunkMessage, WebMCPToolInfo } from './types';
+import { streamFailureText } from './features/side-panel/chat-state';
+import { IN_PAGE_PROMPT_PORT_PREFIX } from './features/content/in-page-panel/promptPort';
+import type {
+  BrowserContextTabReference,
+  ChatChunkMessage,
+  ChatToolHandoffMessage,
+  WebMCPToolInfo,
+} from './types';
 import type {
   ConnectionStatus,
   ExtensionMessage,
@@ -41,7 +48,8 @@ import type {
   InPagePromptResponse,
   ScheduledTask,
 } from './types';
-import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { logger, originOfUrl, RateLimiter, withTimeout, sleep } from './utils';
+import { storageUtils } from './features/background/storageUtils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { openAssistantPanel, sidePanelAvailable } from './features/surface/assistantPanel';
@@ -55,6 +63,7 @@ import {
   loadShortcuts,
   handleSaveShortcut,
   handleListShortcuts,
+  releaseRecordingsOfOtherAccounts,
   handleDeleteShortcut,
   handleUpdateShortcut,
   planShortcutReplay,
@@ -63,6 +72,14 @@ import {
   normalizeShortcutStartUrl,
   validateShortcutReplayTarget,
 } from './features/shortcuts/origin';
+import {
+  appendRecordedAction,
+  beginRecordingSession,
+  discardAllRecordingSessions,
+  discardRecordingSession,
+  endRecordingSession,
+  readRecordingSession,
+} from './features/background/recordingSessions';
 import { initializeSyncedPreferences } from './features/background/synced-preferences';
 import {
   loadScheduledTasks,
@@ -92,9 +109,11 @@ import {
 import { settleDetachedAssistantTurn } from './features/background/conversation-history';
 import { createMaintenanceAlarmController } from './features/background/maintenance-alarm';
 import {
+  captureAdmittedTab,
   deliverPageCapture,
   pageCaptureFailureMessage,
   PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE,
+  PAGE_CAPTURE_TAB_CHANGED_MESSAGE,
   PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
@@ -117,6 +136,7 @@ import {
   ScheduledTaskCancellationAttemptCoordinator,
   selectScheduledTaskCancellationCredential,
 } from './features/background/scheduled-task-cancellation';
+import { readEnabledPreference } from './features/background/enabled-preference';
 import {
   publishAuthorizedScheduledTaskNotification,
   scheduledTaskNotificationAuthority,
@@ -139,7 +159,10 @@ import {
   actionNeedsApproval,
   readBrowserPermissionMode,
 } from './features/computer-use/askBeforeActing';
-import { isCrucialAction } from './features/computer-use/crucialActions';
+import { asksInAutoMode } from './features/computer-use/crucialActions';
+import { restrictStorageToTrustedContexts } from './features/background/storageAccess';
+import { desktopTabSummary } from './features/native-bridge/tabListing';
+import { isExtensionAccountOrigin } from './features/computer-use/accountOrigins';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -151,10 +174,13 @@ import {
   type BrowserUploadBinding,
   type BrowserUploadedFileMetadata,
 } from './features/computer-use/userFileUpload';
+import { createRunInputWatch } from './features/computer-use/inputWatch';
 import {
   COMPUTER_USE_RUN_ID_PATTERN,
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
+  USER_TAKEOVER_MAX_MINUTES,
+  USER_TAKEOVER_MAX_MS,
   type ComputerUseCancellationReason,
   type ComputerUseRunLease,
   type ComputerUseTakeover,
@@ -185,6 +211,7 @@ import {
 import {
   ADMIN_SITE_POLICY_STORAGE_KEY,
   readAdminSitePolicy,
+  readUserSiteAllowlist,
   loadScheduledSitePolicyInput,
 } from './features/site-policy/store';
 import { createSitePolicyPublicationOwner } from './background/site-policy-publication';
@@ -234,6 +261,17 @@ import {
   listTransientHostPermissions,
   planTransientSweep,
 } from './features/computer-use/transientHostPermissions';
+import {
+  chromeHostPermissionReconcileDeps,
+  releaseUnapprovedHostPermissions,
+} from './features/computer-use/hostPermissionReconcile';
+import {
+  markComputerUseRunEnded,
+  markComputerUseRunStarted,
+  markComputerUseRunTab,
+  recoverLostComputerUseRun,
+  WORKER_RESTARTED_REASON,
+} from './features/computer-use/runMarker';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import {
   isPermanentNativeDisconnect,
@@ -293,8 +331,10 @@ import {
   ensureCloudConversation,
   flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
+  saveConversationNow,
   scheduleConversationSync,
   sweepConversationSync,
+  CONVERSATION_SYNC_RETRY_ALARM,
   SYNC_SWEEP_ALARM,
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
@@ -317,8 +357,20 @@ import {
 import { readConsoleEntries } from './features/browser-tools/consoleCapture';
 import {
   authorizeBrowserToolTab,
+  authorizeBrowserToolUrl,
   readAuthorizedBrowserTab,
 } from './features/browser-tools/tabAuthority';
+import {
+  AUTOFILL_NOT_APPROVED_ERROR,
+  AUTOFILL_PROFILE_UNREADABLE_ERROR,
+  AUTOFILL_UNSUPPORTED_PAGE_ERROR,
+  CONTENT_SENDER_REFUSAL,
+  contentScriptPageUrl,
+} from './features/background/contentAccess';
+import { loadAutofillProfile } from './features/content/autofill/profile-storage';
+import { isJobApplicationHostUrl } from './features/content/autofill/detector';
+import { changedOrigins, notifyPageAccessChanged } from './features/background/pageAccessNotifier';
+import { IN_PAGE_PANEL_ENABLED_STORAGE_KEY } from './features/options/preference-rows';
 import { parseContactAutofillProfile } from './features/content/autofill/contactProfile';
 import { parseFormFillPlan } from './features/content/formFillPlan';
 import { UUID_PATTERN } from './lib/uuid';
@@ -346,9 +398,67 @@ import {
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
 import {
+  bindUnboundDesktopPairing,
   desktopPairingRejectsAccount,
+  oweDesktopRevocation,
+  readDesktopPairToken,
+  readPendingDesktopRevocation,
   releaseStoredDesktopPairing,
+  releaseStoredDesktopPairingOf,
+  settlePendingDesktopRevocation,
+  type PendingDesktopRevocation,
 } from './features/native-bridge/pairing';
+import type {
+  AdoptChatTurnMessage,
+  AdoptedChatToolHandoff,
+  ApproveContextHandoffMessage,
+  BridgeUrlChangedMessage,
+  CancelComputerUseMessage,
+  ComputerUseApprovalResponseMessage,
+  SidePanelClosedMessage,
+  CancelContextHandoffMessage,
+  CancelStreamMessage,
+  ChatMessageMessage,
+  ComputerUseGuidanceMessage,
+  ComputerUseTakeoverMessage,
+  CreateScheduledTaskMessage,
+  DeleteCloudConversationMessage,
+  DeleteScheduledTaskMessage,
+  DeleteShortcutMessage,
+  EnsureCloudConversationMessage,
+  GrantSiteOnceMessage,
+  ListScheduledTasksMessage,
+  ManagedCloudAuthChangedMessage,
+  ReadPageConsoleMessage,
+  ReadPageNetworkMessage,
+  ReplayShortcutMessage,
+  ResolveChatApprovalMessage,
+  ResolveChatInputMessage,
+  ResolveChatToolsMessage,
+  ResumeChatRunMessage,
+  RevealDownloadMessage,
+  RevokeSiteOnceMessage,
+  RecordingActionMessage,
+  SaveShortcutMessage,
+  SetPageWatchMessage,
+  SetQuickModeMessage,
+  StartComputerUseMessage,
+  StartDownloadMessage,
+  SyncConversationMessage,
+  SaveConversationNowMessage,
+  SaveConversationNowResponse,
+  UpdateScheduledTaskMessage,
+  UpdateShortcutMessage,
+  WebMCPDiscoverToolsMessage,
+  WebMCPToolsChangedMessage,
+} from './types';
+import type { CallerToolContinuation } from './features/computer-use/toolHandoff';
+import type {
+  CallerToolResumeRequest,
+  ManagedCloudAgentRunReference,
+  WebDomainRules,
+} from '@agiworkforce/cloud-contracts';
+import type { PageDocumentReference } from './features/browser-tools/documentBridge';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -363,7 +473,26 @@ interface NativeMessageEnvelope {
   type: string;
   success?: boolean;
   error?: string;
+  code?: unknown;
   data?: unknown;
+}
+
+const NATIVE_PAIRING_REJECTED_CODE = 'pairing-rejected';
+
+class NativeRequestRefused extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+  ) {
+    super(message);
+  }
+}
+
+function nativeRefusal(message: NativeMessageEnvelope): NativeRequestRefused {
+  return new NativeRequestRefused(
+    message.error ?? 'Native request failed',
+    typeof message.code === 'string' ? message.code : null,
+  );
 }
 
 interface NativeResponseEnvelope {
@@ -389,13 +518,16 @@ interface ActiveChatStream {
   cancelNotified: boolean;
   cancellation?: Promise<ExtensionResponse>;
   requestId?: string;
-  cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
+  cloudRun?: ManagedCloudAgentRunReference;
   streamId?: string;
   historyConversationId?: string;
   assistantMessageId?: string;
   visibleText?: string;
   panelDetached?: boolean;
   settlement?: Promise<void>;
+  inPageTabId?: number;
+  inPageOrigin?: string;
+  inPageRequestId?: string;
 }
 
 const activeChatStreams = new Map<string, ActiveChatStream>();
@@ -430,6 +562,7 @@ interface PendingChatToolHandoff {
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   streamId: string;
+  handoff: AdoptedChatToolHandoff;
   callIds: readonly string[];
   callNames: readonly string[];
   signal: AbortSignal;
@@ -569,8 +702,8 @@ function requestChatToolHandoff(
   active: ActiveChatStream,
   streamId: string,
   calls: ToolCall[],
-  checkpoint?: import('./features/computer-use/toolHandoff').CallerToolContinuation,
-  recoveryContext?: import('./types').ChatToolHandoffMessage['recoveryContext'],
+  checkpoint?: CallerToolContinuation,
+  recoveryContext?: ChatToolHandoffMessage['recoveryContext'],
 ): Promise<ChromeManagedToolHandoffOutcome> {
   const callerCheckpoint = checkpoint
     ? {
@@ -618,17 +751,7 @@ function requestChatToolHandoff(
       onAbort();
       return;
     }
-    pendingChatToolHandoffs.set(handoffId, {
-      owner: active.owner,
-      clientInstanceId: active.clientInstanceId,
-      streamId,
-      callIds: calls.map((call) => call.id),
-      callNames: calls.map((call) => call.function.name),
-      signal,
-      ...(callerCheckpoint ? { callerCheckpoint } : {}),
-      finish,
-    });
-    const handoff: import('./types').ChatToolHandoffMessage = {
+    const handoff: ChatToolHandoffMessage = {
       type: 'CHAT_TOOL_HANDOFF',
       owner: active.owner,
       clientInstanceId: active.clientInstanceId,
@@ -638,6 +761,22 @@ function requestChatToolHandoff(
       ...(callerCheckpoint ? { callerCheckpoint } : {}),
       ...(recoveryContext ? { recoveryContext } : {}),
     };
+    pendingChatToolHandoffs.set(handoffId, {
+      owner: active.owner,
+      clientInstanceId: active.clientInstanceId,
+      streamId,
+      handoff: {
+        handoffId,
+        calls,
+        ...(callerCheckpoint ? { callerCheckpoint } : {}),
+        ...(recoveryContext ? { recoveryContext } : {}),
+      },
+      callIds: calls.map((call) => call.id),
+      callNames: calls.map((call) => call.function.name),
+      signal,
+      ...(callerCheckpoint ? { callerCheckpoint } : {}),
+      finish,
+    });
     void chrome.runtime.sendMessage(handoff).catch(() =>
       finish(
         callerCheckpoint
@@ -654,7 +793,40 @@ function requestChatToolHandoff(
   });
 }
 
-function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
+function waitingChatToolHandoffs(active: ActiveChatStream, streamId: string) {
+  return [...pendingChatToolHandoffs.values()].filter(
+    (pending) =>
+      pending.streamId === streamId &&
+      pending.clientInstanceId === active.clientInstanceId &&
+      !pending.nativeTask &&
+      !pending.signal.aborted &&
+      sameManagedCloudOwner(pending.owner, active.owner),
+  );
+}
+
+function adoptPendingChatToolHandoffs(
+  active: ActiveChatStream,
+  streamId: string,
+  clientInstanceId: string,
+): AdoptedChatToolHandoff[] {
+  return waitingChatToolHandoffs(active, streamId).map((pending) => {
+    pending.clientInstanceId = clientInstanceId;
+    return structuredClone(pending.handoff);
+  });
+}
+
+async function notifyWaitingBrowserStep(active: ActiveChatStream): Promise<void> {
+  if (!active.streamId || waitingChatToolHandoffs(active, active.streamId).length === 0) return;
+  if (!(await taskNotificationsEnabled())) return;
+  showNotification(
+    t('notifyTaskInputTitle'),
+    t('notifyBrowserStepWaiting'),
+    active.historyConversationId,
+    active.owner,
+  );
+}
+
+function resolveChatToolHandoff(message: ResolveChatToolsMessage): boolean {
   const pending = pendingChatToolHandoffs.get(message.handoffId);
   const owner = normalizeManagedCloudOwner(message.owner);
   if (
@@ -752,7 +924,7 @@ async function sweepTransientHostPermissions(expiredOnly: boolean): Promise<void
   for (const origin of plan.removeOrigins) await removeBrowserControlHostPermission(origin);
 }
 
-function grantSiteOnce(message: import('./types').GrantSiteOnceMessage): boolean {
+function grantSiteOnce(message: GrantSiteOnceMessage): boolean {
   for (const expired of expiredOneTimeSiteGrants()) void revokeOneTimeSiteGrant(expired.grantId);
   if (!isOneTimeSiteGrantId(message.grantId) || typeof message.origin !== 'string') return false;
   const grant = addOneTimeSiteGrant(
@@ -774,7 +946,7 @@ interface ActiveScheduledRecovery {
   owner: ManagedCloudOwner;
   token: string;
   controller: AbortController;
-  cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
+  cloudRun?: ManagedCloudAgentRunReference;
 }
 const activeScheduledRecoveries = new Map<string, ActiveScheduledRecovery>();
 const scheduledTaskCancellationAttempts = new ScheduledTaskCancellationAttemptCoordinator();
@@ -784,6 +956,12 @@ const SCHEDULED_RECOVERY_MAX_ATTEMPTS = 3;
 const SCHEDULED_HEARTBEAT_INTERVAL_MS = 20_000;
 
 const computerUseRuns = new ComputerUseRunCoordinator();
+const pendingComputerUseApprovals = new Map<
+  string,
+  (message: unknown, sender: chrome.runtime.MessageSender) => void
+>();
+const APPROVAL_NO_LONGER_PENDING =
+  'This request is no longer waiting for an answer, so nothing was done.';
 interface PendingRunGuidance {
   text: string;
   settle: (applied: boolean) => void;
@@ -820,11 +998,10 @@ function broadcastComputerUseForCurrentRun(
     runId: lease.runId,
     runGeneration: lease.generation,
     tabId: lease.tabId,
+    ...(lease.windowId === undefined ? {} : { windowId: lease.windowId }),
   });
 }
 
-const USER_TAKEOVER_REASON = 'You have the page. AGI waits until you hand it back.';
-const USER_INPUT_TAKEOVER_REASON = 'You started using the page, so AGI stopped acting on it.';
 const AGENT_INPUT_ECHO_MS = 750;
 
 function watchComputerUseUserInput(tabId: number, watching: boolean): void {
@@ -855,8 +1032,27 @@ function untilHandedBack(lease: ComputerUseRunLease, takeover: ComputerUseTakeov
   });
 }
 
+const takeoverDeadlines = new WeakSet<ComputerUseTakeover>();
+
+function endTakeoverAfterLimit(lease: ComputerUseRunLease, takeover: ComputerUseTakeover): void {
+  if (takeoverDeadlines.has(takeover)) return;
+  takeoverDeadlines.add(takeover);
+  const timer = setTimeout(() => {
+    if (lease.takeover !== takeover || computerUseRuns.getActive() !== lease) return;
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('takeover_expired', lease.runId);
+  }, USER_TAKEOVER_MAX_MS);
+  const clear = (): void => clearTimeout(timer);
+  void takeover.handedBack.then(clear);
+  lease.controller.signal.addEventListener('abort', clear, { once: true });
+}
+
 function handComputerUseTabToUser(lease: ComputerUseRunLease, reason: string): Promise<void> {
-  const takeover = computerUseRuns.beginTakeover(lease, reason);
+  const takeover = computerUseRuns.beginTakeover(
+    lease,
+    `${reason.trim()} ${t('cuTakeoverLimit', [USER_TAKEOVER_MAX_MINUTES])}`,
+  );
+  endTakeoverAfterLimit(lease, takeover);
   broadcastComputerUseForCurrentRun(lease, {
     type: 'AGI_CU_STATE',
     status: 'paused',
@@ -1183,10 +1379,18 @@ const TAB_GROUP_NAME = 'AGI';
 const _bgCtx = {
   nativeReconnectTimer: null as ReturnType<typeof setTimeout> | null,
   nativeReconnectAttempt: 0,
+  nativeConnectAttempt: 0,
   nativeHandshakeInFlight: false,
   nativeReconnectGaveUp: false,
   nativeSuspendInProgress: false,
+  revocationRetryAt: 0,
 };
+
+const DESKTOP_NOT_PAIRED =
+  'This browser profile is not paired with Desktop. Pair it in the extension settings.';
+const DESKTOP_PAIRED_ELSEWHERE =
+  'Desktop no longer recognizes this browser profile, so the pairing was removed here. Pair it again in the extension settings.';
+const DESKTOP_REVOCATION_RETRY_MS = 5 * 60_000;
 
 let nativeSessionSecret: ArrayBuffer | null = null;
 
@@ -1272,24 +1476,101 @@ function setDesktopPaired(paired: boolean): void {
  * throws is not a sign-out: the native session stays until the account is known.
  * Returns true when the pairing was released.
  */
-async function revokeMismatchedDesktopPairing(): Promise<boolean> {
-  if (!isClerkExtensionAuthConfigured()) return false;
+async function definitiveSignedInAccount(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<string | null | undefined> {
+  if (!isClerkExtensionAuthConfigured()) return undefined;
   let signedInAccountId: string | null;
   try {
-    const context = await getFreshClerkAuthContext();
+    const context = await (clerkRead ?? getFreshClerkAuthContext());
     signedInAccountId = context?.owner.accountId ?? null;
   } catch {
-    return false;
+    return undefined;
   }
   // A missing Clerk session while the sync cookie is still there is hydration,
   // not a sign-out. A different account id is never ambiguous.
   if (signedInAccountId === null && (await syncHostSessionCookieState()) !== 'absent') {
+    return undefined;
+  }
+  return signedInAccountId;
+}
+
+async function releaseDesktopPairingOfOtherAccount(
+  signedInAccountId: string | null,
+): Promise<boolean> {
+  if (!(await desktopPairingRejectsAccount(signedInAccountId))) {
+    if (signedInAccountId !== null) await bindUnboundDesktopPairing(signedInAccountId);
     return false;
   }
-  if (!(await desktopPairingRejectsAccount(signedInAccountId))) return false;
-  await disconnectPairedNativeHost('The signed-in account changed.');
-  await releaseStoredDesktopPairing();
+  await releaseDesktopPairing('The signed-in account changed.', false);
   return true;
+}
+
+async function revokeMismatchedDesktopPairing(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<boolean> {
+  const signedInAccountId = await definitiveSignedInAccount(clerkRead);
+  if (signedInAccountId === undefined) return false;
+  return releaseDesktopPairingOfOtherAccount(signedInAccountId);
+}
+
+/** Pairing and recordings belong to the account that made them. */
+async function releaseDataOfOtherAccounts(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<void> {
+  const signedInAccountId = await definitiveSignedInAccount(clerkRead);
+  if (signedInAccountId === undefined) return;
+  await releaseDesktopPairingOfOtherAccount(signedInAccountId);
+  await releaseRecordingsOfOtherAccounts(signedInAccountId);
+}
+
+/**
+ * Unpairs this profile. When Desktop cannot be told now, the unpair is owed
+ * and retried on later worker starts with the token Desktop needs to accept it.
+ * `keepUnlessOwed` keeps the pairing when that debt cannot be recorded, so a
+ * user unpair is never silently half done; an account change releases anyway.
+ */
+async function releaseDesktopPairing(
+  reason: string,
+  keepUnlessOwed: boolean,
+): Promise<{ acknowledged: boolean; owed: boolean; kept: boolean }> {
+  const token = await readDesktopPairToken();
+  const acknowledged = await disconnectPairedNativeHost(reason);
+  const owed = !acknowledged && token !== null && (await oweDesktopRevocation(token));
+  if (!acknowledged && token !== null && !owed && keepUnlessOwed) {
+    return { acknowledged, owed, kept: true };
+  }
+  await releaseStoredDesktopPairing();
+  if (owed) {
+    _bgCtx.revocationRetryAt = 0;
+    void settleOwedDesktopRevocation();
+  }
+  return { acknowledged, owed, kept: false };
+}
+
+/** Tries to deliver an owed unpair, at most once per retry window. True while one is owed. */
+async function settleOwedDesktopRevocation(): Promise<boolean> {
+  if (!(await readPendingDesktopRevocation())) return false;
+  if (state.nativePort || _bgCtx.nativeHandshakeInFlight) return true;
+  if (Date.now() < _bgCtx.revocationRetryAt) return true;
+  _bgCtx.revocationRetryAt = Date.now() + DESKTOP_REVOCATION_RETRY_MS;
+  resetNativeReconnectState();
+  connectToNativeHost();
+  return true;
+}
+
+async function readDesktopConnectCredential(): Promise<{
+  token: string;
+  revocation: PendingDesktopRevocation | null;
+} | null> {
+  try {
+    const revocation = await readPendingDesktopRevocation();
+    if (revocation) return { token: revocation.token, revocation };
+    const token = await readDesktopPairToken();
+    return token ? { token, revocation: null } : null;
+  } catch {
+    return null;
+  }
 }
 
 async function shouldAutoConnectToDesktop(): Promise<boolean> {
@@ -1323,24 +1604,39 @@ async function disconnectPairedNativeHost(reason: string): Promise<boolean> {
         ).catch(() => null)
       : null
   ) as { success?: boolean } | null;
-  if (state.nativePort === port) {
-    if (port) rejectPendingNativeRequests(port, reason);
-    state.nativePort = null;
-    nativeSessionSecret = null;
-    state.isNativeConnected = false;
-    state.connectionStatus = 'disconnected';
-    _bgCtx.nativeHandshakeInFlight = false;
-    clearNativeReconnectTimer();
-    setNativeReconnectGaveUp(true);
-    setDesktopPaired(false);
-    try {
-      port?.disconnect();
-    } catch (error) {
-      logger.debug('Native disconnect after unpair failed', error);
-    }
-    void notifyConnectionStatusChange();
-  }
+  if (state.nativePort === port) dropNativeConnection(port, reason);
   return unpaired?.success === true;
+}
+
+function dropNativeConnection(port: chrome.runtime.Port | null, reason: string): void {
+  if (port) rejectPendingNativeRequests(port, reason);
+  state.nativePort = null;
+  nativeSessionSecret = null;
+  state.isNativeConnected = false;
+  state.connectionStatus = 'disconnected';
+  _bgCtx.nativeHandshakeInFlight = false;
+  clearNativeReconnectTimer();
+  setNativeReconnectGaveUp(true);
+  setDesktopPaired(false);
+  try {
+    port?.disconnect();
+  } catch (error) {
+    logger.debug('Native disconnect after unpair failed', error);
+  }
+  void notifyConnectionStatusChange();
+}
+
+async function deliverOwedDesktopRevocation(
+  port: chrome.runtime.Port,
+  revocationId: string,
+): Promise<void> {
+  const receipt = (await sendNativeRequest({
+    type: NATIVE_BROWSER_UNPAIR_MESSAGE,
+  })) as unknown as { success?: boolean } | null;
+  if (state.nativePort !== port) return;
+  if (receipt?.success !== true) throw new Error('Desktop did not remove the pairing.');
+  await settlePendingDesktopRevocation(revocationId);
+  dropNativeConnection(port, 'The browser was unpaired from Desktop.');
 }
 
 function resetNativeReconnectState(): void {
@@ -1429,9 +1725,13 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 }
 
 function initialize(): void {
+  void restrictStorageToTrustedContexts(chrome.storage, (area, error) => {
+    logger.error('Failed to restrict Chrome storage to extension pages', { area, error });
+  });
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
   chrome.runtime.onConnect.addListener(handleSidePanelPresencePort);
+  chrome.runtime.onConnect.addListener(handleInPagePromptPort);
   void sweepTransientHostPermissions(false);
   void initializeSyncedPreferences(chrome.storage, (error) => {
     logger.warn('Failed to mirror a cross-device preference', error);
@@ -1451,7 +1751,7 @@ function initialize(): void {
     });
   }
   watchSyncHostSession(() => {
-    void revokeMismatchedDesktopPairing();
+    void releaseDataOfOtherAccounts();
   });
   void shouldAutoConnectToDesktop().then((autoConnect) => {
     if (!autoConnect) return;
@@ -1465,10 +1765,13 @@ function initialize(): void {
 
 const openSidePanelWindows = new Map<number, number>();
 
-function publishSidePanelPresence(windowId: number): void {
+function publishSidePanelPresence(
+  windowId: number,
+  open: boolean = openSidePanelWindows.has(windowId),
+): void {
   const message: SidePanelPresenceMessage = {
     type: SIDE_PANEL_PRESENCE_MESSAGE,
-    open: openSidePanelWindows.has(windowId),
+    open,
   };
   void chrome.tabs
     .query({ windowId })
@@ -1511,9 +1814,24 @@ function handleSidePanelPresencePort(port: chrome.runtime.Port): void {
     const remaining = (openSidePanelWindows.get(registeredWindow) ?? 1) - 1;
     if (remaining > 0) openSidePanelWindows.set(registeredWindow, remaining);
     else openSidePanelWindows.delete(registeredWindow);
-    publishSidePanelPresence(registeredWindow);
-    if (openSidePanelWindows.size === 0) void revokeAllOneTimeSiteGrants();
+    void settleClosedSidePanel(registeredWindow, port.sender?.documentId);
   });
+}
+
+async function settleClosedSidePanel(
+  windowId: number,
+  closingDocumentId: string | undefined,
+): Promise<void> {
+  const remaining = (
+    await chrome.runtime
+      .getContexts({ contextTypes: ['SIDE_PANEL' as chrome.runtime.ContextType] })
+      .catch(() => [])
+  ).filter((panel) => panel.documentId === undefined || panel.documentId !== closingDocumentId);
+  publishSidePanelPresence(
+    windowId,
+    openSidePanelWindows.has(windowId) || remaining.some((panel) => panel.windowId === windowId),
+  );
+  if (remaining.length === 0 && openSidePanelWindows.size === 0) await revokeAllOneTimeSiteGrants();
 }
 
 function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
@@ -1547,7 +1865,9 @@ function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
   });
   port.onDisconnect.addListener(() => {
     for (const active of activeChatStreams.values()) {
-      if (active.clientInstanceId === clientInstanceId) active.panelDetached = true;
+      if (active.clientInstanceId !== clientInstanceId) continue;
+      active.panelDetached = true;
+      void notifyWaitingBrowserStep(active);
     }
     syncDetachedChatHeartbeat();
   });
@@ -1557,13 +1877,100 @@ function connectToNativeHost(): void {
   if (state.nativePort || _bgCtx.nativeHandshakeInFlight || _bgCtx.nativeReconnectGaveUp) {
     return;
   }
+  const attempt = ++_bgCtx.nativeConnectAttempt;
+  _bgCtx.nativeHandshakeInFlight = true;
+  void readDesktopConnectCredential().then((credential) => {
+    if (
+      attempt !== _bgCtx.nativeConnectAttempt ||
+      !_bgCtx.nativeHandshakeInFlight ||
+      state.nativePort
+    )
+      return;
+    if (!credential || _bgCtx.nativeReconnectGaveUp) {
+      _bgCtx.nativeHandshakeInFlight = false;
+      if (!credential) state.lastNativeError = DESKTOP_NOT_PAIRED;
+      return;
+    }
+    openNativeConnection(credential);
+  });
+}
 
+/**
+ * Handles a refused handshake. Desktop refuses a token it does not hold when
+ * it was unpaired or paired with another profile: an owed unpair is then
+ * already done, and a pairing that only this side still remembers is dropped
+ * so the settings page stops showing it.
+ */
+async function handleRefusedDesktopHandshake(
+  error: unknown,
+  credential: { token: string; revocation: PendingDesktopRevocation | null },
+): Promise<boolean> {
+  if (!(error instanceof NativeRequestRefused) || error.code !== NATIVE_PAIRING_REJECTED_CODE)
+    return false;
+  if (credential.revocation) {
+    await settlePendingDesktopRevocation(credential.revocation.id);
+    return true;
+  }
+  if (!(await releaseStoredDesktopPairingOf(credential.token))) return false;
+  state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
+  return true;
+}
+
+const nativePortPairTokens = new WeakMap<chrome.runtime.Port, string>();
+
+async function releaseRevokedDesktopConnection(
+  port: chrome.runtime.Port,
+  error: unknown,
+): Promise<boolean> {
+  if (!(error instanceof NativeRequestRefused) || error.code !== NATIVE_PAIRING_REJECTED_CODE)
+    return false;
+  if (state.nativePort !== port) return true;
+  const portToken = nativePortPairTokens.get(port);
+  const released = portToken !== undefined && (await releaseStoredDesktopPairingOf(portToken));
+  if (state.nativePort !== port) return true;
+  const reason = released
+    ? DESKTOP_PAIRED_ELSEWHERE
+    : 'This browser was paired with Desktop again, so the earlier connection was closed.';
+  logger.warn(
+    released
+      ? 'Desktop no longer holds this pairing; releasing it here'
+      : 'Desktop refused an earlier pairing; keeping the newer one',
+  );
+  activePairedBrowserCommand?.driver?.cancel(reason);
+  rejectPendingNativeRequests(port, reason);
+  state.nativePort = null;
+  nativeSessionSecret = null;
+  _bgCtx.nativeHandshakeInFlight = false;
+  state.isNativeConnected = false;
+  state.connectionStatus = 'disconnected';
+  state.lastNativeError = released ? DESKTOP_PAIRED_ELSEWHERE : null;
+  try {
+    port.disconnect();
+  } catch (disconnectError) {
+    logger.debug('Native port disconnect after a refused pairing failed', disconnectError);
+  }
+  clearNativeReconnectTimer();
+  if (released) {
+    setNativeReconnectGaveUp(true);
+    setDesktopPaired(false);
+  } else {
+    connectToNativeHost();
+  }
+  void notifyConnectionStatusChange();
+  return true;
+}
+
+function openNativeConnection(credential: {
+  token: string;
+  revocation: PendingDesktopRevocation | null;
+}): void {
   try {
     state.connectionStatus = 'connecting';
     void notifyConnectionStatusChange();
 
     logger.info('Connecting to native host', { host: NATIVE_HOST_NAME });
     const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+    nativePortPairTokens.set(port, credential.token);
     state.nativePort = port;
     nativeSessionSecret = null;
     state.isNativeConnected = false;
@@ -1581,6 +1988,7 @@ function connectToNativeHost(): void {
         const connectResult = (await sendNativeRequest({
           type: 'connect',
           extension_id: chrome.runtime.id,
+          pair_token: credential.token,
         })) as unknown as NativeResponseEnvelope;
         if (state.nativePort !== port) return;
         if (!connectResult?.success) {
@@ -1596,6 +2004,11 @@ function connectToNativeHost(): void {
         if (state.nativePort !== port) return;
         if (!pingResult?.success) {
           throw new Error(pingResult?.error ?? 'Native ping failed');
+        }
+
+        if (credential.revocation) {
+          await deliverOwedDesktopRevocation(port, credential.revocation.id);
+          return;
         }
 
         state.isNativeConnected = true;
@@ -1622,8 +2035,16 @@ function connectToNativeHost(): void {
         state.connectionStatus = 'disconnected';
         state.nativePort = null;
         state.lastNativeError = error instanceof Error ? error.message : 'Native handshake failed';
+        if (await handleRefusedDesktopHandshake(error, credential)) {
+          clearNativeReconnectTimer();
+          setNativeReconnectGaveUp(true);
+          setDesktopPaired(false);
+        } else if (credential.revocation) {
+          setNativeReconnectGaveUp(true);
+        } else {
+          scheduleNativeReconnect('handshake_failed');
+        }
         void notifyConnectionStatusChange();
-        scheduleNativeReconnect('handshake_failed');
       } finally {
         if (state.nativePort === port) _bgCtx.nativeHandshakeInFlight = false;
       }
@@ -1636,7 +2057,8 @@ function connectToNativeHost(): void {
     state.connectionStatus = 'disconnected';
     state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
     void notifyConnectionStatusChange();
-    scheduleNativeReconnect('connect_failed');
+    if (credential.revocation) setNativeReconnectGaveUp(true);
+    else scheduleNativeReconnect('connect_failed');
   }
 }
 
@@ -1937,7 +2359,7 @@ function handleNativeMessage(message: NativeMessageEnvelope, port: chrome.runtim
               return;
             }
             if (message.success === false) {
-              reject(new Error(message.error ?? 'Native request failed'));
+              reject(nativeRefusal(message));
             } else {
               resolve(message as unknown as ExtensionResponse);
             }
@@ -1951,7 +2373,7 @@ function handleNativeMessage(message: NativeMessageEnvelope, port: chrome.runtim
         return;
       }
       if (message.success === false) {
-        reject(new Error(message.error ?? 'Native request failed'));
+        reject(nativeRefusal(message));
       } else {
         resolve(message as unknown as ExtensionResponse);
       }
@@ -1992,10 +2414,22 @@ function handleNativeDisconnect(): void {
     logger.warn('Native host permanently unavailable; halting reconnect', { error });
     setNativeReconnectGaveUp(true);
     setDesktopPaired(false);
+    void releaseUnreachableDesktopPairing();
     return;
   }
 
   scheduleNativeReconnect('native_disconnect');
+}
+
+/**
+ * Desktop removes its host registration when it unpairs or is uninstalled, and
+ * Chrome then reports the host as missing. No pairing is left on the other
+ * side, so neither the record here nor an owed unpair can mean anything.
+ */
+async function releaseUnreachableDesktopPairing(): Promise<void> {
+  const owed = await readPendingDesktopRevocation();
+  if (owed) await settlePendingDesktopRevocation(owed.id);
+  await releaseStoredDesktopPairing();
 }
 
 function showNotification(
@@ -2010,7 +2444,7 @@ function showNotification(
     notifId,
     {
       type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title,
       message,
     },
@@ -2026,14 +2460,16 @@ function showNotification(
 }
 
 async function taskNotificationsEnabled(): Promise<boolean> {
-  try {
-    const { agi_task_notifications: enabled } = await chrome.storage.local.get({
-      agi_task_notifications: true,
-    });
-    return enabled !== false;
-  } catch {
-    return true;
-  }
+  return readEnabledPreference({
+    read: async () => {
+      const { agi_task_notifications: enabled } = await chrome.storage.local.get({
+        agi_task_notifications: true,
+      });
+      return enabled;
+    },
+    onUnreadable: (error) =>
+      logger.warn('Task notification setting could not be read; staying quiet', error),
+  });
 }
 
 const notifyBrowserTask = createTaskNotifier<ManagedCloudOwner>({
@@ -2055,7 +2491,7 @@ async function notifyScheduledTaskRunning(
       publish: () => {
         chrome.notifications.create(`agi_task_notif_${crypto.randomUUID()}`, {
           type: 'basic',
-          iconUrl: 'icons/icon48.png',
+          iconUrl: chrome.runtime.getURL('icons/icon48.png'),
           title: t('notifyScheduledTaskRunningTitle'),
           message: taskName,
           priority: 0,
@@ -2105,21 +2541,28 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
   }
 }
 
-async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
-  const leaveAsIs = async (): Promise<void> => undefined;
-  if (!chrome.tabGroups) return leaveAsIs;
+async function markComputerUseTab(tabId: number): Promise<(() => Promise<void>) | null> {
+  if (!chrome.tabGroups) return null;
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (typeof tab.groupId === 'number' && tab.groupId >= 0) return leaveAsIs;
-    if (!(await ensureTabGroup(tabId))) return leaveAsIs;
+    if (typeof tab.groupId === 'number' && tab.groupId >= 0) return null;
+    if (!(await ensureTabGroup(tabId))) return null;
     return () => chrome.tabs.ungroup(tabId).catch(() => undefined);
   } catch {
-    return leaveAsIs;
+    return null;
   }
 }
 
+async function ungroupLostComputerUseTab(tabId: number): Promise<void> {
+  if (!chrome.tabGroups) return;
+  const tab = await chrome.tabs.get(tabId);
+  if (typeof tab.groupId !== 'number' || tab.groupId < 0) return;
+  const group = await chrome.tabGroups.get(tab.groupId);
+  if (group.title === TAB_GROUP_NAME) await chrome.tabs.ungroup(tabId);
+}
+
 async function handleReplayShortcut(
-  message: import('./types').ReplayShortcutMessage,
+  message: ReplayShortcutMessage,
   expectedOwner?: ManagedCloudOwner,
   notify = true,
 ): Promise<ExtensionResponse> {
@@ -2132,6 +2575,7 @@ async function handleReplayShortcut(
       error: 'The shortcut model selection is invalid.',
     } as ExtensionResponse;
   }
+  await releaseDataOfOtherAccounts();
   const shortcuts = await loadShortcuts();
   const shortcut = shortcuts.find((s) => s.id === message.shortcutId);
   if (!shortcut) {
@@ -2149,7 +2593,7 @@ async function handleReplayShortcut(
     await handleDeleteShortcut({
       type: 'DELETE_SHORTCUT',
       shortcutId: shortcut.id,
-    } as import('./types').DeleteShortcutMessage);
+    } as DeleteShortcutMessage);
     return {
       success: false,
       error: 'Shortcut origin is no longer on your allowlist; the shortcut was removed.',
@@ -2164,7 +2608,7 @@ async function handleReplayShortcut(
   }
   if (plan.kind === 'prompt') {
     const safePrompt = renderShortcutPrompt(plan.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
-    const chatMsg: Omit<import('./types').ChatMessageMessage, 'owner'> & {
+    const chatMsg: Omit<ChatMessageMessage, 'owner'> & {
       owner?: ManagedCloudOwner;
     } = {
       type: 'CHAT_MESSAGE',
@@ -2511,11 +2955,12 @@ async function resumeScheduledTaskJournal(
     { run: cloudRun, alreadyVisibleText: '', signal },
     {
       getAuthToken: async () => credential.token,
-      createClient: (token) =>
+      fetchImpl,
+      createClient: (token, capturingFetch) =>
         createManagedCloudAgentRunClient({
           baseUrl: FREE_TRIAL_GATEWAY,
           getAuthToken: async () => token,
-          fetchImpl,
+          fetchImpl: capturingFetch ?? fetchImpl,
           decorateMutationHeaders: (headers) => ({
             ...headers,
             'X-Requested-With': 'XMLHttpRequest',
@@ -3023,7 +3468,7 @@ async function completeScheduledTaskRun(
 function abandonScheduledTaskRun(
   journal: ScheduledTaskRunJournal,
   currentCredential?: { token: string; owner: ManagedCloudOwner } | null,
-  knownRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference,
+  knownRun?: ManagedCloudAgentRunReference,
 ): Promise<boolean> {
   markScheduledTaskRequestAbandoned(journal.requestId);
   let cancellationCredential = selectScheduledTaskCancellationCredential(
@@ -3273,6 +3718,7 @@ async function runMaintenancePass(): Promise<boolean> {
     connectToNativeHost();
     outstanding = true;
   }
+  await settleOwedDesktopRevocation();
 
   return outstanding;
 }
@@ -3459,7 +3905,7 @@ async function executeScheduledTask(
         {
           type: 'DELETE_SCHEDULED_TASK',
           taskId: task.id,
-        } as import('./types').DeleteScheduledTaskMessage,
+        } as DeleteScheduledTaskMessage,
         task.managedCloudAccountId,
         () => {
           deletionGeneration = scheduledTaskExecutions.invalidate(task.id);
@@ -3718,8 +4164,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
   siteAllowlistPublication.claim();
   const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
+  const previous = changes[SITE_ALLOWLIST_STORAGE_KEY].oldValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
   cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+  const changed = changedOrigins(
+    new Set(Array.isArray(previous) ? (previous as string[]) : []),
+    siteAllowlistCache,
+  );
+  cancelInPagePromptsOnUnapprovedOrigins();
+  void notifyPageAccessChanged((origin) => changed.has(origin));
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes[IN_PAGE_PANEL_ENABLED_STORAGE_KEY]) return;
+  void siteAllowlistReady.then(() => notifyPageAccessChanged(isOriginApprovedForAutomation));
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -3731,6 +4189,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
       adminSitePolicyPublication.publish(owner, () => {
         adminSitePolicyCache = policy;
         cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+        cancelInPagePromptsOnUnapprovedOrigins();
+        void notifyPageAccessChanged(() => true);
       });
     });
 });
@@ -3993,6 +4453,29 @@ function handleMessage(
     return false;
   }
 
+  if (
+    msg.type === 'OPEN_SIDE_PANEL' &&
+    !siteAllowlistLoaded &&
+    sender.id === chrome.runtime.id &&
+    sender.tab?.id != null
+  ) {
+    // Chrome allows sidePanel.open only in the synchronous turn of the user's
+    // click, and a dormant worker has not read the allowlist yet. Opening the
+    // panel reveals nothing about any site, so the open comes first and the
+    // allowlist decides the reply.
+    openAssistantPanel({ tabId: sender.tab.id, windowId: sender.tab.windowId }).catch((err) => {
+      logger.warn('OPEN_SIDE_PANEL synchronous open failed', err);
+    });
+    void siteAllowlistReady.then(() => {
+      sendResponse(
+        isAllowlistedSender(sender, msg.type)
+          ? ({ success: true } as ExtensionResponse)
+          : ({ success: false, error: SITE_NOT_APPROVED_MESSAGE } as ExtensionResponse),
+      );
+    });
+    return true;
+  }
+
   if (!isAllowlistedSender(sender, msg.type)) {
     if (!siteAllowlistLoaded) {
       // This message may be the one that woke a dormant worker, arriving before
@@ -4144,6 +4627,7 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
  * tab, or the desktop would check one tab while the command acted on another.
  */
 async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
+  await siteAllowlistReady;
   const [focused] = await chrome.tabs.query({ active: true, currentWindow: true });
   const target = await resolveBrowserToolTabId(undefined);
   const tabs = await chrome.tabs.query({});
@@ -4155,16 +4639,18 @@ async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
         a.index - b.index,
     )
     .slice(0, MAX_LISTED_BROWSER_TABS)
-    .map((tab) => ({
-      tabId: tab.id as number,
-      title: tab.title ?? '',
-      url: tab.url as string,
-      active: tab.id === target,
-    }));
+    .map((tab) =>
+      desktopTabSummary(
+        { id: tab.id as number, url: tab.url as string, title: tab.title },
+        tab.id === target,
+        (origin) => isOriginApprovedForAutomation(origin) && !isExtensionAccountOrigin(origin),
+      ),
+    );
 }
 
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
-const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
+const DESKTOP_POLL_RETRY_BASE_MS = 5_000;
+const DESKTOP_POLL_RETRY_MAX_MS = 60_000;
 
 /**
  * Reads that may name a tab other than the foreground one, as the desktop's
@@ -4187,9 +4673,9 @@ let activePairedBrowserCommand: {
  * Desktop-issued page work, pulled rather than pushed.
  *
  * The native client only resolves responses to its own requests, so a host that
- * pushed a command would be talking to nobody. A host that does not know these
- * message types, the Rust one the Tauri app ships, answers an error and the
- * loop stops asking.
+ * pushed a command would be talking to nobody. The native host belongs to
+ * Chrome and outlives a Desktop restart, so a failed poll backs off and asks
+ * again for as long as this connection lasts: nothing else would restart it.
  */
 async function pollDesktopBrowserCommands(): Promise<void> {
   if (desktopPollRunning) return;
@@ -4219,10 +4705,13 @@ async function pollDesktopBrowserCommands(): Promise<void> {
         command = response.command ?? null;
       } catch (error) {
         if (!isCurrentConnection()) return;
+        if (await releaseRevokedDesktopConnection(port, error)) return;
         failures += 1;
         logger.debug('Desktop browser command poll failed', error);
-        if (failures >= DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES) return;
-        await sleep(5000);
+        const retryAt =
+          Date.now() +
+          Math.min(DESKTOP_POLL_RETRY_BASE_MS * 2 ** (failures - 1), DESKTOP_POLL_RETRY_MAX_MS);
+        while (isCurrentConnection() && Date.now() < retryAt) await sleep(1_000);
         continue;
       }
 
@@ -4291,6 +4780,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
               }
             } catch (error) {
               if (!driver.signal.aborted) driver.cancel(errorText(error));
+              void releaseRevokedDesktopConnection(port, error);
               return;
             }
           }
@@ -4334,8 +4824,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
               const download = await startBrowserToolDownload(
                 tabId,
                 message['url'],
-                message['siteRules'] as
-                  import('@agiworkforce/cloud-contracts').WebDomainRules | undefined,
+                message['siteRules'] as WebDomainRules | undefined,
                 { signal: driver.signal, assertCurrent: () => assertTabOwnership(tabId) },
               );
               await assertTabOwnership(tabId);
@@ -4385,6 +4874,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
           { requireAuthenticatedSession: true, connection },
         );
       } catch (error) {
+        if (await releaseRevokedDesktopConnection(port, error)) return;
         logger.debug('Desktop browser command result was not delivered', error);
       }
     }
@@ -4464,7 +4954,7 @@ async function handleMessageAsync(
         return { success: false, error: 'The application page changed before autofill.' };
       if (isRetiredManagedCloudOwner(owner))
         return { success: false, error: 'The application autofill account changed.' };
-      let document: import('./features/browser-tools/documentBridge').PageDocumentReference;
+      let document: PageDocumentReference;
       try {
         document = await readPageDocument(target.tabId, target.url, message.documentId);
       } catch {
@@ -4508,8 +4998,9 @@ async function handleMessageAsync(
       );
     }
     case 'GET_CLOUD_AUTH_TOKEN': {
-      await revokeMismatchedDesktopPairing();
-      const candidate = await getManagedCloudAuthContext(message.refresh);
+      const clerkRead = getFreshClerkAuthContext(message.refresh);
+      await releaseDataOfOtherAccounts(clerkRead);
+      const candidate = await getManagedCloudAuthContext(message.refresh, clerkRead);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
       observeMaintenanceOwner(context?.owner ?? null);
@@ -4521,7 +5012,7 @@ async function handleMessageAsync(
 
     case 'MANAGED_CLOUD_AUTH_CHANGED': {
       const previousOwner = normalizeManagedCloudOwner(
-        (message as import('./types').ManagedCloudAuthChangedMessage).previousOwner,
+        (message as ManagedCloudAuthChangedMessage).previousOwner,
       );
       if (!previousOwner) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -4541,8 +5032,9 @@ async function handleMessageAsync(
         cancelActiveComputerUseRun('account_changed', computerUseLease.runId);
       }
       await invalidateManagedCloudOwner(previousOwner, true);
-      await disconnectPairedNativeHost('The signed-in account changed.');
-      await releaseStoredDesktopPairing();
+      await releaseDesktopPairing('The signed-in account changed.', false);
+      await discardAllRecordingSessions();
+      await releaseDataOfOtherAccounts();
       return { success: true } as ExtensionResponse;
     }
 
@@ -4588,8 +5080,15 @@ async function handleMessageAsync(
       return triggerManualReconnect();
 
     case 'UNPAIR_NATIVE': {
-      const unpaired = await disconnectPairedNativeHost('The browser was unpaired from Desktop.');
-      return { success: unpaired } as ExtensionResponse;
+      const outcome = await releaseDesktopPairing('The browser was unpaired from Desktop.', true);
+      return (
+        outcome.kept
+          ? {
+              success: false,
+              error: 'Desktop could not be reached, so the pairing was kept. Try again.',
+            }
+          : { success: outcome.acknowledged, revocationOwed: outcome.owed }
+      ) as ExtensionResponse;
     }
 
     case 'TAB_READY': {
@@ -4604,7 +5103,7 @@ async function handleMessageAsync(
     }
 
     case 'APPROVE_CONTEXT_HANDOFF': {
-      const approval = message as import('./types').ApproveContextHandoffMessage;
+      const approval = message as ApproveContextHandoffMessage;
       if (!/^ctx_[A-Za-z0-9_-]{8,80}$/.test(approval.handoffId)) {
         return {
           success: false,
@@ -4704,7 +5203,7 @@ async function handleMessageAsync(
     }
 
     case 'CANCEL_CONTEXT_HANDOFF': {
-      const cancellation = message as import('./types').CancelContextHandoffMessage;
+      const cancellation = message as CancelContextHandoffMessage;
       if (!/^ctx_[A-Za-z0-9_-]{8,80}$/.test(cancellation.handoffId)) {
         return {
           success: false,
@@ -4731,7 +5230,7 @@ async function handleMessageAsync(
     }
 
     case 'CHAT_MESSAGE': {
-      const chatMsg = message as import('./types').ChatMessageMessage;
+      const chatMsg = message as ChatMessageMessage;
       const owner = normalizeManagedCloudOwner(chatMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4744,7 +5243,7 @@ async function handleMessageAsync(
     }
 
     case 'RESUME_CHAT_RUN': {
-      const resumeMsg = message as import('./types').ResumeChatRunMessage;
+      const resumeMsg = message as ResumeChatRunMessage;
       const owner = normalizeManagedCloudOwner(resumeMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4764,7 +5263,7 @@ async function handleMessageAsync(
     }
 
     case 'ADOPT_CHAT_TURN': {
-      const adoptMsg = message as import('./types').AdoptChatTurnMessage;
+      const adoptMsg = message as AdoptChatTurnMessage;
       const owner = normalizeManagedCloudOwner(adoptMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       if (typeof adoptMsg.historyConversationId !== 'string') {
@@ -4788,6 +5287,11 @@ async function handleMessageAsync(
           await active.settlement;
           return { success: true } as ExtensionResponse;
         }
+        const toolHandoffs = adoptPendingChatToolHandoffs(
+          active,
+          active.streamId,
+          adoptMsg.clientInstanceId,
+        );
         active.clientInstanceId = adoptMsg.clientInstanceId;
         active.panelDetached = false;
         adoptedChatStreamKeys.set(adoptedKey, streamKey);
@@ -4799,6 +5303,7 @@ async function handleMessageAsync(
             text: active.visibleText ?? '',
             ...(active.cloudRun ? { cloudRun: { ...active.cloudRun } } : {}),
             ...(active.assistantMessageId ? { assistantMessageId: active.assistantMessageId } : {}),
+            ...(toolHandoffs.length > 0 ? { toolHandoffs } : {}),
           },
         } as ExtensionResponse;
       }
@@ -4806,7 +5311,7 @@ async function handleMessageAsync(
     }
 
     case 'RESOLVE_CHAT_APPROVAL': {
-      const approvalMsg = message as import('./types').ResolveChatApprovalMessage;
+      const approvalMsg = message as ResolveChatApprovalMessage;
       const owner = normalizeManagedCloudOwner(approvalMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4819,7 +5324,7 @@ async function handleMessageAsync(
     }
 
     case 'RESOLVE_CHAT_INPUT': {
-      const inputMsg = message as import('./types').ResolveChatInputMessage;
+      const inputMsg = message as ResolveChatInputMessage;
       const owner = normalizeManagedCloudOwner(inputMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4832,7 +5337,7 @@ async function handleMessageAsync(
     }
 
     case 'RESOLVE_CHAT_TOOLS': {
-      const resolved = resolveChatToolHandoff(message as import('./types').ResolveChatToolsMessage);
+      const resolved = resolveChatToolHandoff(message as ResolveChatToolsMessage);
       return (
         resolved
           ? { success: true }
@@ -4841,14 +5346,14 @@ async function handleMessageAsync(
     }
 
     case 'GRANT_SITE_ONCE': {
-      const granted = grantSiteOnce(message as import('./types').GrantSiteOnceMessage);
+      const granted = grantSiteOnce(message as GrantSiteOnceMessage);
       return (
         granted ? { success: true } : { success: false, error: 'Invalid one-time site grant.' }
       ) as ExtensionResponse;
     }
 
     case 'REVOKE_SITE_ONCE': {
-      const revokeMsg = message as import('./types').RevokeSiteOnceMessage;
+      const revokeMsg = message as RevokeSiteOnceMessage;
       if (!isOneTimeSiteGrantId(revokeMsg.grantId))
         return { success: false, error: 'Invalid one-time site grant.' } as ExtensionResponse;
       await revokeOneTimeSiteGrant(revokeMsg.grantId);
@@ -4868,7 +5373,7 @@ async function handleMessageAsync(
     }
 
     case 'CANCEL_STREAM': {
-      const cancelMsg = message as import('./types').CancelStreamMessage;
+      const cancelMsg = message as CancelStreamMessage;
       const owner = normalizeManagedCloudOwner(cancelMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       let streamKey: string;
@@ -4978,6 +5483,19 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'SIDE_PANEL_CLOSED': {
+      const windowId = (message as SidePanelClosedMessage).windowId;
+      if (!Number.isSafeInteger(windowId)) {
+        return {
+          success: false,
+          error: 'SIDE_PANEL_CLOSED: invalid windowId',
+        } as ExtensionResponse;
+      }
+      if (openSidePanelWindows.has(windowId)) return { success: true } as ExtensionResponse;
+      await settleClosedSidePanel(windowId, sender.documentId);
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'GET_SIDE_PANEL_OPEN': {
       const windowId = sender.tab?.windowId;
       const panels = await chrome.runtime
@@ -4987,6 +5505,54 @@ async function handleMessageAsync(
         success: true,
         open: windowId !== undefined && panels.some((panel) => panel.windowId === windowId),
       } as ExtensionResponse;
+    }
+
+    case 'GET_PAGE_ACCESS': {
+      const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
+      if (!pageUrl) return { success: false, error: CONTENT_SENDER_REFUSAL } as ExtensionResponse;
+      await siteAllowlistReady;
+      const approved = isOriginApprovedForAutomation(new URL(pageUrl).origin);
+      const preference = approved
+        ? await chrome.storage.local.get(IN_PAGE_PANEL_ENABLED_STORAGE_KEY)
+        : {};
+      return {
+        success: true,
+        approved,
+        inPagePanel: approved && preference[IN_PAGE_PANEL_ENABLED_STORAGE_KEY] !== false,
+      } as ExtensionResponse;
+    }
+
+    case 'GET_AUTOFILL_PROFILE': {
+      const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
+      if (!pageUrl) return { success: false, error: CONTENT_SENDER_REFUSAL } as ExtensionResponse;
+      if (!isOriginApprovedForAutomation(new URL(pageUrl).origin))
+        return { success: false, error: AUTOFILL_NOT_APPROVED_ERROR } as ExtensionResponse;
+      if (!isJobApplicationHostUrl(pageUrl))
+        return { success: false, error: AUTOFILL_UNSUPPORTED_PAGE_ERROR } as ExtensionResponse;
+      try {
+        return {
+          success: true,
+          profile: await loadAutofillProfile({ throwOnError: true }),
+        } as ExtensionResponse;
+      } catch (error) {
+        logger.warn('Autofill profile could not be read', error);
+        return { success: false, error: AUTOFILL_PROFILE_UNREADABLE_ERROR } as ExtensionResponse;
+      }
+    }
+
+    case 'AUTHORIZE_SITE_TOOL_DESTINATION': {
+      const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
+      const destination = (message as { url?: unknown }).url;
+      const senderTabId = sender.tab?.id;
+      if (!pageUrl || typeof senderTabId !== 'number' || typeof destination !== 'string')
+        return { success: false, error: CONTENT_SENDER_REFUSAL } as ExtensionResponse;
+      try {
+        await authorizeBrowserToolTab(senderTabId);
+        await authorizeBrowserToolUrl(destination);
+        return { success: true } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, error: errorText(error) } as ExtensionResponse;
+      }
     }
 
     case 'CAPTURE_SCREENSHOT': {
@@ -5081,7 +5647,18 @@ async function handleMessageAsync(
       if (!resolvedTabId) {
         return { success: false, error: 'No tab ID' } as ExtensionResponse;
       }
-      return forwardToContentScript(resolvedTabId, message);
+      return handleRecordingMessage(resolvedTabId, message);
+    }
+
+    case 'RECORDING_ACTION': {
+      if (tabId === undefined || sender.tab?.id !== tabId)
+        return { success: false, error: 'Only the recorded page reports its steps.' };
+      const recording = await appendRecordedAction(
+        tabId,
+        sender.url,
+        (message as RecordingActionMessage).action,
+      );
+      return { success: true, recording } as ExtensionResponse;
     }
 
     case 'FIND_ELEMENTS':
@@ -5098,7 +5675,7 @@ async function handleMessageAsync(
     }
 
     case 'WEBMCP_DISCOVER_TOOLS': {
-      const discoveryRequest = message as import('./types').WebMCPDiscoverToolsMessage;
+      const discoveryRequest = message as WebMCPDiscoverToolsMessage;
       const pageGeneration = discoveryRequest.pageGeneration;
       if (
         pageGeneration !== undefined &&
@@ -5167,7 +5744,7 @@ async function handleMessageAsync(
     }
 
     case 'WEBMCP_TOOLS_CHANGED': {
-      const toolsMsg = message as import('./types').WebMCPToolsChangedMessage;
+      const toolsMsg = message as WebMCPToolsChangedMessage;
       const toolsTabId = sender?.tab?.id;
       if (typeof toolsTabId !== 'number') {
         return { success: false, error: 'WebMCP discovery requires a sender tab' };
@@ -5252,22 +5829,26 @@ async function handleMessageAsync(
     }
 
     case 'SAVE_SHORTCUT':
-      return handleSaveShortcut(message as import('./types').SaveShortcutMessage);
+      return handleSaveShortcut(
+        message as SaveShortcutMessage,
+        (await definitiveSignedInAccount()) ?? null,
+      );
 
     case 'LIST_SHORTCUTS':
+      await releaseDataOfOtherAccounts();
       return handleListShortcuts();
 
     case 'DELETE_SHORTCUT':
-      return handleDeleteShortcut(message as import('./types').DeleteShortcutMessage);
+      return handleDeleteShortcut(message as DeleteShortcutMessage);
 
     case 'UPDATE_SHORTCUT':
-      return handleUpdateShortcut(message as import('./types').UpdateShortcutMessage);
+      return handleUpdateShortcut(message as UpdateShortcutMessage);
 
     case 'REPLAY_SHORTCUT':
-      return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
+      return handleReplayShortcut(message as ReplayShortcutMessage);
 
     case 'CREATE_SCHEDULED_TASK': {
-      const createMessage = message as import('./types').CreateScheduledTaskMessage;
+      const createMessage = message as CreateScheduledTaskMessage;
       const requiresManagedCloud = await scheduledTaskUsesManagedCloud(createMessage.task);
       const requestedOwner = requiresManagedCloud
         ? normalizeManagedCloudOwner(createMessage.owner)
@@ -5290,7 +5871,7 @@ async function handleMessageAsync(
     }
 
     case 'LIST_SCHEDULED_TASKS': {
-      const listMessage = message as import('./types').ListScheduledTasksMessage;
+      const listMessage = message as ListScheduledTasksMessage;
       const requestedOwner = normalizeManagedCloudOwner(listMessage.owner);
       const credential = requestedOwner
         ? await getExactManagedMutationCredential(requestedOwner)
@@ -5301,7 +5882,7 @@ async function handleMessageAsync(
     }
 
     case 'UPDATE_SCHEDULED_TASK': {
-      const updateMessage = message as import('./types').UpdateScheduledTaskMessage;
+      const updateMessage = message as UpdateScheduledTaskMessage;
       const changesExecution =
         Object.prototype.hasOwnProperty.call(updateMessage.updates, 'prompt') ||
         Object.prototype.hasOwnProperty.call(updateMessage.updates, 'shortcutId');
@@ -5370,7 +5951,7 @@ async function handleMessageAsync(
     }
 
     case 'DELETE_SCHEDULED_TASK': {
-      const deleteMessage = message as import('./types').DeleteScheduledTaskMessage;
+      const deleteMessage = message as DeleteScheduledTaskMessage;
       const existing = (await loadScheduledTasks()).find(
         (task) => task.id === deleteMessage.taskId,
       );
@@ -5422,7 +6003,16 @@ async function handleMessageAsync(
         typeof prompt === 'string' ? prompt : '',
         typeof pageContext === 'string' ? pageContext : undefined,
         sender.tab?.url ?? sender.url,
+        sender.tab?.id,
+        typeof (message as InPagePromptMessage).requestId === 'string'
+          ? (message as InPagePromptMessage).requestId
+          : undefined,
       );
+    }
+
+    case 'CANCEL_IN_PAGE_PROMPT': {
+      if (typeof sender.tab?.id === 'number') cancelInPagePrompts(sender.tab.id);
+      return { success: true } as ExtensionResponse;
     }
 
     case 'LIST_MEMORIES': {
@@ -5499,14 +6089,14 @@ async function handleMessageAsync(
     }
 
     case 'SET_QUICK_MODE': {
-      const qmMsg = message as import('./types').SetQuickModeMessage;
+      const qmMsg = message as SetQuickModeMessage;
       quickModeCache = qmMsg.enabled === true;
       await chrome.storage.local.set({ agi_quick_mode: quickModeCache });
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
 
     case 'SYNC_CONVERSATION': {
-      const syncMsg = message as import('./types').SyncConversationMessage;
+      const syncMsg = message as SyncConversationMessage;
       const syncOwner = normalizeManagedCloudOwner(syncMsg.owner);
       if (!syncOwner || isRetiredManagedCloudOwner(syncOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -5521,8 +6111,28 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'SAVE_CONVERSATION_NOW': {
+      const saveMsg = message as SaveConversationNowMessage;
+      const saveOwner = normalizeManagedCloudOwner(saveMsg.owner);
+      if (!saveOwner || isRetiredManagedCloudOwner(saveOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      if (typeof saveMsg.conversationId !== 'string' || saveMsg.conversationId.length === 0) {
+        return { success: false, error: 'conversationId is required' } as ExtensionResponse;
+      }
+      const answering = [...activeChatStreams.values()].some(
+        (active) =>
+          active.historyConversationId === saveMsg.conversationId &&
+          sameManagedCloudOwner(active.owner, saveOwner),
+      );
+      const saved: SaveConversationNowResponse = answering
+        ? { success: true, status: 'streaming' }
+        : { success: true, ...(await saveConversationNow(saveOwner, saveMsg.conversationId)) };
+      return saved as ExtensionResponse;
+    }
+
     case 'ENSURE_CLOUD_CONVERSATION': {
-      const ensureMsg = message as import('./types').EnsureCloudConversationMessage;
+      const ensureMsg = message as EnsureCloudConversationMessage;
       const ensureOwner = normalizeManagedCloudOwner(ensureMsg.owner);
       if (!ensureOwner || isRetiredManagedCloudOwner(ensureOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -5543,7 +6153,7 @@ async function handleMessageAsync(
     }
 
     case 'DELETE_CLOUD_CONVERSATION': {
-      const delCloudMsg = message as import('./types').DeleteCloudConversationMessage;
+      const delCloudMsg = message as DeleteCloudConversationMessage;
       const delOwner = normalizeManagedCloudOwner(delCloudMsg.owner);
       if (!delOwner || isRetiredManagedCloudOwner(delOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -5560,7 +6170,7 @@ async function handleMessageAsync(
     }
 
     case 'AGI_START_COMPUTER_USE': {
-      const cuMsg = message as import('./types').StartComputerUseMessage;
+      const cuMsg = message as StartComputerUseMessage;
       const cuTabId = cuMsg.tabId;
       const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.trim() : '';
       const cuRunId =
@@ -5731,7 +6341,7 @@ async function handleMessageAsync(
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
 
-      let selectedTabs: readonly import('./types').BrowserContextTabReference[];
+      let selectedTabs: readonly BrowserContextTabReference[];
       let restoredTaskTabs: TaskTabScope | undefined;
       const assertStartCurrent = async (): Promise<void> => {
         if (startWasCancelled())
@@ -5772,6 +6382,10 @@ async function handleMessageAsync(
         );
       }
 
+      await lostComputerUseRunRecovery;
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
       clearPendingComputerUseStart(cuRunId);
       const notificationTarget =
         typeof cuMsg.historyConversationId === 'string' &&
@@ -5788,6 +6402,12 @@ async function handleMessageAsync(
         authOwner: authContext.owner,
         credential: authContext.token,
       });
+      const releaseWorker = beginScheduledTaskHeartbeat();
+      void markComputerUseRunStarted({
+        runId: lease.runId,
+        runGeneration: lease.generation,
+        tabIds: [cuTabId],
+      }).catch(() => undefined);
 
       const onCallerAbort = () => cancelActiveComputerUseRun('user_stopped', lease.runId);
       callerTask?.attachCancellation(onCallerAbort);
@@ -5810,7 +6430,7 @@ async function handleMessageAsync(
       ): Promise<boolean> => {
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
-          crucial: isCrucialAction(requirement),
+          crucial: asksInAutoMode(requirement),
           mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
           readsOnly: readsWithoutActing(toolName),
@@ -5873,7 +6493,8 @@ async function handleMessageAsync(
             const cleanup = (): void => {
               clearTimeout(timeout);
               signal?.removeEventListener('abort', onAbort);
-              chrome.runtime.onMessage.removeListener(listener);
+              if (pendingComputerUseApprovals.get(requestId) === listener)
+                pendingComputerUseApprovals.delete(requestId);
             };
             const finish = (allowed: boolean, forTask = false): void => {
               if (settled) return;
@@ -5943,7 +6564,7 @@ async function handleMessageAsync(
                 );
               }
             }
-            chrome.runtime.onMessage.addListener(listener);
+            pendingComputerUseApprovals.set(requestId, listener);
             signal?.addEventListener('abort', onAbort, { once: true });
             if (signal?.aborted) onAbort();
           });
@@ -5978,6 +6599,11 @@ async function handleMessageAsync(
         });
       };
 
+      const inputWatch = createRunInputWatch({
+        lease,
+        activeRun: () => computerUseRuns.getActive(),
+        send: watchComputerUseUserInput,
+      });
       const taskTabs =
         Number.isSafeInteger(lease.windowId) && lease.windowId !== undefined && lease.windowId >= 0
           ? new TaskTabs({
@@ -5990,8 +6616,12 @@ async function handleMessageAsync(
               assertCurrent: () => assertComputerUseOwnership(lease).then(() => undefined),
               beginTransition: (targetTabId) =>
                 computerUseRuns.beginTabTransition(lease, targetTabId),
-              commitTransition: (transition, url) =>
-                computerUseRuns.commitTabTransition(lease, transition, url),
+              commitTransition: (transition, url) => {
+                const previousTabId = lease.tabId;
+                computerUseRuns.commitTabTransition(lease, transition, url);
+                inputWatch.retarget(previousTabId);
+                void markComputerUseRunTab(lease.runId, lease.tabId).catch(() => undefined);
+              },
               abortTransition: (transition) =>
                 computerUseRuns.abortTabTransition(lease, transition),
               transitionFailed: () => {
@@ -6087,17 +6717,24 @@ async function handleMessageAsync(
             pending.settle(false);
         })
         .catch(() => undefined);
-      watchComputerUseUserInput(cuTabId, true);
+      inputWatch.start();
       const unmarkTab = markComputerUseTab(cuTabId);
+      void unmarkTab
+        .then((unmark) => (unmark ? markComputerUseRunTab(lease.runId, cuTabId, true) : undefined))
+        .catch(() => undefined);
       const cleanupActions: Array<() => unknown> = [
-        () => watchComputerUseUserInput(cuTabId, false),
+        () => inputWatch.stop(cuTabId),
         () => flushAutomationAuditOutbox().catch(() => false),
-        () => unmarkTab.then((unmark) => unmark()),
+        () => unmarkTab.then((unmark) => unmark?.()),
+        () => markComputerUseRunEnded(lease.runId),
       ];
-      for (const cleanup of cleanupActions)
-        void completion
-          .then(cleanup, cleanup)
-          .catch((error) => logger.warn('Browser task cleanup failed', error));
+      void Promise.all(
+        cleanupActions.map((cleanup) =>
+          completion
+            .then(cleanup, cleanup)
+            .catch((error) => logger.warn('Browser task cleanup failed', error)),
+        ),
+      ).finally(releaseWorker);
       void completion.then(
         (browserContext) => {
           if (!computerUseRuns.finish(lease)) return;
@@ -6149,7 +6786,7 @@ async function handleMessageAsync(
     }
 
     case 'START_DOWNLOAD': {
-      const downloadMsg = message as import('./types').StartDownloadMessage;
+      const downloadMsg = message as StartDownloadMessage;
       const downloadTabId = await resolveBrowserToolTabId(tabId);
       if (downloadTabId === null) {
         return { success: false, error: 'No tab to download from' } as ExtensionResponse;
@@ -6174,7 +6811,7 @@ async function handleMessageAsync(
     }
 
     case 'REVEAL_DOWNLOAD': {
-      const revealMsg = message as import('./types').RevealDownloadMessage;
+      const revealMsg = message as RevealDownloadMessage;
       if (typeof revealMsg.downloadId !== 'number') {
         return {
           success: false,
@@ -6190,7 +6827,7 @@ async function handleMessageAsync(
     }
 
     case 'SET_PAGE_WATCH': {
-      const watchMsg = message as import('./types').SetPageWatchMessage;
+      const watchMsg = message as SetPageWatchMessage;
       const watchTabId = await resolveBrowserToolTabId(tabId);
       if (watchTabId === null) {
         return { success: false, error: 'No tab to watch' } as ExtensionResponse;
@@ -6208,7 +6845,7 @@ async function handleMessageAsync(
     }
 
     case 'READ_PAGE_CONSOLE': {
-      const consoleMsg = message as import('./types').ReadPageConsoleMessage;
+      const consoleMsg = message as ReadPageConsoleMessage;
       const consoleTabId = await resolveBrowserToolTabId(tabId);
       if (consoleTabId === null) {
         return { success: false, error: 'No tab to read the console of' } as ExtensionResponse;
@@ -6231,7 +6868,7 @@ async function handleMessageAsync(
     }
 
     case 'READ_PAGE_NETWORK': {
-      const networkMsg = message as import('./types').ReadPageNetworkMessage;
+      const networkMsg = message as ReadPageNetworkMessage;
       const networkTabId = await resolveBrowserToolTabId(tabId);
       if (networkTabId === null) {
         return { success: false, error: 'No tab to read requests for' } as ExtensionResponse;
@@ -6254,6 +6891,16 @@ async function handleMessageAsync(
       }
     }
 
+    case 'AGI_CU_APPROVE_RESPONSE': {
+      const requestId = (message as ComputerUseApprovalResponseMessage).requestId;
+      const deliver =
+        typeof requestId === 'string' ? pendingComputerUseApprovals.get(requestId) : undefined;
+      if (!deliver)
+        return { success: false, error: APPROVAL_NO_LONGER_PENDING } as ExtensionResponse;
+      deliver(message, sender);
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'GET_COMPUTER_USE_STATE': {
       const activeLease = computerUseRuns.getActive();
       if (!activeLease) {
@@ -6265,6 +6912,7 @@ async function handleMessageAsync(
         runId: activeLease.runId,
         runGeneration: activeLease.generation,
         tabId: activeLease.tabId,
+        ...(activeLease.windowId === undefined ? {} : { windowId: activeLease.windowId }),
         ...(activeLease.takeover ? { paused: true, pauseReason: activeLease.takeover.reason } : {}),
       } as ExtensionResponse;
     }
@@ -6278,8 +6926,11 @@ async function handleMessageAsync(
         !lease.actionInFlight &&
         Date.now() - lease.lastActionEndedAt > AGENT_INPUT_ECHO_MS
       ) {
-        void handComputerUseTabToUser(lease, USER_INPUT_TAKEOVER_REASON).catch(() => undefined);
+        void handComputerUseTabToUser(lease, t('cuTakeoverByInputReason')).catch(() => undefined);
       }
+      const inputTabId = sender?.tab?.id;
+      if (typeof inputTabId === 'number' && lease?.tabId !== inputTabId)
+        watchComputerUseUserInput(inputTabId, false);
       return { success: true } as ExtensionResponse;
     }
 
@@ -6302,7 +6953,7 @@ async function handleMessageAsync(
           error: 'This action requires the extension UI.',
         } as ExtensionResponse;
       }
-      const guidanceMessage = message as import('./types').ComputerUseGuidanceMessage;
+      const guidanceMessage = message as ComputerUseGuidanceMessage;
       const lease = computerUseRuns.getActive();
       const queue = lease ? computerUseGuidance.get(lease.runId) : undefined;
       if (!lease || lease.runId !== guidanceMessage.runId || !queue) {
@@ -6343,7 +6994,7 @@ async function handleMessageAsync(
 
     case 'PAUSE_COMPUTER_USE':
     case 'RESUME_COMPUTER_USE': {
-      const takeoverMessage = message as import('./types').ComputerUseTakeoverMessage;
+      const takeoverMessage = message as ComputerUseTakeoverMessage;
       const lease = computerUseRuns.getActive();
       if (!lease || lease.runId !== takeoverMessage.runId) {
         return {
@@ -6353,7 +7004,7 @@ async function handleMessageAsync(
         } as ExtensionResponse;
       }
       if (takeoverMessage.type === 'PAUSE_COMPUTER_USE') {
-        void handComputerUseTabToUser(lease, USER_TAKEOVER_REASON).catch(() => undefined);
+        void handComputerUseTabToUser(lease, t('cuTakeoverByUserReason')).catch(() => undefined);
         return {
           success: true,
           running: true,
@@ -6401,7 +7052,7 @@ async function handleMessageAsync(
     }
 
     case 'CANCEL_COMPUTER_USE': {
-      const cancelMessage = message as import('./types').CancelComputerUseMessage;
+      const cancelMessage = message as CancelComputerUseMessage;
       const rawExpectedRunId = cancelMessage.runId;
       if (
         rawExpectedRunId !== undefined &&
@@ -6446,6 +7097,19 @@ async function handleMessageAsync(
         }
         return { success: true, running: false } as ExtensionResponse;
       }
+      if (
+        reason === 'panel_closed' &&
+        activeRun !== null &&
+        activeRun.runId === expectedRunId &&
+        activeRun.windowId !== undefined &&
+        cancelMessage.windowId !== activeRun.windowId
+      ) {
+        return {
+          success: false,
+          running: true,
+          error: 'CANCEL_COMPUTER_USE: the closed panel belongs to another window',
+        } as ExtensionResponse;
+      }
 
       computerUseStartGeneration += 1;
       const pendingCancelled = clearPendingComputerUseStart(expectedRunId);
@@ -6462,7 +7126,7 @@ async function handleMessageAsync(
     }
 
     case 'BRIDGE_URL_CHANGED': {
-      const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
+      const newUrl = (message as BridgeUrlChangedMessage).url?.trim();
       if (newUrl) {
         const validated = validateBridgeUrl(newUrl);
         if (!validated) {
@@ -6517,6 +7181,51 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
   }
 }
 
+/**
+ * The worker owns the recording, so a page that loads a new document cannot
+ * take the recorded steps with it. Options asks the worker, and the worker asks
+ * the page whether it is still recording: a page that is not, or no longer
+ * answers, has navigated, and the recording ends there with its steps kept.
+ */
+async function handleRecordingMessage(
+  tabId: number,
+  message: ExtensionMessage,
+): Promise<ExtensionResponse> {
+  if (message.type === 'SET_RECORDING_VALUE_CAPTURE') return forwardToContentScript(tabId, message);
+  if (message.type === 'START_RECORDING') {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!(await beginRecordingSession(tabId, tab?.url)))
+      return { success: false, error: 'Only a web page can be recorded.' } as ExtensionResponse;
+    const started = await forwardToContentScript(tabId, message);
+    if (!started?.success) await discardRecordingSession(tabId);
+    return started;
+  }
+  const session = await readRecordingSession(tabId);
+  if (message.type === 'STOP_RECORDING') {
+    if (session?.state === 'recording') await forwardToContentScript(tabId, message);
+    const ended = await endRecordingSession(tabId, 'stopped');
+    return {
+      success: true,
+      recording: false,
+      actions: ended?.actions ?? [],
+      ...(ended?.state === 'navigated' ? { stoppedBy: 'navigation' } : {}),
+    } as ExtensionResponse;
+  }
+  if (!session) return { success: true, recording: false, actions: [] } as ExtensionResponse;
+  let current = session;
+  if (session.state === 'recording') {
+    const page = (await forwardToContentScript(tabId, message)) as { recording?: unknown };
+    if (page?.recording !== true)
+      current = (await endRecordingSession(tabId, 'navigated')) ?? session;
+  }
+  return {
+    success: true,
+    recording: current.state === 'recording',
+    actions: current.actions,
+    ...(current.state === 'navigated' ? { stoppedBy: 'navigation' } : {}),
+  } as ExtensionResponse;
+}
+
 async function forwardToContentScript(
   tabId: number,
   message: ExtensionMessage,
@@ -6540,7 +7249,8 @@ async function forwardToContentScript(
  * `connectedToDesktop` records that the native host has answered on this
  * profile, not that it is answering right now. A closed Desktop app is a
  * reconnect, not an unpairing, so only a permanently unavailable host, an
- * explicit unpair, or a Managed Cloud account change clears it.
+ * explicit unpair, Desktop refusing this profile's pair token, or a Managed
+ * Cloud account change clears it.
  */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
@@ -6613,6 +7323,11 @@ const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = 
   { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
   { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
 ];
+const pendingChatWindowStamp = (tab: chrome.tabs.Tab) => ({
+  tabId: tab.id,
+  windowId: tab.windowId,
+});
+
 const pendingEditableCaptures = new Map<number, string>();
 
 /**
@@ -6708,7 +7423,7 @@ function handleContextMenuClick(
           type: 'ask-selection',
           text: info.selectionText,
           url: info.pageUrl ?? tab.url ?? '',
-          tabId: tab.id,
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6759,6 +7474,7 @@ function handleContextMenuClick(
           type: 'explain',
           text: info.selectionText,
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6773,6 +7489,7 @@ function handleContextMenuClick(
           type: 'translate',
           text: info.selectionText,
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6787,6 +7504,7 @@ function handleContextMenuClick(
           type: 'ask-page',
           text: '',
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6801,6 +7519,7 @@ function handleContextMenuClick(
           type: 'summarize',
           text: '',
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6821,8 +7540,20 @@ chrome.action?.onClicked?.addListener((tab) => {
   });
 });
 
+function releaseUnapprovedSiteAccess(): void {
+  void releaseUnapprovedHostPermissions(chromeHostPermissionReconcileDeps(readUserSiteAllowlist))
+    .then((released) => {
+      if (released.length > 0)
+        logger.info('Released site access that was allowed only once', { count: released.length });
+    })
+    .catch((error) => logger.warn('Site access could not be reconciled', error));
+}
+
+chrome.runtime.onStartup.addListener(releaseUnapprovedSiteAccess);
+
 chrome.runtime.onInstalled.addListener((details) => {
   void rebuildContextMenus();
+  releaseUnapprovedSiteAccess();
   if (details.reason === 'install') {
     void chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PAGE_PATH) });
   }
@@ -6837,6 +7568,8 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  cancelInPagePrompts(tabId);
+  void discardRecordingSession(tabId);
   const lease = computerUseRuns.getActive();
   if (lease?.tabId === tabId) {
     computerUseStartGeneration += 1;
@@ -6911,9 +7644,18 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-
     const tabId = tab.id;
+    const dataUrl = await captureAdmittedTab(
+      { id: tabId, windowId: tab.windowId, url: tab.url },
+      {
+        visibleTab: async (windowId) => (await chrome.tabs.query({ active: true, windowId }))[0],
+        capture: (windowId) => chrome.tabs.captureVisibleTab(windowId, { format: 'png' }),
+      },
+    );
+    if (dataUrl === null) {
+      showNotification(PAGE_CAPTURE_UNDELIVERED_TITLE, PAGE_CAPTURE_TAB_CHANGED_MESSAGE);
+      return;
+    }
     await deliverPageCapture({
       send: () =>
         sendNativeRequest({
@@ -6930,6 +7672,7 @@ async function captureCurrentPage(): Promise<void> {
       },
       writeActionCount: (actionCount) => storageUtils.setItem('stats', { actionCount }),
       notify: showNotification,
+      sent: { title: t('pageCaptureSentTitle'), message: t('pageCaptureSentMessage') },
     });
   } catch (error) {
     logger.error('Failed to capture page', error);
@@ -6941,7 +7684,7 @@ async function captureCurrentPage(): Promise<void> {
 }
 
 async function handleChatMessage(
-  message: Omit<import('./types').ChatMessageMessage, 'owner'> & {
+  message: Omit<ChatMessageMessage, 'owner'> & {
     owner?: ManagedCloudOwner;
   },
   _sender: chrome.runtime.MessageSender,
@@ -7168,10 +7911,15 @@ async function handleChatMessage(
         )
       : undefined;
     let systemPrompt: string | undefined;
-    if (!delivery) {
+    const turnCarriesPage =
+      (typeof message.pageContext === 'string' && message.pageContext.length > 0) ||
+      isChatBrowserToolTier(message.browserToolTier) ||
+      browserContext !== undefined;
+    if (!delivery && turnCarriesPage) {
       try {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
+        const turnUrl = browserContext?.url ?? activeTab?.url;
+        if (turnUrl) systemPrompt = getPlatformPrompt(turnUrl) ?? undefined;
       } catch {
         // Platform context is optional; inference remains Managed Cloud only.
       }
@@ -7208,6 +7956,13 @@ async function handleChatMessage(
         ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
         ...(message.skillName !== undefined ? { skillName: message.skillName } : {}),
         ...(!delivery && chatTools.length ? { tools: chatTools } : {}),
+        ...(!delivery &&
+        chatTools.length &&
+        conversationContext &&
+        browserContext?.documentId &&
+        message.historyConversationId
+          ? { callerToolContinuation: true }
+          : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,
@@ -7423,7 +8178,7 @@ async function handleChatMessage(
   }
 }
 
-async function handleResumeChatRun(message: import('./types').ResumeChatRunMessage): Promise<void> {
+async function handleResumeChatRun(message: ResumeChatRunMessage): Promise<void> {
   const { clientInstanceId, id } = message;
   let streamKey: string;
   try {
@@ -7485,6 +8240,10 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
     cancelRequested: false,
     cancelNotified: false,
     cloudRun: { ...message.cloudRun },
+    streamId: id,
+    ...(message.historyConversationId
+      ? { historyConversationId: message.historyConversationId }
+      : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
 
@@ -7493,7 +8252,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
 
 async function assertOwnedCallerBrowserAction(
   saved: NonNullable<Awaited<ReturnType<typeof readChromeCallerToolCustody>>>,
-  checkpoint: import('./features/computer-use/toolHandoff').CallerToolContinuation,
+  checkpoint: CallerToolContinuation,
   historyConversationId: string | undefined,
   streamKey: string,
   active: ActiveChatStream,
@@ -7539,7 +8298,7 @@ async function assertOwnedCallerBrowserAction(
 }
 
 async function resumeOwnedManagedRun(
-  message: import('./types').ResumeChatRunMessage,
+  message: ResumeChatRunMessage,
   streamKey: string,
   activeStream: ActiveChatStream,
   routing?: Exclude<ReturnType<typeof normalizeChromeManagedRoutingMetadata>, null>,
@@ -7609,9 +8368,7 @@ async function resumeOwnedManagedRun(
     };
     let visibleText = message.alreadyVisibleText;
     const replayPublicJournal = (
-      onCallerCheckpoint?: (
-        checkpoint: import('./features/computer-use/toolHandoff').CallerToolContinuation,
-      ) => void,
+      onCallerCheckpoint?: (checkpoint: CallerToolContinuation) => void,
     ) =>
       resumeChromeManagedRun(
         {
@@ -7645,9 +8402,7 @@ async function resumeOwnedManagedRun(
           },
         },
       );
-    const postReceipt = async (
-      receipt: import('@agiworkforce/cloud-contracts').CallerToolResumeRequest,
-    ) =>
+    const postReceipt = async (receipt: CallerToolResumeRequest) =>
       await executeChromeManagedCallerResume(
         {
           id,
@@ -7714,8 +8469,7 @@ async function resumeOwnedManagedRun(
       | Awaited<ReturnType<typeof executeChromeManagedCallerResume>> = { status: 'success' };
     const posted = new Set<number>();
     for (let step = 0; step <= MAX_CALLER_TOOL_STEPS; step += 1) {
-      let checkpoint:
-        import('./features/computer-use/toolHandoff').CallerToolContinuation | undefined;
+      let checkpoint: CallerToolContinuation | undefined;
       result = await replayPublicJournal(
         savedCaller
           ? (value) => {
@@ -7876,7 +8630,7 @@ async function resumeOwnedManagedRun(
 }
 
 async function handleResolveChatApproval(
-  message: import('./types').ResolveChatApprovalMessage | import('./types').ResolveChatInputMessage,
+  message: ResolveChatApprovalMessage | ResolveChatInputMessage,
 ): Promise<void> {
   const { clientInstanceId, id } = message;
   let streamKey: string;
@@ -7916,6 +8670,10 @@ async function handleResolveChatApproval(
     cancelRequested: false,
     cancelNotified: false,
     cloudRun: { ...message.cloudRun },
+    streamId: id,
+    ...(message.historyConversationId
+      ? { historyConversationId: message.historyConversationId }
+      : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
 
@@ -8118,10 +8876,7 @@ function mapInPagePromptFailure(
     case 'auth_required':
       return inPagePromptFailure('signed_out', 'Sign in to use AGI Managed Cloud.');
     case 'plan_required':
-      return inPagePromptFailure(
-        'plan_required',
-        'Managed Cloud chat is not available for this AGI account.',
-      );
+      return inPagePromptFailure('plan_required', result.message);
     case 'quota_exceeded':
       return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
@@ -8131,24 +8886,78 @@ function mapInPagePromptFailure(
     case 'terms_required':
       return inPagePromptFailure('terms_required', result.message);
     case 'rate_limited':
-      return inPagePromptFailure('rate_limited', result.message, true);
+      return inPagePromptFailure(
+        'rate_limited',
+        streamFailureText(result.message, {
+          ...(result.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: result.retryAfterSeconds }
+            : {}),
+        }),
+        true,
+      );
     case 'cancelled':
       return inPagePromptFailure('cancelled', 'Request cancelled.');
     case 'invalid_request':
     case 'model_not_admitted':
+    case 'model_refused':
+    case 'policy_blocked':
       return inPagePromptFailure('request_rejected', result.message);
     default:
       return inPagePromptFailure('retryable_error', result.message, true);
   }
 }
 
+function cancelInPagePrompts(tabId: number, requestId?: string): void {
+  for (const active of activeChatStreams.values()) {
+    if (active.inPageTabId !== tabId) continue;
+    if (requestId !== undefined && active.inPageRequestId !== requestId) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+  }
+}
+
+function cancelInPagePromptsOnUnapprovedOrigins(): void {
+  for (const active of activeChatStreams.values()) {
+    if (active.inPageTabId === undefined) continue;
+    if (active.inPageOrigin && isOriginApprovedForAutomation(active.inPageOrigin)) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+  }
+}
+
+const MAX_CLOSED_IN_PAGE_REQUESTS = 50;
+const closedInPageRequests = new Set<string>();
+
+function handleInPagePromptPort(port: chrome.runtime.Port): void {
+  if (!port.name.startsWith(IN_PAGE_PROMPT_PORT_PREFIX)) return;
+  const tabId = port.sender?.tab?.id;
+  if (port.sender?.id !== chrome.runtime.id || typeof tabId !== 'number') {
+    port.disconnect();
+    return;
+  }
+  const requestId = port.name.slice(IN_PAGE_PROMPT_PORT_PREFIX.length);
+  port.onDisconnect.addListener(() => {
+    closedInPageRequests.add(requestId);
+    if (closedInPageRequests.size > MAX_CLOSED_IN_PAGE_REQUESTS) {
+      const oldest = closedInPageRequests.values().next().value;
+      if (oldest !== undefined) closedInPageRequests.delete(oldest);
+    }
+    cancelInPagePrompts(tabId, requestId);
+  });
+}
+
 async function handleInPagePrompt(
   prompt: string,
   pageContext?: string,
   senderUrl?: string,
+  senderTabId?: number,
+  requestId?: string,
 ): Promise<InPagePromptResponse> {
   if (!prompt.trim()) {
     return inPagePromptFailure('request_rejected', 'Enter a question or choose a page action.');
+  }
+  if (requestId !== undefined && closedInPageRequests.has(requestId)) {
+    return inPagePromptFailure('cancelled', 'Request cancelled.');
   }
   let credential: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
   try {
@@ -8175,6 +8984,9 @@ async function handleInPagePrompt(
     controller: new AbortController(),
     cancelRequested: false,
     cancelNotified: false,
+    ...(senderTabId !== undefined ? { inPageTabId: senderTabId } : {}),
+    ...(senderUrl ? { inPageOrigin: originOfUrl(senderUrl) } : {}),
+    ...(requestId !== undefined ? { inPageRequestId: requestId } : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
   let result: ChromeManagedChatResult;
@@ -8241,6 +9053,24 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 initialize();
 installBackgroundErrorReporting();
 void flushAutomationAuditOutbox();
+const lostComputerUseRunRecovery = recoverLostComputerUseRun({
+  stopInputWatch: (tabId) =>
+    chrome.tabs.sendMessage(tabId, { type: 'AGI_CU_WATCH_INPUT', watching: false }),
+  detachDebugger: (tabId) => chrome.debugger.detach({ tabId }),
+  ungroupTab: ungroupLostComputerUseTab,
+  announce: (marker) =>
+    sendComputerUseLifecycle({
+      type: 'AGI_CU_STATE',
+      status: 'error',
+      reason: WORKER_RESTARTED_REASON,
+      runId: marker.runId,
+      runGeneration: marker.runGeneration,
+      tabId: marker.tabIds[marker.tabIds.length - 1],
+    }),
+}).catch((error) => {
+  logger.warn('A browser task lost with the previous worker could not be cleaned up', error);
+  return null;
+});
 
 // chrome.debugger.onDetach has to be attached in the worker's first turn: a
 // user pressing Cancel on Chrome's debugging bar wakes a worker that would
@@ -8259,7 +9089,7 @@ chrome.runtime.onConnect.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === MAINTENANCE_ALARM) {
+  if (alarm.name === MAINTENANCE_ALARM || alarm.name === CONVERSATION_SYNC_RETRY_ALARM) {
     void settleMaintenanceAlarm();
     return;
   }

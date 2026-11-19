@@ -1,3 +1,4 @@
+import type { AnswerUiCardBody, AnswerUiValue } from './answer-ui';
 import type { PlacePriceLevel } from './places-search';
 import type { ChatExecutionMode } from './suite-contracts';
 
@@ -13,6 +14,7 @@ export const INTERACTIVE_CARD_MAX_SERIALIZED_LENGTH = 12_000;
 export const INTERACTIVE_CARDS_MAX_PER_MESSAGE = 4;
 
 export const KNOWN_INTERACTIVE_CARD_KINDS = [
+  'answer-ui.v1',
   'clarify.v1',
   'image.v1',
   'itinerary.v1',
@@ -236,6 +238,7 @@ export interface MapSearchAction {
 export const MAP_SEARCH_MIN_ZOOM = 2;
 export const MAP_SEARCH_MAX_ZOOM = 17;
 export const MAP_SEARCH_MAX_PLACES = 6;
+export const MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH = 160;
 
 export interface MapSearchPlace {
   label: string;
@@ -264,6 +267,7 @@ export interface MapSearchCardBody {
   actions: MapSearchAction[];
   view?: MapSearchView;
   places?: MapSearchPlace[];
+  unresolvedStops?: string[];
 }
 
 export interface McpAppCardBody {
@@ -382,6 +386,7 @@ type _AssertNoIdentityInModelInput = [_IdentityKeysLeakedToModel] extends [never
 export const INTERACTIVE_CARD_IDENTITY_GUARD: _AssertNoIdentityInModelInput = true;
 
 export type KnownInteractiveCard =
+  | (InteractiveCardCommon & { recognized: true; kind: 'answer-ui.v1'; body: AnswerUiCardBody })
   | (InteractiveCardCommon & { recognized: true; kind: 'clarify.v1'; body: ClarifyCardBody })
   | (InteractiveCardCommon & { recognized: true; kind: 'image.v1'; body: ImageCardBody })
   | (InteractiveCardCommon & { recognized: true; kind: 'itinerary.v1'; body: ItineraryCardBody })
@@ -458,4 +463,5 @@ export type InteractiveCardResponsePayload =
         skipped?: boolean;
       }>;
     }
-  | { kind: 'dismiss'; text?: string };
+  | { kind: 'dismiss'; text?: string }
+  | { kind: 'message'; action_id: string; values: Record<string, AnswerUiValue> };

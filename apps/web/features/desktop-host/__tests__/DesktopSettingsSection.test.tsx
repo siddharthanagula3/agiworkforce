@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { DesktopSettingsSection } from '../components/DesktopSettingsSection';
 import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const DEFAULT_STATE: HostPreferencesState = {
   preferences: {
@@ -46,7 +47,7 @@ const MISSING_CLI: DeveloperRuntimeStatus = {
   name: 'agi',
   version: null,
   path: null,
-  hint: 'Install the AGI CLI from agiworkforce.com/download.',
+  hint: `Install the ${PRODUCT_NAMES.cli} from agiworkforce.com/download.`,
   accountSyncError: null,
 };
 
@@ -71,7 +72,7 @@ function installHost(
     agiHost: {
       platform: 'electron-darwin',
       appVersion: '1.2.0',
-      readPreferences: vi.fn(async () => state),
+      readPreferences: vi.fn(async () => ({ ...state })),
       writePreferences,
       checkForUpdate: vi.fn(async () => ({
         available: false,
@@ -93,7 +94,7 @@ function installHost(
       notify: vi.fn(),
     },
   });
-  return { writePreferences };
+  return { writePreferences, state };
 }
 
 afterEach(() => {
@@ -102,7 +103,7 @@ afterEach(() => {
 });
 
 describe('the desktop settings section', () => {
-  it('names the AGI CLI it would run, with its version and where it lives', async () => {
+  it(`names the ${PRODUCT_NAMES.cli} it would run, with its version and where it lives`, async () => {
     installHost();
 
     render(<DesktopSettingsSection />);
@@ -111,7 +112,11 @@ describe('the desktop settings section', () => {
   });
 
   it.each([
-    ['bundled', 'Bundled with the app', '/Applications/AGI Desktop.app/Contents/Resources/agi'],
+    [
+      'bundled',
+      'Bundled with the app',
+      `/Applications/${PRODUCT_NAMES.desktop}.app/Contents/Resources/agi`,
+    ],
     ['custom', 'Custom path', '/opt/agi/bin/agi'],
     ['path', 'From PATH', '/usr/local/bin/agi'],
   ] as const)('says where a %s CLI came from', async (source, label, cliPath) => {
@@ -131,7 +136,7 @@ describe('the desktop settings section', () => {
 
     expect(
       await screen.findByText(
-        'Not found on this computer. Install the AGI CLI to run coding sessions here. Install the AGI CLI from agiworkforce.com/download.',
+        `Not found on this computer. Install the ${PRODUCT_NAMES.cli} to run coding sessions here. Install the ${PRODUCT_NAMES.cli} from agiworkforce.com/download.`,
       ),
     ).toBeInTheDocument();
   });
@@ -142,7 +147,7 @@ describe('the desktop settings section', () => {
     render(<DesktopSettingsSection />);
 
     const note = await screen.findByText(
-      'Using agi 1.7.1 from ~/.cargo/bin/agi. This account could not be given to the AGI CLI on this computer. Device sign-in is turned off for this account.',
+      `Using agi 1.7.1 from ~/.cargo/bin/agi. This account could not be given to the ${PRODUCT_NAMES.cli} on this computer. Device sign-in is turned off for this account.`,
     );
     expect(note).toBeInTheDocument();
   });
@@ -170,7 +175,7 @@ describe('the desktop settings section', () => {
     );
     // The version already has its own row, and the bridge's platform value is
     // an id to branch on rather than something to show anyone.
-    expect(screen.getByText('AGI Desktop on macOS')).toBeInTheDocument();
+    expect(screen.getByText(`${PRODUCT_NAMES.desktop} on macOS`)).toBeInTheDocument();
     expect(screen.queryByText(/electron-darwin/u)).not.toBeInTheDocument();
   });
 
@@ -324,7 +329,9 @@ describe('the desktop settings section', () => {
     render(<DesktopSettingsSection />);
 
     expect(await screen.findByText('Already used by another app.')).toBeInTheDocument();
-    expect(screen.getByText('Already used by another AGI Desktop shortcut.')).toBeInTheDocument();
+    expect(
+      screen.getByText(`Already used by another ${PRODUCT_NAMES.desktop} shortcut.`),
+    ).toBeInTheDocument();
   });
 
   // The shell asks the user natively before it saves a new CLI path, so what
@@ -346,7 +353,7 @@ describe('the desktop settings section', () => {
       invokeRuntime.mock.calls.filter(([command]) => command === 'developer_runtime_status').length;
     render(<DesktopSettingsSection />);
 
-    const field = await screen.findByLabelText('AGI CLI path');
+    const field = await screen.findByLabelText(`${PRODUCT_NAMES.cli} path`);
     await waitFor(() => expect(field).toBeEnabled());
     await waitFor(() => expect(cliReads()).toBe(1));
     await userEvent.type(field, '/tmp/not-the-cli');
@@ -358,7 +365,7 @@ describe('the desktop settings section', () => {
     answer(DEFAULT_STATE);
 
     await waitFor(() => expect(cliReads()).toBe(2));
-    expect(screen.getByLabelText('AGI CLI path')).toHaveValue('');
+    expect(screen.getByLabelText(`${PRODUCT_NAMES.cli} path`)).toHaveValue('');
   });
 
   it('offers the stop shortcut and agent notifications only when the shell reports them', async () => {
@@ -397,7 +404,7 @@ describe('the desktop settings section', () => {
     render(<DesktopSettingsSection />);
 
     const mode = await screen.findByLabelText('Agent notifications');
-    expect(mode).toHaveDisplayValue('Only when AGI Desktop is in the background');
+    expect(mode).toHaveDisplayValue(`Only when ${PRODUCT_NAMES.desktop} is in the background`);
 
     expect(screen.getByLabelText('Questions')).toBeChecked();
     await userEvent.click(screen.getByLabelText('Finished turns'));
@@ -423,6 +430,75 @@ describe('the desktop settings section', () => {
     });
     await waitFor(() => expect(screen.getByLabelText('Approval requests')).toBeDisabled());
     expect(screen.getByLabelText('Questions')).toBeDisabled();
+  });
+
+  it('applies a notification change to what another window already saved', async () => {
+    const { writePreferences, state } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+    await screen.findByLabelText('Agent notifications');
+
+    state.preferences = {
+      ...state.preferences,
+      agentNotifications: { when: 'never', muted: ['question'], sound: true },
+    };
+    await userEvent.click(screen.getByLabelText('Notification sound'));
+
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: { when: 'never', muted: ['question'], sound: false },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
+    });
+    await waitFor(() => expect(screen.getByLabelText('Agent notifications')).toHaveValue('never'));
+  });
+
+  it('applies quick consecutive notification changes one after the other', async () => {
+    const { writePreferences } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+    await screen.findByLabelText('Agent notifications');
+
+    await Promise.all([
+      userEvent.click(screen.getByLabelText('Finished turns')),
+      userEvent.click(screen.getByLabelText('Questions')),
+    ]);
+
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: {
+        when: 'unfocused',
+        muted: ['turn-complete', 'question'],
+        sound: true,
+      },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
+    });
+  });
+
+  it('shows what another window saved once this one is focused again', async () => {
+    const { state } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+    await screen.findByLabelText('Agent notifications');
+
+    state.preferences = {
+      ...state.preferences,
+      agentNotifications: { when: 'never', muted: [], sound: true },
+    };
+    window.dispatchEvent(new Event('focus'));
+
+    await waitFor(() => expect(screen.getByLabelText('Agent notifications')).toHaveValue('never'));
   });
 
   it('shows one set of notification choices, and keeps what the older alert rows saved', async () => {

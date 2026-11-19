@@ -65,6 +65,13 @@ export function androidChannelId(priority: NotificationPriority, vibrate: boolea
   return vibrate ? priority : `${priority}${SILENT_CHANNEL_SUFFIX}`;
 }
 
+export function immediateNotificationTrigger(
+  priority: NotificationPriority,
+  vibrate: boolean,
+): Notifications.NotificationTriggerInput {
+  return Platform.OS === 'android' ? { channelId: androidChannelId(priority, vibrate) } : null;
+}
+
 export async function registerAndroidChannels(): Promise<void> {
   if (Platform.OS !== 'android') return;
   for (const priority of NOTIFICATION_PRIORITIES) {

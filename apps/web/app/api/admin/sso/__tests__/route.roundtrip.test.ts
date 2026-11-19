@@ -19,18 +19,27 @@ const {
   mockDeleteEnterpriseConnection: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   logSecurityEvent: vi.fn(async () => undefined),
   recordAuditEvent: vi.fn(async () => undefined),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -147,6 +156,7 @@ const mockQuery = vi.fn(async (sql: string, params: unknown[] = []): Promise<Row
 
   if (text.startsWith('update sso_connections set display_name =')) {
     const current = store.connection!;
+    if (params[11] === true && !current['domain_verified_at']) return [];
     store.connection = {
       ...current,
       display_name: params[1],
@@ -169,7 +179,8 @@ const mockQuery = vi.fn(async (sql: string, params: unknown[] = []): Promise<Row
 
 const mockExecute = vi.fn(async () => undefined);
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getNeonDb: vi.fn(() => ({
     query: (...args: [string, unknown[]?]) => mockQuery(...args),
     execute: (...args: unknown[]) => mockExecute(...(args as [])),
@@ -356,6 +367,49 @@ describe('SSO configuration round trip', () => {
         attributeMapping: { emailAddress: 'user.email' },
       },
     });
+  });
+
+  it('removes a connection it just created when the domain was reset before it could be saved', async () => {
+    await createDraft();
+    store.connection!['domain_verified_at'] = '2026-08-04T01:00:00.000Z';
+    store.connection!['domain_verification_token'] = null;
+    mockCreateEnterpriseConnection.mockImplementation(async () => {
+      store.connection!['domain_verified_at'] = null;
+      return { id: 'ec_live_1', active: true, samlConnection: null };
+    });
+
+    const response = await PATCH(
+      req(`http://localhost/api/admin/sso/${CONNECTION_ID}`, 'PATCH', { is_active: true }),
+      params,
+    );
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('CONNECTION_CHANGED');
+    expect(mockDeleteEnterpriseConnection).toHaveBeenCalledWith('ec_live_1');
+    expect(store.connection!['is_active']).toBe(false);
+  });
+
+  it('switches an existing provider connection back off when the domain was reset before activation was saved', async () => {
+    await createDraft();
+    store.connection!['domain_verified_at'] = '2026-08-04T01:00:00.000Z';
+    store.connection!['domain_verification_token'] = null;
+    store.connection!['clerk_connection_id'] = 'ec_live_1';
+    mockUpdateEnterpriseConnection.mockImplementationOnce(async () => {
+      store.connection!['domain_verified_at'] = null;
+      return { id: 'ec_live_1', active: true, samlConnection: null };
+    });
+
+    const response = await PATCH(
+      req(`http://localhost/api/admin/sso/${CONNECTION_ID}`, 'PATCH', { is_active: true }),
+      params,
+    );
+
+    expect(response.status).toBe(409);
+    expect(mockUpdateEnterpriseConnection).toHaveBeenLastCalledWith('ec_live_1', {
+      active: false,
+    });
+    expect(mockDeleteEnterpriseConnection).not.toHaveBeenCalled();
+    expect(store.connection!['is_active']).toBe(false);
   });
 
   it('reads the connection back with its stored provider reference hidden', async () => {
@@ -645,3 +699,10 @@ describe('SSO authorization within an entitled organization', () => {
     expect(body.connections[0]!.domain).toBe('example.com');
   });
 });
+
+type ImportedModule5 = typeof import('@/lib/rate-limit');
+type ImportedModule4 = typeof import('@/lib/csrf');
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule2 = typeof import('@/lib/security-audit');
+type ImportedModule1 = typeof import('@/lib/api-auth');
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

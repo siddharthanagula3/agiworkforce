@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('@/src/ui/theme', () => ({
   colors: {
@@ -181,6 +181,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
   openExternalUrl: jest.fn(),
 }));
 
+import { Camera } from 'expo-camera';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import PermissionsScreen from '@/src/features/settings/permissions';
 import PermissionDetailScreen from '@/src/features/settings/permissions/Detail';
@@ -222,5 +223,54 @@ describe('PermissionDetailScreen, camera', () => {
 
     expect(getByText('Unknown permission type.')).toBeTruthy();
     expect(mockPermissionsState.setObservedStatus).not.toHaveBeenCalled();
+  });
+
+  it('says the status may be stale when the device rejects the status read', async () => {
+    (Camera.getCameraPermissionsAsync as jest.Mock).mockRejectedValueOnce(new Error('native'));
+
+    const { findByText } = render(<PermissionDetailScreen />);
+
+    expect(
+      await findByText(
+        'Could not read this permission from your device. The status shown may be out of date.',
+      ),
+    ).toBeTruthy();
+    expect(mockPermissionsState.setObservedStatus).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure and re-enables the control when the device rejects the request', async () => {
+    (Camera.requestCameraPermissionsAsync as jest.Mock).mockRejectedValueOnce(new Error('native'));
+
+    const { findByText, getByLabelText } = render(<PermissionDetailScreen />);
+    await waitFor(() => expect(Camera.getCameraPermissionsAsync).toHaveBeenCalled());
+    fireEvent.press(getByLabelText('Allow Camera'));
+
+    expect(
+      await findByText('Your device could not process the request. Try again, or open Settings.'),
+    ).toBeTruthy();
+    expect(getByLabelText('Allow Camera').props.accessibilityState.disabled).toBe(false);
+    expect(mockPermissionsState.setObservedStatus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PermissionsScreen, status read failure', () => {
+  it('warns that statuses may be stale when one adapter rejects and still records the rest', async () => {
+    (Camera.getCameraPermissionsAsync as jest.Mock).mockRejectedValueOnce(new Error('native'));
+
+    const { findByText } = render(<PermissionsScreen />);
+
+    expect(
+      await findByText(
+        'Could not read some permissions from your device. The statuses shown may be out of date.',
+      ),
+    ).toBeTruthy();
+    expect(mockPermissionsState.setObservedStatus).toHaveBeenCalledWith(
+      'microphone',
+      'undetermined',
+    );
+    expect(mockPermissionsState.setObservedStatus).not.toHaveBeenCalledWith(
+      'camera',
+      expect.anything(),
+    );
   });
 });

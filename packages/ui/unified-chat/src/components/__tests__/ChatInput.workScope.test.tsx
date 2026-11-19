@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { COMPOSER_SEND_ACCEPTED, ChatInput, type ChatInputProps } from '../ChatInput';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
@@ -31,7 +32,7 @@ function makePicker(overrides: Partial<NonNullable<ChatInputProps['projectPicker
   };
 }
 
-describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)', () => {
+describe('ChatInput work scope (Chat | Work toggle + project/folder picker)', () => {
   beforeEach(() => {
     useChatStore.setState({
       activeConversationId: 'conv-1',
@@ -117,7 +118,7 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     const { onSend, textarea } = renderComposer();
 
     expect(screen.queryByRole('group', { name: 'Composer mode' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'AGI Work' })).toBeNull();
+    expect(screen.queryByRole('button', { name: PRODUCT_NAMES.work })).toBeNull();
 
     fireEvent.change(textarea, { target: { value: 'Plain send' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
@@ -125,38 +126,38 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     expect(onSend).toHaveBeenCalledWith('Plain send', 'ask', undefined, undefined, false);
   });
 
-  it('renders the toggle when the host feeds the picker, and AGI Work reveals the scope chip', () => {
+  it('renders the toggle when the host feeds the picker, and Work reveals the scope chip', () => {
     renderComposer({ projectPicker: makePicker() });
 
     expect(screen.queryByRole('group', { name: 'Composer mode' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Project or folder' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
 
-    expect(screen.getByRole('button', { name: 'AGI Work' }).getAttribute('aria-pressed')).toBe(
-      'true',
-    );
+    expect(
+      screen.getByRole('button', { name: PRODUCT_NAMES.work }).getAttribute('aria-pressed'),
+    ).toBe('true');
     expect(screen.queryByRole('button', { name: 'Project or folder' })).not.toBeNull();
   });
 
-  it('keeps ordinary project chat but withholds AGI Work when the host denies the entitlement', () => {
+  it('keeps ordinary project chat but withholds Work when the host denies the entitlement', () => {
     const picker = makePicker({ activeProjectId: 'p1' });
     const { onSend, textarea } = renderComposer({
       projectPicker: picker,
       canUseAgiWork: false,
       agiWorkUnavailableReason:
-        'AGI Work is not available for this local model. Project chat still works.',
+        'Work is not available for this local model. Project chat still works.',
       onSelectFolder: vi.fn(),
     });
 
     expect(screen.queryByRole('group', { name: 'Composer mode' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'AGI Work' })).toBeNull();
+    expect(screen.queryByRole('button', { name: PRODUCT_NAMES.work })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Project' })).not.toBeNull();
     expect(screen.queryByRole('status')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Project' }));
     expect(screen.getByRole('status').textContent).toContain(
-      'AGI Work is not available for this local model. Project chat still works.',
+      'Work is not available for this local model. Project chat still works.',
     );
     expect(screen.queryByText(/Choose a local folder/)).toBeNull();
 
@@ -187,7 +188,7 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
       currentFolderLabel: 'my-folder',
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
     fireEvent.click(screen.getByRole('option', { name: 'Apollo' }));
 
@@ -198,7 +199,7 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
   it('closes the scope picker on Escape and returns focus to its trigger', () => {
     renderComposer({ projectPicker: makePicker() });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     const trigger = screen.getByRole('button', { name: 'Project or folder' });
     fireEvent.click(trigger);
 
@@ -213,7 +214,7 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
   it('arrow-navigates between project options in the scope picker', () => {
     renderComposer({ projectPicker: makePicker() });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
 
     fireEvent.keyDown(document, { key: 'ArrowDown' });
@@ -258,9 +259,9 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
       projectPicker: makePicker({ activeProjectId: 'p1' }),
     });
 
-    expect(screen.getByRole('button', { name: 'AGI Work' }).getAttribute('aria-pressed')).toBe(
-      'true',
-    );
+    expect(
+      screen.getByRole('button', { name: PRODUCT_NAMES.work }).getAttribute('aria-pressed'),
+    ).toBe('true');
 
     fireEvent.change(textarea, { target: { value: 'Scoped send' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send message (Enter)' }));
@@ -293,13 +294,13 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
   it('offers the local-folder action only when the host feeds the folder seam', () => {
     const { view } = renderComposer({ projectPicker: makePicker() });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
     expect(screen.queryByText(/Choose a local folder/)).toBeNull();
     view.unmount();
 
     renderComposer({ projectPicker: makePicker(), onSelectFolder: vi.fn() });
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
     expect(screen.queryByText(/Choose a local folder/)).not.toBeNull();
   });
@@ -308,7 +309,7 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     const onCreateProject = vi.fn();
     renderComposer({ projectPicker: makePicker({ onCreateProject }) });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     fireEvent.click(screen.getByRole('button', { name: 'Project or folder' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
 

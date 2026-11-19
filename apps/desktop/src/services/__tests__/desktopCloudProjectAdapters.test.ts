@@ -112,4 +112,46 @@ describe('Desktop Managed Cloud project adapters', () => {
     );
     expect(assertBoundary).toHaveBeenCalled();
   });
+
+  describe('a signed knowledge upload that carries encryption headers', () => {
+    const SIGNED_URL =
+      'https://storage.example.test/signed-upload?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption';
+
+    function presignWith(uploadHeaders: Record<string, string>) {
+      fetch.mockImplementation(async (input: string, init?: RequestInit) => {
+        const url = new URL(input);
+        if (url.pathname === '/api/uploads/presign' && init?.method === 'POST') {
+          return jsonResponse({
+            uploadUrl: SIGNED_URL,
+            uploadMethod: 'PUT',
+            uploadHeaders,
+            storageKey: 'knowledge-files/projects/project-1/notes.txt',
+          });
+        }
+        throw new Error(`Unexpected project upload request: ${init?.method} ${url.pathname}`);
+      });
+    }
+
+    it('refuses to upload without a header the signed url requires', async () => {
+      presignWith({ 'Content-Type': 'text/plain' });
+      const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+
+      await expect(desktopCloudProjectKnowledge.upload('project-1', file)).rejects.toThrow(
+        'x-amz-server-side-encryption',
+      );
+      expect(fetchExternal).not.toHaveBeenCalled();
+    });
+
+    it('sends the headers the server returned through the external fetch', async () => {
+      presignWith({ 'Content-Type': 'text/plain', 'x-amz-server-side-encryption': 'AES256' });
+      const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+
+      await desktopCloudProjectKnowledge.upload('project-1', file).catch(() => undefined);
+
+      const init = fetchExternal.mock.calls[0]?.[1] as RequestInit;
+      const sent = new Headers(init.headers);
+      expect(sent.get('x-amz-server-side-encryption')).toBe('AES256');
+      expect(sent.get('Content-Type')).toBe('text/plain');
+    });
+  });
 });

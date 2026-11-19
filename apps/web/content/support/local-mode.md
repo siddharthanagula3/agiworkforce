@@ -5,7 +5,7 @@ path: /local
 category: local
 tags: local mode, offline, ollama, lm studio, on device, privacy, free
 platforms: cli
-updated: 2026-10-05
+updated: 2026-11-10
 description: How to run a local model with the CLI, how to set it up and how model routes and tool permissions apply.
 scope: public
 ---
@@ -14,8 +14,9 @@ scope: public
 
 Check [surface availability](https://agiworkforce.com/get-started) before
 installing the CLI. The CLI implementation supports local inference through
-Ollama and LM Studio. The current Desktop application is managed-cloud-only and
-does not accept provider keys or run local models.
+Ollama and LM Studio. Desktop chat uses Cloud and Desktop does not accept
+provider keys; its local coding sessions run the CLI, which can use a local model
+or a provider key you set up there.
 
 Local describes the inference route. Signed-in CLI startup may refresh the
 managed model catalog when it is not cached. Review network use by tools and

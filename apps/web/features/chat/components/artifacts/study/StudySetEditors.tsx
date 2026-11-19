@@ -3,7 +3,16 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import type { Flashcard, FlashcardSet, Quiz, QuizQuestion } from './study-set';
+import {
+  MAX_CARDS,
+  MAX_OPTIONS,
+  MAX_QUESTIONS,
+  MAX_TEXT,
+  type Flashcard,
+  type FlashcardSet,
+  type Quiz,
+  type QuizQuestion,
+} from './study-set';
 
 const FIELD =
   'min-h-11 w-full rounded-md border border-border/60 bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9';
@@ -35,15 +44,49 @@ function blankQuestion(kind: QuizQuestion['kind']): QuizQuestion {
     : { kind, question: '', answer: '', accept: [], explanation: '', hints: [] };
 }
 
+function fits(value: string): boolean {
+  return value.trim().length <= MAX_TEXT;
+}
+
+function isQuestionComplete(question: QuizQuestion): boolean {
+  if (question.kind === 'multiple_choice') {
+    return (
+      question.question.trim() !== '' &&
+      fits(question.question) &&
+      fits(question.explanation) &&
+      question.options.length >= 2 &&
+      question.options.length <= MAX_OPTIONS &&
+      question.options.every((option) => option.trim() !== '' && fits(option)) &&
+      question.answer >= 0 &&
+      question.answer < question.options.length
+    );
+  }
+  return (
+    question.question.trim() !== '' &&
+    fits(question.question) &&
+    question.answer.trim() !== '' &&
+    fits(question.answer) &&
+    fits(question.explanation)
+  );
+}
+
 export function isQuizComplete(quiz: Quiz): boolean {
   return (
     quiz.questions.length > 0 &&
-    quiz.questions.every((question) =>
-      question.kind === 'multiple_choice'
-        ? question.question.trim() !== '' &&
-          question.options.filter((option) => option.trim()).length >= 2 &&
-          (question.options[question.answer] ?? '').trim() !== ''
-        : question.question.trim() !== '' && question.answer.trim() !== '',
+    quiz.questions.length <= MAX_QUESTIONS &&
+    fits(quiz.title) &&
+    quiz.questions.every(isQuestionComplete)
+  );
+}
+
+export function isFlashcardSetComplete(set: FlashcardSet): boolean {
+  return (
+    set.cards.length > 0 &&
+    set.cards.length <= MAX_CARDS &&
+    fits(set.title) &&
+    set.cards.every(
+      (card) =>
+        card.front.trim() !== '' && card.back.trim() !== '' && fits(card.front) && fits(card.back),
     )
   );
 }
@@ -74,6 +117,7 @@ export function QuizEditor({
         Quiz title
         <input
           value={quiz.title}
+          maxLength={MAX_TEXT}
           onChange={(event) => setQuiz({ ...quiz, title: event.target.value })}
           className={FIELD}
         />
@@ -101,6 +145,7 @@ export function QuizEditor({
               Question
               <input
                 value={question.question}
+                maxLength={MAX_TEXT}
                 onChange={(event) => update(index, { ...question, question: event.target.value })}
                 className={FIELD}
               />
@@ -122,6 +167,7 @@ export function QuizEditor({
                     />
                     <input
                       value={option}
+                      maxLength={MAX_TEXT}
                       onChange={(event) =>
                         update(index, {
                           ...question,
@@ -155,7 +201,7 @@ export function QuizEditor({
                     </button>
                   </div>
                 ))}
-                {question.options.length < 8 ? (
+                {question.options.length < MAX_OPTIONS ? (
                   <button
                     type="button"
                     onClick={() =>
@@ -172,6 +218,7 @@ export function QuizEditor({
                 Correct answer
                 <input
                   value={question.answer}
+                  maxLength={MAX_TEXT}
                   onChange={(event) => update(index, { ...question, answer: event.target.value })}
                   className={FIELD}
                 />
@@ -181,6 +228,7 @@ export function QuizEditor({
               Explanation
               <textarea
                 value={question.explanation}
+                maxLength={MAX_TEXT}
                 rows={2}
                 onChange={(event) =>
                   update(index, { ...question, explanation: event.target.value })
@@ -195,6 +243,7 @@ export function QuizEditor({
         <Button
           variant="outline"
           size="sm"
+          disabled={quiz.questions.length >= MAX_QUESTIONS}
           onClick={() =>
             setQuiz({ ...quiz, questions: [...quiz.questions, blankQuestion('multiple_choice')] })
           }
@@ -205,6 +254,7 @@ export function QuizEditor({
         <Button
           variant="outline"
           size="sm"
+          disabled={quiz.questions.length >= MAX_QUESTIONS}
           onClick={() =>
             setQuiz({ ...quiz, questions: [...quiz.questions, blankQuestion('short_answer')] })
           }
@@ -215,7 +265,7 @@ export function QuizEditor({
       </div>
       {!isQuizComplete(quiz) ? (
         <p className="text-xs text-muted-foreground" role="status">
-          Every question needs its text and a correct answer before it can be saved.
+          {`Every question needs its text, filled-in options and a correct answer before it can be saved. A quiz holds up to ${MAX_QUESTIONS} questions and each text up to ${MAX_TEXT} characters.`}
         </p>
       ) : null}
       <EditorActions
@@ -242,8 +292,7 @@ export function FlashcardsEditor({
       ...current,
       cards: current.cards.map((card, i) => (i === index ? next : card)),
     }));
-  const complete =
-    set.cards.length > 0 && set.cards.every((card) => card.front.trim() && card.back.trim());
+  const complete = isFlashcardSetComplete(set);
 
   return (
     <section
@@ -255,6 +304,7 @@ export function FlashcardsEditor({
         Set title
         <input
           value={set.title}
+          maxLength={MAX_TEXT}
           onChange={(event) => setSet({ ...set, title: event.target.value })}
           className={FIELD}
         />
@@ -264,12 +314,14 @@ export function FlashcardsEditor({
           <li key={index} className="flex items-start gap-2">
             <input
               value={card.front}
+              maxLength={MAX_TEXT}
               onChange={(event) => update(index, { ...card, front: event.target.value })}
               aria-label={`Card ${index + 1} front`}
               className={FIELD}
             />
             <input
               value={card.back}
+              maxLength={MAX_TEXT}
               onChange={(event) => update(index, { ...card, back: event.target.value })}
               aria-label={`Card ${index + 1} back`}
               className={FIELD}
@@ -289,11 +341,17 @@ export function FlashcardsEditor({
         variant="outline"
         size="sm"
         className="self-start"
+        disabled={set.cards.length >= MAX_CARDS}
         onClick={() => setSet({ ...set, cards: [...set.cards, { front: '', back: '' }] })}
       >
         <Plus className="me-1 h-3.5 w-3.5" aria-hidden="true" />
         Add card
       </Button>
+      {!complete ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          {`Every card needs both sides before it can be saved. A set holds up to ${MAX_CARDS} cards and each text up to ${MAX_TEXT} characters.`}
+        </p>
+      ) : null}
       <EditorActions onCancel={onCancel} onSave={() => onSave(set)} saveDisabled={!complete} />
     </section>
   );

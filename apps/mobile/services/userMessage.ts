@@ -1,4 +1,8 @@
-import { ApiHttpError } from './apiErrors';
+import {
+  ACCOUNT_UNCONFIRMED_MESSAGE,
+  ApiHttpError,
+  CloudCredentialUnavailableError,
+} from './apiErrors';
 
 const NETWORK_FAILURE = /failed to fetch|networkerror|network request failed|\bload failed\b/i;
 const HTTP_STATUS_PREFIX = /^\s*HTTP\s+(\d{3})\b/;
@@ -19,7 +23,7 @@ function statusOf(error: unknown): number | undefined {
 
 function httpStatusMessage(status: number | undefined): string | null {
   if (status === undefined) return null;
-  if (status === 401) return 'Your session has expired. Sign in again to continue.';
+  if (status === 401) return ACCOUNT_UNCONFIRMED_MESSAGE;
   if (status === 403) return 'You do not have access to this.';
   if (status === 404) return 'That is no longer available.';
   if (status === 408) return 'The server took too long to answer. Try again.';
@@ -41,6 +45,7 @@ function isEnvelopeSentence(error: unknown): error is ApiHttpError {
 export function toUserMessage(error: unknown, fallback: string): string {
   const raw = error instanceof Error ? error.message.trim() : '';
   if (NETWORK_FAILURE.test(raw)) return NETWORK_UNREACHABLE_MESSAGE;
+  if (error instanceof CloudCredentialUnavailableError) return ACCOUNT_UNCONFIRMED_MESSAGE;
   if (isEnvelopeSentence(error)) return raw;
   return httpStatusMessage(statusOf(error)) ?? fallback;
 }

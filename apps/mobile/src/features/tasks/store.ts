@@ -88,6 +88,8 @@ export interface CloudTaskState {
 }
 
 let followController: AbortController | null = null;
+let listGeneration = 0;
+let detailIncarnation = 0;
 
 const EMPTY_LIST = {
   runs: [] as CloudAgentRun[],
@@ -140,6 +142,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
 
   setFilter: (filter) => {
     if (get().filter === filter) return;
+    listGeneration += 1;
     set({ ...EMPTY_LIST, filter, status: 'idle' });
     void get().load('initial');
   },
@@ -147,22 +150,27 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
   load: async (reason) => {
     const account = captureCloudAccountEpoch();
     if (!account) {
+      listGeneration += 1;
       set({ ...EMPTY_LIST, status: 'idle' });
       return;
     }
+
+    listGeneration += 1;
+    const generation = listGeneration;
+    const isCurrent = () => isCloudAccountEpochCurrent(account) && generation === listGeneration;
 
     if (reason === 'initial') set({ status: 'loading', error: null });
     if (reason === 'refresh') set({ refreshing: true });
 
     try {
       const page = await listCloudRuns({ states: cloudRunFilterStates(get().filter) });
-      if (!isCloudAccountEpochCurrent(account)) return;
+      if (!isCurrent()) return;
       set({ runs: page.runs, nextCursor: page.nextCursor, status: 'loaded', error: null });
     } catch (error) {
-      if (!isCloudAccountEpochCurrent(account) || reason === 'background') return;
+      if (!isCurrent() || (reason === 'background' && get().status !== 'loading')) return;
       set({ status: 'error', error: describeCloudRunError(error, CLOUD_RUN_LIST_ERROR) });
     } finally {
-      if (isCloudAccountEpochCurrent(account)) set({ refreshing: false });
+      if (isCurrent()) set({ refreshing: false, loadingMore: false });
     }
   },
 
@@ -172,23 +180,26 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     const account = captureCloudAccountEpoch();
     if (!account) return;
 
+    const generation = listGeneration;
+    const isCurrent = () => isCloudAccountEpochCurrent(account) && generation === listGeneration;
+
     set({ loadingMore: true });
     try {
       const page = await listCloudRuns({
         states: cloudRunFilterStates(get().filter),
         cursor: nextCursor,
       });
-      if (!isCloudAccountEpochCurrent(account)) return;
+      if (!isCurrent()) return;
       set((state) => ({
         runs: mergeCloudRuns(state.runs, page.runs),
         nextCursor: page.nextCursor,
         error: null,
       }));
     } catch (error) {
-      if (!isCloudAccountEpochCurrent(account)) return;
+      if (!isCurrent()) return;
       set({ error: describeCloudRunError(error, CLOUD_RUN_LIST_ERROR) });
     } finally {
-      if (isCloudAccountEpochCurrent(account)) set({ loadingMore: false });
+      if (isCurrent()) set({ loadingMore: false });
     }
   },
 
@@ -196,6 +207,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     const account = captureCloudAccountEpoch();
     if (!account) return;
 
+    detailIncarnation += 1;
     followController?.abort();
     const controller = new AbortController();
     followController = controller;
@@ -247,6 +259,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
   },
 
   closeRun: () => {
+    detailIncarnation += 1;
     followController?.abort();
     followController = null;
     set({ detail: null });
@@ -258,6 +271,7 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     if (!detail || !pending) return;
     const account = captureCloudAccountEpoch();
     if (!account) return;
+    const incarnation = detailIncarnation;
 
     set({
       detail: {
@@ -274,11 +288,15 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
         decision,
       );
       if (!isCloudAccountEpochCurrent(account)) return;
+      if (incarnation !== detailIncarnation) {
+        void get().load('background');
+        return;
+      }
       await get().openRun(detail.runId);
     } catch (error) {
       if (!isCloudAccountEpochCurrent(account)) return;
       set((state) =>
-        state.detail?.runId === detail.runId
+        state.detail?.runId === detail.runId && incarnation === detailIncarnation
           ? {
               detail: {
                 ...state.detail,
@@ -297,17 +315,22 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     if (!detail?.run?.pendingInput || answers.length === 0) return;
     const account = captureCloudAccountEpoch();
     if (!account) return;
+    const incarnation = detailIncarnation;
 
     set({ detail: { ...detail, pendingAction: 'answer', error: null } });
 
     try {
       await createMobileCloudAgentRunClient().answerRunInput(detail.runId, answers);
       if (!isCloudAccountEpochCurrent(account)) return;
+      if (incarnation !== detailIncarnation) {
+        void get().load('background');
+        return;
+      }
       await get().openRun(detail.runId);
     } catch (error) {
       if (!isCloudAccountEpochCurrent(account)) return;
       set((state) =>
-        state.detail?.runId === detail.runId
+        state.detail?.runId === detail.runId && incarnation === detailIncarnation
           ? {
               detail: {
                 ...state.detail,
@@ -392,15 +415,16 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
     if (!detail || detail.pendingAction) return;
     const account = captureCloudAccountEpoch();
     if (!account) return;
+    const incarnation = detailIncarnation;
     set({ detail: { ...detail, pendingAction: 'resume', error: null } });
     try {
       await resumePausedCloudRun(detail.runId);
       if (!isCloudAccountEpochCurrent(account)) return;
-      if (get().detail?.runId === detail.runId) await get().openRun(detail.runId);
+      if (incarnation === detailIncarnation) await get().openRun(detail.runId);
     } catch (error) {
       if (!isCloudAccountEpochCurrent(account)) return;
       set((state) =>
-        state.detail?.runId === detail.runId
+        state.detail?.runId === detail.runId && incarnation === detailIncarnation
           ? {
               detail: {
                 ...state.detail,
@@ -416,6 +440,8 @@ export const useCloudTaskStore = create<CloudTaskState>()((set, get) => ({
   },
 
   reset: () => {
+    listGeneration += 1;
+    detailIncarnation += 1;
     followController?.abort();
     followController = null;
     set({ ...EMPTY_LIST, status: 'idle', detail: null });

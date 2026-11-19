@@ -19,9 +19,13 @@ const COMPLETIONS_DIR = path.resolve(import.meta.dirname, '..');
 const CHECKPOINT_RESUME_ROUTES = [
   'approve/route.ts',
   'resume-input/route.ts',
-  'resume-device/route.ts',
   'runs/[runId]/resume/route.ts',
+  'lib/tool-result-resume.ts',
 ];
+
+const TOOL_RESULT_RESUME_ROUTES = ['resume-device/route.ts', 'resume-caller/route.ts'];
+
+const RESTORE_CALL = 'restoreCheckpointedTurn(processed, claim.checkpoint);';
 
 describe('moving the chat system prompt pin under existing conversations', () => {
   it('never takes a signed thinking block from the client history of a later turn', () => {
@@ -52,8 +56,22 @@ describe('moving the chat system prompt pin under existing conversations', () =>
     '%s resumes a paused turn from the messages its checkpoint stored, system text included',
     (route) => {
       const source = readFileSync(path.join(COMPLETIONS_DIR, route), 'utf8');
+      const processedAt = source.indexOf('const processed');
+      const restoredAt = source.indexOf(RESTORE_CALL);
 
-      expect(source).toContain('restoreCheckpointedTurn(processed, claim.checkpoint);');
+      expect(processedAt).toBeGreaterThan(-1);
+      expect(restoredAt).toBeGreaterThan(processedAt);
+    },
+  );
+
+  it.each(TOOL_RESULT_RESUME_ROUTES)(
+    '%s resumes its claimed checkpoint through the shared tool-result resume',
+    (route) => {
+      const source = readFileSync(path.join(COMPLETIONS_DIR, route), 'utf8');
+
+      expect(source).toContain("from '@/app/api/llm/v1/chat/completions/lib/tool-result-resume';");
+      expect(source).toMatch(/return continueToolResultResume\(\{[^}]*\bclaim,/);
+      expect(source).not.toContain('processRequest(');
     },
   );
 

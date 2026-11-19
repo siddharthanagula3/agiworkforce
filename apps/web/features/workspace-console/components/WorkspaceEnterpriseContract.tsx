@@ -38,6 +38,16 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function formatCalendarDate(iso: string | null): string {
+  if (!iso) return NOT_ON_RECORD;
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function formatAmount(cents: number, currency: string): string {
   return (cents / 100).toLocaleString(undefined, {
     style: 'currency',
@@ -47,7 +57,7 @@ function formatAmount(cents: number, currency: string): string {
 
 function termLabel(contract: EnterpriseContractSummary): string {
   if (!contract.termStart && !contract.termEnd) return NOT_ON_RECORD;
-  return `${formatDate(contract.termStart)} to ${formatDate(contract.termEnd)}`;
+  return `${formatCalendarDate(contract.termStart)} to ${formatCalendarDate(contract.termEnd)}`;
 }
 
 function paymentTermsLabel(days: number | null): string {
@@ -258,7 +268,7 @@ export function WorkspaceEnterpriseContract({
         <SectionHeading
           id="enterprise-contract-heading"
           title={contract.ended ? 'Enterprise contract (ended)' : 'Enterprise contract'}
-          caption="Read only. Your account team changes contract terms, and changes appear here once billing records them."
+          caption="Read only. Changes appear once billing records them."
         />
         <div className="divide-y" style={{ borderColor: 'var(--settings-border)' }}>
           <Row label="Legal entity" value={contract.customerLegalEntity ?? NOT_ON_RECORD} />
@@ -269,6 +279,15 @@ export function WorkspaceEnterpriseContract({
           <Row label="Tax status" value={TAX_STATUS_LABELS[contract.taxExemptStatus]} />
           <Row label="Purchase order" value={contract.procurementReference ?? NOT_ON_RECORD} />
           {contract.supportTier ? <Row label="Support tier" value={contract.supportTier} /> : null}
+          {contract.overageWriteOff ? (
+            <Row
+              label="Usage written off at contract end"
+              value={`${formatAmount(
+                contract.overageWriteOff.writtenOffCents,
+                contract.overageWriteOff.currency,
+              )}, ${formatDate(contract.overageWriteOff.recordedAt)}`}
+            />
+          ) : null}
         </div>
       </section>
 
@@ -288,7 +307,7 @@ export function WorkspaceEnterpriseContract({
         <SectionHeading
           id="enterprise-invoices-heading"
           title="Invoices"
-          caption="The most recent invoices on this contract, newest first. Older invoices stay with the billing provider and are reachable from any invoice link below."
+          caption="Recent invoices, newest first. Older invoices stay with the billing provider."
         />
         <InvoiceTable invoices={data?.invoices ?? []} />
       </section>

@@ -62,7 +62,7 @@ describe('plan catalog versioning', () => {
 
   it('tells a grandfathered yearly subscriber that nothing changes until they switch', () => {
     expect(grandfatheredYearlyBillingNotice('pro')).toBe(
-      'If you already pay yearly for Pro, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.',
+      `If you already pay yearly for ${BILLING_PLAN_PRICING.pro.label}, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.`,
     );
     expect(grandfatheredYearlyBillingNotice('team')).toBeNull();
   });

@@ -15,6 +15,7 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { readDisabledConnectorIds } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import { advanceConnectorPermissionGeneration } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
 
 export const runtime = 'nodejs';
 
@@ -45,18 +46,21 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   const { connectorId, enabled } = parsed.data;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
-  const rows = await db.query<{ connector_id: string; enabled: boolean }>(
-    `insert into public.connector_account_states (user_id, connector_id, enabled)
-     select $1, $2, $3
-      where (select count(*)
-               from public.connector_account_states
-              where user_id = $1 and connector_id <> $2) < $4
-     on conflict (user_id, connector_id)
-       do update set enabled = excluded.enabled
-     returning connector_id, enabled`,
-    [userId, connectorId, enabled, CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES],
-  );
-  const saved = rows[0];
+  const saved = await db.transaction(async (transaction) => {
+    await advanceConnectorPermissionGeneration(transaction, userId, connectorId);
+    const rows = await transaction.query<{ connector_id: string; enabled: boolean }>(
+      `insert into public.connector_account_states (user_id, connector_id, enabled)
+       select $1, $2, $3
+        where (select count(*)
+                 from public.connector_account_states
+                where user_id = $1 and connector_id <> $2) < $4
+       on conflict (user_id, connector_id)
+         do update set enabled = excluded.enabled
+       returning connector_id, enabled`,
+      [userId, connectorId, enabled, CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES],
+    );
+    return rows[0];
+  });
   if (!saved) {
     throw createError.validation(
       `Only ${CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES} connectors can be switched on or off. Disconnect one you no longer use.`,

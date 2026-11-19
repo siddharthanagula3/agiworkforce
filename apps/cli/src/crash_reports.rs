@@ -82,19 +82,35 @@ pub fn install_panic_hook(dir: PathBuf) {
     let _ = startup_metrics::record_ready(&dir);
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let location = info.location().map(describe_location);
-        let thread = std::thread::current().name().map(str::to_string);
-        let written = write_report(&dir, &build_report(location, thread));
-        let _ = startup_metrics::record_terminal_error(
+        record_panic(
             &dir,
-            if written.is_ok() {
-                TerminalErrorKind::Unhandled
-            } else {
-                TerminalErrorKind::ReportUnwritable
-            },
+            crate::broken_pipe::panic_message(info),
+            info.location().map(describe_location),
+            std::thread::current().name().map(str::to_string),
         );
         previous(info);
     }));
+}
+
+fn record_panic(
+    dir: &Path,
+    message: Option<&str>,
+    location: Option<String>,
+    thread: Option<String>,
+) -> bool {
+    if message.is_some_and(crate::broken_pipe::is_broken_pipe_panic) {
+        return false;
+    }
+    let written = write_report(dir, &build_report(location, thread));
+    let _ = startup_metrics::record_terminal_error(
+        dir,
+        if written.is_ok() {
+            TerminalErrorKind::Unhandled
+        } else {
+            TerminalErrorKind::ReportUnwritable
+        },
+    );
+    true
 }
 
 pub fn write_report(dir: &Path, report: &CrashReport) -> std::io::Result<PathBuf> {
@@ -312,6 +328,38 @@ mod tests {
         let metrics = startup_metrics::load(dir.path());
         assert_eq!(metrics.ready_count(&startup_metrics::current_version()), 1);
         assert!(pending_reports(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn a_closed_output_pipe_is_not_recorded_as_a_crash() {
+        let dir = tempfile::tempdir().unwrap();
+        let version = startup_metrics::current_version();
+
+        assert!(!record_panic(
+            dir.path(),
+            Some("failed printing to stdout: Broken pipe (os error 32)"),
+            Some("library/std/src/io/stdio.rs:1:1".to_string()),
+            Some("main".to_string()),
+        ));
+        assert!(pending_reports(dir.path()).is_empty());
+        assert_eq!(
+            startup_metrics::load(dir.path())
+                .terminal_error_count(&version, TerminalErrorKind::Unhandled),
+            0
+        );
+
+        assert!(record_panic(
+            dir.path(),
+            Some("index out of bounds"),
+            Some("src/lib.rs:1:1".to_string()),
+            None,
+        ));
+        assert_eq!(pending_reports(dir.path()).len(), 1);
+        assert_eq!(
+            startup_metrics::load(dir.path())
+                .terminal_error_count(&version, TerminalErrorKind::Unhandled),
+            1
+        );
     }
 
     #[test]

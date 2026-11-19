@@ -75,7 +75,7 @@ export async function performAdminAccountAction(
   action: AdminAccountAction,
   userId: string,
   reason: string,
-): Promise<{ message: string; account_status: string }> {
+): Promise<AdminAccountActionResult> {
   if (!token.trim()) throw new Error('Admin session token is unavailable');
   const csrfToken = await getCsrfToken();
   const response = await fetch(`/api/admin/security?action=${action}`, {
@@ -88,5 +88,14 @@ export async function performAdminAccountAction(
     body: JSON.stringify({ userId, reason }),
   });
   if (!response.ok) throw await responseError(response);
-  return response.json() as Promise<{ message: string; account_status: string }>;
+  return response.json() as Promise<AdminAccountActionResult>;
+}
+
+export interface AdminAccountActionResult {
+  message: string;
+  account_status: string;
+  complete: boolean;
+  provider_status: 'completed' | 'failed' | 'not_required';
+  retry_queued: boolean;
+  action_id: string | null;
 }

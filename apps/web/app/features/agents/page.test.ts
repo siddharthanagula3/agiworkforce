@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -46,6 +47,8 @@ describe('/features/agents, which surface each part belongs to', () => {
 
   it('names the web preview as the web app', () => {
     expect(page).toContain('<AgentRunWindow />');
-    expect(page).toContain('The preview above shows a tool waiting for approval in AGI Chat.');
+    expect(page).toContain(
+      `The preview above shows a tool waiting for approval in ${PRODUCT_NAMES.chat}.`,
+    );
   });
 });

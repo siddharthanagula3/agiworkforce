@@ -69,6 +69,7 @@ export default function ScheduledRunsScreen() {
   const loading = useScheduleStore((s) => s.recentRunsLoading);
   const loadingMore = useScheduleStore((s) => s.recentRunsLoadingMore);
   const error = useScheduleStore((s) => s.recentRunsError);
+  const refreshFailed = useScheduleStore((s) => s.recentRunsErrorSource === 'refresh');
   const fetchRecentRuns = useScheduleStore((s) => s.fetchRecentRuns);
   const fetchMoreRecentRuns = useScheduleStore((s) => s.fetchMoreRecentRuns);
 
@@ -110,6 +111,11 @@ export default function ScheduledRunsScreen() {
   const handleEndReached = useCallback(() => {
     void fetchMoreRecentRuns();
   }, [fetchMoreRecentRuns]);
+
+  const handleRetryFooter = useCallback(() => {
+    if (refreshFailed) void fetchRecentRuns();
+    else void fetchMoreRecentRuns();
+  }, [fetchMoreRecentRuns, fetchRecentRuns, refreshFailed]);
 
   if (!FEATURES.schedules) return <FeatureUnavailable feature="Scheduled tasks" />;
   if (!isCloudMode || !cloudUnlocked) {
@@ -205,14 +211,18 @@ export default function ScheduledRunsScreen() {
           onEndReachedThreshold={END_REACHED_THRESHOLD}
           renderItem={({ item }) => <RunRow run={item} onPress={handleOpenSchedule} />}
           ListFooterComponent={
-            loadingMore ? (
+            loadingMore || (loading && !refreshing) ? (
               <LoadingIndicator className="py-4" />
             ) : error ? (
               <PressableBox
-                onPress={handleEndReached}
+                onPress={handleRetryFooter}
                 className="min-h-[44px] items-center justify-center"
                 accessibilityRole="button"
-                accessibilityLabel="Retry loading more scheduled runs"
+                accessibilityLabel={
+                  refreshFailed
+                    ? 'Retry loading scheduled runs'
+                    : 'Retry loading more scheduled runs'
+                }
               >
                 <Text className="text-sm" style={{ color: colors.agentError }}>
                   {error}

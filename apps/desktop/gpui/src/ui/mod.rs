@@ -128,9 +128,7 @@ enum UiAction {
     UseStoredCodeInstructions,
     KeepCodeInstructionEdits,
     CodeInstructionSources,
-    SearchCode,
     ToggleArchivedSessions,
-    ClearCodeSearch,
     BeginCodeRename,
     SaveCodeRename,
     CancelCodeRename,
@@ -163,6 +161,8 @@ enum UiAction {
     OpenFolder,
     Refresh,
     NextPage,
+    SearchSessions,
+    ClearSessionSearch,
     ReadSession(String),
     NewSession,
     CreateSession(usize),
@@ -258,6 +258,8 @@ struct Desktop {
     binary: PathBuf,
     workspace: Option<PathBuf>,
     threads: Vec<ThreadSummary>,
+    code_query: gpui::Entity<InputState>,
+    code_search: crate::code_search::CodeSearch,
     conversation: Option<Conversation>,
     changes: crate::changes::Changes,
     editor: crate::editor::FileEditor,
@@ -274,7 +276,6 @@ struct Desktop {
         String,
     )>,
     composer: gpui::Entity<TextareaState>,
-    code_query: gpui::Entity<InputState>,
     code_title: gpui::Entity<InputState>,
     drafts: HashMap<String, String>,
     models: Option<Vec<HostModelSummary>>,
@@ -284,6 +285,7 @@ struct Desktop {
     pending_events: Vec<AppServerNotification>,
     closing: bool,
     next_cursor: Option<String>,
+    code_search_reset: bool,
     loading: bool,
     error: Option<String>,
     focus: FocusHandle,
@@ -459,6 +461,8 @@ impl Desktop {
         self.pending_terminal_paste = None;
         self.models = None;
         self.threads.clear();
+        self.code_search.reset();
+        self.code_search_reset = true;
         self.next_cursor = None;
         self.workspace = Some(workspace.clone());
         let binary = self.binary.clone();
@@ -575,6 +579,49 @@ impl Desktop {
                 .context("The runtime task stopped")
                 .and_then(|result| result);
             let _ = view.update(cx, |view, cx| view.finish_list(result, more, cx));
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn search_sessions(&mut self, cx: &mut Context<Self>) {
+        if self.loading || self.code_busy() || self.workspace.is_none() {
+            return;
+        }
+        let Some((generation, query)) = self.code_search.begin() else {
+            cx.notify();
+            return;
+        };
+        self.error = None;
+        let include_archived = self.code_sessions.include_archived;
+        let runtime = Arc::clone(&self.runtime);
+        let task = self.executor.spawn(async move {
+            runtime
+                .lock()
+                .await
+                .as_mut()
+                .context("Open the folder again to reconnect the runtime")?
+                .search_sessions(query, include_archived)
+                .await
+        });
+        cx.spawn(async move |view, cx| {
+            let result = task
+                .await
+                .context("The runtime task stopped")
+                .and_then(|result| result);
+            let _ = view.update(cx, |view, cx| {
+                match result {
+                    Ok(response) => {
+                        view.code_search.finish(generation, response);
+                    }
+                    Err(error) => {
+                        if view.code_search.fail(generation) {
+                            view.error = Some(format!("{error:#}"));
+                        }
+                    }
+                }
+                cx.notify();
+            });
         })
         .detach();
         cx.notify();
@@ -850,9 +897,7 @@ impl Desktop {
                     cx.notify();
                 }
             }
-            UiAction::SearchCode => self.search_code_sessions(cx),
             UiAction::ToggleArchivedSessions => self.toggle_archived_sessions(cx),
-            UiAction::ClearCodeSearch => self.clear_code_search(cx),
             UiAction::BeginCodeRename => self.begin_code_rename(window, cx),
             UiAction::SaveCodeRename => self.save_code_rename(cx),
             UiAction::CancelCodeRename => {
@@ -999,6 +1044,12 @@ impl Desktop {
             UiAction::OpenFolder => self.open_folder(window, cx),
             UiAction::Refresh => self.load_sessions(false, cx),
             UiAction::NextPage => self.load_sessions(true, cx),
+            UiAction::SearchSessions => self.search_sessions(cx),
+            UiAction::ClearSessionSearch => {
+                self.code_search.reset();
+                self.code_search_reset = true;
+                cx.notify();
+            }
             UiAction::ReadSession(id) => self.read_session(id, window, cx),
             UiAction::NewSession => self.new_session(cx),
             UiAction::CreateSession(index) => self.create_session(index, window, cx),
@@ -1233,14 +1284,14 @@ impl Render for Desktop {
         if self.loading && !self.account.visible && !self.cloud.visible {
             content = content.child(gpui::text!("Loading…"));
         }
+        if self.code_search_reset {
+            self.code_search_reset = false;
+            self.code_query
+                .update(cx, |state, cx| state.set_value("", window, cx));
+        }
         if self.cloud.reset_query {
             self.cloud.reset_query = false;
             self.cloud_query
-                .update(cx, |state, cx| state.set_value("", window, cx));
-        }
-        if self.code_sessions.reset_query {
-            self.code_sessions.reset_query = false;
-            self.code_query
                 .update(cx, |state, cx| state.set_value("", window, cx));
         }
         self.sync_cloud_draft(window, cx);
@@ -1855,21 +1906,6 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                             },
                         )
                         .detach();
-                        let code_query = cx.new(|cx| {
-                            InputState::new(window, cx).placeholder("Search coding sessions")
-                        });
-                        cx.subscribe_in(
-                            &code_query,
-                            window,
-                            |view: &mut Desktop, input, event: &InputEvent, _, cx| match event {
-                                InputEvent::Change if !view.code_sessions.reset_query => {
-                                    view.code_sessions.query = input.read(cx).value().to_string()
-                                }
-                                InputEvent::PressEnter { .. } => view.search_code_sessions(cx),
-                                _ => {}
-                            },
-                        )
-                        .detach();
                         let code_title =
                             cx.new(|cx| InputState::new(window, cx).placeholder("Session title"));
                         cx.subscribe_in(
@@ -1894,6 +1930,22 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                                     view.save_code_draft(window, cx);
                                     cx.notify();
                                 }
+                                _ => {}
+                            },
+                        )
+                        .detach();
+                        let code_query = cx.new(|cx| {
+                            InputState::new(window, cx).placeholder("Search coding sessions")
+                        });
+                        cx.subscribe_in(
+                            &code_query,
+                            window,
+                            |view: &mut Desktop, input, event: &InputEvent, _, cx| match event {
+                                InputEvent::Change if !view.code_search_reset => {
+                                    view.code_search.set_query(input.read(cx).value().as_str());
+                                    cx.notify();
+                                }
+                                InputEvent::PressEnter { .. } => view.search_sessions(cx),
                                 _ => {}
                             },
                         )
@@ -1933,7 +1985,6 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                             terminal_paste,
                             pending_terminal_paste: None,
                             composer,
-                            code_query,
                             code_title,
                             drafts: HashMap::new(),
                             models: None,
@@ -1943,6 +1994,9 @@ pub fn run(runtime: PathBuf, initial_size: Option<(f32, f32)>) -> Result<()> {
                             pending_events: Vec::new(),
                             closing: false,
                             next_cursor: None,
+                            code_query,
+                            code_search: Default::default(),
+                            code_search_reset: false,
                             loading: false,
                             error: None,
                             focus,

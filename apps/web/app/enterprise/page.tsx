@@ -168,7 +168,7 @@ export default function EnterprisePage() {
               rows={[
                 {
                   label: 'BYOK posture',
-                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach Cloud. ${BYOK_SURFACES.availability} Desktop is cloud only and is ${SURFACE_STATUS.desktop.toLowerCase()}. A member who moves a CLI thread to cloud does so through an explicit, reviewed handoff.`,
+                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach Cloud. ${BYOK_SURFACES.availability} Desktop chat is cloud only, its local coding sessions run the CLI, and Desktop is ${SURFACE_STATUS.desktop.toLowerCase()}. A member who moves a CLI thread to cloud does so through an explicit, reviewed handoff.`,
                 },
                 {
                   label: 'Service levels',

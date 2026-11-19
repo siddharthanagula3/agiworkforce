@@ -227,6 +227,7 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
   const [trackedResourceKey, setTrackedResourceKey] = useState(resourceKey);
   const [deviceGrant, setDeviceGrant] = useState<DeviceGrant>('unneeded');
   const [deviceAsk, setDeviceAsk] = useState<DevicePermission[] | null>(null);
+  const approvedDevicesRef = useRef<readonly DevicePermission[]>([]);
   if (trackedResourceKey !== resourceKey) {
     setTrackedResourceKey(resourceKey);
     setDeviceGrant('unneeded');
@@ -272,7 +273,11 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
         const resource = extractAppResource(resourceEnvelope, body.resourceUri);
         if (disposed) return;
         const requestedDevices = requestedDevicePermissions(resource.permissions);
-        if (requestedDevices.length > 0 && deviceGrant === 'unneeded') {
+        const exceedsApproval =
+          deviceGrant === 'granted' &&
+          requestedDevices.some((name) => !approvedDevicesRef.current.includes(name));
+        if (requestedDevices.length > 0 && (deviceGrant === 'unneeded' || exceedsApproval)) {
+          approvedDevicesRef.current = [];
           setDeviceAsk(requestedDevices);
           setDeviceGrant('pending');
           return;
@@ -462,6 +467,7 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
               type="button"
               className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
               onClick={() => {
+                approvedDevicesRef.current = deviceAsk;
                 setDeviceGrant('granted');
                 setDeviceAsk(null);
               }}

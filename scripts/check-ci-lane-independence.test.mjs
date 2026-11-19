@@ -125,6 +125,7 @@ test('CI change detection selects every lane when the prior commit is unavailabl
     git('commit', '--quiet', '-am', 'fixture: after');
     for (const file of [
       'scripts/production-deploy-scope.mjs',
+      'scripts/lib/git-output.mjs',
       'scripts/verify-deployment.mjs',
       'scripts/config/deploy-gates.json',
     ]) {

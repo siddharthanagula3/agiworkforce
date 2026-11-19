@@ -27,6 +27,8 @@ import {
   OPENAI_ADMIN_KEY_ENV,
   OPENAI_COST_SOURCE,
   UNREPORTED_PROVIDERS,
+  CATCH_UP_DAYS,
+  catchUpWindows,
   yesterdayWindow,
 } from './lib/provider-cost-reports';
 
@@ -54,12 +56,18 @@ function routeFetch(byHost: Record<string, unknown>) {
 interface LedgerFixture {
   costs?: Array<Record<string, unknown>>;
   delivered?: Array<Record<string, unknown>>;
+  covered?: Array<Record<string, unknown>>;
   fail?: string;
+  failCoverage?: string;
 }
 
 function stubLedger(fixture: LedgerFixture = {}): void {
   mocks.query.mockImplementation(async (sql: string) => {
     if (fixture.fail !== undefined) throw new Error(fixture.fail);
+    if (sql.includes('provider_cost_reconciliation_days')) {
+      if (fixture.failCoverage !== undefined) throw new Error(fixture.failCoverage);
+      return fixture.covered ?? [];
+    }
     if (sql.includes('provider_cost_events')) return fixture.costs ?? [];
     if (sql.includes('managed_usage_requests')) return fixture.delivered ?? [];
     return [];
@@ -285,5 +293,189 @@ describe('GET /api/cron/reconcile-provider-costs', () => {
 
     expect(response.status).toBe(500);
     expect(body.providers.find((entry) => entry.provider === 'openai')?.status).toBe('failed');
+  });
+});
+
+describe('a provider report that does not carry the money', () => {
+  async function reportWith(openaiBody: unknown) {
+    vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
+    vi.stubGlobal('fetch', routeFetch({ 'organization/costs': openaiBody }));
+    const response = await GET(request());
+    const body = (await response.json()) as {
+      providers: Array<{ provider: string; status: string; detail?: string }>;
+    };
+    return {
+      status: response.status,
+      openai: body.providers.find((entry) => entry.provider === 'openai'),
+    };
+  }
+
+  function dayUpserts() {
+    return mocks.execute.mock.calls.filter((call) =>
+      String(call[0]).includes('provider_cost_reconciliation_days'),
+    );
+  }
+
+  it.each([
+    ['a body with no data array', {}],
+    ['a bucket with no results array', { data: [{}] }],
+    ['a result with no amount', { data: [{ results: [{ object: 'organization.costs.result' }] }] }],
+    ['a result whose amount has no value', { data: [{ results: [{ amount: {} }] }] }],
+    [
+      'a result whose amount is not a number',
+      { data: [{ results: [{ amount: { value: 'n/a' } }] }] },
+    ],
+    ['a result that is not an object', { data: [{ results: [null] }] }],
+  ])('is not stored as a reported zero when it is %s', async (_label, body) => {
+    const { status, openai } = await reportWith(body);
+
+    expect(openai?.status).toBe('failed');
+    expect(status).toBe(500);
+    expect(dayUpserts()).toHaveLength(0);
+  });
+
+  it('still stores a complete report whose cost really is zero', async () => {
+    const empty = await reportWith({ data: [] });
+    expect(empty.openai?.status).toBe('reported');
+
+    mocks.execute.mockClear();
+    const zero = await reportWith({
+      data: [{ results: [{ amount: { value: 0, currency: 'usd' } }] }],
+    });
+    expect(zero.openai?.status).toBe('reported');
+    expect(dayUpserts().map((call) => call[1])).toContainEqual(
+      expect.arrayContaining(['openai', 0, OPENAI_COST_SOURCE]),
+    );
+  });
+
+  it('refuses an Anthropic result with an unreadable amount', async () => {
+    vi.stubEnv(ANTHROPIC_ADMIN_KEY_ENV, ANTHROPIC_KEY);
+    vi.stubGlobal(
+      'fetch',
+      routeFetch({ cost_report: { data: [{ results: [{ currency: 'USD' }] }] } }),
+    );
+
+    const body = (await (await GET(request())).json()) as {
+      providers: Array<{ provider: string; status: string }>;
+    };
+
+    expect(body.providers.find((entry) => entry.provider === 'anthropic')?.status).toBe('failed');
+    expect(dayUpserts()).toHaveLength(0);
+  });
+});
+
+describe('catchUpWindows', () => {
+  it('lists the days before yesterday, oldest first', () => {
+    const windows = catchUpWindows(new Date('2026-09-10T04:15:00.000Z'), 3);
+
+    expect(windows.map((window) => window.day)).toEqual(['2026-09-06', '2026-09-07', '2026-09-08']);
+    expect(windows[2]?.end.toISOString()).toBe(
+      yesterdayWindow(new Date('2026-09-10T04:15:00.000Z')).start.toISOString(),
+    );
+  });
+});
+
+describe('a day the cron missed', () => {
+  const REPORT = {
+    'organization/costs': { data: [{ results: [{ amount: { value: 2, currency: 'usd' } }] }] },
+  };
+
+  function storedDays(): string[] {
+    return mocks.execute.mock.calls
+      .map((call) => call[1] as unknown[])
+      .map((params) => String(params[1]))
+      .sort();
+  }
+
+  it('is fetched on the next run, and only the days with no report', async () => {
+    vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
+    vi.stubGlobal('fetch', routeFetch(REPORT));
+    const earlier = catchUpWindows(new Date()).map((window) => window.day);
+    const present = earlier.slice(0, 2);
+    stubLedger({
+      covered: present.map((day) => ({ provider: 'openai', source: OPENAI_COST_SOURCE, day })),
+    });
+
+    const response = await GET(request());
+    const body = (await response.json()) as {
+      catchUp: { status: string; outcomes: Array<{ day: string; status: string }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.catchUp.status).toBe('checked');
+    expect(body.catchUp.outcomes.map((outcome) => outcome.day)).toEqual(earlier.slice(2));
+    expect(storedDays()).toEqual([...earlier.slice(2), yesterdayWindow(new Date()).day].sort());
+    expect(earlier).toHaveLength(CATCH_UP_DAYS);
+  });
+
+  it('is not refetched once every recent day has a report', async () => {
+    vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
+    const fetchMock = routeFetch(REPORT);
+    vi.stubGlobal('fetch', fetchMock);
+    stubLedger({
+      covered: catchUpWindows(new Date()).map((window) => ({
+        provider: 'openai',
+        source: OPENAI_COST_SOURCE,
+        day: window.day,
+      })),
+    });
+
+    await GET(request());
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(storedDays()).toEqual([yesterdayWindow(new Date()).day]);
+  });
+
+  it('is left alone while the provider cannot answer for yesterday either', async () => {
+    vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
+    const fetchMock = vi.fn(
+      async () => ({ ok: false, status: 503, json: async () => ({}) }) as unknown as Response,
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const response = await GET(request());
+    const body = (await response.json()) as { catchUp: { outcomes: unknown[] } };
+
+    expect(response.status).toBe(500);
+    expect(body.catchUp.outcomes).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers 500 and names the day when an earlier day still cannot be recovered', async () => {
+    vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
+    const yesterday = yesterdayWindow(new Date());
+    const startOf = (href: string) => Number(new URL(href).searchParams.get('start_time'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) =>
+        startOf(String(url)) === Math.floor(yesterday.start.getTime() / 1000)
+          ? jsonResponse(REPORT['organization/costs'])
+          : ({ ok: false, status: 502, json: async () => ({}) } as unknown as Response),
+      ),
+    );
+
+    const response = await GET(request());
+    const body = (await response.json()) as {
+      catchUp: { outcomes: Array<{ day: string; status: string }> };
+    };
+
+    expect(response.status).toBe(500);
+    expect(body.catchUp.outcomes).toHaveLength(1);
+    expect(body.catchUp.outcomes[0]).toMatchObject({
+      day: catchUpWindows(new Date())[0]?.day,
+      status: 'failed',
+    });
+  });
+
+  it('answers 500 when the stored coverage cannot be read', async () => {
+    vi.stubEnv(OPENAI_ADMIN_KEY_ENV, OPENAI_KEY);
+    vi.stubGlobal('fetch', routeFetch(REPORT));
+    stubLedger({ failCoverage: 'coverage read timed out' });
+
+    const response = await GET(request());
+    const body = (await response.json()) as { catchUp: { status: string; detail: string } };
+
+    expect(response.status).toBe(500);
+    expect(body.catchUp).toMatchObject({ status: 'failed', detail: 'coverage read timed out' });
   });
 });

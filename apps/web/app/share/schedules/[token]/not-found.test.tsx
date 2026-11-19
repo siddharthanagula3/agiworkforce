@@ -18,6 +18,6 @@ describe('SharedScheduleNotFound', () => {
       within(main).getByRole('heading', { level: 1, name: 'Shared schedule unavailable' }),
     ).toBeVisible();
     expect(within(main).getByText(/revoked or entered incorrectly/i)).toBeVisible();
-    expect(within(main).getByRole('link', { name: 'Open AGI' })).toHaveAttribute('href', '/');
+    expect(within(main).getByRole('link', { name: 'Open chat' })).toHaveAttribute('href', '/');
   });
 });

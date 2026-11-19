@@ -33,7 +33,9 @@ export {
   stripSystemPromptCacheBoundary,
   splitSystemPromptCacheBoundary,
   prependSystemPromptAdditionAfterCacheBoundary,
+  joinSystemTextsAtCacheBoundary,
 } from './system-prompt-cache-boundary';
+export { formatTurnContext, isTurnContextText } from './turn-context';
 
 export { normalizeStructuredPromptSection } from './lib/prompt-cache-stability';
 
@@ -47,8 +49,10 @@ export type {
 export {
   resolveAnthropicPayloadPolicy,
   applyAnthropicPayloadPolicyToParams,
+  planAnthropicCacheBreakpoints,
 } from './anthropic-payload-policy';
 export type {
+  AnthropicCacheBreakpointPlan,
   AnthropicPayloadPolicy,
   AnthropicPayloadPolicyInput,
   AnthropicEphemeralCacheControl,
@@ -68,6 +72,7 @@ export type {
 export {
   normalizeStrictOpenAIJsonSchema,
   normalizeOpenAIStrictToolParameters,
+  resolveOpenAIToolStrictness,
 } from './openai-tool-schema';
 
 export { normalizeToolParameterSchema } from './tool-parameter-schema';

@@ -15,10 +15,12 @@ let analytics: ProductAnalyticsEmitter | undefined;
 async function requestAccountJson(
   secrets: vscode.SecretStorage,
   path: string,
+  isEnabled: () => boolean,
   init?: { method: 'POST'; body: string },
 ): Promise<unknown> {
   const token = await getAccountToken(secrets, { renew: false });
   if (token === undefined || token === '') return null;
+  if (init !== undefined && !isEnabled()) return null;
   const response = await fetch(`${getCloudWebOrigin()}${path}`, {
     method: init?.method ?? 'GET',
     headers: {
@@ -32,10 +34,11 @@ async function requestAccountJson(
 }
 
 export function activateProductAnalytics(context: vscode.ExtensionContext): vscode.Disposable {
+  const isEnabled = (): boolean => Config.telemetryEnabled() && vscode.env.isTelemetryEnabled;
   const current = createAccountProductAnalytics({
     surface: 'vscode',
-    isEnabled: () => Config.telemetryEnabled() && vscode.env.isTelemetryEnabled,
-    request: (path, init) => requestAccountJson(context.secrets, path, init),
+    isEnabled,
+    request: (path, init) => requestAccountJson(context.secrets, path, isEnabled, init),
   });
   analytics = current;
   return new vscode.Disposable(() => {

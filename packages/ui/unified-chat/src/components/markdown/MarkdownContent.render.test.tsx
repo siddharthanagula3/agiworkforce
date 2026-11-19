@@ -293,6 +293,17 @@ describe('MarkdownContent unlabeled fences', () => {
     expect(container.querySelectorAll('.katex-html [style]').length).toBeGreaterThan(0);
   });
 
+  it('keeps asterisks inside inline math instead of reading them as emphasis', () => {
+    const { container } = render(
+      <MarkdownContent content={'So $a*b*c$ holds, and *this* is italic.'} />,
+    );
+
+    expect(container.querySelectorAll('.katex')).toHaveLength(1);
+    expect(container.querySelector('.katex annotation')?.textContent).toBe('a*b*c');
+    expect(container.querySelectorAll('em')).toHaveLength(1);
+    expect(container.querySelector('em')?.textContent).toBe('this');
+  });
+
   it('leaves one-line display math in a fence as written', () => {
     const { container } = render(<MarkdownContent content={'```latex\n$$x+y$$\n```'} />);
     expect(container.querySelector('.katex')).toBeNull();

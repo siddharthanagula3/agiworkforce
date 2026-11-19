@@ -1,5 +1,6 @@
 import { readAsStringAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { OFFICE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
+import { parseCsvRecords } from '@/services/csvRecords';
 
 export type SupportedDocType = 'pdf' | 'txt' | 'md' | 'csv' | 'code';
 
@@ -12,6 +13,7 @@ export interface ParsedDocument {
     columns?: number;
     language?: string;
     fileSizeBytes?: number;
+    partial?: boolean;
   };
 }
 
@@ -125,44 +127,39 @@ async function readFileText(uri: string): Promise<string> {
   }
 }
 
-function parseCsvToText(raw: string): { text: string; rows: number; columns: number } {
-  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { text: '', rows: 0, columns: 0 };
+const CSV_VALUE_NEEDS_QUOTING = /[\r\n";]|^\s|\s$/;
+const CSV_HEADER_NEEDS_QUOTING = /[\r\n",]|^\s|\s$/;
 
-  const splitCsvLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        inQuotes = !inQuotes;
-      } else if (ch === ',' && !inQuotes) {
-        result.push(current.trim());
-        current = '';
-      } else {
-        current += ch;
-      }
-    }
-    result.push(current.trim());
-    return result;
-  };
+function csvLabelText(value: string, needsQuoting: RegExp): string {
+  return needsQuoting.test(value) ? JSON.stringify(value) : value;
+}
 
-  const headers = splitCsvLine(lines[0] ?? '');
-  const columns = headers.length;
-  const dataRows = lines.slice(1);
+function parseCsvToText(raw: string): {
+  text: string;
+  rows: number;
+  columns: number;
+  complete: boolean;
+} {
+  const { records, complete } = parseCsvRecords(raw);
+  const [headerRecord, ...dataRows] = records;
+  if (!headerRecord) return { text: '', rows: 0, columns: 0, complete };
 
+  const headers = headerRecord.map((header) => csvLabelText(header, CSV_HEADER_NEEDS_QUOTING));
   const segments: string[] = [`Columns: ${headers.join(', ')}`];
-  for (const row of dataRows) {
-    const values = splitCsvLine(row);
-    const pairs = headers.map((h, i) => `${h}: ${values[i] ?? ''}`);
+  for (const values of dataRows) {
+    const width = Math.max(headers.length, values.length);
+    const pairs = Array.from({ length: width }, (_, i) => {
+      const label = headers[i] ?? `column ${i + 1}`;
+      return `${label}: ${csvLabelText(values[i] ?? '', CSV_VALUE_NEEDS_QUOTING)}`;
+    });
     segments.push(pairs.join('; '));
   }
 
   return {
     text: segments.join('\n'),
     rows: dataRows.length,
-    columns,
+    columns: headers.length,
+    complete,
   };
 }
 
@@ -180,11 +177,15 @@ function unescapePdfLiteral(value: string): string {
   );
 }
 
-function readPdfStringLiteral(block: string, open: number): { value: string | null; next: number } {
+function readPdfStringLiteral(
+  block: string,
+  open: number,
+  end: number,
+): { value: string | null; next: number } {
   let depth = 1;
   let i = open + 1;
 
-  while (i < block.length) {
+  while (i < end) {
     const ch = block[i];
 
     if (ch === '\\') {
@@ -197,34 +198,54 @@ function readPdfStringLiteral(block: string, open: number): { value: string | nu
     } else if (ch === ')') {
       depth -= 1;
       if (depth === 0) {
-        const end = Math.min(i, open + 1 + PDF_MAX_TEXT_CHARS);
-        return { value: unescapePdfLiteral(block.slice(open + 1, end)), next: i + 1 };
+        const valueEnd = Math.min(i, open + 1 + PDF_MAX_TEXT_CHARS);
+        return { value: unescapePdfLiteral(block.slice(open + 1, valueEnd)), next: i + 1 };
       }
     }
 
     i += 1;
   }
 
-  // An unterminated literal has to swallow the rest of the block: resuming after the '(' would let
+  // An unterminated literal has to swallow the rest of the span: resuming after the '(' would let
   // a crafted stream re-scan the same tail once per opener and turn extraction quadratic.
-  return { value: null, next: block.length };
+  return { value: null, next: end };
 }
 
-function scanPdfTextBlock(block: string, push: (value: string) => boolean): boolean {
-  let i = 0;
+type PdfTextObjectScan =
+  | { status: 'closed'; next: number }
+  | { status: 'full' }
+  | { status: 'unterminated'; literalAt: number }
+  | { status: 'open-ended' };
+
+function isPdfNameEnd(ch: string): boolean {
+  return /[\s()<>[\]{}/%]/.test(ch);
+}
+
+function scanPdfTextObject(
+  raw: string,
+  start: number,
+  end: number,
+  push: (value: string) => boolean,
+): PdfTextObjectScan {
+  let i = start;
   let inArray = false;
   let pending: string[] = [];
 
-  while (i < block.length) {
-    const ch = block[i];
+  while (i < end) {
+    const ch = raw[i] as string;
 
     if (ch === '(') {
-      const { value, next } = readPdfStringLiteral(block, i);
-      if (value !== null) {
-        if (!inArray) pending.length = 0;
-        if (pending.length < PDF_MAX_TEXT_PARTS) pending.push(value);
-      }
+      const { value, next } = readPdfStringLiteral(raw, i, end);
+      if (value === null) return { status: 'unterminated', literalAt: i };
+      if (!inArray) pending.length = 0;
+      if (pending.length < PDF_MAX_TEXT_PARTS) pending.push(value);
       i = next;
+      continue;
+    }
+
+    if (ch === '/') {
+      i += 1;
+      while (i < end && !isPdfNameEnd(raw[i] as string)) i += 1;
       continue;
     }
 
@@ -241,14 +262,21 @@ function scanPdfTextBlock(block: string, push: (value: string) => boolean): bool
       continue;
     }
 
-    if (isPdfOperatorChar(block.charCodeAt(i))) {
-      const start = i;
+    if (isPdfOperatorChar(raw.charCodeAt(i))) {
+      const operatorStart = i;
       do {
         i += 1;
-      } while (i < block.length && isPdfOperatorChar(block.charCodeAt(i)));
-      if (i - start === 2 && ch === 'T' && (block[start + 1] === 'j' || block[start + 1] === 'J')) {
+      } while (i < end && isPdfOperatorChar(raw.charCodeAt(i)));
+      if (i - operatorStart === 2 && ch === 'E' && raw[operatorStart + 1] === 'T') {
+        return { status: 'closed', next: i };
+      }
+      if (
+        i - operatorStart === 2 &&
+        ch === 'T' &&
+        (raw[operatorStart + 1] === 'j' || raw[operatorStart + 1] === 'J')
+      ) {
         for (const part of pending) {
-          if (part && !push(part)) return false;
+          if (part && !push(part)) return { status: 'full' };
         }
       }
       pending = [];
@@ -258,10 +286,24 @@ function scanPdfTextBlock(block: string, push: (value: string) => boolean): bool
     i += 1;
   }
 
-  return true;
+  return { status: 'open-ended' };
 }
 
-function extractTextFromPdfBuffer(base64: string): { text: string; pages: number } {
+function findPdfTextObjectStart(raw: string, from: number): number {
+  let at = raw.indexOf('BT', from);
+  while (at !== -1) {
+    const previous = at > from ? raw.charCodeAt(at - 1) : 0;
+    if (!isPdfOperatorChar(previous) && previous !== 47) return at;
+    at = raw.indexOf('BT', at + 2);
+  }
+  return -1;
+}
+
+function extractTextFromPdfBuffer(base64: string): {
+  text: string;
+  pages: number;
+  complete: boolean;
+} {
   let raw: string;
   try {
     raw = atob(base64);
@@ -289,20 +331,34 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
 
   let cursor = 0;
   let scanBudget = PDF_MAX_SCAN_CHARS;
-  while (cursor < raw.length && scanBudget > 0) {
-    const blockStart = raw.indexOf('BT', cursor);
+  let complete = true;
+  while (cursor < raw.length) {
+    const blockStart = findPdfTextObjectStart(raw, cursor);
     if (blockStart === -1) break;
-    const blockEnd = raw.indexOf('ET', blockStart + 2);
-    if (blockEnd === -1) break;
+    if (scanBudget <= 0) {
+      complete = false;
+      break;
+    }
     const contentStart = blockStart + 2;
-    const contentEnd = Math.min(blockEnd, contentStart + scanBudget);
-    scanBudget -= contentEnd - contentStart;
-    if (!scanPdfTextBlock(raw.slice(contentStart, contentEnd), push)) break;
-    cursor = blockEnd + 2;
+    const scanEnd = Math.min(raw.length, contentStart + scanBudget);
+    const scan = scanPdfTextObject(raw, contentStart, scanEnd, push);
+
+    if (scan.status === 'closed') {
+      scanBudget -= scan.next - contentStart;
+      cursor = scan.next;
+      continue;
+    }
+
+    complete = false;
+    scanBudget -= scanEnd - contentStart;
+    if (scan.status !== 'unterminated') break;
+    const resume = raw.indexOf('ET', scan.literalAt);
+    if (resume === -1) break;
+    cursor = resume + 2;
   }
 
   const text = textParts.join(' ').replace(/\s+/g, ' ').trim();
-  return { text, pages };
+  return { text, pages, complete };
 }
 
 export async function parseDocument(uri: string, mimeType?: string): Promise<ParsedDocument> {
@@ -341,13 +397,19 @@ export async function parseDocument(uri: string, mimeType?: string): Promise<Par
 
     case 'csv': {
       const raw = await readFileText(uri);
-      const { text, rows, columns } = parseCsvToText(raw);
+      const { text, rows, columns, complete } = parseCsvToText(raw);
       if (!text.trim()) {
         throw new DocParseError('CSV appears to be empty', 'EMPTY_DOCUMENT');
       }
       return {
         text,
-        metadata: { docType, rows, columns, fileSizeBytes },
+        metadata: {
+          docType,
+          rows,
+          columns,
+          fileSizeBytes,
+          ...(complete ? {} : { partial: true }),
+        },
       };
     }
 
@@ -361,13 +423,13 @@ export async function parseDocument(uri: string, mimeType?: string): Promise<Par
           'READ_ERROR',
         );
       }
-      const { text, pages } = extractTextFromPdfBuffer(base64);
+      const { text, pages, complete } = extractTextFromPdfBuffer(base64);
       if (!text.trim()) {
         throw new DocParseError('No readable text was found in this PDF', 'EMPTY_DOCUMENT');
       }
       return {
         text,
-        metadata: { docType, pages, fileSizeBytes },
+        metadata: { docType, pages, fileSizeBytes, ...(complete ? {} : { partial: true }) },
       };
     }
   }

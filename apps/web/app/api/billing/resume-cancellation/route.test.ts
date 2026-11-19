@@ -54,6 +54,7 @@ vi.mock('@/lib/server/stripe-plan-change', async (importOriginal) => ({
 
 import { POST } from './route';
 import { createError } from '@/lib/errors';
+import { ScheduledChangeReleasedError } from '@/lib/server/stripe-plan-change';
 
 const USER_ID = 'user_resume';
 const STRIPE = { id: 'stripe-client' };
@@ -171,6 +172,25 @@ describe('POST /api/billing/resume-cancellation', () => {
     });
     expect(db.execute).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not claim nothing changed when the schedule was already released', async () => {
+    mocks.keepCurrentPlan.mockRejectedValueOnce(
+      new ScheduledChangeReleasedError(new Error('stripe timeout')),
+    );
+
+    const response = await POST(post());
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toContain('scheduled plan change was removed');
+    expect(body.error.message).not.toContain('Nothing was changed');
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        detail: expect.objectContaining({ status: 'schedule_released' }),
+      }),
+    );
   });
 
   it('still reports the resume when the stored flag waits for the webhook', async () => {

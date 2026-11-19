@@ -200,6 +200,7 @@ describe('a retry never buys the turn more time than the caller granted', () => 
     vi.useFakeTimers();
     const attempts = { count: 0 };
     const waitSeconds = 1;
+    const grantedMs = 5_000;
     const adapter = makeAdapter(async function* (_request: ChatRequest, signal: AbortSignal) {
       attempts.count += 1;
       if (attempts.count === 1) {
@@ -219,28 +220,43 @@ describe('a retry never buys the turn more time than the caller granted', () => 
       yield { type: 'text-delta', delta: 'too late' } as StreamChunk;
     });
 
-    const failure = await settleOnFakeClock(start(adapter, new AbortController().signal)).then(
+    const failure = await settleOnFakeClock(
+      start(adapter, new AbortController().signal, grantedMs),
+    ).then(
       () => null,
       (error: unknown) => error as ProviderFirstTokenDeadlineError,
     );
 
     expect(failure).toBeInstanceOf(ProviderFirstTokenDeadlineError);
-    expect(failure!.deadlineMs).toBeLessThan(GRANTED_FIRST_TOKEN_MS);
-    expect(failure!.deadlineMs).toBeLessThanOrEqual(GRANTED_FIRST_TOKEN_MS - waitSeconds * 1_000);
+    expect(failure!.deadlineMs).toBeLessThan(grantedMs);
+    expect(failure!.deadlineMs).toBeLessThanOrEqual(grantedMs - waitSeconds * 1_000);
     expect(attempts.count).toBe(2);
   });
 
-  it('clamps a long Retry-After to what is left rather than overrunning the turn', async () => {
-    vi.useFakeTimers();
+  it('gives up on a Retry-After the turn cannot wait out instead of retrying early', async () => {
     const attempts = { count: 0 };
-    const startedAt = Date.now();
-    const chunks = await settleOnFakeClock(
-      start(failingAdapter([overload('overloaded', 60)], attempts), new AbortController().signal),
-    );
 
-    expect(await drain(chunks)).toHaveLength(2);
-    expect(attempts.count).toBe(2);
-    expect(Date.now() - startedAt).toBeLessThan(GRANTED_FIRST_TOKEN_MS);
+    await expect(
+      start(
+        failingAdapter([overload('overloaded', 60), overload('unreachable', 0)], attempts),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('overloaded');
+
+    expect(attempts.count).toBe(1);
+  });
+
+  it('gives up on a Retry-After inside the ceiling that exceeds what is left of the turn', async () => {
+    const attempts = { count: 0 };
+
+    await expect(
+      start(
+        failingAdapter([overload('overloaded', 20), overload('unreachable', 0)], attempts),
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('overloaded');
+
+    expect(attempts.count).toBe(1);
   });
 
   it('refuses a retry when the turn has only the child-deadline floor left', async () => {

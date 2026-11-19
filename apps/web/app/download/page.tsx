@@ -4,12 +4,12 @@ import { MarketingFooter } from '@/features/marketing/components/system';
 import { DesktopWindow, WebWindow } from '@/features/marketing/components/DeviceMockups';
 import { DownloadSurfaces } from './DownloadSurfaces';
 import { ScrollToHashTarget } from './ScrollToHashTarget';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import './download.css';
 
 export const metadata = buildMetadata({
   title: 'Download AGI: every app and where it stands',
-  description:
-    'Open chat Chat in any current browser, see where Desktop, the CLI, mobile and the extensions stand, and leave an email to hear when an app is ready.',
+  description: `Open ${PRODUCT_NAMES.chat} in any current browser, see where Desktop, the CLI, mobile and the extensions stand, and leave an email to hear when an app is ready.`,
   path: '/download',
 });
 

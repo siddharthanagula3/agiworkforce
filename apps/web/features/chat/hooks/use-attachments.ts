@@ -60,6 +60,8 @@ export interface UseAttachmentsReturn {
   /** A picture is still having its location and camera details removed. */
   preparing: boolean;
   addFiles: (files: File[]) => void;
+  /** Resolves with the incoming files the draft took, so a caller can keep the rest. */
+  admitFiles: (files: File[]) => Promise<File[]>;
   removeFile: (index: number) => void;
   clearAll: () => void;
 }
@@ -245,9 +247,9 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     setPreviews((prev) => [...prev, ...newPreviews]);
   }, []);
 
-  const addFiles = useCallback(
-    (incoming: File[]) => {
-      if (incoming.length === 0) return;
+  const admitFiles = useCallback(
+    (incoming: File[]): Promise<File[]> => {
+      if (incoming.length === 0) return Promise.resolve([]);
 
       const limits: IntakeLimits = {
         maxFiles,
@@ -307,7 +309,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       if (refusals.length > 0) setRefused((prev) => [...prev, ...refusals]);
       if (batch.length === 0) {
         report(0, issues);
-        return;
+        return Promise.resolve([]);
       }
 
       heldCountRef.current += batch.length;
@@ -319,11 +321,11 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
       ) {
         admit(batch, []);
         report(batch.length, issues);
-        return;
+        return Promise.resolve(batch.map(({ file }) => file));
       }
 
-      const settle = (accepted: readonly HeldFile[], unreadable: readonly HeldFile[]) => {
-        if (generation !== draftGenerationRef.current) return;
+      const settle = (accepted: readonly HeldFile[], unreadable: readonly HeldFile[]): File[] => {
+        if (generation !== draftGenerationRef.current) return [];
         admit(accepted, unreadable);
         report(accepted.length, [
           ...issues,
@@ -332,11 +334,14 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
             reason: PICTURE_METADATA_REFUSAL,
           })),
         ]);
+        return batch
+          .filter((entry) => accepted.some((held) => held.key === entry.key))
+          .map(({ file }) => file);
       };
 
       pendingBatchesRef.current += 1;
       setPreparing(true);
-      admissionRef.current = admissionRef.current
+      const taken = admissionRef.current
         .then(() =>
           generation === draftGenerationRef.current
             ? Promise.all(batch.map(({ file }) => prepareChatAttachment(file)))
@@ -352,17 +357,25 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
               if (result.status === 'ready') accepted.push({ file: result.file, key: entry.key });
               else unreadable.push(entry);
             });
-            settle(accepted, unreadable);
+            return settle(accepted, unreadable);
           },
           () => settle([], batch),
-        )
-        .then(() => {
-          if (generation !== draftGenerationRef.current) return;
-          pendingBatchesRef.current -= 1;
-          if (pendingBatchesRef.current === 0) setPreparing(false);
-        });
+        );
+      admissionRef.current = taken.then(() => {
+        if (generation !== draftGenerationRef.current) return;
+        pendingBatchesRef.current -= 1;
+        if (pendingBatchesRef.current === 0) setPreparing(false);
+      });
+      return taken;
     },
     [admit, maxFiles, maxFileSize, maxTotalBytes, planFileLimitBytes, planLabel, onError],
+  );
+
+  const addFiles = useCallback(
+    (incoming: File[]) => {
+      void admitFiles(incoming);
+    },
+    [admitFiles],
   );
 
   const removeFile = useCallback(
@@ -404,6 +417,7 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
     refused,
     preparing,
     addFiles,
+    admitFiles,
     removeFile,
     clearAll,
   };

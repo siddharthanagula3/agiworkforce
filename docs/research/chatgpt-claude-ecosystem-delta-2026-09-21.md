@@ -1,12 +1,13 @@
 # ChatGPT And Claude Ecosystem Delta
 
-Status: Current research snapshot
+Status: Dated external research
 Owner: Product research
 Verified: 2026-09-21
 Coverage: 2026-07-01 through 2026-09-21
 
 This document is the dated freshness layer for ChatGPT- and Claude-sensitive
-product decisions made after the July 2026 baseline. It records capabilities
+product decisions made after the July 2026 baseline. Vendor facts after
+2026-09-21 are in `assistant-comparison-2026-11-11.md`. It records capabilities
 and continuity patterns from first-party documentation. It does not authorize
 copying branding, layouts, wording, assets, or private implementation.
 

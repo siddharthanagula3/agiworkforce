@@ -16,7 +16,6 @@ const ACCENTS: Array<{ value: AccentColor; label: string }> = [
   { value: 'blue', label: 'Blue' },
   { value: 'violet', label: 'Violet' },
   { value: 'rose', label: 'Rose' },
-  { value: 'amber', label: 'Amber' },
 ];
 
 export default function AccentColorScreen() {
@@ -35,7 +34,7 @@ export default function AccentColorScreen() {
     <SettingsScreenShell title="Accent Color">
       <SettingsInfo
         title="Accent"
-        body="Accent color affects selected controls and highlights. Neutral keeps the AGI default."
+        body="Colors selected controls and highlights. Neutral is the default."
         icon={Palette}
       />
       <SettingsGroup>

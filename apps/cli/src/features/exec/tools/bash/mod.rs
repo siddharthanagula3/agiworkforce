@@ -50,7 +50,7 @@ pub(super) async fn execute_run_command(
     if let Some(dir) = &working_dir {
         details.push(format!("in {}", dir.display()));
     }
-    let require_confirmation = match approve_command(
+    if let Err(refusal) = approve_command(
         "run_command",
         command,
         details,
@@ -59,9 +59,8 @@ pub(super) async fn execute_run_command(
     )
     .await?
     {
-        Ok(require_confirmation) => require_confirmation,
-        Err(refusal) => return Ok(refusal),
-    };
+        return Ok(refusal);
+    }
 
     // Most command strings are a program and its operands, and handing those to
     // `sh -c` is the only reason an operand can be read as syntax. When the
@@ -101,17 +100,20 @@ pub(super) async fn execute_run_command(
             }
         }
     };
-    let result: std::io::Result<std::process::Output> = {
-        if !unrestricted {
-            if let Some(refusal) = internal_destination_refusal(command) {
-                return Ok(refusal);
-            }
+    if !unrestricted {
+        if let Some(refusal) = internal_destination_refusal(command) {
+            return Ok(refusal);
         }
-        let network = if unrestricted {
-            crate::sandbox::NetworkPolicy::Allow
-        } else {
-            sandbox_network_policy(command, require_confirmation, approval_callback).await
-        };
+    }
+    let network = if unrestricted {
+        crate::sandbox::NetworkPolicy::Allow
+    } else {
+        sandbox_network_policy(command, require_confirmation, approval_callback).await
+    };
+    let network_notice = (network == crate::sandbox::NetworkPolicy::Deny
+        && command_requests_network(command))
+    .then(|| network_blocked_notice(require_confirmation));
+    let result: std::io::Result<std::process::Output> = {
         let run_in = working_dir.clone().unwrap_or_else(|| cwd.clone());
         let cmd = command.to_string();
         let structured = structured.clone();
@@ -147,13 +149,7 @@ pub(super) async fn execute_run_command(
                     .await
                 }
             };
-            executed.map_err(|error| {
-                let kind = error
-                    .downcast_ref::<std::io::Error>()
-                    .map(std::io::Error::kind)
-                    .unwrap_or(std::io::ErrorKind::Other);
-                std::io::Error::new(kind, error.to_string())
-            })
+            executed.map_err(command_io_error)
         }
         .await;
         if let Err(ref e) = sandbox_result {
@@ -174,56 +170,108 @@ pub(super) async fn execute_run_command(
         sandbox_result
     };
 
+    let notice: String = workspace_notice
+        .into_iter()
+        .chain(network_notice)
+        .map(|notice| format!("{notice}\n"))
+        .collect();
     match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-            let mut combined = String::new();
-            if !stdout.is_empty() {
-                combined.push_str(&stdout);
-            }
-            if !stderr.is_empty() {
-                if !combined.is_empty() {
-                    combined.push('\n');
-                }
-                combined.push_str("[stderr]\n");
-                combined.push_str(&stderr);
-            }
-
-            if combined.is_empty() {
-                combined = "(no output)".to_string();
-            }
-
-            let combined = truncate_output_with_save("run_command", combined);
-            let notice = workspace_notice
-                .map(|notice| format!("{notice}\n"))
-                .unwrap_or_default();
-
-            Ok(ToolResult {
-                tool_name: "run_command".to_string(),
-                success: output.status.success(),
-                output: format!(
-                    "{notice}Exit code: {}\n{}",
-                    output.status.code().unwrap_or(-1),
-                    combined
-                ),
-            })
-        }
+        Ok(output) => Ok(ToolResult {
+            tool_name: "run_command".to_string(),
+            success: output.status.success(),
+            output: format!(
+                "{notice}Exit code: {}\n{}",
+                exit_description(output.status),
+                captured_output(&output.stdout, &output.stderr)
+            ),
+        }),
         Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
             tool_name: "run_command".to_string(),
             success: false,
             output: format!("Failed to execute command: {}", e),
         }),
-        Err(_) => Ok(ToolResult {
+        Err(e) => Ok(ToolResult {
             tool_name: "run_command".to_string(),
             success: false,
-            output: format!(
-                "Command timed out after {} seconds",
-                COMMAND_TIMEOUT.as_secs()
-            ),
+            output: timed_out_report(&notice, &e),
         }),
     }
+}
+
+fn command_io_error(error: anyhow::Error) -> std::io::Error {
+    let kind = error
+        .downcast_ref::<std::io::Error>()
+        .map(std::io::Error::kind)
+        .unwrap_or(std::io::ErrorKind::Other);
+    if kind == std::io::ErrorKind::TimedOut {
+        return error
+            .downcast::<std::io::Error>()
+            .unwrap_or_else(|error| std::io::Error::new(kind, error.to_string()));
+    }
+    std::io::Error::new(kind, error.to_string())
+}
+
+fn captured_output(stdout: &[u8], stderr: &[u8]) -> String {
+    let stdout = String::from_utf8_lossy(stdout);
+    let stderr = String::from_utf8_lossy(stderr);
+
+    let mut combined = String::new();
+    if !stdout.is_empty() {
+        combined.push_str(&stdout);
+    }
+    if !stderr.is_empty() {
+        if !combined.is_empty() {
+            combined.push('\n');
+        }
+        combined.push_str("[stderr]\n");
+        combined.push_str(&stderr);
+    }
+
+    if combined.is_empty() {
+        combined = "(no output)".to_string();
+    }
+
+    truncate_output_with_save("run_command", combined)
+}
+
+fn timed_out_report(notice: &str, error: &std::io::Error) -> String {
+    let headline = format!(
+        "{notice}Command timed out after {} seconds and was stopped.",
+        COMMAND_TIMEOUT.as_secs()
+    );
+    match crate::process_tree::TimedOutOutput::of(error) {
+        Some(partial) => format!(
+            "{headline} Output before the timeout:\n{}",
+            captured_output(&partial.stdout, &partial.stderr)
+        ),
+        None => headline,
+    }
+}
+
+fn network_blocked_notice(could_ask: bool) -> String {
+    if could_ask {
+        "The sandbox blocked network access for this command because it was not allowed; \
+         a failure to resolve or connect below comes from that."
+            .to_string()
+    } else {
+        "The sandbox blocked network access for this command: this session runs without \
+         prompts, so no one could allow it. A failure to resolve or connect below comes from that."
+            .to_string()
+    }
+}
+
+fn exit_description(status: std::process::ExitStatus) -> String {
+    if let Some(code) = status.code() {
+        return code.to_string();
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return format!("none, killed by signal {signal}");
+        }
+    }
+    "none".to_string()
 }
 
 fn internal_destination_refusal(command: &str) -> Option<ToolResult> {
@@ -234,7 +282,7 @@ fn internal_destination_refusal(command: &str) -> Option<ToolResult> {
         tool_name: "run_command".to_string(),
         success: false,
         output: format!(
-            "Command '{}' targets {}, which the sandbox blocks: a request the model composes must not reach a service on this machine or a cloud instance-metadata endpoint. Re-run with --no-sandbox only if you accept unrestricted command execution.",
+            "Command '{}' targets {}, which the sandbox blocks: a request the model composes must name a fixed external host, never a service on this machine or a cloud instance-metadata endpoint. Re-run with --no-sandbox only if you accept unrestricted command execution.",
             redact_tool_output(command),
             host,
         ),
@@ -351,10 +399,10 @@ pub(super) async fn execute_command_output(
     else {
         return Ok(result(
             true,
-            crate::terminals::summary(&crate::terminals::list()),
+            crate::terminals::summary(&crate::terminals::list_owned()),
         ));
     };
-    let Some(background) = crate::terminals::find(id) else {
+    let Some(background) = crate::terminals::find_owned(id) else {
         return Ok(result(
             false,
             format!("There is no background command {id}. Call command_output without an id to list them."),
@@ -420,13 +468,7 @@ pub(super) async fn execute_command_output(
             return Ok(result(false, format!("{error:#}")));
         }
     }
-    let wait = args
-        .get("wait_seconds")
-        .and_then(|value| value.trim().parse::<f64>().ok())
-        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
-        .map(|seconds| std::time::Duration::from_secs_f64(seconds).min(crate::terminals::MAX_WAIT))
-        .unwrap_or(crate::terminals::DEFAULT_WAIT);
-    let output = crate::terminals::read_new(&background, wait).await;
+    let output = crate::terminals::read_new(&background, command_output_wait(args)).await;
     Ok(result(
         true,
         truncate_output_with_save(
@@ -436,13 +478,28 @@ pub(super) async fn execute_command_output(
     ))
 }
 
+fn command_output_wait(args: &HashMap<String, String>) -> std::time::Duration {
+    args.get("wait_seconds")
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+        .map(|seconds| {
+            std::time::Duration::from_secs_f64(
+                seconds.min(crate::terminals::MAX_WAIT.as_secs_f64()),
+            )
+        })
+        .unwrap_or(crate::terminals::DEFAULT_WAIT)
+}
+
 pub(super) async fn execute_command_stop(args: &HashMap<String, String>) -> Result<ToolResult> {
     let result = |success: bool, output: String| ToolResult {
         tool_name: "command_stop".to_string(),
         success,
         output,
     };
-    let Some(background) = args.get("id").and_then(|id| crate::terminals::find(id)) else {
+    let Some(background) = args
+        .get("id")
+        .and_then(|id| crate::terminals::find_owned(id))
+    else {
         return Ok(result(
             false,
             "There is no background command with that id. Call command_output without an id to list them.".to_string(),
@@ -472,6 +529,26 @@ pub(super) async fn approve_command(
     tool_name: &str,
     command: &str,
     extra_details: Vec<String>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<std::result::Result<bool, ToolResult>> {
+    let policy = crate::features::exec::exec_policy::load_policy()?;
+    approve_command_under_policy(
+        &policy,
+        tool_name,
+        command,
+        extra_details,
+        require_confirmation,
+        approval_callback,
+    )
+    .await
+}
+
+async fn approve_command_under_policy(
+    policy: &agiworkforce_execpolicy::Policy,
+    tool_name: &str,
+    command: &str,
+    extra_details: Vec<String>,
     mut require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<std::result::Result<bool, ToolResult>> {
@@ -479,13 +556,16 @@ pub(super) async fn approve_command(
     // ones after `&&`, `;`, `|` or inside `$(...)`, is evaluated before anything
     // executes. A `Forbidden` decision is a hard block that no confirmation can
     // override. Confirmation is only waived when EVERY segment matched an explicit
-    // allow rule.
+    // allow rule, and an explicit prompt rule asks even for a command the
+    // heuristics call safe.
     let asks = require_confirmation
         && crate::permissions::PermissionStore::load_or_ask().asks_before(command);
+    let policy_requires_approval;
     {
-        use crate::features::exec::exec_policy::{evaluate_command, load_policy};
+        use crate::features::exec::exec_policy::evaluate_command;
         use agiworkforce_execpolicy::Decision;
-        let evaluation = evaluate_command(&load_policy()?, command);
+        let evaluation = evaluate_command(policy, command);
+        policy_requires_approval = evaluation.explicit_prompt_rule;
         match evaluation.decision {
             Decision::Forbidden => {
                 return Ok(Err(ToolResult {
@@ -508,10 +588,12 @@ pub(super) async fn approve_command(
     if require_confirmation {
         let safety = classify_command(command);
         let hook_bypass = bypasses_git_hooks(command);
-        if asks || !matches!(safety, CommandSafety::Safe) {
+        if policy_requires_approval || asks || !matches!(safety, CommandSafety::Safe) {
             let perms = crate::permissions::PermissionStore::load_or_ask();
+            let saved = saved_command_decision(&perms, command, safety)
+                .filter(|allowed| !(*allowed && policy_requires_approval));
 
-            match saved_command_decision(&perms, command, safety) {
+            match saved {
                 Some(true) => {
                     // Previously allowed, skip prompt
                 }
@@ -558,7 +640,10 @@ pub(super) async fn approve_command(
                             details,
                         )
                         .saving_always_allow(
-                            crate::features::exec::exec_policy::can_persist_allow_command(command),
+                            !policy_requires_approval
+                                && crate::features::exec::exec_policy::can_persist_allow_command(
+                                    command,
+                                ),
                         ),
                     )
                     .await
@@ -713,25 +798,34 @@ async fn sandbox_network_policy(
         return crate::sandbox::NetworkPolicy::Deny;
     }
     let summary = "This command needs the network, which the sandbox blocks.";
+    let scope = network_grant_scope(crate::sandbox::SandboxType::detect());
     let request = ApprovalRequest::new(
         ApprovalRequestKind::Network {
             tool_name: "run_command".to_string(),
-            destination: "external hosts (this machine stays unreachable)".to_string(),
+            destination: scope.to_string(),
         },
         summary,
         vec![describe_command(command)],
     );
     let allowed = match request_approval(approval_callback, request).await {
         Some(decision) => approval_allows(decision),
-        None => crate::output::confirm(
-            format!("{summary} Allow external network access for it?"),
-            false,
-        ),
+        None => crate::output::confirm(format!("{summary} Allow it to reach {scope}?"), false),
     };
     if allowed {
         crate::sandbox::NetworkPolicy::AllowExternal
     } else {
         crate::sandbox::NetworkPolicy::Deny
+    }
+}
+
+fn network_grant_scope(backend: crate::sandbox::SandboxType) -> &'static str {
+    match backend {
+        crate::sandbox::SandboxType::MacosSeatbelt => {
+            "any host except localhost, including your local network and cloud metadata addresses"
+        }
+        crate::sandbox::SandboxType::LinuxBubblewrap | crate::sandbox::SandboxType::None => {
+            "any host, including services on this machine and cloud metadata addresses"
+        }
     }
 }
 
@@ -757,6 +851,45 @@ pub(super) fn saved_command_decision(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    fn wait_for(value: &str) -> std::time::Duration {
+        command_output_wait(&HashMap::from([(
+            "wait_seconds".to_string(),
+            value.to_string(),
+        )]))
+    }
+
+    #[test]
+    fn command_output_wait_is_capped_instead_of_overflowing() {
+        let max = crate::terminals::MAX_WAIT;
+        for oversized in [
+            "1e20",
+            "1e300",
+            "1.7976931348623157e308",
+            "18446744073709551616",
+        ] {
+            assert_eq!(wait_for(oversized), max, "{oversized}");
+        }
+        assert_eq!(wait_for("31"), max);
+        assert_eq!(wait_for("30"), max);
+    }
+
+    #[test]
+    fn command_output_wait_keeps_representable_values_and_defaults() {
+        assert_eq!(wait_for("0"), std::time::Duration::ZERO);
+        assert_eq!(wait_for(" 1.5 "), std::time::Duration::from_secs_f64(1.5));
+        for unusable in ["-1", "NaN", "inf", "-inf", "soon", ""] {
+            assert_eq!(
+                wait_for(unusable),
+                crate::terminals::DEFAULT_WAIT,
+                "{unusable}"
+            );
+        }
+        assert_eq!(
+            command_output_wait(&HashMap::new()),
+            crate::terminals::DEFAULT_WAIT
+        );
+    }
 
     #[test]
     fn working_directory_cannot_use_an_additional_root() {
@@ -945,7 +1078,7 @@ mod tests {
             *seen.lock().expect("seen lock"),
             vec![ApprovalRequestKind::Network {
                 tool_name: "run_command".to_string(),
-                destination: "external hosts (this machine stays unreachable)".to_string(),
+                destination: network_grant_scope(crate::sandbox::SandboxType::detect()).to_string(),
             }]
         );
 
@@ -962,6 +1095,30 @@ mod tests {
             sandbox_network_policy("git pull", false, Some(&allow)).await,
             crate::sandbox::NetworkPolicy::Deny
         );
+    }
+
+    #[test]
+    fn a_network_grant_names_what_the_sandbox_in_use_leaves_reachable() {
+        use crate::sandbox::SandboxType;
+
+        let seatbelt = network_grant_scope(SandboxType::MacosSeatbelt);
+        assert!(seatbelt.contains("except localhost"), "{seatbelt}");
+        assert!(seatbelt.contains("local network"), "{seatbelt}");
+        assert!(seatbelt.contains("cloud metadata"), "{seatbelt}");
+
+        for backend in [SandboxType::LinuxBubblewrap, SandboxType::None] {
+            let scope = network_grant_scope(backend);
+            assert!(scope.contains("this machine"), "{scope}");
+            assert!(scope.contains("cloud metadata"), "{scope}");
+            assert!(!scope.contains("except"), "{scope}");
+        }
+        for backend in [
+            SandboxType::MacosSeatbelt,
+            SandboxType::LinuxBubblewrap,
+            SandboxType::None,
+        ] {
+            assert!(!network_grant_scope(backend).contains("unreachable"));
+        }
     }
 
     #[test]
@@ -993,6 +1150,57 @@ mod tests {
         // a string that merely mentions a loopback URL is not refused.
         assert!(internal_destination("echo http://localhost:3000").is_some());
         assert!(!command_requests_network("echo http://localhost:3000"));
+    }
+
+    #[test]
+    fn a_quoted_loopback_operand_is_refused_like_the_plain_one() {
+        for command in [
+            "curl http://127.0.0.1:3000/",
+            "curl http://12'7.0.0.1':3000/",
+            "curl \"http://127.0.0.1\":3000/",
+        ] {
+            assert!(command_requests_network(command), "{command}");
+            let refusal = internal_destination_refusal(command).expect("refused");
+            assert!(!refusal.success);
+            assert!(
+                refusal.output.contains("targets 127.0.0.1"),
+                "{}",
+                refusal.output
+            );
+        }
+        assert!(internal_destination_refusal("curl 'https://api.example.com/v1/models'").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_quoted_loopback_operand_is_refused_before_the_network_is_asked_for() {
+        if !sandbox_available() {
+            return;
+        }
+        let network_requests = Arc::new(Mutex::new(0usize));
+        let seen = Arc::clone(&network_requests);
+        let callback: ApprovalCallback = Arc::new(move |request: ApprovalRequest| {
+            if matches!(request.kind, ApprovalRequestKind::Network { .. }) {
+                *seen.lock().expect("count") += 1;
+            }
+            Box::pin(async { ApprovalDecision::AllowOnce })
+        });
+        let mut args = HashMap::new();
+        args.insert(
+            "command".to_string(),
+            "curl http://12'7.0.0.1':3000/".to_string(),
+        );
+
+        let result = execute_run_command(&args, true, Some(&callback))
+            .await
+            .expect("tool result");
+
+        assert!(!result.success, "{}", result.output);
+        assert!(
+            result.output.contains("targets 127.0.0.1"),
+            "refusal must name the destination the program would reach: {}",
+            result.output
+        );
+        assert_eq!(*network_requests.lock().expect("count"), 0);
     }
 
     /// The sandboxed execution paths are only meaningful where a backend is
@@ -1269,5 +1477,220 @@ mod tests {
         assert!(!policy_waives_confirmation(&dangerous, "rm -rf build"));
         let routine = evaluate_command(&policy, "cargo build");
         assert!(policy_waives_confirmation(&routine, "cargo build"));
+    }
+
+    fn counting_callback(
+        decision: ApprovalDecision,
+    ) -> (ApprovalCallback, Arc<std::sync::atomic::AtomicUsize>) {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&calls);
+        let callback: ApprovalCallback = Arc::new(move |_| {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async move { decision })
+        });
+        (callback, calls)
+    }
+
+    fn policy_with_pwd(
+        decision: agiworkforce_execpolicy::Decision,
+    ) -> agiworkforce_execpolicy::Policy {
+        let mut policy = agiworkforce_execpolicy::Policy::empty();
+        policy
+            .add_prefix_rule(&["pwd".to_string()], decision)
+            .expect("pwd rule");
+        policy
+    }
+
+    #[tokio::test]
+    async fn an_explicit_prompt_rule_asks_before_a_safe_command_and_a_denial_stops_it() {
+        use agiworkforce_execpolicy::Decision;
+        assert_eq!(classify_command("pwd"), CommandSafety::Safe);
+        let policy = policy_with_pwd(Decision::Prompt);
+        let evaluation = crate::features::exec::exec_policy::evaluate_command(&policy, "pwd");
+        assert!(evaluation.explicit_prompt_rule);
+
+        let (deny, denied_calls) = counting_callback(ApprovalDecision::Deny);
+        let refused = approve_command_under_policy(
+            &policy,
+            "run_command",
+            "pwd",
+            Vec::new(),
+            true,
+            Some(&deny),
+        )
+        .await
+        .expect("approval")
+        .expect_err("a denied prompt rule must refuse");
+        assert_eq!(denied_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(!refused.success);
+        assert_eq!(refused.output, "User denied command execution");
+
+        let (allow, allowed_calls) = counting_callback(ApprovalDecision::AllowOnce);
+        let approved = approve_command_under_policy(
+            &policy,
+            "run_command",
+            "pwd",
+            Vec::new(),
+            false,
+            Some(&allow),
+        )
+        .await
+        .expect("approval");
+        assert_eq!(allowed_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(matches!(approved, Ok(true)));
+    }
+
+    #[tokio::test]
+    async fn a_safe_command_without_a_prompt_rule_keeps_running_without_a_request() {
+        use agiworkforce_execpolicy::{Decision, Policy};
+        for policy in [Policy::empty(), policy_with_pwd(Decision::Allow)] {
+            let evaluation = crate::features::exec::exec_policy::evaluate_command(&policy, "pwd");
+            assert!(!evaluation.explicit_prompt_rule);
+            let (callback, calls) = counting_callback(ApprovalDecision::Deny);
+            let outcome = approve_command_under_policy(
+                &policy,
+                "run_command",
+                "pwd",
+                Vec::new(),
+                true,
+                Some(&callback),
+            )
+            .await
+            .expect("approval");
+            assert!(outcome.is_ok());
+            assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+        }
+
+        let forbidden = policy_with_pwd(Decision::Forbidden);
+        let (callback, calls) = counting_callback(ApprovalDecision::AllowOnce);
+        let refused = approve_command_under_policy(
+            &forbidden,
+            "run_command",
+            "pwd",
+            Vec::new(),
+            true,
+            Some(&callback),
+        )
+        .await
+        .expect("approval")
+        .expect_err("a forbidden rule must refuse");
+        assert!(refused.output.contains("forbidden"));
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_fallback_prompt_is_not_an_explicit_prompt_rule() {
+        let policy = agiworkforce_execpolicy::Policy::empty();
+        let evaluation =
+            crate::features::exec::exec_policy::evaluate_command(&policy, "echo 'open");
+        assert!(!evaluation.explicit_prompt_rule);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_command_killed_by_a_signal_names_the_signal() {
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(
+            exit_description(std::process::ExitStatus::from_raw(11)),
+            "none, killed by signal 11"
+        );
+        assert_eq!(
+            exit_description(std::process::ExitStatus::from_raw(256)),
+            "1"
+        );
+    }
+
+    #[test]
+    fn a_timed_out_command_reports_the_output_it_had_produced() {
+        let sandboxed = anyhow::Error::new(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            crate::process_tree::TimedOutOutput {
+                stdout: b"started\n".to_vec(),
+                stderr: b"still compiling\n".to_vec(),
+            },
+        ))
+        .context("Seatbelt exec failed");
+
+        let error = command_io_error(sandboxed);
+        let report = timed_out_report("", &error);
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(
+            report.starts_with(&format!(
+                "Command timed out after {} seconds and was stopped. Output before the timeout:\n",
+                COMMAND_TIMEOUT.as_secs()
+            )),
+            "{report}"
+        );
+        assert!(report.contains("started\n"), "{report}");
+        assert!(report.contains("[stderr]\nstill compiling"), "{report}");
+
+        let bare = std::io::Error::new(std::io::ErrorKind::TimedOut, "subprocess timed out");
+        assert!(!timed_out_report("", &bare).contains("Output before the timeout"));
+    }
+
+    #[test]
+    fn a_saved_allow_does_not_cover_a_longer_command_that_discards_work() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("git stash");
+        perms.allow_always("git checkout main");
+        for command in [
+            "git stash clear",
+            "git stash drop",
+            "git checkout main -- .",
+        ] {
+            assert_eq!(
+                saved_command_decision(&perms, command, classify_command(command)),
+                None,
+                "{command}"
+            );
+        }
+        assert_eq!(
+            saved_command_decision(&perms, "git stash", classify_command("git stash")),
+            Some(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_network_command_says_when_the_sandbox_blocked_its_network() {
+        if !sandbox_available() || !sandbox_executes().await {
+            return;
+        }
+        let mut args = HashMap::new();
+        args.insert("command".to_string(), "curl --version".to_string());
+
+        let unasked = execute_run_command(&args, false, None)
+            .await
+            .expect("tool result");
+        assert!(
+            unasked.output.contains("no one could allow it"),
+            "{}",
+            unasked.output
+        );
+
+        let network_requests = Arc::new(Mutex::new(0usize));
+        let seen = Arc::clone(&network_requests);
+        let callback: ApprovalCallback = Arc::new(move |request: ApprovalRequest| {
+            let network = matches!(request.kind, ApprovalRequestKind::Network { .. });
+            if network {
+                *seen.lock().expect("count") += 1;
+            }
+            Box::pin(async move {
+                if network {
+                    ApprovalDecision::Deny
+                } else {
+                    ApprovalDecision::AllowOnce
+                }
+            })
+        });
+        let declined = execute_run_command(&args, true, Some(&callback))
+            .await
+            .expect("tool result");
+        assert_eq!(*network_requests.lock().expect("count"), 1);
+        assert!(
+            declined.output.contains("because it was not allowed"),
+            "{}",
+            declined.output
+        );
     }
 }

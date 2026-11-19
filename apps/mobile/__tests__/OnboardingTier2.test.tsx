@@ -17,7 +17,14 @@ jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useSharedValue: <T,>(value: T) => ({ value }),
+    withRepeat: <T,>(value: T) => value,
+    withTiming: <T,>(value: T) => value,
     default: {
+      createAnimatedComponent: (component: unknown) => component,
       View: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => (
         <View {...rest}>{children}</View>
       ),
@@ -150,16 +157,27 @@ jest.mock('@agiworkforce/local-llm', () => {
     },
   ];
 
+  const capabilities = {
+    totalRAMMB: 6144,
+    tier1Available: false,
+    tier1Runtime: null,
+    tier2Available: true,
+    tier3Available: true,
+    osVersion: '18.2',
+    thermalThrottled: false,
+  };
+  const allModels = [defaultModelWithPreset, ...systemModels];
+
   return {
-    detectCapabilities: jest.fn().mockResolvedValue({
-      totalRAMMB: 6144,
-      tier1Available: false,
-      tier1Runtime: null,
-      tier2Available: true,
-      tier3Available: true,
-      osVersion: '18.2',
-      thermalThrottled: false,
-    }),
+    detectCapabilities: jest.fn().mockResolvedValue(capabilities),
+    getCapabilities: jest.fn().mockResolvedValue(capabilities),
+    getModelById: jest.fn((id: string) => allModels.find((model) => model.id === id)),
+    hasRunnableGgufArtifacts: jest.fn().mockReturnValue(false),
+    hasSufficientRAMForMultimodal: jest.fn().mockReturnValue(true),
+    isMultimodalModel: jest.fn().mockReturnValue(false),
+    loadedLocalModel: jest.fn().mockReturnValue(null),
+    tier2IsPresetDownloaded: jest.fn().mockResolvedValue(true),
+    tier2Release: jest.fn(),
     getDefaultModel: jest.fn().mockReturnValue(defaultModelWithPreset),
     getShippableModels: jest.fn().mockReturnValue([defaultModelWithPreset, ...systemModels]),
     getSystemModelForTier1Runtime: jest.fn((runtime: string | null) =>
@@ -340,6 +358,86 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     });
     await waitFor(() => getByTestId('download-error'));
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('offers a retry after a failed download and finishes onboarding when it succeeds', async () => {
+    mockTier2LoadModel.mockRejectedValueOnce(new Error('connection reset'));
+    const { getByTestId, queryByTestId } = await renderAtDeviceTier();
+    await act(async () => {
+      fireEvent.press(getByTestId('device-tier-download-btn'));
+      await Promise.resolve();
+    });
+    await waitFor(() => getByTestId('download-error'));
+    expect(mockTier2LoadModel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.press(getByTestId('download-retry-btn'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockTier2LoadModel).toHaveBeenCalledTimes(2);
+      expect(mockReplace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(app)' }));
+    });
+    expect(queryByTestId('download-error')).toBeNull();
+  });
+
+  it('does not offer a retry while a download is running', async () => {
+    mockTier2LoadModel.mockImplementation(() => new Promise<void>(() => undefined));
+    const { getByTestId, queryByTestId } = await renderAtDeviceTier();
+    await act(async () => {
+      fireEvent.press(getByTestId('device-tier-download-btn'));
+      await Promise.resolve();
+    });
+    await waitFor(() => getByTestId('onboarding-download-screen'));
+    expect(queryByTestId('download-retry-btn')).toBeNull();
+  });
+
+  it('keeps the download running when the user skips to chat and finishes it quietly', async () => {
+    const { _setExecutorchResourcesForTesting } = require('../services/executorchModels');
+    const { useModelInstallStore } = require('../src/features/model-picker/installStore');
+    const { useModelStore } = require('../src/features/model-picker/store');
+    const cancelFetching = jest.fn().mockResolvedValue(undefined);
+    _setExecutorchResourcesForTesting({ cancelFetching, deleteResources: jest.fn() });
+    let finishDownload: () => void = () => undefined;
+    mockTier2LoadModel.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDownload = resolve;
+        }),
+    );
+
+    const { getByTestId } = await renderAtDeviceTier();
+    await act(async () => {
+      fireEvent.press(getByTestId('device-tier-download-btn'));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('downloading');
+    });
+    const selectedBefore = useModelStore.getState().selectedModel;
+
+    await act(async () => {
+      fireEvent.press(getByTestId('download-skip-btn'));
+      await Promise.resolve();
+    });
+
+    expect(cancelFetching).not.toHaveBeenCalled();
+    expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('downloading');
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(app)' }));
+
+    await act(async () => {
+      finishDownload();
+    });
+
+    await waitFor(() => {
+      expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('ready');
+    });
+    expect(useModelInstallStore.getState().installedModelIds).toContain(DEFAULT_MODEL_ID);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(useModelStore.getState().selectedModel).toBe(selectedBefore);
+    _setExecutorchResourcesForTesting(null);
   });
 
   it('does NOT silently fall through to finishOnboarding when no preset and no downloadUrl', async () => {

@@ -62,10 +62,19 @@ describe('isMessageContinuable', () => {
     );
   });
 
-  it('offers Continue when the text reads as cut off however the turn was reported', () => {
+  it('trusts a finished turn over the truncation heuristic', () => {
+    expect(
+      isMessageContinuable(
+        assistantMessage({ content: '17 \u00d7 23 = 391', metadata: { finishReason: 'stop' } }),
+      ),
+    ).toBe(false);
     expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
-      true,
+      false,
     );
+  });
+
+  it('falls back to the truncation heuristic only when no finish reason was recorded', () => {
+    expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(true);
   });
 
   it('does NOT offer Continue when the partial content is empty', () => {

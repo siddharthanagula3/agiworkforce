@@ -110,10 +110,16 @@ export function ResponseRatingDetails({
     if (!canSubmit) return;
     setSending(true);
     setDraftFailure(messageId, null);
+    const submitted = { reason, comment: comment.trim() };
     try {
-      await onSubmit({ reason, comment: comment.trim() });
+      await onSubmit(submitted);
       toast.success('Thanks for your feedback.');
-      onClose();
+      const current = useResponseRatingDraftStore.getState().drafts.get(messageId);
+      const supersededByNewDraft =
+        current !== undefined &&
+        (current.reason !== submitted.reason || current.comment.trim() !== submitted.comment);
+      if (supersededByNewDraft) setSending(false);
+      else onClose();
     } catch (error) {
       setDraftFailure(messageId, responseRatingFailureMessage(error));
       setSending(false);
@@ -166,6 +172,7 @@ export function ResponseRatingDetails({
               ref={index === 0 ? firstReasonRef : undefined}
               type="button"
               aria-pressed={selected}
+              disabled={sending}
               onClick={() => updateDraft(messageId, { reason: selected ? null : option, comment })}
               className={cn(
                 REASON_CHIP_CLASS,
@@ -188,6 +195,7 @@ export function ResponseRatingDetails({
           id={commentId}
           value={comment}
           onChange={(event) => updateDraft(messageId, { reason, comment: event.target.value })}
+          disabled={sending}
           maxLength={RESPONSE_RATING_COMMENT_MAX_CHARS}
           rows={2}
           placeholder="What was wrong with this response?"

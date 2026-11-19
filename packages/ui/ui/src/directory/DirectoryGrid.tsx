@@ -234,7 +234,7 @@ export function DirectoryCard({
           </button>
         ) : null}
       </div>
-      <p className="line-clamp-2 text-sm text-muted-foreground">{entry.description}</p>
+      <p className="line-clamp-2 text-xs text-muted-foreground">{entry.description}</p>
       {entry.statusLabel ? (
         <p className="text-sm text-muted-foreground">{entry.statusLabel}</p>
       ) : null}

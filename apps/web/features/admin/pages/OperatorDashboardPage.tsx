@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type {
+  FeedbackContextField,
+  FeedbackReportContext,
   FeedbackRow,
   OperatorOverview,
   UserRow,
@@ -59,6 +61,40 @@ type Tab = (typeof TABS)[number];
 const DATABASE_VIEWS: readonly Tab[] = ['overview', 'feedback', 'users'];
 
 const DEFAULT_TAB: Tab = 'overview';
+
+const FEEDBACK_CONTEXT_LABELS: Record<FeedbackContextField, string> = {
+  source: 'Source',
+  platform: 'Platform',
+  version: 'Version',
+  feedback_context: 'Report type',
+  finish_reason: 'Finish reason',
+  conversation_id: 'Conversation',
+  message_id: 'Message',
+  run_id: 'Run',
+};
+
+function FeedbackContextList({ context }: { context: FeedbackReportContext }) {
+  const entries = (Object.keys(FEEDBACK_CONTEXT_LABELS) as FeedbackContextField[]).flatMap(
+    (field) => {
+      const value = context[field];
+      return value ? [{ field, value }] : [];
+    },
+  );
+  if (entries.length === 0) return null;
+  return (
+    <dl
+      aria-label="Reporter-supplied context"
+      className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs text-muted-foreground"
+    >
+      {entries.map(({ field, value }) => (
+        <div key={field} className="contents">
+          <dt>{FEEDBACK_CONTEXT_LABELS[field]}</dt>
+          <dd className="break-all font-mono">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 function isTab(value: string): value is Tab {
   return (TABS as readonly string[]).includes(value);
@@ -414,6 +450,7 @@ export function OperatorDashboardPage() {
                     <p className="mt-1 font-mono text-xs text-muted-foreground">{row.pagePath}</p>
                   ) : null}
                   <p className="mt-2 whitespace-pre-wrap text-sm">{row.message}</p>
+                  <FeedbackContextList context={row.context} />
                   {row.screenshotKey ? (
                     <a
                       href={`/api/operator?view=feedback-screenshot&key=${encodeURIComponent(row.screenshotKey)}`}

@@ -39,3 +39,38 @@ do not substitute for these checks.
 Record the Chrome version, OS, account/plan state, tagged commit, ZIP SHA-256,
 Store item ID, and pass/fail evidence. A failure must be fixed and the entire
 affected row repeated on the newly packaged artifact.
+
+## Open before the first submission
+
+Read on 2026-11-11 against the working tree. The owner steps, in order, are
+"First submission" in `docs/runbooks/chrome-web-store-publish.md`.
+
+- **Release scan refuses the desktop bridge address.** The bundle ships
+  `http://localhost:8787` (`DEFAULT_AGI_BRIDGE_URL` in
+  `apps/extension/src/background/policy.ts`; port 8787 is
+  `BROWSER_BRIDGE_DEFAULT_PORT` in `packages/contracts/types/src/browser-bridge.ts`),
+  and the `dev-server-origin` rule in `scripts/lib/rollout/artifact-scan.mjs`
+  lists port 8787, so the workflow step "Scan the packaged extension for secrets
+  and dev endpoints" fails on every build today. Needs a reviewed entry in
+  `scripts/release/release-scan-allowlist.json` stating the value is the
+  loopback Desktop bridge, or a narrower rule.
+- **Sentry step fails when Sentry is configured.** `apps/extension/vite.config.ts`
+  builds production without sourcemaps (`sourcemap: mode !== 'production'`),
+  and the workflow's Sentry step exits 1 when `SENTRY_AUTH_TOKEN`,
+  `SENTRY_ORG` and `SENTRY_PROJECT_CHROME_EXTENSION` are set but no `*.map`
+  exists. Hidden production maps (excluded from the ZIP already) would satisfy
+  it. With those values unset the step warns and passes.
+- **Store item and identity.** No item, no `CWS_EXTENSION_ID`, no
+  `CHROME_EXTENSION_PUBLIC_KEY`, no Clerk repository variables and no protected
+  `chrome-web-store` environment exist (lead, 2026-11-11). The first-draft
+  package (`prepare-package.mjs --first-draft`, `verify-package.mjs --first-draft`)
+  creates the item without a key.
+- **First store version.** Source is `0.0.1`; the first-draft upload carries it,
+  so the first tagged release must be higher.
+- **Listing images.** The store needs the 128x128 icon and at least one
+  1280x800 or 640x400 screenshot; the listing document's "Store assets" names
+  them.
+- **Permission baseline.** `scripts/release/chrome-permissions-baseline.json`
+  approves `optional_permissions:history`, which the manifest gained after the
+  baseline was written; rewrite the baseline from the published manifest after
+  the first approval.

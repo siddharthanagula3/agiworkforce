@@ -31,7 +31,7 @@ import {
   retrievalDocumentGoogleUserDataSql,
 } from '@/lib/connectors/google-user-data';
 import { logger } from '@/lib/logger';
-import { readOrganizationRegion } from '@/lib/server/data-region';
+import { readStoredOrganizationRegion } from '@/lib/server/data-region';
 import {
   embedTextsMetered,
   RetrievalEmbeddingError,
@@ -124,13 +124,16 @@ export async function resolveRetrievalResidency(input: {
   if (!input.organizationId) {
     return { origin: executing, executing, provisioned: true, missing: [] };
   }
-  // readOrganizationRegion reads one row through `query`, which every scoped
+  // readStoredOrganizationRegion reads one row through `query`, which every scoped
   // handle carries even when it is narrower than the full adapter.
-  const state = await readOrganizationRegion(
+  const state = await readStoredOrganizationRegion(
     input.db as DatabaseAdapter,
     input.organizationId,
     env,
   );
+  if (!state) {
+    return { origin: null, executing, provisioned: false, missing: [] };
+  }
   return {
     origin: state.effective,
     executing,

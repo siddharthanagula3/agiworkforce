@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   readReleaseEvents: vi.fn(),
+  readLatestReleaseEvent: vi.fn(),
 }));
 
 vi.mock('@/lib/server/neon-db', () => ({
@@ -14,7 +15,11 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 vi.mock('@/lib/server/release-audit-store', async () => {
   const actual = await vi.importActual<ScanModule0>('@/lib/server/release-audit-store');
-  return { ...actual, readReleaseEvents: mocks.readReleaseEvents };
+  return {
+    ...actual,
+    readReleaseEvents: mocks.readReleaseEvents,
+    readLatestReleaseEvent: mocks.readLatestReleaseEvent,
+  };
 });
 
 import { GENESIS_HASH, type ReleaseEvent } from '@/lib/server/release-audit-store';
@@ -71,6 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllEnvs();
   mocks.readReleaseEvents.mockResolvedValue([]);
+  mocks.readLatestReleaseEvent.mockResolvedValue(null);
   vi.stubEnv('AGI_RELEASE_SHA', COMMIT);
   vi.stubEnv('AGI_DEPLOY_ENV', 'production');
 });
@@ -136,31 +142,68 @@ describe('the dashboard', () => {
 
   it('ages the last successful drill and ignores a failed one', async () => {
     withLedger([]);
-    mocks.readReleaseEvents.mockResolvedValue([
-      event({
-        id: 3,
-        event: 'rollback_drill',
-        outcome: 'failed',
-        reason: 'no target',
-        recordedAt: new Date(NOW - DAY_MS).toISOString(),
-      }),
-      event({
-        id: 2,
-        event: 'rollback_drill',
-        outcome: 'succeeded',
-        recordedAt: new Date(NOW - 7 * DAY_MS).toISOString(),
-      }),
-    ]);
+    mocks.readLatestReleaseEvent.mockImplementation(
+      async (query: { event: string; outcome?: string }) =>
+        query.event === 'rollback_drill' && query.outcome === 'succeeded'
+          ? event({
+              id: 2,
+              event: 'rollback_drill',
+              outcome: 'succeeded',
+              recordedAt: new Date(NOW - 7 * DAY_MS).toISOString(),
+            })
+          : null,
+    );
 
     const dashboard = await readReleaseDashboard(NOW);
 
     expect(dashboard.lastDrill?.id).toBe(2);
     expect(dashboard.drillAgeDays).toBe(7);
+    expect(mocks.readLatestReleaseEvent).toHaveBeenCalledWith({
+      event: 'rollback_drill',
+      outcome: 'succeeded',
+    });
+  });
+
+  it('keeps a successful drill and a rollback that are older than the displayed event window', async () => {
+    withLedger([]);
+    const newerEvents = Array.from({ length: 50 }, (_, index) =>
+      event({ id: 100 - index, event: 'promoted' }),
+    );
+    mocks.readReleaseEvents.mockResolvedValue(newerEvents);
+    mocks.readLatestReleaseEvent.mockImplementation(async (query: { event: string }) =>
+      query.event === 'rollback_drill'
+        ? event({
+            id: 3,
+            event: 'rollback_drill',
+            recordedAt: new Date(NOW - 2 * DAY_MS).toISOString(),
+          })
+        : event({ id: 2, event: 'rolled_back', deploymentId: 'dpl_old_good' }),
+    );
+
+    const dashboard = await readReleaseDashboard(NOW);
+
+    expect(dashboard.events.some((entry) => entry.event !== 'promoted')).toBe(false);
+    expect(dashboard.lastDrill?.id).toBe(3);
+    expect(dashboard.drillAgeDays).toBe(2);
+    expect(dashboard.lastRollback?.deploymentId).toBe('dpl_old_good');
+    expect(dashboard.unreadable).toEqual([]);
+  });
+
+  it('names the trail as unreadable when only the latest-event reads fail', async () => {
+    withLedger([]);
+    mocks.readLatestReleaseEvent.mockRejectedValue(new Error('timeout'));
+
+    const dashboard = await readReleaseDashboard(NOW);
+
+    expect(dashboard.unreadable).toEqual(['events']);
+    expect(dashboard.lastDrill).toBeNull();
+    expect(dashboard.lastRollback).toBeNull();
   });
 
   it('names the source it could not read rather than reporting it empty', async () => {
     mocks.query.mockRejectedValue(new Error('relation does not exist'));
     mocks.readReleaseEvents.mockRejectedValue(new Error('relation does not exist'));
+    mocks.readLatestReleaseEvent.mockRejectedValue(new Error('relation does not exist'));
 
     const dashboard = await readReleaseDashboard(NOW);
 
@@ -171,15 +214,16 @@ describe('the dashboard', () => {
 
   it('surfaces the newest rollback and the chain verdict', async () => {
     withLedger([]);
-    mocks.readReleaseEvents.mockResolvedValue([
-      event({
-        id: 2,
-        event: 'rolled_back',
-        deploymentId: 'dpl_good',
-        previousHash: 'z'.repeat(64),
-      }),
-      event({ id: 1 }),
-    ]);
+    const rollback = event({
+      id: 2,
+      event: 'rolled_back',
+      deploymentId: 'dpl_good',
+      previousHash: 'z'.repeat(64),
+    });
+    mocks.readReleaseEvents.mockResolvedValue([rollback, event({ id: 1 })]);
+    mocks.readLatestReleaseEvent.mockImplementation(async (query: { event: string }) =>
+      query.event === 'rolled_back' ? rollback : null,
+    );
 
     const dashboard = await readReleaseDashboard(NOW);
 

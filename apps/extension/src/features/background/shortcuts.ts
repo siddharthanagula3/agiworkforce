@@ -55,7 +55,38 @@ function mutateShortcuts<T>(operation: (shortcuts: SavedShortcut[]) => Promise<T
   return result;
 }
 
-export async function handleSaveShortcut(message: SaveShortcutMessage): Promise<ExtensionResponse> {
+function isRecording(shortcut: SavedShortcut): boolean {
+  return Array.isArray(shortcut.actions) && shortcut.actions.length > 0;
+}
+
+/**
+ * Recordings can carry what the user typed, so they belong to the account
+ * that made them. One made while signed out goes to the first account seen;
+ * every other recording is removed on a sign-out or a switch of account.
+ */
+export function releaseRecordingsOfOtherAccounts(signedInAccountId: string | null): Promise<void> {
+  return mutateShortcuts(async (shortcuts) => {
+    let changed = false;
+    const kept: SavedShortcut[] = [];
+    for (const shortcut of shortcuts) {
+      const owner = shortcut.ownerAccountId ?? null;
+      if (!isRecording(shortcut) || owner === signedInAccountId) {
+        kept.push(shortcut);
+      } else if (owner === null) {
+        kept.push({ ...shortcut, ownerAccountId: signedInAccountId });
+        changed = true;
+      } else {
+        changed = true;
+      }
+    }
+    if (changed) await saveShortcuts(kept);
+  });
+}
+
+export async function handleSaveShortcut(
+  message: SaveShortcutMessage,
+  ownerAccountId: string | null = null,
+): Promise<ExtensionResponse> {
   return mutateShortcuts(async (shortcuts) => {
     if (shortcuts.length >= MAX_SHORTCUTS) {
       return {
@@ -87,6 +118,7 @@ export async function handleSaveShortcut(message: SaveShortcutMessage): Promise<
       prompt: message.prompt,
       ...(startUrl ? { startUrl } : {}),
       scheduled: message.scheduled,
+      ...(actions.length > 0 ? { ownerAccountId } : {}),
     };
     shortcuts.push(shortcut);
     await saveShortcuts(shortcuts);

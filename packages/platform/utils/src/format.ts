@@ -298,5 +298,7 @@ export function formatFileName(filename: string, maxLength: number): string {
   const availableLength = maxLength - ext.length - 3;
   const halfLength = Math.floor(availableLength / 2);
 
-  return `${name.slice(0, halfLength)}...${name.slice(-halfLength)}${ext}`;
+  const tail = halfLength > 0 ? name.slice(-halfLength) : '';
+
+  return `${name.slice(0, halfLength)}...${tail}${ext}`;
 }

@@ -21,7 +21,6 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { AUDIT_STREAM_CONTINUITY_ALERT_MINUTES } from '../audit-streaming-service';
 import {
   CERTIFICATE_ATTENTION_DAYS,
-  MIN_RECOMMENDED_OWNERS,
   readWorkspacePosture,
   type PostureSignal,
 } from '../workspace-posture-service';
@@ -653,7 +652,7 @@ describe('readWorkspacePosture, who can administer the workspace', () => {
     entitlement.plan = 'team';
   });
 
-  it('flags a workspace that only one account can administer', async () => {
+  it('treats the single owner as the supported model and recommends no second owner', async () => {
     const h = harness({
       roles: [
         { role: 'owner', count: 1 },
@@ -665,37 +664,12 @@ describe('readWorkspacePosture, who can administer the workspace', () => {
     const owners = signal(posture.groups, 'owners');
 
     expect(owners.value).toBe('1 owner');
-    expect(owners.state).toBe('attention');
+    expect(owners.state).toBe('ok');
     expect(owners.enforcement).toBe('enforced');
-    expect(posture.recommendations.map((r) => r.id)).toContain('second-owner');
-  });
-
-  it('does not let admins stand in for the missing owner', async () => {
-    // The row this replaced added owners and admins together, so four admins
-    // made a single-owner workspace read as five accounts deep.
-    const h = harness({
-      roles: [
-        { role: 'owner', count: 1 },
-        { role: 'admin', count: 4 },
-      ],
-    });
-    const posture = await readWorkspacePosture(h.db, ORG);
-
-    expect(signal(posture.groups, 'members').detail).toContain('1 owner and 4 admins');
-    expect(signal(posture.groups, 'owners').state).toBe('attention');
-  });
-
-  it('is satisfied once a second owner exists', async () => {
-    const h = harness({
-      roles: [
-        { role: 'owner', count: MIN_RECOMMENDED_OWNERS },
-        { role: 'member', count: 1 },
-      ],
-    });
-    const posture = await readWorkspacePosture(h.db, ORG);
-
-    expect(signal(posture.groups, 'owners').state).toBe('ok');
+    expect(owners.detail).toContain('Transfer ownership');
+    expect(owners.detail).not.toMatch(/second owner/i);
     expect(posture.recommendations.map((r) => r.id)).not.toContain('second-owner');
+    expect(signal(posture.groups, 'members').detail).toContain('1 owner and 4 admins');
   });
 
   it('says plainly when no account holds the role at all', async () => {

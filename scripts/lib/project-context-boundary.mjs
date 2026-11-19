@@ -239,6 +239,44 @@ export function findUnloadedProjectRenders(
   return findings;
 }
 
+const TEMPLATE_CONSTANT = /\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*`([^`]*)`/g;
+const NAMED_IMPORT = /import\s+\{([^}]*)\}\s*from\s*'@\/([^']+)'/g;
+const BARE_INTERPOLATION = /\$\{\s*([A-Za-z_$][\w$]*)\s*\}/g;
+
+function templateConstants(source) {
+  return new Map([...source.matchAll(TEMPLATE_CONSTANT)].map((match) => [match[1], match[2]]));
+}
+
+/**
+ * The SQL fragments a module can splice into a statement by name: its own
+ * template constants and the ones it imports from another server module.
+ * A fragment that binds the owner binds it in every statement it is spliced
+ * into, so the statement is judged with the fragment's text in place.
+ */
+function spliceableFragments(source, repoRoot) {
+  const fragments = templateConstants(source);
+  for (const match of source.matchAll(NAMED_IMPORT)) {
+    let imported;
+    try {
+      imported = stripComments(
+        readFileSync(path.join(repoRoot, `apps/web/${match[2]}.ts`), 'utf8'),
+      );
+    } catch {
+      continue;
+    }
+    const exported = templateConstants(imported);
+    for (const specifier of match[1].split(',')) {
+      const [name, local = name] = specifier.trim().split(/\s+as\s+/);
+      if (name && exported.has(name)) fragments.set(local, exported.get(name));
+    }
+  }
+  return fragments;
+}
+
+function spliceFragments(sql, fragments) {
+  return sql.replace(BARE_INTERPOLATION, (whole, name) => fragments.get(name) ?? whole);
+}
+
 export function findUnscopedProjectReads(repoRoot = REPO_ROOT, files = productionFiles(repoRoot)) {
   const scoped = projectScopedTables(repoRoot);
   const findings = [];
@@ -250,7 +288,14 @@ export function findUnscopedProjectReads(repoRoot = REPO_ROOT, files = productio
     } catch {
       continue;
     }
-    const statements = extractStatements(source);
+    let statements = extractStatements(source);
+    if (statements.some((statement) => statement.sql.includes('${'))) {
+      const fragments = spliceableFragments(source, repoRoot);
+      statements = statements.map((statement) => ({
+        ...statement,
+        sql: spliceFragments(statement.sql, fragments),
+      }));
+    }
     let authorisedAt = Number.POSITIVE_INFINITY;
     for (const statement of statements) {
       statement.sql = expandProjectReadScope(statement.sql, source, relative, repoRoot);

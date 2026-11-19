@@ -63,8 +63,9 @@ const QUESTIONS = [
         <strong>BYOK</strong>, the request goes from your client straight to the provider on your
         own key and we are not in the path. In <strong>Cloud</strong>, it goes through us and we
         store it. Note that Local is part of the CLI, while BYOK is part of the CLI and is coming
-        soon to VS Code. <strong>Web and Desktop are cloud-only</strong>, so work on those surfaces
-        uses Cloud. The full comparison is section 00 of the{' '}
+        soon to VS Code. <strong>Web and Desktop chat use Cloud</strong>; a Desktop local coding
+        session runs the CLI and can also use Local or BYOK. The full comparison is section 00 of
+        the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>
@@ -105,10 +106,11 @@ const QUESTIONS = [
     body: (
       <>
         Both are self-serve in account settings: export returns your data as a download, and
-        deletion is scheduled 24 hours out and then performed. You get no confirmation email, but
-        cancellation is self-serve too: sign back in and cancel from Settings &gt; Account any time
-        before the 24 hours are up. Everything else (access, correction, deleting an address we hold
-        without an account) goes through{' '}
+        deletion is scheduled 24 hours out and then carried out by a daily job, unless an active
+        legal hold covers your account, in which case it waits until the hold is released. You get
+        no confirmation email, but cancellation is self-serve too: sign back in and cancel from
+        Settings &gt; Account any time before the 24 hours are up. Everything else (access,
+        correction, deleting an address we hold without an account) goes through{' '}
         <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           /privacy/requests
         </Link>

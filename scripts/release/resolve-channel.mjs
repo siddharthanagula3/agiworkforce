@@ -15,9 +15,11 @@ import {
   versionForTag,
   vsceChannelArgs,
 } from '../lib/rollout/channels.mjs';
+import { GIT_MAX_BUFFER } from '../lib/git-output.mjs';
 
 function existingTags(surface) {
   return execFileSync('git', ['tag', '--list', `${surfaceTagPrefix(surface)}*`], {
+    maxBuffer: GIT_MAX_BUFFER,
     encoding: 'utf8',
   })
     .split('\n')

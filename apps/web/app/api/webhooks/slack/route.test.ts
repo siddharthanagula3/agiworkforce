@@ -109,6 +109,23 @@ describe('POST /api/webhooks/slack', () => {
     await expect(response.json()).resolves.toMatchObject({ received: true, queued: 1 });
   });
 
+  it('asks Slack to redeliver an event it could not queue instead of acknowledging it', async () => {
+    mocks.ingestTriggerEvent.mockResolvedValue([
+      { triggerId: 't1', outcome: 'failed', detail: 'The run could not be queued: down' },
+    ]);
+    const body = JSON.stringify({
+      type: 'event_callback',
+      team_id: 'T0123ABCD',
+      event_id: 'Ev125',
+      event: { type: 'message', text: 'hi' },
+    });
+
+    const response = await POST(signed(body));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('10');
+  });
+
   it('never runs an agent inline: it only records what it queued', async () => {
     const body = JSON.stringify({
       type: 'event_callback',

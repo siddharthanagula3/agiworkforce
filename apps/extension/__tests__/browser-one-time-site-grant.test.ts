@@ -13,6 +13,9 @@ import {
   type BrowserControlPermissions,
 } from '../src/features/computer-use/browserControlConsent';
 import { authorizeBrowserToolCapability } from '../src/features/browser-tools/tabAuthority';
+import { packagedManifest } from './fixtures/packaged-manifest';
+
+vi.stubGlobal('chrome', { runtime: { getManifest: packagedManifest } });
 
 const ACME = 'https://acme.example';
 

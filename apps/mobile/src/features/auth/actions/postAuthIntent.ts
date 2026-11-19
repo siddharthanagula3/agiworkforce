@@ -9,6 +9,7 @@ import {
   stagePostAuthDestination,
   type PostAuthIntent,
 } from '../services/postAuthIntent';
+import { isCloudAccountAdditionOpenFor } from '../services/accountAddition';
 
 export function resetPostAuthDestinationToLocal(): void {
   useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
@@ -53,6 +54,7 @@ export function completePendingPostAuthIntentForLoadedSession({
   subscriptionTier,
 }: LoadedCloudSession): boolean {
   if (!isLoaded || !isSignedIn || !userId || !termsAccepted || !cloudUnlocked) return false;
+  if (isCloudAccountAdditionOpenFor(userId)) return false;
 
   const intent = consumePostAuthIntent();
   if (!intent) return false;

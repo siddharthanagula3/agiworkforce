@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import conversationContract from './conversation-contract.json';
+import conversationContract from './conversation-contract.json' with { type: 'json' };
 import { WORKSPACE_KINDS, type WorkspaceSummary } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_WORKSPACES_PATH = conversationContract.workspacesPath;

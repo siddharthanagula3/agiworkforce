@@ -33,6 +33,7 @@ import {
   createManagedUsageErrorBody,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
+  markManagedUsageProviderStarted,
   parseManagedUsageIdempotencyKey,
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
@@ -227,6 +228,7 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
 
   let vectors: number[][];
   try {
+    await markManagedUsageProviderStarted(reservation);
     vectors = await embedWithGoogle(inputs, model);
   } catch (error) {
     await finalizeManagedUsageRequest({

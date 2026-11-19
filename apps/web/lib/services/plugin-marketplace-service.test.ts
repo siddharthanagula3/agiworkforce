@@ -900,6 +900,36 @@ describe('verifyPluginPackage', () => {
     });
   });
 
+  it('refuses a claim whose id or version carries the payload separator', () => {
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    const signed = { pluginId: 'acme-pack\n1.0.0', version: '2.0.0', sha256: digest };
+    const signature = signPayload(
+      null,
+      Buffer.from(pluginSignaturePayload(signed), 'utf8'),
+      privateKey,
+    ).toString('base64');
+    process.env['PLUGIN_SIGNING_PUBLIC_KEYS'] = publicKey
+      .export({ type: 'spki', format: 'pem' })
+      .toString();
+    const shifted: PluginPackageClaim = {
+      pluginId: 'acme-pack',
+      version: '1.0.0\n2.0.0',
+      source: 'marketplace',
+      publisherKind: 'third-party',
+      sha256: digest,
+      signature,
+      signatureAlgorithm: 'ed25519',
+    };
+    expect(verifyPluginPackage(shifted, digest)).toMatchObject({
+      ok: false,
+      code: 'signature_invalid',
+    });
+    expect(verifyPluginPackage({ ...shifted, ...signed }, digest)).toMatchObject({
+      ok: false,
+      code: 'signature_invalid',
+    });
+  });
+
   it('refuses before looking at any key when the digest is absent', () => {
     const { publicKeyPem, claim: signed } = claim({ sha256: null });
     process.env['PLUGIN_SIGNING_PUBLIC_KEYS'] = publicKeyPem;

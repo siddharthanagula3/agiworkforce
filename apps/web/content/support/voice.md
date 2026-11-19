@@ -29,8 +29,9 @@ button and language control, and discards any recording still in progress.
 ## Voice mode
 
 Start it with the **Start voice mode** button in the composer. Voice settings
-choose the spoken voice, how much intelligence a voice turn gets, and its
-language, which can be left on **Auto-detect**. Choose from the voices available
+choose the spoken voice, how much the voice reasons, and its language, which can
+be left on **Auto-detect**. **Chat intelligence** sets the model tier for the
+chat's typed replies, not for the spoken turns. Choose from the voices available
 in the voice settings.
 
 ## When voice will not start

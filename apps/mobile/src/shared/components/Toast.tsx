@@ -53,8 +53,24 @@ export function ToastHost() {
   useEffect(() => {
     if (!current) return;
     AccessibilityInfo.announceForAccessibility(current.message);
-    const timer = setTimeout(() => dismiss(current.id), TOAST_DURATION_MS);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleDismiss = (durationMs: number) => {
+      if (cancelled) return;
+      timer = setTimeout(() => dismiss(current.id), durationMs);
+    };
+    if (current.action) {
+      AccessibilityInfo.getRecommendedTimeoutMillis(TOAST_DURATION_MS).then(
+        (recommendedMs) => scheduleDismiss(Math.max(TOAST_DURATION_MS, recommendedMs)),
+        () => scheduleDismiss(TOAST_DURATION_MS),
+      );
+    } else {
+      scheduleDismiss(TOAST_DURATION_MS);
+    }
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [current, dismiss]);
 
   if (!current) return null;

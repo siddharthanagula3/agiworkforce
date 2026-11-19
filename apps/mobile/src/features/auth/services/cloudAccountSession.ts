@@ -74,6 +74,14 @@ export function invalidateCloudAccount(): void {
   }
 }
 
+export function hasCloudAccountOwner(): boolean {
+  return recordedCloudAccountOwnerId() !== null;
+}
+
+export function recordedCloudAccountOwnerId(): string | null {
+  return runtimeOwnerId ?? (storage.getString(CLOUD_CACHE_OWNER_KEY)?.trim() || null);
+}
+
 export function captureCloudAccountEpoch(): CloudAccountEpoch | null {
   return runtimeOwnerId === null ? null : { ownerId: runtimeOwnerId, epoch: accountEpoch };
 }

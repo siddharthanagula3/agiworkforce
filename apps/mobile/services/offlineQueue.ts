@@ -267,11 +267,14 @@ class OfflineMessageQueue {
     try {
       while (ownsQueue() && this.queue.length > 0) {
         if (!isReady()) break;
-        const unsafeCloudEntry = this.queue.find((queued) => {
-          if (queued.provenance.scope !== 'cloud') return false;
-          const currentAccount = captureCloudAccountEpoch();
-          return !currentAccount || currentAccount.ownerId !== queued.provenance.ownerId;
-        });
+        const currentAccount = captureCloudAccountEpoch();
+        const unsafeCloudEntry = currentAccount
+          ? this.queue.find(
+              (queued) =>
+                queued.provenance.scope === 'cloud' &&
+                queued.provenance.ownerId !== currentAccount.ownerId,
+            )
+          : undefined;
         if (unsafeCloudEntry) {
           this.dropEntry(
             unsafeCloudEntry,
@@ -281,7 +284,11 @@ class OfflineMessageQueue {
         }
 
         const currentMode = useChatAppModeStore.getState().appMode;
-        const entry = this.queue.find((queued) => queued.provenance.scope === currentMode);
+        const entry = this.queue.find(
+          (queued) =>
+            queued.provenance.scope === currentMode &&
+            (queued.provenance.scope === 'local' || currentAccount !== null),
+        );
         if (!entry) break;
         const account = entry.provenance.scope === 'cloud' ? captureCloudAccountEpoch() : null;
 

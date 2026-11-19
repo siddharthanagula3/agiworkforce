@@ -16,7 +16,7 @@ import {
   mediaPersistenceToken,
 } from './imageGenerationPersistence';
 import { createRequestAuthority } from '@/lib/identity/request-authority';
-import { EMPTY_ASSISTANT_CONTENT_PLACEHOLDER } from '@/lib/hooks/useChatStream';
+import { EMPTY_KEPT_ASSISTANT_CONTENT } from '@/lib/chat-kept-messages';
 import type { MessageMetadata } from '@shared/stores/web-chat-store';
 import { getModels, isExecutableImageModel, isModelLive } from '@agiworkforce/types';
 
@@ -155,7 +155,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = lastRequestBody(fetchMock);
 
-    expect(body['content']).toBe(EMPTY_ASSISTANT_CONTENT_PLACEHOLDER);
+    expect(body['content']).toBe(EMPTY_KEPT_ASSISTANT_CONTENT);
     expect(body['content']).not.toBe('');
     expect((body['content'] as string).trim().length).toBe(1);
     expect((body['content'] as string).length).toBe(1);
@@ -227,7 +227,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     expect(body).toMatchObject({
       id: ASSISTANT_MESSAGE_ID,
       role: 'assistant',
-      content: EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+      content: EMPTY_KEPT_ASSISTANT_CONTENT,
       metadata: refusalMetadata,
     });
   });

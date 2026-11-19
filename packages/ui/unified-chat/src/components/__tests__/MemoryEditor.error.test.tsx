@@ -75,3 +75,77 @@ describe('MemoryEditor storage label', () => {
     expect(screen.queryByText(/Synced to your account/)).toBeNull();
   });
 });
+
+describe('MemoryEditor edit save', () => {
+  const fact = {
+    id: 'memory-1',
+    text: 'Prefers concise answers',
+    source: 'user',
+    createdAt: '2026-11-07T00:00:00Z',
+    updatedAt: '2026-11-07T00:00:00Z',
+  };
+
+  function editAdapter(
+    scope: 'local' | 'cloud',
+    update: MemoryEditorDataAdapter['update'],
+  ): MemoryEditorDataAdapter {
+    return {
+      ...adapter(vi.fn()),
+      scope,
+      facts: [fact],
+      syncStatus: scope === 'cloud' ? 'synced' : 'unavailable',
+      update,
+    };
+  }
+
+  it.each(['local', 'cloud'] as const)(
+    'keeps the %s editor open with the text and the error when the save fails',
+    async (scope) => {
+      const update = vi.fn(async () => {
+        throw new Error('The change was rejected');
+      });
+      render(<MemoryEditor adapter={editAdapter(scope, update)} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Edit memory:/ }));
+      const editor = screen.getByRole('textbox', {
+        name: /^Editing memory:/,
+      }) as HTMLTextAreaElement;
+      fireEvent.change(editor, { target: { value: 'Prefers very short answers' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(await screen.findByRole('alert')).toBeDefined();
+      const kept = screen.getByRole('textbox', { name: /^Editing memory:/ }) as HTMLTextAreaElement;
+      expect(kept.value).toBe('Prefers very short answers');
+      expect(update).toHaveBeenCalledWith('memory-1', 'Prefers very short answers');
+    },
+  );
+
+  it.each(['local', 'cloud'] as const)(
+    'disables Save while the %s write runs and closes the editor once it lands',
+    async (scope) => {
+      let resolve!: (value: unknown) => void;
+      const update = vi.fn(
+        () =>
+          new Promise<unknown>((accept) => {
+            resolve = accept;
+          }),
+      );
+      render(<MemoryEditor adapter={editAdapter(scope, update)} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Edit memory:/ }));
+      const editor = screen.getByRole('textbox', { name: /^Editing memory:/ });
+      fireEvent.change(editor, { target: { value: 'Prefers very short answers' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+        true,
+      );
+      expect(screen.getByRole('textbox', { name: /^Editing memory:/ })).toBeDefined();
+
+      await act(async () => {
+        resolve({});
+      });
+      expect(screen.queryByRole('textbox', { name: /^Editing memory:/ })).toBeNull();
+    },
+  );
+});

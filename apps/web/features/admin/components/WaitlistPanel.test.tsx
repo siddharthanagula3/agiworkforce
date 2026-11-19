@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import WaitlistPanel from './WaitlistPanel';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  max_15x: getBillingPlanPricing('max_15x').label,
+  pro: getBillingPlanPricing('pro').label,
+} as const;
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 
@@ -138,7 +144,7 @@ describe('WaitlistPanel', () => {
     render(<WaitlistPanel />);
 
     const row = (await screen.findByText('user_upgrade_1')).closest('tr')!;
-    expect(within(row).getByText('Pro')).toBeInTheDocument();
+    expect(within(row).getByText(`${PLAN_LABEL.pro}`)).toBeInTheDocument();
   });
 
   it('shows upgrade demand as people and as requests by plan, interval, source and day', async () => {
@@ -176,9 +182,9 @@ describe('WaitlistPanel', () => {
       await screen.findByText(/3 people asked for a paid plan, in 4 plan requests/),
     ).toBeInTheDocument();
     const byPlan = screen.getByRole('table', { name: 'By plan' });
-    expect(within(byPlan).getByText('Max 20x').closest('tr')).toHaveTextContent('1');
+    expect(within(byPlan).getByText(`${PLAN_LABEL.max_15x}`).closest('tr')).toHaveTextContent('1');
     expect(within(byPlan).queryByText('max_15x')).toBeNull();
-    expect(within(byPlan).getByText('Pro').closest('tr')).toHaveTextContent('2');
+    expect(within(byPlan).getByText(`${PLAN_LABEL.pro}`).closest('tr')).toHaveTextContent('2');
     const byInterval = screen.getByRole('table', { name: 'By billing interval' });
     expect(within(byInterval).getByText('yearly').closest('tr')).toHaveTextContent('1');
     const bySource = screen.getByRole('table', { name: 'By where they asked' });

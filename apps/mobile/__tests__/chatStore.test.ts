@@ -1,6 +1,12 @@
 import { Alert } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 
+const mockAnnounceReplyReady = jest.fn(async (_conversationId: string) => false);
+jest.mock('../services/replyReadyNotice', () => ({
+  announceReplyReadyInBackground: (conversationId: string) =>
+    mockAnnounceReplyReady(conversationId),
+}));
+
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -82,6 +88,11 @@ jest.mock('../storage/installedModels', () => ({
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../services/docParser', () => {
+  const actual = jest.requireActual('../services/docParser');
+  return { ...actual, parseDocument: jest.fn(actual.parseDocument) };
+});
+
 jest.mock('../src/features/memory/store', () => ({
   retrieveMemoryContext: jest.fn(async () => []),
 }));
@@ -132,6 +143,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
+import { parseDocument } from '../services/docParser';
 import { getModelMetadataById, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   SYNTHETIC_IMAGE_MODEL_ID,
@@ -142,7 +154,7 @@ import {
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
-import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '../stores/chat/chatViewStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
@@ -163,6 +175,9 @@ import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import { storage } from '../lib/mmkv';
+import { MINOR_SAFE_REFUSAL, REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
+import { streamFailureNoticeText } from '../src/features/chat/utils/messageStreamError';
 
 const AUTO_MODEL_ID = requireAutoMode().id;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
@@ -176,6 +191,7 @@ const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunct
   typeof getRemoteChatDisabledReason
 >;
 const mockLocalGenerate = localGenerate as jest.MockedFunction<typeof localGenerate>;
+const mockParseDocument = parseDocument as jest.MockedFunction<typeof parseDocument>;
 const mockListInstalledModels = listInstalledModels as jest.MockedFunction<
   typeof listInstalledModels
 >;
@@ -262,6 +278,10 @@ const RESEARCH_MODEL = requireMobileCloudModel((model) => {
   const capabilities = getModelMetadataById(model.id)?.capabilities;
   return capabilities?.research === true && capabilities.search === true;
 }, 'research-and-search-capable Mobile Cloud model').id;
+const CODE_MODEL = requireMobileCloudModel((model) => {
+  const capabilities = getModelMetadataById(model.id)?.capabilities;
+  return capabilities?.codeExecution === true && capabilities.tools === true;
+}, 'code-execution-capable Mobile Cloud model').id;
 
 function seedCloudConversation(model = CLOUD_MODEL) {
   const existing = getState().conversations.find((conversation) => conversation.id === CONV_ID);
@@ -443,6 +463,92 @@ describe('chatStore, streaming state', () => {
       });
 
       expect(capturedBody?.web_search).toBeUndefined();
+    });
+
+    describe('code execution', () => {
+      async function sendCodeCapableTurn(text: string) {
+        let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+        useTierStore.setState({
+          tier: 'max',
+          billingTier: 'max',
+          codeExecutionAvailable: true,
+          grantedCapabilities: ['canUseWebSearch', 'canUseCloudExecution'],
+        } as never);
+        seedCloudConversation(CODE_MODEL);
+        mockStreamChat.mockImplementation(
+          (body, callbacks) =>
+            new Promise<void>((resolve) => {
+              capturedBody = body;
+              callbacks.onDone();
+              resolve();
+            }),
+        );
+        await act(async () => {
+          await getState().sendMessage(CONV_ID, text, CODE_MODEL);
+        });
+        return capturedBody as Parameters<typeof streamChat>[0] | null;
+      }
+
+      beforeEach(() => {
+        useChatViewStore.setState({ runCodeByConversation: {} });
+        useChatStore.setState({
+          features: {
+            webSearch: true,
+            imageGen: true,
+            health: false,
+            codeExecution: true,
+            research: false,
+          },
+        });
+      });
+
+      it('leaves a plain message on a code-capable model to the server instead of forcing a run', async () => {
+        const body = await sendCodeCapableTurn('Hi');
+
+        expect(body).not.toBeNull();
+        expect(body).not.toHaveProperty('code_execution');
+        expect(body).not.toHaveProperty('office_creation');
+      });
+
+      it('asks for a run on every turn only while Run code is on for that chat', async () => {
+        useChatViewStore.getState().setRunCode(CONV_ID, true);
+        expect((await sendCodeCapableTurn('Chart the first 20 primes'))?.code_execution).toBe(true);
+
+        useChatViewStore.getState().setRunCode(CONV_ID, false);
+        expect(await sendCodeCapableTurn('Hi again')).not.toHaveProperty('code_execution');
+      });
+
+      it('keeps Run code from another chat out of this one', async () => {
+        useChatViewStore.getState().setRunCode('another-conversation', true);
+
+        expect(await sendCodeCapableTurn('Hi')).not.toHaveProperty('code_execution');
+      });
+
+      it('tells the server not to run code or create files when the permission is off', async () => {
+        useChatViewStore.getState().setRunCode(CONV_ID, true);
+        useChatStore.setState({
+          features: {
+            webSearch: true,
+            imageGen: true,
+            health: false,
+            codeExecution: false,
+            research: false,
+          },
+        });
+
+        const body = await sendCodeCapableTurn('Run this Python: print(1)');
+
+        expect(body?.code_execution).toBe(false);
+        expect(body?.office_creation).toBe(false);
+      });
+
+      it('carries the new-chat Run code choice to the conversation it creates', () => {
+        useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, true);
+
+        useChatViewStore.getState().adoptStyleSelection(NEW_CHAT_STYLE_KEY, CONV_ID);
+
+        expect(useChatViewStore.getState().runCodeByConversation).toEqual({ [CONV_ID]: true });
+      });
     });
 
     it('keeps the model capability clamp when the web-search preference is on', async () => {
@@ -779,6 +885,74 @@ describe('chatStore, streaming state', () => {
       expect(capturedBody?.research).toBeUndefined();
     });
 
+    it.each(['interrupted', 'error', 'paused'] as const)(
+      'resends the approved research deliverable when a %s run is retried',
+      async (phase) => {
+        let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+        seedCloudConversation(RESEARCH_MODEL);
+        useTierStore.setState({
+          tier: 'max',
+          grantedCapabilities: ['canUseWebSearch', 'canUseDeepResearch'],
+          capabilityHandshakeReceived: true,
+        } as never);
+        const createdAt = new Date().toISOString();
+        const deliverable = {
+          depth: 'executive-summary',
+          format: 'bullet-brief',
+          minSources: 4,
+          stopWhenNoNewSources: false,
+          saveToLibrary: false,
+        };
+        useChatStore.setState({
+          messages: {
+            [CONV_ID]: [
+              {
+                id: 'research-user',
+                conversationId: CONV_ID,
+                role: 'user',
+                content: 'Compare the options',
+                model: RESEARCH_MODEL,
+                createdAt,
+              },
+              {
+                id: 'research-assistant',
+                conversationId: CONV_ID,
+                role: 'assistant',
+                content: '',
+                model: RESEARCH_MODEL,
+                createdAt,
+                isStreaming: false,
+                metadata: {
+                  research: {
+                    phase,
+                    deliverable,
+                    steps: [{ id: 's1', type: 'search', description: 'Look', status: 'pending' }],
+                  },
+                },
+              },
+            ],
+          },
+        });
+        mockStreamChat.mockImplementation(
+          (body, callbacks) =>
+            new Promise<void>((resolve) => {
+              capturedBody = body;
+              callbacks.onDone();
+              resolve();
+            }),
+        );
+
+        await act(async () => {
+          await getState().resumeResearch(CONV_ID, 'research-assistant', 'retry');
+        });
+
+        expect(capturedBody?.research_resume).toMatchObject({
+          approved_steps: [expect.objectContaining({ id: 's1' })],
+          deliverable,
+        });
+      },
+    );
+
     it('uses per-send task options over persisted chat mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
@@ -846,6 +1020,43 @@ describe('chatStore, streaming state', () => {
       expect(state.isStreaming).toBe(false);
       expect(state.streamingContent).toBe('');
       expect(state.streamingReasoning).toBe('');
+    });
+
+    it('offers a reply notice when a Cloud reply with no server run finishes', async () => {
+      seedCloudConversation();
+      mockAnnounceReplyReady.mockClear();
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onDelta({ content: 'Hello' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
+      });
+
+      expect(mockAnnounceReplyReady).toHaveBeenCalledTimes(1);
+      expect(mockAnnounceReplyReady).toHaveBeenCalledWith(CONV_ID);
+    });
+
+    it('leaves the reply notice to the server when the Cloud turn ran as a server run', async () => {
+      seedCloudConversation();
+      mockAnnounceReplyReady.mockClear();
+      const runId = '0190a000-0000-7000-8000-000000000098';
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onRunReference?.({
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: -1,
+        });
+        callbacks.onDelta({ content: 'Hello' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
+      });
+
+      expect(mockAnnounceReplyReady).not.toHaveBeenCalled();
     });
 
     it('accumulates streaming content via onDelta', async () => {
@@ -1485,6 +1696,7 @@ describe('chatStore, streaming state', () => {
         conversationId: CONV_ID,
         includeSensitiveTopics: false,
       });
+      expect(mockAnnounceReplyReady).toHaveBeenCalledWith(CONV_ID);
     });
 
     it('does not capture durable facts when local generation fails', async () => {
@@ -1881,6 +2093,326 @@ describe('chatStore, streaming state', () => {
           expect.objectContaining({ content: 'Use Project B instructions.' }),
         ]),
       );
+    });
+
+    describe('Local project sources', () => {
+      const projectSource = (id: string, name: string) => ({
+        id,
+        name,
+        mimeType: 'text/plain',
+        size: 40,
+        uri: `file:///cache/${name}`,
+        addedAt: '2026-06-11T00:00:00.000Z',
+      });
+
+      afterEach(() => {
+        mockParseDocument.mockReset();
+      });
+
+      async function sendInLocalProject(sources: ReturnType<typeof projectSource>[]) {
+        useChatStore.setState({
+          conversations: [
+            {
+              id: CONV_ID,
+              title: 'Project A chat',
+              updatedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              messageCount: 0,
+              pinned: false,
+              model: LOCAL_MODEL,
+              provider: 'local',
+              executionMode: 'local',
+              projectId: 'project-a',
+            },
+          ],
+          messages: { [CONV_ID]: [] },
+        });
+        useProjectStore.setState({
+          projects: [
+            {
+              id: 'project-a',
+              name: 'Project A',
+              description: '',
+              instructions: '',
+              sources,
+              createdAt: '2026-06-11T00:00:00.000Z',
+              updatedAt: '2026-06-11T00:00:00.000Z',
+            },
+            {
+              id: 'project-b',
+              name: 'Project B',
+              description: '',
+              instructions: '',
+              sources: [projectSource('src-b', 'other.txt')],
+              createdAt: '2026-06-11T00:00:00.000Z',
+              updatedAt: '2026-06-11T00:00:00.000Z',
+            },
+          ],
+          activeProjectId: 'project-b',
+        });
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+        mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+          capturedLocalGenerateOptions = opts;
+          return { text: 'Answer', runtime: 'executorch', aborted: false };
+        });
+        await act(async () => {
+          await getState().sendMessage(
+            CONV_ID,
+            'What shipment label is in my project source?',
+            LOCAL_MODEL,
+          );
+        });
+        return (capturedLocalGenerateOptions?.messages ?? [])
+          .filter((message) => message.role === 'system')
+          .map((message) => String(message.content));
+      }
+
+      it('puts the conversation project sources in the first Local request', async () => {
+        mockParseDocument.mockImplementation(async (uri) => ({
+          text: uri.endsWith('label.txt') ? 'The shipment label is violet-742.' : 'wrong project',
+          metadata: { docType: 'txt' },
+        }));
+
+        const systemMessages = await sendInLocalProject([projectSource('src-a', 'label.txt')]);
+
+        expect(mockParseDocument).toHaveBeenCalledTimes(1);
+        expect(mockParseDocument).toHaveBeenCalledWith('file:///cache/label.txt', 'text/plain');
+        const sourceMessage = systemMessages.find((content) => content.includes('violet-742'));
+        expect(sourceMessage).toContain('[Project source: label.txt (text/plain)]');
+        expect(systemMessages.join('\n')).not.toContain('wrong project');
+      });
+
+      it('names a source whose file cannot be read instead of dropping it silently', async () => {
+        mockParseDocument.mockRejectedValue(new Error('gone'));
+
+        const systemMessages = await sendInLocalProject([projectSource('src-a', 'label.txt')]);
+
+        expect(systemMessages.join('\n')).toContain(
+          '[Project source: label.txt (text/plain), content could not be extracted on-device]',
+        );
+      });
+
+      it('adds nothing once the project has no sources', async () => {
+        const systemMessages = await sendInLocalProject([]);
+
+        expect(mockParseDocument).not.toHaveBeenCalled();
+        expect(systemMessages.join('\n')).not.toContain('Project source');
+      });
+    });
+
+    describe('Local attached documents across turns', () => {
+      const attachment = {
+        id: 'doc-1',
+        uri: 'file:///cache/allocations.txt',
+        mimeType: 'text/plain',
+        fileName: 'allocations.txt',
+        fileSize: 64,
+      };
+
+      async function sendLocalTurn(content: string, attachments?: (typeof attachment)[]) {
+        mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+          capturedLocalGenerateOptions = opts;
+          return { text: 'Answer', runtime: 'executorch', aborted: false };
+        });
+        await act(async () => {
+          await getState().sendMessage(CONV_ID, content, LOCAL_MODEL, attachments);
+        });
+        return (capturedLocalGenerateOptions?.messages ?? [])
+          .filter((message) => message.role === 'user')
+          .map((message) => String(message.content));
+      }
+
+      beforeEach(() => {
+        useChatStore.setState({
+          conversations: [
+            {
+              id: CONV_ID,
+              title: 'Local document chat',
+              updatedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              messageCount: 0,
+              pinned: false,
+              model: LOCAL_MODEL,
+              provider: 'local',
+              executionMode: 'local',
+            },
+          ],
+          messages: { [CONV_ID]: [] },
+        });
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+        mockParseDocument.mockImplementation(async () => ({
+          text: 'Alpha allocation: 10\nBeta allocation: 20',
+          metadata: { docType: 'txt' },
+        }));
+      });
+
+      it('keeps an earlier turn document text in the history of a follow-up question', async () => {
+        await sendLocalTurn('What is the Alpha allocation?', [attachment]);
+        mockParseDocument.mockClear();
+
+        const userTurns = await sendLocalTurn('And the Beta allocation?');
+
+        expect(mockParseDocument).toHaveBeenCalledTimes(1);
+        expect(mockParseDocument).toHaveBeenCalledWith(
+          'file:///cache/allocations.txt',
+          'text/plain',
+        );
+        expect(userTurns).toHaveLength(1);
+        expect(userTurns[0]).toContain('Beta allocation: 20');
+        expect(userTurns[0]).toContain('What is the Alpha allocation?');
+      });
+
+      it('names a document that can no longer be read instead of dropping it from the history', async () => {
+        await sendLocalTurn('What is the Alpha allocation?', [attachment]);
+        mockParseDocument.mockRejectedValue(new Error('gone'));
+
+        const userTurns = await sendLocalTurn('And the Beta allocation?');
+
+        expect(userTurns.join('\n')).toContain(
+          '[Attached file: allocations.txt (text/plain), content could not be extracted on-device]',
+        );
+      });
+    });
+
+    describe('editing a Local message', () => {
+      const stamp = new Date().toISOString();
+      const original = [
+        { id: 'edit-u1', role: 'user' as const, content: 'first question' },
+        { id: 'edit-a1', role: 'assistant' as const, content: 'first answer' },
+        { id: 'edit-u2', role: 'user' as const, content: 'second question' },
+        { id: 'edit-a2', role: 'assistant' as const, content: 'second answer' },
+      ].map((row) => ({
+        ...row,
+        conversationId: CONV_ID,
+        createdAt: stamp,
+        isStreaming: false,
+      }));
+
+      const contents = () => (getState().messages[CONV_ID] ?? []).map((row) => row.content);
+
+      beforeEach(() => {
+        useChatStore.setState({
+          conversations: [
+            {
+              id: CONV_ID,
+              title: 'Local edit chat',
+              updatedAt: stamp,
+              createdAt: stamp,
+              messageCount: original.length,
+              pinned: false,
+              model: LOCAL_MODEL,
+              provider: 'local',
+              executionMode: 'local',
+            },
+          ],
+          messages: { [CONV_ID]: original },
+        });
+        mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+        mockLocalGenerate.mockImplementation(async () => ({
+          text: 'edited answer',
+          runtime: 'executorch',
+          aborted: false,
+        }));
+      });
+
+      it('keeps the original question and everything after it when the replacement is refused', async () => {
+        useSettingsStore.setState({ reduceSensitiveContent: true });
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+        try {
+          act(() => {
+            expect(getState().editMessage(CONV_ID, 'edit-u2', 'What does NSFW stand for?')).toBe(
+              true,
+            );
+          });
+          await waitFor(() => expect(getState().isEditing).toBe(false));
+
+          expect(alertSpy).toHaveBeenCalledWith(
+            'Content not available',
+            REDUCED_SENSITIVE_CONTENT_REFUSAL,
+          );
+          expect(getState().messages[CONV_ID]).toEqual(original);
+          expect(mockLocalGenerate).not.toHaveBeenCalled();
+        } finally {
+          alertSpy.mockRestore();
+        }
+      });
+
+      it('restores the removed turns in place and never reaches Cloud when the Local chat holds a Cloud model', async () => {
+        const withCloudModel = original.map((row) =>
+          row.id === 'edit-u1' ? { ...row, model: CLOUD_MODEL } : row,
+        );
+        useChatStore.setState({ messages: { [CONV_ID]: withCloudModel } });
+
+        act(() => {
+          getState().editMessage(CONV_ID, 'edit-u1', 'rewritten opening');
+        });
+        await waitFor(() => expect(getState().isEditing).toBe(false));
+
+        expect(getState().error).toBe(
+          'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
+        );
+        expect(getState().messages[CONV_ID]).toEqual(withCloudModel);
+        expect(mockStreamChat).not.toHaveBeenCalled();
+        expect(mockLocalGenerate).not.toHaveBeenCalled();
+      });
+
+      it('replaces the edited question and the turns after it once the replacement is accepted', async () => {
+        act(() => {
+          getState().editMessage(CONV_ID, 'edit-u2', 'revised second question');
+        });
+        await waitFor(() => {
+          expect(getState().isEditing).toBe(false);
+          expect(contents()).toContain('edited answer');
+        });
+
+        expect(contents()).toEqual([
+          'first question',
+          'first answer',
+          'revised second question',
+          'edited answer',
+        ]);
+      });
     });
 
     it('leaves Cloud project instructions to the server, which loads them from the conversation', async () => {
@@ -2327,7 +2859,11 @@ describe('chatStore, streaming state', () => {
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg?.isStreaming).toBe(false);
-      expect(assistantMsg?.content).toBe('Something went wrong. Please try again.');
+      expect(assistantMsg?.content).toBe('');
+      expect(assistantMsg?.metadata?.streamError).toEqual({
+        message: 'Something went wrong. Please try again.',
+      });
+      expect(streamFailureNoticeText(assistantMsg)).toBe('Something went wrong. Please try again.');
       expect(getState().error).toBe('Something went wrong. Please try again.');
     });
 
@@ -2373,6 +2909,48 @@ describe('chatStore, streaming state', () => {
 
       alertSpy.mockRestore();
     });
+
+    it.each([
+      ['new-conversation', MODEL, false],
+      ['Cloud-conversation', CLOUD_MODEL, true],
+    ])(
+      'refuses a %s send in minor-safe mode with the adult preference off and points to Parental Controls',
+      async (_label, model, cloud) => {
+        if (cloud) seedCloudConversation();
+        const getString = storage.getString as jest.Mock;
+        getString.mockImplementation((key: string) =>
+          key === 'age-gate:v1'
+            ? JSON.stringify({
+                confirmed: true,
+                isMinor: true,
+                confirmedAt: '2026-11-01T00:00:00.000Z',
+                regionCode: 'US',
+                threshold: 13,
+              })
+            : undefined,
+        );
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+        try {
+          let accepted: boolean | undefined;
+          await act(async () => {
+            accepted = await getState().sendMessage(CONV_ID, 'explain the term nsfw', model);
+          });
+
+          expect(useSettingsStore.getState().reduceSensitiveContent).toBe(false);
+          expect(accepted).toBe(false);
+          expect(alertSpy).toHaveBeenCalledWith('Content not available', MINOR_SAFE_REFUSAL);
+          const body = alertSpy.mock.calls[0]?.[1] ?? '';
+          expect(body).toContain('Settings > Parental Controls');
+          expect(body).not.toContain('Settings > Privacy');
+          expect(mockStreamChat).not.toHaveBeenCalled();
+          expect(mockLocalGenerate).not.toHaveBeenCalled();
+        } finally {
+          getString.mockReturnValue(undefined);
+          alertSpy.mockRestore();
+        }
+      },
+    );
 
     it('resolves false and never fires onAccepted when a pre-flight gate blocks the send', async () => {
       mockRemoteDisabledReason.mockReturnValue('Remote chat is disabled for this test');

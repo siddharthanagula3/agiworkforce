@@ -5,6 +5,14 @@ jest.mock('@/services/fileCreation', () => ({
   shareFile: jest.fn().mockResolvedValue(undefined),
 }));
 
+const HIDDEN_OK = { includeHiddenElements: true } as const;
+
+let mockAccountOwned = true;
+jest.mock('@/src/features/auth/services/accountScopedUiState', () => ({
+  captureAccountScopedUiState: () => ({ scope: 'cloud', account: { ownerId: 'user_a', epoch: 1 } }),
+  isAccountScopedUiStateOwned: () => mockAccountOwned,
+}));
+
 jest.mock('@/src/features/image/hooks/useGeneratedImageSource', () => ({
   useGeneratedImageSource: (uri: string) => ({
     source: { uri: `https://api.test${uri}`, headers: { Authorization: 'Bearer t' } },
@@ -63,11 +71,27 @@ function renderLiveBar(props: Partial<React.ComponentProps<typeof LiveVoiceBar>>
 describe('LiveVoiceBar', () => {
   beforeEach(() => {
     useSettingsStore.setState({ hapticsEnabled: false });
+    mockAccountOwned = true;
+    (shareFile as jest.Mock).mockClear();
   });
 
   it('renders nothing when it is not the active composer', () => {
     const { queryByTestId } = renderLiveBar({ visible: false });
     expect(queryByTestId('live-voice-bar')).toBeNull();
+  });
+
+  it('shows the audio route notice only while no error is showing', () => {
+    const notice = 'Could not switch audio to speaker. This call may use a different output.';
+    const shown = renderLiveBar({ routeNotice: notice });
+    expect(shown.getByTestId('live-voice-route-notice').props.children).toBe(notice);
+    shown.unmount();
+
+    const withError = renderLiveBar({ routeNotice: notice, error: 'Connection failed' });
+    expect(withError.queryByTestId('live-voice-route-notice')).toBeNull();
+    withError.unmount();
+
+    const none = renderLiveBar();
+    expect(none.queryByTestId('live-voice-route-notice')).toBeNull();
   });
 
   it('fills the transcript area with a stage and centres the orb in it', () => {
@@ -266,11 +290,41 @@ describe('LiveVoiceBar', () => {
     });
     expect(getAllByTestId('live-voice-tool-file')).toHaveLength(1);
     fireEvent.press(getByLabelText('Open plan.docx'));
-    await waitFor(() => expect(shareFile).toHaveBeenCalledWith('file:///exports/plan.docx'));
+    await waitFor(() =>
+      expect(shareFile).toHaveBeenCalledWith('file:///exports/plan.docx', {
+        isCurrent: expect.any(Function),
+      }),
+    );
     expect(downloadGeneratedFile).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/files\/gf_plan$/),
       'plan.docx',
     );
+  });
+
+  it('does not hand a downloaded file to the share sheet after the account changed', async () => {
+    let finishDownload: (uri: string) => void = () => undefined;
+    (downloadGeneratedFile as jest.Mock).mockReturnValue(
+      new Promise<string>((resolve) => {
+        finishDownload = resolve;
+      }),
+    );
+    const { getByLabelText } = renderLiveBar({
+      toolOutcomes: [
+        {
+          callId: 'doc',
+          label: 'Creating a document',
+          output: 'Saved',
+          isError: false,
+          files: [{ name: 'plan.docx', uri: '/api/files/gf_plan' }],
+        },
+      ],
+    });
+    fireEvent.press(getByLabelText('Open plan.docx'));
+    mockAccountOwned = false;
+    await act(async () => {
+      finishDownload('file:///exports/plan.docx');
+    });
+    expect(shareFile).not.toHaveBeenCalled();
   });
 
   it('sends the on-screen approval decision for that call', () => {
@@ -436,5 +490,42 @@ describe('the turn-based fallback states why it is not live', () => {
       </SafeAreaProvider>,
     );
     expect(queryByTestId('voice-inline-notice')).toBeNull();
+  });
+});
+
+describe('the live bar shows its state by glow and takes no attachments', () => {
+  it('glows in the listening colour while the microphone is open', () => {
+    const { queryByTestId, getByTestId } = renderLiveBar();
+    expect(queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeTruthy();
+    expect(queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeNull();
+    expect(getByTestId('live-voice-status').props.children).toBe('Listening');
+  });
+
+  it('glows in a different colour while the assistant speaks', () => {
+    const { queryByTestId, getByTestId } = renderLiveBar({ assistantSpeaking: true });
+    expect(queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeTruthy();
+    expect(queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+    expect(getByTestId('live-voice-status').props.children).toBe(
+      'Speaking, talk any time to interrupt',
+    );
+  });
+
+  it('does not glow while muted, paused, reconnecting or stopped', () => {
+    for (const props of [
+      { muted: true },
+      { paused: true },
+      { reconnecting: true },
+      { status: 'error' as const },
+    ]) {
+      const view = renderLiveBar(props);
+      expect(view.queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+      expect(view.queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('offers no add control, because the live session carries audio only from here', () => {
+    const { queryByLabelText } = renderLiveBar();
+    expect(queryByLabelText('Add attachment')).toBeNull();
   });
 });

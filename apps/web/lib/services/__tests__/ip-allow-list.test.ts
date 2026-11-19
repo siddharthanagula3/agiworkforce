@@ -20,6 +20,12 @@ describe('isValidCidr', () => {
     expect(isValidCidr('2001:db8::/129')).toBe(false);
   });
 
+  it('rejects entries with segments after the prefix', () => {
+    expect(isValidCidr('192.0.2.0/24/extra')).toBe(false);
+    expect(isValidCidr('192.0.2.0/24/')).toBe(false);
+    expect(isValidCidr('2001:db8::/32/8')).toBe(false);
+  });
+
   it('rejects a non-numeric prefix and garbage input', () => {
     expect(isValidCidr('203.0.113.0/abc')).toBe(false);
     expect(isValidCidr('not-an-address')).toBe(false);

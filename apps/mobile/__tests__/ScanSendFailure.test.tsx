@@ -44,7 +44,45 @@ jest.mock('@/src/features/model-picker/store', () => ({
     select({ selectedModel: undefined }),
 }));
 
+const mockImpactAsync = jest.fn();
+const mockNotificationAsync = jest.fn();
+
+jest.mock('expo-haptics', () => ({
+  impactAsync: (...args: unknown[]) => mockImpactAsync(...args),
+  notificationAsync: (...args: unknown[]) => mockNotificationAsync(...args),
+  ImpactFeedbackStyle: { Light: 'light' },
+  NotificationFeedbackType: { Success: 'success' },
+}));
+
 import ScanScreen from '@/app/(app)/scan';
+import { useSettingsStore } from '@/stores/settingsStore';
+
+beforeEach(() => {
+  mockImpactAsync.mockReset().mockResolvedValue(undefined);
+  mockNotificationAsync.mockReset().mockResolvedValue(undefined);
+  useSettingsStore.setState({ hapticsEnabled: true });
+});
+
+it('leaves the haptic engine alone after a scan and copy when Haptic Feedback is off', async () => {
+  useSettingsStore.setState({ hapticsEnabled: false });
+  mockRecognizeText.mockResolvedValue({ text: 'Read this', regions: [] });
+
+  const screen = render(<ScanScreen />);
+  fireEvent.press(await screen.findByLabelText('Copy extracted text'));
+
+  await waitFor(() => expect(screen.getByText('Copied')).toBeTruthy());
+  expect(mockNotificationAsync).not.toHaveBeenCalled();
+  expect(mockImpactAsync).not.toHaveBeenCalled();
+});
+
+it('plays the scan success haptic when Haptic Feedback is on', async () => {
+  mockRecognizeText.mockResolvedValue({ text: 'Read this', regions: [] });
+
+  const screen = render(<ScanScreen />);
+
+  expect(await screen.findByLabelText('Copy extracted text')).toBeTruthy();
+  expect(mockNotificationAsync).toHaveBeenCalledWith('success');
+});
 
 it('keeps the scanned image and question when the chat store refuses the send', async () => {
   mockRecognizeText.mockResolvedValue({ text: 'Read this', regions: [] });

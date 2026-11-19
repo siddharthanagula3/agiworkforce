@@ -81,7 +81,22 @@ describe('GET /api/chat/conversations/[id]/plugin-drafts/[toolCallId]', () => {
     expect(sql).toMatch(/c\.organization_id is not distinct from \$3/);
     expect(sql).toMatch(/c\.deleted_at is null/);
     expect(sql).toMatch(/'isError' = 'false'/);
+    expect(sql).toMatch(/r\.user_id = \$2/);
     expect(params).toEqual([CONVERSATION_ID, 'user-1', null, TOOL_CALL_ID, PLUGIN_DRAFT_TOOL_NAME]);
+  });
+
+  it('recovers a draft copied into a branch from the conversation it was branched from', async () => {
+    mocks.query.mockResolvedValue([
+      { output: JSON.stringify({ [PLUGIN_DRAFT_RESULT_KEY]: draft, shown: 'shown' }) },
+    ]);
+    const response = await call();
+    expect(response.status).toBe(200);
+    const [sql] = mocks.query.mock.calls[0]!;
+    expect(sql).toMatch(/with recursive lineage/);
+    expect(sql).toMatch(/b\.target_conversation_id = l\.conversation_id/);
+    expect(sql).toMatch(/b\.user_id = \$2/);
+    expect(sql).toMatch(/c\.id = b\.source_conversation_id\s+and c\.user_id = \$2/);
+    expect(sql).toMatch(/order by \(l\.conversation_id = \$1\) desc, e\.sequence desc/);
   });
 
   it('answers not found to a caller who does not own the conversation', async () => {

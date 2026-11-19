@@ -21,6 +21,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -157,7 +158,7 @@ export default function WorkspaceScreen() {
       router.back();
       return;
     }
-    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handleRefresh = useCallback(async () => {
@@ -302,7 +303,13 @@ export default function WorkspaceScreen() {
             void (async () => {
               setBusyMemberId(member.id);
               try {
-                await removeWorkspaceMember(member.id);
+                const { cleanupComplete } = await removeWorkspaceMember(member.id);
+                if (!cleanupComplete) {
+                  Alert.alert(
+                    'Member removed',
+                    `${member.name} no longer has access to this workspace, but some of their sign-ins or keys could not be revoked. Check the web admin console.`,
+                  );
+                }
                 await load();
               } catch {
                 Alert.alert('Could not remove member', 'Check the member list before retrying.');
@@ -535,8 +542,9 @@ export default function WorkspaceScreen() {
                   maxWidth: 300,
                 }}
               >
-                This needs a provisioned Team or Enterprise plan. Your current plan is{' '}
-                {planLabel(overview?.access.plan ?? 'free')}.
+                {NATIVE_PURCHASES_AVAILABLE
+                  ? `This needs a provisioned Team or Enterprise plan. Your current plan is ${planLabel(overview?.access.plan ?? 'free')}.`
+                  : "Workspaces aren't included in your plan."}
               </Text>
             </View>
           </Card>
@@ -550,27 +558,33 @@ export default function WorkspaceScreen() {
               >
                 No workspace yet
               </Text>
-              <Text
-                style={{
-                  fontSize: typeScale.footnote,
-                  color: c.textSecondary,
-                  textAlign: 'center',
-                  lineHeight: 18,
-                  maxWidth: 300,
-                }}
-              >
-                Create your workspace on the web, then manage its members from here.
-              </Text>
-              {webLinksAllowed ? (
-                <Pressable
-                  onPress={() => void openExternalUrl(WEB_TEAM_URL)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create a workspace on the web"
-                >
-                  <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
-                    Create on web
+              {NATIVE_PURCHASES_AVAILABLE ? (
+                <>
+                  <Text
+                    style={{
+                      fontSize: typeScale.footnote,
+                      color: c.textSecondary,
+                      textAlign: 'center',
+                      lineHeight: 18,
+                      maxWidth: 300,
+                    }}
+                  >
+                    Create your workspace on the web, then manage its members from here.
                   </Text>
-                </Pressable>
+                  {webLinksAllowed ? (
+                    <Pressable
+                      onPress={() => void openExternalUrl(WEB_TEAM_URL)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Create a workspace on the web"
+                    >
+                      <Text
+                        style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                      >
+                        Create on web
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </>
               ) : null}
             </View>
           </Card>

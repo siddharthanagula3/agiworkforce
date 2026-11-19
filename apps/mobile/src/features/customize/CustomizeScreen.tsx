@@ -11,6 +11,8 @@ import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
+import { PersonalSourceRows } from './PersonalSourceRows';
+
 export interface CustomizeDestination {
   key: 'skills' | 'plugins' | 'connectors' | 'agents';
   title: string;
@@ -94,6 +96,7 @@ export function CustomizeScreen() {
             <ChevronRight size={18} color={colors.textMuted} />
           </PressableBox>
         ))}
+        <PersonalSourceRows />
       </ScrollView>
     </SafeAreaView>
   );

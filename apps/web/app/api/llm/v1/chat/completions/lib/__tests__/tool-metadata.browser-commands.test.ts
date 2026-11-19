@@ -8,7 +8,12 @@ import {
   resolveToolMetadata,
 } from '../tool-metadata';
 
-const DECLARED_BROWSER_COMMANDS = ['browser_find', 'browser_fill_form', 'browser_history'] as const;
+const DECLARED_BROWSER_COMMANDS = [
+  'browser_find',
+  'browser_fill_form',
+  'browser_history',
+  'browser_stop',
+] as const;
 
 describe('browser commands declared for the paired browser', () => {
   it('declares each one like its device_browser equivalent', () => {

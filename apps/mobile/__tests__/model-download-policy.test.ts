@@ -3,8 +3,14 @@ import {
   createDownloadResumable,
   deleteAsync,
   getFreeDiskStorageAsync,
+  getInfoAsync,
+  readAsStringAsync,
 } from 'expo-file-system/legacy';
-import { getInstalledModel } from '@/storage/installedModels';
+import {
+  getInstalledModel,
+  insertInstalledModel,
+  removeInstalledModel,
+} from '@/storage/installedModels';
 import type { InstalledModel } from '@/storage/types';
 import {
   assertDownloadAllowed,
@@ -36,6 +42,8 @@ jest.mock('expo-file-system/legacy', () => ({
 jest.mock('@/storage/installedModels', () => ({
   ...jest.requireActual('@/storage/installedModels'),
   getInstalledModel: jest.fn(async () => null),
+  insertInstalledModel: jest.fn(async () => undefined),
+  removeInstalledModel: jest.fn(async () => undefined),
 }));
 
 const mockFetch = NetInfo.fetch as jest.Mock;
@@ -244,5 +252,222 @@ describe('cancelling a download', () => {
     cancelDownload('model-a');
 
     await expect(download).rejects.toMatchObject({ kind: 'cancelled' });
+  });
+
+  const EMPTY_FILE_SHA256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+
+  function modelOptions(modelId: string, checksum: string) {
+    return {
+      modelId,
+      displayName: 'Cancel fixture',
+      downloadUrl: `https://models.example/${modelId}.gguf`,
+      checksum,
+      fileSizeBytes: 1024,
+      runtime: 'local' as const,
+      format: 'gguf' as const,
+      wifiOnly: true,
+    };
+  }
+
+  it('honours a cancel that lands before any download handle exists', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    const mockCreate = createDownloadResumable as jest.Mock;
+    mockCreate.mockClear();
+    (insertInstalledModel as jest.Mock).mockClear();
+    let releaseLookup: (value: null) => void = () => undefined;
+    (getInstalledModel as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise<null>((resolve) => {
+          releaseLookup = resolve;
+        }),
+    );
+
+    const download = downloadModel(modelOptions('model-preflight', 'a'.repeat(64)));
+    cancelDownload('model-preflight');
+    releaseLookup(null);
+
+    await expect(download).rejects.toMatchObject({ kind: 'cancelled' });
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(insertInstalledModel).not.toHaveBeenCalled();
+  });
+
+  it('honours a cancel that lands after admission but before the transport starts', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    const mockCreate = createDownloadResumable as jest.Mock;
+    mockCreate.mockClear();
+    (insertInstalledModel as jest.Mock).mockClear();
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => {
+      if (path.endsWith('.partial')) cancelDownload('model-resume');
+      return { exists: false };
+    });
+
+    try {
+      await expect(
+        downloadModel(modelOptions('model-resume', 'a'.repeat(64))),
+      ).rejects.toMatchObject({ kind: 'cancelled' });
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(insertInstalledModel).not.toHaveBeenCalled();
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+
+  it('stops hashing at the next chunk when cancelled mid-verification', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    (insertInstalledModel as jest.Mock).mockClear();
+    const read = readAsStringAsync as jest.Mock;
+    read.mockReset().mockImplementation(async () => {
+      cancelDownload('model-hash');
+      return '';
+    });
+    (createDownloadResumable as jest.Mock).mockReturnValue({
+      downloadAsync: async () => ({ status: 200 }),
+      pauseAsync: jest.fn(async () => ({})),
+      savable: jest.fn(async () => ({})),
+    });
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 10 * 1024 * 1024,
+    }));
+
+    try {
+      await expect(downloadModel(modelOptions('model-hash', 'a'.repeat(64)))).rejects.toMatchObject(
+        { kind: 'cancelled' },
+      );
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(insertInstalledModel).not.toHaveBeenCalled();
+    } finally {
+      read.mockReset();
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+
+  it('removes the record when a cancel lands while it is being written', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    (removeInstalledModel as jest.Mock).mockClear();
+    (insertInstalledModel as jest.Mock).mockImplementationOnce(async () => {
+      cancelDownload('model-insert');
+    });
+    (createDownloadResumable as jest.Mock).mockReturnValue({
+      downloadAsync: async () => ({ status: 200 }),
+      pauseAsync: jest.fn(async () => ({})),
+      savable: jest.fn(async () => ({})),
+    });
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 0,
+    }));
+
+    try {
+      await expect(
+        downloadModel(modelOptions('model-insert', EMPTY_FILE_SHA256)),
+      ).rejects.toMatchObject({ kind: 'cancelled' });
+      expect(removeInstalledModel).toHaveBeenCalledWith('model-insert');
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+
+  it('does not record an installation cancelled while the file was being verified', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    (insertInstalledModel as jest.Mock).mockClear();
+    (createDownloadResumable as jest.Mock).mockReturnValue({
+      downloadAsync: async () => ({ status: 200 }),
+      pauseAsync: jest.fn(async () => ({})),
+      savable: jest.fn(async () => ({})),
+    });
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => {
+      const isModelFile = path.endsWith('/model.gguf');
+      if (isModelFile) cancelDownload('model-verify');
+      return { exists: isModelFile, size: 0 };
+    });
+
+    try {
+      await expect(
+        downloadModel(modelOptions('model-verify', EMPTY_FILE_SHA256)),
+      ).rejects.toMatchObject({ kind: 'cancelled' });
+      expect(insertInstalledModel).not.toHaveBeenCalled();
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+
+  it('records an installation nobody cancelled', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    (insertInstalledModel as jest.Mock).mockClear();
+    (createDownloadResumable as jest.Mock).mockReturnValue({
+      downloadAsync: async () => ({ status: 200 }),
+      pauseAsync: jest.fn(async () => ({})),
+      savable: jest.fn(async () => ({})),
+    });
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 0,
+    }));
+
+    try {
+      await expect(
+        downloadModel(modelOptions('model-clean', EMPTY_FILE_SHA256)),
+      ).resolves.toMatchObject({ id: 'model-clean' });
+      expect(insertInstalledModel).toHaveBeenCalledTimes(1);
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+});
+
+describe('download progress', () => {
+  it('reports once per percent while the file system reports every chunk', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    const totalBytes = 20_000;
+    (createDownloadResumable as jest.Mock).mockImplementation(
+      (
+        _url: string,
+        _dest: string,
+        _options: unknown,
+        onChunk?: (data: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void,
+      ) => ({
+        downloadAsync: async () => {
+          for (let written = 1; written <= totalBytes; written += 1) {
+            onChunk?.({ totalBytesWritten: written, totalBytesExpectedToWrite: totalBytes });
+          }
+          return { status: 200 };
+        },
+        pauseAsync: jest.fn(async () => ({})),
+        savable: jest.fn(async () => ({})),
+      }),
+    );
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 0,
+    }));
+    const shown: number[] = [];
+
+    try {
+      await downloadModel({
+        modelId: 'model-progress',
+        displayName: 'Progress fixture',
+        downloadUrl: 'https://models.example/model-progress.gguf',
+        checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        fileSizeBytes: totalBytes,
+        runtime: 'local',
+        format: 'gguf',
+        wifiOnly: true,
+        onProgress: (written, total) => shown.push(written / total),
+      });
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+      (createDownloadResumable as jest.Mock).mockReset();
+    }
+
+    expect(shown.length).toBeLessThanOrEqual(101);
+    expect(shown[shown.length - 1]).toBe(1);
   });
 });

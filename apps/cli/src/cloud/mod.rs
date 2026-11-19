@@ -62,7 +62,7 @@ pub fn report_boundary_once(error: &CloudError) {
     if BOUNDARY_NOTICE_SHOWN.swap(true, Ordering::SeqCst) {
         return;
     }
-    crate::output::print_info(&error.to_string());
+    crate::output::print_info(&error.turn_notice());
 }
 
 pub fn cloud_dir(config_dir: &Path) -> PathBuf {
@@ -112,6 +112,22 @@ pub fn load_memory_cache(config_dir: &Path) -> memory::MemoryCache {
 
 pub fn save_memory_cache(config_dir: &Path, cache: &memory::MemoryCache) -> std::io::Result<()> {
     write_cache(&memory_cache_path(config_dir), cache)
+}
+
+fn load_owned_memory_cache(config_dir: &Path, owner: &str) -> memory::MemoryCache {
+    load_memory_cache(config_dir).owned_by(owner)
+}
+
+pub fn signed_in_owner() -> Option<String> {
+    crate::tier_cache::load_jwt()
+        .as_deref()
+        .and_then(crate::auth::jwt_subject)
+}
+
+pub fn forget_account_data(config_dir: &Path) {
+    let _ = std::fs::remove_file(memory_cache_path(config_dir));
+    let _ = std::fs::remove_file(project_cache_path(config_dir));
+    let _ = std::fs::remove_dir_all(skills::account_skills_dir(config_dir));
 }
 
 /// Connect and load this account's sync state together, so a caller can never
@@ -349,9 +365,14 @@ pub async fn sync_session(
     Ok(response.applied.messages.len())
 }
 
-pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
-    let client = match CloudClient::connect_managed() {
+pub async fn send_feedback(
+    privacy: PrivacyMode,
+    kind: feedback::FeedbackKind,
+    message: &str,
+) -> String {
+    let client = match CloudClient::connect(privacy) {
         Ok(client) => client,
+        Err(error @ CloudError::NotManaged(_)) => return error.to_string(),
         Err(error) => {
             return format!(
                 "Feedback needs a signed-in AGI account ({error}). Sign in with `agi login`, then send it again."
@@ -396,14 +417,24 @@ pub async fn hosted_conversation(
 pub async fn refresh_projects(privacy: PrivacyMode) -> Result<projects::ProjectCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
     let sync = projects::ProjectsSync::new(&session.client);
-    let response = sync.pull_all(&session.state.projects.cursor).await?;
     let mut cache = load_project_cache(&session.config_dir);
-    cache.apply(&response.projects);
-    projects::apply_pull_response(&response, &mut session.state);
-    if let Err(error) = save_project_cache(&session.config_dir, &cache) {
-        crate::output::print_warn(&format!("could not cache the project list: {error}"));
+    let since = state::pull_frontier(&session.state.projects, cache.synced_through.as_deref());
+    let mut response = sync.pull_all(&since).await?;
+    if let Some(scope) = projects::scope_to_adopt(&response, &cache, &session.state) {
+        projects::reset_scope(&scope, &mut cache, &mut session.state);
+        if since != state::INITIAL_CURSOR {
+            response = sync.pull_all(state::INITIAL_CURSOR).await?;
+            projects::require_scope(&response, &scope)?;
+        }
     }
-    session.persist();
+    cache.adopt(&response);
+    projects::apply_pull_response(&response, &mut session.state);
+    match save_project_cache(&session.config_dir, &cache) {
+        Ok(()) => session.persist(),
+        Err(error) => crate::output::print_warn(&format!(
+            "could not cache the project list, so it will be fetched again next time: {error}"
+        )),
+    }
     Ok(cache)
 }
 
@@ -603,17 +634,17 @@ pub async fn active_workspace_label(privacy: PrivacyMode) -> Result<String, Clou
 pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
     let sync = memory::MemorySync::new(&session.client);
-    let response = sync.pull_all(&session.state.memories.cursor).await?;
-    let mut cache = load_memory_cache(&session.config_dir);
-    cache.apply(&response.memories);
-    if let Some(enabled) = response.memory_enabled {
-        cache.account_memory_off = !enabled;
-    }
+    let mut cache = load_owned_memory_cache(&session.config_dir, session.client.owner());
+    let since = state::pull_frontier(&session.state.memories, cache.synced_through.as_deref());
+    let response = sync.pull_all(&since).await?;
+    cache.adopt(&response);
     memory::apply_pull_response(&response, &mut session.state);
-    if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
-        crate::output::print_warn(&format!("could not cache the account memory: {error}"));
+    match save_memory_cache(&session.config_dir, &cache) {
+        Ok(()) => session.persist(),
+        Err(error) => crate::output::print_warn(&format!(
+            "could not cache the account memory, so it will be fetched again next time: {error}"
+        )),
     }
-    session.persist();
     Ok(cache)
 }
 
@@ -629,25 +660,26 @@ pub async fn refresh_account_skills(
     }
     let session = CloudSession::open(privacy)?;
     let dir = skills::account_skills_dir(&session.config_dir);
-    let stamp = dir.join(ACCOUNT_SKILLS_STAMP);
-    let fresh = std::fs::metadata(&stamp)
-        .and_then(|metadata| metadata.modified())
-        .ok()
-        .and_then(|modified| modified.elapsed().ok())
-        .is_some_and(|age| age < ACCOUNT_SKILLS_REFRESH);
+    let stamp = dir.join(skills::ACCOUNT_SKILLS_STAMP);
+    let owner = session.client.owner();
+    let fresh = skills::account_skills_belong_to(&dir, Some(owner))
+        && std::fs::metadata(&stamp)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| modified.elapsed().ok())
+            .is_some_and(|age| age < ACCOUNT_SKILLS_REFRESH);
     if fresh && !force {
         return Ok(0);
     }
     let synced = skills::fetch_account_skills(&session.client).await?;
     skills::write_account_skills(&dir, &synced)
-        .and_then(|()| std::fs::write(&stamp, b""))
+        .and_then(|()| std::fs::write(&stamp, owner.as_bytes()))
         .map_err(|error| {
             CloudError::Transport(format!("could not save the account's skills: {error}"))
         })?;
     Ok(synced.len())
 }
 
-const ACCOUNT_SKILLS_STAMP: &str = ".synced";
 const ACCOUNT_SKILLS_REFRESH: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Record a memory in the account. Returns the reasons the server gave for
@@ -669,7 +701,7 @@ pub async fn add_memory(
 
     let refusals = memory::refusals(&request, &response);
     if refusals.is_empty() {
-        let mut cache = load_memory_cache(&session.config_dir);
+        let mut cache = load_owned_memory_cache(&session.config_dir, session.client.owner());
         cache.entries.insert(
             0,
             memory::CachedMemory {
@@ -698,7 +730,7 @@ pub async fn revise_memory(
     pinned: Option<bool>,
 ) -> Result<Option<Vec<String>>, CloudError> {
     let mut session = CloudSession::open(privacy)?;
-    let mut cache = load_memory_cache(&session.config_dir);
+    let mut cache = load_owned_memory_cache(&session.config_dir, session.client.owner());
     let Some(entry) = cache
         .entries
         .iter()
@@ -819,7 +851,7 @@ const MEMORY_IMPORT_BATCH: usize = 500;
 /// Remove a memory from the account.
 pub async fn forget_memory(privacy: PrivacyMode, id_or_content: &str) -> Result<bool, CloudError> {
     let mut session = CloudSession::open(privacy)?;
-    let mut cache = load_memory_cache(&session.config_dir);
+    let mut cache = load_owned_memory_cache(&session.config_dir, session.client.owner());
     let Some(entry) = cache
         .entries
         .iter()
@@ -868,11 +900,9 @@ pub fn account_memory_context(privacy: PrivacyMode, config_dir: &Path) -> String
     if privacy != PrivacyMode::Managed {
         return String::new();
     }
-    let cache = load_memory_cache(config_dir);
-    if cache.account_memory_off {
-        return String::new();
-    }
-    cache.context_prompt()
+    usable_memory_cache(config_dir, signed_in_owner().as_deref())
+        .map(|cache| cache.context_prompt())
+        .unwrap_or_default()
 }
 
 pub fn account_memory_context_for(
@@ -883,11 +913,15 @@ pub fn account_memory_context_for(
     if privacy != PrivacyMode::Managed {
         return String::new();
     }
+    usable_memory_cache(config_dir, signed_in_owner().as_deref())
+        .map(|cache| cache.context_prompt_for(project))
+        .unwrap_or_default()
+}
+
+fn usable_memory_cache(config_dir: &Path, owner: Option<&str>) -> Option<memory::MemoryCache> {
+    let owner = owner?;
     let cache = load_memory_cache(config_dir);
-    if cache.account_memory_off {
-        return String::new();
-    }
-    cache.context_prompt_for(project)
+    (cache.owner.as_deref() == Some(owner) && !cache.account_memory_off).then_some(cache)
 }
 
 pub async fn add_project_memory(
@@ -1001,11 +1035,69 @@ mod tests {
             source_conversation_title: None,
             project_id: None,
         });
+        cache.owner = Some("account-a".to_string());
         save_memory_cache(dir.path(), &cache).expect("save");
 
         assert_eq!(account_memory_context(PrivacyMode::Local, dir.path()), "");
         assert_eq!(account_memory_context(PrivacyMode::Byok, dir.path()), "");
-        assert!(account_memory_context(PrivacyMode::Managed, dir.path()).contains("prefers tabs"));
+        assert!(usable_memory_cache(dir.path(), Some("account-a"))
+            .expect("the owner's cache")
+            .context_prompt()
+            .contains("prefers tabs"));
+    }
+
+    #[test]
+    fn account_memory_reaches_only_the_account_that_cached_it() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let mut cache = memory::MemoryCache::default().owned_by("account-a");
+        cache.entries.push(memory::CachedMemory {
+            id: "a1".to_string(),
+            content: "account a secret".to_string(),
+            category: None,
+            source: None,
+            pinned: false,
+            updated_at: "2026-09-13T00:00:00Z".to_string(),
+            source_conversation_id: None,
+            source_conversation_title: None,
+            project_id: None,
+        });
+        save_memory_cache(dir.path(), &cache).expect("save");
+
+        assert!(usable_memory_cache(dir.path(), Some("account-b")).is_none());
+        assert!(usable_memory_cache(dir.path(), None).is_none());
+        assert!(load_owned_memory_cache(dir.path(), "account-b")
+            .entries
+            .is_empty());
+
+        let unowned = memory::MemoryCache {
+            owner: None,
+            ..cache.clone()
+        };
+        save_memory_cache(dir.path(), &unowned).expect("save");
+        assert!(
+            usable_memory_cache(dir.path(), Some("account-a")).is_none(),
+            "a cache with no recorded owner was read into a prompt"
+        );
+    }
+
+    #[test]
+    fn signing_out_removes_the_cached_account_data() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        save_memory_cache(
+            dir.path(),
+            &memory::MemoryCache::default().owned_by("account-a"),
+        )
+        .expect("memory");
+        save_project_cache(dir.path(), &projects::ProjectCache::default()).expect("projects");
+        let skills_dir = skills::account_skills_dir(dir.path());
+        std::fs::create_dir_all(skills_dir.join("kept")).expect("skills");
+        std::fs::write(skills_dir.join(skills::ACCOUNT_SKILLS_STAMP), b"account-a").expect("stamp");
+
+        forget_account_data(dir.path());
+
+        assert!(!memory_cache_path(dir.path()).exists());
+        assert!(!project_cache_path(dir.path()).exists());
+        assert!(!skills_dir.exists());
     }
 
     #[test]

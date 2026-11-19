@@ -53,6 +53,7 @@ import {
   CLOUD_CODE_SCREEN_TITLE,
   CLOUD_CODE_STATE_BADGE_COLORS,
   CLOUD_CODE_TURN_MODE_OPTIONS,
+  cloudCodeRestoreRefusedGoal,
   cloudCodeWorkspaceLabel,
 } from './presentation';
 import { useCloudCodeAccess } from './useCloudCodeAccess';
@@ -140,10 +141,12 @@ function Notice({
   message,
   tone,
   onDismiss,
+  inline = false,
 }: {
   message: string;
   tone: 'error' | 'neutral';
   onDismiss?: () => void;
+  inline?: boolean;
 }) {
   const colors = useThemeColors();
   const error = tone === 'error';
@@ -152,7 +155,7 @@ function Notice({
     <View
       accessibilityRole={error ? 'alert' : undefined}
       style={{
-        marginHorizontal: 12,
+        marginHorizontal: inline ? 0 : 12,
         borderRadius: 14,
         borderCurve: 'continuous',
         paddingVertical: 10,
@@ -259,7 +262,7 @@ function SessionView({
     initialGoalSent.current = true;
     router.setParams({ goal: undefined });
     void send(goal, turnOptions).then((sent) => {
-      if (!sent) setDraft((current) => (current.trim() ? current : goal));
+      if (!sent) setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
     });
   }, [initialGoal, router, send, turnOptions, view.session?.state, view.status]);
 
@@ -279,7 +282,7 @@ function SessionView({
     setDraft('');
     nearBottom.current = true;
     const sent = await send(goal, turnOptions);
-    if (!sent) setDraft((current) => (current.trim() ? current : goal));
+    if (!sent) setDraft((current) => cloudCodeRestoreRefusedGoal(current, goal));
   }, [draft, send, turnOptions]);
 
   const session = view.session;
@@ -392,6 +395,10 @@ function SessionView({
             />
           }
         >
+          {view.turnsTruncated ? (
+            <Notice message={CLOUD_CODE_SESSION_COPY.earlierTurnsNotShown} tone="neutral" inline />
+          ) : null}
+
           {pullRequestLabel && pullRequestUrl ? (
             <PressableBox
               onPress={() => void openUntrustedUrlInAppBrowser(pullRequestUrl)}

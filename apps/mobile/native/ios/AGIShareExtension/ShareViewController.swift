@@ -134,7 +134,12 @@ final class ShareViewController: UIViewController {
       self?.loadFirstValue(typeIdentifier: UTType.url.identifier, providers: textProviders) {
         [weak self] urlValue in
         self?.loadFiles(providers: fileProviders) { [weak self] files in
-          self?.finishLoading(text: textValue, url: urlValue, files: files)
+          self?.finishLoading(
+            text: textValue,
+            url: urlValue,
+            files: files,
+            skippedFileCount: max(0, fileProviders.count - files.count)
+          )
         }
       }
     }
@@ -290,7 +295,12 @@ final class ShareViewController: UIViewController {
     }
   }
 
-  private func finishLoading(text: String?, url: String?, files: [LoadedFile]) {
+  private func finishLoading(
+    text: String?,
+    url: String?,
+    files: [LoadedFile],
+    skippedFileCount: Int
+  ) {
     let combined: String
     if let text, let url, text != url {
       combined = "\(text)\n\n\(url)"
@@ -303,7 +313,10 @@ final class ShareViewController: UIViewController {
     }
 
     guard !combined.isEmpty || !files.isEmpty else {
-      showLoadError("AGI can receive shared text, web links, images and files from this screen.")
+      showLoadError(
+        skippedFileCount > 0
+          ? Self.skippedFilesNotice(skippedFileCount)
+          : "AGI can receive shared text, web links, images and files from this screen.")
       return
     }
 
@@ -311,7 +324,12 @@ final class ShareViewController: UIViewController {
     sharedText = bounded.value
     sharedFiles = files
     contentWasTruncated = bounded.truncated
-    previewView.text = Self.previewText(bounded.value, truncated: bounded.truncated, files: files)
+    previewView.text = Self.previewText(
+      bounded.value,
+      truncated: bounded.truncated,
+      files: files,
+      skippedFileCount: skippedFileCount
+    )
     activityIndicator.stopAnimating()
     reviewButton.isEnabled = true
   }
@@ -333,15 +351,23 @@ final class ShareViewController: UIViewController {
     return ("", true)
   }
 
+  private static func skippedFilesNotice(_ count: Int) -> String {
+    let subject = count == 1 ? "1 item could not be added" : "\(count) items could not be added"
+    let megabytes = maximumSharedFileBytes / (1024 * 1024)
+    return "\(subject). AGI accepts up to \(maximumSharedFiles) files of up to \(megabytes) MB each."
+  }
+
   private static func previewText(
     _ value: String,
     truncated: Bool,
-    files: [LoadedFile]
+    files: [LoadedFile],
+    skippedFileCount: Int
   ) -> String {
     let previewLimit = 4_000
     let preview = value.count > previewLimit ? String(value.prefix(previewLimit)) + "…" : value
     var sections: [String] = []
     if truncated { sections.append("Content was truncated to 100 KB.") }
+    if skippedFileCount > 0 { sections.append(skippedFilesNotice(skippedFileCount)) }
     if !files.isEmpty {
       let names = files.map { "• \($0.fileName)" }.joined(separator: "\n")
       sections.append(files.count == 1 ? "1 file\n\(names)" : "\(files.count) files\n\(names)")
@@ -369,43 +395,47 @@ final class ShareViewController: UIViewController {
     }
 
     let inbox = container.appendingPathComponent(inboxDirectoryName, isDirectory: true)
-    let fileInbox = inbox.appendingPathComponent(fileDirectoryName, isDirectory: true)
-    try fileManager.createDirectory(at: fileInbox, withIntermediateDirectories: true)
+    let shareDirectory = "\(fileDirectoryName)/\(UUID().uuidString)"
+    let shareFiles = inbox.appendingPathComponent(shareDirectory, isDirectory: true)
 
     var persistedFiles: [PendingShareFile] = []
-    for file in files {
-      let relativePath = "\(fileDirectoryName)/\(UUID().uuidString)-\(file.fileName)"
-      let destination = inbox.appendingPathComponent(relativePath, isDirectory: false)
-      do {
-        try fileManager.copyItem(at: file.sourceURL, to: destination)
-      } catch {
-        continue
+    do {
+      if !files.isEmpty {
+        try fileManager.createDirectory(at: shareFiles, withIntermediateDirectories: true)
       }
+      for file in files {
+        let relativePath = "\(shareDirectory)/\(UUID().uuidString)-\(file.fileName)"
+        let destination = inbox.appendingPathComponent(relativePath, isDirectory: false)
+        try fileManager.copyItem(at: file.sourceURL, to: destination)
+        try? fileManager.setAttributes(
+          [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+          ofItemAtPath: destination.path
+        )
+        persistedFiles.append(
+          PendingShareFile(
+            fileName: file.fileName,
+            mimeType: file.mimeType,
+            relativePath: relativePath,
+            byteSize: file.byteSize
+          )
+        )
+      }
+
+      let now = Date().timeIntervalSince1970
+      let pending = PendingShare(
+        text: text, truncated: truncated, files: persistedFiles, createdAt: now)
+      let data = try JSONEncoder().encode(pending)
+      let fileName = "\(Int(now * 1_000))-\(UUID().uuidString).json"
+      let destination = inbox.appendingPathComponent(fileName, isDirectory: false)
+      try data.write(to: destination, options: [.atomic])
       try? fileManager.setAttributes(
         [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
         ofItemAtPath: destination.path
       )
-      persistedFiles.append(
-        PendingShareFile(
-          fileName: file.fileName,
-          mimeType: file.mimeType,
-          relativePath: relativePath,
-          byteSize: file.byteSize
-        )
-      )
+    } catch {
+      try? fileManager.removeItem(at: shareFiles)
+      throw error
     }
-
-    let now = Date().timeIntervalSince1970
-    let pending = PendingShare(
-      text: text, truncated: truncated, files: persistedFiles, createdAt: now)
-    let data = try JSONEncoder().encode(pending)
-    let fileName = "\(Int(now * 1_000))-\(UUID().uuidString).json"
-    let destination = inbox.appendingPathComponent(fileName, isDirectory: false)
-    try data.write(to: destination, options: [.atomic])
-    try? fileManager.setAttributes(
-      [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-      ofItemAtPath: destination.path
-    )
   }
 
   private func showLoadError(_ message: String) {

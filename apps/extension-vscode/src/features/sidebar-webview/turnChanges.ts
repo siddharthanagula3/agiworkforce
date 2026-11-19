@@ -41,8 +41,10 @@ async function gitApi(): Promise<GitApi | undefined> {
 }
 
 /**
- * Opens one multi-file diff of what a reply changed, each file against its last
- * commit, in VS Code's own diff editor where hunks can be kept or reverted.
+ * Opens one multi-file diff of the files a reply changed, each against its last
+ * commit, in VS Code's own diff editor where hunks can be kept or reverted. The
+ * runtime keeps no per-reply snapshot, so the title says what the diff is
+ * against: other uncommitted edits in those files show too.
  */
 export async function openTurnChanges(files: readonly string[]): Promise<void> {
   const git = await gitApi().catch(() => undefined);
@@ -61,7 +63,7 @@ export async function openTurnChanges(files: readonly string[]): Promise<void> {
   });
   const title =
     files.length === 1
-      ? `Changes in ${path.basename(files[0] ?? '')}`
-      : `Changes in ${files.length} files`;
+      ? `${path.basename(files[0] ?? '')} since last commit`
+      : `${files.length} files since last commit`;
   await vscode.commands.executeCommand('vscode.changes', title, resources);
 }

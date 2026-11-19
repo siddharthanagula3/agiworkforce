@@ -56,12 +56,18 @@ interface FakeOptions {
   claimed?: Record<string, unknown> | null;
   file?: Record<string, unknown> | null;
   googleSource?: boolean;
+  settledRows?: number;
+  failChunkInsert?: boolean;
 }
 
 function fakeDb(options: FakeOptions = {}) {
-  const statements: Array<{ sql: string; params: unknown[] }> = [];
+  const statements: Array<{ sql: string; params: unknown[]; transaction: boolean }> = [];
+  let depth = 0;
   const run = async (sql: string, params: unknown[] = []) => {
-    statements.push({ sql, params });
+    statements.push({ sql, params, transaction: depth > 0 });
+    if (options.failChunkInsert && sql.includes('insert into retrieval_chunks')) {
+      throw new Error('insert failed');
+    }
     if (sql.includes('external_resource_references')) {
       return [{ google: options.googleSource === true }];
     }
@@ -88,11 +94,16 @@ function fakeDb(options: FakeOptions = {}) {
     query: vi.fn(run),
     execute: vi.fn(async (sql: string, params: unknown[] = []) => {
       await run(sql, params);
-      return 1;
+      return sql.includes('update retrieval_documents') ? (options.settledRows ?? 1) : 1;
     }),
-    transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-      callback(db as unknown as DatabaseAdapter),
-    ),
+    transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) => {
+      depth += 1;
+      try {
+        return await callback(db as unknown as DatabaseAdapter);
+      } finally {
+        depth -= 1;
+      }
+    }),
     withUser: vi.fn(),
     withOrg: vi.fn(),
     dispose: vi.fn(),
@@ -228,6 +239,76 @@ describe('indexRetrievalDocument', () => {
     expect(
       statements.find((entry) => entry.sql.includes('delete from retrieval_documents'))?.params,
     ).toEqual([DOCUMENT.id, DOCUMENT.user_id]);
+  });
+
+  it('settles and writes chunks in one transaction, fenced to the claiming run', async () => {
+    mocks.embed.mockImplementation(async ({ texts }: { texts: string[] }) => ({
+      vectors: texts.map(() => vector()),
+      model: 'embedding-model',
+      routeId: 'route',
+    }));
+    const { db, statements } = fakeDb();
+
+    await indexRetrievalDocument(db, DOCUMENT.id, 'run-1');
+
+    const settle = statements.find((entry) => entry.sql.includes("then 'indexed'"));
+    const insert = statements.find((entry) => entry.sql.includes('insert into retrieval_chunks'));
+    expect(settle?.transaction).toBe(true);
+    expect(insert?.transaction).toBe(true);
+    expect(settle?.sql).toContain('workflow_run_id = $13');
+    expect(settle?.params[12]).toBe('run-1');
+    expect(statements.indexOf(settle!)).toBeLessThan(statements.indexOf(insert!));
+  });
+
+  it('writes nothing when a newer run has taken the document over', async () => {
+    mocks.embed.mockImplementation(async ({ texts }: { texts: string[] }) => ({
+      vectors: texts.map(() => vector()),
+      model: 'embedding-model',
+      routeId: 'route',
+    }));
+    const { db, statements } = fakeDb({ settledRows: 0 });
+
+    expect(await indexRetrievalDocument(db, DOCUMENT.id, 'run-1')).toEqual({ kind: 'skipped' });
+    expect(statements.some((entry) => entry.sql.includes('delete from retrieval_chunks'))).toBe(
+      false,
+    );
+    expect(statements.some((entry) => entry.sql.includes('insert into retrieval_chunks'))).toBe(
+      false,
+    );
+  });
+
+  it('does not let a superseded run record an unchanged result', async () => {
+    const chunks = prepareChunks({
+      title: 'policy.md',
+      segments: [{ text: TEXT, metadata: { projectId: 'project-1' } }],
+    });
+    const { db } = fakeDb({
+      settledRows: 0,
+      claimed: {
+        ...DOCUMENT,
+        content_sha256: contentDigest('policy.md', chunks),
+        embedding_model: 'embedding-model',
+      },
+    });
+
+    expect(await indexRetrievalDocument(db, DOCUMENT.id, 'run-1')).toEqual({ kind: 'skipped' });
+  });
+
+  it('records a failed write without having published a new chunk version', async () => {
+    mocks.embed.mockImplementation(async ({ texts }: { texts: string[] }) => ({
+      vectors: texts.map(() => vector()),
+      model: 'embedding-model',
+      routeId: 'route',
+    }));
+    const { db, statements } = fakeDb({ failChunkInsert: true });
+
+    expect(await indexRetrievalDocument(db, DOCUMENT.id, 'run-1')).toMatchObject({
+      kind: 'failed',
+    });
+    const failure = statements.filter((entry) => entry.sql.includes("then 'indexed'")).at(-1);
+    expect(failure?.transaction).toBe(false);
+    expect(failure?.params[1]).toBe(false);
+    expect(failure?.params[2]).toBeNull();
   });
 
   it('skips a document another run holds', async () => {

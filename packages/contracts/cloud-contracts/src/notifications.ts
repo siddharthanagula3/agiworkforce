@@ -19,6 +19,7 @@ export type NotificationFeedItemWire = z.infer<typeof NotificationFeedItemSchema
 export const NotificationFeedResponseSchema = z.object({
   notifications: z.array(NotificationFeedItemSchema),
   unreadCount: z.number().int().nonnegative(),
+  nextCursor: z.string().nullable().optional(),
 });
 export type NotificationFeedResponseWire = z.infer<typeof NotificationFeedResponseSchema>;
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { getBillingPlanProductLimits } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -68,13 +69,14 @@ describe('managed cloud resource entitlements', () => {
       expect(getFileStorageLimitBytes(plan)).toBe(expected);
     });
 
-    it.each([
-      ['max', 62 * 1024 ** 3],
-      ['max_15x', 124 * 1024 ** 3],
-      ['team_premium', 77 * 1024 ** 3],
-    ] as const)('caps %s at the storage its price funds', (plan, expected) => {
-      expect(getFileStorageLimitBytes(plan)).toBe(expected);
-    });
+    it.each(['max', 'max_15x', 'team_premium'] as const)(
+      'caps %s at the storage the plan catalog grants it',
+      (plan) => {
+        const granted = getBillingPlanProductLimits(plan)?.knowledgeStorageBytes;
+        expect(typeof granted).toBe('number');
+        expect(getFileStorageLimitBytes(plan)).toBe(granted);
+      },
+    );
 
     it('leaves enterprise storage to its contract', () => {
       expect(getFileStorageLimitBytes('enterprise')).toBeNull();

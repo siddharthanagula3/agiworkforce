@@ -603,12 +603,14 @@ pub(super) fn strip_html_tags_pub(input: &str) -> String {
     strip_html_tags(input)
 }
 
-/// `mcp_tools` is the session's connected MCP catalog. It must be searched
-/// alongside the built-ins: an MCP tool the initial list deferred is reachable
-/// only if this is the place its schema can be loaded from.
+/// `callable` is every tool the requesting turn can call, connected MCP tools
+/// included: an MCP tool the initial list deferred is reachable only if this
+/// is the place its schema can be loaded from, and a tool the turn's filters
+/// exclude must not come back as one the model "can call now". `None`, for a
+/// caller with no session, searches every built-in.
 pub(super) async fn execute_tool_search(
     args: &HashMap<String, String>,
-    mcp_tools: &[crate::models::ToolDefinition],
+    callable: Option<&[crate::models::ToolDefinition]>,
 ) -> Result<ToolResult> {
     let query = match args.get("query") {
         Some(q) => q,
@@ -625,9 +627,15 @@ pub(super) async fn execute_tool_search(
         .and_then(|s| s.parse().ok())
         .unwrap_or(10);
 
-    let mut catalog = crate::runtime::tool_catalog::all_builtin_tool_definitions();
-    catalog.extend(mcp_tools.iter().cloned());
-    let results = crate::tool_search::search_tool_schemas(query, &catalog, max);
+    let built_ins;
+    let catalog = match callable {
+        Some(callable) => callable,
+        None => {
+            built_ins = crate::runtime::tool_catalog::all_builtin_tool_definitions();
+            built_ins.as_slice()
+        }
+    };
+    let results = crate::tool_search::search_tool_schemas(query, catalog, max);
     Ok(ToolResult {
         tool_name: "tool_search".into(),
         success: true,
@@ -849,7 +857,7 @@ mod tests {
             .expect("a catalogue past the budget defers something");
 
         let args = HashMap::from([("query".to_string(), format!("select:{}", deferred.name))]);
-        let result = execute_tool_search(&args, &mcp_tools)
+        let result = execute_tool_search(&args, Some(mcp_tools.as_slice()))
             .await
             .expect("tool_search runs");
 
@@ -859,13 +867,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tool_search_still_answers_for_built_ins_with_no_mcp_server() {
+    async fn tool_search_still_answers_for_built_ins_with_no_session() {
         let args = HashMap::from([("query".to_string(), "select:apply_patch".to_string())]);
-        let result = execute_tool_search(&args, &[])
+        let result = execute_tool_search(&args, None)
             .await
             .expect("tool_search runs");
 
         assert!(result.success);
         assert!(result.output.contains("apply_patch"));
+    }
+
+    #[tokio::test]
+    async fn tool_search_never_offers_a_tool_the_turn_cannot_call() {
+        let callable: Vec<_> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+            .into_iter()
+            .filter(|definition| matches!(definition.name.as_str(), "tool_search" | "read_file"))
+            .collect();
+
+        for query in ["select:write_file", "write_file"] {
+            let args = HashMap::from([("query".to_string(), query.to_string())]);
+            let result = execute_tool_search(&args, Some(callable.as_slice()))
+                .await
+                .expect("tool_search runs");
+            assert!(
+                !result.output.contains("\"name\": \"write_file\""),
+                "{query} offered write_file: {}",
+                result.output
+            );
+        }
+
+        let args = HashMap::from([("query".to_string(), "select:write_file".to_string())]);
+        let result = execute_tool_search(&args, Some(callable.as_slice()))
+            .await
+            .expect("tool_search runs");
+        assert!(!result.output.contains("You can call"), "{}", result.output);
     }
 }

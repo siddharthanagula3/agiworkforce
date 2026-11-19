@@ -20,6 +20,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { Schedule, ScheduleRun, CreateScheduleInput } from './store';
 import { assertMobileScheduleRecurrenceSupported } from './policy';
+import { isoToZonedTimeInput } from './timing';
 
 function assertSchedulesAvailable(): void {
   if (!FEATURES.schedules) throw new Error('schedules: cloud schedules not available in v1');
@@ -52,6 +53,14 @@ function optionalIntegerArray(value: unknown): number[] | undefined {
   return value.every((item) => Number.isInteger(item)) ? (value as number[]) : undefined;
 }
 
+function onceTimeOfDay(task: ManagedCloudScheduleTask): string | null {
+  try {
+    return isoToZonedTimeInput(task.executeAt, task.timezone) || null;
+  } catch {
+    return null;
+  }
+}
+
 function mapSchedule(task: ManagedCloudScheduleTask): Schedule {
   if (task.actionType !== 'agent' || task.prompt === null || task.model === null) {
     throw invalidResponse('Schedules returned an unsupported task type.');
@@ -74,7 +83,9 @@ function mapSchedule(task: ManagedCloudScheduleTask): Schedule {
     daysOfWeek,
     dayOfMonth:
       typeof dayOfMonth === 'number' && Number.isInteger(dayOfMonth) ? dayOfMonth : undefined,
-    timeOfDay: typeof timeOfDay === 'string' ? timeOfDay : '09:00',
+    timeOfDay:
+      (recurrence === 'once' ? onceTimeOfDay(task) : null) ??
+      (typeof timeOfDay === 'string' ? timeOfDay : '09:00'),
     timezone: task.timezone,
     isActive: task.isEnabled,
     status: task.status,

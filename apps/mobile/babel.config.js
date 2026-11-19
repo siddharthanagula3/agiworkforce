@@ -14,5 +14,8 @@ module.exports = function (api) {
       ],
       'nativewind/babel',
     ],
+    // Jest loads CommonJS, and without this a dynamic import() in source stays
+    // native and throws in every test that reaches it.
+    plugins: isTest ? ['@babel/plugin-transform-dynamic-import'] : [],
   };
 };

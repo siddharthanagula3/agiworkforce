@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT_BRAND, getBillingPlanPricing } from '@agiworkforce/types';
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
@@ -81,6 +82,10 @@ function toldInApp() {
   return updates().filter(({ sql }) => sql.includes('set upgrade_notified_at = now()'));
 }
 
+function stillClosedStamps() {
+  return updates().filter(({ sql }) => sql.includes('set upgrade_access_checked_at = now()'));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
@@ -132,17 +137,16 @@ describe('notifyUpgradeWaitlist', () => {
       emailChannel: 'available',
     });
 
+    const joinedPlans = `${getBillingPlanPricing('basic').label} or ${getBillingPlanPricing('pro').label}`;
     const notice = mocks.record.mock.calls[0]?.[1];
     expect(notice).toMatchObject({
       userId: 'user-1',
-      title: 'You can now upgrade to Basic or Pro',
-      message:
-        'Paid upgrades are open on AGI. You joined the waitlist for Basic or Pro, and you can upgrade now.',
+      title: `You can now upgrade to ${joinedPlans}`,
+      message: `Paid upgrades are open on ${PRODUCT_BRAND}. You joined the waitlist for ${joinedPlans}, and you can upgrade now.`,
       dedupeKey: `${UPGRADE_WAITLIST_OPEN_NOTICE}user-1`,
       action: { label: 'See plans', url: expect.stringMatching(/\/pricing$/) },
       promotion: {
-        reason:
-          'You are receiving this because you joined the AGI waitlist for Basic or Pro. It is the only email about that waitlist.',
+        reason: `You are receiving this because you joined the ${PRODUCT_BRAND} waitlist for ${joinedPlans}. It is the only email about that waitlist.`,
       },
     });
     expect(mocks.email).toHaveBeenCalledWith(db, notice);
@@ -175,9 +179,9 @@ describe('notifyUpgradeWaitlist', () => {
       'mins => $2::int * power(2, max(waitlisted.upgrade_email_attempts) - 1)::int',
     );
     expect(sql.replace(/\s+/g, ' ')).toContain(
-      'order by count(waitlisted.upgrade_notified_at) > 0, max(waitlisted.upgrade_email_attempted_at) nulls first, min(coalesce(waitlisted.joined_at, waitlisted.created_at))',
+      'order by count(waitlisted.upgrade_notified_at) > 0, max(waitlisted.upgrade_access_checked_at) nulls first, max(waitlisted.upgrade_email_attempted_at) nulls first, min(coalesce(waitlisted.joined_at, waitlisted.created_at))',
     );
-    expect(params).toEqual([true, EMAIL_RETRY_BASE_MINUTES, 26, UNATTENDED_RUN_DENIED_STATUSES]);
+    expect(params).toEqual([true, EMAIL_RETRY_BASE_MINUTES, 26, UNATTENDED_RUN_DENIED_STATUSES, 0]);
   });
 
   it('leaves out accounts that cannot sign in, asked to be deleted, or were erased', async () => {
@@ -319,6 +323,7 @@ describe('notifyUpgradeWaitlist', () => {
       EMAIL_RETRY_BASE_MINUTES,
       101,
       UNATTENDED_RUN_DENIED_STATUSES,
+      0,
     ]);
     expect(mocks.email).not.toHaveBeenCalled();
     expect(toldInApp()).toEqual([expect.objectContaining({ params: ['user-1'] })]);
@@ -333,6 +338,138 @@ describe('notifyUpgradeWaitlist', () => {
       remaining: true,
     });
     expect(mocks.email).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when earlier accounts are still closed', () => {
+    const closed = Array.from({ length: 100 }, (_, index) => ({
+      user_id: `closed-${index + 1}`,
+      plans: ['basic'],
+      notified: false,
+      email_attempts: 0,
+    }));
+    const eligible = { user_id: 'open-101', plans: ['pro'], notified: false, email_attempts: 0 };
+
+    beforeEach(() => {
+      mocks.query.mockImplementation(async (_sql: string, params: unknown[]) => {
+        const all = [...closed, eligible];
+        const limit = params[2] as number;
+        const offset = params[4] as number;
+        return all.slice(offset, offset + limit);
+      });
+      mocks.upgradesOpen.mockImplementation(async (userId: string) => userId === 'open-101');
+    });
+
+    it('reaches an open account behind a full batch of closed ones', async () => {
+      await expect(notifyUpgradeWaitlist(db, 100)).resolves.toMatchObject({
+        notified: 1,
+        remaining: false,
+      });
+      expect(mocks.record).toHaveBeenCalledTimes(1);
+      expect(mocks.record).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ userId: 'open-101' }),
+      );
+      expect(mocks.record).not.toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ userId: 'closed-1' }),
+      );
+    });
+
+    it('says candidates remain, not that the waitlist is closed, when the scan stops early', async () => {
+      const summary = await notifyUpgradeWaitlist(db, 100, 100);
+
+      expect(summary).toMatchObject({ notified: 0, remaining: true });
+      expect(summary.skipped).toBeUndefined();
+      expect(mocks.record).not.toHaveBeenCalled();
+    });
+
+    it('reports the waitlist closed only after every candidate was checked', async () => {
+      mocks.upgradesOpen.mockResolvedValue(false);
+
+      await expect(notifyUpgradeWaitlist(db, 100)).resolves.toMatchObject({
+        notified: 0,
+        remaining: false,
+        skipped: 'waitlist_closed',
+      });
+      expect(mocks.upgradesOpen).toHaveBeenCalledTimes(101);
+    });
+
+    it('records the accounts it found closed, never the one it told', async () => {
+      await notifyUpgradeWaitlist(db, 100);
+
+      const stamps = stillClosedStamps();
+      expect(stamps).toHaveLength(1);
+      expect(stamps[0]?.params).toEqual([closed.map((account) => account.user_id)]);
+      expect(stamps[0]?.params[0]).not.toContain('open-101');
+    });
+  });
+
+  describe('across runs, when more accounts are closed than one run examines', () => {
+    function waitlistWithMemory(userIds: string[]) {
+      const checkedAt = new Map<string, number>();
+      let tick = 0;
+      mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+        const remembers = sql.includes('max(waitlisted.upgrade_access_checked_at) nulls first');
+        const ordered = userIds
+          .map((user_id, joined) => ({ user_id, joined, checked: checkedAt.get(user_id) }))
+          .sort((a, b) => {
+            if (remembers && a.checked !== b.checked) {
+              if (a.checked === undefined) return -1;
+              if (b.checked === undefined) return 1;
+              return a.checked - b.checked;
+            }
+            return a.joined - b.joined;
+          })
+          .map(({ user_id }) => ({ user_id, plans: ['pro'], notified: false, email_attempts: 0 }));
+        const limit = params[2] as number;
+        const offset = params[4] as number;
+        return ordered.slice(offset, offset + limit);
+      });
+      mocks.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+        if (sql.includes('set upgrade_access_checked_at = now()')) {
+          tick += 1;
+          for (const userId of params[0] as string[]) checkedAt.set(userId, tick);
+        }
+        return 1;
+      });
+    }
+
+    it('reaches an open account behind more closed accounts than one run scans', async () => {
+      const userIds = [
+        ...Array.from({ length: 30 }, (_, index) => `closed-${index + 1}`),
+        'open-31',
+      ];
+      waitlistWithMemory(userIds);
+      mocks.upgradesOpen.mockImplementation(async (userId: string) => userId === 'open-31');
+
+      const runs = [];
+      for (let run = 0; run < 4; run += 1) runs.push(await notifyUpgradeWaitlist(db, 1, 10));
+
+      expect(runs.slice(0, 3).map((summary) => summary.notified)).toEqual([0, 0, 0]);
+      expect(runs.slice(0, 3).every((summary) => summary.remaining)).toBe(true);
+      expect(runs[3]).toMatchObject({ notified: 1 });
+      expect(mocks.record).toHaveBeenCalledWith(db, expect.objectContaining({ userId: 'open-31' }));
+    });
+  });
+
+  it('still tells open accounts when the closed accounts cannot be recorded', async () => {
+    waitlisted(
+      { user_id: 'closed-account', plans: ['basic'] },
+      { user_id: 'open-account', plans: ['pro'] },
+    );
+    mocks.upgradesOpen.mockImplementation(async (userId: string) => userId === 'open-account');
+    mocks.execute.mockImplementation(async (sql: string) => {
+      if (sql.includes('set upgrade_access_checked_at = now()')) {
+        throw new Error('column "upgrade_access_checked_at" does not exist');
+      }
+      return 1;
+    });
+
+    await expect(notifyUpgradeWaitlist(db, 100)).resolves.toMatchObject({ notified: 1 });
+    expect(mocks.record).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ userId: 'open-account' }),
+    );
   });
 
   it('carries on with the next account when one fails', async () => {

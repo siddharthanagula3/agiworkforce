@@ -1,5 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+
+const gate = vi.hoisted(() => ({ access: vi.fn(), feature: vi.fn() }));
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => {
+  const actual = await importOriginal<ManagedComputeGateModule>();
+  gate.access.mockImplementation(actual.buildWorkspaceAccessGateResponse);
+  gate.feature.mockImplementation(actual.buildWorkspaceFeatureGateResponse);
+  return {
+    ...actual,
+    buildWorkspaceAccessGateResponse: gate.access,
+    buildWorkspaceFeatureGateResponse: gate.feature,
+  };
+});
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
@@ -7,7 +22,15 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
 vi.mock('@/lib/services/schedule-service', () => ({
   ScheduleConflictError: class ScheduleConflictError extends Error {},
-  ScheduleLimitError: class ScheduleLimitError extends Error {},
+  ScheduleLimitError: class ScheduleLimitError extends Error {
+    constructor(
+      message: string,
+      readonly planTier: string,
+      readonly limit: number,
+    ) {
+      super(message);
+    }
+  },
   ScheduleNotFoundError: class ScheduleNotFoundError extends Error {},
   ScheduleValidationError: class ScheduleValidationError extends Error {},
   assertScheduleQuota: vi.fn(),
@@ -172,10 +195,89 @@ describe('/api/schedules', () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
       error: {
+        code: 'SUBSCRIPTION_REQUIRED',
         message: 'Free plans do not include scheduled tasks. Upgrade to schedule unattended runs.',
+        details: {
+          code: 'schedules_not_in_plan',
+          limit: 0,
+          recovery: { action: 'upgrade' },
+        },
       },
     });
     expect(assertScheduleQuota).toHaveBeenCalledWith(db, 'user-1', 'free');
+    expect(createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('tells a paid plan at its ceiling apart from a plan without schedules', async () => {
+    vi.mocked(assertScheduleQuota).mockRejectedValueOnce(
+      new ScheduleLimitError('This plan can have up to 5 scheduled tasks.', 'pro', 5),
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/schedules', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Daily briefing', prompt: 'Brief me' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'SUBSCRIPTION_REQUIRED',
+        details: { code: 'schedule_limit_reached', limit: 5 },
+      },
+    });
+  });
+
+  it('asks the workspace policy about the client the credential is bound to, on read', async () => {
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db,
+      userId: 'user-1',
+      surface: 'chrome',
+    } as never);
+    gate.access.mockResolvedValueOnce(
+      NextResponse.json(
+        { error: { type: 'organization_policy', code: 'surface_not_allowed', message: 'No.' } },
+        { status: 403 },
+      ),
+    );
+
+    const response = await GET(new NextRequest('http://localhost/api/schedules'));
+
+    expect(response.status).toBe(403);
+    expect(gate.access).toHaveBeenCalledWith('user-1', expect.any(NextRequest), 'chrome');
+    expect(listSchedules).not.toHaveBeenCalled();
+  });
+
+  it('asks the workspace feature policy about the bound client, not an unknown one, on create', async () => {
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db,
+      userId: 'user-1',
+      surface: 'vscode',
+    } as never);
+    gate.feature.mockResolvedValueOnce(
+      NextResponse.json(
+        { error: { type: 'organization_policy', code: 'surface_not_allowed', message: 'No.' } },
+        { status: 403 },
+      ),
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/schedules', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Daily briefing', prompt: 'Brief me' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(gate.feature).toHaveBeenCalledWith(
+      'user-1',
+      expect.any(NextRequest),
+      'schedules',
+      'vscode',
+    );
     expect(createSchedule).not.toHaveBeenCalled();
   });
 

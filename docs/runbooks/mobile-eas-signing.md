@@ -83,8 +83,11 @@ Configure these values on the protected environment:
 | Secret   | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64`    | Base64-encoded Play Console service-account JSON           |
 
 Also configure the public production variables from `apps/mobile/.env.example`
-in the EAS `production` environment. The GitHub Clerk variable and its EAS
-counterpart must be identical. Set `EXPO_PUBLIC_API_URL` as a repository Actions
+in the EAS `production` environment. The environment's Clerk variable and its
+EAS counterpart must be identical. The repository-level variable of the same
+name is a test key that belongs to the simulator job in `ci.yml`; the validation
+job does not read it and evaluates the production configuration with a
+placeholder, because it ships nothing. Set `EXPO_PUBLIC_API_URL` as a repository Actions
 variable for tag validation and give the protected release environment the same
 value; it must match the EAS production value. Set
 `EXPO_PUBLIC_AGI_AUTH_PROVIDERS` in Actions and EAS to the same verified provider

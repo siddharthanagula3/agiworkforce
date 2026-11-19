@@ -224,6 +224,34 @@ describe('ReflectSection activity chart accessibility', () => {
       expect(bar.getAttribute('aria-hidden')).toBe('true');
     }
   });
+
+  it('announces a peak taken only from the days the chart draws', async () => {
+    const days = Array.from({ length: 60 }, (_, index) => ({
+      date: new Date(Date.UTC(2026, 4, 1 + index)).toISOString().slice(0, 10),
+      conversationCount: 1,
+    }));
+    vi.mocked(fetch).mockImplementation(() =>
+      response({
+        ...recap,
+        dailyActivity: [{ date: '2026-04-01', conversationCount: 100 }, ...days],
+      }),
+    );
+    render(<ReflectSection />);
+
+    const chart = await screen.findByRole('img', { name: /conversation activity across/i });
+    expect(chart).toHaveAccessibleName(
+      'Conversation activity across 60 active days, peaking at 1 conversations in a day',
+    );
+  });
+
+  it('announces the peak of a recap with fewer days than the chart limit', async () => {
+    render(<ReflectSection />);
+
+    const chart = await screen.findByRole('img', { name: /conversation activity across/i });
+    expect(chart).toHaveAccessibleName(
+      'Conversation activity across 2 active days, peaking at 2 conversations in a day',
+    );
+  });
 });
 
 describe('ReflectSection topic share bar', () => {

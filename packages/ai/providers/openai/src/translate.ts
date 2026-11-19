@@ -13,6 +13,7 @@ import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-pro
 import {
   normalizeOpenAIStrictToolParameters,
   resolveOpenAIReasoningEffortForModel,
+  resolveOpenAIToolStrictness,
   splitSystemPromptCacheBoundary,
   stripSystemPromptCacheBoundary,
 } from '@agiworkforce/provider-protocol';
@@ -192,15 +193,16 @@ function prependExplicitSystem(
   return [{ role: systemRole, content: text }, ...messages];
 }
 
-function translateTool(tool: ToolDef, strict: boolean): OpenAIChatTool {
-  const parameters = normalizeOpenAIStrictToolParameters(tool.inputSchema, strict);
+function translateTool(tool: ToolDef, supportsStrictMode: boolean): OpenAIChatTool {
+  const strict = resolveOpenAIToolStrictness(tool, supportsStrictMode);
+  const parameters = normalizeOpenAIStrictToolParameters(tool.inputSchema, strict === true);
   return {
     type: 'function',
     function: {
       name: tool.name,
       description: tool.description,
       parameters: parameters as Record<string, unknown>,
-      ...(strict ? { strict: true } : {}),
+      ...(strict !== undefined ? { strict } : {}),
     },
   };
 }
@@ -306,8 +308,7 @@ export function translateChatRequest(
   const baseMessages = translateMessages(req.messages, systemRole, provider === 'openai');
   const messages = prependExplicitSystem(baseMessages, req.system, systemRole);
 
-  const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
-  const translatedTools = req.tools?.map((t) => translateTool(t, strict)) ?? [];
+  const translatedTools = req.tools?.map((t) => translateTool(t, compat.supportsStrictMode)) ?? [];
   const rawVendorTools = req.rawVendorTools ?? [];
   const hasTools = translatedTools.length + rawVendorTools.length > 0;
   const vendorTools =

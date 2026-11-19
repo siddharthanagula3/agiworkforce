@@ -68,7 +68,18 @@ const gitHubUserInstallationsResponseSchema = z.object({
 
 const gitHubUserInstallationRepositoriesResponseSchema = z.object({
   total_count: z.number().int().nonnegative(),
-  repositories: z.array(z.object({ full_name: z.string().min(1).max(512) })),
+  repositories: z.array(
+    z.object({
+      full_name: z.string().min(1).max(512),
+      permissions: z
+        .object({
+          admin: z.boolean().optional(),
+          maintain: z.boolean().optional(),
+          push: z.boolean().optional(),
+        })
+        .optional(),
+    }),
+  ),
 });
 
 export interface VerifiedGitHubInstallation {
@@ -82,6 +93,13 @@ export interface VerifiedGitHubInstallation {
    * not the installation, is the caller's authorization.
    */
   verifiedRepositories: string[];
+  /**
+   * The subset of {@link verifiedRepositories} the account can push to, from the
+   * `permissions` GitHub returns per repository. An installation token with
+   * write scope acts with the App's rights, not the account's, so visibility
+   * alone must never be enough to mint one.
+   */
+  writableRepositories: string[];
 }
 
 export function isGitHubAppConfigured(): boolean {
@@ -250,14 +268,13 @@ export async function findGitHubInstallationForUser(
 
   if (!match) return null;
 
+  const reachable = await listUserAccessibleInstallationRepositories(userAccessToken, match.id);
   return {
     installationId: match.id,
     accountLogin: match.account.login,
     accountType: match.account.type,
-    verifiedRepositories: await listUserAccessibleInstallationRepositories(
-      userAccessToken,
-      match.id,
-    ),
+    verifiedRepositories: reachable.verified,
+    writableRepositories: reachable.writable,
   };
 }
 
@@ -274,7 +291,7 @@ export async function findGitHubInstallationForUser(
 async function listUserAccessibleInstallationRepositories(
   userAccessToken: string,
   installationId: number,
-): Promise<string[]> {
+): Promise<{ verified: string[]; writable: string[] }> {
   const collected = await collectGitHubRestPages({
     perPage: GITHUB_REPOSITORIES_PER_PAGE,
     maxPages: MAX_GITHUB_VERIFIED_REPOSITORY_PAGES,
@@ -318,7 +335,15 @@ async function listUserAccessibleInstallationRepositories(
       `This account reaches more than ${MAX_VERIFIED_REPOSITORIES} repositories through that installation`,
     );
   }
-  return [...new Set(collected.items.map((repository) => repository.full_name.toLowerCase()))];
+  const verified = new Set<string>();
+  const writable = new Set<string>();
+  for (const repository of collected.items) {
+    const fullName = repository.full_name.toLowerCase();
+    verified.add(fullName);
+    const permissions = repository.permissions;
+    if (permissions?.admin || permissions?.maintain || permissions?.push) writable.add(fullName);
+  }
+  return { verified: [...verified], writable: [...writable] };
 }
 
 export function verifyGitHubWebhookSignature(
@@ -1462,12 +1487,20 @@ export async function getGitHubIssue(
   return toGitHubIssue(parsed.data);
 }
 
-export async function getPrDiff(
+const MAX_PR_DIFF_CHARS = 300_000;
+const PR_SNAPSHOT_ATTEMPTS = 3;
+
+interface FetchedPrDiff {
+  diff: string;
+  truncated: boolean;
+}
+
+async function fetchPrDiff(
   token: string,
   owner: string,
   repo: string,
   prNumber: number,
-): Promise<string> {
+): Promise<FetchedPrDiff> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
   const res = await fetch(
@@ -1489,15 +1522,59 @@ export async function getPrDiff(
     throw new Error(`Failed to fetch PR diff: ${res.status}`);
   }
 
-  let diff = await res.text();
-  // The reviewer chunks what it gets, so this is a memory bound rather than a
-  // review bound. At 50,000 it was the review bound, and everything past the
-  // first few files went unreviewed without anyone being told.
-  const MAX_CHARS = 300_000;
-  if (diff.length > MAX_CHARS) {
-    diff = diff.substring(0, MAX_CHARS) + `\n\n[... diff truncated at ${MAX_CHARS} characters ...]`;
+  const text = await res.text();
+  if (text.length <= MAX_PR_DIFF_CHARS) return { diff: text, truncated: false };
+  return {
+    diff:
+      text.substring(0, MAX_PR_DIFF_CHARS) +
+      `\n\n[... diff truncated at ${MAX_PR_DIFF_CHARS} characters ...]`,
+    truncated: true,
+  };
+}
+
+export async function getPrDiff(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<string> {
+  return (await fetchPrDiff(token, owner, repo, prNumber)).diff;
+}
+
+export interface GitHubPrReviewSnapshot {
+  diff: string;
+  truncated: boolean;
+  headSha: string;
+}
+
+export async function getPrHeadSha(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<string> {
+  return (await getGitHubPullRequestForTask(token, owner, repo, prNumber)).headSha;
+}
+
+/**
+ * The diff of one named head commit. The diff endpoint cannot be pinned to a
+ * commit, so the head is read on both sides of it and the bytes are accepted
+ * only when no push landed in between.
+ */
+export async function getPrReviewSnapshot(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<GitHubPrReviewSnapshot> {
+  for (let attempt = 0; attempt < PR_SNAPSHOT_ATTEMPTS; attempt += 1) {
+    const headSha = await getPrHeadSha(token, owner, repo, prNumber);
+    const { diff, truncated } = await fetchPrDiff(token, owner, repo, prNumber);
+    if ((await getPrHeadSha(token, owner, repo, prNumber)) === headSha) {
+      return { diff, truncated, headSha };
+    }
   }
-  return diff;
+  throw new Error('Pull request head kept changing while its diff was read');
 }
 
 export interface GitHubReviewLineComment {
@@ -1515,6 +1592,7 @@ export async function postPrReview(
   body: string,
   event: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES' = 'COMMENT',
   comments: readonly GitHubReviewLineComment[] = [],
+  commitId?: string,
 ): Promise<void> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
@@ -1533,6 +1611,7 @@ export async function postPrReview(
       body: JSON.stringify({
         body,
         event,
+        ...(commitId ? { commit_id: commitId } : {}),
         ...(comments.length > 0
           ? {
               comments: comments.map((comment) => ({

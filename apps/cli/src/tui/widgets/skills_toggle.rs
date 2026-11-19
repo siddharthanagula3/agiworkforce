@@ -27,6 +27,7 @@ impl Skill {
 
 pub struct SkillsToggleView {
     pub skills: Vec<Skill>,
+    initially_enabled: Vec<bool>,
     state: SelectionState,
     done: bool,
     saved: bool,
@@ -37,6 +38,7 @@ impl SkillsToggleView {
         let len = skills.len();
         Self {
             state: SelectionState::new(len),
+            initially_enabled: skills.iter().map(|skill| skill.enabled).collect(),
             skills,
             done: false,
             saved: false,
@@ -108,16 +110,15 @@ impl InteractiveView for SkillsToggleView {
     }
 
     fn take_result(&mut self) -> Option<super::interactive::OverlayResult> {
-        // On save, hand back the names of skills the user turned OFF so discovery
-        // can persist + skip them. Esc cancels and applies nothing.
         if self.saved {
-            let disabled: Vec<String> = self
+            let choices: Vec<(String, bool)> = self
                 .skills
                 .iter()
-                .filter(|s| !s.enabled)
-                .map(|s| s.name.clone())
+                .zip(&self.initially_enabled)
+                .filter(|(skill, initially_enabled)| skill.enabled != **initially_enabled)
+                .map(|(skill, _)| (skill.name.clone(), skill.enabled))
                 .collect();
-            Some(super::interactive::OverlayResult::SkillsDisabled(disabled))
+            Some(super::interactive::OverlayResult::SkillChoices(choices))
         } else {
             None
         }
@@ -179,26 +180,36 @@ mod tests {
     }
 
     #[test]
-    fn take_result_reports_disabled_skills_only_after_save() {
+    fn take_result_reports_only_changed_skills_after_save() {
         let mut view = make_view();
-        // web-search starts enabled at cursor 0; disable it.
         view.handle_key(KeyAction::Char(' '));
         assert!(!view.skills[0].enabled);
-        // Nothing committed until Enter.
+        view.handle_key(KeyAction::Down);
+        view.handle_key(KeyAction::Char(' '));
         assert!(view.take_result().is_none());
         view.handle_key(KeyAction::Enter);
         match view.take_result() {
-            Some(crate::tui::widgets::interactive::OverlayResult::SkillsDisabled(names)) => {
-                assert!(
-                    names.contains(&"web-search".to_string()),
-                    "just-disabled skill included"
-                );
-                assert!(
-                    names.contains(&"code-review".to_string()),
-                    "already-disabled skill included"
+            Some(crate::tui::widgets::interactive::OverlayResult::SkillChoices(choices)) => {
+                assert_eq!(
+                    choices,
+                    vec![
+                        ("web-search".to_string(), false),
+                        ("code-review".to_string(), true),
+                    ]
                 );
             }
-            other => panic!("expected SkillsDisabled after save, got {other:?}"),
+            other => panic!("expected SkillChoices after save, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn saving_without_changes_or_rows_reports_no_choices() {
+        for mut view in [make_view(), SkillsToggleView::new(vec![])] {
+            view.handle_key(KeyAction::Enter);
+            assert_eq!(
+                view.take_result(),
+                Some(crate::tui::widgets::interactive::OverlayResult::SkillChoices(Vec::new()))
+            );
         }
     }
 

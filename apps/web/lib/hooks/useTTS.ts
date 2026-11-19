@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { useSettingsStore, VOICE_SPEED_RATES } from '@shared/stores/web-settings-store';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { useReadonlyIdentityLifetime, useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
@@ -8,6 +9,8 @@ import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-cha
 
 const SPEECH_ENDPOINT = '/api/voice/speech';
 const SPEECH_CHUNK_CHARACTERS = 3_800;
+const PLAYBACK_FAILED_MESSAGE = 'Read aloud could not play. Try again.';
+const INTENTIONAL_UTTERANCE_ERRORS = new Set(['canceled', 'interrupted']);
 interface SpeechOperation {
   clean: string;
   isCurrent: () => boolean;
@@ -60,6 +63,10 @@ async function fetchSpeech(
   } catch {
     return null;
   }
+}
+
+function reportPlaybackFailure(operation: SpeechOperation): void {
+  if (operation.isCurrent()) toast.error(PLAYBACK_FAILED_MESSAGE);
 }
 
 let speechContext: AudioContext | null = null;
@@ -329,6 +336,7 @@ export function useTTS(ownerScope?: string | null, allowed = true): UseTTSReturn
     (operation: SpeechOperation, primer = false) => {
       if (!operation.isCurrent()) return;
       if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+        if (!primer) reportPlaybackFailure(operation);
         operation.retire();
         return;
       }
@@ -363,9 +371,14 @@ export function useTTS(ownerScope?: string | null, allowed = true): UseTTSReturn
           operation.retire();
         };
         utterance.onend = finish;
-        utterance.onerror = finish;
+        utterance.onerror = (event) => {
+          if (!primer && !INTENTIONAL_UTTERANCE_ERRORS.has(event.error))
+            reportPlaybackFailure(operation);
+          finish();
+        };
         if (operation.isCurrent()) window.speechSynthesis.speak(utterance);
       } catch {
+        reportPlaybackFailure(operation);
         operation.retire();
       }
     },
@@ -452,7 +465,10 @@ export function useTTS(ownerScope?: string | null, allowed = true): UseTTSReturn
             if (!operation.isCurrent()) return;
             if (!buffer) {
               if (index === 0) speakWithDevice(operation);
-              else operation.retire();
+              else {
+                reportPlaybackFailure(operation);
+                operation.retire();
+              }
               return;
             }
             const source = context.createBufferSource();
@@ -478,6 +494,7 @@ export function useTTS(ownerScope?: string | null, allowed = true): UseTTSReturn
           }
           if (operation.isCurrent()) operation.retire();
         } catch {
+          reportPlaybackFailure(operation);
           operation.retire();
         }
       })();

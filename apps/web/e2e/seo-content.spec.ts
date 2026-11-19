@@ -321,9 +321,7 @@ test.describe('public buying guidance', () => {
             const comparisonValues = (label: string) =>
               page
                 .getByRole('row')
-                .filter({
-                  has: page.getByRole('rowheader', { name: label, exact: true }),
-                })
+                .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
                 .getByRole('cell');
             await expect(comparisonValues('Knowledge storage')).toHaveText([
               '100 MB',

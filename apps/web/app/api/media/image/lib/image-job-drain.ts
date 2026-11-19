@@ -8,7 +8,9 @@ import { getImageGenerationJob } from '@/lib/server/image-generation-jobs';
 import {
   isImageJobAttemptDue,
   isImageJobCancellationPending,
+  isImageJobExhaustedAndAbandoned,
   reconcileCancelledImageGenerationJob,
+  reconcileExhaustedImageGenerationJob,
   runImageGenerationJobAttempt,
 } from './image-job-executor';
 import { isImageGenerationJobDrivable } from './image-job-drive-queue';
@@ -46,7 +48,11 @@ export async function driveImageGenerationJob(
     return { jobId, status: (closed ?? job).status, settled: closed !== null };
   }
   if (job.attempts >= job.maxAttempts) {
-    return { jobId, status: job.status, skipped: 'attempts_exhausted' };
+    if (!isImageJobExhaustedAndAbandoned(job, Date.now())) {
+      throw new Error(`Image job ${jobId} is inside its final attempt`);
+    }
+    const closed = await reconcileExhaustedImageGenerationJob({ db: scopedDb, job });
+    return { jobId, status: (closed ?? job).status, settled: closed !== null };
   }
   if (!isImageGenerationJobDrivable(job)) {
     return { jobId, status: job.status, skipped: 'source_image_not_stored' };

@@ -31,6 +31,7 @@ import { admitAttachmentUpload } from '@/lib/server/attachment-allowance';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { uploadNeedsSameOriginRelay } from '@/lib/server/upload-transport';
 import { uploadObjectKey } from '@/lib/server/upload-keys';
+import { directUploadHeaders } from '@/lib/server/direct-upload-headers';
 import { PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION } from '@agiworkforce/cloud-contracts';
 import { createChatAttachmentRelayAuthorization } from '@/lib/server/chat-attachment-completion';
 
@@ -205,7 +206,10 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     uploadHeaders:
       proxyChatAttachmentUpload || proxyKnowledgeFileUpload
         ? { 'Content-Type': mimeType, 'x-csrf-token': request.headers.get('x-csrf-token') ?? '' }
-        : { 'Content-Type': mimeType },
+        : directUploadHeaders(
+            mimeType,
+            'uploadHeaders' in upload ? upload.uploadHeaders : undefined,
+          ),
     ...('publicUrl' in upload ? { publicUrl: upload.publicUrl } : {}),
     expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
   });

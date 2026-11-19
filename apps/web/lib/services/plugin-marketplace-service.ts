@@ -41,6 +41,7 @@ import {
   isPluginSha256,
   isPluginShippedWithProduct,
   isPluginSignatureAlgorithm,
+  isUnambiguousPluginSignatureClaim,
   normalizePluginPermissions,
   pluginIntegrityVerdict,
   pluginSignaturePayload,
@@ -137,14 +138,11 @@ export function verifyPluginPackage(
     return pluginIntegrityVerdict('signature_algorithm_unsupported', claim.pluginId);
   }
 
-  const payload = Buffer.from(
-    pluginSignaturePayload({
-      pluginId: claim.pluginId,
-      version: claim.version,
-      sha256,
-    }),
-    'utf8',
-  );
+  const signedClaim = { pluginId: claim.pluginId, version: claim.version, sha256 };
+  if (!isUnambiguousPluginSignatureClaim(signedClaim)) {
+    return pluginIntegrityVerdict('signature_invalid', claim.pluginId);
+  }
+  const payload = Buffer.from(pluginSignaturePayload(signedClaim), 'utf8');
   let signature: Buffer;
   try {
     signature = Buffer.from(claim.signature, 'base64');

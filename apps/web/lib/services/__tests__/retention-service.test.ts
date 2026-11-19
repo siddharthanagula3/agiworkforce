@@ -16,6 +16,7 @@ import { listLegalHolds } from '../legal-hold-gate';
 import {
   createLegalHold,
   isSwept,
+  listOrganizationsWithRetentionEnforced,
   readRetentionBacklog,
   releaseLegalHold,
   sweepOrganizationRetention,
@@ -155,7 +156,7 @@ describe('sweepOrganizationRetention', () => {
     expect(h.sweepInserts).toEqual([]);
   });
 
-  it('does not sweep a workspace that has not opted in and owes no commitment', async () => {
+  it('does not sweep a workspace that has not turned enforcement on', async () => {
     const h = harness({ policy: { retention_days: 30, retention_enforced: false } });
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
@@ -163,11 +164,21 @@ describe('sweepOrganizationRetention', () => {
     expect(h.deletes).toEqual([]);
   });
 
-  it('sweeps a plan-committed workspace whose owner never turned enforcement on', async () => {
-    // The window is contractual on this plan, so leaving it unswept is the
-    // product failing a commitment it sold, not respecting a preference.
+  it('sweeps nothing for an enterprise workspace with a window and enforcement off', async () => {
     mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
     const h = harness({ policy: { retention_days: 30, retention_enforced: false } });
+
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(result.outcome).toBe('not_enforced');
+    expect(h.deletes).toEqual([]);
+    expect(h.sweepInserts).toEqual([]);
+    expect(mockResolvePlan).not.toHaveBeenCalled();
+  });
+
+  it('sweeps an enterprise workspace with a window once enforcement is on', async () => {
+    mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
+    const h = harness({ policy: { retention_days: 30, retention_enforced: true } });
 
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
@@ -176,7 +187,7 @@ describe('sweepOrganizationRetention', () => {
     expect(sweepRow(h.sweepInserts).retentionDays).toBe(30);
   });
 
-  it('still sweeps nothing for a plan-committed workspace that recorded no window', async () => {
+  it('sweeps nothing for an enterprise workspace that recorded no window', async () => {
     mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
     const h = harness({ policy: null });
 
@@ -250,8 +261,9 @@ describe('sweepOrganizationRetention', () => {
 
     expect(isSwept(result) && result.outcome).toBe('deleted');
     expect(isSwept(result) && result.conversationsHeld).toBe(4);
-    expect(h.deletes[0]).toMatch(/not exists/);
-    expect(h.deletes[0]).toMatch(/legal_hold_custodians/);
+    expect(h.deletes[0]).toContain(
+      'not public.legal_hold_preserves(candidate.organization_id::uuid, candidate.user_id::text, $3::text)',
+    );
 
     const deleteParams = h.query.mock.calls
       .filter(([sql]) => /delete from public\.web_conversations/i.test(String(sql)))
@@ -267,9 +279,13 @@ describe('sweepOrganizationRetention', () => {
     });
     await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
-    // No list of people to get wrong: the statement reads the custodian table.
-    expect(h.deletes[0]).toMatch(/h\.scope = 'custodian' and c\.user_id/);
-    expect(h.deletes[0]).toMatch(/legal_hold_custodians/);
+    // No list of people to get wrong: the statement asks the database, which
+    // reads the custodian table itself.
+    expect(h.deletes[0]).toMatch(/public\.legal_hold_preserves\(candidate\.organization_id/);
+    expect(h.deletes[0]).not.toMatch(/'ann'|'bo'/);
+    expect(h.query.mock.calls.flatMap(([, params]) => (params as unknown[]) ?? [])).not.toEqual(
+      expect.arrayContaining(['ann']),
+    );
   });
 
   it('does not suspend the conversation sweep for a hold narrowed to files', async () => {
@@ -281,7 +297,7 @@ describe('sweepOrganizationRetention', () => {
     // The store is bound, so the database decides that a file-only hold does
     // not cover conversations.
     expect(isSwept(result) && result.outcome).toBe('deleted');
-    expect(h.deletes[0]).toMatch(/resource_types is null or \$3 = any/);
+    expect(h.deletes[0]).toMatch(/public\.legal_hold_preserves\([^)]*, \$3::text\)/);
   });
 
   it('suspends the conversation sweep for a hold that names conversations', async () => {
@@ -388,7 +404,23 @@ describe('sweepOrganizationRetention', () => {
     const deleteParams = h.query.mock.calls.find((call) =>
       /delete from public\.web_conversations/i.test(String(call[0])),
     )?.[1] as unknown[];
-    expect(deleteParams?.[3]).toBe(RETENTION_SWEEP_BATCH);
+    const limitPlaceholder = /limit \$(\d+)/.exec(h.deletes[0] ?? '')?.[1];
+    expect(deleteParams?.[Number(limitPlaceholder) - 1]).toBe(RETENTION_SWEEP_BATCH);
+    expect(deleteParams?.at(-1)).toBe(RETENTION_SWEEP_BATCH);
+  });
+
+  it('does not delete a conversation whose messages a narrowed hold preserves', async () => {
+    const h = harness({
+      holds: [hold({ scope: 'organization', subject_user_id: null, resource_types: ['message'] })],
+    });
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(isSwept(result) && result.outcome).toBe('deleted');
+    expect(h.deletes[0]).toMatch(/from public\.web_messages hold_cascade_1/);
+    const deleteParams = h.query.mock.calls.find((call) =>
+      /delete from public\.web_conversations/i.test(String(call[0])),
+    )?.[1] as unknown[];
+    expect(deleteParams?.slice(2, 4)).toEqual(['conversation', 'message']);
   });
 
   it('a dry run deletes nothing and records nothing as deleted', async () => {
@@ -512,6 +544,29 @@ describe('legal holds', () => {
     expect(created.custodianUserIds).toEqual(['a', 'b']);
     expect(h.db.transaction).toHaveBeenCalledTimes(1);
   });
+
+  it('takes the workspace hold-placement lock before the hold becomes visible', async () => {
+    const h = harness({ holds: [hold()] });
+    const statements: string[] = [];
+    h.query.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      statements.push(text);
+      if (/insert into public\.legal_holds/i.test(text)) return [{ id: 'hold-1' }];
+      return [hold()];
+    });
+
+    await createLegalHold(h.db, {
+      organizationId: ORG,
+      name: 'Matter 41',
+      reason: null,
+      scope: 'member',
+      subjectUserId: 'user-held',
+      createdByUserId: 'user-admin',
+    });
+
+    expect(statements[0]).toMatch(/pg_advisory_xact_lock\(/);
+    expect(statements[1]).toMatch(/insert into public\.legal_holds/i);
+  });
 });
 
 interface BacklogFixture {
@@ -550,6 +605,23 @@ function backlogHarness(fixture: BacklogFixture = {}) {
   });
   return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
 }
+
+describe('listOrganizationsWithRetentionEnforced', () => {
+  it('lists only workspaces with a window and enforcement on, in the order read', async () => {
+    const query = vi.fn(async () => [
+      { organization_id: 'org-stale', retention_days: 30, retention_enforced: false },
+      { organization_id: 'org-on', retention_days: '90', retention_enforced: true },
+      { organization_id: 'org-on-too', retention_days: 7, retention_enforced: true },
+    ]);
+
+    const ids = await listOrganizationsWithRetentionEnforced({
+      query,
+    } as unknown as DatabaseAdapter);
+
+    expect(ids).toEqual(['org-on', 'org-on-too']);
+    expect(mockResolvePlan).not.toHaveBeenCalled();
+  });
+});
 
 describe('readRetentionBacklog', () => {
   beforeEach(() => vi.clearAllMocks());

@@ -20,7 +20,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: vi.fn(async () => null),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOperatorMappedConnectorIds: () => new Set(['slack']),
   getUserGithubInstallations: vi.fn(async () => []),
   getUserCustomConnectorSummaries: vi.fn(async () => []),
@@ -120,3 +121,5 @@ describe('support actions, a proposal cannot be swapped for a different effect',
     expect(row.outcome).toBe('denied');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/user-connector-tools');

@@ -40,6 +40,7 @@ export interface PendingAuthorizationInput
 }
 
 export interface PendingAuthorization extends DiscoveredAuthorizationFacts, ConnectorAccountFacts {
+  authorizationId: string;
   userId: string;
   connectorId: string;
   codeVerifier: string;
@@ -55,7 +56,11 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
   await db.execute(
     `delete from public.connector_oauth_authorizations
       where user_id = $1
-        and (expires_at < now() or consumed_at is not null or connector_id = $2)`,
+        and (
+          expires_at < now()
+          or consumed_at < now() - interval '1 hour'
+          or connector_id = $2
+        )`,
     [input.userId, input.connectorId],
   );
   await db.execute(
@@ -135,6 +140,7 @@ export async function pendingAuthorizationOwner(
 }
 
 interface PendingAuthorizationRow {
+  id: string;
   user_id: string;
   connector_id: string;
   code_verifier_enc: string;
@@ -182,7 +188,7 @@ export async function consumePendingAuthorization(
         and consumed_at is null
         and expires_at > now()
         and user_id = $2
-      returning user_id, connector_id, code_verifier_enc, redirect_uri,
+      returning id, user_id, connector_id, code_verifier_enc, redirect_uri,
                 requested_scopes, return_path, issuer, authorization_endpoint,
                 token_endpoint, resource_url, mcp_url, client_id, discovery_state,
                 account_key, account_label, account_scope`,
@@ -204,6 +210,7 @@ export async function consumePendingAuthorization(
   }
 
   return {
+    authorizationId: row.id,
     userId: row.user_id,
     connectorId: row.connector_id,
     codeVerifier,
@@ -249,8 +256,49 @@ export async function upsertConnectorOAuthGrant(
   connectorId: string,
   tokens: StoredGrantTokens,
   account: ConnectorAccountIdentity = {},
+  authorizationId?: string,
+): Promise<boolean> {
+  if (authorizationId === undefined) {
+    await writeConnectorOAuthGrant(getNeonDb(), userId, connectorId, tokens, account);
+    return true;
+  }
+  return getNeonDb().transaction(async (tx) => {
+    const live = await tx.query<{ id: string }>(
+      `select id
+         from public.connector_oauth_authorizations
+        where id = $1 and user_id = $2 and connector_id = $3 and consumed_at is not null
+        for update`,
+      [authorizationId, userId, connectorId],
+    );
+    if (live.length === 0) return false;
+    await writeConnectorOAuthGrant(tx, userId, connectorId, tokens, account);
+    return true;
+  });
+}
+
+export async function cancelPendingConnectorAuthorizations(
+  userId: string,
+  connectorId: string,
+  accountKey?: string | null,
 ): Promise<void> {
+  const scoped = accountKey !== undefined && accountKey !== null;
   await getNeonDb().execute(
+    `delete from public.connector_oauth_authorizations
+      where user_id = $1 and connector_id = $2${scoped ? ' and account_key = $3' : ''}`,
+    scoped
+      ? [userId, connectorId, normalizeConnectorAccountKey(accountKey)]
+      : [userId, connectorId],
+  );
+}
+
+async function writeConnectorOAuthGrant(
+  db: DatabaseAdapter,
+  userId: string,
+  connectorId: string,
+  tokens: StoredGrantTokens,
+  account: ConnectorAccountIdentity,
+): Promise<void> {
+  await db.execute(
     `insert into public.connector_oauth_grants (
        user_id, connector_id, access_token_enc, refresh_token_enc, token_type,
        granted_scopes, access_token_expires_at, token_endpoint,

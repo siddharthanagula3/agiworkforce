@@ -129,6 +129,49 @@ pub fn discovered_models(probes: &[LocalProviderProbe]) -> Vec<DiscoveredLocalMo
     models
 }
 
+pub fn select_discovered_model<'a>(
+    models: &'a [DiscoveredLocalModel],
+    model: &str,
+    current_provider: &str,
+) -> Result<Option<&'a DiscoveredLocalModel>> {
+    let ollama_default_tag = (!model.contains(':')).then(|| format!("{model}:latest"));
+    let mut matches: Vec<&DiscoveredLocalModel> = models
+        .iter()
+        .filter(|candidate| {
+            candidate.id == model
+                || (candidate.provider == "ollama"
+                    && ollama_default_tag.as_deref() == Some(candidate.id.as_str()))
+        })
+        .collect();
+    matches.sort_by_key(|candidate| candidate.id != model);
+    let Some(first) = matches.first().copied() else {
+        return Ok(None);
+    };
+    if matches
+        .iter()
+        .all(|candidate| candidate.provider == first.provider)
+    {
+        return Ok(Some(first));
+    }
+    if let Some(current) = matches
+        .iter()
+        .copied()
+        .find(|candidate| candidate.provider == current_provider)
+    {
+        return Ok(Some(current));
+    }
+    let mut providers: Vec<&str> = matches
+        .iter()
+        .map(|candidate| candidate.provider.as_str())
+        .collect();
+    providers.sort_unstable();
+    providers.dedup();
+    bail!(
+        "model '{model}' is installed in several local providers ({}); switch to one of them first or run `agi models set {model} --provider <provider>`",
+        providers.join(", ")
+    )
+}
+
 pub async fn probe_ollama(client: &reqwest::Client, base_url: &str) -> LocalProviderProbe {
     let safe_base = normalize_ollama_host_root(base_url);
     if !is_safe_local_base_url(&safe_base) {
@@ -480,6 +523,64 @@ fn failed_probe(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn installed(provider: &str, id: &str) -> DiscoveredLocalModel {
+        DiscoveredLocalModel {
+            id: id.to_string(),
+            provider: provider.to_string(),
+            base_url: "http://localhost:1".to_string(),
+            source: format!("{provider}:fixture"),
+        }
+    }
+
+    #[test]
+    fn an_uncataloged_lmstudio_model_is_selectable_from_discovery() {
+        let models = vec![
+            installed("lmstudio", "local-fixture-a"),
+            installed("lmstudio", "local-fixture-b"),
+        ];
+        let selected = select_discovered_model(&models, "local-fixture-b", "lmstudio")
+            .expect("unambiguous")
+            .expect("installed");
+        assert_eq!(selected.provider, "lmstudio");
+        assert_eq!(selected.id, "local-fixture-b");
+    }
+
+    #[test]
+    fn an_ollama_model_named_without_its_default_tag_is_selectable() {
+        let models = vec![installed("ollama", "fixture-chat:latest")];
+        let selected = select_discovered_model(&models, "fixture-chat", "lmstudio")
+            .expect("unambiguous")
+            .expect("installed");
+        assert_eq!(selected.provider, "ollama");
+    }
+
+    #[test]
+    fn a_model_no_local_server_reports_is_not_selected() {
+        let models = vec![installed("lmstudio", "local-fixture-a")];
+        assert!(
+            select_discovered_model(&models, "hosted-fixture", "lmstudio")
+                .expect("no ambiguity")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_name_shared_by_two_local_providers_follows_the_current_provider_or_is_refused() {
+        let models = vec![
+            installed("lmstudio", "fixture-shared"),
+            installed("ollama", "fixture-shared"),
+        ];
+        let selected = select_discovered_model(&models, "fixture-shared", "ollama")
+            .expect("current provider breaks the tie")
+            .expect("installed");
+        assert_eq!(selected.provider, "ollama");
+
+        let error = select_discovered_model(&models, "fixture-shared", "openai")
+            .expect_err("two local providers and neither is current");
+        let message = error.to_string();
+        assert!(message.contains("lmstudio, ollama"), "{message}");
+    }
 
     #[tokio::test]
     async fn discovery_client_failure_returns_no_models() {

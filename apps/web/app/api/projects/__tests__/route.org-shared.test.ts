@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildWorkspaceAccessGateResponse: vi.fn(async () => null),
+}));
 import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
@@ -163,10 +170,10 @@ describe('project reads with real shared scope and mocked request-scope receipt'
       expect(sql).toMatch(
         detail
           ? /p\.organization_id is not distinct from \$4::uuid/
-          : /p\.organization_id is not distinct from \$5::uuid/,
+          : /p\.organization_id is not distinct from \$4::uuid/,
       );
-      expect(params[detail ? 2 : 3]).toEqual([SHARED_PROJECT]);
-      expect(params[detail ? 3 : 4]).toBe(ORG);
+      expect(params[2]).toEqual([SHARED_PROJECT]);
+      expect(params[3]).toBe(ORG);
     },
   );
 
@@ -204,8 +211,8 @@ describe('project reads with real shared scope and mocked request-scope receipt'
     expect(list.status).toBe(200);
     expect(detail.status).toBe(404);
     expect(mockRlsQuery).toHaveBeenCalledTimes(2);
-    expect(mockRlsQuery.mock.calls[0]![1][3]).toEqual([]);
-    expect(mockRlsQuery.mock.calls[0]![1][4]).toBeNull();
+    expect(mockRlsQuery.mock.calls[0]![1][2]).toEqual([]);
+    expect(mockRlsQuery.mock.calls[0]![1][3]).toBeNull();
     expect(mockRlsQuery.mock.calls[1]![1]).toEqual([SHARED_PROJECT, 'member-1', null]);
     expect(mockSavedOrganizationId).not.toHaveBeenCalled();
   });
@@ -222,8 +229,8 @@ describe('GET /api/projects · shared projects', () => {
     await LIST_PROJECTS(listRequest());
 
     const [sql, params] = mockRlsQuery.mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
-    expect(params[4]).toBe(organizationId);
+    expect(sql).toMatch(/p\.organization_id is not distinct from \$4::uuid/i);
+    expect(params[3]).toBe(organizationId);
   });
 
   it('reads the owned-or-shared row set through the caller-scoped connection', async () => {
@@ -255,11 +262,11 @@ describe('GET /api/projects · shared projects', () => {
     expect(response.status).toBe(200);
 
     const [sql, params] = mockRlsQuery.mock.calls[0]!;
-    expect(sql).toMatch(/p\.user_id = \$1 or p\.id = any\(\$4::uuid\[\]\)/i);
-    expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
+    expect(sql).toMatch(/p\.user_id = \$1 or p\.id = any\(\$3::uuid\[\]\)/i);
+    expect(sql).toMatch(/p\.organization_id is not distinct from \$4::uuid/i);
     expect((params as unknown[])[0]).toBe('member-1');
-    expect((params as unknown[])[3]).toEqual([SHARED_PROJECT]);
-    expect((params as unknown[])[4]).toBe(ORG);
+    expect((params as unknown[])[2]).toEqual([SHARED_PROJECT]);
+    expect((params as unknown[])[3]).toBe(ORG);
   });
 
   it('binds an EMPTY id set for a user in no organization, so nothing widens', async () => {
@@ -268,7 +275,7 @@ describe('GET /api/projects · shared projects', () => {
     await LIST_PROJECTS(listRequest());
 
     const [, params] = mockRlsQuery.mock.calls[0]!;
-    expect((params as unknown[])[3]).toEqual([]);
+    expect((params as unknown[])[2]).toEqual([]);
   });
 
   it('keeps conversations personal inside a shared project', async () => {

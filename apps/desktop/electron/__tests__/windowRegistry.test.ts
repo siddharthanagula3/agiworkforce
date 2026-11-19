@@ -4,8 +4,10 @@ import {
   broadcastRuntimeEvent,
   cascadeBounds,
   conversationIdFromRoute,
+  frontShellEntry,
   planSignOut,
   resolveNavigationConflict,
+  routeAfterConflict,
   type OpenWindow,
   type WindowBounds,
 } from '../windowRegistry';
@@ -69,6 +71,43 @@ describe('a window that navigates onto a conversation another one holds', () => 
 
     expect(resolveNavigationConflict(windows, 1, '/chat/library?surface=artifact')).toBeNull();
     expect(resolveNavigationConflict(windows, 2, '/settings')).toBeNull();
+  });
+});
+
+describe('the shell window an app-menu command acts on', () => {
+  const shells = new Map([
+    [1, 'primary'],
+    [2, 'secondary'],
+  ]);
+
+  it('is the focused shell window', () => {
+    expect(frontShellEntry(shells, 2, 1)).toBe('secondary');
+  });
+
+  it('is nothing when a detached panel is focused, never the primary', () => {
+    expect(frontShellEntry(shells, 99, 1)).toBeNull();
+  });
+
+  it('is the primary only when no window is focused', () => {
+    expect(frontShellEntry(shells, null, 1)).toBe('primary');
+    expect(frontShellEntry(shells, null, null)).toBeNull();
+  });
+});
+
+describe('where a window goes back to after a clash', () => {
+  const OTHER_CHAT = '0b9d4e51-3c7a-4a08-8f12-6d5e4c3b2a19';
+
+  it('returns to the route it came from', () => {
+    expect(routeAfterConflict(`/chat/${OTHER_CHAT}`, `/chat/${ADA_CHAT}`)).toBe(
+      `/chat/${OTHER_CHAT}`,
+    );
+    expect(routeAfterConflict('/chat/library', `/chat/${ADA_CHAT}`)).toBe('/chat/library');
+  });
+
+  it('starts a new chat when it came from the conflicting conversation itself', () => {
+    expect(routeAfterConflict(`/chat/${ADA_CHAT}`, `/chat/${ADA_CHAT}?highlightMessage=4`)).toBe(
+      '/chat',
+    );
   });
 });
 

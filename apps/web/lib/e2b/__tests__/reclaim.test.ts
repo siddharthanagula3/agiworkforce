@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { crons } from '../../../../../vercel.json';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -89,7 +90,8 @@ describe('reclaimAbandonedE2BSandboxes', () => {
       },
     ];
 
-    const { reclaimAbandonedE2BSandboxes, SANDBOX_MAX_AGE_MS } = await import('../reclaim');
+    const { reclaimAbandonedE2BSandboxes } = await import('../reclaim');
+    const { SANDBOX_MAX_AGE_MS } = await import('../reclaim-schedule');
     const report = await reclaimAbandonedE2BSandboxes({
       now: new Date(SANDBOX_MAX_AGE_MS + 1),
     });
@@ -205,5 +207,33 @@ describe('paused sandboxes give up their slot sooner', () => {
     expect(report.reclaimed).toBe(0);
     expect(report.retained).toBe(1);
     expect(kill).not.toHaveBeenCalled();
+  });
+});
+
+function minutesOfHour(field: string): number[] {
+  if (field === '*') return Array.from({ length: 60 }, (_, minute) => minute);
+  const step = /^\*\/(\d+)$/u.exec(field);
+  if (step) {
+    const every = Number(step[1]);
+    return Array.from({ length: Math.ceil(60 / every) }, (_, index) => index * every);
+  }
+  return field
+    .split(',')
+    .map(Number)
+    .sort((a, b) => a - b);
+}
+
+describe('the reclaim sweep schedule', () => {
+  it('runs at least as often as sandbox reservation leases assume', async () => {
+    const { RECLAIM_SWEEP_INTERVAL_MS } = await import('../reclaim-schedule');
+    const schedule = crons.find(({ path }) => path === '/api/cron/reclaim-sandboxes')?.schedule;
+    const [minuteField = '', ...hourAndDayFields] = (schedule ?? '').split(' ');
+    expect(hourAndDayFields).toEqual(['*', '*', '*', '*']);
+
+    const minutes = minutesOfHour(minuteField);
+    const longestGapMinutes = Math.max(
+      ...minutes.map((minute, index) => (minutes[index + 1] ?? minutes[0]! + 60) - minute),
+    );
+    expect(longestGapMinutes * 60_000).toBeLessThanOrEqual(RECLAIM_SWEEP_INTERVAL_MS);
   });
 });

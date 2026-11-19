@@ -25,6 +25,8 @@ import {
 } from '@/lib/services/cloud-code-session-service';
 
 import {
+  SECURITY_SCAN_DELIVERY_ERROR_MAX_LENGTH,
+  SECURITY_SCAN_DELIVERY_STATUS,
   SECURITY_SCAN_STATUS,
   type SecurityScanCompletedReport,
   type SecurityScanDecision,
@@ -558,7 +560,7 @@ async function deliverApprovedFix(
   } catch (error) {
     logger.warn({ error, sessionId: context.sessionId }, '[security-scan] fix push failed');
     return {
-      status: SECURITY_SCAN_STATUS.failed,
+      status: SECURITY_SCAN_DELIVERY_STATUS.failed,
       pullRequestUrl: null,
       error: deliveryError(error),
     };
@@ -569,10 +571,68 @@ async function deliverApprovedFix(
       context.owner,
       context.sessionId,
     );
-    return { status: 'pushed', pullRequestUrl: pullRequest.url, error: null };
+    return {
+      status: SECURITY_SCAN_DELIVERY_STATUS.pushed,
+      pullRequestUrl: pullRequest.url,
+      error: null,
+    };
   } catch (error) {
     logger.warn({ error, sessionId: context.sessionId }, '[security-scan] pull request failed');
-    return { status: 'pushed', pullRequestUrl: null, error: deliveryError(error) };
+    return {
+      status: SECURITY_SCAN_DELIVERY_STATUS.pushed,
+      pullRequestUrl: null,
+      error: deliveryError(error),
+    };
+  }
+}
+
+function withFindingDelivery(
+  report: SecurityScanCompletedReport,
+  findingId: string,
+  delivery: SecurityScanDeliveryResult,
+): SecurityScanCompletedReport {
+  return {
+    ...report,
+    findings: report.findings.map((entry) =>
+      entry.id === findingId ? { ...entry, delivery } : entry,
+    ),
+  };
+}
+
+async function recordDelivery(
+  context: SecurityScanServiceContext,
+  scanId: string,
+  findingId: string,
+  delivery: SecurityScanDeliveryResult,
+): Promise<SecurityScanCompletedReport | null> {
+  const stored: SecurityScanDeliveryResult = {
+    ...delivery,
+    error: delivery.error?.slice(0, SECURITY_SCAN_DELIVERY_ERROR_MAX_LENGTH) ?? null,
+  };
+  try {
+    return await withSecurityScanWorkspace(
+      context.db,
+      context.owner,
+      context.sessionId,
+      context.planTier,
+      async (workspace) => {
+        const report = await workspace.readReport();
+        if (report?.status !== SECURITY_SCAN_STATUS.completed || report.scanId !== scanId) {
+          return null;
+        }
+        const finding = report.findings.find((entry) => entry.id === findingId);
+        if (finding?.state !== 'approved') return null;
+        const updated = withFindingDelivery(report, findingId, stored);
+        await workspace.writeReport(updated);
+        return updated;
+      },
+    );
+  } catch (error) {
+    logger.warn(
+      { error, sessionId: context.sessionId },
+      '[security-scan] fix delivery outcome could not be recorded',
+    );
+    return null;
   }
 }
 
@@ -622,6 +682,15 @@ export async function decideSecurityScanFinding(
         ...finding,
         state: input.decision === 'approve' ? 'approved' : 'dismissed',
         decidedAt: new Date().toISOString(),
+        ...(input.decision === 'approve'
+          ? {
+              delivery: {
+                status: SECURITY_SCAN_DELIVERY_STATUS.pending,
+                pullRequestUrl: null,
+                error: null,
+              },
+            }
+          : {}),
       };
       const updated: SecurityScanCompletedReport = {
         ...report,
@@ -634,7 +703,11 @@ export async function decideSecurityScanFinding(
     },
   );
 
-  const delivery =
-    input.decision === 'approve' ? await deliverApprovedFix(context, decided.finding) : null;
-  return { report: decided.report, delivery };
+  if (input.decision !== 'approve') return { report: decided.report, delivery: null };
+  const delivery = await deliverApprovedFix(context, decided.finding);
+  const recorded = await recordDelivery(context, input.scanId, decided.finding.id, delivery);
+  return {
+    report: recorded ?? withFindingDelivery(decided.report, decided.finding.id, delivery),
+    delivery,
+  };
 }

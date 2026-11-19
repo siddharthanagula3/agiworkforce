@@ -18,6 +18,7 @@ import {
   type ToolAnnotations,
 } from './tool-metadata';
 import {
+  advanceConnectorPermissionGeneration,
   loadConnectorToolSessionGrants,
   insertConnectorToolSessionGrants,
   NO_SESSION_GRANTS,
@@ -81,6 +82,7 @@ export async function saveConnectorToolPermissions(
       ? toolName === connectorCategoryToolName('write')
       : isDestructiveConnectorTool(input.connectorId, toolName, annotations);
   });
+  await advanceConnectorPermissionGeneration(db, input.userId, input.connectorId);
   for (const toolName of toolNames)
     await revokeConnectorSessionGrants(db, input.connectorId, toolName);
   const rows = await db.query<{ tool_name: string }>(
@@ -113,14 +115,68 @@ export class ConnectorToolPermissionChangedError extends Error {
   }
 }
 
+export class ConnectorToolPermissionStaleError extends Error {
+  constructor() {
+    super(
+      "This tool's permissions changed after you were asked. Approve this call once, or deny it.",
+    );
+    this.name = 'ConnectorToolPermissionStaleError';
+  }
+}
+
+const GENERATION_PATTERN = /^\d{1,19}$/;
+
+async function lockConnectorPermissionGeneration(
+  db: Pick<DatabaseAdapter, 'query'>,
+  userId: string,
+  connectorId: string,
+): Promise<string> {
+  const rows = await db.query<{ generation: string | number }>(
+    `insert into public.connector_permission_generations (user_id, connector_id, generation)
+     values ($1, $2, 0)
+     on conflict (user_id, connector_id)
+       do update set generation = connector_permission_generations.generation
+     returning generation::text as generation`,
+    [userId, connectorId],
+  );
+  const generation = rows.length === 1 ? String(rows[0]!.generation) : '';
+  if (!GENERATION_PATTERN.test(generation))
+    throw new Error('The connector permission generation could not be read.');
+  return generation;
+}
+
+/**
+ * Each remembered approval names the generation its card was offered under.
+ * Every connector's generation is locked and compared, in a fixed order,
+ * before anything is written, so a reset that committed after the card was
+ * built refuses the whole batch and one that starts later waits for it.
+ */
 export async function saveScopedConnectorToolApprovals(
   db: DatabaseAdapter,
   input: ConnectorToolSessionScope & {
-    approvals: readonly ScopedToolApproval[];
+    approvals: readonly (ScopedToolApproval & { reviewedGeneration: string })[];
     annotationsFor?: (connectorId: string, toolName: string) => ToolAnnotations | undefined;
   },
 ): Promise<void> {
+  const reviewed = new Map<string, string>();
+  for (const approval of input.approvals) {
+    const prior = reviewed.get(approval.connectorId);
+    if (
+      !GENERATION_PATTERN.test(approval.reviewedGeneration) ||
+      (prior !== undefined && prior !== approval.reviewedGeneration)
+    )
+      throw new ConnectorToolPermissionStaleError();
+    reviewed.set(approval.connectorId, approval.reviewedGeneration);
+  }
   await db.transaction(async (transaction) => {
+    for (const connectorId of [...reviewed.keys()].sort()) {
+      const current = await lockConnectorPermissionGeneration(
+        transaction,
+        input.userId,
+        connectorId,
+      );
+      if (current !== reviewed.get(connectorId)) throw new ConnectorToolPermissionStaleError();
+    }
     for (const approval of input.approvals.filter((entry) => entry.scope === 'always')) {
       const result = await saveConnectorToolPermissions(transaction, {
         userId: input.userId,
@@ -163,6 +219,12 @@ export interface ConnectorToolPermissions {
   isConnectorDenied(connectorId: string): boolean;
   isSessionGranted?(qualifiedName: string, currentRisk?: ToolApprovalRiskTier): boolean;
   canRememberApproval?(qualifiedName: string): boolean;
+  /**
+   * The connector's permission generation, read before these verdicts were.
+   * A remembered approval offered under these verdicts is saved only while
+   * the generation is unchanged.
+   */
+  permissionGenerationFor?(connectorId: string): string | undefined;
   readonly sessionGrantsAvailable?: boolean;
   readonly size: number;
 }
@@ -551,6 +613,7 @@ export async function loadConnectorToolPermissions(
   session?: Pick<ConnectorToolSessionScope, 'conversationId' | 'trustBoundary'>,
 ): Promise<ConnectorToolPermissions> {
   if (!userId) return EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  const generations = await readConnectorPermissionGenerations(db, userId);
   // Checked here rather than at each caller: the completions, approve and
   // resume-input routes all resolve permissions through this function, so a
   // route added later inherits lockdown instead of having to remember it.
@@ -591,16 +654,52 @@ export async function loadConnectorToolPermissions(
       : Promise.resolve(null),
     workspaceToolRules(db, organizationId),
   ]);
-  const governed = withWorkspaceToolRules(grants ? withSessionGrants(base, grants) : base, rules);
+  const ruled = withWorkspaceToolRules(grants ? withSessionGrants(base, grants) : base, rules);
+  const governed = standingPermissionsReadable ? ruled : withoutStandingApprovals(ruled);
   return withDisabledConnectorIds(
     {
       ...governed,
       sessionGrantsAvailable: grants !== null && grants !== NO_SESSION_GRANTS,
       canRememberApproval: (qualifiedName) =>
-        standingPermissionsReadable && governed.canRememberApproval?.(qualifiedName) === true,
+        standingPermissionsReadable &&
+        generations !== null &&
+        governed.canRememberApproval?.(qualifiedName) === true,
+      permissionGenerationFor: (connectorId) =>
+        generations === null ? undefined : (generations.get(connectorId) ?? '0'),
     },
     disabledConnectorIds,
   );
+}
+
+/**
+ * Read before any verdict the turn's approval cards are built from. A failed
+ * read offers no remembered scope rather than inventing a generation.
+ */
+async function readConnectorPermissionGenerations(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ReadonlyMap<string, string> | null> {
+  try {
+    const rows = await db.query<{ connector_id: string; generation: string | number }>(
+      `select connector_id, generation::text as generation
+         from public.connector_permission_generations
+        where user_id = $1`,
+      [userId],
+    );
+    const generations = new Map<string, string>();
+    for (const row of rows) {
+      const generation = String(row.generation);
+      if (!GENERATION_PATTERN.test(generation)) return null;
+      generations.set(row.connector_id, generation);
+    }
+    return generations;
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : error, userId },
+      '[connector-permissions] permission generations unavailable; approvals are asked once',
+    );
+    return null;
+  }
 }
 
 async function workspaceToolRules(

@@ -640,11 +640,21 @@ impl ToolExecutor {
 
         match write_result {
             Ok(_) => {
+                if let Some(ext) = Path::new(&validated_path_string)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                {
+                    let _ = try_auto_format(&validated_path_string, ext).await;
+                }
+
                 if let Some(app_handle) = &self.app_handle {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                         let task_id = Uuid::new_v4().to_string();
                         let path_buf = std::path::PathBuf::from(&validated_path);
                         let tracker = &undo_state.change_tracker;
+                        let final_content = fs::read_to_string(&validated_path)
+                            .await
+                            .unwrap_or_else(|_| content.clone());
                         if file_exists {
                             let restorable = old_content.is_some();
                             let _ = tracker
@@ -652,7 +662,7 @@ impl ToolExecutor {
                                     "file_write".to_string(),
                                     path_buf,
                                     old_content.clone(),
-                                    Some(content.clone()),
+                                    Some(final_content),
                                     task_id,
                                     restorable,
                                     restorable
@@ -661,18 +671,10 @@ impl ToolExecutor {
                                 .await;
                         } else {
                             let _ = tracker
-                                .record_file_created(path_buf, content.clone(), task_id)
+                                .record_file_created(path_buf, final_content, task_id)
                                 .await;
                         }
                     }
-                }
-
-                // Auto-format after write (best-effort, don't fail the write)
-                if let Some(ext) = Path::new(&validated_path_string)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                {
-                    let _ = try_auto_format(&validated_path_string, ext).await;
                 }
 
                 Ok(ToolResult {
@@ -743,19 +745,27 @@ impl ToolExecutor {
                     if let Some(undo_state) = app_handle.try_state::<UndoState>() {
                         let task_id = Uuid::new_v4().to_string();
                         let path_buf = std::path::PathBuf::from(&validated_path);
-                        let restorable = file_content_before.is_some();
-                        let _ = undo_state
-                            .change_tracker
-                            .record_tool_executed_with_path(
-                                "file_delete".to_string(),
-                                path_buf,
-                                file_content_before,
-                                None,
-                                task_id,
-                                restorable,
-                                restorable.then(|| "Restore deleted file".to_string()),
-                            )
-                            .await;
+                        let tracker = &undo_state.change_tracker;
+                        match file_content_before {
+                            Some(content) => {
+                                let _ = tracker
+                                    .record_file_deleted(path_buf, content, task_id)
+                                    .await;
+                            }
+                            None => {
+                                let _ = tracker
+                                    .record_tool_executed_with_path(
+                                        "file_delete".to_string(),
+                                        path_buf,
+                                        None,
+                                        None,
+                                        task_id,
+                                        false,
+                                        None,
+                                    )
+                                    .await;
+                            }
+                        }
                     }
                 }
 

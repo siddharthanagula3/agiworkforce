@@ -22,7 +22,7 @@ import { GET } from '../route';
 const ORG = '11111111-1111-4111-8111-111111111111';
 
 function bind({
-  enforcedOrgs = [ORG],
+  policies = [{ organization_id: ORG, retention_days: 90, retention_enforced: true }],
   enforced = true,
   holdsThrow = false,
   holds = [] as Record<string, unknown>[],
@@ -32,11 +32,12 @@ function bind({
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
     if (/from public\.organization_admin_policies/i.test(text)) {
-      if (/retention_enforced = true/i.test(text)) {
+      if (/left join lateral/i.test(text)) {
         if (listThrows) throw new Error('connection refused');
-        return enforcedOrgs.map((id) => ({ organization_id: id }));
+        return policies;
       }
-      return [{ retention_days: 90, retention_enforced: enforced }];
+      const [own] = policies;
+      return [{ retention_days: own?.retention_days ?? 90, retention_enforced: enforced }];
     }
     if (/^\s*select count/i.test(text) && /from public\.legal_holds/i.test(text)) {
       if (holdsThrow) throw new Error('connection reset');
@@ -72,14 +73,52 @@ describe('GET /api/cron/enforce-workspace-retention', () => {
     expect((await GET(req() as never)).status).toBe(401);
   });
 
-  it('only considers organizations that opted in', async () => {
+  it('sweeps an organization with a window and enforcement on', async () => {
     bind();
-    await GET(req() as never);
+    const body = (await (await GET(req() as never)).json()) as {
+      organizationsSwept: number;
+      conversationsDeleted: number;
+    };
 
-    const listCall = mockQuery.mock.calls.find((call) =>
-      /retention_enforced = true/i.test(String(call[0])),
-    );
-    expect(listCall, 'the sweep must filter on the opt-in column').toBeDefined();
+    expect(body.organizationsSwept).toBe(1);
+    expect(body.conversationsDeleted).toBe(1);
+  });
+
+  it('sweeps nothing for an organization with a window and enforcement off', async () => {
+    bind({
+      policies: [{ organization_id: ORG, retention_days: 90, retention_enforced: false }],
+      enforced: false,
+    });
+    const body = (await (await GET(req() as never)).json()) as {
+      organizationsConsidered: number;
+      organizationsSwept: number;
+      conversationsDeleted: number;
+    };
+
+    expect(body.organizationsConsidered).toBe(0);
+    expect(body.organizationsSwept).toBe(0);
+    expect(body.conversationsDeleted).toBe(0);
+    expect(
+      mockQuery.mock.calls.some((c) => /delete from public\.web_conversations/i.test(String(c[0]))),
+    ).toBe(false);
+    expect(
+      mockQuery.mock.calls.some((c) =>
+        /insert into public\.organization_retention_sweeps/i.test(String(c[0])),
+      ),
+    ).toBe(false);
+  });
+
+  it('never deletes for an organization the sweep itself finds not enforced', async () => {
+    bind({
+      policies: [{ organization_id: ORG, retention_days: 90, retention_enforced: true }],
+      enforced: false,
+    });
+    const body = (await (await GET(req() as never)).json()) as { conversationsDeleted: number };
+
+    expect(body.conversationsDeleted).toBe(0);
+    expect(
+      mockQuery.mock.calls.some((c) => /delete from public\.web_conversations/i.test(String(c[0]))),
+    ).toBe(false);
   });
 
   it('deletes nothing anywhere when the organization list cannot be read', async () => {
@@ -143,8 +182,11 @@ describe('GET /api/cron/enforce-workspace-retention', () => {
     let seen = 0;
     mockQuery.mockImplementation(async (sql: string) => {
       const text = String(sql);
-      if (/retention_enforced = true/i.test(text)) {
-        return [{ organization_id: ORG }, { organization_id: other }];
+      if (/left join lateral/i.test(text)) {
+        return [
+          { organization_id: ORG, retention_days: 90, retention_enforced: true },
+          { organization_id: other, retention_days: 90, retention_enforced: true },
+        ];
       }
       if (/from public\.organization_admin_policies/i.test(text)) {
         seen += 1;

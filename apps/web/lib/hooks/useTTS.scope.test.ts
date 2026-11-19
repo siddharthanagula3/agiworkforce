@@ -14,7 +14,7 @@ describe('read-aloud caller lifetime scopes', () => {
     const transcript = source('features/code/components/CodeTranscript.tsx');
     expect(transcript).toContain('readAloudScope={session.id}');
     expect(transcript).toContain('readAloudScope={readAloudScope}');
-    expect(transcript).toContain('useTTS(readAloudScope, !readAloudUnavailableReason)');
+    expect(transcript).toMatch(/useTTS\(\s*readAloudScope,\s*!readAloudUnavailableReason,?\s*\)/u);
     expect(source('features/code/components/LocalSessionPanel.tsx')).toContain(
       'readAloudScope={JSON.stringify([session.rootId, session.id])}',
     );

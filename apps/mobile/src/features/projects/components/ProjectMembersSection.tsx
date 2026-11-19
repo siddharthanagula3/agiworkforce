@@ -139,8 +139,7 @@ export function ProjectMembersSection({
           marginBottom: 24,
         }}
       >
-        {error ??
-          'Only you can open this project. Projects in a workspace can be shared with its members.'}
+        {error ?? 'Only you can open this project. Workspace projects can be shared.'}
       </Text>
     );
   }
@@ -259,9 +258,7 @@ export function ProjectMembersSection({
           <Text
             style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}
           >
-            {
-              'Only you can open this project; sharing includes its instructions and files, not chats.'
-            }
+            {'Only you can open this. Sharing includes instructions and files, not chats.'}
           </Text>
           <View style={{ gap: 8 }}>
             <OutlineButton
@@ -284,7 +281,7 @@ export function ProjectMembersSection({
         </>
       ) : (
         <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
-          This project is not shared. Your workspace role does not let you share your work.
+          Not shared. Your workspace role doesn’t allow sharing.
         </Text>
       )}
       {error ? (

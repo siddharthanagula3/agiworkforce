@@ -179,6 +179,10 @@ export async function transferWorkspaceOwnership(
   );
 }
 
-export async function removeWorkspaceMember(memberId: string): Promise<void> {
-  await api.delete(`/api/settings/team/${encodeURIComponent(memberId)}`);
+export async function removeWorkspaceMember(
+  memberId: string,
+): Promise<{ cleanupComplete: boolean }> {
+  const response = await api.delete<unknown>(`/api/settings/team/${encodeURIComponent(memberId)}`);
+  const warnings = isRecord(response) ? response['warnings'] : undefined;
+  return { cleanupComplete: !Array.isArray(warnings) || warnings.length === 0 };
 }

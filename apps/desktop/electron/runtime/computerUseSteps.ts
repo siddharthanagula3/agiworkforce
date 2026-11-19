@@ -8,7 +8,7 @@ import {
   type PermissionScope,
 } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_NAMES, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { gateApplications } from './applicationControl';
+import { confirmApplicationsUnchanged, gateApplications } from './applicationControl';
 import { showDevicePrompt } from './devicePrompts';
 import { ComputerUseRefused, readFrontWindow } from './computerUseService';
 import { showNativeMessage } from './nativeSurface';
@@ -122,9 +122,10 @@ export async function runScreenAction(
   args: StepArgs,
   action: () => Promise<unknown>,
 ): Promise<{ front: DeviceFrontWindow | null }> {
-  await gateApplications(window, command, args);
+  const approved = await gateApplications(window, command, args);
   await reviewScreenStep(window, command, args);
   await gateClipboardKeys(window, command, args);
+  await confirmApplicationsUnchanged(command, args, approved);
   try {
     await withoutInputWatch(action, { releaseStopShortcut: pressesStopKey(command, args) });
   } catch (error) {

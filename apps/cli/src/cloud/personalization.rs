@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 use super::client::{CloudClient, CloudError, Route};
+use crate::platform::runtime::session::PrivacyMode;
 
 pub const PREFERENCES_PATH: &str = "/api/settings/preferences";
 const GENERAL: &str = "general";
@@ -138,25 +139,25 @@ pub fn usage() -> String {
     )
 }
 
-pub async fn run(arg: &str) -> Result<String, String> {
+pub async fn run(privacy: PrivacyMode, arg: &str) -> Result<String, String> {
     let arg = arg.trim();
     let (action, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
     match action {
-        "" | "show" => show().await.map_err(|error| error.to_string()),
+        "" | "show" => show(privacy).await.map_err(|error| error.to_string()),
         "set" => {
             let (name, value) = rest
                 .trim()
                 .split_once(char::is_whitespace)
                 .ok_or_else(usage)?;
-            save(name, Some(value.trim())).await
+            save(privacy, name, Some(value.trim())).await
         }
-        "clear" | "reset" => save(rest.trim(), None).await,
+        "clear" | "reset" => save(privacy, rest.trim(), None).await,
         _ => Err(usage()),
     }
 }
 
-async fn show() -> Result<String, CloudError> {
-    let client = CloudClient::connect_managed()?;
+async fn show(privacy: PrivacyMode) -> Result<String, CloudError> {
+    let client = CloudClient::connect(privacy)?;
     let preferences: Preferences = client.call(&preferences_route(), &[], None).await?;
     Ok(format_preferences(&preferences.settings, client.base()))
 }
@@ -201,7 +202,7 @@ fn display_value(field: &Field, value: Option<&Value>) -> String {
     }
 }
 
-async fn save(name: &str, value: Option<&str>) -> Result<String, String> {
+async fn save(privacy: PrivacyMode, name: &str, value: Option<&str>) -> Result<String, String> {
     let field = FIELDS
         .iter()
         .find(|field| field.name == name)
@@ -210,7 +211,7 @@ async fn save(name: &str, value: Option<&str>) -> Result<String, String> {
         Some(value) => validate(field, value)?,
         None => Value::Null,
     };
-    let client = CloudClient::connect_managed().map_err(|error| error.to_string())?;
+    let client = CloudClient::connect(privacy).map_err(|error| error.to_string())?;
     let body = json!({ "namespace": field.namespace, "patch": { field.key: stored } });
     let _: Value = client
         .call(&save_route(), &[], Some(&body))
@@ -271,8 +272,11 @@ fn validate(field: &Field, value: &str) -> Result<Value, String> {
 const CAPABILITIES_NAMESPACE: &str = "capabilities";
 const MEMORY_SWITCH: &str = "memory";
 
-pub async fn memory_switch(enabled: Option<bool>) -> Result<String, CloudError> {
-    let client = CloudClient::connect_managed()?;
+pub async fn memory_switch(
+    privacy: PrivacyMode,
+    enabled: Option<bool>,
+) -> Result<String, CloudError> {
+    let client = CloudClient::connect(privacy)?;
     if let Some(enabled) = enabled {
         let body =
             json!({ "namespace": CAPABILITIES_NAMESPACE, "patch": { MEMORY_SWITCH: enabled } });
@@ -323,8 +327,12 @@ async fn excluded_terms(client: &CloudClient) -> Result<Vec<String>, CloudError>
         .unwrap_or_default())
 }
 
-pub async fn never_remember(add: &[String], remove: &[String]) -> Result<String, CloudError> {
-    let client = CloudClient::connect_managed()?;
+pub async fn never_remember(
+    privacy: PrivacyMode,
+    add: &[String],
+    remove: &[String],
+) -> Result<String, CloudError> {
+    let client = CloudClient::connect(privacy)?;
     let mut terms = excluded_terms(&client).await?;
     if add.is_empty() && remove.is_empty() {
         return Ok(format_terms(&terms));
@@ -380,5 +388,23 @@ mod tests {
         let field = FIELDS.iter().find(|field| field.name == "style").unwrap();
         assert_eq!(validate(field, "learning").unwrap(), json!("learning"));
         assert!(validate(field, "unknown").is_err());
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_reads_or_writes_account_preferences() {
+        let refusal = |mode: PrivacyMode| CloudError::NotManaged(mode).to_string();
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            assert_eq!(run(mode, "show").await, Err(refusal(mode)));
+            assert_eq!(run(mode, "set name Ada").await, Err(refusal(mode)));
+            assert_eq!(run(mode, "clear name").await, Err(refusal(mode)));
+            let switched = memory_switch(mode, Some(false))
+                .await
+                .expect_err("the memory switch is an account setting");
+            assert!(matches!(switched, CloudError::NotManaged(seen) if seen == mode));
+            let never = never_remember(mode, &["salary".to_string()], &[])
+                .await
+                .expect_err("the never-remember list is an account setting");
+            assert!(matches!(never, CloudError::NotManaged(seen) if seen == mode));
+        }
     }
 }

@@ -100,3 +100,52 @@ describe('the response style reaches the prompt', () => {
     expect(await buildCustomInstructionsPreamble(db, 'user-1')).not.toMatch(/Respond in /u);
   });
 });
+
+describe('a name or description cleared in web settings stays cleared', () => {
+  it('does not fall back to the mobile nickname once the web name is saved empty', async () => {
+    bindSettings({
+      general: { preferredName: '' },
+      personalization: { nickname: 'Sam', style: 'concise' },
+    });
+
+    const preamble = await buildCustomInstructionsPreamble(db, 'user-1');
+
+    expect(preamble).not.toContain('Sam');
+    expect(preamble).not.toContain('preferred name');
+  });
+
+  it('treats a whitespace-only web name as cleared', async () => {
+    bindSettings({
+      general: { preferredName: '   ' },
+      personalization: { nickname: 'Sam', style: 'concise' },
+    });
+
+    expect(await buildCustomInstructionsPreamble(db, 'user-1')).not.toContain('Sam');
+  });
+
+  it('uses the mobile nickname when web never saved a name', async () => {
+    bindSettings({ personalization: { nickname: 'Sam' } });
+
+    expect(await buildCustomInstructionsPreamble(db, 'user-1')).toContain('preferred name is Sam');
+  });
+
+  it('prefers the web name over the mobile nickname', async () => {
+    bindSettings({
+      general: { preferredName: 'Samantha' },
+      personalization: { nickname: 'Sam' },
+    });
+
+    expect(await buildCustomInstructionsPreamble(db, 'user-1')).toContain(
+      'preferred name is Samantha',
+    );
+  });
+
+  it('does not fall back to the mobile about-you once the web copy is saved empty', async () => {
+    bindSettings({
+      general: { aboutYou: '' },
+      personalization: { aboutYou: 'I run a bakery.', style: 'concise' },
+    });
+
+    expect(await buildCustomInstructionsPreamble(db, 'user-1')).not.toContain('I run a bakery.');
+  });
+});

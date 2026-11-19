@@ -155,20 +155,80 @@ describe('iOS Share Extension contract', () => {
     );
   });
 
-  it('moves the shared files out of the App Group before the drafts are deleted', () => {
-    expect(hostInboxSource).toContain('stageSharedFiles');
+  it('copies shared files for review and keeps the App Group copy until the receipt is acknowledged', () => {
+    const staging = hostInboxSource.slice(
+      hostInboxSource.indexOf('private static func stageSharedFiles'),
+      hostInboxSource.indexOf('private static func acknowledge('),
+    );
+    expect(staging).toContain('copyItem(at: source, to: destination)');
+    expect(staging).not.toContain('fileManager.moveItem');
+    expect(staging).not.toContain('prefix(');
     expect(hostInboxSource).toContain('cachesDirectory');
-    expect(hostInboxSource).toContain('moveItem(at: source, to: destination)');
-    expect(hostInboxSource).toContain('source.path.hasPrefix(inbox.standardizedFileURL.path)');
+    expect(hostInboxSource).toContain('let root = paths.files.standardizedFileURL.path + "/"');
+    expect(hostInboxSource).toContain('"unavailableFileCount": staged.unavailable');
   });
 
-  it('wires a main-app native inbox consumer for the second review', () => {
+  it('claims a bounded batch by renaming its manifests instead of deleting the inbox', () => {
+    const claim = hostInboxSource.slice(
+      hostInboxSource.indexOf('private static func claimNextBatch'),
+      hostInboxSource.indexOf('private static func deliver('),
+    );
+    expect(claim).toContain('fileCount + files > maximumSharedFiles');
+    expect(claim).toContain('textBytes + bytes > maximumSharedBytes');
+    expect(claim).toContain('try fileManager.moveItem(');
+    expect(claim).toContain('to: claim.appendingPathComponent(manifest.lastPathComponent');
+    expect(hostInboxSource).not.toContain(
+      'removeItem(at: inbox.appendingPathComponent("files", isDirectory: true))',
+    );
+    expect(hostInboxSource).toContain(
+      'outstandingReceipts(paths).first(where: { !held.contains($0) })',
+    );
+  });
+
+  it('deletes only the manifests and files that the acknowledged receipt owns', () => {
+    const acknowledge = hostInboxSource.slice(
+      hostInboxSource.indexOf('private static func acknowledge('),
+      hostInboxSource.indexOf('private static func pruneAbandonedCopies'),
+    );
+    expect(acknowledge).toContain('guard isReceiptIdentifier(receiptId)');
+    expect(acknowledge).toContain('for file in decodeShare(manifest)?.files ?? []');
+    expect(acknowledge).toContain('guard let source = ownedSource(file, paths)');
+    expect(acknowledge).toContain('try fileManager.removeItem(at: claim)');
+    expect(acknowledge).toContain('if discardStagedCopies');
+    const prune = hostInboxSource.slice(
+      hostInboxSource.indexOf('private static func pruneAbandonedCopies'),
+    );
+    expect(prune).toContain('referenced.contains(where:');
+    expect(prune).toContain('!outstanding.contains(entry.lastPathComponent)');
+  });
+
+  it('wires a main-app native inbox with claim and acknowledgement methods', () => {
     expect(nativeModulesPluginSource).toContain("'AGIShareInbox.m'");
     expect(nativeModulesPluginSource).toContain("'AGIShareInbox.swift'");
     expect(hostInboxBridge).toContain('RCT_EXTERN_MODULE(AGIShareInbox, NSObject)');
-    expect(hostInboxSource).toContain('consumePendingShares');
+    expect(hostInboxBridge).toContain('claimPendingShares:(NSArray<NSString *> *)heldReceipts');
+    expect(hostInboxBridge).toContain('acknowledgePendingShares:(NSString *)receiptId');
+    expect(hostInboxBridge).toContain('discardStagedCopies:(BOOL)discardStagedCopies');
+    expect(hostInboxSource).toContain('@objc(claimPendingShares:resolve:reject:)');
+    expect(hostInboxSource).toContain(
+      '@objc(acknowledgePendingShares:discardStagedCopies:resolve:reject:)',
+    );
+    expect(hostInboxSource).not.toContain('consumePendingShares');
     expect(hostInboxSource).toContain('forSecurityApplicationGroupIdentifier: appGroupIdentifier');
     expect(hostInboxSource).toContain('maximumSharedBytes = 100 * 1024');
+  });
+
+  it('saves a share all-or-nothing and names the items it could not add', () => {
+    const persist = source.slice(
+      source.indexOf('private static func persistForReview'),
+      source.indexOf('private func showLoadError'),
+    );
+    expect(persist).toContain('try fileManager.copyItem(at: file.sourceURL, to: destination)');
+    expect(persist).not.toContain('continue');
+    expect(persist).toContain('try? fileManager.removeItem(at: shareFiles)');
+    expect(persist).toContain('throw error');
+    expect(source).toContain('skippedFileCount: max(0, fileProviders.count - files.count)');
+    expect(source).toContain('items could not be added');
   });
 
   it('keeps the plugin filenames aligned with the tracked native sources', () => {

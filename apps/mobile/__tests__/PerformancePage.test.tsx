@@ -100,7 +100,13 @@ jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    withRepeat: <T,>(value: T) => value,
+    withTiming: <T,>(value: T) => value,
     default: {
+      createAnimatedComponent: (component: unknown) => component,
       View: ({ children, style }: { children: React.ReactNode; style?: object }) => (
         <View style={style}>{children}</View>
       ),
@@ -122,10 +128,23 @@ jest.mock('react-native-svg', () => {
   const { View, Text } = require('react-native');
   return {
     __esModule: true,
-    default: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    default: ({
+      children,
+      accessibilityLabel,
+    }: {
+      children: React.ReactNode;
+      accessibilityLabel?: string;
+    }) => <View accessibilityLabel={accessibilityLabel}>{children}</View>,
     Polyline: () => null,
     Line: () => null,
     Circle: () => null,
+    Defs: () => null,
+    FeGaussianBlur: () => null,
+    Filter: () => null,
+    G: () => null,
+    Image: () => null,
+    Mask: () => null,
+    Path: () => null,
     Text: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
   };
 });
@@ -392,6 +411,21 @@ describe('PerformanceScreen rendering', () => {
     expect(queryByText(/Last benchmark result/)).toBeNull();
   });
 
+  it('announces the newest sample as the most recent value on both charts', async () => {
+    const now = Date.now();
+    recordPerfEvent(
+      makePerfEvent({ ts: now - 60_000, tokensPerSecond: 11, firstTokenLatencyMs: 900 }),
+    );
+    recordPerfEvent(makePerfEvent({ ts: now, tokensPerSecond: 47, firstTokenLatencyMs: 130 }));
+    const { getByLabelText } = await renderSettledPerformanceScreen();
+    expect(
+      getByLabelText(/Tokens per second over the last 7 days\..*Most recent: 47 t\/s/),
+    ).toBeTruthy();
+    expect(
+      getByLabelText(/First-token latency over the last 7 days\..*Most recent: 130 ms/),
+    ).toBeTruthy();
+  });
+
   it('renders the Device Tier card heading', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Device Tier')).toBeTruthy();
@@ -445,6 +479,8 @@ describe('PerformanceScreen rendering', () => {
   it('offers only toggles that change runtime behaviour', async () => {
     const { getByText, queryByText } = await renderSettledPerformanceScreen();
     expect(getByText('Show performance chip in chat')).toBeTruthy();
+    expect(getByText('Shows tok/s under on-device replies')).toBeTruthy();
+    expect(queryByText('Shows tok/s and TTFT under each assistant response')).toBeNull();
     expect(queryByText('Pause at serious thermal')).toBeNull();
     expect(queryByText('Pause at 15% battery')).toBeNull();
   });

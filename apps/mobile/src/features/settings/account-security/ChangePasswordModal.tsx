@@ -100,7 +100,7 @@ export function ChangePasswordModal({
             <Text style={[styles.body, { color: colors.textSecondary }]}>
               {hasPassword
                 ? 'Your other signed-in sessions are signed out when the password changes.'
-                : 'Your account signs in without a password. You confirm it is you before one is set.'}
+                : 'You sign in without a password now. Confirm it’s you to set one.'}
             </Text>
             {hasPassword
               ? field('Current password', currentPassword, setCurrentPassword, 'password')

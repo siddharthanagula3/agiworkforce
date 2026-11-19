@@ -1,5 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
+import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
+
 import { resolveAnonymousSession } from '@/lib/anonymous-session';
 import { deploymentEnvironment, isProductionRuntime } from '@/lib/config/runtime-environment';
 import { logger } from '@/lib/logger';
@@ -148,7 +150,10 @@ export async function getOrCreateAnonSession(
   return resolveAnonymousSession(request);
 }
 
-async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
+async function isBearerTokenValid(
+  authHeader: string | null,
+  surfaceProof: string | null = null,
+): Promise<boolean> {
   if (!authHeader?.startsWith('Bearer ')) {
     return false;
   }
@@ -173,8 +178,9 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
   }
 
   try {
-    const { verifyIdentitySessionToken } = await import('@/lib/server/identity');
-    if (await verifyIdentitySessionToken(token)) return true;
+    const { verifySessionTokenWithSurfaceProof } =
+      await import('@/lib/server/native-session-token');
+    if (await verifySessionTokenWithSurfaceProof(token, surfaceProof)) return true;
   } catch {
     // Not a session token this deployment can verify
   }
@@ -193,7 +199,10 @@ export async function validateCsrfFromRequest(
 
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
-    const validBearer = await isBearerTokenValid(authHeader);
+    const validBearer = await isBearerTokenValid(
+      authHeader,
+      request.headers.get(SURFACE_TOKEN_HEADER),
+    );
     if (validBearer) {
       return true;
     }

@@ -73,7 +73,7 @@ function respondWith(requests: unknown[], erasure: { body: unknown; status: numb
   return async (_url: string, init?: RequestInit) =>
     init?.method === 'POST'
       ? jsonResponse(erasure.body, erasure.status)
-      : jsonResponse({ requests, count: requests.length });
+      : jsonResponse({ requests, count: requests.length, total: requests.length, hasMore: false });
 }
 
 async function submitErasure() {
@@ -111,6 +111,23 @@ describe('PrivacyRequestsPanel', () => {
     expect(screen.getByText('Erasure')).toBeInTheDocument();
     expect(screen.getByText(OPEN_REQUEST.contactEmail)).toBeInTheDocument();
     expect(screen.getByText('no account')).toBeInTheDocument();
+  });
+
+  it('says how many requests are open and loads the next window on demand', async () => {
+    const later = { ...OPEN_REQUEST, reference: 'DPDP-LATER00000' };
+    mocks.fetch.mockImplementation(async (url: string) =>
+      String(url).includes('offset=1')
+        ? jsonResponse({ requests: [later], count: 1, total: 2, hasMore: false })
+        : jsonResponse({ requests: [OPEN_REQUEST], count: 1, total: 2, hasMore: true }),
+    );
+    render(<PrivacyRequestsPanel />);
+
+    expect(await screen.findByText('Showing 1 of 2 open requests.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    expect(await screen.findByText('DPDP-LATER00000')).toBeInTheDocument();
+    expect(screen.getByText(OPEN_REQUEST.reference)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
   });
 
   it('names what would populate an empty queue', async () => {

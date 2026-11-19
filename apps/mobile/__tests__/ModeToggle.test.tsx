@@ -70,6 +70,14 @@ describe('ModeToggle', () => {
     expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe('AGI Cloud');
   });
 
+  it('fills the sidebar column and splits it into two equal halves', () => {
+    const { getByTestId } = render(<ModeToggle mode="cloud" cloudUnlocked />);
+
+    expect(getByTestId('chat.mode-toggle').props.style.alignSelf).toBe('stretch');
+    expect(getByTestId('chat.mode-toggle.local').props.style.flex).toBe(1);
+    expect(getByTestId('chat.mode-toggle.cloud').props.style.flex).toBe(1);
+  });
+
   it('uses the same selected pill treatment for Local and Cloud', () => {
     const { getByTestId, rerender } = render(<ModeToggle mode="local" />);
 

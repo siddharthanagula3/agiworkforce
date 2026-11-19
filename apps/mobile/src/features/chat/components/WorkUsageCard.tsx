@@ -7,15 +7,17 @@ import {
 } from '@agiworkforce/types';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { radii, useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 const BILLING_ROUTE = '/(app)/settings/cloud-billing';
+const WAIT_BODY = 'Wait for your usage to reset.';
 
 export function WorkUsageCard({ recovery }: { recovery: WorkUsageRecovery }) {
   const router = useRouter();
   const { colors } = useTheme();
-  const actionLabel = workUsageRecoveryActionLabel(recovery);
+  const actionLabel = NATIVE_PURCHASES_AVAILABLE ? workUsageRecoveryActionLabel(recovery) : null;
 
   return (
     <View
@@ -37,7 +39,7 @@ export function WorkUsageCard({ recovery }: { recovery: WorkUsageRecovery }) {
           {WORK_USAGE_COPY.title}
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
-          {WORK_USAGE_COPY.body[recovery]}
+          {NATIVE_PURCHASES_AVAILABLE ? WORK_USAGE_COPY.body[recovery] : WAIT_BODY}
         </Text>
       </View>
       {actionLabel ? (

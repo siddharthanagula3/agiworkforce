@@ -26,31 +26,25 @@ fn search_program(name: &str) -> std::io::Result<Command> {
         })
 }
 
-/// The file a `path:line:text` match came from, for a path that may itself
-/// carry a Windows drive prefix.
+const FILENAME_END: char = '\0';
+
+/// The file a match came from. Every search runs with `--with-filename` and
+/// `--null`, so the producer ends the name with a NUL byte that no path can
+/// contain; a name that holds `:1:` or `\n` cannot be mistaken for another.
 fn matched_file(line: &str) -> Option<&str> {
-    let mut from = 0;
-    while let Some(offset) = line[from..].find(':') {
-        let at = from + offset;
-        let rest = &line[at + 1..];
-        let digits = rest.chars().take_while(|c| c.is_ascii_digit()).count();
-        if digits > 0 && rest[digits..].starts_with(':') {
-            return Some(&line[..at]);
-        }
-        from = at + 1;
-    }
-    line.split_once(':').map(|(path, _)| path)
+    line.split_once(FILENAME_END).map(|(path, _)| path)
 }
 
 /// Matched lines that came out of a file the credential policy covers. A
 /// search reads the tree a line at a time, so the refusal `read_file` makes
-/// has to be made again on what a match would carry back.
+/// has to be made again on what a match would carry back. A line whose file
+/// cannot be named is withheld too.
 fn withhold_credential_matches(output: &str) -> (String, usize) {
-    let mut kept: Vec<&str> = Vec::new();
+    let mut kept: Vec<String> = Vec::new();
     let mut withheld = 0usize;
     let mut judged: HashMap<&str, bool> = HashMap::new();
     for line in output.lines() {
-        let covered = matched_file(line).is_some_and(|path| {
+        let covered = matched_file(line).is_none_or(|path| {
             *judged.entry(path).or_insert_with(|| {
                 crate::path_security::is_checkpoint_internal_path(std::path::Path::new(path))
                     || crate::path_security::reads_a_credential_file(path)
@@ -59,7 +53,7 @@ fn withhold_credential_matches(output: &str) -> (String, usize) {
         if covered {
             withheld += 1;
         } else {
-            kept.push(line);
+            kept.push(line.replacen(FILENAME_END, ":", 1));
         }
     }
     (kept.join("\n"), withheld)
@@ -67,10 +61,40 @@ fn withhold_credential_matches(output: &str) -> (String, usize) {
 
 fn withholding_note(withheld: usize) -> String {
     format!(
-        "\n[{withheld} match(es) withheld: they are in private checkpoint storage or files the credential-file policy covers, so \
-         their contents would reach the model and the session transcript. Open those files \
-         yourself, or pass the one value the task needs.]"
+        "\n[{withheld} match(es) withheld: they are in private checkpoint storage, in files the credential-file policy covers, \
+         or the search could not name the file they came from, so their contents would reach the model and the session \
+         transcript. Open those files yourself, or pass the one value the task needs.]"
     )
+}
+
+const SEARCH_FILES_PER_FILE_CAP: usize = 200;
+const GREP_FILES_PER_FILE_CAP: usize = 100;
+
+fn per_file_cap_note(output: &str, cap: usize) -> Option<String> {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for line in output.lines() {
+        if let Some(file) = matched_file(line) {
+            *counts.entry(file).or_default() += 1;
+        }
+    }
+    let full = counts.values().filter(|count| **count >= cap).count();
+    (full > 0).then(|| {
+        format!(
+            "\n[{full} file(s) reached the limit of {cap} matches per file, so later matches in \
+             them are not listed; search those files with a narrower pattern]"
+        )
+    })
+}
+
+fn search_failed(tool_name: &str, stderr: &str) -> ToolResult {
+    ToolResult {
+        tool_name: tool_name.to_string(),
+        success: false,
+        output: format!(
+            "The search failed, so this says nothing about whether the text exists: {}",
+            stderr.trim()
+        ),
+    }
 }
 
 /// A search answer with the credential files taken out of it.
@@ -116,7 +140,13 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
 
     let result = match search_program("grep") {
         Ok(mut command) => {
-            command.arg("-rn").arg("--include=*").arg("-m").arg("200");
+            command
+                .arg("-rnE")
+                .arg("--with-filename")
+                .arg("--null")
+                .arg("--include=*")
+                .arg("-m")
+                .arg(SEARCH_FILES_PER_FILE_CAP.to_string());
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 command.arg(format!("--exclude-dir={directory}"));
             }
@@ -142,8 +172,15 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
                     output: format!("No matches found for pattern: {}", pattern),
                 });
             }
+            if stdout.is_empty() && output.status.code() == Some(2) {
+                return Ok(search_failed("search_files", &stderr));
+            }
 
+            let cap_note = per_file_cap_note(&stdout, SEARCH_FILES_PER_FILE_CAP);
             let mut result = searched("search_files", stdout);
+            if let Some(note) = cap_note {
+                result.output.push_str(&note);
+            }
             if !stderr.is_empty() {
                 result.output.push_str("\n[stderr]\n");
                 result.output.push_str(&stderr);
@@ -308,9 +345,11 @@ pub(super) async fn execute_grep_files(
     let found = match search_program("rg") {
         Ok(mut cmd) => {
             cmd.arg("--line-number")
+                .arg("--with-filename")
+                .arg("--null")
                 .arg("--no-heading")
                 .arg("--color=never")
-                .arg("--max-count=100");
+                .arg(format!("--max-count={GREP_FILES_PER_FILE_CAP}"));
             if let Some(g) = include {
                 cmd.arg("--glob").arg(g);
             }
@@ -324,17 +363,7 @@ pub(super) async fn execute_grep_files(
         Err(missing) => Err(missing),
     };
     match found {
-        Ok(o) => {
-            let stdout = String::from_utf8_lossy(&o.stdout).to_string();
-            if stdout.is_empty() {
-                return Ok(ToolResult {
-                    tool_name: "grep_files".into(),
-                    success: true,
-                    output: format!("No matches for: {}", pattern),
-                });
-            }
-            Ok(searched("grep_files", stdout))
-        }
+        Ok(o) => Ok(grep_answer(pattern, &o)),
         Err(error) if error.kind() != std::io::ErrorKind::TimedOut => {
             let mut fb = match search_program("grep") {
                 Ok(fb) => fb,
@@ -346,7 +375,24 @@ pub(super) async fn execute_grep_files(
                     })
                 }
             };
-            fb.arg("-rn").arg("--max-count=100");
+            let include = include.map(|filter| filter.trim_start_matches("**/"));
+            if let Some(filter) = include.filter(|filter| filter.contains('/')) {
+                return Ok(ToolResult {
+                    tool_name: "grep_files".into(),
+                    success: false,
+                    output: format!(
+                        "rg is not installed, and grep filters by file name only, so include \
+                         must be a file name pattern such as *.rs, not {filter}"
+                    ),
+                });
+            }
+            fb.arg("-rnE")
+                .arg("--with-filename")
+                .arg("--null")
+                .arg(format!("--max-count={GREP_FILES_PER_FILE_CAP}"));
+            if let Some(filter) = include {
+                fb.arg(format!("--include={filter}"));
+            }
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 fb.arg(format!("--exclude-dir={directory}"));
             }
@@ -356,10 +402,7 @@ pub(super) async fn execute_grep_files(
             }
             fb.arg("--").arg(pattern).arg(&validated_path);
             match crate::process_tree::output(fb, None, Some(COMMAND_TIMEOUT)).await {
-                Ok(o) => Ok(searched(
-                    "grep_files",
-                    String::from_utf8_lossy(&o.stdout).to_string(),
-                )),
+                Ok(o) => Ok(grep_answer(pattern, &o)),
                 Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: false,
@@ -384,6 +427,26 @@ pub(super) async fn execute_grep_files(
             ),
         }),
     }
+}
+
+fn grep_answer(pattern: &str, output: &std::process::Output) -> ToolResult {
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if stdout.is_empty() {
+        if output.status.code() == Some(2) {
+            return search_failed("grep_files", &String::from_utf8_lossy(&output.stderr));
+        }
+        return ToolResult {
+            tool_name: "grep_files".into(),
+            success: true,
+            output: format!("No matches for: {}", pattern),
+        };
+    }
+    let cap_note = per_file_cap_note(&stdout, GREP_FILES_PER_FILE_CAP);
+    let mut answer = searched("grep_files", stdout);
+    if let Some(note) = cap_note {
+        answer.output.push_str(&note);
+    }
+    answer
 }
 
 pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolResult> {
@@ -428,9 +491,6 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
 
     let full_pattern = format!("{}/{}", base_path.display(), pattern);
 
-    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
-
     let paths = match glob::glob(&full_pattern) {
         Ok(paths) => paths,
         Err(err) => {
@@ -449,9 +509,8 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
             continue;
         }
         let in_workspace = path
-            .canonicalize()
-            .map(|c| c.starts_with(&cwd_canonical))
-            .unwrap_or(false);
+            .to_str()
+            .is_some_and(|shown| validate_file_path(shown).is_ok());
         if !in_workspace {
             continue;
         }
@@ -494,12 +553,12 @@ mod tests {
     #[test]
     fn a_match_inside_a_credential_file_never_reaches_the_answer() {
         let raw = format!(
-            "src/billing.rs:12:const KEY_NAME: &str = \"STRIPE_KEY\";\n\
-             .env:3:STRIPE_SECRET_KEY={WITHHELD_VALUE}\n\
-             apps/web/.env.production:1:DATABASE_URL=postgres://user:pw@host/db\n\
-             deploy/id_rsa:1:OPENSSH_KEY_BODY_PLACEHOLDER\n\
-             certs/server.pem:1:PEM_KEY_BODY_PLACEHOLDER\n\
-             docs/development/README.md:9:copy .env.example to .env\n"
+            "src/billing.rs\x0012:const KEY_NAME: &str = \"STRIPE_KEY\";\n\
+             .env\x003:STRIPE_SECRET_KEY={WITHHELD_VALUE}\n\
+             apps/web/.env.production\x001:DATABASE_URL=postgres://user:pw@host/db\n\
+             deploy/id_rsa\x001:OPENSSH_KEY_BODY_PLACEHOLDER\n\
+             certs/server.pem\x001:PEM_KEY_BODY_PLACEHOLDER\n\
+             docs/development/README.md\x009:copy .env.example to .env\n"
         );
 
         let answer = searched("search_files", raw).output;
@@ -521,7 +580,7 @@ mod tests {
 
     #[test]
     fn nothing_is_withheld_and_nothing_is_said_when_no_credential_file_matched() {
-        let raw = "src/a.rs:1:fn main() {}\nsrc/b.rs:2:let key = 1;\n".to_string();
+        let raw = "src/a.rs\x001:fn main() {}\nsrc/b.rs\x002:let key = 1;\n".to_string();
 
         let answer = searched("grep_files", raw).output;
 
@@ -556,7 +615,7 @@ mod tests {
             "docs/security/security.md",
             "package.json",
         ] {
-            let line = format!("{path}:7:value");
+            let line = format!("{path}\x007:value");
             let (kept, withheld) = withhold_credential_matches(&line);
             let sensitive = crate::sensitive_files::is_sensitive_file(path);
             assert_eq!(
@@ -571,21 +630,91 @@ mod tests {
     #[test]
     fn a_path_that_carries_a_colon_is_still_attributed_to_its_file() {
         assert_eq!(
-            matched_file(r"C:\repo\apps\.env:4:TOKEN=x"),
+            matched_file("C:\\repo\\apps\\.env\x004:TOKEN=x"),
             Some(r"C:\repo\apps\.env")
         );
-        assert_eq!(matched_file("src/a.rs:12:let x = 1;"), Some("src/a.rs"));
+        assert_eq!(matched_file("src/a.rs\x0012:let x = 1;"), Some("src/a.rs"));
+        assert_eq!(
+            matched_file("/project/demo:1:copy/.env\x001:DEPLOY_PASS=sample-only-4837"),
+            Some("/project/demo:1:copy/.env")
+        );
         assert_eq!(matched_file("Binary file .env matches"), None);
 
-        let (kept, withheld) = withhold_credential_matches(r"C:\repo\apps\.env:4:TOKEN=x");
+        let (kept, withheld) = withhold_credential_matches("C:\\repo\\apps\\.env\x004:TOKEN=x");
         assert_eq!(withheld, 1, "a Windows path was not attributed: {kept}");
+
+        let (kept, withheld) = withhold_credential_matches(
+            "/project/demo:1:copy/.env\x001:DEPLOY_PASS=sample-only-4837",
+        );
+        assert_eq!(withheld, 1, "a name holding :1: was misattributed: {kept}");
+        assert!(!kept.contains("sample-only-4837"), "{kept}");
     }
 
     #[test]
-    fn a_line_with_no_line_number_is_attributed_by_its_leading_path() {
-        let (kept, withheld) = withhold_credential_matches(".env:TOKEN=x\nsrc/a.rs:fn main()");
-        assert_eq!(withheld, 1);
-        assert_eq!(kept, "src/a.rs:fn main()");
+    fn a_line_whose_file_cannot_be_named_is_withheld() {
+        let (kept, withheld) = withhold_credential_matches(
+            "1:DEPLOY_PASS=sample-only-4837\nsrc/a.rs\x003:fn main()\nBinary file .env matches",
+        );
+        assert_eq!(withheld, 2, "{kept}");
+        assert_eq!(kept, "src/a.rs:3:fn main()");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_credential_file_under_a_folder_named_like_a_match_stays_out_of_every_search() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        std::fs::create_dir(root.join("demo")).unwrap();
+        std::fs::create_dir(root.join("demo:1:copy")).unwrap();
+        let protected = root.join("demo:1:copy").join(".env");
+        std::fs::write(&protected, "DEPLOY_PASS=sample-only-4837\n").unwrap();
+        std::fs::write(root.join("demo").join("notes.txt"), "DEPLOY_PASS is set\n").unwrap();
+
+        let search = |tool: &'static str, path: String| {
+            let root = root.clone();
+            async move {
+                let args: HashMap<String, String> = [
+                    ("pattern".to_string(), "DEPLOY_PASS".to_string()),
+                    ("path".to_string(), path),
+                ]
+                .into_iter()
+                .collect();
+                crate::path_security::scope_workspace_paths(Some(root), Vec::new(), async {
+                    match tool {
+                        "search_files" => execute_search_files(&args).await,
+                        _ => execute_grep_files(&args, true).await,
+                    }
+                })
+                .await
+                .unwrap()
+            }
+        };
+
+        let whole_tree = search("search_files", root.to_string_lossy().into_owned()).await;
+        assert!(
+            !whole_tree.output.contains("sample-only-4837"),
+            "{}",
+            whole_tree.output
+        );
+        assert!(
+            whole_tree.output.contains("notes.txt:1:DEPLOY_PASS is set"),
+            "{}",
+            whole_tree.output
+        );
+        assert!(
+            whole_tree.output.contains("1 match(es) withheld"),
+            "{}",
+            whole_tree.output
+        );
+
+        for tool in ["search_files", "grep_files"] {
+            let one_file = search(tool, protected.to_string_lossy().into_owned()).await;
+            assert!(
+                !one_file.output.contains("sample-only-4837"),
+                "{tool}: {}",
+                one_file.output
+            );
+        }
     }
 
     #[test]
@@ -597,5 +726,91 @@ mod tests {
                 "{directory} is searched on every query"
             );
         }
+    }
+
+    fn scoped_args(pairs: &[(&str, String)]) -> HashMap<String, String> {
+        pairs
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.clone()))
+            .collect()
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_search_reads_its_pattern_as_a_regular_expression_and_reports_a_bad_one() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        std::fs::write(root.join("notes.txt"), "the beta release\n").unwrap();
+        let path = root.to_string_lossy().into_owned();
+
+        let alternation = scoped_args(&[
+            ("pattern", "alpha|beta".to_string()),
+            ("path", path.clone()),
+        ]);
+        let found =
+            crate::path_security::scope_workspace_paths(Some(root.clone()), Vec::new(), async {
+                execute_search_files(&alternation).await
+            })
+            .await
+            .unwrap();
+        assert!(
+            found.output.contains("the beta release"),
+            "{}",
+            found.output
+        );
+
+        let broken = scoped_args(&[("pattern", "(".to_string()), ("path", path)]);
+        for tool in ["search_files", "grep_files"] {
+            let answer = crate::path_security::scope_workspace_paths(
+                Some(root.clone()),
+                Vec::new(),
+                async {
+                    match tool {
+                        "search_files" => execute_search_files(&broken).await,
+                        _ => execute_grep_files(&broken, true).await,
+                    }
+                },
+            )
+            .await
+            .unwrap();
+            assert!(!answer.success, "{tool}: {}", answer.output);
+            assert!(
+                answer.output.contains("The search failed"),
+                "{tool}: {}",
+                answer.output
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_that_reached_the_per_file_limit_is_named_in_a_note() {
+        let full: String = (1..=3)
+            .map(|line| format!("src/a.rs\x00{line}:x\n"))
+            .collect();
+        let note = per_file_cap_note(&format!("{full}src/b.rs\x001:x\n"), 3).expect("a note");
+        assert!(note.contains("1 file(s) reached the limit of 3"), "{note}");
+        assert!(per_file_cap_note("src/b.rs\x001:x\n", 3).is_none());
+    }
+
+    #[tokio::test]
+    async fn glob_lists_files_in_a_folder_added_to_the_workspace() {
+        let workspace = tempfile::tempdir().unwrap();
+        let added = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        let extra = added.path().canonicalize().unwrap();
+        std::fs::write(extra.join("shared.ts"), "export {}\n").unwrap();
+        let args = scoped_args(&[
+            ("pattern", "**/*.ts".to_string()),
+            ("path", extra.to_string_lossy().into_owned()),
+        ]);
+
+        let result = crate::path_security::scope_workspace_paths(Some(root), vec![extra], async {
+            execute_glob(&args).await
+        })
+        .await
+        .unwrap();
+
+        assert!(result.success, "{}", result.output);
+        assert!(result.output.contains("shared.ts"), "{}", result.output);
     }
 }

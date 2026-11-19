@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   evaluateBurnRates: vi.fn(),
   evaluateAnomalies: vi.fn(),
   notifyIncident: vi.fn(),
+  clearIncident: vi.fn(),
   error: vi.fn(),
   warn: vi.fn(),
 }));
@@ -17,7 +18,10 @@ vi.mock('@/lib/server/slo/anomaly', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   evaluateAnomalies: mocks.evaluateAnomalies,
 }));
-vi.mock('@/lib/server/incident/dispatch', () => ({ notifyIncident: mocks.notifyIncident }));
+vi.mock('@/lib/server/incident/dispatch', () => ({
+  notifyIncident: mocks.notifyIncident,
+  clearIncident: mocks.clearIncident,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: mocks.warn, error: mocks.error, debug: vi.fn() },
 }));
@@ -60,11 +64,16 @@ const COST_ANOMALY = {
   owner: null,
 };
 
+function clean(alerts: unknown[] = [], failed: unknown[] = []) {
+  return { alerts, failed };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronRequest.mockReturnValue(true);
   mocks.evaluateBurnRates.mockResolvedValue([]);
-  mocks.evaluateAnomalies.mockResolvedValue([]);
+  mocks.evaluateAnomalies.mockResolvedValue(clean());
+  mocks.clearIncident.mockResolvedValue(undefined);
   mocks.notifyIncident.mockResolvedValue({
     level: 1,
     notified: ['primary'],
@@ -91,13 +100,13 @@ describe(`GET ${ROUTE}`, () => {
     await expect(response.json()).resolves.toEqual({
       burning: 0,
       paged: 'not_needed',
-      anomalies: { detected: 0 },
+      anomalies: { evaluation: 'completed', detected: 0 },
     });
     expect(mocks.notifyIncident).not.toHaveBeenCalled();
   });
 
   it('pages on a cost spike no objective can burn for, as its own incident', async () => {
-    mocks.evaluateAnomalies.mockResolvedValue([COST_ANOMALY]);
+    mocks.evaluateAnomalies.mockResolvedValue(clean([COST_ANOMALY]));
 
     const response = await GET(request());
 
@@ -113,18 +122,138 @@ describe(`GET ${ROUTE}`, () => {
     );
     await expect(response.json()).resolves.toMatchObject({
       burning: 0,
-      anomalies: { detected: 1, severity: 'critical', series: ['turn-cost'] },
+      anomalies: {
+        evaluation: 'completed',
+        detected: 1,
+        severity: 'critical',
+        delivery: 'delivered',
+        series: ['turn-cost'],
+      },
     });
   });
 
-  it('keeps answering the scheduler when the anomaly read itself fails', async () => {
+  it('answers 500 and names the failure when the anomaly read itself fails', async () => {
     mocks.evaluateAnomalies.mockRejectedValue(new Error('connection terminated'));
 
     const response = await GET(request());
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ anomalies: { detected: 0 } });
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      burning: 0,
+      anomalies: {
+        evaluation: 'incomplete',
+        detected: 0,
+        failedSeries: ['turn-cost', 'turn-latency', 'turn-time-to-first-token'],
+      },
+    });
     expect(mocks.error).toHaveBeenCalled();
+  });
+
+  it('pages the series it could read and answers 500 for the one it could not', async () => {
+    mocks.evaluateAnomalies.mockResolvedValue(
+      clean([COST_ANOMALY], [{ id: 'turn-latency', error: 'connection terminated' }]),
+    );
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(500);
+    expect(mocks.notifyIncident).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toMatchObject({
+      anomalies: {
+        evaluation: 'incomplete',
+        detected: 1,
+        series: ['turn-cost'],
+        failedSeries: ['turn-latency'],
+      },
+    });
+    expect(mocks.clearIncident).not.toHaveBeenCalledWith(expect.stringContaining('slo-anomaly'));
+  });
+
+  it('answers 500 when a detected anomaly reached no transport', async () => {
+    mocks.evaluateAnomalies.mockResolvedValue(clean([COST_ANOMALY]));
+    mocks.notifyIncident.mockResolvedValue({
+      level: 1,
+      notified: ['primary'],
+      delivery: 'undeliverable',
+      paged: 'unconfigured',
+      channel: 'unconfigured',
+      reason: 'no api key',
+    });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      burning: 0,
+      anomalies: { detected: 1, delivery: 'undeliverable', paged: 'unconfigured' },
+    });
+  });
+
+  it('keeps the burn receipt separate from a failed anomaly delivery', async () => {
+    mocks.evaluateBurnRates.mockResolvedValue([FAST_BURN]);
+    mocks.evaluateAnomalies.mockResolvedValue(clean([COST_ANOMALY]));
+    mocks.notifyIncident
+      .mockResolvedValueOnce({
+        level: 1,
+        notified: ['primary'],
+        delivery: 'undeliverable',
+        paged: 'unconfigured',
+        channel: 'unconfigured',
+      })
+      .mockResolvedValueOnce({
+        level: 1,
+        notified: ['primary'],
+        delivery: 'delivered',
+        paged: 'paged',
+        channel: 'paged',
+      });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      delivery: 'delivered',
+      anomalies: { delivery: 'undeliverable' },
+    });
+  });
+
+  it('retires the escalation clock of every severity that is no longer firing', async () => {
+    await GET(request());
+
+    expect(mocks.clearIncident.mock.calls.map(([key]) => key).sort()).toEqual([
+      'slo-anomaly:critical',
+      'slo-anomaly:warning',
+      'slo-burn:critical',
+      'slo-burn:warning',
+    ]);
+  });
+
+  it('keeps the severity that is still firing and retires the other', async () => {
+    mocks.evaluateBurnRates.mockResolvedValue([FAST_BURN]);
+
+    await GET(request());
+
+    expect(mocks.clearIncident).toHaveBeenCalledWith('slo-burn:warning');
+    expect(mocks.clearIncident).not.toHaveBeenCalledWith('slo-burn:critical');
+  });
+
+  it('retires nothing when the burn evaluation itself failed', async () => {
+    mocks.evaluateBurnRates.mockRejectedValue(new Error('connection terminated'));
+
+    await GET(request());
+
+    expect(mocks.clearIncident).not.toHaveBeenCalled();
+  });
+
+  it('retires nothing for the anomaly family while a series is unread', async () => {
+    mocks.evaluateAnomalies.mockResolvedValue(
+      clean([], [{ id: 'turn-cost', error: 'connection terminated' }]),
+    );
+
+    await GET(request());
+
+    expect(mocks.clearIncident).not.toHaveBeenCalledWith(expect.stringContaining('slo-anomaly'));
+    expect(mocks.clearIncident).toHaveBeenCalledWith('slo-burn:critical');
   });
 
   it('raises an incident naming the burning domain when a fast burn fires', async () => {
@@ -158,6 +287,22 @@ describe(`GET ${ROUTE}`, () => {
     expect(mocks.notifyIncident).toHaveBeenCalledWith(
       expect.objectContaining({ severity: 'warning', subject: expect.stringContaining('WARNING') }),
     );
+  });
+
+  it('answers 200 when only the pager or channel accepted the alert', async () => {
+    mocks.evaluateBurnRates.mockResolvedValue([FAST_BURN]);
+    mocks.notifyIncident.mockResolvedValue({
+      level: 1,
+      notified: ['primary'],
+      delivery: 'delivered',
+      paged: 'unconfigured',
+      channel: 'paged',
+      reason: 'no api key',
+    });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
   });
 
   it('answers 500 when neither the email nor the pager reached a human', async () => {

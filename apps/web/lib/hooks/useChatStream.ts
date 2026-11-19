@@ -6,6 +6,7 @@ import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
 import { trackMessageSave } from '@/features/chat/lib/pending-message-saves';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
+import { EMPTY_KEPT_ASSISTANT_CONTENT } from '@/lib/chat-kept-messages';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -29,6 +30,7 @@ import {
   messageKindForAgentEvent,
   type InteractiveCard,
   type InteractiveCardClientCapability,
+  type AnswerUiValue,
   type InteractiveCardResponsePayload,
   type KnownInteractiveCardKind,
   type StreamSequenceState,
@@ -134,6 +136,7 @@ import {
   SSE_DONE_DATA,
 } from '@agiworkforce/client-runtime';
 import {
+  AnswerUiMessageResponseSchema,
   INTERACTIVE_CARD_RESPONSE_PATH,
   RESPONDABLE_INTERACTIVE_CARD_KIND,
   interactiveCardAcceptsResponse,
@@ -242,8 +245,6 @@ import {
   SEAM_INSPECTION_WINDOW,
   type CitationSpan,
 } from '@agiworkforce/unified-chat';
-import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
-import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
 import {
   buildApiMessageContent,
@@ -251,6 +252,11 @@ import {
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
+import { cardOnlyAssistantTurnContent } from '@/features/chat/lib/assistant-history-turn';
+import {
+  citationSpansFromAnchors,
+  type CitationAnchor,
+} from '@/features/chat/lib/citation-anchors';
 import {
   freeModelAttachmentKind,
   freeQuotaChatOffering,
@@ -359,7 +365,10 @@ export type ToolApprovalDecision = ToolApprovalDecisionValue;
 export interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
   stopGeneration: (conversationId?: string) => void;
-  continueGeneration: (assistantMessageId: string) => Promise<void>;
+  continueGeneration: (
+    assistantMessageId: string,
+    options?: { conversationId?: string },
+  ) => Promise<void>;
   resumeInteractiveCardTurn: (
     assistantMessageId: string,
     options?: { force?: boolean },
@@ -369,6 +378,11 @@ export interface UseChatStreamReturn {
     payload: InteractiveCardResponsePayload,
   ) => Promise<void>;
   isInteractiveCardResponsePending: (binding: InteractiveCardResponseBinding) => boolean;
+  requestAnswerUiMessage: (
+    binding: InteractiveCardResponseBinding,
+    actionId: string,
+    values: Record<string, AnswerUiValue>,
+  ) => Promise<string | null>;
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -672,8 +686,6 @@ function buildAssistantErrorContent(message: string, code?: string): string {
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
-const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
-
 const STOPPED_FINISH_REASON = 'stopped';
 const RATE_LIMITED_SAVE_STATUS = 429;
 
@@ -798,7 +810,7 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
   console.error(`[useChatStream] Failed to save ${kind} message:`, error);
 }
 
-export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
+export { saveMessageToDb, notifyPersistenceFailure };
 
 /**
  * The server treats an absent field as "on", so every request that produces a
@@ -1237,6 +1249,7 @@ export interface InteractiveCardResponseBinding {
 }
 
 export const WEB_INTERACTIVE_CARD_KINDS = [
+  'answer-ui.v1',
   'clarify.v1',
   'image.v1',
   'itinerary.v1',
@@ -1336,24 +1349,6 @@ function patchInteractiveCardSubmissionError(
     },
     binding.conversationId,
   );
-}
-
-function autoResolvePendingApprovals(
-  assistantMessageId: string,
-  calls: PendingApprovalCall[],
-  resolve: ResolveToolApprovalFn,
-): void {
-  const permissions = useToolPermissionsStore.getState();
-  for (const call of calls) {
-    const parsed = parseQualifiedMcpToolName(call.name);
-    if (!parsed) continue;
-    const level = permissions.getToolPermission(parsed.serverId, parsed.toolName);
-    if (level === 'allow') {
-      void resolve(assistantMessageId, call.toolCallId, 'approved');
-    } else if (level === 'deny') {
-      void resolve(assistantMessageId, call.toolCallId, 'rejected');
-    }
-  }
 }
 
 const REMOTE_APPROVAL_POLL_INTERVAL_MS = 5_000;
@@ -2040,6 +2035,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
       .map((card) => [card.cardId, card]),
   );
+  const interactiveCardTextOffsets: Record<string, number> = {
+    ...seedMetadata?.interactiveCardTextOffsets,
+  };
 
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
     if (!tokenOwnerCurrent(getAuthToken)) return;
@@ -2064,8 +2062,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   let providerCitationSpans: { spans: CitationSpan[]; urls: string[] } | null = null;
 
+  const citationAnchors: CitationAnchor[] = [];
   const withProviderCitationMarkers = (content: string): string => {
-    if (!providerCitationSpans || !content) return content;
+    if (!content) return content;
+    if (!providerCitationSpans) {
+      if (citationAnchors.length === 0) return content;
+      return insertCitationMarkers(
+        content,
+        citationSpansFromAnchors(content, citationAnchors),
+        citationsInModelMarkerOrder.length,
+      );
+    }
     const delivered = existingSearchResults();
     const indexOfUrl = new Map(
       delivered.map(
@@ -2349,10 +2356,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ thinkingSegments: thinkingSegments.map((s) => ({ ...s })) });
   };
 
+  const streamOpenedAt = new Date().toISOString();
   let thinkingActivityOpen = false;
   const openThinkingSegment = () => {
     coalescedAppends.flush();
-    const startedAt = new Date().toISOString();
+    const firstStepOfTurn =
+      thinkingSegments.length === 0 && !thinkingStartedAt && toolTimeline.length === 0;
+    const startedAt = firstStepOfTurn ? streamOpenedAt : new Date().toISOString();
     thinkingStartedAt = startedAt;
     thinkingSegments.push({
       id: `${assistantMessageId}-think-${thinkingSegments.length}`,
@@ -2654,6 +2664,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (interactiveCards.size > 0) {
       metadata.interactiveCards = [...interactiveCards.values()];
+      metadata.interactiveCardTextOffsets = { ...interactiveCardTextOffsets };
     }
     if (interactiveCardsResumed) {
       metadata.interactiveCardsResumed = true;
@@ -2735,7 +2746,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           {
             id: assistantMessageId,
             role: 'assistant',
-            content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            content: fullContent || EMPTY_KEPT_ASSISTANT_CONTENT,
             model,
             metadata,
             ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
@@ -2840,6 +2851,34 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     latencyTrace?.observeAssistantText(fullAssistantContent);
   };
 
+  // A direct stream carries the same reasoning twice, inline in tags and as
+  // reasoning events, while the durable route carries only the events: the
+  // first channel to deliver reasoning is the one shown for the whole turn.
+  let thinkingChannel: 'tagged' | 'event' | null = null;
+  const thinkingFrom = (channel: 'tagged' | 'event'): boolean => {
+    thinkingChannel ??= channel;
+    return thinkingChannel === channel;
+  };
+  let eventThinkingOpen = false;
+  const closeEventThinking = (): boolean => {
+    if (!eventThinkingOpen) return false;
+    eventThinkingOpen = false;
+    return true;
+  };
+  const consumeReasoningEvent = (event: AgentEvent): void => {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'reasoning' && event.type === 'reasoning-delta') {
+      if (!event.delta || !thinkingFrom('event')) return;
+      if (!eventThinkingOpen) {
+        openThinkingSegment();
+        eventThinkingOpen = true;
+      }
+      appendThinkingText(event.delta);
+      return;
+    }
+    if (kind !== null && kind !== 'status' && closeEventThinking()) closeThinkingSegment();
+  };
+
   const consumeThinkingParts = (parts: readonly ThinkingTagPart[], isFinal = false): void => {
     for (const part of parts) {
       switch (part.type) {
@@ -2847,13 +2886,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           emitPublicText(part.text, isFinal);
           break;
         case 'thinking':
-          appendThinkingText(part.text);
+          if (thinkingFrom('tagged')) appendThinkingText(part.text);
           break;
         case 'thinking-start':
-          openThinkingSegment();
+          if (thinkingFrom('tagged')) openThinkingSegment();
           break;
         case 'thinking-end':
-          closeThinkingSegment();
+          if (thinkingFrom('tagged')) closeThinkingSegment();
           break;
       }
     }
@@ -2909,6 +2948,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       assertTokenOwner(getAuthToken);
       ctx.signal?.throwIfAborted();
       if (remainder) {
+        contentSplitter.discardPendingPublic();
         emitPublicText(remainder, true);
         coalescedAppends.flush();
       }
@@ -2935,7 +2975,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const settleStream = (): StreamOutcome => {
     assertTokenOwner(getAuthToken);
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
     finishRunningTools();
@@ -2979,7 +3019,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     beginStreamPhase(assistantMessageId, 'reconnecting');
 
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
 
@@ -3012,6 +3052,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           ctx.signal?.throwIfAborted();
           endStreamPhase(assistantMessageId, 'reconnecting');
           const kind = recordAgentEventOutcome(envelope.event);
+          consumeReasoningEvent(envelope.event);
           if (kind === 'text' && envelope.event.type === 'text-delta' && envelope.event.delta) {
             const reconciled = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
@@ -3125,7 +3166,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (sequenceGapSeen) continue;
           latencyTrace?.markDone();
           flushContentBuffer(true);
-          if (contentSplitter.closeThinking()) {
+          if (contentSplitter.closeThinking() || closeEventThinking()) {
             closeThinkingSegment();
           }
           finishRunningTools();
@@ -3180,6 +3221,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           );
           if (agentEnvelope && !duplicateAgentEnvelope) {
             const kind = recordAgentEventOutcome(agentEnvelope.event);
+            consumeReasoningEvent(agentEnvelope.event);
             if (kind === 'text' && agentEnvelope.event.type === 'text-delta') {
               unacknowledgedPublicText = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
@@ -3451,7 +3493,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 interactiveCards.size < INTERACTIVE_CARDS_MAX_PER_MESSAGE)
             ) {
               interactiveCards.set(card.cardId, card);
-              patchMessageMeta({ interactiveCards: [...interactiveCards.values()] });
+              if (interactiveCardTextOffsets[card.cardId] === undefined) {
+                interactiveCardTextOffsets[card.cardId] = hasVisibleText(fullAssistantContent)
+                  ? fullAssistantContent.length
+                  : 0;
+              }
+              patchMessageMeta({
+                interactiveCards: [...interactiveCards.values()],
+                interactiveCardTextOffsets: { ...interactiveCardTextOffsets },
+              });
             }
           }
 
@@ -3482,6 +3532,16 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             Partial<WebSearchCitationDeltaWire> | undefined;
           if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
             appendMarkerOrderedCitation(citationBlock.url, citationBlock.title);
+            const citedKey = normalizeCitationUrl(citationBlock.url) ?? citationBlock.url;
+            const marker =
+              citationsInModelMarkerOrder.findIndex(
+                (citation) =>
+                  citation.url !== undefined &&
+                  (normalizeCitationUrl(citation.url) ?? citation.url) === citedKey,
+              ) + 1;
+            if (marker > 0 && !seamPending) {
+              citationAnchors.push({ offset: fullAssistantContent.length, marker });
+            }
           }
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
@@ -3711,7 +3771,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     }
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
     throw terminalError;
@@ -4002,11 +4062,7 @@ export function useChatStream(
   }, [activeConversationId, followActiveConversation, userId, isSignedIn, captureSessionSnapshot]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef, requestSettlements);
-  const resolveToolInput = useResolveToolInput(
-    abortControllersRef,
-    resolveToolApproval,
-    requestSettlements,
-  );
+  const resolveToolInput = useResolveToolInput(abortControllersRef, requestSettlements);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -4380,7 +4436,10 @@ export function useChatStream(
             .flatMap((m): ApiMessage[] => [
               {
                 role: m.role,
-                content: researchTurnHistoryContent(m) ?? buildApiMessageContent(m),
+                content:
+                  researchTurnHistoryContent(m) ??
+                  cardOnlyAssistantTurnContent(m) ??
+                  buildApiMessageContent(m),
               },
               ...turnsAfterReply(m),
             ]);
@@ -4637,11 +4696,6 @@ export function useChatStream(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(
-              assistantMessageId,
-              settled.pendingCalls,
-              resolveToolApproval,
-            );
             followRemoteApproval(assistantMessageId, getAuthToken);
             break;
           }
@@ -4764,7 +4818,6 @@ export function useChatStream(
       setLoading,
       setError,
       getToken,
-      resolveToolApproval,
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
@@ -4773,9 +4826,9 @@ export function useChatStream(
   );
 
   const continueGeneration = useCallback(
-    async (assistantMessageId: string) => {
+    async (assistantMessageId: string, options: { conversationId?: string } = {}) => {
       const store = useChatStore.getState();
-      const conversationId = store.activeConversationId;
+      const conversationId = options.conversationId ?? store.activeConversationId;
       const existingAuthority =
         turnAuthoritiesRef.current.get(assistantMessageId) ??
         (conversationId ? requestAuthoritiesRef.current.get(conversationId) : undefined);
@@ -4847,7 +4900,10 @@ export function useChatStream(
         const apiMessages: ApiMessage[] = conversationMessages
           .slice(0, messageIndex + 1)
           .flatMap((m): ApiMessage[] => [
-            { role: m.role, content: m.content as MessageContent },
+            {
+              role: m.role,
+              content: cardOnlyAssistantTurnContent(m) ?? (m.content as MessageContent),
+            },
             ...turnsAfterReply(m),
           ]);
         if (!resumingCard) {
@@ -5133,6 +5189,49 @@ export function useChatStream(
     [captureSessionSnapshot],
   );
 
+  const requestAnswerUiMessage = useCallback(
+    async (
+      binding: InteractiveCardResponseBinding,
+      actionId: string,
+      values: Record<string, AnswerUiValue>,
+    ): Promise<string | null> => {
+      if (!cardResponseRuntimeActiveRef.current) return null;
+      const snapshot = captureSessionSnapshot();
+      if (!snapshot) return null;
+      const authority = createRequestAuthority(
+        snapshot,
+        () => cardResponseRuntimeActiveRef.current,
+      );
+      ownedAuthoritiesRef.current.add(authority);
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        const response = await authority.fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            conversation_id: binding.conversationId,
+            message_id: binding.messageId,
+            card_id: binding.cardId,
+            response: { kind: 'message', action_id: actionId, values },
+          } satisfies InteractiveCardResponseRequest),
+        });
+        if (!response.ok) {
+          throw new Error(`Answer UI message rejected with ${response.status}`);
+        }
+        const decoded: unknown = await response.json();
+        authority.assertCurrent();
+        return AnswerUiMessageResponseSchema.parse(decoded).message;
+      } catch (error) {
+        if (!authority.isCurrent()) return null;
+        throw error;
+      } finally {
+        ownedAuthoritiesRef.current.delete(authority);
+        authority.retire();
+      }
+    },
+    [captureSessionSnapshot],
+  );
+
   const resumeInteractiveCardTurn = useCallback(
     async (assistantMessageId: string, options: { force?: boolean } = {}): Promise<void> => {
       const store = useChatStore.getState();
@@ -5178,7 +5277,7 @@ export function useChatStream(
                 {
                   id: assistantMessageId,
                   role: 'assistant',
-                  content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                  content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
                   model: message.model,
                   metadata: nextMetadata,
                 },
@@ -5191,7 +5290,7 @@ export function useChatStream(
         }
 
         if (tokenOwnerCurrent(getAuthToken) && !request.controller.signal.aborted) {
-          await continueGeneration(assistantMessageId);
+          await continueGeneration(assistantMessageId, { conversationId });
         }
       } finally {
         request.finish();
@@ -5301,6 +5400,7 @@ export function useChatStream(
     resumeInteractiveCardTurn,
     respondToInteractiveCard,
     isInteractiveCardResponsePending,
+    requestAnswerUiMessage,
     resolveToolApproval,
     resolveToolInput,
     steerActiveTurn,
@@ -5386,7 +5486,7 @@ export function useResolveToolApproval(
             {
               id: assistantMessageId,
               role: selectedMessage.role,
-              content: selectedMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: selectedMessage.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: selectedMessage.model ?? turn.model,
               metadata: selectedMetadata,
             },
@@ -5452,7 +5552,7 @@ export function useResolveToolApproval(
               {
                 id: assistantMessageId,
                 role: message.role,
-                content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
                 model: message.model ?? turn.model,
                 metadata,
               },
@@ -5483,7 +5583,7 @@ export function useResolveToolApproval(
             {
               id: assistantMessageId,
               role: message.role,
-              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: message.model ?? turn.model,
               metadata,
             },
@@ -5596,11 +5696,6 @@ export function useResolveToolApproval(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(
-              assistantMessageId,
-              settled.pendingCalls,
-              resolveToolApproval,
-            );
             followRemoteApproval(assistantMessageId, getAuthToken);
           } else {
             pendingTurns.delete(assistantMessageId);
@@ -5664,7 +5759,6 @@ const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
 
 function useResolveToolInput(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
-  resolveToolApproval: UseChatStreamReturn['resolveToolApproval'],
   requests: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolInput'] {
   const captureSessionSnapshot = useSessionSnapshot();
@@ -5746,7 +5840,7 @@ function useResolveToolInput(
             {
               id: assistantMessageId,
               role: message.role,
-              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: message.model ?? turn.model,
               ...(message.metadata ? { metadata: message.metadata } : {}),
             },
@@ -5855,7 +5949,6 @@ function useResolveToolInput(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
             followRemoteApproval(assistantMessageId, getAuthToken);
           }
           if (runId && pendingInputs.length > 0) {
@@ -5909,7 +6002,7 @@ function useResolveToolInput(
         request.finish();
       }
     },
-    [abortControllers, captureSessionSnapshot, resolveToolApproval, requests],
+    [abortControllers, captureSessionSnapshot, requests],
   );
 }
 
@@ -5984,7 +6077,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         {
           id: assistantMessageId,
           role: 'assistant',
-          content: currentMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          content: currentMessage.content || EMPTY_KEPT_ASSISTANT_CONTENT,
           model: currentMessage.model ?? model,
           metadata: cancelledMetadata,
           ...(currentMessage.parentId ? { parentId: currentMessage.parentId } : {}),
