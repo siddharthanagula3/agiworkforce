@@ -59,12 +59,13 @@ function run(
   sandbox: Parameters<typeof runShellCommand>[0]['sandbox'],
   approve: Parameters<typeof runShellCommand>[0]['approve'],
   policy = { allow: ['node'], deny: [] as string[] },
+  command = 'node -e "1"',
 ) {
   return runShellCommand({
     runId: `run-${Math.random()}`,
     root,
     relativePath: '',
-    command: 'node -e "1"',
+    command,
     policy,
     sandbox,
     approve,
@@ -137,6 +138,48 @@ describe('runShellCommand with a sandbox', () => {
       }),
     ).rejects.toMatchObject({ name: 'ShellCommandRefused', reason: 'not-listed' });
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  const seatbelt = { backend: 'seatbelt', executable: SEATBELT_EXECUTABLE } as const;
+
+  async function nodeOnPath(): Promise<string> {
+    await run(seatbelt, vi.fn());
+    const found = (spawn.mock.calls[0] as [string, string[]])[1][2]!;
+    spawn.mockClear();
+    return found;
+  }
+
+  it('runs an allowed program unasked when the command names the file PATH finds for it', async () => {
+    const found = await nodeOnPath();
+    const approve = vi.fn();
+
+    await run(seatbelt, approve, undefined, `"${found}" -e "1"`);
+
+    expect(approve).not.toHaveBeenCalled();
+    expect((spawn.mock.calls[0] as [string, string[]])[1][2]).toBe(found);
+  });
+
+  it('asks about a file in the folder named like an allowed program, or a link there to it', async () => {
+    const scripts = path.join(folder, 'scripts');
+    const link = path.join(folder, 'node');
+    await fs.mkdir(scripts);
+    await fs.writeFile(path.join(scripts, 'node'), '#!/bin/sh\n', { mode: 0o755 });
+    await fs.symlink(await nodeOnPath(), link);
+    try {
+      for (const command of ['scripts/node -e "1"', './node -e "1"']) {
+        const approve = vi.fn().mockResolvedValue({ approved: false, allowNetwork: false });
+        await expect(run(seatbelt, approve, undefined, command)).rejects.toMatchObject({
+          name: 'ShellCommandRefused',
+          reason: 'not-listed',
+        });
+        expect(approve).toHaveBeenCalledTimes(1);
+        expect(approve.mock.calls[0]![0]).toMatchObject({ command, sandboxed: true });
+      }
+      expect(spawn).not.toHaveBeenCalled();
+    } finally {
+      await fs.rm(scripts, { recursive: true, force: true });
+      await fs.rm(link, { force: true });
+    }
   });
 
   it('spawns bubblewrap on Linux with the folder bound writable', async () => {
