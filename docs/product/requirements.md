@@ -172,7 +172,8 @@ exists, a route compiles, or a typecheck passes. A feature is complete only when
 This baseline was re-verified on 2026-09-21. The source-backed chronology for
 changes since July lives in
 `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`; the latest vendor
-comparison is `docs/research/assistant-comparison-2026-11-11.md`. Older dated
+comparisons are `docs/research/claude-chatgpt-comparison-2026-11-18.md` for ChatGPT and
+Claude and `docs/research/assistant-comparison-2026-11-11.md` for Gemini and Perplexity. Older dated
 research is historical evidence, not the current product target.
 
 The reference products are:

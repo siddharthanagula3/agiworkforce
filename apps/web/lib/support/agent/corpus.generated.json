@@ -2836,7 +2836,7 @@
           "ordinal": 2,
           "heading": "Voice mode",
           "headingPath": "Talk to AGI: voice mode and dictation › Voice mode",
-          "text": "Start it with the **Start voice mode** button in the composer. Voice settings\nchoose the spoken voice, how much the voice reasons, and its language, which can\nbe left on **Auto-detect**. **Chat intelligence** sets the model tier for the\nchat's typed replies, not for the spoken turns. Choose from the voices available\nin the voice settings."
+          "text": "Start it with the **Start voice mode** button in the composer. Voice settings\nchoose the spoken voice, how much the voice reasons, and its language, which can\nbe left on **Auto-detect**. When the chat is on Auto and your plan includes Auto,\n**Chat intelligence** also appears; it sets the model tier for the chat's typed\nreplies, not for the spoken turns. Choose from the voices available in the voice\nsettings."
         },
         {
           "id": "voice#3",

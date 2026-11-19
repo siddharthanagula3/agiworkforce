@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DesktopRuntimeError,
   approvedRootId,
@@ -21,6 +21,7 @@ import {
   onWorkspaceChanged,
   pinDeveloperThread,
   pickWorkspaceRoot,
+  readDeveloperRuntimeStatus,
   renameDeveloperThread,
   reviewDeveloperMcpServer,
   startDeveloperSession,
@@ -30,13 +31,17 @@ import {
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
+  LOCAL_CLI_PROGRAM,
   LOCAL_CODE_COPY,
+  localCliProgram,
+  localCloudModelsPlanLine,
   localFolderGroups,
   localMcpServerKey,
   localPlacementRequest,
   nextSessionMarker,
+  planStartingModelId,
   sharedUnavailableLine,
-  startingModelId,
+  withPlanModelVerdicts,
   type LocalPlacement,
   type LocalSessionMarker,
 } from '../local-code';
@@ -76,9 +81,12 @@ export interface LocalSessionsState {
     model?: string,
     placement?: LocalPlacement,
   ) => Promise<LocalDeveloperSession | null>;
+  /** The folder's models with the account's plan applied. */
   modelsFor: (rootId: string) => DeveloperRuntimeModels | null;
   /** The folder's models are the last ones read: the latest read of them failed. */
   modelsStale: (rootId: string) => boolean;
+  /** The CLI as a terminal on this computer names it, for a command the page offers to copy. */
+  cliProgram: string;
   /** What each session's turn is doing now, by thread id, as the runtime reported it. */
   activity: Record<string, LocalSessionMarker | null>;
   /** Older worktrees the CLI could not archive when it made a session's, by thread id. */
@@ -98,9 +106,11 @@ export interface LocalSessionsState {
 
 /**
  * The coding sessions the CLI has recorded for every folder this Mac has
- * opened to AGI. Absent in a browser, where there is no host to ask.
+ * opened to AGI. Absent in a browser, where there is no host to ask. The
+ * account's plan, once known, decides which of the account's models a folder
+ * offers, so every caller reads the same verdicts.
  */
-export function useLocalSessions(): LocalSessionsState {
+export function useLocalSessions(planTier: string | null = null): LocalSessionsState {
   const host = useDesktopHost();
   const supported = host !== null;
   const [models, setModels] = useState<Record<string, DeveloperRuntimeModels>>({});
@@ -119,10 +129,12 @@ export function useLocalSessions(): LocalSessionsState {
   const [mcpRefusals, setMcpRefusals] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [modelsReadKey, setModelsReadKey] = useState(0);
   const [activity, setActivity] = useState<Record<string, LocalSessionMarker | null>>({});
   const [cleanupFailures, setCleanupFailures] = useState<Record<string, WorktreeCleanupFailure[]>>(
     {},
   );
+  const [cliProgram, setCliProgram] = useState(LOCAL_CLI_PROGRAM);
   const groupsRef = useRef<DeveloperSessionGroup[]>([]);
 
   groupsRef.current = groups;
@@ -160,6 +172,21 @@ export function useLocalSessions(): LocalSessionsState {
     if (!supported) return;
     return onWorkspaceChanged(refresh);
   }, [supported, refresh]);
+
+  useEffect(() => {
+    if (!supported) return;
+    let cancelled = false;
+    readDeveloperRuntimeStatus()
+      .then((status) => {
+        if (!cancelled) setCliProgram(localCliProgram(status));
+      })
+      .catch(() => {
+        if (!cancelled) setCliProgram(LOCAL_CLI_PROGRAM);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [supported, reloadKey]);
 
   useEffect(() => {
     if (!supported) return;
@@ -235,7 +262,7 @@ export function useLocalSessions(): LocalSessionsState {
       cancelled = true;
       window.removeEventListener('focus', onFocus);
     };
-  }, [groups]);
+  }, [groups, modelsReadKey]);
 
   const addFolder = useCallback(
     async (kind: WorkspaceRootKind = 'folder') => {
@@ -300,11 +327,34 @@ export function useLocalSessions(): LocalSessionsState {
     [refresh],
   );
 
+  const planModels = useMemo(() => {
+    const applied: Record<string, DeveloperRuntimeModels | null> = {};
+    for (const [rootId, read] of Object.entries(models)) {
+      applied[rootId] = withPlanModelVerdicts(read, planTier);
+    }
+    return applied;
+  }, [models, planTier]);
+
+  const modelsFor = useCallback(
+    (rootId: string) => planModels[approvedRootId(rootId)] ?? null,
+    [planModels],
+  );
+
   const startSession = useCallback(
     async (rootId: string, model?: string, placement: LocalPlacement = 'local') => {
       setError(null);
       const group = groups.find((candidate) => candidate.rootId === rootId);
-      const chosen = model ?? startingModelId(models[rootId] ?? null, group?.sessions ?? []);
+      const runtime = modelsFor(rootId);
+      const chosen = model ?? planStartingModelId(runtime, group?.sessions ?? [], planTier);
+      if (chosen === null) {
+        if (runtime === null) {
+          setError(LOCAL_CODE_COPY.modelsUnread);
+          setModelsReadKey((key) => key + 1);
+        } else {
+          setError(localCloudModelsPlanLine());
+        }
+        return null;
+      }
       try {
         const session =
           placement === 'local' || !worktrees
@@ -321,7 +371,7 @@ export function useLocalSessions(): LocalSessionsState {
         return null;
       }
     },
-    [refresh, groups, models, worktrees],
+    [refresh, groups, modelsFor, planTier, worktrees],
   );
 
   const act = useCallback(
@@ -379,11 +429,6 @@ export function useLocalSessions(): LocalSessionsState {
     });
   }, []);
 
-  const modelsFor = useCallback(
-    (rootId: string) => models[approvedRootId(rootId)] ?? null,
-    [models],
-  );
-
   const modelsStale = useCallback(
     (rootId: string) => {
       const approved = approvedRootId(rootId);
@@ -398,6 +443,7 @@ export function useLocalSessions(): LocalSessionsState {
     groups,
     modelsFor,
     modelsStale,
+    cliProgram,
     loading,
     settled,
     adding,

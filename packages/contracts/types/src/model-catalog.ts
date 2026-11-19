@@ -1011,9 +1011,9 @@ export function getAutoRoutingProfiles(subscriptionTier?: string | null): AutoRo
 /**
  * Every routing profile as its own tier, which is not the same list as
  * `getAutoRoutingProfiles`. That one answers "what may the model picker offer",
- * and the registry marks only the umbrella default selectable there. A surface
- * that asks the user to choose a tier directly, voice mode's Intelligence
- * picker, needs all three, so this reads the per-profile aliases instead.
+ * and the registry marks only the umbrella default selectable there. Resolving
+ * a routing-profile choice or describing a tier by name needs all three, so
+ * this reads the per-profile aliases instead.
  */
 export function getAutoRoutingProfileTiers(): AutoRoutingProfileView[] {
   const policy = modelRegistry.policies.auto as unknown as {

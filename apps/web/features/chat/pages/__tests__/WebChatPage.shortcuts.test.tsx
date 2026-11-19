@@ -268,6 +268,7 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { KEYBOARD_SHORTCUT_DOCS } from '../../hooks/use-keyboard-shortcuts';
 import { useVoiceSessionStore } from '../../stores/voice-session-store';
 import { VOICE_SESSION_EVENT } from '@agiworkforce/unified-chat';
+import { useLocalModelSelection } from '@features/desktop-host';
 
 const HANDLER_BY_DESCRIPTION: Record<string, string> = {
   'Open search': 'onSearch',
@@ -507,6 +508,26 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
     expect(mocks.enterVoiceSession).toHaveBeenCalledTimes(1);
     expect(mocks.exitVoiceSession).not.toHaveBeenCalled();
+  });
+
+  it('does not start voice mode while a model on this device answers the chat', async () => {
+    openConversation();
+    useLocalModelSelection.getState().select({
+      id: 'local:ollama/qwen2.5:1.5b',
+      serverId: 'ollama',
+      serverLabel: 'Ollama',
+      name: 'qwen2.5:1.5b',
+    });
+    try {
+      render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+      await screen.findByTestId('message-list');
+
+      (latestShortcutOptions()['onToggleVoice'] as () => void)();
+
+      expect(mocks.enterVoiceSession).not.toHaveBeenCalled();
+    } finally {
+      useLocalModelSelection.getState().select(null);
+    }
   });
 
   it('ends voice mode when it is already running', async () => {

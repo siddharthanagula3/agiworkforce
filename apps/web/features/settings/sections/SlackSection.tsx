@@ -15,6 +15,7 @@ import {
   type ManagedCloudSlackPendingApproval,
 } from '@agiworkforce/cloud-contracts';
 import { Button, Spinner, useConfirmAction } from '@agiworkforce/ui';
+import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
@@ -30,9 +31,16 @@ import {
   type SlackInstallStatus,
 } from '@/lib/slack/slack-contract';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useDesktopHost } from '@/features/desktop-host/lib/host';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { SlackChannelPolicies } from '@/features/slack/components/SlackChannelPolicies';
 
 const OVERVIEW_UNREADABLE = 'Your Slack settings could not be loaded.';
+const INSTALL_IN_BROWSER =
+  'Finish adding the app in your browser. This page updates when you come back.';
+const BROWSER_NOT_OPENED = 'Your browser could not be opened. Try again.';
 
 const INSTALL_STATUS_MESSAGE: Readonly<Record<SlackInstallStatus, string>> = {
   installed: 'AGI was added to Slack. Send it a message there to start.',
@@ -157,6 +165,24 @@ function EmptyRow({ children }: { children: ReactNode }) {
   );
 }
 
+function SlackUpgradeButton() {
+  const router = useGuardedRouter();
+  const { closeSettings } = useSettingsModal();
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      onClick={() => {
+        closeSettings();
+        openUpgrade((href) => router.push(href));
+      }}
+    >
+      Upgrade
+    </Button>
+  );
+}
+
 function ApprovalItem({
   approval,
   disabled,
@@ -247,6 +273,8 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
   const statusParam = searchParams?.get(SLACK_SETTINGS_STATUS_PARAM) ?? null;
   const installStatus = isSlackInstallStatus(statusParam) ? statusParam : null;
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const host = useDesktopHost();
+  const browserReturn = useRef<(() => void) | null>(null);
   const [state, setState] = useState<OverviewState>({ kind: 'loading' });
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -296,6 +324,8 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
       mounted.current = false;
       overview.current = null;
       reading.current?.retire();
+      if (browserReturn.current) window.removeEventListener('focus', browserReturn.current);
+      browserReturn.current = null;
     };
   }, [load]);
 
@@ -408,6 +438,30 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
     });
   }
 
+  function installInBrowser(desktop: HostBridge) {
+    if (!view.reconcile() || !ready() || view.blocked()) return;
+    setError(null);
+    setNotice(null);
+    desktop.openExternal(new URL(SLACK_INSTALL_PATH, window.location.href).href).then(
+      () => {
+        if (!current()) return;
+        setNotice(INSTALL_IN_BROWSER);
+        if (browserReturn.current) window.removeEventListener('focus', browserReturn.current);
+        const onReturn = () => {
+          browserReturn.current = null;
+          if (!current()) return;
+          setNotice(null);
+          void load();
+        };
+        browserReturn.current = onReturn;
+        window.addEventListener('focus', onReturn, { once: true });
+      },
+      () => {
+        if (current()) setError(BROWSER_NOT_OPENED);
+      },
+    );
+  }
+
   const data = ready() && state.kind === 'ready' ? state.data : null;
   const blocked = view.blocked() || !data;
 
@@ -498,12 +552,12 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
             </p>
           ) : null}
           {data.available && !data.planAllowed ? (
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
-              Answers in Slack are available on {data.requiredPlans} plans.{' '}
-              <a href="/pricing" style={{ color: 'var(--text-1)' }}>
-                See plans
-              </a>
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
+                Answers in Slack are available on {data.requiredPlans} plans.
+              </p>
+              <SlackUpgradeButton />
+            </div>
           ) : null}
 
           <Card
@@ -580,7 +634,16 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
             title="Slack workspaces you added"
             description="Add the app, then /invite it to channels. Anyone there can link their account."
             action={
-              data.available ? (
+              data.available && host ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={blocked}
+                  onClick={() => installInBrowser(host)}
+                >
+                  Add to Slack
+                </Button>
+              ) : data.available ? (
                 <Button asChild size="sm">
                   <a
                     href={blocked ? undefined : SLACK_INSTALL_PATH}

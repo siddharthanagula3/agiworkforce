@@ -59,6 +59,18 @@ vi.mock('@/lib/services/api-key-service', async () => ({
   },
 }));
 
+vi.mock('@/lib/services/entitlement-resolution', async () => {
+  const types = await vi.importActual<TypesModule>('@agiworkforce/types');
+  return {
+    ...(await vi.importActual<EntitlementResolutionModule>(
+      '@/lib/services/entitlement-resolution',
+    )),
+    resolveEntitledPlanTier: vi.fn(
+      async () => types.billingPlanCapabilityWireTiers('managed_api')[0],
+    ),
+  };
+});
+
 process.env['CSRF_SECRET'] = 'audit-redaction-step-up-secret-long-enough';
 
 import { NextRequest } from 'next/server';
@@ -73,6 +85,8 @@ type CsrfModule = typeof import('@/lib/csrf');
 type ApiAuthModule = typeof import('@/lib/api-auth');
 type RlsDbModule = typeof import('@/lib/server/rls-db');
 type ApiKeyServiceModule = typeof import('@/lib/services/api-key-service');
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+type TypesModule = typeof import('@agiworkforce/types');
 
 const SECRETS = {
   agiApiKey: 'sk_live_0123456789abcdef_thisisthesecretpart',
