@@ -324,9 +324,9 @@ test.describe('public buying guidance', () => {
                 .filter({ has: page.getByRole('rowheader', { name: label, exact: true }) })
                 .getByRole('cell');
             await expect(comparisonValues('Knowledge storage')).toHaveText([
-              '100 MB',
-              '1 GB',
-              '10 GB',
+              '500 MB',
+              '4 GB',
+              '20 GB',
               '50 GB',
               '100 GB',
             ]);

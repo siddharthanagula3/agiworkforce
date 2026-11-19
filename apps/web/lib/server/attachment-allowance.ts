@@ -342,7 +342,7 @@ export interface AdmittedChatLargeFile {
 /**
  * Admits a `chat-large-file` create before any byte is sent: readiness, the
  * kind's ceiling, the plan and the scanner, storage net of the files still in
- * flight (outside temporary chats), the in-flight slot, and last the daily
+ * flight, the in-flight slot, and last the daily
  * large file bytes, the one check that charges. A plan value of zero for
  * either counter refuses.
  */
@@ -354,7 +354,6 @@ export async function admitChatLargeFileUpload(input: {
   fileName: string;
   mimeType: string;
   byteCount: number;
-  temporaryChat: boolean;
   nowMs?: number;
   readinessDeps?: ChatLargeFileReadinessDeps;
 }): Promise<AdmittedChatLargeFile> {
@@ -377,7 +376,7 @@ export async function admitChatLargeFileUpload(input: {
   const ceilingBytes = Math.min(kindMaxBytes, allowance.maxFileBytes);
   if (input.byteCount > ceilingBytes) throw largeFileTooLarge(planTier, ceilingBytes);
 
-  if (!input.temporaryChat && allowance.storageLimitBytes !== null) {
+  if (allowance.storageLimitBytes !== null) {
     const committed = await storageCommittedBytes(scope);
     if (committed + input.byteCount > allowance.storageLimitBytes) {
       throw largeFileStorageFull(planTier);
@@ -416,14 +415,13 @@ export async function confirmChatLargeFileAdmission(input: {
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
-  temporaryChat: boolean;
   admitted: AdmittedChatLargeFile;
 }): Promise<void> {
   const { planTier, storageLimitBytes } = input.admitted;
   const inFlight = await countInFlightIntakes(input.db, { userId: input.userId });
   if (inFlight < 1) throw largeFilesUnavailable();
   assertLargeFileIntakeSlot({ planTier, inFlight: inFlight - 1 });
-  if (input.temporaryChat || storageLimitBytes === null) return;
+  if (storageLimitBytes === null) return;
   const committed = await storageCommittedBytes(input);
   if (committed > storageLimitBytes) throw largeFileStorageFull(planTier);
 }

@@ -1,0 +1,120 @@
+{
+  "scenario": "stripe top-up bought in Japan",
+  "outcomes": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed (top-up)"
+    }
+  ],
+  "ledger": {
+    "billing_disputes": [],
+    "credit_transactions": [
+      {
+        "amount_cents": 1000,
+        "amount_microusd": 10000000,
+        "credit_account_id": "<id 1>",
+        "description": "initial credit allocation for billing period",
+        "id": "<id 2>",
+        "metadata": null,
+        "transaction_type": "allocation"
+      },
+      {
+        "amount_cents": 1250,
+        "amount_microusd": 12500000,
+        "credit_account_id": "<id 1>",
+        "description": "Credit top-up purchase cs_test_ledgerReplayTopUpJp",
+        "id": "<id 3>",
+        "metadata": {
+          "charged_cents": 4750,
+          "charged_currency": "usd",
+          "purchase_country": "JP",
+          "purchase_expires_at": "T0+6mo"
+        },
+        "transaction_type": "purchase"
+      }
+    ],
+    "expiring_credit_purchases": [
+      {
+        "created_by": null,
+        "credit_account_id": "<id 1>",
+        "credit_transaction_id": "<id 3>",
+        "expired_at": null,
+        "expires_at": "T0+6mo",
+        "purchase_country": "JP",
+        "purchased_microusd": 12500000,
+        "reference": "Credit top-up purchase cs_test_ledgerReplayTopUpJp",
+        "remaining_microusd": 12500000,
+        "reminded_at": null
+      }
+    ],
+    "mobile_iap_transactions": [],
+    "subscriptions": [
+      {
+        "apple_original_transaction_id": null,
+        "cancel_at_period_end": false,
+        "canceled_at": null,
+        "current_period_end": "T0+20d",
+        "current_period_start": "T0-10d",
+        "google_purchase_token": null,
+        "id": "<id 4>",
+        "last_stripe_event_at": "T0",
+        "plan_catalog_version": 4,
+        "plan_tier": "pro",
+        "status": "active",
+        "stripe_customer_id": "cus_ledgerReplay",
+        "stripe_price_id": "price_ledgerReplayPro",
+        "stripe_subscription_id": "sub_ledgerReplay"
+      }
+    ],
+    "token_credits": [
+      {
+        "bonus_granted_cents": 0,
+        "credits_allocated_cents": 2250,
+        "credits_allocated_microusd": 22500000,
+        "credits_used_cents": 0,
+        "credits_used_microusd": 0,
+        "id": "<id 1>",
+        "period_end": "T0+20d",
+        "period_start": "T0-10d",
+        "plan_catalog_version": 4,
+        "subscription_id": "<id 4>",
+        "top_up_allocated_cents": 1250,
+        "top_up_allocated_microusd": 12500000
+      }
+    ]
+  },
+  "outcomesDeliveredTwice": [
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "customer.subscription.created"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed (top-up)"
+    },
+    {
+      "outcome": "ok",
+      "step": "checkout.session.completed (top-up)"
+    }
+  ]
+}

@@ -307,7 +307,6 @@ export async function sumInFlightIntakeBytes(
        from public.chat_file_intakes
       where user_id = $1
         and organization_id is not distinct from $2::uuid
-        and not temporary_chat
         and state = any($3::text[])`,
     [input.userId, input.organizationId, NON_TERMINAL_INTAKE_STATES],
   );

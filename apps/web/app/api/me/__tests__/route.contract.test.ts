@@ -10,7 +10,11 @@ import {
   MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
   MeResponseSchema,
 } from '@agiworkforce/cloud-contracts';
-import { getBillingPlanPricing, getPlanMaxChatFileBytes } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  getBillingPlanProductLimits,
+  getPlanMaxChatFileBytes,
+} from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
@@ -434,7 +438,7 @@ describe('GET /api/me, large chat file limits', () => {
     max_message_bytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
     max_files_per_message: MAX_CHAT_ATTACHMENT_COUNT,
   };
-  const PRO_STORAGE_BYTES = 10 * 1024 ** 3;
+  const PRO_STORAGE_BYTES = getBillingPlanProductLimits('pro')!.knowledgeStorageBytes as number;
   const STORED_BYTES = 2 * 1024 ** 3;
   let systemTimeMs = Date.parse('2026-11-15T12:00:00Z');
   let schemaReady = true;

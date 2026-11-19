@@ -210,6 +210,7 @@ export * from './DeveloperSessionApproval';
 export * from './DeveloperSessionFileChange';
 export * from './DeveloperSessionHandoff';
 export * from './DeveloperSessionSource';
+export * from './DeveloperSessionTable';
 export * from './DeveloperSessionTrustMode';
 export * from './DeveloperSessionWriter';
 export * from './DeveloperSessionWriterChange';
