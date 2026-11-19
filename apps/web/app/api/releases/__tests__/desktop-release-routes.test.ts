@@ -405,7 +405,7 @@ describe('desktop release routes', () => {
   });
 
   describe('installer response deadline', () => {
-    let finishInstallerBody: () => void;
+    let installerSignal: AbortSignal | undefined;
 
     beforeEach(() => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -417,45 +417,105 @@ describe('desktop release routes', () => {
         );
         return controller.signal;
       });
-      finishInstallerBody = () => undefined;
+      installerSignal = undefined;
     });
 
     afterEach(() => {
       vi.useRealTimers();
     });
 
-    function slowInstallerResponse(init: RequestInit | undefined): Response {
-      const encoder = new TextEncoder();
-      const body = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(encoder.encode('first-half-'));
-          init?.signal?.addEventListener('abort', () => controller.error(init.signal?.reason));
-          finishInstallerBody = () => {
-            if (init?.signal?.aborted) return;
-            controller.enqueue(encoder.encode('second-half'));
-            controller.close();
-          };
-        },
+    function installerFrom(
+      body: (signal: AbortSignal | undefined) => ReadableStream<Uint8Array>,
+    ): void {
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input) !== CLOUD_ARM64_DMG_URL) return Response.json([cloudDesktopRelease()]);
+        installerSignal = init?.signal ?? undefined;
+        return new Response(body(installerSignal), { status: 200 });
       });
-      return new Response(body, { status: 200 });
     }
 
-    it('keeps streaming an installer whose transfer outlasts the response deadline', async () => {
-      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) =>
-        String(input) === CLOUD_ARM64_DMG_URL
-          ? slowInstallerResponse(init)
-          : Response.json([cloudDesktopRelease()]),
-      );
+    function chunkEvery(intervalMs: number, chunks: string[]) {
+      return (signal: AbortSignal | undefined) => {
+        const encoder = new TextEncoder();
+        return new ReadableStream<Uint8Array>({
+          start(controller) {
+            signal?.addEventListener('abort', () => controller.error(signal.reason));
+            const send = (index: number) => {
+              if (signal?.aborted) return;
+              if (index === chunks.length) {
+                controller.close();
+                return;
+              }
+              controller.enqueue(encoder.encode(chunks[index]));
+              setTimeout(() => send(index + 1), intervalMs);
+            };
+            send(0);
+          },
+        });
+      };
+    }
 
+    function endless(signal: AbortSignal | undefined): ReadableStream<Uint8Array> {
+      return new ReadableStream<Uint8Array>({
+        start(controller) {
+          signal?.addEventListener('abort', () => controller.error(signal.reason));
+        },
+        pull(controller) {
+          controller.enqueue(new TextEncoder().encode('chunk-'));
+        },
+      });
+    }
+
+    async function startDownload(): Promise<Response> {
       const response = await downloadDesktop(
         makeRequest('https://agi.example/api/download?platform=mac&arch=arm64'),
       );
       expect(response.status).toBe(200);
+      return response;
+    }
 
-      vi.advanceTimersByTime(10 * 60_000);
-      finishInstallerBody();
+    it('keeps streaming an installer whose transfer outlasts the response deadline while bytes keep moving', async () => {
+      const chunks = Array.from({ length: 30 }, (_, index) => `part-${index}-`);
+      installerFrom(chunkEvery(20_000, chunks));
 
-      expect(await response.text()).toBe('first-half-second-half');
+      const response = await startDownload();
+      const text = response.text();
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(await text).toBe(chunks.join(''));
+      expect(installerSignal?.aborted).toBe(false);
+    });
+
+    it('stops the installer transfer when the client stops reading', async () => {
+      installerFrom(endless);
+
+      const reader = (await startDownload()).body!.getReader();
+      await reader.read();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(installerSignal?.aborted).toBe(true);
+      await expect(reader.read()).rejects.toThrow();
+    });
+
+    it('stops the installer transfer when the client goes away', async () => {
+      installerFrom(endless);
+
+      const reader = (await startDownload()).body!.getReader();
+      await reader.read();
+      await reader.cancel();
+
+      expect(installerSignal?.aborted).toBe(true);
+    });
+
+    it('ends a download whose installer host stops sending', async () => {
+      installerFrom(chunkEvery(10 * 60_000, ['first-', 'never-']));
+
+      const response = await startDownload();
+      const text = response.text();
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      await expect(text).rejects.toThrow();
+      expect(installerSignal?.aborted).toBe(true);
     });
 
     it('still gives up on an installer host that never answers', async () => {
