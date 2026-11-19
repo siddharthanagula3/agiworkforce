@@ -12,7 +12,6 @@ import { EmptyState } from '../EmptyState';
 import { SlashCommandMenu, type CommandSuggestion } from '../SlashCommandMenu';
 import { SkillMentionPicker, type MentionSkill } from '../SkillMentionPicker';
 
-import { useMentionStore } from '../../stores/mentionStore';
 import { usePlanModeStore } from '../../stores/planModeStore';
 import { useChatStore } from '../../stores/chatStore';
 import { useArtifactStore } from '../../stores/artifactStore';
@@ -20,7 +19,6 @@ import { useUIStore } from '../../stores/uiStore';
 import type { ChatRuntime } from '../../lib/runtime';
 
 function resetStores() {
-  useMentionStore.setState({ activeTrigger: null, query: '', cursorIndex: 0 });
   usePlanModeStore.setState({ planMode: false, pendingPlan: null });
   useChatStore.setState({
     conversations: [],
@@ -208,45 +206,6 @@ describe('SkillMentionPicker', () => {
     );
     expect(html).toContain('Backend Engineer');
     expect(html).not.toContain('Data Analyst');
-  });
-});
-
-describe('mentionStore', () => {
-  beforeEach(() => resetStores());
-
-  it('starts with no active trigger', () => {
-    expect(useMentionStore.getState().activeTrigger).toBeNull();
-  });
-
-  it('openMention sets trigger and query', () => {
-    useMentionStore.getState().openMention('@skill', 'backend');
-    const s = useMentionStore.getState();
-    expect(s.activeTrigger).toBe('@skill');
-    expect(s.query).toBe('backend');
-    expect(s.cursorIndex).toBe(0);
-  });
-
-  it('closeMention resets all fields', () => {
-    useMentionStore.getState().openMention('@file', 'src');
-    useMentionStore.getState().closeMention();
-    const s = useMentionStore.getState();
-    expect(s.activeTrigger).toBeNull();
-    expect(s.query).toBe('');
-    expect(s.cursorIndex).toBe(0);
-  });
-
-  it('moveCursor wraps around downward', () => {
-    useMentionStore.getState().openMention('@skill');
-    useMentionStore.setState({ cursorIndex: 2 });
-    useMentionStore.getState().moveCursor('down', 3);
-    expect(useMentionStore.getState().cursorIndex).toBe(0);
-  });
-
-  it('moveCursor wraps around upward', () => {
-    useMentionStore.getState().openMention('@skill');
-    useMentionStore.setState({ cursorIndex: 0 });
-    useMentionStore.getState().moveCursor('up', 3);
-    expect(useMentionStore.getState().cursorIndex).toBe(2);
   });
 });
 

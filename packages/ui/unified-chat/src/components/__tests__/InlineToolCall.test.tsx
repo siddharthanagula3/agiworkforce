@@ -4,7 +4,6 @@ import { Box } from 'lucide-react';
 
 import {
   InlineToolCall,
-  InlineToolCallStack,
   inferKindFromLabel,
   KIND_TO_BADGE,
   type InlineToolKind,
@@ -180,23 +179,6 @@ describe('InlineToolCall, arg summary', () => {
       <InlineToolCall id="a2" label="bash" status="success" body={<span />} />,
     );
     expect(container.querySelector('.inline-tool-call__summary')).toBeNull();
-  });
-});
-
-describe('InlineToolCallStack', () => {
-  it('renders children inside a stack with the 1px left guideline', () => {
-    const { container } = render(
-      <InlineToolCallStack>
-        <InlineToolCall id="m1" label="Read" status="success" body={<span />} />
-        <InlineToolCall id="m2" label="Write" status="success" body={<span />} />
-        <InlineToolCall id="m3" label="Read" status="success" body={<span />} />
-      </InlineToolCallStack>,
-    );
-    const stack = container.querySelector('[data-tool-stack]');
-    expect(stack).not.toBeNull();
-    expect(stack?.className).toMatch(/border-s/);
-    const children = container.querySelectorAll('[data-tool-id]');
-    expect(children).toHaveLength(3);
   });
 });
 

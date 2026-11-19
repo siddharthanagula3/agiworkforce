@@ -2353,4 +2353,43 @@ mod tests {
         assert_eq!(managed_plan_needed(max_model), Some(UserTier::Max.label()));
         assert_eq!(managed_plan_needed("a-model-nobody-ships"), None);
     }
+
+    #[test]
+    fn the_cli_model_admission_and_minimum_plan_answer_as_recorded_for_every_spelling() {
+        use crate::tier_cache::plan_conformance::{conform, OwnedCopy, Probe, Scope};
+        use serde_json::{json, Value};
+
+        const COPIES: [OwnedCopy; 2] = [
+            OwnedCopy {
+                id: "cli.canAccessModel",
+                scope: Scope::Spelling,
+                question: "modelAdmission",
+                source: "apps/cli/src/model_catalog.rs can_access_model_for_tier after tier_cache::parse_tier",
+                per_sample: true,
+            },
+            OwnedCopy {
+                id: "cli.managedPlanNeeded",
+                scope: Scope::Model,
+                question: "minimumPlanLabel",
+                source: "apps/cli/src/model_catalog.rs managed_plan_needed",
+                per_sample: false,
+            },
+        ];
+
+        conform(&COPIES, &|probe: &Probe| {
+            let model = &probe.model.expect("model answers name a sample").model_id;
+            match probe.copy {
+                "cli.canAccessModel" => crate::tier_cache::parse_tier(
+                    probe.spelling.expect("admission answers are per spelling"),
+                )
+                .map_or(Value::Null, |tier| {
+                    json!(can_access_model_for_tier(model, &tier))
+                }),
+                "cli.managedPlanNeeded" => {
+                    managed_plan_needed(model).map_or(Value::Null, |plan| json!(plan))
+                }
+                other => panic!("model_catalog does not own the {other} answer"),
+            }
+        });
+    }
 }
