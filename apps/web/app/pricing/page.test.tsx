@@ -1204,7 +1204,7 @@ describe('PricingPage', () => {
     column('free', {
       usage: 'compareFreeUsage',
       projects: '5',
-      storage: '100 MB',
+      storage: '500 MB',
       downloads: '775 MB',
       attachment: '25 MB',
       customMcp: NOT_INCLUDED,
@@ -1216,7 +1216,7 @@ describe('PricingPage', () => {
     column('basic', {
       usage: INCLUDED,
       projects: 'noSetLimit',
-      storage: '1 GB',
+      storage: '4 GB',
       downloads: '1 GB',
       attachment: '25 MB',
       customMcp: '5',
@@ -1227,7 +1227,7 @@ describe('PricingPage', () => {
     column('pro', {
       usage: '5x more usage than Basic',
       projects: 'noSetLimit',
-      storage: '10 GB',
+      storage: '20 GB',
       downloads: '3 GB',
       attachment: '25 MB',
       customMcp: '25',

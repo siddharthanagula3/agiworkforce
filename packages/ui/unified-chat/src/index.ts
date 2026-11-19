@@ -4,7 +4,6 @@ export * from './lib/runtime';
 export * from './lib/hostBridge';
 export * from './lib/Capabilities';
 export * from './lib/utils';
-export * from './lib/greetings';
 export { useOnlineStatus } from './hooks/use-online-status';
 export {
   buildSandboxedHtml,
@@ -99,8 +98,8 @@ export {
 export type { ArtifactVersionSummary, VersionedContent } from './lib/artifactVersionSummary';
 export { matchMentionQuery } from './lib/mentionQuery';
 export type { MentionMatch } from './lib/mentionQuery';
-export { classifyPrompt, TASK_LABEL } from './lib/promptClassifier';
-export type { ClassifiedTask, ClassificationResult, ClassifyOptions } from './lib/promptClassifier';
+export { TASK_LABEL } from './lib/promptClassifier';
+export type { ClassifiedTask } from './lib/promptClassifier';
 export {
   getModelsAdmittedForExecutionMode,
   isLocalChatModel,
@@ -365,8 +364,6 @@ export {
   summarizeConversationUsage,
 } from './components/ConversationStatsPanel';
 export type { ConversationStats } from './components/ConversationStatsPanel';
-export { detectGoalIntent } from './lib/goalIntent';
-export type { GoalIntent } from './lib/goalIntent';
 
 export { ThinkingBlock } from './components/ThinkingBlock';
 export { CitationPill } from './components/CitationPill';
@@ -496,15 +493,9 @@ export type {
   ConnectorAuthorizationReason,
   ConnectorConnectRequest,
 } from './lib/connector-connect-required';
-export {
-  InlineToolCall,
-  InlineToolCallStack,
-  inferKindFromLabel,
-  KIND_TO_BADGE,
-} from './components/InlineToolCall';
+export { InlineToolCall, inferKindFromLabel, KIND_TO_BADGE } from './components/InlineToolCall';
 export type {
   InlineToolCallProps,
-  InlineToolCallStackProps,
   InlineToolCallStatus,
   InlineToolKind,
   InlineToolIconStyle,
@@ -516,12 +507,8 @@ export { RewindTimeline } from './components/RewindTimeline';
 export type { RewindTimelineProps, CodingCheckpoint } from './components/RewindTimeline';
 export { useReducedMotion } from './hooks/useReducedMotion';
 
-export { BranchNavigator, BranchNavigatorContainer } from './components/BranchNavigator';
-export type {
-  BranchNavigatorProps,
-  BranchNavigatorContainerProps,
-  BranchItem,
-} from './components/BranchNavigator';
+export { BranchNavigator } from './components/BranchNavigator';
+export type { BranchNavigatorProps, BranchItem } from './components/BranchNavigator';
 export { RewindTimelineContainer } from './components/RewindTimeline';
 export type { RewindTimelineContainerProps } from './components/RewindTimeline';
 export {
@@ -638,13 +625,6 @@ export type {
 } from './components/SlashCommandMenu';
 export { SkillMentionPicker } from './components/SkillMentionPicker';
 export type { SkillMentionPickerProps, MentionSkill } from './components/SkillMentionPicker';
-export {
-  useMentionStore,
-  selectActiveMentionTrigger,
-  selectMentionQuery,
-  selectMentionCursorIndex,
-} from './stores/mentionStore';
-export type { MentionTrigger } from './stores/mentionStore';
 export {
   selectPlanMode,
   selectPendingPlan,

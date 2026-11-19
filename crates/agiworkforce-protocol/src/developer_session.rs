@@ -49,175 +49,393 @@ pub const MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION: u32 =
 /// not answer.
 pub const PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE: i32 = -32005;
 
+macro_rules! method_constants {
+    ($(pub const $name:ident: &str = $value:literal;)*) => {
+        $(pub const $name: &str = $value;)*
+
+        /// Every constant in this module as `(constant name, wire name)`.
+        pub const ALL: &[(&str, &str)] = &[$((stringify!($name), $value)),*];
+    };
+}
+
 pub mod method {
-    pub const INITIALIZE: &str = "initialize";
-    pub const INITIALIZED: &str = "initialized";
-    pub const THREAD_START: &str = "thread/start";
-    pub const THREAD_LIST: &str = "thread/list";
-    pub const THREAD_READ: &str = "thread/read";
-    pub const THREAD_RESUME: &str = "thread/resume";
-    pub const THREAD_FORK: &str = "thread/fork";
-    pub const THREAD_COMPACT: &str = "thread/compact";
-    pub const THREAD_HANDOFF: &str = "thread/handoff";
-    pub const THREAD_HANDOFF_ACCEPT: &str = "thread/handoff/accept";
-    pub const THREAD_ARCHIVE: &str = "thread/archive";
-    pub const THREAD_UNARCHIVE: &str = "thread/unarchive";
-    pub const THREAD_SEARCH: &str = "thread/search";
-    pub const THREAD_CHECKPOINTS: &str = "thread/checkpoints";
-    pub const THREAD_REWIND: &str = "thread/rewind";
-    pub const THREAD_PLAN: &str = "thread/plan";
-    pub const THREAD_DELETE: &str = "thread/delete";
-    pub const WORKSPACE_IDENTITY: &str = "workspace/identity";
-    pub const WORKSPACE_FILES_LIST: &str = "workspace/files/list";
-    pub const WORKSPACE_FILE_READ: &str = "workspace/file/read";
-    pub const WORKSPACE_FILE_WRITE: &str = "workspace/file/write";
-    pub const WORKSPACE_FILE_RECOVERY_READ: &str = "workspace/file/recovery/read";
-    pub const WORKSPACE_FILE_RECOVERY_WRITE: &str = "workspace/file/recovery/write";
-    pub const WORKSPACE_FILE_RECOVERY_LIST: &str = "workspace/file/recovery/list";
-    pub const WORKSPACE_FILE_RECOVERY_RESTORE: &str = "workspace/file/recovery/restore";
-    pub const TERMINAL_PLAN: &str = "terminal/plan";
-    pub const TERMINAL_START: &str = "terminal/start";
-    pub const TERMINAL_LIST: &str = "terminal/list";
-    pub const TERMINAL_READ: &str = "terminal/read";
-    pub const TERMINAL_WRITE: &str = "terminal/write";
-    pub const TERMINAL_RESIZE: &str = "terminal/resize";
-    pub const TERMINAL_CLOSE: &str = "terminal/close";
-    pub const THREAD_RECONNECT: &str = "thread/reconnect";
-    pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
-    pub const THREAD_WRITER_TAKEOVER: &str = "thread/writer/takeover";
-    pub const MODEL_LIST: &str = "model/list";
-    pub const TURN_START: &str = "turn/start";
-    pub const TURN_STEER: &str = "turn/steer";
-    pub const TURN_INTERRUPT: &str = "turn/interrupt";
-    pub const TURN_STARTED: &str = "turn/started";
-    pub const TURN_OUTPUT_DELTA: &str = "turn/output_delta";
-    pub const TURN_MODEL: &str = "turn/model";
-    pub const TURN_COMPLETED: &str = "turn/completed";
-    pub const TURN_FAILED: &str = "turn/failed";
-    pub const TURN_INTERRUPTED: &str = "turn/interrupted";
-    pub const TURN_AGENT_EVENT: &str = "turn/agent_event";
-    pub const APPROVAL_REQUESTED: &str = "approval/requested";
-    pub const SERVER_WARNING: &str = "server/warning";
-    pub const APPROVAL_RESPOND: &str = "approval/respond";
-    pub const USER_INPUT_REQUESTED: &str = "userInput/requested";
-    pub const USER_INPUT_RESPOND: &str = "userInput/respond";
-    pub const TASK_STATE_CHANGED: &str = "task/state_changed";
-    pub const SHUTDOWN: &str = "shutdown";
-    pub const ACCOUNT_STATUS: &str = "account/status";
-    pub const CLOUD_WORKSPACES_LIST: &str = "cloud/workspaces/list";
-    pub const CLOUD_WORKSPACE_SELECT: &str = "cloud/workspace/select";
-    pub const CLOUD_MODEL_LIST: &str = "cloud/models/list";
-    pub const CLOUD_HISTORY_LIST: &str = "cloud/history/list";
-    pub const CLOUD_HISTORY_READ: &str = "cloud/history/read";
-    pub const CLOUD_CONVERSATION_UPDATE: &str = "cloud/conversation/update";
-    pub const CLOUD_PROJECT_DOWNLOAD_PREPARE: &str = "cloud/project/download/prepare";
-    pub const CLOUD_PROJECT_DOWNLOAD_START: &str = "cloud/project/download/start";
-    pub const CLOUD_PROJECT_DOWNLOAD_READ: &str = "cloud/project/download/read";
-    pub const CLOUD_PROJECT_DOWNLOAD_CANCEL: &str = "cloud/project/download/cancel";
-    pub const CLOUD_PROJECT_DOWNLOAD_RELEASE: &str = "cloud/project/download/release";
-    pub const CLOUD_ATTACHMENT_RECOVERY_READ: &str = "cloud/attachment/recovery/read";
-    pub const CLOUD_ATTACHMENT_RECOVERY_LIST: &str = "cloud/attachment/recovery/list";
-    pub const CLOUD_ATTACHMENT_RECOVERY_CHANGE: &str = "cloud/attachment/recovery/change";
-    pub const CLOUD_UPLOAD_PREPARE: &str = "cloud/upload/prepare";
-    pub const CLOUD_UPLOAD_START: &str = "cloud/upload/start";
-    pub const CLOUD_UPLOAD_READ: &str = "cloud/upload/read";
-    pub const CLOUD_UPLOAD_CANCEL: &str = "cloud/upload/cancel";
-    pub const CLOUD_UPLOAD_RELEASE: &str = "cloud/upload/release";
-    pub const CLOUD_PROJECT_UPLOAD_PREPARE: &str = "cloud/project/upload/prepare";
-    pub const CLOUD_PROJECT_UPLOAD_START: &str = "cloud/project/upload/start";
-    pub const CLOUD_PROJECT_UPLOAD_READ: &str = "cloud/project/upload/read";
-    pub const CLOUD_PROJECT_UPLOAD_CANCEL: &str = "cloud/project/upload/cancel";
-    pub const CLOUD_PROJECT_UPLOAD_RELEASE: &str = "cloud/project/upload/release";
-    pub const CLOUD_PROJECT_FILE_REINDEX: &str = "cloud/project/file/reindex";
-    pub const CLOUD_PROJECT_FILES_LIST: &str = "cloud/project/files/list";
-    pub const CLOUD_PROJECT_FILE_PREVIEW: &str = "cloud/project/file/preview";
-    pub const CLOUD_PROJECT_LIST: &str = "cloud/projects/list";
-    pub const CLOUD_PROJECT_READ: &str = "cloud/project/read";
-    pub const CLOUD_PROJECT_CREATE: &str = "cloud/project/create";
-    pub const CLOUD_PROJECT_UPDATE: &str = "cloud/project/update";
-    pub const CLOUD_DRAFT_SAVE: &str = "cloud/conversation/draft/save";
-    pub const CLOUD_CONVERSATION_CREATE: &str = "cloud/conversation/create";
-    pub const CLOUD_TURN_START: &str = "cloud/turn/start";
-    pub const CLOUD_TURN_READ: &str = "cloud/turn/read";
-    pub const CLOUD_TURN_STOP: &str = "cloud/turn/stop";
-    pub const CLOUD_TURN_RESUME: &str = "cloud/turn/resume";
-    pub const CLOUD_RUN_LIST: &str = "cloud/run/list";
-    pub const CLOUD_RUN_ATTACH: &str = "cloud/run/attach";
-    pub const CLOUD_TURN_DETACH: &str = "cloud/turn/detach";
-    pub const CLOUD_WORK_PLAN_UPDATE: &str = "cloud/work/plan/update";
-    pub const ACCOUNT_LOGIN: &str = "account/login";
-    pub const ACCOUNT_LOGIN_WAIT: &str = "account/login/wait";
-    pub const ACCOUNT_LOGIN_CANCEL: &str = "account/login/cancel";
-    pub const ACCOUNT_LOGOUT: &str = "account/logout";
-    pub const ACCOUNT_TOKEN: &str = "account/token";
-    pub const CONTEXT_INSTRUCTIONS: &str = "context/instructions";
-    pub const SKILLS_LIST: &str = "skills/list";
-    pub const SKILLS_SET_ENABLED: &str = "skills/setEnabled";
-    pub const SKILLS_CONSENT: &str = "skills/consent";
-    pub const SKILLS_INSTALL: &str = "skills/install";
-    pub const SKILLS_REMOVE: &str = "skills/remove";
-    pub const PLUGINS_LIST: &str = "plugins/list";
-    pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
-    pub const PLUGINS_INSTALL: &str = "plugins/install";
-    pub const PLUGINS_REMOVE: &str = "plugins/remove";
-    pub const PLUGINS_UPDATE: &str = "plugins/update";
-    pub const MCP_LIST: &str = "mcp/list";
-    pub const MCP_LOGIN: &str = "mcp/login";
-    pub const MCP_TEST: &str = "mcp/test";
-    pub const MCP_TOOLS: &str = "mcp/tools";
-    pub const MCP_INSPECT: &str = "mcp/inspect";
-    pub const MCP_AUTH_REQUIRED: &str = "mcp/authRequired";
-    pub const MCP_ADD: &str = "mcp/add";
-    pub const MCP_REMOVE: &str = "mcp/remove";
-    pub const MCP_SET_ENABLED: &str = "mcp/setEnabled";
-    pub const MCP_APPROVAL_READ: &str = "mcp/approval/read";
-    pub const MCP_APPROVAL_GRANT: &str = "mcp/approval/grant";
-    pub const HOOKS_LIST: &str = "hooks/list";
-    pub const HOOKS_ADD: &str = "hooks/add";
-    pub const HOOKS_REMOVE: &str = "hooks/remove";
-    pub const SETTINGS_READ: &str = "settings/read";
-    pub const SETTINGS_WRITE: &str = "settings/write";
-    pub const SETTINGS_INSTRUCTIONS_READ: &str = "settings/instructions/read";
-    pub const SETTINGS_INSTRUCTIONS_WRITE: &str = "settings/instructions/write";
-    pub const COMMANDS_LIST: &str = "commands/list";
-    pub const COMMANDS_RUN: &str = "commands/run";
-    pub const MEMORY_ADD: &str = "memory/add";
-    pub const WORKTREE_CREATE: &str = "worktree/create";
-    pub const WORKTREE_LIST: &str = "worktree/list";
-    pub const WORKTREE_REMOVE: &str = "worktree/remove";
-    pub const PERMISSIONS_LIST: &str = "permissions/list";
-    pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
-    pub const PERMISSIONS_RULES: &str = "permissions/rules";
-    pub const PERMISSIONS_ADD: &str = "permissions/add";
-    pub const TRUST_LIST: &str = "trust/list";
-    pub const TRUST_REVOKE: &str = "trust/revoke";
-    pub const PROVIDERS_LIST: &str = "providers/list";
-    pub const PROVIDERS_SET_KEY: &str = "providers/setKey";
-    pub const PROVIDERS_REMOVE_KEY: &str = "providers/removeKey";
-    pub const PLAN_DECIDE: &str = "plan/decide";
-    pub const GIT_PULL_REQUEST_PLAN: &str = "git/pullRequest/plan";
-    pub const GIT_PULL_REQUEST: &str = "git/pullRequest";
-    pub const MANAGED_WORKTREE_CREATE: &str = "worktree/managed/create";
-    pub const MANAGED_WORKTREE_LIST: &str = "worktree/managed/list";
-    pub const WORKTREE_DELETE: &str = "worktree/managed/delete";
-    pub const WORKTREE_PIN: &str = "worktree/managed/pin";
-    pub const WORKTREE_KEEP: &str = "worktree/managed/keep";
-    pub const WORKTREE_APPLY_TO_LOCAL: &str = "worktree/managed/applyToLocal";
-    pub const WORKTREE_APPLY_PLAN: &str = "worktree/managed/apply/plan";
-    pub const WORKTREE_APPLY_COMMIT: &str = "worktree/managed/apply/commit";
-    pub const WORKTREE_APPLY_RESULT: &str = "worktree/managed/apply/result";
-    pub const WORKTREE_SETUP_RUN: &str = "worktree/managed/setup/run";
-    pub const WORKTREE_SETUP_LOG: &str = "worktree/managed/setup/log";
-    pub const WORKTREE_SETUP_FINISHED: &str = "worktree/managed/setup/finished";
-    pub const CHECKPOINT_LIST: &str = "checkpoint/list";
-    pub const CHECKPOINT_DIFF: &str = "checkpoint/diff";
-    pub const CHECKPOINT_REVERT: &str = "checkpoint/revert";
-    pub const CHECKPOINT_STAGE: &str = "checkpoint/stage";
-    pub const THREAD_REVERT: &str = "thread/revert";
-    pub const THREAD_SIDE_QUESTION: &str = "thread/sideQuestion";
-    pub const THREAD_RENAME: &str = "thread/rename";
-    pub const THREAD_RENAMED: &str = "thread/renamed";
-    pub const THREAD_SIDE_QUESTION_DELTA: &str = "thread/sideQuestion/delta";
+    method_constants! {
+        pub const INITIALIZE: &str = "initialize";
+        pub const INITIALIZED: &str = "initialized";
+        pub const THREAD_START: &str = "thread/start";
+        pub const THREAD_LIST: &str = "thread/list";
+        pub const THREAD_READ: &str = "thread/read";
+        pub const THREAD_RESUME: &str = "thread/resume";
+        pub const THREAD_FORK: &str = "thread/fork";
+        pub const THREAD_COMPACT: &str = "thread/compact";
+        pub const THREAD_HANDOFF: &str = "thread/handoff";
+        pub const THREAD_HANDOFF_ACCEPT: &str = "thread/handoff/accept";
+        pub const THREAD_ARCHIVE: &str = "thread/archive";
+        pub const THREAD_UNARCHIVE: &str = "thread/unarchive";
+        pub const THREAD_SEARCH: &str = "thread/search";
+        pub const THREAD_CHECKPOINTS: &str = "thread/checkpoints";
+        pub const THREAD_REWIND: &str = "thread/rewind";
+        pub const THREAD_PLAN: &str = "thread/plan";
+        pub const THREAD_DELETE: &str = "thread/delete";
+        pub const WORKSPACE_IDENTITY: &str = "workspace/identity";
+        pub const WORKSPACE_FILES_LIST: &str = "workspace/files/list";
+        pub const WORKSPACE_FILE_READ: &str = "workspace/file/read";
+        pub const WORKSPACE_FILE_WRITE: &str = "workspace/file/write";
+        pub const WORKSPACE_FILE_RECOVERY_READ: &str = "workspace/file/recovery/read";
+        pub const WORKSPACE_FILE_RECOVERY_WRITE: &str = "workspace/file/recovery/write";
+        pub const WORKSPACE_FILE_RECOVERY_LIST: &str = "workspace/file/recovery/list";
+        pub const WORKSPACE_FILE_RECOVERY_RESTORE: &str = "workspace/file/recovery/restore";
+        pub const TERMINAL_PLAN: &str = "terminal/plan";
+        pub const TERMINAL_START: &str = "terminal/start";
+        pub const TERMINAL_LIST: &str = "terminal/list";
+        pub const TERMINAL_READ: &str = "terminal/read";
+        pub const TERMINAL_WRITE: &str = "terminal/write";
+        pub const TERMINAL_RESIZE: &str = "terminal/resize";
+        pub const TERMINAL_CLOSE: &str = "terminal/close";
+        pub const THREAD_RECONNECT: &str = "thread/reconnect";
+        pub const THREAD_WRITER_RELEASE: &str = "thread/writer/release";
+        pub const THREAD_WRITER_TAKEOVER: &str = "thread/writer/takeover";
+        pub const MODEL_LIST: &str = "model/list";
+        pub const TURN_START: &str = "turn/start";
+        pub const TURN_STEER: &str = "turn/steer";
+        pub const TURN_INTERRUPT: &str = "turn/interrupt";
+        pub const TURN_STARTED: &str = "turn/started";
+        pub const TURN_OUTPUT_DELTA: &str = "turn/output_delta";
+        pub const TURN_MODEL: &str = "turn/model";
+        pub const TURN_COMPLETED: &str = "turn/completed";
+        pub const TURN_FAILED: &str = "turn/failed";
+        pub const TURN_INTERRUPTED: &str = "turn/interrupted";
+        pub const TURN_AGENT_EVENT: &str = "turn/agent_event";
+        pub const APPROVAL_REQUESTED: &str = "approval/requested";
+        pub const SERVER_WARNING: &str = "server/warning";
+        pub const APPROVAL_RESPOND: &str = "approval/respond";
+        pub const USER_INPUT_REQUESTED: &str = "userInput/requested";
+        pub const USER_INPUT_RESPOND: &str = "userInput/respond";
+        pub const TASK_STATE_CHANGED: &str = "task/state_changed";
+        pub const SHUTDOWN: &str = "shutdown";
+        pub const ACCOUNT_STATUS: &str = "account/status";
+        pub const CLOUD_WORKSPACES_LIST: &str = "cloud/workspaces/list";
+        pub const CLOUD_WORKSPACE_SELECT: &str = "cloud/workspace/select";
+        pub const CLOUD_MODEL_LIST: &str = "cloud/models/list";
+        pub const CLOUD_HISTORY_LIST: &str = "cloud/history/list";
+        pub const CLOUD_HISTORY_READ: &str = "cloud/history/read";
+        pub const CLOUD_CONVERSATION_UPDATE: &str = "cloud/conversation/update";
+        pub const CLOUD_PROJECT_DOWNLOAD_PREPARE: &str = "cloud/project/download/prepare";
+        pub const CLOUD_PROJECT_DOWNLOAD_START: &str = "cloud/project/download/start";
+        pub const CLOUD_PROJECT_DOWNLOAD_READ: &str = "cloud/project/download/read";
+        pub const CLOUD_PROJECT_DOWNLOAD_CANCEL: &str = "cloud/project/download/cancel";
+        pub const CLOUD_PROJECT_DOWNLOAD_RELEASE: &str = "cloud/project/download/release";
+        pub const CLOUD_ATTACHMENT_RECOVERY_READ: &str = "cloud/attachment/recovery/read";
+        pub const CLOUD_ATTACHMENT_RECOVERY_LIST: &str = "cloud/attachment/recovery/list";
+        pub const CLOUD_ATTACHMENT_RECOVERY_CHANGE: &str = "cloud/attachment/recovery/change";
+        pub const CLOUD_UPLOAD_PREPARE: &str = "cloud/upload/prepare";
+        pub const CLOUD_UPLOAD_START: &str = "cloud/upload/start";
+        pub const CLOUD_UPLOAD_READ: &str = "cloud/upload/read";
+        pub const CLOUD_UPLOAD_CANCEL: &str = "cloud/upload/cancel";
+        pub const CLOUD_UPLOAD_RELEASE: &str = "cloud/upload/release";
+        pub const CLOUD_PROJECT_UPLOAD_PREPARE: &str = "cloud/project/upload/prepare";
+        pub const CLOUD_PROJECT_UPLOAD_START: &str = "cloud/project/upload/start";
+        pub const CLOUD_PROJECT_UPLOAD_READ: &str = "cloud/project/upload/read";
+        pub const CLOUD_PROJECT_UPLOAD_CANCEL: &str = "cloud/project/upload/cancel";
+        pub const CLOUD_PROJECT_UPLOAD_RELEASE: &str = "cloud/project/upload/release";
+        pub const CLOUD_PROJECT_FILE_REINDEX: &str = "cloud/project/file/reindex";
+        pub const CLOUD_PROJECT_FILES_LIST: &str = "cloud/project/files/list";
+        pub const CLOUD_PROJECT_FILE_PREVIEW: &str = "cloud/project/file/preview";
+        pub const CLOUD_PROJECT_LIST: &str = "cloud/projects/list";
+        pub const CLOUD_PROJECT_READ: &str = "cloud/project/read";
+        pub const CLOUD_PROJECT_CREATE: &str = "cloud/project/create";
+        pub const CLOUD_PROJECT_UPDATE: &str = "cloud/project/update";
+        pub const CLOUD_DRAFT_SAVE: &str = "cloud/conversation/draft/save";
+        pub const CLOUD_CONVERSATION_CREATE: &str = "cloud/conversation/create";
+        pub const CLOUD_TURN_START: &str = "cloud/turn/start";
+        pub const CLOUD_TURN_READ: &str = "cloud/turn/read";
+        pub const CLOUD_TURN_STOP: &str = "cloud/turn/stop";
+        pub const CLOUD_TURN_RESUME: &str = "cloud/turn/resume";
+        pub const CLOUD_RUN_LIST: &str = "cloud/run/list";
+        pub const CLOUD_RUN_ATTACH: &str = "cloud/run/attach";
+        pub const CLOUD_TURN_DETACH: &str = "cloud/turn/detach";
+        pub const CLOUD_WORK_PLAN_UPDATE: &str = "cloud/work/plan/update";
+        pub const ACCOUNT_LOGIN: &str = "account/login";
+        pub const ACCOUNT_LOGIN_WAIT: &str = "account/login/wait";
+        pub const ACCOUNT_LOGIN_CANCEL: &str = "account/login/cancel";
+        pub const ACCOUNT_LOGOUT: &str = "account/logout";
+        pub const ACCOUNT_TOKEN: &str = "account/token";
+        pub const CONTEXT_INSTRUCTIONS: &str = "context/instructions";
+        pub const SKILLS_LIST: &str = "skills/list";
+        pub const SKILLS_SET_ENABLED: &str = "skills/setEnabled";
+        pub const SKILLS_CONSENT: &str = "skills/consent";
+        pub const SKILLS_INSTALL: &str = "skills/install";
+        pub const SKILLS_REMOVE: &str = "skills/remove";
+        pub const PLUGINS_LIST: &str = "plugins/list";
+        pub const PLUGINS_SET_ENABLED: &str = "plugins/setEnabled";
+        pub const PLUGINS_INSTALL: &str = "plugins/install";
+        pub const PLUGINS_REMOVE: &str = "plugins/remove";
+        pub const PLUGINS_UPDATE: &str = "plugins/update";
+        pub const MCP_LIST: &str = "mcp/list";
+        pub const MCP_LOGIN: &str = "mcp/login";
+        pub const MCP_TEST: &str = "mcp/test";
+        pub const MCP_TOOLS: &str = "mcp/tools";
+        pub const MCP_INSPECT: &str = "mcp/inspect";
+        pub const MCP_AUTH_REQUIRED: &str = "mcp/authRequired";
+        pub const MCP_ADD: &str = "mcp/add";
+        pub const MCP_REMOVE: &str = "mcp/remove";
+        pub const MCP_SET_ENABLED: &str = "mcp/setEnabled";
+        pub const MCP_APPROVAL_READ: &str = "mcp/approval/read";
+        pub const MCP_APPROVAL_GRANT: &str = "mcp/approval/grant";
+        pub const HOOKS_LIST: &str = "hooks/list";
+        pub const HOOKS_ADD: &str = "hooks/add";
+        pub const HOOKS_REMOVE: &str = "hooks/remove";
+        pub const SETTINGS_READ: &str = "settings/read";
+        pub const SETTINGS_WRITE: &str = "settings/write";
+        pub const SETTINGS_INSTRUCTIONS_READ: &str = "settings/instructions/read";
+        pub const SETTINGS_INSTRUCTIONS_WRITE: &str = "settings/instructions/write";
+        pub const COMMANDS_LIST: &str = "commands/list";
+        pub const COMMANDS_RUN: &str = "commands/run";
+        pub const MEMORY_ADD: &str = "memory/add";
+        pub const WORKTREE_CREATE: &str = "worktree/create";
+        pub const WORKTREE_LIST: &str = "worktree/list";
+        pub const WORKTREE_REMOVE: &str = "worktree/remove";
+        pub const PERMISSIONS_LIST: &str = "permissions/list";
+        pub const PERMISSIONS_REMOVE: &str = "permissions/remove";
+        pub const PERMISSIONS_RULES: &str = "permissions/rules";
+        pub const PERMISSIONS_ADD: &str = "permissions/add";
+        pub const TRUST_LIST: &str = "trust/list";
+        pub const TRUST_REVOKE: &str = "trust/revoke";
+        pub const PROVIDERS_LIST: &str = "providers/list";
+        pub const PROVIDERS_SET_KEY: &str = "providers/setKey";
+        pub const PROVIDERS_REMOVE_KEY: &str = "providers/removeKey";
+        pub const PLAN_DECIDE: &str = "plan/decide";
+        pub const GIT_PULL_REQUEST_PLAN: &str = "git/pullRequest/plan";
+        pub const GIT_PULL_REQUEST: &str = "git/pullRequest";
+        pub const MANAGED_WORKTREE_CREATE: &str = "worktree/managed/create";
+        pub const MANAGED_WORKTREE_LIST: &str = "worktree/managed/list";
+        pub const WORKTREE_DELETE: &str = "worktree/managed/delete";
+        pub const WORKTREE_PIN: &str = "worktree/managed/pin";
+        pub const WORKTREE_KEEP: &str = "worktree/managed/keep";
+        pub const WORKTREE_APPLY_TO_LOCAL: &str = "worktree/managed/applyToLocal";
+        pub const WORKTREE_APPLY_PLAN: &str = "worktree/managed/apply/plan";
+        pub const WORKTREE_APPLY_COMMIT: &str = "worktree/managed/apply/commit";
+        pub const WORKTREE_APPLY_RESULT: &str = "worktree/managed/apply/result";
+        pub const WORKTREE_SETUP_RUN: &str = "worktree/managed/setup/run";
+        pub const WORKTREE_SETUP_LOG: &str = "worktree/managed/setup/log";
+        pub const WORKTREE_SETUP_FINISHED: &str = "worktree/managed/setup/finished";
+        pub const CHECKPOINT_LIST: &str = "checkpoint/list";
+        pub const CHECKPOINT_DIFF: &str = "checkpoint/diff";
+        pub const CHECKPOINT_REVERT: &str = "checkpoint/revert";
+        pub const CHECKPOINT_STAGE: &str = "checkpoint/stage";
+        pub const THREAD_REVERT: &str = "thread/revert";
+        pub const THREAD_SIDE_QUESTION: &str = "thread/sideQuestion";
+        pub const THREAD_RENAME: &str = "thread/rename";
+        pub const THREAD_RENAMED: &str = "thread/renamed";
+        pub const THREAD_SIDE_QUESTION_DELTA: &str = "thread/sideQuestion/delta";
+        pub const THREAD_STARTED: &str = "thread/started";
+        pub const THREAD_FORKED: &str = "thread/forked";
+        pub const THREAD_RELOADED: &str = "thread/reloaded";
+        pub const THREAD_ARCHIVED: &str = "thread/archived";
+        pub const THREAD_UNARCHIVED: &str = "thread/unarchived";
+        pub const THREAD_REWOUND: &str = "thread/rewound";
+        pub const THREAD_DELETED: &str = "thread/deleted";
+        pub const THREAD_WRITER_CHANGED: &str = "thread/writer_changed";
+        pub const TURN_STEERED: &str = "turn/steered";
+        pub const MCP_LOADING: &str = "mcp/loading";
+        pub const MCP_READY: &str = "mcp/ready";
+        pub const MCP_UNAVAILABLE: &str = "mcp/unavailable";
+        pub const MCP_CHANGED: &str = "mcp/changed";
+        pub const SKILLS_CHANGED: &str = "skills/changed";
+        pub const PLUGINS_CHANGED: &str = "plugins/changed";
+        pub const HOOKS_CHANGED: &str = "hooks/changed";
+        pub const MEMORY_ADDED: &str = "memory/added";
+        pub const WORKTREE_CREATED: &str = "worktree/created";
+        pub const WORKTREE_REMOVED: &str = "worktree/removed";
+    }
+
+    /// Wire names of the messages sent without an `id`, in either direction.
+    pub const NOTIFICATIONS: &[&str] = &[
+        INITIALIZED,
+        TURN_STARTED,
+        TURN_STEERED,
+        TURN_OUTPUT_DELTA,
+        TURN_MODEL,
+        TURN_COMPLETED,
+        TURN_FAILED,
+        TURN_INTERRUPTED,
+        TURN_AGENT_EVENT,
+        APPROVAL_REQUESTED,
+        SERVER_WARNING,
+        USER_INPUT_REQUESTED,
+        TASK_STATE_CHANGED,
+        MCP_AUTH_REQUIRED,
+        MCP_LOADING,
+        MCP_READY,
+        MCP_UNAVAILABLE,
+        MCP_CHANGED,
+        SKILLS_CHANGED,
+        PLUGINS_CHANGED,
+        HOOKS_CHANGED,
+        MEMORY_ADDED,
+        THREAD_STARTED,
+        THREAD_FORKED,
+        THREAD_RELOADED,
+        THREAD_ARCHIVED,
+        THREAD_UNARCHIVED,
+        THREAD_REWOUND,
+        THREAD_DELETED,
+        THREAD_RENAMED,
+        THREAD_PLAN,
+        THREAD_WRITER_CHANGED,
+        THREAD_SIDE_QUESTION_DELTA,
+        WORKTREE_CREATED,
+        WORKTREE_REMOVED,
+        WORKTREE_SETUP_LOG,
+        WORKTREE_SETUP_FINISHED,
+    ];
+}
+
+/// Capability keys an `initialize` response may carry, in the camelCase the
+/// wire spells them.
+pub fn app_server_capability_keys() -> Vec<String> {
+    schemars::schema_for!(AppServerCapabilities)
+        .schema
+        .object
+        .map(|object| object.properties.into_keys().collect())
+        .unwrap_or_default()
+}
+
+/// Every name and number a developer-session client needs from this module,
+/// written for TypeScript by the binding export so no client re-reads this
+/// file to learn them.
+pub struct DeveloperSessionTable {
+    pub protocol_version: u32,
+    pub supported_protocol_versions: Vec<u32>,
+    pub legacy_protocol_version: u32,
+    pub minimum_protocol_version: u32,
+    pub agent_event_schema_version: u32,
+    pub error_codes: Vec<(&'static str, i32)>,
+    pub methods: Vec<(&'static str, &'static str)>,
+    pub notifications: Vec<(&'static str, &'static str)>,
+    pub capabilities: Vec<String>,
+    pub agent_modes: Vec<&'static str>,
+    pub reasoning_efforts: Vec<&'static str>,
+    pub child_task_states: Vec<String>,
+}
+
+fn wire_variants<T: JsonSchema>() -> Vec<String> {
+    use schemars::schema::{Schema, SchemaObject};
+    fn collect(schema: &SchemaObject, out: &mut Vec<String>) {
+        if let Some(values) = &schema.enum_values {
+            out.extend(values.iter().filter_map(|v| v.as_str().map(str::to_string)));
+        }
+        if let Some(subschemas) = &schema.subschemas {
+            for variant in subschemas.one_of.iter().flatten() {
+                if let Schema::Object(object) = variant {
+                    collect(object, out);
+                }
+            }
+        }
+    }
+    let mut variants = Vec::new();
+    collect(&schemars::schema_for!(T).schema, &mut variants);
+    variants
+}
+
+impl DeveloperSessionTable {
+    pub fn current() -> Self {
+        let methods: Vec<(&'static str, &'static str)> = method::ALL.to_vec();
+        let notifications = method::NOTIFICATIONS
+            .iter()
+            .filter_map(|wire| methods.iter().find(|(_, value)| value == wire).copied())
+            .collect();
+        Self {
+            protocol_version: DEVELOPER_SESSION_PROTOCOL_VERSION,
+            supported_protocol_versions: SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS.to_vec(),
+            legacy_protocol_version: LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            minimum_protocol_version: MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+            agent_event_schema_version: AGENT_EVENT_SCHEMA_VERSION,
+            error_codes: vec![
+                (
+                    "PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE",
+                    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+                ),
+                (
+                    "THREAD_WRITER_CONFLICT_ERROR_CODE",
+                    THREAD_WRITER_CONFLICT_ERROR_CODE,
+                ),
+                (
+                    "MCP_APPROVAL_STALE_ERROR_CODE",
+                    MCP_APPROVAL_STALE_ERROR_CODE,
+                ),
+            ],
+            methods,
+            notifications,
+            capabilities: app_server_capability_keys(),
+            agent_modes: DEVELOPER_AGENT_MODES
+                .iter()
+                .map(|mode| mode.wire_name())
+                .collect(),
+            reasoning_efforts: DeveloperReasoningEffort::ALL
+                .iter()
+                .map(|effort| effort.as_str())
+                .collect(),
+            child_task_states: wire_variants::<DeveloperChildTaskState>(),
+        }
+    }
+
+    pub fn render_typescript(&self) -> String {
+        fn numbers(rows: &[(&str, i32)]) -> Vec<String> {
+            rows.iter()
+                .map(|(name, value)| format!("    {name}: {value},"))
+                .collect()
+        }
+        fn strings(rows: &[(&str, &str)]) -> Vec<String> {
+            rows.iter()
+                .map(|(name, value)| format!("    {name}: {value:?},"))
+                .collect()
+        }
+        let supported = self
+            .supported_protocol_versions
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut lines = vec![
+            "// This file was generated by agiworkforce-protocol (export_bindings). Do not edit this file manually.".to_string(),
+            "export const DEVELOPER_SESSION_TABLE = {".to_string(),
+            format!("  protocolVersion: {},", self.protocol_version),
+            format!("  supportedProtocolVersions: [{supported}],"),
+            format!("  legacyProtocolVersion: {},", self.legacy_protocol_version),
+            format!("  minimumProtocolVersion: {},", self.minimum_protocol_version),
+            format!(
+                "  agentEventSchemaVersion: {},",
+                self.agent_event_schema_version
+            ),
+            "  errorCodes: {".to_string(),
+        ];
+        lines.extend(numbers(&self.error_codes));
+        lines.push("  },".to_string());
+        lines.push("  methods: {".to_string());
+        lines.extend(strings(&self.methods));
+        lines.push("  },".to_string());
+        lines.push("  notifications: {".to_string());
+        lines.extend(strings(&self.notifications));
+        lines.push("  },".to_string());
+        lines.push("  capabilities: [".to_string());
+        lines.extend(self.capabilities.iter().map(|key| format!("    {key:?},")));
+        lines.push("  ],".to_string());
+        for (name, values) in [
+            ("agentModes", self.agent_modes.clone()),
+            ("reasoningEfforts", self.reasoning_efforts.clone()),
+            (
+                "childTaskStates",
+                self.child_task_states.iter().map(String::as_str).collect(),
+            ),
+        ] {
+            lines.push(format!("  {name}: ["));
+            lines.extend(values.iter().map(|value| format!("    {value:?},")));
+            lines.push("  ],".to_string());
+        }
+        lines.push("} as const;".to_string());
+        lines.join("\n") + "\n"
+    }
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -4738,6 +4956,138 @@ mod tests {
         );
     }
 
+    fn declared_source() -> &'static str {
+        include_str!("developer_session.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("the source has a production part")
+    }
+
+    fn quoted_constants(body: &str) -> Vec<(String, String)> {
+        body.lines()
+            .filter_map(|line| {
+                let rest = line.trim().strip_prefix("pub const ")?;
+                let (name, rest) = rest.split_once(": &str = \"")?;
+                let (value, _) = rest.split_once("\";")?;
+                Some((name.to_string(), value.to_string()))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_table_lists_every_constant_this_module_declares() {
+        let source = declared_source();
+        let start = source
+            .find("pub mod method {")
+            .expect("the method module is declared");
+        let module = &source[start..];
+        let module = &module[..module.find("\n}\n").expect("the module closes")];
+        let declared = quoted_constants(module);
+        assert!(!declared.is_empty(), "the method module declares constants");
+
+        let table = DeveloperSessionTable::current();
+        let tabled: Vec<(String, String)> = table
+            .methods
+            .iter()
+            .map(|(name, value)| (name.to_string(), value.to_string()))
+            .collect();
+        assert_eq!(declared, tabled);
+
+        let declared_codes: Vec<(String, i32)> = source
+            .lines()
+            .filter_map(|line| {
+                let rest = line.strip_prefix("pub const ")?;
+                let (name, rest) = rest.split_once(": i32 = ")?;
+                Some((name.to_string(), rest.trim_end_matches(';').parse().ok()?))
+            })
+            .collect();
+        let mut tabled_codes: Vec<(String, i32)> = table
+            .error_codes
+            .iter()
+            .map(|(name, code)| (name.to_string(), *code))
+            .collect();
+        tabled_codes.sort();
+        let mut declared_codes = declared_codes;
+        declared_codes.sort();
+        assert_eq!(declared_codes, tabled_codes);
+    }
+
+    #[test]
+    fn method_names_are_unique_and_every_notification_is_a_method() {
+        let table = DeveloperSessionTable::current();
+        let mut wire: Vec<&str> = table.methods.iter().map(|(_, value)| *value).collect();
+        wire.sort_unstable();
+        let before = wire.len();
+        wire.dedup();
+        assert_eq!(before, wire.len(), "two constants share one wire name");
+
+        assert_eq!(table.notifications.len(), method::NOTIFICATIONS.len());
+        for notification in method::NOTIFICATIONS {
+            assert!(
+                table.methods.iter().any(|(_, value)| value == notification),
+                "{notification} is listed as a notification but is no method constant"
+            );
+        }
+    }
+
+    #[test]
+    fn the_table_names_each_capability_the_response_can_carry() {
+        let keys = app_server_capability_keys();
+        let every_key_on: serde_json::Map<String, Value> = keys
+            .iter()
+            .map(|key| (key.clone(), Value::Bool(true)))
+            .collect();
+        let capabilities: AppServerCapabilities =
+            serde_json::from_value(Value::Object(every_key_on)).unwrap();
+        let Value::Object(serialized) = serde_json::to_value(capabilities).unwrap() else {
+            panic!("capabilities serialize to an object");
+        };
+        let mut serialized: Vec<String> = serialized.keys().cloned().collect();
+        serialized.sort();
+        let mut keys = keys;
+        keys.sort();
+        assert_eq!(keys, serialized);
+    }
+
+    #[test]
+    fn the_table_vocabularies_are_the_wire_enums() {
+        let table = DeveloperSessionTable::current();
+
+        let mut modes = table.agent_modes.clone();
+        modes.sort_unstable();
+        let mut wire_modes = wire_variants::<DeveloperAgentMode>();
+        wire_modes.sort_unstable();
+        assert_eq!(modes, wire_modes);
+
+        assert_eq!(
+            table.reasoning_efforts,
+            wire_variants::<DeveloperReasoningEffort>()
+        );
+
+        assert!(!table.child_task_states.is_empty());
+        for state in &table.child_task_states {
+            let parsed: DeveloperChildTaskState =
+                serde_json::from_value(Value::String(state.clone())).unwrap();
+            assert_eq!(serde_json::to_value(parsed).unwrap(), state.as_str());
+        }
+    }
+
+    #[test]
+    fn the_rendered_table_carries_versions_codes_methods_and_notifications() {
+        let rendered = DeveloperSessionTable::current().render_typescript();
+        assert!(rendered.contains("export const DEVELOPER_SESSION_TABLE = {"));
+        assert!(rendered.contains(&format!(
+            "  protocolVersion: {DEVELOPER_SESSION_PROTOCOL_VERSION},"
+        )));
+        assert!(rendered.contains(&format!(
+            "PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE: {PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE},"
+        )));
+        assert!(rendered.contains("THREAD_START: \"thread/start\","));
+        assert!(rendered.contains("TURN_STEERED: \"turn/steered\","));
+        assert!(rendered.contains("\"workspaceTerminal\","));
+        assert!(rendered.ends_with("} as const;\n"));
+    }
+
     fn repo_file(relative: &str) -> String {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -4745,23 +5095,6 @@ mod tests {
         std::fs::read_to_string(&path).unwrap_or_else(|error| {
             panic!("{relative} is the surface this contract covers: {error}")
         })
-    }
-
-    /// Every spelling inside `text` between `open` and the next `close`.
-    fn quoted_between(text: &str, open: &str, close: &str) -> Vec<String> {
-        let start = text
-            .find(open)
-            .unwrap_or_else(|| panic!("{open} is present"));
-        let rest = &text[start + open.len()..];
-        let end = rest
-            .find(close)
-            .unwrap_or_else(|| panic!("{close} closes it"));
-        rest[..end]
-            .split('\'')
-            .skip(1)
-            .step_by(2)
-            .map(str::to_string)
-            .collect()
     }
 
     fn cli_permission_mode_vocabulary() -> Vec<String> {
@@ -4798,39 +5131,21 @@ mod tests {
             "expected the CLI's full PermissionMode vocabulary, read {cli:?}"
         );
 
-        let vscode = quoted_between(
-            &repo_file("apps/extension-vscode/src/features/permissions/agentModeConsent.ts"),
-            "export type ExtensionAgentMode =",
-            ";",
-        );
-        assert_eq!(vscode.len(), 4, "read the VS Code vocabulary: {vscode:?}");
-
-        let shared = quoted_between(
-            &repo_file("packages/contracts/local-runtime/src/developer-session.ts"),
-            "export const DEVELOPER_AGENT_MODES =",
-            "]",
-        );
+        let shared = DeveloperSessionTable::current().agent_modes;
         assert_eq!(shared.len(), DEVELOPER_AGENT_MODES.len());
 
-        for spelling in cli.iter().chain(vscode.iter()).chain(shared.iter()) {
+        for spelling in cli.iter().map(String::as_str).chain(shared.iter().copied()) {
             assert!(
                 DeveloperAgentMode::from_client_spelling(spelling).is_some(),
                 "{spelling} is a surface's own name for a posture and must land on the shared enum"
             );
         }
 
-        // The shared contract is the wire enum itself, not a fifth vocabulary.
-        let mut wire: Vec<&str> = DEVELOPER_AGENT_MODES
-            .iter()
-            .map(|m| m.wire_name())
-            .collect();
+        let mut wire = wire_variants::<DeveloperAgentMode>();
         wire.sort_unstable();
-        let mut mirrored: Vec<&str> = shared.iter().map(String::as_str).collect();
-        mirrored.sort_unstable();
-        assert_eq!(wire, mirrored);
-        let mut editor: Vec<&str> = vscode.iter().map(String::as_str).collect();
-        editor.sort_unstable();
-        assert_eq!(wire, editor);
+        let mut tabled: Vec<String> = shared.iter().map(ToString::to_string).collect();
+        tabled.sort_unstable();
+        assert_eq!(wire, tabled);
     }
 
     #[test]

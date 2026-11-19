@@ -1,7 +1,5 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { useChatStore, selectDraftContent } from '@shared/stores/web-chat-store';
 
 export const WORK_ENTRY_POINTS = [
@@ -10,7 +8,6 @@ export const WORK_ENTRY_POINTS = [
   'connector_result',
   'browser_page',
   'desktop_context',
-  'escalation',
 ] as const;
 
 export type WorkEntryPoint = (typeof WORK_ENTRY_POINTS)[number];
@@ -21,7 +18,6 @@ export const WORK_ENTRY_POINT_LABELS: Readonly<Record<WorkEntryPoint, string>> =
   connector_result: 'Start Work from this result',
   browser_page: 'Start Work from this page',
   desktop_context: 'Start Work from this window',
-  escalation: 'Switch to Work',
 });
 
 const OBJECTIVE_OPENERS: Readonly<Record<WorkEntryPoint, string>> = Object.freeze({
@@ -30,7 +26,6 @@ const OBJECTIVE_OPENERS: Readonly<Record<WorkEntryPoint, string>> = Object.freez
   connector_result: 'Work from the result of',
   browser_page: 'Work from the page',
   desktop_context: 'Work from the window',
-  escalation: 'Work on',
 });
 
 export interface WorkLaunchSource {
@@ -64,12 +59,9 @@ export function mergeIntoDraft(draft: string, objective: string): string {
   return draft.trim() ? `${draft.replace(/\s+$/, '')}\n\n${objective}` : objective;
 }
 
-export type StartWork = (request: WorkLaunchRequest) => void;
-
 /**
  * An omitted conversationId means the open conversation; an explicit null means
- * a new chat. Navigation is the hook's job, so a host outside the app router can
- * still hand its context to Work.
+ * a new chat.
  */
 export function startWork(request: WorkLaunchRequest): void {
   const state = useChatStore.getState();
@@ -78,16 +70,4 @@ export function startWork(request: WorkLaunchRequest): void {
   const draft = selectDraftContent(conversationId)(state);
   state.setComposerToggles({ workMode: 'agiwork' }, conversationId);
   state.setDraftContent(mergeIntoDraft(draft, buildWorkObjective(request)), conversationId);
-}
-
-export function useStartWork(): StartWork {
-  const router = useRouter();
-
-  return useCallback(
-    (request: WorkLaunchRequest) => {
-      startWork(request);
-      if ((request.conversationId ?? null) === null) router.push('/chat');
-    },
-    [router],
-  );
 }
