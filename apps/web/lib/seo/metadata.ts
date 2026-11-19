@@ -10,6 +10,7 @@ export interface BuildMetadataOptions {
   ogTitle?: string;
   ogDescription?: string;
   ogType?: 'website' | 'article';
+  updated?: string;
   imageAlt?: string;
   robots?: Metadata['robots'];
   feeds?: NonNullable<Metadata['alternates']>['types'];
@@ -36,6 +37,7 @@ export function buildMetadata(options: BuildMetadataOptions): Metadata {
     ogTitle,
     ogDescription,
     ogType = 'website',
+    updated,
     imageAlt,
     robots,
     feeds,
@@ -58,6 +60,7 @@ export function buildMetadata(options: BuildMetadataOptions): Metadata {
     alternates: feeds ? { canonical, types: feeds } : { canonical },
     openGraph: {
       type: ogType,
+      ...(ogType === 'article' && updated ? { modifiedTime: updated } : {}),
       locale: 'en_US',
       siteName: SITE_NAME,
       url: canonical,

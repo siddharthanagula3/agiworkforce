@@ -13,6 +13,8 @@ impl Desktop {
         }
         self.editor.visible = true;
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         self.account.visible = false;
         self.cloud.visible = false;
@@ -363,6 +365,20 @@ impl Desktop {
                 }
                 panel = panel
                     .child(self.button(
+                        "rename-file",
+                        "Rename to path…",
+                        UiAction::RenameFile,
+                        palette,
+                        cx,
+                    ))
+                    .child(self.button(
+                        "delete-file",
+                        "Delete file…",
+                        UiAction::DeleteFile,
+                        palette,
+                        cx,
+                    ))
+                    .child(self.button(
                         "reload-file",
                         "Reload file…",
                         UiAction::ReadFile(file.path.clone()),
@@ -406,6 +422,13 @@ impl Desktop {
                 "open-file-path",
                 "Open file",
                 UiAction::OpenFilePath,
+                palette,
+                cx,
+            ))
+            .child(self.button(
+                "create-file",
+                "Create file",
+                UiAction::CreateFile,
                 palette,
                 cx,
             ));

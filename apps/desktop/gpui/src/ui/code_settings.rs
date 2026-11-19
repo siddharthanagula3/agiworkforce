@@ -23,6 +23,8 @@ impl Desktop {
             return;
         }
         self.code_settings.visible = true;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         self.focus.focus(window, cx);
         self.cloud.visible = false;

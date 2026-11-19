@@ -92,6 +92,60 @@ pub struct WorkspaceFileWriteResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
+pub struct WorkspaceFileCreateParams {
+    pub root_key: String,
+    pub path: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorkspaceFileRenameParams {
+    pub root_key: String,
+    pub from: String,
+    pub to: String,
+    /// Replaces a regular file at `to`. The caller sets this only after a
+    /// confirmation that names `to`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub replace: bool,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires fn(&T) -> bool.
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorkspaceFileRenameResponse {
+    pub root_key: String,
+    pub from: String,
+    pub to: String,
+    pub replaced: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorkspaceFileDeleteParams {
+    pub root_key: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorkspaceFileDeleteResponse {
+    pub root_key: String,
+    pub path: String,
+    pub removed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
 pub struct WorkspaceFileRecovery {
     pub base_revision: String,
     pub content: String,

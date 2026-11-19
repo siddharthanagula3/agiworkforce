@@ -33,6 +33,8 @@ function findCollection(id: string, fromPhone: boolean) {
   return { collection: null, unavailableOnPhone: fromPhone && find('web') !== undefined };
 }
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   return supportCollectionIndex().collections.map((collection) => ({ id: collection.id }));
 }

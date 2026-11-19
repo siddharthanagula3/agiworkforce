@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Desktop surface maintainers + Rust platform
-Last updated: 2026-11-11
+Last updated: 2026-11-18
 
 The active goal is a complete GPUI desktop application with the web application's
 product workflows and additional permissioned local implementation, using Claude,
@@ -2533,8 +2533,10 @@ pushed; the broader migration is not claimed complete.
 ## Native Code session search
 
 The Code sidebar searches the open folder's sessions through the CLI's existing
-`thread/search` owner. Titles and transcripts match case-insensitively; archived
-sessions and other folders are excluded by the host, not the client. Results
+`thread/search` owner. Titles and transcripts match case-insensitively; other
+folders are excluded by the host, not the client. Archived sessions are left out
+unless the sidebar's archived filter is on, and the search request carries that
+filter. Results
 replace the folder list until the query is cleared, and a newer search or a folder
 change discards a slower response. Account-only connections refuse the request.
 
@@ -2579,6 +2581,65 @@ ledger existed, which the migration's live-row backfill does not register.
 The lifecycle harness connects as the owner role directly rather than through
 `SET ROLE`, matching the production owner connection; `legal_hold_preserves`
 deliberately fails closed for a set-role connection with no bound subject.
+
+## Coding session management and new-session defaults
+
+The native Code sidebar searches the consented folder through `thread/search`,
+including or excluding archived sessions, and can return to the paged list.
+An open session can be renamed, archived, restored or deleted through the
+existing thread methods. Rename and archive wait until the turn is stopped.
+The host refuses a resumed read of an archived session, so archive updates the
+open session locally and drops it from the active list. Unarchive reads the
+restored session back. Delete asks before removing the session and its saved
+messages. It never discards worktree archives in that step. A second
+confirmation is required before those archive refs are deleted, and only for
+the refs the previous delete reported as kept. An archived session cannot send.
+
+New coding sessions use the CLI settings owner. The defaults panel reads
+`settings/read` and the host model list, then writes one of model, effort or
+permission mode through `settings/write`. The model must appear once in that
+list and must have a known trust mode. Bypass cannot be saved. Automatic
+approval asks before it is stored. Instruction text from the settings read is
+not kept or written by this panel. The change does not alter Cloud
+conversations, an open session, or account-wide Cloud defaults. Those Cloud
+defaults still have no native settings method.
+
+The shared limits are `THREAD_TITLE_MAX_CHARS`,
+`THREAD_SEARCH_QUERY_MAX_CHARS`, `THREAD_SEARCH_DEFAULT_LIMIT` and
+`THREAD_SEARCH_MAX_LIMIT` on the developer-session protocol. The CLI host
+enforces the query limit and clamps the search page. This slice is covered by
+native state tests and the host's empty/overlong search refusal. It is not
+native-window, screen-reader, IME or release acceptance.
+
+## Confined file changes, coding drafts, and MCP switches
+
+Creating, renaming, and deleting a file in a consented folder goes through the
+same file authority as editor save. An escaping path, a path outside the grant,
+or a protected file is refused before the tree changes. Delete, and a rename
+that would replace an existing file, wait for a confirmation that names the
+path. File bytes stay in the granted folder.
+
+Unsent Host Code composer text is stored under the CLI configuration root in
+`code-drafts`, keyed by the granted folder and thread. It is separate from
+Cloud drafts and from editor file recovery. A fresh owner reads the same store.
+A newer revision wins over an older write. Typing pauses before a save. An edit
+that arrives while a save is in flight is written afterward with the accepted
+revision. A rejected write replaces the composer with the stored draft. Opening
+another coding session keeps text typed while the first read is still in
+flight and writes it once that snapshot arrives, before the other session
+loads. Sending or an explicit clear removes the draft, including when a save is
+still in flight or the snapshot has not loaded, and that clear uses the
+accepted revision. The read does not start a turn.
+
+The native Code surface lists the host's MCP servers and enables or disables
+one through `mcp/setEnabled`. The shown state stays until the host accepts the
+change. A refusal leaves it unchanged. Enabling a server does not invoke a
+tool and does not write Cloud connectors.
+
+Account-wide Cloud new-chat defaults still have no developer-session method.
+The web `default-model` preference namespace is not reachable from this host.
+The Cloud surface says those defaults are unavailable and persists nothing.
+Host Developer new-session defaults stay on `settings/read` and `settings/write`.
 
 ## Native desktop integration
 
@@ -2671,11 +2732,15 @@ updates above. The full maintenance scan remains open under
   establish those live gates.
 - Complete remaining native narrow scrolling and drag-resize acceptance for the
   implemented frame. Complete native acceptance for saved conversation model
-  choice and implement account-wide new-chat defaults through their settings owner.
+  choice. Code new-session defaults now save through the CLI settings owner;
+  account-wide Cloud defaults still need their own settings method. Native
+  session search, rename, archive and delete still need window acceptance.
 - Accept the native desktop integration above in a running window, then migrate
-  provider selection where admitted, file and artifact rendering, dictation,
-  desktop tools, credential storage, browser bridges, and remote-control
-  workflows.
+  the remaining project controls, Cloud search acceptance, provider selection
+  where admitted, file and artifact rendering, dictation, desktop tools,
+  credential storage, browser bridges, and remote-control workflows. Code
+  session search and Host Developer defaults are implemented above and still
+  need native acceptance.
 - Implement AGI Code editing, diffs, terminal and worktree flows through existing
   owners; review the license of every additional dependency separately.
 - Verify Windows and Linux builds and behavior. Only the local macOS build has

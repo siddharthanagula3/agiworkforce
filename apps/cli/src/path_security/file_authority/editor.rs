@@ -22,7 +22,69 @@ fn relative(path: &str, root: bool) -> Result<()> {
     Ok(())
 }
 
+fn regular_file_exists(directory: &DirectoryAuthority, relative: &Path) -> Result<bool> {
+    let (parent, leaf) = match directory.parent(relative, false) {
+        Ok(value) => value,
+        Err(error) if is_not_found(&error) => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    match confined::stat(&parent, &leaf, FollowSymlinks::No) {
+        Ok(metadata) => {
+            validate_regular(&metadata, u64::MAX)?;
+            Ok(true)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
 impl WorkspaceFileAuthority {
+    pub(crate) fn create_editor_file(&self, path: &str, bytes: &[u8]) -> Result<()> {
+        let (directory, relative) = self.editor_file(path)?;
+        anyhow::ensure!(
+            !regular_file_exists(directory, &relative)?,
+            "The file already exists"
+        );
+        let created =
+            directory.replace_file(&relative, bytes, false, MAX_EDITOR_TEXT_BYTES as u64)?;
+        anyhow::ensure!(created, "The file was not created");
+        self.identity()?;
+        Ok(())
+    }
+
+    pub(crate) fn rename_editor_file(&self, from: &str, to: &str, replace: bool) -> Result<bool> {
+        anyhow::ensure!(from != to, "Choose a different relative path");
+        let (from_directory, from_relative) = self.editor_file(from)?;
+        let (to_directory, to_relative) = self.editor_file(to)?;
+        anyhow::ensure!(
+            from_directory.path() == to_directory.path(),
+            "The file would leave its granted folder"
+        );
+        let (from_parent, from_leaf) = from_directory.parent(&from_relative, false)?;
+        let from_metadata = confined::stat(&from_parent, &from_leaf, FollowSymlinks::No)?;
+        validate_regular(&from_metadata, u64::MAX)?;
+        let replaced = regular_file_exists(to_directory, &to_relative)?;
+        anyhow::ensure!(!replaced || replace, "The destination already exists");
+        let (to_parent, to_leaf) = to_directory.parent(&to_relative, true)?;
+        if replaced {
+            let metadata = confined::stat(&to_parent, &to_leaf, FollowSymlinks::No)?;
+            validate_regular(&metadata, u64::MAX)?;
+        }
+        confined::rename(&from_parent, &from_leaf, &to_parent, &to_leaf)?;
+        self.identity()?;
+        Ok(replaced)
+    }
+
+    pub(crate) fn delete_editor_file(&self, path: &str) -> Result<()> {
+        let (directory, relative) = self.editor_file(path)?;
+        anyhow::ensure!(
+            directory.remove_file(&relative)?,
+            "The file is no longer available"
+        );
+        self.identity()?;
+        Ok(())
+    }
+
     #[cfg(unix)]
     pub(crate) fn read_scoped_file(&self, path: &str, limit: u64) -> Result<Option<ReadFile>> {
         self.identity()?;
