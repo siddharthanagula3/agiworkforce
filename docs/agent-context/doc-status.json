@@ -46,12 +46,17 @@
     {
       "path": "docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md",
       "status": "dated-external-research",
-      "rule": "Dated through 2026-09-21; vendor facts after that date come from docs/research/assistant-comparison-2026-11-11.md. Implementation and launch status still come from code and current repository owners."
+      "rule": "Dated through 2026-09-21; vendor facts after that date come from docs/research/claude-chatgpt-comparison-2026-11-18.md for ChatGPT and Claude and docs/research/assistant-comparison-2026-11-11.md for Gemini and Perplexity. Implementation and launch status still come from code and current repository owners."
+    },
+    {
+      "path": "docs/research/claude-chatgpt-comparison-2026-11-18.md",
+      "status": "dated-external-research",
+      "rule": "Latest ChatGPT and Claude comparison across 21 areas, read 2026-11-18. Reopen the cited vendor page before acting on a claim; its AGI Workforce brief is recommendation, not implementation or release status."
     },
     {
       "path": "docs/research/assistant-comparison-2026-11-11.md",
       "status": "dated-external-research",
-      "rule": "Latest ChatGPT, Claude, Gemini and Perplexity comparison, read 2026-11-11. Reopen the cited vendor page before acting on a claim; the AGI column does not override code, the billing catalog or the release state."
+      "rule": "Superseded for OpenAI and Anthropic by docs/research/claude-chatgpt-comparison-2026-11-18.md; still the 2026-11-11 record for Gemini and Perplexity. Reopen the cited vendor page before acting on a claim; the AGI column does not override code, the billing catalog or the release state."
     },
     {
       "path": "docs/research/competitor-surfaces-2026-10-24.md",

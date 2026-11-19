@@ -243,12 +243,15 @@ export function WebSettingsModal({
   const pluginsDecision = useCapabilityDecision('canUsePlugins');
 
   const sectionContent: Record<WebSettingsPane, React.ReactNode> &
-    Partial<Record<WebSettingsHostedSection | 'skills' | 'plugins', React.ReactNode>> = {
+    Partial<
+      Record<WebSettingsHostedSection | 'connectors' | 'skills' | 'plugins', React.ReactNode>
+    > = {
     ...(host ? { desktop: <DesktopSettingsSection /> } : {}),
     ...(electronHost ? { 'computer-use': <ComputerUseSettings /> } : {}),
     ...(electronHost ? { 'browser-pane': <BrowserPaneSettings /> } : {}),
     ...(electronHost ? { 'local-mcp': <LocalMcpSettings /> } : {}),
     ...(electronHost ? { storage: <StorageSettings /> } : {}),
+    ...(connectors.planPane ? { connectors: connectors.planPane } : {}),
     ...(skillsDecision?.allowed === false && skillsDecision.reason
       ? { skills: <CapabilityDeniedNotice reason={skillsDecision.reason} /> }
       : {}),
@@ -325,6 +328,7 @@ export function WebSettingsModal({
           navGroups={navGroups}
           adapter={adapter}
           directoryAdapter={connectors.directoryAdapter}
+          directoryHeaderActions={connectors.directoryHeaderActions}
           navBadges={connectors.navBadges}
           openCustomConnector={customConnectorOpen}
           onCustomConnectorOpenChange={changeCustomConnectorOpen}

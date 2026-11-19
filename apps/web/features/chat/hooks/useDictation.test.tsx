@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import {
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  TEAM_SEAT_PLAN_TIERS,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
@@ -118,7 +123,7 @@ describe('useDictation', () => {
 
   beforeEach(() => {
     useSettingsStore.setState({ dictationEnabled: true });
-    useBillingStore.setState({ disabledFeatures: [] });
+    useBillingStore.setState({ disabledFeatures: [], subscription: null });
     _resetRuntimeRefs();
     clearCsrfToken();
     useVoiceInputStore.setState({
@@ -127,6 +132,8 @@ describe('useDictation', () => {
       error: null,
       language: 'en-US',
       captureStream: null,
+      canRetryTranscription: false,
+      allowanceRefusal: null,
     });
     currentRecorder = new MockMediaRecorder();
     Object.defineProperty(window, 'MediaRecorder', {
@@ -489,5 +496,97 @@ describe('useDictation', () => {
 
     await waitFor(() => expect(result.current.status).toBe(DICTATION_STATUS.cancelled));
     expect(onInsert).not.toHaveBeenCalled();
+  });
+
+  describe('a refused recording', () => {
+    const lowestPaidTier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0];
+    const topSelfServeTier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.at(-1)!;
+
+    function subscribe(tier: BillingPlanTier) {
+      useBillingStore.setState({
+        subscription: {
+          tier,
+          display_name: tier,
+          status: 'active',
+          current_period_end: null,
+          plan_name: tier,
+        },
+      });
+    }
+
+    async function refuse(status: number, code?: string) {
+      const view = mount();
+      await act(async () => {
+        view.result.current.start();
+      });
+      stubFetch(() => ({
+        ok: false,
+        status,
+        json: async () => (code ? { error: { code } } : {}),
+      }));
+      await act(async () => {
+        view.result.current.stop();
+      });
+      await waitFor(() => expect(view.result.current.status).toBe(DICTATION_STATUS.error));
+      return view;
+    }
+
+    it('offers an upgrade when a free account has used its voice minutes', async () => {
+      const { result, onInsert } = await refuse(429, 'voice_minutes_monthly_limit_reached');
+
+      expect(result.current.usageLimited).toBe('upgradable');
+      expect(result.current.error).toBe('This month’s voice minutes are used up. Type instead.');
+      expect(onInsert).not.toHaveBeenCalled();
+    });
+
+    it('offers an upgrade when a lower paid plan reaches its usage limit', async () => {
+      subscribe(lowestPaidTier);
+      const { result } = await refuse(429, 'rolling_five_hour_limit_reached');
+
+      expect(result.current.usageLimited).toBe('upgradable');
+    });
+
+    it.each([
+      ['the top self-serve plan', topSelfServeTier],
+      ['a team plan', TEAM_SEAT_PLAN_TIERS.standard],
+    ])('offers no upgrade on %s, where no higher plan exists', async (_label, tier) => {
+      subscribe(tier);
+      const { result } = await refuse(429, 'rolling_weekly_limit_reached');
+
+      expect(result.current.usageLimited).toBe('not_upgradable');
+      expect(result.current.error).toBe(
+        'You’ve reached your usage limit. Type instead, or try again later.',
+      );
+    });
+
+    it('offers no upgrade when the organization spend cap refuses the recording', async () => {
+      subscribe(lowestPaidTier);
+      const { result } = await refuse(402, 'organization_spend_cap_reached');
+
+      expect(result.current.usageLimited).toBe('not_upgradable');
+      expect(result.current.error).toBe(
+        'Your organization has reached its usage limit. Type instead.',
+      );
+    });
+
+    it('reports no limit for a passing failure, so it stays retryable', async () => {
+      const { result } = await refuse(503);
+
+      expect(result.current.usageLimited).toBeNull();
+      expect(useVoiceInputStore.getState().canRetryTranscription).toBe(true);
+    });
+
+    it('records afresh rather than resending when retry follows a spent limit', async () => {
+      const { result } = await refuse(429, 'voice_minutes_monthly_limit_reached');
+      transcribes(TRANSCRIPT);
+
+      await act(async () => {
+        result.current.retry();
+      });
+
+      await waitFor(() => expect(result.current.status).toBe(DICTATION_STATUS.recording));
+      expect(result.current.usageLimited).toBeNull();
+      expect(result.current.error).toBeNull();
+    });
   });
 });

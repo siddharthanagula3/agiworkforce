@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createPortalSession: vi.fn(),
   listCustomers: vi.fn(),
   listSubscriptions: vi.fn(),
+  retrieveSubscription: vi.fn(),
 }));
 
 const waitlistAccessMocks = vi.hoisted(() => ({ hasAccess: vi.fn(async () => false) }));
@@ -66,7 +67,7 @@ vi.mock('stripe', () => ({
     };
     subscriptions = {
       list: mocks.listSubscriptions,
-      retrieve: vi.fn(),
+      retrieve: mocks.retrieveSubscription,
     };
   },
 }));
@@ -166,6 +167,35 @@ describe('POST /api/portal', () => {
 
     expect(response.status).toBe(409);
     expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed customer_id write instead of logging it as stored', async () => {
+    const { logger } = await import('@/lib/logger');
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'pro',
+        stripe_customer_id: null,
+        stripe_subscription_id: 'sub_123',
+        status: 'active',
+      },
+    ]);
+    mocks.retrieveSubscription.mockResolvedValueOnce({ customer: 'cus_found' });
+    mocks.execute.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await POST(request());
+
+    expect(mocks.execute).toHaveBeenCalledWith(
+      'update subscriptions set stripe_customer_id = $1 where user_id = $2',
+      ['cus_found', expect.any(String)],
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ customerId: 'cus_found' }),
+      'Could not store the Stripe customer_id on the subscription',
+    );
+    expect(logger.info).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'Updated subscription with customer_id',
+    );
   });
 
   it('does not send an ended store subscription to a Stripe portal', async () => {

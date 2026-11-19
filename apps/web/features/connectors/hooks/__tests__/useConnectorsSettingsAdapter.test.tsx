@@ -2,6 +2,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import {
+  billingPlanCapabilityUpgradeMessage,
+  type CapabilityDocumentWireView,
+} from '@agiworkforce/types';
+import { CapabilityProvider } from '@agiworkforce/unified-chat';
+import { onAppCommand } from '@shared/lib/app-commands';
+import { CONNECTORS_PLAN_LOCK } from '@/features/directory/services/connectors-directory';
+
+type TypesModule = typeof import('@agiworkforce/types');
+
+const connectorRelease = vi.hoisted(() => ({ released: null as boolean | null }));
+vi.mock('@agiworkforce/types', async (original) => {
+  const actual = await original<TypesModule>();
+  return {
+    ...actual,
+    connectorsReleased: (...args: Parameters<typeof actual.connectorsReleased>) =>
+      connectorRelease.released ?? actual.connectorsReleased(...args),
+  };
+});
 
 const directoryOptions = vi.hoisted(() => ({
   current: null as null | Record<string, unknown>,
@@ -12,7 +31,11 @@ vi.mock('@/features/directory', () => ({
   CONNECTOR_NOT_RESPONDING_COPY: 'Not responding to recent requests.',
   useDirectoryAdapter: (options: Record<string, unknown>) => {
     directoryOptions.current = options;
-    return { loadSection: vi.fn() };
+    return {
+      loadSection: vi.fn(),
+      sections: ['connectors'],
+      connectors: { entries: [], installable: true },
+    };
   },
 }));
 
@@ -50,7 +73,10 @@ vi.mock('@/features/connectors/components/ConnectorScopeList', () => ({
   ),
 }));
 
-import { useConnectorsSettingsAdapter } from '../useConnectorsSettingsAdapter';
+import {
+  useConnectorsSettingsAdapter,
+  type ConnectorsSettingsAdapterResult,
+} from '../useConnectorsSettingsAdapter';
 
 const CONNECTED_BODY = {
   connectors: [
@@ -113,6 +139,7 @@ function footerFor(detail: Record<string, unknown>, connectorId: string): ReactN
 beforeEach(() => {
   vi.clearAllMocks();
   directoryOptions.current = null;
+  connectorRelease.released = null;
 });
 
 afterEach(() => {
@@ -788,5 +815,168 @@ describe('connecting through a provider sign-in', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('oauth/start'))).toBe(
       false,
     );
+  });
+});
+
+const CAPABILITY_SOURCES = {
+  model: 'models.json@test',
+  tier: 'tier:test',
+  surface: 'surface:web',
+  settings: 'settings',
+} as const;
+
+function connectorsDocument(
+  deniedBy: readonly string[],
+  reason?: string,
+): CapabilityDocumentWireView {
+  return {
+    granted: deniedBy.length === 0 ? ['canUseConnectors'] : [],
+    deniedBy: deniedBy.length === 0 ? {} : { canUseConnectors: deniedBy },
+    ...(reason ? { denialReasons: { canUseConnectors: reason } } : {}),
+    sources: CAPABILITY_SOURCES,
+  };
+}
+
+const stableHeaders = async () => ({});
+
+function renderAdapterWith(document: CapabilityDocumentWireView) {
+  return renderHook(
+    () => useConnectorsSettingsAdapter({ open: true, authedHeaders: stableHeaders }),
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <CapabilityProvider platform="web" document={document}>
+          {children}
+        </CapabilityProvider>
+      ),
+    },
+  );
+}
+
+function renderPlanPaneWith(document: CapabilityDocumentWireView) {
+  const latest: { current: ConnectorsSettingsAdapterResult | null } = { current: null };
+  function PlanPane() {
+    const result = useConnectorsSettingsAdapter({ open: true, authedHeaders: stableHeaders });
+    latest.current = result;
+    return <>{result.planPane}</>;
+  }
+  render(
+    <CapabilityProvider platform="web" document={document}>
+      <PlanPane />
+    </CapabilityProvider>,
+  );
+  return latest;
+}
+
+describe('connectors on a plan that does not include them', () => {
+  const NOTHING_CONNECTED = { connectors: [], available: [] };
+
+  function renderNode(node: ReactNode) {
+    return render(<>{node}</>);
+  }
+
+  it('shows only the plan line with Upgrade once the lists show nothing connected', async () => {
+    connectorRelease.released = true;
+    stubFetch([], NOTHING_CONNECTED);
+    const openPlans = vi.fn();
+    const stop = onAppCommand('open-upgrade', openPlans);
+    try {
+      const latest = renderPlanPaneWith(connectorsDocument(['tier']));
+      expect(screen.getByLabelText('Loading connectors')).toBeTruthy();
+      expect(screen.queryByText(billingPlanCapabilityUpgradeMessage('connectors'))).toBeNull();
+
+      expect(
+        await screen.findByText(billingPlanCapabilityUpgradeMessage('connectors')),
+      ).toBeTruthy();
+      expect(screen.queryByLabelText('Loading connectors')).toBeNull();
+      expect(screen.queryByText(/needs credentials this deployment/)).toBeNull();
+      expect(latest.current?.adapter.addCustomConnector).toBeUndefined();
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+    } finally {
+      stop();
+    }
+    expect(openPlans).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the directory for an account that still holds a connection, so it can disconnect', async () => {
+    connectorRelease.released = true;
+    stubFetch([]);
+    const { result } = renderAdapterWith(connectorsDocument(['tier']));
+    await waitFor(() =>
+      expect(
+        (directoryOptions.current?.['connectedConnectors'] as Array<{ connectorId: string }>)?.map(
+          (row) => row.connectorId,
+        ),
+      ).toEqual(['io.sentry/mcp']),
+    );
+    await waitFor(() => expect(result.current.planPane).toBeNull());
+
+    expect(result.current.adapter.addCustomConnector).toBeUndefined();
+    expect(result.current.directoryAdapter.connectors?.locked).toEqual(CONNECTORS_PLAN_LOCK);
+    expect(result.current.directoryAdapter.connectors?.installable).toBe(false);
+    const openPlans = vi.fn();
+    const stop = onAppCommand('open-upgrade', openPlans);
+    try {
+      renderNode(result.current.directoryHeaderActions?.['connectors']);
+      fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+    } finally {
+      stop();
+    }
+    expect(openPlans).toHaveBeenCalledOnce();
+
+    const disconnect = directoryOptions.current?.['onDisconnectConnector'] as (
+      id: string,
+    ) => Promise<void>;
+    await disconnect('io.sentry/mcp');
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      '/api/connectors?connectorId=io.sentry%2Fmcp',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    await waitFor(() => expect(result.current.planPane).not.toBeNull());
+  });
+
+  it('keeps the directory for an account with a self-added connector', async () => {
+    connectorRelease.released = true;
+    stubFetch([SELF_ADDED_ROW], NOTHING_CONNECTED);
+    const { result } = renderAdapterWith(connectorsDocument(['tier']));
+    await waitFor(() => expect(directoryOptions.current?.['connectedConnectors']).toHaveLength(1));
+    await waitFor(() => expect(result.current.planPane).toBeNull());
+
+    expect(result.current.directoryAdapter.connectors?.locked).toEqual(CONNECTORS_PLAN_LOCK);
+  });
+
+  it('keeps the directory with its retry when the connector lists could not be read', async () => {
+    connectorRelease.released = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })),
+    );
+    const { result } = renderAdapterWith(connectorsDocument(['tier']));
+    await waitFor(() => expect(directoryOptions.current?.['connectorsError']).toBeTruthy());
+    await waitFor(() => expect(result.current.planPane).toBeNull());
+
+    expect(result.current.directoryAdapter.connectors?.locked).toEqual(CONNECTORS_PLAN_LOCK);
+  });
+
+  it.each([
+    ['allowed', connectorsDocument([])],
+    ['coming soon', connectorsDocument(['model', 'tier'], 'feature_coming_soon')],
+    ['turned off for the workspace', connectorsDocument(['settings'], 'disabled_by_organization')],
+  ])('leaves the directory in place when connectors are %s', async (_, document) => {
+    stubFetch([], NOTHING_CONNECTED);
+    const { result } = renderAdapterWith(document);
+    await waitFor(() => expect(directoryOptions.current?.['connectedConnectors']).toEqual([]));
+
+    expect(result.current.planPane).toBeNull();
+    expect(result.current.directoryHeaderActions).toBeUndefined();
+    expect(result.current.directoryAdapter.connectors?.locked).not.toEqual(CONNECTORS_PLAN_LOCK);
+  });
+
+  it('keeps adding a custom connector where connectors are allowed', async () => {
+    connectorRelease.released = true;
+    stubFetch([]);
+    const { result } = renderAdapterWith(connectorsDocument([]));
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    expect(result.current.adapter.addCustomConnector).toEqual(expect.any(Function));
   });
 });

@@ -2,17 +2,31 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  BILLING_PLAN_PRICING,
+  canUseBillingPlanCapability,
   getRoutingSlotModel,
+  modelsCatalog,
   NOTEBOOK_TEMPLATE_ID,
   PRODUCT_NAMES,
+  type BillingPlanTier,
   type CloudCodeSession,
 } from '@agiworkforce/types';
 import {
   DEVELOPER_RUNTIME_CAPABILITIES,
   DesktopRuntimeError,
+  type DeveloperHostModel,
   type DeveloperSessionGroup,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
+import { onAppCommand } from '@shared/lib/app-commands';
+import { LOCAL_MODELS_SETTINGS_SECTION } from '@/features/settings/lib/web-settings-sections';
+import {
+  LOCAL_CODE_COPY,
+  LOCAL_MODEL_UPGRADE_HEADING,
+  LOCAL_MODELS_HELP_ARTICLE,
+  localCloudModelsPlanLine,
+} from './local-code';
+import { helpArticlePath } from '@/lib/support/help-paths';
 import { useUIStore } from '@shared/stores/layout-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { getModelMetadata } from '@shared/config/llm';
@@ -105,8 +119,14 @@ vi.mock('./components/CodeUsageDashboard', () => ({
   ),
 }));
 
+const composerFooter = vi.hoisted(() => ({
+  onUpgradeRequest: undefined as (() => void) | undefined,
+}));
 vi.mock('@features/chat/components/Composer/ComposerFooter', () => ({
-  ComposerFooter: () => <div data-testid="model-trigger" />,
+  ComposerFooter: ({ onUpgradeRequest }: { onUpgradeRequest?: () => void }) => {
+    composerFooter.onUpgradeRequest = onUpgradeRequest;
+    return <div data-testid="model-trigger" />;
+  },
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
@@ -117,6 +137,7 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 type FakeHost = Record<string, never> | null;
 let host: FakeHost = null;
 let hostAfterHydration: FakeHost = null;
+let localModeHost = false;
 const localSession: LocalDeveloperSession = {
   id: 'thread-1',
   rootId: 'root-recent',
@@ -144,11 +165,15 @@ const readDeveloperSession = vi.fn(async () => ({
   activeTurn: null,
 }));
 const pickWorkspaceRoot = vi.fn(async () => ({ rootId: 'root-added' }));
-let localHostModels: { id: string; provider: string; reachable: boolean; unreachable: null }[] = [];
+let localHostModels: Array<
+  Pick<DeveloperHostModel, 'id' | 'provider' | 'reachable' | 'unreachable'> &
+    Partial<Pick<DeveloperHostModel, 'trustMode'>>
+> = [];
+let localDefaultModelId: string | null = null;
 const listDeveloperModels = vi.fn(async () => ({
   models: [],
   hostModels: localHostModels,
-  defaultModelId: null,
+  defaultModelId: localDefaultModelId,
 }));
 
 const WORKTREE_ROOT_ID = 'root-recent::worktree::0a1b2c3d';
@@ -193,6 +218,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
     </a>
   ),
   useDesktopHost: () => host,
+  useLocalModeHost: () => (localModeHost ? host : null),
   isDesktopHost: () => host !== null || hostAfterHydration !== null,
   archiveDeveloperThread: (...args: unknown[]) => archiveDeveloperThread(...args),
   allowDeveloperSessions: (...args: unknown[]) => allowDeveloperSessions(...args),
@@ -222,6 +248,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  localModeHost = false;
   codeIdentity.auth = {
     isLoaded: true,
     isSignedIn: true,
@@ -244,6 +271,8 @@ beforeEach(() => {
   }
   localGroups = [];
   localHostModels = [];
+  localDefaultModelId = null;
+  composerFooter.onUpgradeRequest = undefined;
   listDeveloperSessions.mockClear();
   startDeveloperSession.mockClear();
   startDeveloperTurn.mockClear();
@@ -4351,5 +4380,234 @@ describe('CloudCodePage, the model a coding agent runs', () => {
         expect.objectContaining({ model: picked }),
       ),
     );
+  });
+});
+
+describe('local Code on a plan without cloud models on this computer', () => {
+  const PLAN_WITHOUT = (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).find(
+    (plan) =>
+      plan !== 'local-only' &&
+      plan !== 'byok' &&
+      !canUseBillingPlanCapability(plan, 'developer_surfaces'),
+  ) as BillingPlanTier;
+  const MANAGED_MODEL = Object.keys(modelsCatalog.models).find((id) => {
+    const metadata = getModelMetadata(id);
+    return (
+      metadata !== undefined &&
+      metadata !== null &&
+      metadata.qualityTier !== 'best' &&
+      metadata.inputCost + metadata.outputCost > 0
+    );
+  }) as string;
+  const LOCAL_MODEL = 'qa-runner/qa-local';
+  const managedReady = {
+    id: MANAGED_MODEL,
+    provider: 'qa-vendor',
+    reachable: true,
+    trustMode: 'managed' as const,
+    unreachable: null,
+  };
+  const localReady = {
+    id: LOCAL_MODEL,
+    provider: 'ollama',
+    reachable: true,
+    trustMode: 'local' as const,
+    unreachable: null,
+  };
+
+  function planApi() {
+    return createApi({
+      list: vi.fn(async () => ({
+        availability: { ...availability, planEntitled: false, planTier: PLAN_WITHOUT },
+        sessions: [],
+        runtimes: [],
+      })),
+    });
+  }
+
+  it('opens the folder draft from the rail instead of starting a session no model can run', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    localHostModels = [managedReady];
+    render(<CloudCodePage api={planApi()} />);
+
+    await screen.findByRole('button', { name: LOCAL_CODE_COPY.chooseModel });
+    const menu = await openEnvironment(user);
+    await user.click(within(menu).getByRole('menuitemradio', { name: /Trusted hosts/ }));
+    await screen.findByRole('button', { name: 'Cloud · Trusted hosts' });
+    await user.click(screen.getByRole('button', { name: 'New session in qa-project' }));
+
+    expect(
+      await screen.findByRole('button', { name: 'Change the folder: qa-project' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByTestId('local-plan-required')).toHaveTextContent(
+      localCloudModelsPlanLine(),
+    );
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).toBeDisabled();
+  });
+
+  it('opens the draft for a folder whose only history ran on the account, on a CLI with no verdicts', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [
+      folder({
+        sessions: [
+          {
+            ...localSession,
+            model: MANAGED_MODEL,
+            provider: 'managed_cloud',
+            trustMode: 'managed',
+          },
+        ],
+      }),
+    ];
+    render(<CloudCodePage api={planApi()} />);
+
+    await waitFor(() => expect(listDeveloperModels).toHaveBeenCalledWith('root-recent', {}));
+    await act(async () => {});
+    const menu = await openEnvironment(user);
+    await user.click(within(menu).getByRole('menuitemradio', { name: /Trusted hosts/ }));
+    await screen.findByRole('button', { name: 'Cloud · Trusted hosts' });
+    await user.click(screen.getByRole('button', { name: 'New session in qa-project' }));
+
+    expect(await screen.findByTestId('local-plan-required')).toHaveTextContent(
+      localCloudModelsPlanLine(),
+    );
+    expect(startDeveloperSession).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).toBeDisabled();
+  });
+
+  it('starts a rail session on a model on this computer, not the CLI default the plan refuses', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    localHostModels = [managedReady, localReady];
+    localDefaultModelId = MANAGED_MODEL;
+    render(<CloudCodePage api={planApi()} />);
+
+    await screen.findByRole('button', { name: LOCAL_MODEL });
+    await user.click(screen.getByRole('button', { name: 'New session in qa-project' }));
+
+    await waitFor(() =>
+      expect(startDeveloperSession).toHaveBeenCalledWith('root-recent', LOCAL_MODEL),
+    );
+  });
+
+  it('keeps the model chip and its rows reachable, and offers the upgrade and a local model', async () => {
+    const user = userEvent.setup();
+    const upgrade = vi.fn();
+    const release = onAppCommand('open-upgrade', upgrade);
+    openSettings.mockClear();
+    host = {};
+    localGroups = [folder()];
+    localHostModels = [managedReady];
+    render(<CloudCodePage api={planApi()} />);
+
+    const chip = await screen.findByRole('button', { name: LOCAL_CODE_COPY.chooseModel });
+    expect(chip).toBeEnabled();
+    await user.click(chip);
+    expect(await screen.findByText(LOCAL_MODEL_UPGRADE_HEADING)).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Cloud/ })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    const notice = await screen.findByTestId('local-plan-required');
+    await user.click(within(notice).getByRole('button', { name: CODE_COPY.upgradeAction }));
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    const setUp = within(notice).getByRole('link', { name: LOCAL_CODE_COPY.setUpLocalModel });
+    expect(setUp).toHaveAttribute('href', helpArticlePath(LOCAL_MODELS_HELP_ARTICLE));
+    expect(setUp).toHaveAttribute('target', '_blank');
+    expect(openSettings).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalledWith('/pricing');
+    release();
+  });
+
+  it('offers the upgrade beside the cloud environment a plan does not include', async () => {
+    const user = userEvent.setup();
+    const upgrade = vi.fn();
+    const release = onAppCommand('open-upgrade', upgrade);
+    host = {};
+    render(<CloudCodePage api={planApi()} />);
+
+    const notice = await screen.findByTestId('code-unavailable');
+    expect(notice).toHaveTextContent(CODE_COPY.planNotEntitled);
+    await user.click(within(notice).getByRole('button', { name: CODE_COPY.upgradeAction }));
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalledWith('/pricing');
+    release();
+  });
+
+  it('opens the local models settings where the host runs local models itself', async () => {
+    const user = userEvent.setup();
+    openSettings.mockClear();
+    host = {};
+    localModeHost = true;
+    localGroups = [folder()];
+    localHostModels = [managedReady];
+    render(<CloudCodePage api={planApi()} />);
+
+    const notice = await screen.findByTestId('local-plan-required');
+    await user.click(within(notice).getByRole('button', { name: LOCAL_CODE_COPY.setUpLocalModel }));
+    expect(openSettings).toHaveBeenCalledWith(LOCAL_MODELS_SETTINGS_SECTION);
+  });
+
+  it('starts a new session for a model in another trust boundary from the draft', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder()];
+    localHostModels = [
+      {
+        id: localSession.model!,
+        provider: 'qa-provider',
+        reachable: true,
+        trustMode: 'byok',
+        unreachable: null,
+      },
+      localReady,
+    ];
+    render(<CloudCodePage api={planApi()} />);
+
+    await user.click(
+      await screen.findByRole('button', { name: new RegExp(`^${localSession.title}`) }),
+    );
+    const panel = within(await screen.findByTestId('local-code-composer'));
+    await user.click(await panel.findByRole('button', { name: localSession.model! }));
+    expect(screen.queryByRole('menuitemradio', { name: LOCAL_MODEL })).toBeNull();
+    await user.click(
+      screen.getByRole('menuitem', { name: LOCAL_CODE_COPY.newSessionWith(LOCAL_MODEL) }),
+    );
+
+    expect(
+      await screen.findByRole('button', { name: 'Change the folder: qa-project' }),
+    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: LOCAL_MODEL })).toBeInTheDocument();
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+    await user.type(await enabledComposer(), 'quote the readme');
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() =>
+      expect(startDeveloperSession).toHaveBeenCalledWith('root-recent', LOCAL_MODEL),
+    );
+  });
+});
+
+describe('the cloud model picker in the Code composer', () => {
+  it('opens the plan dialog for a model the plan does not include', async () => {
+    const upgrade = vi.fn();
+    const release = onAppCommand('open-upgrade', upgrade);
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByTestId('model-trigger');
+    expect(composerFooter.onUpgradeRequest).toBeTypeOf('function');
+    act(() => composerFooter.onUpgradeRequest?.());
+
+    expect(upgrade).toHaveBeenCalledTimes(1);
+    expect(push).not.toHaveBeenCalledWith('/pricing');
+    release();
   });
 });

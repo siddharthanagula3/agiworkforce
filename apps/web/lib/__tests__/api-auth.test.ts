@@ -26,6 +26,13 @@ vi.mock('@/lib/server/key-value', async (importOriginal) => ({
   getKeyValueStore: vi.fn(() => null),
 }));
 
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<EntitlementResolutionModule>()),
+  resolveEntitledPlanTier: vi.fn(async () => 'pro' as const),
+}));
+
 const mockAuth = vi.fn();
 const mockClerkGetUser = vi.fn();
 const mockClerkGetSession = vi.fn();

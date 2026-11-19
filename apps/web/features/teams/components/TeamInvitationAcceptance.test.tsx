@@ -149,6 +149,35 @@ describe('TeamInvitationAcceptance', () => {
     expect(screen.queryByRole('link', { name: 'Open team settings' })).toBeNull();
   });
 
+  it('asks before declining, because a declined invitation cannot be used again', async () => {
+    authState.isSignedIn = true;
+    window.sessionStorage.setItem('agi.team.invitation-token', INVITE_TOKEN);
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({}),
+    } as Response);
+
+    render(<TeamInvitationAcceptance />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('new invitation');
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep invitation' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Decline invitation' }));
+
+    await waitFor(() => expect(screen.getByText('Invitation declined.')).toBeVisible());
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/settings/team/invitations/accept',
+      expect.objectContaining({ body: JSON.stringify({ token: INVITE_TOKEN, action: 'decline' }) }),
+    );
+  });
+
   it('shows the server email-boundary error and retains the token for a retry', async () => {
     authState.isSignedIn = true;
     window.sessionStorage.setItem('agi.team.invitation-token', INVITE_TOKEN);

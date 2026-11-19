@@ -167,8 +167,9 @@ import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import {
-  getAutoRoutingProfileTiers,
+  canAccessAutoRoutingProfileForTier,
   getBillingPlanPricing,
+  getDefaultAutoRoutingProfile,
   summarizeSendPreview,
   type BillingPlanTier,
   type CloudWorkMode,
@@ -288,7 +289,6 @@ import {
   enterVoiceSession,
   useVoiceModeActive,
   useVoiceSessionStore,
-  type VoiceIntelligence,
 } from '../stores/voice-session-store';
 import {
   conversationDeleteConfirm,
@@ -1283,7 +1283,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const { runExplicitMemoryCommand, memoryCommandDialog } = useExplicitMemoryCommands();
   const activeModelId = localModelSelection?.id ?? cloudModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
-  const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
+  const freeUsageLimitReached =
+    useFreeTrialStore((s) => s.limitReached) && localModelSelection === null;
   const isTrialExhausted =
     isWebsiteFreeTrial &&
     !freeQuotaSelection(activeModelId) &&
@@ -2198,6 +2199,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       setAccountUsageBlock,
     ],
   );
+  const cloudUsageBlock =
+    localModelSelection === null ? composerUsageBlockWithAlternative : undefined;
 
   // Public sharing is always a two-step action: the visible Share control opens
   // a disclosure/expiry dialog, and only the dialog's explicit confirmation
@@ -5900,6 +5903,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   }, [lastAssistantMessage, handleRegenerateMessage]);
 
   const canUseVoice = useCapability('canUseVoice');
+  const voiceProviderMode = getProviderModeForModel(activeModelId);
+  const voiceManaged =
+    localModelSelection === null &&
+    !conversationHoldsLocalTurns(displayedMessages) &&
+    (voiceProviderMode === 'ManagedGateway' || voiceProviderMode === 'ManagedNative');
 
   const handleSelectModel = useCallback(() => {
     openModelPicker();
@@ -5910,8 +5918,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       exitVoiceSession();
       return;
     }
-    if (canUseVoice && !isStreaming) enterVoiceSession();
-  }, [canUseVoice, isStreaming]);
+    if (canUseVoice && voiceManaged && !isStreaming) enterVoiceSession();
+  }, [canUseVoice, isStreaming, voiceManaged]);
 
   const handleSetCustomInstructions = useCallback(() => {
     openSettings('personalization');
@@ -6819,19 +6827,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     openSettings(VOICE_CONNECTORS_SETTINGS_SECTION);
   }, [openSettings]);
 
-  const handleVoiceIntelligenceChange = useCallback(
-    (intelligence: VoiceIntelligence) => {
-      const profile = getAutoRoutingProfileTiers().find((entry) => entry.profile === intelligence);
-      if (profile) void handleConversationModelChange(profile.id);
-    },
-    [handleConversationModelChange],
-  );
-
-  const voiceProviderMode = getProviderModeForModel(activeModelId);
-  const voiceManaged =
+  const routingProfile = useModelStore((s) => s.routingProfile);
+  const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
+  const autoModelId = getDefaultAutoRoutingProfile().id;
+  const voiceChatIntelligence =
+    billingPolicyReady &&
     localModelSelection === null &&
-    !conversationHoldsLocalTurns(displayedMessages) &&
-    (voiceProviderMode === 'ManagedGateway' || voiceProviderMode === 'ManagedNative');
+    cloudModelId === autoModelId &&
+    canAccessAutoRoutingProfileForTier(autoModelId, subscriptionTier)
+      ? { choice: routingProfile, onChange: setRoutingProfile }
+      : undefined;
+
   const voiceSurfaceProps = {
     managed: voiceManaged,
     turnActive: isLoading || isStreaming,
@@ -6844,7 +6850,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     onNewChat: handleNewChat,
     onOpenLibrary: handleVoiceOpenLibrary,
     onOpenConnectors: handleVoiceOpenConnectors,
-    onIntelligenceChange: handleVoiceIntelligenceChange,
+    chatIntelligence: voiceChatIntelligence,
   };
 
   const turnFailureNotice = resolveTurnFailureNotice({
@@ -7660,7 +7666,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     ) : (
                       <ChatComposerNew
                         onSend={handleComposerSend}
-                        onEnterVoiceMode={enterVoiceSession}
+                        onEnterVoiceMode={voiceManaged ? enterVoiceSession : undefined}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         onSteerQueuedMessage={handleSteerQueuedMessage}
@@ -7693,9 +7699,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           enabled: isWebsiteFreeTrial,
                           limitReached: freeUsageLimitReached,
                         }}
-                        {...(composerUsageBlockWithAlternative
-                          ? { usageBlock: composerUsageBlockWithAlternative }
-                          : {})}
+                        {...(cloudUsageBlock ? { usageBlock: cloudUsageBlock } : {})}
                       />
                     )}
                     {!isNarrowViewport && emptyStateExtras}
@@ -7790,7 +7794,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     ) : (
                       <ChatComposerNew
                         onSend={handleComposerSend}
-                        onEnterVoiceMode={enterVoiceSession}
+                        onEnterVoiceMode={voiceManaged ? enterVoiceSession : undefined}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
                         onSteerQueuedMessage={handleSteerQueuedMessage}
@@ -7823,9 +7827,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           enabled: isWebsiteFreeTrial,
                           limitReached: freeUsageLimitReached,
                         }}
-                        {...(composerUsageBlockWithAlternative
-                          ? { usageBlock: composerUsageBlockWithAlternative }
-                          : {})}
+                        {...(cloudUsageBlock ? { usageBlock: cloudUsageBlock } : {})}
                         suppressAutoFocus={Boolean(highlightMessageId)}
                       />
                     )}

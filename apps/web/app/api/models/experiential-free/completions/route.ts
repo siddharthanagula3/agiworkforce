@@ -41,6 +41,7 @@ import {
   GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE,
 } from '@/lib/connectors/google-user-data';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
+import { conversationHealthSpaceId } from '@/lib/services/health-space-service';
 import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
 
 export const runtime = 'nodejs';
@@ -122,6 +123,15 @@ async function handlePost(request: NextRequest): Promise<Response> {
   );
   if (!conversation) return refusal(404, 'conversation_not_found', 'Conversation not found.');
   if (!providerKeepsInputsOutOfTraining(selected.offering.provider)) {
+    if (
+      (await conversationHealthSpaceId(scoped.db, scoped.userId, body.conversation_id)) !== null
+    ) {
+      return refusal(
+        403,
+        'model_may_train',
+        "This free model's provider may train on what you send, and Health only uses models that keep your chats out of training. Choose another model. No model request was sent.",
+      );
+    }
     if (await conversationHoldsGoogleUserData(scoped.db, scoped.userId, body.conversation_id)) {
       return refusal(403, 'model_may_train', GOOGLE_USER_DATA_MODEL_MAY_TRAIN_MESSAGE);
     }

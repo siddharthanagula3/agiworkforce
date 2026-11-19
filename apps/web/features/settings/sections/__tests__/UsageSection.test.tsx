@@ -259,6 +259,8 @@ describe('UsageSection', () => {
     expect(screen.getByRole('button', { name: 'Upgrade' })).toBeTruthy();
     expect(screen.queryAllByTestId('progress')).toHaveLength(0);
     expect(screen.queryByText('Plan usage limits')).toBeNull();
+    expect(screen.queryByText(/Your limits, when they reset/)).toBeNull();
+    expect(screen.queryByText('Learn more about usage limits')).toBeNull();
     expect(screen.queryByText(/credits\/month/)).toBeNull();
     expect(screen.queryByText(/Used \d/)).toBeNull();
     expect(screen.queryByText(managedUsageBucketLabel('session'))).toBeNull();
