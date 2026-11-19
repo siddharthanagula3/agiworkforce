@@ -7,10 +7,13 @@ Last updated: 2026-11-11
 **Repository location:** `docs/product/competitive-guidance.md`
 **Research baseline:** announcements dated on or before **September 21, 2026**.
 **Research performed / live documentation accessed:** **September 22, 2026**.
-**Latest comparison:** `docs/research/assistant-comparison-2026-11-11.md` compares ChatGPT,
+**Latest comparison:** `docs/research/claude-chatgpt-comparison-2026-11-18.md` compares ChatGPT
+and Claude, with their coding, browser and agent products, across 21 areas as read on
+**November 18, 2026**. `docs/research/assistant-comparison-2026-11-11.md` compares ChatGPT,
 Claude, Gemini and Perplexity with AGI Workforce on every dimension (surfaces, plans, limits,
 models, features, agents, extensibility, coding, enterprise, privacy, policies, API), as read on
-**November 11, 2026**. Prefer it over this file's September vendor detail. For the other vendors,
+**November 11, 2026**; it is still the record for Gemini and Perplexity and for the AGI Workforce
+column. Prefer both over this file's September vendor detail. For the other vendors,
 `docs/research/competitor-surfaces-2026-10-24.md` (read on **October 24, 2026**) is still the record.
 **Scope:** seven application implementations mapped to six public product
 surfaces; the two Desktop implementations have different current roles.

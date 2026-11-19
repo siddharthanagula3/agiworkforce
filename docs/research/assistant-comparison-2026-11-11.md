@@ -1,6 +1,6 @@
 # ChatGPT, Claude, Gemini and Perplexity compared
 
-Status: Current research snapshot
+Status: Dated research snapshot; superseded for OpenAI and Anthropic by `claude-chatgpt-comparison-2026-11-18.md`
 Owner: Product research
 Last updated: 2026-11-11
 Verified: 2026-11-11
