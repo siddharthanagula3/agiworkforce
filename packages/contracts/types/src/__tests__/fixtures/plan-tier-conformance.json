@@ -239,7 +239,7 @@
     "unnamed_routed_median": {
       "answers": {
         "cli.managedPlanNeeded": null,
-        "ts.minimumRequiredTierLabel": "Basic"
+        "ts.minimumRequiredTierLabel": "Premium"
       },
       "differs": ["minimumPlanLabel"],
       "selection": "middle model of that same set and order"
@@ -664,7 +664,7 @@
         "ts.access.canAccessModel@pro_addition": false,
         "ts.access.canAccessModel@unnamed_routed_cheapest": true,
         "ts.access.canAccessModel@unnamed_routed_dearest": false,
-        "ts.access.canAccessModel@unnamed_routed_median": true,
+        "ts.access.canAccessModel@unnamed_routed_median": false,
         "ts.access.normalize": "basic",
         "ts.autoProfile.canAccess@auto": true,
         "ts.autoProfile.canAccess@auto-balanced": true,
@@ -737,7 +737,6 @@
         "modelAdmission@economy_named_free",
         "modelAdmission@economy_named_not_free",
         "modelAdmission@unnamed_routed_cheapest",
-        "modelAdmission@unnamed_routed_median",
         "modelBucket"
       ],
       "kind": "canonical"
@@ -1112,7 +1111,7 @@
         "ts.access.canAccessModel@pro_addition": false,
         "ts.access.canAccessModel@unnamed_routed_cheapest": true,
         "ts.access.canAccessModel@unnamed_routed_dearest": false,
-        "ts.access.canAccessModel@unnamed_routed_median": true,
+        "ts.access.canAccessModel@unnamed_routed_median": false,
         "ts.access.normalize": "basic",
         "ts.autoProfile.canAccess@auto": true,
         "ts.autoProfile.canAccess@auto-balanced": true,
