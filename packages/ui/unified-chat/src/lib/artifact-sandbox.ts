@@ -25,10 +25,14 @@ function stripCspMetaTags(content: string): string {
 // The policy opens the document rather than following the first `<head>`-shaped
 // text: that text may sit in a comment or a script string, where a policy meta
 // is inert. A leading meta makes the parser open <head> around it, and the
-// artifact's own <html> and <head> tags then merge into those elements.
+// artifact's own <html> and <head> tags then merge into those elements. Complete
+// comments and the doctype stay ahead of it, because a meta before the doctype
+// makes the parser drop the doctype and render in quirks mode.
+const LEADING_COMMENTS_AND_DOCTYPE = /^(?:\s|<!--(?:>|->|[\s\S]*?--!?>))*<!doctype[^>]*>/i;
+
 function prependHeadContent(documentHtml: string, headContent: string): string {
-  const doctype = documentHtml.match(/^\s*<!doctype[^>]*>/i)?.[0] ?? '';
-  return `${doctype}${headContent}${documentHtml.slice(doctype.length)}`;
+  const prologue = documentHtml.match(LEADING_COMMENTS_AND_DOCTYPE)?.[0] ?? '';
+  return `${prologue}${headContent}${documentHtml.slice(prologue.length)}`;
 }
 
 export function buildSandboxedHtml(content: string): string {

@@ -60,6 +60,24 @@ describe('buildSandboxedHtml', () => {
     }
   });
 
+  it.each([
+    ['a leading comment', '<!-- copyright -->\n<!doctype html><html><body>x</body></html>'],
+    ['several comments', '<!-- a -->\n<!--->\n<!-->\n<!doctype html><body>x</body>'],
+    ['a comment closed with --!>', '<!-- a --!><!DOCTYPE html><body>x</body>'],
+  ])('keeps standards mode for a document that opens with %s', (_label, html) => {
+    const doc = new DOMParser().parseFromString(buildSandboxedHtml(html), 'text/html');
+    expect(doc.doctype?.name).toBe('html');
+    expect(doc.compatMode).toBe('CSS1Compat');
+    expect(cspIsInsideHead(buildSandboxedHtml(html))).toBe(true);
+  });
+
+  it('keeps the CSP ahead of a script hidden behind an unterminated comment', () => {
+    const html = '<!-- open <script>alert(1)</script><!doctype html><body>x</body>';
+    const doc = new DOMParser().parseFromString(buildSandboxedHtml(html), 'text/html');
+    expect(doc.querySelector('script')).toBeNull();
+    expect(cspIsInsideHead(buildSandboxedHtml(html))).toBe(true);
+  });
+
   it('loads no image, stylesheet or font from an arbitrary https host', () => {
     const csp = extractMetaCspContent(buildSandboxedHtml('<p>x</p>'));
     expect(csp).toBe(ARTIFACT_CSP_CONTENT);
