@@ -78253,6 +78253,9 @@
     "makeSignedContainer": [
       "packages/contracts/licensing/src/test-support.ts"
     ],
+    "makeTempDir": [
+      "scripts/lib/test-temp-dir.mjs"
+    ],
     "makeUpstreamErrorMapper": [
       "apps/web/app/api/llm/v1/chat/completions/lib/adapter-errors.ts"
     ],
@@ -103332,6 +103335,9 @@
     "preparePlayback": [
       "apps/mobile/src/features/voice/services/tts.ts"
     ],
+    "prepareProtocolTypesTarget": [
+      "scripts/lib/protocol-types-target.mjs"
+    ],
     "preparePublishedArtifactPublication": [
       "apps/web/lib/services/published-artifact-publication-policy.ts"
     ],
@@ -114958,6 +114964,9 @@
     ],
     "removeOneTimeSiteGrant": [
       "apps/extension/src/features/computer-use/oneTimeSiteGrants.ts"
+    ],
+    "removeOrphanedCheckoutTargets": [
+      "scripts/lib/protocol-types-target.mjs"
     ],
     "removePluginConnectors": [
       "apps/web/lib/connectors/plugin-connectors.ts"
