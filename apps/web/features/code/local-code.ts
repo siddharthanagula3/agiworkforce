@@ -518,14 +518,6 @@ export function localProviderLabel(providerId: string | null): string | null {
   return providerLabels[providerId] ?? providerId;
 }
 
-/**
- * The failure as this surface says it.
- *
- * The CLI writes for a terminal, so its own line names an environment variable
- * and a shell command. Where the code says exactly what went wrong, the desktop
- * says it in its own words; where it does not, the CLI's line is still the best
- * description anyone has and is shown unchanged.
- */
 /** The route that bills the AGI Workforce account, which the app signs in. */
 const MANAGED_ACCOUNT_ROUTE = 'managed_cloud';
 
@@ -571,6 +563,14 @@ export function localSessionResumeCommand(sessionId: string, program = LOCAL_CLI
   return `${program} --resume ${shellArgument(sessionId)}`;
 }
 
+/**
+ * The failure as this surface says it.
+ *
+ * The CLI writes for a terminal, so its own line names an environment variable
+ * and a shell command. Where the code says exactly what went wrong, the desktop
+ * says it in its own words; where it does not, the CLI's line is still the best
+ * description anyone has and is shown unchanged.
+ */
 export function localTurnFailureSentence(
   failure: DeveloperTurnFailure,
   program = LOCAL_CLI_PROGRAM,
