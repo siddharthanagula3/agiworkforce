@@ -57,7 +57,8 @@
         "NODE_ENV",
         "TZ",
         "VITE_CLERK_PUBLISHABLE_KEY"
-      ]
+      ],
+      "passThroughEnv": ["AGI_VITEST_MAX_WORKERS"]
     },
     "typecheck": {
       "dependsOn": ["transit"],
