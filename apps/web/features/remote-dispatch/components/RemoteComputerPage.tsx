@@ -9,7 +9,7 @@ import {
   type DispatchTaskLifecycleStatus,
 } from '@agiworkforce/types';
 import { Mic } from '@agiworkforce/icons';
-import { Button, Spinner, Textarea } from '@agiworkforce/ui';
+import { Button, Spinner, Textarea, useConfirmAction } from '@agiworkforce/ui';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { useShellLayout } from '@shared/components/layout/app-shell-layout';
@@ -43,6 +43,9 @@ const CONNECT_LABEL = 'Connect';
 const CONNECTING = 'Connecting to your computer';
 const AWAY = 'Your computer went offline. This page reconnects when it is back.';
 const DISCONNECT_LABEL = 'Disconnect';
+const DISCONNECT_TITLE = 'Disconnect from your computer?';
+const DISCONNECT_DESCRIPTION =
+  'This ends the pairing, so this link stops working. To connect again, copy a new link from Desktop on that computer. Tasks sent from here stop reporting their status.';
 const TASK_LABEL = 'Task';
 const TASK_PLACEHOLDER = 'Describe what AGI should do on your computer';
 const SEND_LABEL = 'Send to computer';
@@ -122,6 +125,7 @@ export function RemoteComputerPage() {
   const attempt = useRef(0);
   const mounted = useRef(false);
   const autoConnected = useRef(false);
+  const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
     mounted.current = true;
@@ -225,9 +229,16 @@ export function RemoteComputerPage() {
   };
 
   const onDisconnect = () => {
-    disconnect();
-    setPhase('idle');
-    setComputerName(null);
+    confirm({
+      title: DISCONNECT_TITLE,
+      description: DISCONNECT_DESCRIPTION,
+      confirmLabel: DISCONNECT_LABEL,
+      onConfirm: () => {
+        disconnect();
+        setPhase('idle');
+        setComputerName(null);
+      },
+    });
   };
 
   const sendTask = async (text: string) => {
@@ -286,6 +297,7 @@ export function RemoteComputerPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 text-foreground">
+      {dialog}
       <header className="flex flex-col gap-2">
         <Link
           href={CODE_PATH}
