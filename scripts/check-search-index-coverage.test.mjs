@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +11,7 @@ import {
   singleSourceMapping,
   stringArrayConst,
 } from './lib/search-index-coverage.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -105,7 +105,7 @@ $$;
 `;
 
 function buildRoot(overrides = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'search-index-coverage-'));
+  const root = makeTempDir('search-index-coverage-');
   const write = (relative, body) => {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });

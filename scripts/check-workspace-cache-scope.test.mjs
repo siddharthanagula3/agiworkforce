@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +11,7 @@ import {
   registeredStoreModules,
   storagePatterns,
 } from './lib/workspace-cache-scope.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -46,7 +46,7 @@ export const useWebChatStore = create(persist((set) => ({}), { name: 'agi-chat-s
 `;
 
 function fixture(extra = {}, registry = REGISTRY) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cache-scope-'));
+  const root = makeTempDir('cache-scope-');
   const write = (relative, source) => {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -110,7 +110,7 @@ test('fails when a workspace label names a store that is not registered', () => 
 });
 
 test('fails when the registry itself is gone', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cache-scope-empty-'));
+  const root = makeTempDir('cache-scope-empty-');
   const result = run(root);
   assert.equal(result.code, 1);
   assert.match(result.output, /is missing; nothing sweeps the caches/);

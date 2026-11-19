@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -33,7 +33,7 @@ export async function readModelImprovementConsent(db, userId, content) {
 `;
 
 function fixture(extra = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'model-improvement-'));
+  const root = makeTempDir('model-improvement-');
   const write = (relative, source) => {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -199,7 +199,7 @@ test('fails when the fail-closed reader is gone', () => {
 });
 
 test('refuses to pass on an empty tree', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'model-improvement-empty-'));
+  const root = makeTempDir('model-improvement-empty-');
   const result = run(root);
   assert.equal(result.code, 1);
   assert.match(result.output, /is gone; the promise it carried is now unstated/);

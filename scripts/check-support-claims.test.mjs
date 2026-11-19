@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -11,6 +10,7 @@ import {
   runSupportClaimsCheck,
   splitSentences,
 } from './check-support-claims.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const INDEXED_ARTICLE = `---
 id: approvals
@@ -101,7 +101,7 @@ function baseIndex() {
 }
 
 function makeRoot(mutate = () => {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'support-claims-'));
+  const root = makeTempDir('support-claims-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.join(root, path.dirname(relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);

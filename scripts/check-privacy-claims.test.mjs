@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -19,6 +18,7 @@ import {
   readStringConstant,
   runPrivacyClaimsCheck,
 } from './check-privacy-claims.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const COOKIE_CONSENT_COMPONENT = 'apps/web/shared/components/CookieConsent.tsx';
 
@@ -69,7 +69,7 @@ export function readCookiePreferences() {
 }
 
 function write(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'privacy-claims-'));
+  const root = makeTempDir('privacy-claims-');
   for (const [relative, contents] of Object.entries(files)) {
     const target = path.join(root, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });

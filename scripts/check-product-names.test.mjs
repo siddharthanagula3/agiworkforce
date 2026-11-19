@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -11,6 +10,7 @@ import {
   readRegistry,
   runProductNamesCheck,
 } from './check-product-names.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const NAMES = {
   chat: 'Chat',
@@ -33,7 +33,7 @@ function registrySource(names) {
 }
 
 function fixture({ desktop = NAMES.desktop, source = '', names = NAMES } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'product-names-'));
+  const root = makeTempDir('product-names-');
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);

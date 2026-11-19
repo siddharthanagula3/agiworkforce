@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -10,9 +9,10 @@ import {
   productFiles,
   withoutMeasurements,
 } from './check-llm-log-hygiene.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function fixtureRoot(files) {
-  const root = mkdtempSync(path.join(tmpdir(), 'llm-log-hygiene-'));
+  const root = makeTempDir('llm-log-hygiene-');
   for (const [relativePath, contents] of Object.entries(files)) {
     const absolute = path.join(root, relativePath);
     mkdirSync(path.dirname(absolute), { recursive: true });

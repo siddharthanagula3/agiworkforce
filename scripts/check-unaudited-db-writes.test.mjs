@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -9,9 +8,10 @@ import {
   staleRehearsalWaivers,
   unauditedWriters,
 } from './check-unaudited-db-writes.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function repoWith(files) {
-  const root = mkdtempSync(join(tmpdir(), 'db-writes-'));
+  const root = makeTempDir('db-writes-');
   mkdirSync(join(root, 'scripts'));
   for (const [name, source] of Object.entries(files)) {
     writeFileSync(join(root, 'scripts', name), source, 'utf8');

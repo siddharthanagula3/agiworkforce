@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { containmentFailures, messageRoles } from './check-tool-gate-result-containment.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const LOOP = 'apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts';
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 
 function fixture(loopSource) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'result-containment-'));
+  const root = makeTempDir('result-containment-');
   const target = path.join(root, LOOP);
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, loopSource);

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +10,7 @@ import {
   parseVocabulary,
   requestBoundNames,
 } from './lib/client-trusted-authz.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -28,7 +28,7 @@ const RESOLVERS = [
 ];
 
 function fixture(routes) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'client-authz-'));
+  const root = makeTempDir('client-authz-');
   for (const relative of RESOLVERS) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -210,7 +210,7 @@ test('fails when a privileged value is added to a contract but not to the vocabu
 });
 
 test('refuses to pass on an empty tree', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'client-authz-empty-'));
+  const root = makeTempDir('client-authz-empty-');
   const result = run(root);
   assert.equal(result.code, 1);
   assert.match(result.output, /no request entry points/);

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'check-unsafe-retry.mjs');
 const CLAIM_PATH = 'apps/web/lib/services/cloud-agent-execution-service.ts';
@@ -27,7 +27,7 @@ export async function claimCloudAgentExecutionOperation(db, input) {
 `;
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unsafe-retry-'));
+  const root = makeTempDir('unsafe-retry-');
   for (const [relative, source] of Object.entries({ [CLAIM_PATH]: CLAIM_SOURCE, ...files })) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -156,7 +156,7 @@ export function runTool(db, input) {
 });
 
 test('fails when the claim path is gone', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'unsafe-retry-empty-'));
+  const root = makeTempDir('unsafe-retry-empty-');
   const result = run(root);
   assert.equal(result.code, 1);
   assert.match(result.output, /claim path moved/);

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -12,6 +11,7 @@ import {
   exportedMethods,
   handlerBody,
 } from './lib/admin-route-guards.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const GOOD_ROUTE = `
 import { requirePlatformAdmin } from '@/lib/auth-guards';
@@ -28,7 +28,7 @@ export const POST = withErrorHandler(handlePost);
 `;
 
 function tree(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'admin-route-guards-'));
+  const root = makeTempDir('admin-route-guards-');
   for (const [rel, source] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -10,9 +9,10 @@ import {
   selfInvokingRoutes,
   vercelCostLoops,
 } from './check-vercel-cost-loops.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function repoWith({ routes = {}, crons = [] }) {
-  const root = mkdtempSync(join(tmpdir(), 'cost-loops-'));
+  const root = makeTempDir('cost-loops-');
   for (const [name, source] of Object.entries(routes)) {
     const directory = join(root, 'apps/web/app/api', name);
     mkdirSync(directory, { recursive: true });

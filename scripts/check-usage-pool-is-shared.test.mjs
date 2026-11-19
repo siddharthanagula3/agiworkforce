@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -11,9 +10,10 @@ import {
   poolStatements,
   surfaceSplits,
 } from './check-usage-pool-is-shared.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function fixture(files) {
-  const root = mkdtempSync(path.join(tmpdir(), 'usage-pool-'));
+  const root = makeTempDir('usage-pool-');
   for (const [name, source] of Object.entries(files)) {
     const full = path.join(root, name);
     mkdirSync(path.dirname(full), { recursive: true });

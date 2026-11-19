@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -22,6 +21,7 @@ import {
   tsPlanWindowCredits,
   zodObjectKeys,
 } from './check-protocol-types.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const TS_RS = `export type Thing = { url: string, title: string, mode?: "fast" | "slow", };\n`;
 const PRETTIER = `export type Thing = {\n  url: string;\n  title: string;\n  mode?: 'fast' | 'slow';\n};\n`;
@@ -43,7 +43,7 @@ function consumerSource(keys) {
 }
 
 function fixtureRoot(over = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'protocol-parity-'));
+  const root = makeTempDir('protocol-parity-');
   const files = {
     [path.join(CANONICAL_DIR, 'AppServerCapabilities.ts')]: CAPABILITY_SOURCE,
     [path.join(CANONICAL_DIR, 'ToolActionClass.ts')]: TOOL_UNION,
@@ -205,7 +205,7 @@ test('a runtime listing that drifted from the generated members fails', () => {
 });
 
 test('an empty canonical tree is a failure rather than a vacuous pass', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'protocol-parity-empty-'));
+  const root = makeTempDir('protocol-parity-empty-');
 
   const { problems } = checkProtocolTypes(root);
 

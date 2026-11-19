@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +16,7 @@ import {
   runRecoveryTableCheck,
   tableRows,
 } from './check-dr-recovery-table.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -57,7 +57,7 @@ const GOOD_ROWS = [
 ];
 
 function scratchRoot(document, registry = REGISTRY_SOURCE) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dr-recovery-'));
+  const root = makeTempDir('dr-recovery-');
   fs.mkdirSync(path.join(root, path.dirname(DOCUMENT)), { recursive: true });
   fs.mkdirSync(path.join(root, path.dirname(REGISTRY)), { recursive: true });
   fs.writeFileSync(path.join(root, DOCUMENT), document);
@@ -207,7 +207,7 @@ const GOOD_BACKUP_ROWS = [
 ];
 
 function backupRoot(document, registry = SYNC_SOURCE) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'dr-backup-'));
+  const root = makeTempDir('dr-backup-');
   fs.mkdirSync(path.join(root, path.dirname(DOCUMENT)), { recursive: true });
   fs.mkdirSync(path.join(root, path.dirname(SYNC_REGISTRY)), { recursive: true });
   fs.writeFileSync(path.join(root, DOCUMENT), document);

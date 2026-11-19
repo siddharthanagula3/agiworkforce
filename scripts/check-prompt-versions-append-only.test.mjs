@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -11,6 +10,7 @@ import {
   digestsOf,
   LOCK_FILE,
 } from './lib/prompt-versions-append-only.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const PUBLISHED = { 'chat.system@1': 'sha256:aaa', 'chat.system@2': 'sha256:bbb' };
 
@@ -19,7 +19,7 @@ function lockSource(digests) {
 }
 
 function repository(digests) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'prompt-versions-'));
+  const root = makeTempDir('prompt-versions-');
   const file = path.join(root, LOCK_FILE);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, lockSource(digests));
@@ -37,7 +37,7 @@ test('reads the lock as it was committed, and says so when there is none', () =>
 
   assert.deepEqual(digestsOf(committedLock(root)), PUBLISHED);
   assert.equal(committedLock(root, 'HEAD', 'apps/web/lib/prompts/absent.json'), null);
-  assert.equal(committedLock(fs.mkdtempSync(path.join(os.tmpdir(), 'no-git-'))), null);
+  assert.equal(committedLock(makeTempDir('no-git-')), null);
 });
 
 test('a lock that parses to no digest is a broken instrument, not an empty lock', () => {

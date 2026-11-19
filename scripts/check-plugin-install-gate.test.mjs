@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -10,9 +9,10 @@ import {
   topLevelFunctions,
   ungatedWrites,
 } from './check-plugin-install-gate.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function scratch(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'plugin-install-gate-'));
+  const root = makeTempDir('plugin-install-gate-');
   for (const [relative, content] of Object.entries(files)) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });

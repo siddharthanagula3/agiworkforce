@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -9,9 +8,10 @@ import {
   checkE2eStructureLocators,
   findStructuralLocators,
 } from './check-e2e-structure-locators.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-structure-locators-'));
+  const root = makeTempDir('e2e-structure-locators-');
   for (const [relative, source] of Object.entries(files)) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });

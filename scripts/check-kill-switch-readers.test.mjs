@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
@@ -13,6 +12,7 @@ import {
   rustBody,
   withoutRustTests,
 } from './check-kill-switch-readers.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const OWED = UNREAD.map((entry) => `  '${entry.capability}',`).join('\n');
 
@@ -33,7 +33,7 @@ const WIRED_HANDSHAKE =
 const WORK_READER = "await assertCapabilityAvailable(subject, WORK_CAPABILITY, 'Work');\n";
 
 function fixture(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'kill-switch-readers-'));
+  const root = makeTempDir('kill-switch-readers-');
   const all = {
     [KILL_SWITCHES]: switches(''),
     [ME_ROUTE]: WIRED_ME,

@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +10,7 @@ import {
   MEMBERSHIP_TABLES,
   REVOCATION_AT_CALLER,
 } from './check-membership-isolation.mjs';
+import { makeTempDir } from './lib/test-temp-dir.mjs';
 
 const script = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -25,7 +25,7 @@ function writeFile(root, relative, contents) {
 }
 
 function fixture() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'membership-isolation-'));
+  const root = makeTempDir('membership-isolation-');
   for (const table of MEMBERSHIP_TABLES) {
     writeFile(
       root,
