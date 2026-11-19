@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { createError } from '@/lib/errors';
+import { AppError, ErrorCode, createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -16,6 +16,12 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { readLiveDeveloperProject } from '@/lib/services/developer-project-service';
 import { queueDeveloperWebhookEvent } from '@/lib/services/developer-webhook-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { UPGRADE_HREF } from '@/lib/services/managed-usage-request-service';
+import {
+  billingPlanCapabilityUpgradeMessage,
+  canUseBillingPlanCapability,
+} from '@agiworkforce/types';
 
 const MAX_ACTIVE_API_KEYS = 20;
 
@@ -74,6 +80,16 @@ async function handleCreate(request: NextRequest) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
   const { name, scopes } = parsed.data;
+
+  const planTier = await resolveEntitledPlanTier(db, userId);
+  if (!canUseBillingPlanCapability(planTier, 'managed_api')) {
+    throw new AppError(
+      ErrorCode.SUBSCRIPTION_REQUIRED,
+      billingPlanCapabilityUpgradeMessage('managed_api'),
+      403,
+      { code: 'managed_api_plan_required', recovery: { action: 'upgrade', href: UPGRADE_HREF } },
+    ).asUserSafe();
+  }
 
   const expiresAt = parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null;
   const projectId = parsed.data.projectId ?? null;

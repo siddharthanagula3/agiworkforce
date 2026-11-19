@@ -38,11 +38,9 @@ import {
   useVoiceSession,
   RECONNECT_BASE_MS,
   RECONNECT_MAX_ATTEMPTS,
+  VOICE_SESSION_MESSAGE,
 } from './use-voice-session';
-import {
-  useVoiceSessionStore,
-  VOICE_INTELLIGENCE,
-} from '@features/chat/stores/voice-session-store';
+import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import {
   LIVE_SESSION_MESSAGE,
   LiveVoiceSessionError,
@@ -242,6 +240,30 @@ describe('useVoiceSession', () => {
     });
     expect(live.start).not.toHaveBeenCalled();
     expect(view.result.current.state.status).toBe(VOICE_SESSION_STATUS.error);
+    expect(view.result.current.state.error).toBe(VOICE_SESSION_MESSAGE.unavailableInChat);
+  });
+
+  it('keeps a chat that is not managed in the same refusal however often it is retried', async () => {
+    const view = renderHook(() =>
+      useVoiceSession({
+        managed: false,
+        turnActive: false,
+        conversationId: 'conv-1',
+        onSend: () => true,
+        onTranscript: vi.fn(),
+        onEnsureConversation: async () => 'conv-1',
+      }),
+    );
+    await act(async () => {
+      view.result.current.enter();
+    });
+    await act(async () => {
+      view.result.current.retry();
+    });
+
+    expect(live.start).not.toHaveBeenCalled();
+    expect(view.result.current.state.status).toBe(VOICE_SESSION_STATUS.error);
+    expect(view.result.current.state.error).toBe(VOICE_SESSION_MESSAGE.unavailableInChat);
   });
 
   it('does not publish an old setup after exit and a replacement attempt', async () => {
@@ -315,7 +337,6 @@ describe('useVoiceSession', () => {
 
   it('returns persisted voice preferences and transient panels to account-safe defaults', () => {
     const store = useVoiceSessionStore.getState();
-    store.setIntelligence(VOICE_INTELLIGENCE.premium);
     store.setLanguage('fr-FR');
     store.setPace(1.5);
     store.setDockOpen(true);
@@ -324,7 +345,6 @@ describe('useVoiceSession', () => {
     useVoiceSessionStore.getState().resetOnLogout();
 
     expect(useVoiceSessionStore.getState()).toMatchObject({
-      intelligence: VOICE_INTELLIGENCE.balanced,
       language: '',
       pace: 1,
       dockOpen: false,

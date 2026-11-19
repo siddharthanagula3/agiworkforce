@@ -28,6 +28,8 @@ const ignoredParts = new Set([
   'test-results',
 ]);
 
+const routeIgnoredParts = new Set(['node_modules', '.next', '.turbo', '.cache', '.vercel']);
+
 const uiPackages = new Set(['@agiworkforce/unified-chat', '@agiworkforce/design-tokens']);
 
 const MANAGED_COMPUTE_ROUTE_ROOT = 'apps/web/app/api';
@@ -208,13 +210,13 @@ function gitIgnoredPaths(dir) {
   );
 }
 
-function walk(dir, files = [], ignored = gitIgnoredPaths(dir)) {
+function walk(dir, files = [], ignored = gitIgnoredPaths(dir), skipped = ignoredParts) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (ignoredParts.has(entry.name)) continue;
+    if (skipped.has(entry.name)) continue;
     const fullPath = path.join(dir, entry.name);
     if (ignored.has(fullPath)) continue;
     if (entry.isDirectory()) {
-      walk(fullPath, files, ignored);
+      walk(fullPath, files, ignored, skipped);
       continue;
     }
     if (sourceExtensions.has(path.extname(entry.name))) {
@@ -486,7 +488,9 @@ function findManagedComputeRouteOffenders() {
   const offenders = new Map();
   const routeDir = path.join(root, MANAGED_COMPUTE_ROUTE_ROOT);
   if (!fs.existsSync(routeDir)) return offenders;
-  const routeFiles = walk(routeDir).filter((file) => path.basename(file) === 'route.ts');
+  const routeFiles = walk(routeDir, [], gitIgnoredPaths(routeDir), routeIgnoredParts).filter(
+    (file) => path.basename(file) === 'route.ts',
+  );
   for (const file of routeFiles) {
     const rel = relativePath(file);
     const stripped = stripComments(fs.readFileSync(file, 'utf8'));

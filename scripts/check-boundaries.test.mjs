@@ -54,6 +54,18 @@ test('fails a route that starts managed compute with no evaluator call and no al
   assert.match(result.stderr, /evaluateManagedComputeAccess/);
 });
 
+test('fails an ungated managed-compute route whose path segment shares a build-output name', () => {
+  for (const segment of ['public', 'build', 'out', 'dist']) {
+    const result = runOnSandbox({
+      [`apps/web/app/api/${segment}/example/route.ts`]:
+        'export async function POST() { await reserveManagedUsageRequest({}); }\n',
+      'scripts/config/managed-compute-evaluator-allowlist.json': EMPTY_ALLOWLIST,
+    });
+    assert.equal(result.status, 1, `a ${segment} route segment must still be checked`);
+    assert.match(result.stderr, new RegExp(`api/${segment}/example/route\\.ts`));
+  }
+});
+
 test('passes a route that starts managed compute and calls the composed evaluator', () => {
   const result = runOnSandbox({
     'apps/web/app/api/example/route.ts': [

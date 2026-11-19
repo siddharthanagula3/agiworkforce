@@ -152,6 +152,63 @@ describe('DictationStrip · error', () => {
     expect(spies.onRetry).toHaveBeenCalledOnce();
   });
 
+  it('offers the upgrade instead of a retry when the voice allowance is spent', () => {
+    const spies = handlers();
+    const onUpgrade = vi.fn();
+    render(
+      <DictationStrip
+        status={DICTATION_STATUS.error}
+        bars={WAVEFORM.bars}
+        error={MESSAGE}
+        reducedMotion={false}
+        usageLimited="upgradable"
+        onUpgrade={onUpgrade}
+        {...spies}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+    expect(onUpgrade).toHaveBeenCalledOnce();
+    expect(spies.onRetry).not.toHaveBeenCalled();
+  });
+
+  it('offers neither an upgrade nor a retry when no higher plan can lift the limit', () => {
+    const onUpgrade = vi.fn();
+    render(
+      <DictationStrip
+        status={DICTATION_STATUS.error}
+        bars={WAVEFORM.bars}
+        error={MESSAGE}
+        reducedMotion={false}
+        usageLimited="not_upgradable"
+        onUpgrade={onUpgrade}
+        {...handlers()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(MESSAGE);
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('offers no dead retry where the allowance is spent and no upgrade can open', () => {
+    render(
+      <DictationStrip
+        status={DICTATION_STATUS.error}
+        bars={WAVEFORM.bars}
+        error={MESSAGE}
+        reducedMotion={false}
+        usageLimited="upgradable"
+        {...handlers()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent(MESSAGE);
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upgrade' })).not.toBeInTheDocument();
+  });
+
   it('dismisses the failure from the same left control', () => {
     const spies = handlers();
     render(

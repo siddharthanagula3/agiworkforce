@@ -7,6 +7,10 @@ import {
   MANAGED_CLOUD_ORGANIZATION_HEADER,
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
+import {
+  billingPlanCapabilityUpgradeMessage,
+  billingPlanCapabilityWireTiers,
+} from '@agiworkforce/types';
 
 type Confirmation = { onConfirm: () => unknown; onCancel?: () => void };
 const fixture = vi.hoisted(() => ({
@@ -56,6 +60,10 @@ vi.mock('@hookform/resolvers/zod', async (original) => {
     },
   };
 });
+vi.mock('next/navigation', async (original) => ({
+  ...(await original<MockedModule4>()),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
 vi.mock('@/features/developers/hooks/use-developer-projects', async (original) => ({
   ...(await original<MockedModule2>()),
   useDeveloperProjects: () => ({ data: [], isLoading: false, isSuccess: true, isError: false }),
@@ -102,6 +110,7 @@ vi.mock('@agiworkforce/ui', async (original) => {
 });
 
 import { getCsrfToken } from '@/lib/client/csrf';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   beginWorkspaceSwitch,
   finishWorkspaceSwitch,
@@ -184,6 +193,18 @@ function changeEpoch() {
 }
 beforeEach(() => {
   observeWorkspaceOwner(null);
+  useBillingStore.setState({
+    initialized: true,
+    isLoading: false,
+    error: null,
+    subscription: {
+      tier: billingPlanCapabilityWireTiers('managed_api')[0]!,
+      status: 'active',
+      display_name: 'Plan with API access',
+      plan_name: 'Plan with API access',
+      current_period_end: null,
+    },
+  });
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: 3 } },
   });
@@ -214,6 +235,7 @@ afterEach(() => {
   cleanup();
   client.clear();
   observeWorkspaceOwner(null);
+  useBillingStore.getState()._reset();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   if (clipboardDescriptor) Object.defineProperty(navigator, 'clipboard', clipboardDescriptor);
@@ -668,9 +690,41 @@ describe('API key editor ownership', () => {
     expect(writes()).toHaveLength(1);
     expect(fixture.error).not.toHaveBeenCalled();
   });
+
+  it('turns the server plan refusal into Upgrade instead of a form that can only fail again', async () => {
+    const refusal = billingPlanCapabilityUpgradeMessage('managed_api');
+    fetchMock.mockImplementation(async (path, init) => {
+      if (init?.method === 'POST')
+        return json(
+          {
+            error: {
+              code: 'SUBSCRIPTION_REQUIRED',
+              message: refusal,
+              details: {
+                code: 'managed_api_plan_required',
+                recovery: { action: 'upgrade', href: '/pricing' },
+              },
+            },
+          },
+          403,
+        );
+      return read(path);
+    });
+    render(<ApiKeysManager />, { wrapper });
+    await openEditor();
+    submit();
+
+    expect(await screen.findByRole('button', { name: 'Upgrade' })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('e.g., Production API')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New Key' })).toBeNull();
+    expect(screen.getByText(refusal)).toBeInTheDocument();
+    expect(writes()).toHaveLength(1);
+    expect(await screen.findByRole('button', { name: 'Delete Production' })).toBeEnabled();
+  });
 });
 
 type MockedModule0 = typeof import('@/lib/client/csrf');
 type MockedModule1 = typeof import('@hookform/resolvers/zod');
 type MockedModule2 = typeof import('@/features/developers/hooks/use-developer-projects');
 type MockedModule3 = typeof import('@agiworkforce/ui');
+type MockedModule4 = typeof import('next/navigation');

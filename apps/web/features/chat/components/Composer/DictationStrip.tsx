@@ -10,6 +10,7 @@ import {
   waveformBarPercent,
   type DictationStatus,
 } from '@features/chat/lib/dictation-machine';
+import type { DictationLimit } from '@features/chat/hooks/use-dictation';
 import { SendButton } from './SendButton';
 
 const LABEL = {
@@ -19,6 +20,7 @@ const LABEL = {
   stop: 'Stop recording and edit the transcript',
   transcribing: 'Transcribing',
   retry: 'Try again',
+  upgrade: 'Upgrade',
 } as const;
 
 const KEY = {
@@ -37,10 +39,12 @@ export interface DictationStripProps {
   error: string | null;
   reducedMotion: boolean;
   emptyState?: boolean;
+  usageLimited?: DictationLimit | null;
   onCancel: () => void;
   onStop: () => void;
   onSend: () => void;
   onRetry: () => void;
+  onUpgrade?: () => void;
 }
 
 export function DictationStrip({
@@ -49,10 +53,12 @@ export function DictationStrip({
   error,
   reducedMotion,
   emptyState = false,
+  usageLimited = null,
   onCancel,
   onStop,
   onSend,
   onRetry,
+  onUpgrade,
 }: DictationStripProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const recording = status === DICTATION_STATUS.recording;
@@ -136,16 +142,34 @@ export function DictationStrip({
             className="h-4 w-4 shrink-0 text-[var(--chat-destructive-text)]"
             aria-hidden="true"
           />
-          <p className="min-w-0 flex-1 truncate text-sm text-[var(--chat-destructive-text)]">
+          <p
+            className={cn(
+              'min-w-0 flex-1 text-sm text-[var(--chat-destructive-text)]',
+              usageLimited ? 'line-clamp-2' : 'truncate',
+            )}
+          >
             {error}
           </p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="shrink-0 rounded-full px-2 py-1 text-sm font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
-          >
-            {LABEL.retry}
-          </button>
+          {usageLimited ? (
+            usageLimited === 'upgradable' &&
+            onUpgrade && (
+              <button
+                type="button"
+                onClick={onUpgrade}
+                className="shrink-0 rounded-full px-2 py-1 text-sm font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+              >
+                {LABEL.upgrade}
+              </button>
+            )
+          ) : (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="shrink-0 rounded-full px-2 py-1 text-sm font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+            >
+              {LABEL.retry}
+            </button>
+          )}
         </div>
       )}
 

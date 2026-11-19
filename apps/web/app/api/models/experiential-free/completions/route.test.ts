@@ -404,6 +404,21 @@ describe('Experiential Labs free-only chat route', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
+  it('refuses a Health chat before the promotional provider sees it', async () => {
+    mocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('space_kind')
+        ? [{ health_space_id: 'health-space' }]
+        : [{ id: 'conversation', data_region: null }],
+    );
+
+    const response = await request();
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: 'model_may_train' } });
+    expect(mocks.persistUser).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
   it('refuses when the account keeps its chats out of provider training', async () => {
     mocks.query.mockImplementation(async (sql: string) =>
       sql.includes('opted_out')

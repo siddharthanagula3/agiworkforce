@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
-import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { getNextUpgradeTier } from '@agiworkforce/types';
+import { useVoiceInputStore, type AllowanceRefusal } from '@features/chat/stores/voice-input-store';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
@@ -49,10 +50,21 @@ export function dictationSwitchedOffReason(
     : DICTATION_SWITCHED_OFF;
 }
 
+export type DictationLimit = 'upgradable' | 'not_upgradable';
+
+function dictationLimit(
+  refusal: AllowanceRefusal | null,
+  planUpgradable: boolean,
+): DictationLimit | null {
+  if (refusal === null) return null;
+  return refusal === 'plan' && planUpgradable ? 'upgradable' : 'not_upgradable';
+}
+
 export interface DictationController {
   status: DictationStatus;
   isActive: boolean;
   error: string | null;
+  usageLimited: DictationLimit | null;
   bars: readonly number[];
   level: number;
   announcement: string;
@@ -93,6 +105,10 @@ export function useDictation(options: UseDictationOptions): DictationController 
   const [announcement, setAnnouncement] = useState('');
   const reducedMotion = usePrefersReducedMotion();
   const captureStream = useVoiceInputStore((state) => state.captureStream);
+  const allowanceRefusal = useVoiceInputStore((state) => state.allowanceRefusal);
+  const planUpgradable = useBillingStore(
+    (state) => getNextUpgradeTier(state.subscription?.tier) !== null,
+  );
   const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
 
   const disabledFeatures = useBillingStore((state) => state.disabledFeatures);
@@ -283,6 +299,10 @@ export function useDictation(options: UseDictationOptions): DictationController 
     status: machine.status,
     isActive: isDictationActive(machine.status),
     error: machine.error,
+    usageLimited:
+      machine.status === DICTATION_STATUS.error
+        ? dictationLimit(allowanceRefusal, planUpgradable)
+        : null,
     bars: waveform.bars,
     level: waveform.level,
     announcement,
