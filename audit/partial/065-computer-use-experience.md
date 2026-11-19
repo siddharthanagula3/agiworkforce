@@ -27,6 +27,26 @@ nothing is left.
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 
+## S65.03: Application allowlist.
+
+- Done when: The user lists which applications the agent may control.
+- Wave: 3
+- Already works on: desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+
+## S65.04: Application blocklist.
+
+- Done when: The user lists applications the agent must never control.
+- Wave: 3
+- Already works on: desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+
 ## S65.06: Monitor selection.
 
 - Done when: On a multi-monitor setup computer use can target a chosen display.
@@ -80,6 +100,16 @@ nothing is left.
 ## S65.11: Clipboard permission.
 
 - Done when: Clipboard access by the agent needs its own permission.
+- Wave: 3
+- Already works on: desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| web | missing | Not built on this surface. |  |
+
+## S65.13: Application launch.
+
+- Done when: The agent can open an application on the computer.
 - Wave: 3
 - Already works on: desktop
 

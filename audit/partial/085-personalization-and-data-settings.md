@@ -128,7 +128,7 @@ nothing is left.
 
 - Done when: The user can download a copy of their account data (chats, memory, files, settings) from the surface.
 - Wave: 3
-- Already works on: web, mobile, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

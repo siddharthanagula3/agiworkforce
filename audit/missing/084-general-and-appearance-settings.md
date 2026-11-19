@@ -12,23 +12,11 @@ nothing is left.
 - Wave: 5
 - Build on: web, desktop, mobile, chrome
 
-## S84.08: Code theme.
-
-- Done when: The user can choose the syntax-highlighting theme for code blocks.
-- Wave: 5
-- Build on: web, desktop, mobile, cli, chrome
-
 ## S84.13: Default workspace.
 
 - Done when: The user can choose which workspace the app opens in by default.
 - Wave: 5
 - Build on: web, desktop, mobile, cli, vscode, chrome
-
-## S84.14: Send-key behavior.
-
-- Done when: The user can choose whether Enter sends or inserts a newline (and which modifier sends).
-- Wave: 5
-- Build on: web, desktop, cli, vscode, chrome
 
 ## S84.16: Sound effects.
 

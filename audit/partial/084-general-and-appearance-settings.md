@@ -39,6 +39,18 @@ nothing is left.
 | --- | --- | --- | --- |
 | chrome | missing | Not built on this surface. |  |
 
+## S84.08: Code theme.
+
+- Done when: The user can choose the syntax-highlighting theme for code blocks.
+- Wave: 3
+- Already works on: web, desktop
+
+| Surface | Status | What is left | Gap |
+| --- | --- | --- | --- |
+| mobile | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
+
 ## S84.09: Code line wrapping.
 
 - Done when: The user can turn line wrapping for code blocks on or off.
@@ -50,16 +62,17 @@ nothing is left.
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S84.12: Default mode.
+## S84.14: Send-key behavior.
 
-- Done when: The user can choose the default mode new conversations start in (e.g. chat vs agent/work, ask vs auto).
+- Done when: The user can choose whether Enter sends or inserts a newline (and which modifier sends).
 - Wave: 3
-- Already works on: mobile, cli, vscode, chrome
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
+| cli | missing | Not built on this surface. |  |
+| vscode | missing | Not built on this surface. |  |
+| chrome | missing | Not built on this surface. |  |
 
 ## S84.19: Quiet hours.
 

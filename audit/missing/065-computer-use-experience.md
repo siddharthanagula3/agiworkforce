@@ -6,27 +6,9 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S65.03: Application allowlist.
-
-- Done when: The user lists which applications the agent may control.
-- Wave: 4
-- Build on: web, desktop
-
-## S65.04: Application blocklist.
-
-- Done when: The user lists applications the agent must never control.
-- Wave: 4
-- Build on: web, desktop
-
 ## S65.05: Window selection.
 
 - Done when: The agent can be pointed at one window rather than the whole screen.
-- Wave: 4
-- Build on: web, desktop
-
-## S65.13: Application launch.
-
-- Done when: The agent can open an application on the computer.
 - Wave: 4
 - Build on: web, desktop
 
