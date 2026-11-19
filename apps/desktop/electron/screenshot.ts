@@ -70,16 +70,26 @@ function isPasteDestination(win: BrowserWindow, destination: PasteDestination): 
   );
 }
 
-function clipboardImageFingerprint(): string | null {
-  const image = clipboard.readImage();
-  if (image.isEmpty()) return null;
-  return createHash('sha256').update(image.toBitmap()).digest('hex');
+const CAPTURE_TYPE = 'image/png';
+
+async function clipboardImageFingerprint(): Promise<string | null> {
+  const items = await clipboard.read();
+  const item = items.find((entry) => entry.types.includes(CAPTURE_TYPE));
+  if (!item) return null;
+  const blob = (await item.getType(CAPTURE_TYPE)) as Blob;
+  return createHash('sha256')
+    .update(Buffer.from(await blob.arrayBuffer()))
+    .digest('hex');
+}
+
+function warnCaptureKept(error: unknown): void {
+  console.warn('[screenshot] the capture could not be taken back off the clipboard:', error);
 }
 
 export async function putCaptureOnClipboard(png: Buffer): Promise<string | null> {
   await clipboard.write([
     new ClipboardItem({
-      'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }),
+      [CAPTURE_TYPE]: new Blob([new Uint8Array(png)], { type: CAPTURE_TYPE }),
     }),
   ]);
   return clipboardImageFingerprint();
@@ -88,13 +98,15 @@ export async function putCaptureOnClipboard(png: Buffer): Promise<string | null>
 // Every app can read the clipboard, so the capture stays there only as long
 // as the paste needs it; an empty or image clipboard must not keep the screen.
 // Anything the user copied since is theirs and is left alone.
-export function takeCaptureBackFromClipboard(
+export async function takeCaptureBackFromClipboard(
   priorText: string,
   captureFingerprint: string | null,
-): void {
-  if (captureFingerprint === null || clipboardImageFingerprint() !== captureFingerprint) return;
+): Promise<void> {
+  if (captureFingerprint === null || (await clipboardImageFingerprint()) !== captureFingerprint) {
+    return;
+  }
   if (priorText !== '') {
-    clipboard.writeText(priorText);
+    await clipboard.writeText(priorText);
     return;
   }
   clipboard.clear();
@@ -175,7 +187,7 @@ export async function captureWindowToChat(
   } finally {
     if (captureOnClipboard && !leftForTheUserToPaste) {
       await delay(CLIPBOARD_RESTORE_MS);
-      takeCaptureBackFromClipboard(priorText, captureFingerprint);
+      await takeCaptureBackFromClipboard(priorText, captureFingerprint).catch(warnCaptureKept);
     }
     capturing = false;
   }
@@ -228,7 +240,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     // one path that leaves the screen on the clipboard.
     if (captureOnClipboard && !leftForTheUserToPaste) {
       await delay(CLIPBOARD_RESTORE_MS);
-      takeCaptureBackFromClipboard(priorText, captureFingerprint);
+      await takeCaptureBackFromClipboard(priorText, captureFingerprint).catch(warnCaptureKept);
     }
     if (mainWasVisible && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show();

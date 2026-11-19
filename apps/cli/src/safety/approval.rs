@@ -21,6 +21,13 @@ fn matches_option(arg: &str, option: &str) -> bool {
     if arg == option {
         return true;
     }
+    if let (Some(arg_long), Some(option_long)) = (arg.strip_prefix("--"), option.strip_prefix("--"))
+    {
+        let name = arg_long.split('=').next().unwrap_or(arg_long);
+        if !name.is_empty() && option_long.starts_with(name) {
+            return true;
+        }
+    }
     let Some(rest) = arg.strip_prefix(option) else {
         return false;
     };
@@ -244,7 +251,12 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
     }
 
     // `git remote -v` is safe.
-    if subcommand == "remote" && sub_args.contains(&"-v") {
+    if subcommand == "remote"
+        && !sub_args.is_empty()
+        && sub_args
+            .iter()
+            .all(|arg| matches!(*arg, "-v" | "--verbose"))
+    {
         return CommandSafety::Safe;
     }
 

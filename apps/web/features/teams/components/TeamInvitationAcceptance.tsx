@@ -2,6 +2,7 @@
 
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
 import { useEffect, useRef, useState } from 'react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { useSession } from '@/lib/identity/client';
 import { CheckCircle2, MailCheck, ShieldCheck, XCircle } from 'lucide-react';
 import { z } from 'zod';
@@ -44,6 +45,7 @@ export function TeamInvitationAcceptance() {
   const [pending, setPending] = useState<(Owned & { action: 'accept' | 'decline' }) | null>(null);
   const [failure, setFailure] = useState<(Owned & { message: string }) | null>(null);
   const [recorded, setCompletion] = useState<Completion>(null);
+  const { confirm, dialog } = useConfirmAction();
   const pendingAction = pending?.owner === identityKey ? pending.action : null;
   const error = failure?.owner === identityKey ? failure.message : null;
   const completion = recorded?.owner === identityKey ? recorded : null;
@@ -112,6 +114,17 @@ export function TeamInvitationAcceptance() {
     }
   }
 
+  function requestDecline() {
+    confirm({
+      title: 'Decline this invitation?',
+      description:
+        'This link stops working and you will not join the workspace. To join later, an administrator has to send you a new invitation.',
+      confirmLabel: 'Decline invitation',
+      cancelLabel: 'Keep invitation',
+      onConfirm: () => respond('decline'),
+    });
+  }
+
   const cardStyle = {
     background: 'var(--agi-card)',
     border: '1px solid var(--agi-rule-strong)',
@@ -124,6 +137,7 @@ export function TeamInvitationAcceptance() {
 
   return (
     <div data-design="agi" className="agi-ds-page">
+      {dialog}
       <Header />
       <main id="main-content">
         <section style={cardStyle} aria-labelledby="team-invitation-title">
@@ -261,7 +275,7 @@ export function TeamInvitationAcceptance() {
                     className="agi-ds-btn"
                     data-variant="secondary"
                     disabled={pendingAction !== null}
-                    onClick={() => void respond('decline')}
+                    onClick={requestDecline}
                   >
                     {pendingAction === 'decline' ? 'Declining…' : 'Decline'}
                   </button>

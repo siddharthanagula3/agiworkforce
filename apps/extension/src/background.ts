@@ -2314,13 +2314,21 @@ async function handleReplayShortcut(
   if (!replayTarget.ok) {
     return { success: false, error: replayTarget.error } as ExtensionResponse;
   }
+  const replayOrigin = normalizeShortcutStartUrl(shortcut.startUrl)!;
+  await siteAllowlistReady;
+  if (!isOriginApprovedForAutomation(replayOrigin)) {
+    return {
+      success: false,
+      error: `${new URL(replayOrigin).host} is not approved for browser automation. Approve the site, then run this workflow again.`,
+    } as ExtensionResponse;
+  }
   const taskId = `replay_${Date.now()}`;
   const result = await forwardToContentScript(targetTab.id, {
     type: 'RUN_PAGE_ACTIONS',
     tabId: targetTab.id,
     taskId,
     actions: shortcut.actions,
-    expectedOrigin: normalizeShortcutStartUrl(shortcut.startUrl)!,
+    expectedOrigin: replayOrigin,
   } as ExtensionMessage);
   if (result.success && notify) {
     showNotification(

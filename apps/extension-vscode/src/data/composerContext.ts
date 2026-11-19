@@ -192,6 +192,28 @@ function pageText(html: string): string {
     .trim();
 }
 
+const WEB_PAGE_TIMEOUT_MS = 15_000;
+const MAX_WEB_PAGE_BYTES = 2 * 1024 * 1024;
+
+async function readCappedBody(response: Response): Promise<{ body: string; capped: boolean }> {
+  const reader = response.body?.getReader();
+  if (reader === undefined) return { body: '', capped: false };
+  const decoder = new TextDecoder();
+  let body = '';
+  let bytes = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return { body: body + decoder.decode(), capped: false };
+    const chunk = value.subarray(0, MAX_WEB_PAGE_BYTES - bytes);
+    bytes += chunk.byteLength;
+    body += decoder.decode(chunk, { stream: true });
+    if (bytes >= MAX_WEB_PAGE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      return { body: body + decoder.decode(), capped: true };
+    }
+  }
+}
+
 async function webPage(): Promise<ContextAttachment | undefined> {
   const input = await vscode.window.showInputBox({
     title: `${PRODUCT_NAMES.code}, Attach a web page`,
@@ -212,13 +234,16 @@ async function webPage(): Promise<ContextAttachment | undefined> {
   if (input === undefined || input.trim() === '') return undefined;
   const url = input.trim();
   try {
-    const response = await fetch(url, { redirect: 'follow' });
+    const response = await fetch(url, {
+      redirect: 'follow',
+      signal: AbortSignal.timeout(WEB_PAGE_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`the page answered HTTP ${response.status}`);
     const type = response.headers.get('content-type') ?? '';
-    const body = await response.text();
+    const { body, capped } = await readCappedBody(response);
     const text = type.includes('html') ? pageText(body) : body;
     const clipped =
-      text.length > MAX_TOTAL_REFERENCE_CHARS
+      capped || text.length > MAX_TOTAL_REFERENCE_CHARS
         ? `${text.slice(0, MAX_TOTAL_REFERENCE_CHARS)}\n... (truncated)`
         : text;
     return { name: new URL(url).host, text: `Content of ${url}:\n${clipped}` };

@@ -22,25 +22,20 @@ function stripCspMetaTags(content: string): string {
   });
 }
 
-function injectHeadContent(documentHtml: string, headContent: string): string {
-  if (/<head\b[^>]*>/i.test(documentHtml)) {
-    return documentHtml.replace(/<head\b[^>]*>/i, (match) => `${match}\n${headContent}`);
-  }
-
-  if (/<html\b[^>]*>/i.test(documentHtml)) {
-    return documentHtml.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${headContent}</head>`);
-  }
-
+// The policy opens the document rather than following the first `<head>`-shaped
+// text: that text may sit in a comment or a script string, where a policy meta
+// is inert. A leading meta makes the parser open <head> around it, and the
+// artifact's own <html> and <head> tags then merge into those elements.
+function prependHeadContent(documentHtml: string, headContent: string): string {
   const doctype = documentHtml.match(/^\s*<!doctype[^>]*>/i)?.[0] ?? '';
-  const body = documentHtml.slice(doctype.length);
-  return `${doctype}<html><head>${headContent}</head><body>${body}</body></html>`;
+  return `${doctype}${headContent}${documentHtml.slice(doctype.length)}`;
 }
 
 export function buildSandboxedHtml(content: string): string {
   const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
 
   if (isFullDocument) {
-    return injectHeadContent(stripCspMetaTags(content), CSP_META);
+    return prependHeadContent(stripCspMetaTags(content), CSP_META);
   }
 
   return (
@@ -52,18 +47,10 @@ export function buildSandboxedHtml(content: string): string {
   );
 }
 
-export const __ARTIFACT_SANDBOX_INTERNALS = { CSP_META, BASE_STYLES };
-
 export const ARTIFACT_SANDBOX_SCHEME = 'artifact';
 
 export type ArtifactSandboxKind =
-  | 'html'
-  | 'react'
-  | 'svg'
-  | 'mermaid'
-  | 'markdown'
-  | 'text'
-  | 'code';
+  'html' | 'react' | 'svg' | 'mermaid' | 'markdown' | 'text' | 'code';
 
 export interface ArtifactRenderPayload {
   type: 'render';
@@ -116,8 +103,7 @@ function normalizeSandboxOrigin(raw: string): string | null {
 
 function tauriArtifactOrigin(): string | null {
   const internals = (globalThis as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ as
-    | { convertFileSrc?: (path: string, protocol?: string) => string }
-    | undefined;
+    { convertFileSrc?: (path: string, protocol?: string) => string } | undefined;
   if (typeof internals?.convertFileSrc !== 'function') return null;
   try {
     return normalizeSandboxOrigin(internals.convertFileSrc('', ARTIFACT_SANDBOX_SCHEME));

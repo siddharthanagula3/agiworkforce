@@ -404,6 +404,78 @@ describe('desktop release routes', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
+  describe('installer response deadline', () => {
+    let finishInstallerBody: () => void;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+        const controller = new AbortController();
+        setTimeout(
+          () => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')),
+          ms,
+        );
+        return controller.signal;
+      });
+      finishInstallerBody = () => undefined;
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function slowInstallerResponse(init: RequestInit | undefined): Response {
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('first-half-'));
+          init?.signal?.addEventListener('abort', () => controller.error(init.signal?.reason));
+          finishInstallerBody = () => {
+            if (init?.signal?.aborted) return;
+            controller.enqueue(encoder.encode('second-half'));
+            controller.close();
+          };
+        },
+      });
+      return new Response(body, { status: 200 });
+    }
+
+    it('keeps streaming an installer whose transfer outlasts the response deadline', async () => {
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) =>
+        String(input) === CLOUD_ARM64_DMG_URL
+          ? slowInstallerResponse(init)
+          : Response.json([cloudDesktopRelease()]),
+      );
+
+      const response = await downloadDesktop(
+        makeRequest('https://agi.example/api/download?platform=mac&arch=arm64'),
+      );
+      expect(response.status).toBe(200);
+
+      vi.advanceTimersByTime(10 * 60_000);
+      finishInstallerBody();
+
+      expect(await response.text()).toBe('first-half-second-half');
+    });
+
+    it('still gives up on an installer host that never answers', async () => {
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input) !== CLOUD_ARM64_DMG_URL) return Response.json([cloudDesktopRelease()]);
+        return new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        });
+      });
+
+      const pending = downloadDesktop(
+        makeRequest('https://agi.example/api/download?platform=mac&arch=arm64'),
+      );
+      await vi.advanceTimersByTimeAsync(30_000);
+      const response = await pending;
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+    });
+  });
+
   it('rejects an oversized version before fetching a release', async () => {
     const response = await downloadDesktop(
       makeRequest(`https://agi.example/api/download?platform=mac&version=${'9'.repeat(65)}`),

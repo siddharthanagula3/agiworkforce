@@ -22,6 +22,14 @@ jest.mock('../src/features/chat/actions/runVideoGenerationTurn', () => ({
   clearCloudVideoGenerationState: jest.fn(),
 }));
 
+jest.mock('../stores/connectionStore', () => ({
+  useConnectionStore: { getState: jest.fn() },
+}));
+
+jest.mock('../src/features/library/libraryCacheStore', () => ({
+  useLibraryCacheStore: { getState: jest.fn() },
+}));
+
 jest.mock('../src/features/artifacts/store', () => ({
   clearAccountScopedArtifactState: jest.fn(),
 }));
@@ -163,6 +171,12 @@ const { clearCloudVideoGenerationState } =
   require('../src/features/chat/actions/runVideoGenerationTurn') as {
     clearCloudVideoGenerationState: jest.Mock;
   };
+const { useConnectionStore } = require('../stores/connectionStore') as {
+  useConnectionStore: { getState: jest.Mock };
+};
+const { useLibraryCacheStore } = require('../src/features/library/libraryCacheStore') as {
+  useLibraryCacheStore: { getState: jest.Mock };
+};
 const { clearAccountScopedArtifactState } = require('../src/features/artifacts/store') as {
   clearAccountScopedArtifactState: jest.Mock;
 };
@@ -273,6 +287,8 @@ describe('clearLocalCloudAccountState', () => {
   const clearManagedCloudAccess = jest.fn();
   const resetCloudUploads = jest.fn();
   const resetAccountNotificationFeed = jest.fn();
+  const endDesktopPairing = jest.fn();
+  const clearLibraryCache = jest.fn();
   let mmkvReadyCallbacks: Array<() => void>;
 
   beforeEach(() => {
@@ -312,6 +328,8 @@ describe('clearLocalCloudAccountState', () => {
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
     useUploadLifecycleStore.getState.mockReturnValue({ reset: resetCloudUploads });
     useAccountNotificationFeed.getState.mockReturnValue({ reset: resetAccountNotificationFeed });
+    useConnectionStore.getState.mockReturnValue({ disconnect: endDesktopPairing });
+    useLibraryCacheStore.getState.mockReturnValue({ clearLibraryCache });
   });
 
   it('clears account A Cloud data before account B while preserving Local data', () => {
@@ -329,6 +347,8 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCloudChats).toHaveBeenCalledTimes(1);
     expect(clearCloudConversationSelection).toHaveBeenCalledWith(['cloud-conversation-a']);
     expect(clearAccountScopedArtifactState).toHaveBeenCalledTimes(1);
+    expect(endDesktopPairing).toHaveBeenCalledTimes(1);
+    expect(clearLibraryCache).toHaveBeenCalledTimes(1);
     expect(clearAccountScopedOfflineQueue).toHaveBeenCalledTimes(1);
     expect(clearAccountScopedDrafts).toHaveBeenCalledTimes(1);
     expect(clearCloudMemory).toHaveBeenCalledTimes(1);

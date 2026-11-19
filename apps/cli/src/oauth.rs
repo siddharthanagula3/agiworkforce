@@ -5,6 +5,8 @@ use anyhow::{Context, Result};
 
 use crate::terminal_style as ts;
 
+const DEVICE_AUTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Device Code Flow (for AGI Workforce + GitHub Copilot style auth)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,6 +68,7 @@ pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<De
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
+        .timeout(DEVICE_AUTH_TIMEOUT)
         .header("Content-Type", "application/json")
         .header(
             "User-Agent",
@@ -113,6 +116,7 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
     let client = reqwest::Client::new();
     let response = client
         .post(format!("{api_base}/auth/device/token"))
+        .timeout(DEVICE_AUTH_TIMEOUT)
         .header("Content-Type", "application/json")
         .header(
             "User-Agent",
@@ -187,6 +191,7 @@ pub enum DeviceSessionRenewal {
 pub async fn renew_device_session(api_base: &str, refresh: &str) -> DeviceSessionRenewal {
     let response = reqwest::Client::new()
         .post(format!("{api_base}/auth/device/refresh"))
+        .timeout(DEVICE_AUTH_TIMEOUT)
         .header(
             "User-Agent",
             format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
@@ -232,6 +237,35 @@ fn renewal_refusal(status: reqwest::StatusCode, body: &serde_json::Value) -> Dev
             .and_then(|value| value.as_str())
             .map(str::to_string),
     )
+}
+
+#[cfg(test)]
+mod device_auth_timeout_tests {
+    #[tokio::test]
+    async fn renewal_against_a_server_that_never_answers_gives_up() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let base = format!("http://{}", listener.local_addr().expect("address"));
+        let silent = tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((socket, _)) = listener.accept().await {
+                held.push(socket);
+            }
+        });
+
+        let outcome = tokio::time::timeout(
+            std::time::Duration::from_secs(45),
+            super::renew_device_session(&base, "refresh"),
+        )
+        .await;
+        silent.abort();
+
+        assert!(
+            matches!(outcome, Ok(super::DeviceSessionRenewal::Unavailable)),
+            "renewal did not give up on a server that never answers"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -305,6 +339,7 @@ mod renewal_refusal_tests {
 pub async fn revoke_device_session(api_base: &str, access: &str, refresh: &str) -> bool {
     let mut request = reqwest::Client::new()
         .post(format!("{api_base}/auth/logout"))
+        .timeout(DEVICE_AUTH_TIMEOUT)
         .header("X-Requested-With", "XMLHttpRequest")
         .header(
             "User-Agent",

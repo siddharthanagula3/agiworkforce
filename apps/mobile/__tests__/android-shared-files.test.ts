@@ -5,6 +5,10 @@ import {
 } from '@/src/features/share-preview/sharedAttachments';
 import { takeComposerAttachments } from '@/src/features/chat/composerHandoff';
 
+jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///data/user/0/com.agiworkforce.app/cache/',
+}));
+
 const COPIED_FILE = {
   uri: 'file:///data/user/0/com.agiworkforce.app/cache/shared-inbox/1757000000000-photo.jpg',
   fileName: 'photo.jpg',
@@ -22,6 +26,27 @@ describe('parseSharedFilesParam', () => {
     const files = parseSharedFilesParam(
       JSON.stringify([
         { ...COPIED_FILE, uri: 'content://media/external/images/media/42' },
+        COPIED_FILE,
+      ]),
+    );
+    expect(files).toEqual([COPIED_FILE]);
+  });
+
+  it('drops a file the deep link names outside the share inbox', () => {
+    const files = parseSharedFilesParam(
+      JSON.stringify([
+        {
+          ...COPIED_FILE,
+          uri: 'file:///data/user/0/com.agiworkforce.app/files/exports/chat.pdf',
+        },
+        {
+          ...COPIED_FILE,
+          uri: 'file:///data/user/0/com.agiworkforce.app/cache/shared-inbox/../../files/mmkv/agiworkforce-mobile',
+        },
+        {
+          ...COPIED_FILE,
+          uri: 'file:///data/user/0/com.agiworkforce.app/cache/shared-inbox/nested/photo.jpg',
+        },
         COPIED_FILE,
       ]),
     );

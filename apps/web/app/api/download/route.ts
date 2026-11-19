@@ -20,6 +20,7 @@ const DOWNLOAD_PAGE_PATH = '/download';
 const MAX_VERSION_LENGTH = 64;
 const VERSIONED_CACHE_CONTROL = 'public, max-age=3600';
 const LATEST_CACHE_CONTROL = 'no-store';
+const INSTALLER_RESPONSE_TIMEOUT_MS = 30_000;
 
 function installerFilename(assetName: string): string {
   const name = assetName.replace(/[^\w .()-]/g, '').trim();
@@ -33,6 +34,22 @@ function macInstallerAsset(release: StableDesktopRelease, architecture: MacArchi
   if (architecture === 'arm64') return arm64;
   if (architecture === 'x64') return x64;
   return arm64 ?? x64 ?? installers[0] ?? null;
+}
+
+async function fetchInstaller(url: string): Promise<Response> {
+  const responseDeadline = new AbortController();
+  const timer = setTimeout(
+    () =>
+      responseDeadline.abort(
+        new DOMException('The installer host did not respond in time.', 'TimeoutError'),
+      ),
+    INSTALLER_RESPONSE_TIMEOUT_MS,
+  );
+  try {
+    return await fetch(url, { signal: responseDeadline.signal });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function unavailable(platform: string) {
@@ -98,9 +115,7 @@ async function handleDownload(request: NextRequest) {
     throw createError.serviceUnavailable('Release asset URL is not trusted');
   }
 
-  const fileResponse = await fetch(downloadUrl, {
-    signal: AbortSignal.timeout(30_000),
-  });
+  const fileResponse = await fetchInstaller(downloadUrl);
 
   if (!fileResponse.ok) {
     throw createError.serviceUnavailable('Failed to fetch installer from GitHub');

@@ -1,3 +1,4 @@
+import { cacheDirectory } from 'expo-file-system/legacy';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -40,7 +41,22 @@ export function parseSharedFilesParam(raw: string | undefined | null): SharedFil
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.map(normalizeSharedFile).filter((file): file is SharedFile => file !== null);
+  return parsed
+    .map(normalizeSharedFile)
+    .filter((file): file is SharedFile => file !== null && isAndroidShareInboxCopy(file.uri));
+}
+
+const ANDROID_SHARE_INBOX_DIR = 'shared-inbox/';
+const SHARE_INBOX_FILE_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
+
+// The deep link is reachable from any app or web page, so a file entry is
+// accepted only when it names a copy the Android rewrite made in its own inbox.
+function isAndroidShareInboxCopy(uri: string): boolean {
+  if (!cacheDirectory) return false;
+  const inbox = `${cacheDirectory.endsWith('/') ? cacheDirectory : `${cacheDirectory}/`}${ANDROID_SHARE_INBOX_DIR}`;
+  if (!uri.startsWith(inbox)) return false;
+  const name = uri.slice(inbox.length);
+  return SHARE_INBOX_FILE_NAME.test(name) && !name.includes('..');
 }
 
 export function sharedFilesToAttachments(files: SharedFile[]): Attachment[] {

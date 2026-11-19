@@ -28,6 +28,7 @@ async function mcpPolicyFetch(
   const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const headers = Object.fromEntries(new Headers(init?.headers ?? {}).entries());
   const deadline = createDeadline(MCP_DIAL_TIMEOUT_MS, init?.signal ?? undefined);
+  let streaming = false;
   try {
     const outcome = await credentialedFetch(new URL(href), {
       deadline,
@@ -36,10 +37,12 @@ async function mcpPolicyFetch(
       ...(init?.method ? { method: init.method } : {}),
       ...(init?.body === undefined || init.body === null ? {} : { body: init.body }),
     });
-    if (outcome.ok) return outcome.response;
-    throw new McpEgressRefusedError(outcome.refusal, outcome.detail);
+    if (!outcome.ok) throw new McpEgressRefusedError(outcome.refusal, outcome.detail);
+    streaming = true;
+    return outcome.response;
   } finally {
-    deadline.release();
+    if (streaming) deadline.stopClock();
+    else deadline.release();
   }
 }
 
