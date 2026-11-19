@@ -108,11 +108,11 @@ async function client(role = 'lifecycle_owner') {
     host: socket,
     port: 5432,
     database: 'postgres',
-    user: process.env.USER,
+    user: role === 'lifecycle_owner' ? role : process.env.USER,
   });
   await connected.connect();
   clients.push(connected);
-  if (role) await connected.query(`set role ${role}`);
+  if (role && role !== 'lifecycle_owner') await connected.query(`set role ${role}`);
   return connected;
 }
 function fingerprint(key) {
@@ -195,6 +195,14 @@ async function organizations(connection) {
   );
   assert(statement);
   await connection.query(statement[0]);
+  const membershipStatus = fs
+    .readFileSync(
+      path.join(root, 'apps/web/db/neon/0234_workspaces_membership_status_and_installations.sql'),
+      'utf8',
+    )
+    .match(/alter table public\.organization_members\s+add column if not exists status [\s\S]*?;/i);
+  assert(membershipStatus, 'Missing authoritative membership status columns');
+  await connection.query(membershipStatus[0]);
 }
 function normalizationDb(connection, observe = async () => {}) {
   return {
@@ -270,7 +278,7 @@ try {
   started = true;
   const admin = await client(null);
   await admin.query(
-    'create role lifecycle_owner nologin nobypassrls; create role app_rls nologin nobypassrls; grant usage,create on schema public to lifecycle_owner; grant usage on schema public to app_rls',
+    'create role lifecycle_owner login nobypassrls; create role app_rls nologin nobypassrls; grant usage,create on schema public to lifecycle_owner; grant usage on schema public to app_rls',
   );
   const db = await client();
   await organizations(db);
@@ -333,6 +341,15 @@ try {
     create policy fixture_custodian_service on legal_hold_custodians to lifecycle_owner using(true) with check(true)`);
   await db.query('grant select on legal_holds, organization_members to app_rls');
   await db.query(holdsMigration.match(/CREATE POLICY legal_holds_admin_read[\s\S]*?;/)[0]);
+  await admin.query('set check_function_bodies = off');
+  await admin.query(helper('0314_workspace_managed_groups.sql', 'organization_member_permissions'));
+  await admin.query(helper('0200_organization_permission_grid.sql', 'app_has_org_permission'));
+  await admin.query(helper('0272_active_membership_authorization.sql', 'app_row_is_visible'));
+  await admin.query('reset check_function_bodies');
+  await admin.query(helper('0416_legal_hold_preserves.sql', 'legal_hold_preserves'));
+  await admin.query(
+    'revoke all on function public.legal_hold_preserves(uuid, text, text) from public; grant execute on function public.legal_hold_preserves(uuid, text, text) to app_rls, lifecycle_owner',
+  );
   await db.query(`alter table user_projects enable row level security; alter table user_projects force row level security;
     alter table project_knowledge_files enable row level security; alter table project_knowledge_files force row level security;
     create policy fixture_project_service on user_projects to lifecycle_owner using(true) with check(true);
@@ -879,7 +896,7 @@ try {
     'utf8',
   );
   const registrationSql = registrationSource.match(
-    /const \[inserted\] = await db\.query<Record<string, unknown>>\(\s*`([\s\S]*?)`/,
+    /const \[row\] = await tx\.query<Record<string, unknown>>\(\s*`([\s\S]*?)`/,
   )[1];
   const localKey = localSealed.key;
   const [registered] = (
@@ -894,8 +911,6 @@ try {
       'user-a',
       localKey,
       'isolated fixture text',
-      1,
-      null,
       JSON.stringify(localSealed.targets),
     ])
   ).rows;
@@ -994,8 +1009,6 @@ try {
           owner,
           sealed.key,
           name,
-          1,
-          null,
           JSON.stringify(sealed.targets),
         ])
       ).rows;

@@ -65,7 +65,8 @@
       "name": "macos-release",
       "used_by": [
         ".github/workflows/release-desktop.yml",
-        ".github/workflows/release-desktop-cloud.yml"
+        ".github/workflows/release-desktop-cloud.yml",
+        ".github/workflows/package-desktop-native.yml"
       ],
       "protection": {
         "wait_timer": 0,

@@ -762,8 +762,8 @@ requireIncludes(
 /**
  * Every native lane is main-only, and nothing said so.
  *
- * `rust-desktop-cli`, `clippy-all-features`, `macos-smoke` and `windows-smoke`
- * all carry `github.ref == 'refs/heads/main'`, so `cargo test --locked` at any scope,
+ * `rust-desktop-cli`, `clippy-all-features`, `macos-smoke`, `windows-smoke`
+ * and `native-gpui` all carry `github.ref == 'refs/heads/main'`, so `cargo test --locked` at any scope,
  * every crate under `crates/*`, and macOS and Windows compilation happen after
  * a merge rather than at review. That is a deliberate, commented cost decision:
  * a full native build is the slowest thing in CI by an order of magnitude, and
@@ -773,7 +773,7 @@ requireIncludes(
  * `native_changed` half and not the `github.ref` half, so the trade-off could
  * be widened or narrowed with nothing failing either way, and a reader of these
  * checks would conclude native code was gated on pull requests. Pinning it
- * makes the four move together and makes a change to any of them deliberate.
+ * makes them move together and makes a change to any of them deliberate.
  *
  * Changing this is a CI spend decision, not a code fix. What it would cost is
  * one native build per pull request that touches Rust; what it buys is catching
@@ -784,6 +784,7 @@ const NATIVE_MAIN_ONLY_JOBS = [
   'clippy-all-features',
   'macos-smoke',
   'windows-smoke',
+  'native-gpui',
 ];
 const NATIVE_MAIN_ONLY_CONDITION =
   "if: needs.scope.outputs.native_changed == 'true' && github.ref == 'refs/heads/main'";

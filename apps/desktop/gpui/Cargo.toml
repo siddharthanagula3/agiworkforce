@@ -33,6 +33,13 @@ two-face = { version = "=0.4.5", default-features = false, features = ["syntect-
 uuid = { version = "1", features = ["v4", "v5"] }
 url = "2"
 
+notify-rust = "=4.18.2"
+auto-launch = "=0.6.0"
+global-hotkey = "=0.8.0"
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+tray-icon = "=0.25.1"
+
 [dev-dependencies]
 agiworkforce-worktree = { path = "../../../crates/agiworkforce-worktree" }
 tempfile = "3"
