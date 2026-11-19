@@ -511,10 +511,10 @@ describe('desktop release routes', () => {
       installerFrom(chunkEvery(10 * 60_000, ['first-', 'never-']));
 
       const response = await startDownload();
-      const text = response.text();
+      const ended = expect(response.text()).rejects.toThrow('stopped making progress');
       await vi.advanceTimersByTimeAsync(30_000);
 
-      await expect(text).rejects.toThrow();
+      await ended;
       expect(installerSignal?.aborted).toBe(true);
     });
 
