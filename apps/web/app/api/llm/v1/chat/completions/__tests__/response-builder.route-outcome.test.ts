@@ -45,7 +45,6 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   logCacheAnalytics: vi.fn(),
 }));
 vi.mock('@/lib/cost-tracker', () => ({
-  recordModelUsage: vi.fn(),
   toOtelAttributes: vi.fn(() => ({})),
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
