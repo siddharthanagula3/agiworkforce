@@ -617,6 +617,9 @@
     "accelerator": [
       "apps/desktop/src-tauri/src/features/speech/dictation/mod.rs"
     ],
+    "AcceleratorError": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "acceleratorIdentity": [
       "apps/desktop/electron/garnishCore.ts"
     ],
@@ -1772,6 +1775,12 @@
     "ActedOn": [
       "apps/desktop/src-tauri/src/automation/computer_use/mod.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/targeted_input.rs"
+    ],
+    "Action": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs",
+      "apps/desktop/gpui/src/ui/ext_integration.rs",
+      "apps/desktop/gpui/src/ui/ext_settings.rs",
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
     ],
     "ACTION_APPROVALS_ROUTE": [
       "apps/mobile/src/features/settings/cloud-connectors/ApprovalPolicySummary.tsx"
@@ -4733,6 +4742,9 @@
       "packages/ui/ui/src/primitives/Alert.tsx",
       "packages/ui/ui/src/primitives/index.ts"
     ],
+    "alive": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
     "all": [
       "apps/cli/src/model_catalog.rs",
       "apps/desktop/src-tauri/src/ui/hooks/types.rs"
@@ -6271,7 +6283,8 @@
       "apps/web/app/appeal/page.tsx"
     ],
     "Appearance": [
-      "apps/desktop/electron/garnishCore.ts"
+      "apps/desktop/electron/garnishCore.ts",
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "APPEARANCE_CHOICES": [
       "apps/desktop/electron/garnishCore.ts"
@@ -8788,6 +8801,7 @@
       "apps/cli/src/cloud/client.rs",
       "apps/cli/src/crash_reports/startup_metrics.rs",
       "apps/cli/src/features/plan/plan_mode.rs",
+      "apps/desktop/gpui/src/updates.rs",
       "apps/desktop/src-tauri/src/automation/audit.rs",
       "apps/desktop/src-tauri/src/core/agi/memory_manager.rs",
       "apps/desktop/src-tauri/src/core/agi/project_memory.rs",
@@ -9536,6 +9550,9 @@
     ],
     "attach_context_files": [
       "apps/cli/src/agent/mod.rs"
+    ],
+    "attach_extensions": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
     ],
     "attach_job_profile_file_from_path": [
       "apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs"
@@ -11378,8 +11395,14 @@
       "apps/cli/src/claude_parity.rs",
       "apps/cli/src/repo/layout.rs"
     ],
+    "availability_url": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "available": [
       "apps/cli/src/tui/widgets/theme_picker.rs"
+    ],
+    "available_destination": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "AVAILABLE_MODELS": [
       "apps/web/shared/stores/model-store.ts"
@@ -11396,6 +11419,9 @@
     ],
     "availableChatSlashCommands": [
       "apps/web/features/chat/lib/chat-slash-commands.ts"
+    ],
+    "AvailableUpdate": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "Avatar": [
       "packages/ui/ui/src/index.ts",
@@ -15193,12 +15219,21 @@
     "bundle_log_dir": [
       "apps/desktop/src-tauri/src/sys/support_bundle.rs"
     ],
+    "bundle_path": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "bundleBinaries": [
       "apps/desktop/electron/bundleBinaries.mjs"
     ],
     "bundled": [
       "apps/cli/src/model_catalog.rs",
       "apps/desktop/src-tauri/src/core/skills/skill.rs"
+    ],
+    "bundled_notices": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
+    "bundled_runtime_version": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "bundled_with_config": [
       "apps/desktop/src-tauri/src/core/skills/skill.rs"
@@ -16692,18 +16727,31 @@
       "apps/cli/src/agent/checkpoints.rs",
       "apps/cli/src/shell_snapshot.rs",
       "apps/cli/src/tier_cache.rs",
+      "apps/desktop/gpui/src/lib.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/mod.rs",
       "apps/desktop/src-tauri/src/sys/commands/mod.rs"
     ],
     "CAPTURE_ANNOTATOR_COPY": [
       "apps/web/features/code/capture-annotator.ts"
     ],
+    "capture_attach": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
     "capture_before": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs"
+    ],
+    "capture_composer_controls": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
+    "capture_dispatch": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
     ],
     "capture_display": [
       "apps/desktop/src-tauri/src/automation/screen/capture.rs",
       "apps/desktop/src-tauri/src/automation/screen/mod.rs"
+    ],
+    "capture_drop_target": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
     ],
     "capture_frame_unless_refused": [
       "apps/desktop/src-tauri/src/automation/computer_use/visual_reasoner.rs"
@@ -16711,14 +16759,29 @@
     "capture_get_windows": [
       "apps/desktop/src-tauri/src/sys/commands/capture.rs"
     ],
+    "capture_hide": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
+    "capture_install": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
     "CAPTURE_KEPT_OFF_DISK": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs"
     ],
     "capture_managed_auth_boundary": [
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
     ],
+    "capture_nav": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
     "CAPTURE_NEEDS_CONSENT": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs"
+    ],
+    "capture_observe": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
+    "capture_preferences_changed": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
     ],
     "capture_primary_screen": [
       "apps/desktop/src-tauri/src/automation/screen/capture.rs",
@@ -16728,8 +16791,14 @@
       "apps/desktop/src-tauri/src/automation/screen/capture.rs",
       "apps/desktop/src-tauri/src/automation/screen/mod.rs"
     ],
+    "capture_render": [
+      "apps/desktop/gpui/src/ui/ext_capture.rs"
+    ],
     "capture_repository_snapshot": [
       "apps/cli/src/context.rs"
+    ],
+    "capture_root": [
+      "apps/desktop/gpui/src/capture.rs"
     ],
     "capture_screen_full": [
       "apps/desktop/src-tauri/src/sys/commands/capture.rs"
@@ -16790,6 +16859,9 @@
     "CapturedImage": [
       "apps/desktop/src-tauri/src/automation/screen/capture.rs",
       "apps/desktop/src-tauri/src/automation/screen/mod.rs"
+    ],
+    "CaptureDir": [
+      "apps/desktop/gpui/src/capture.rs"
     ],
     "CapturedRegion": [
       "apps/desktop/src-tauri/src/automation/screen/capture.rs",
@@ -18787,6 +18859,7 @@
     ],
     "check": [
       "apps/cli/src/permissions.rs",
+      "apps/desktop/gpui/src/updates.rs",
       "apps/desktop/src-tauri/src/automation/browser/dom_operations.rs",
       "crates/agiworkforce-execpolicy/src/policy.rs"
     ],
@@ -19200,6 +19273,9 @@
     "checkoutBillingIntervalFromStripePrice": [
       "apps/web/lib/server/stripe-plan-change.ts"
     ],
+    "CheckOutcome": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "checkOutcomeFor": [
       "apps/web/lib/services/cloud-code-result.ts"
     ],
@@ -19528,6 +19604,9 @@
     "ChecksumMismatchError": [
       "packages/platform/local-llm/src/index.ts",
       "packages/platform/local-llm/src/multimodal.ts"
+    ],
+    "checksums_url": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "checksUnavailable": [
       "apps/web/features/code/code-surface.ts"
@@ -26943,6 +27022,9 @@
     "comparable_path": [
       "apps/cli/src/repo/layout.rs"
     ],
+    "compare": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "COMPARE_ANSWER_LIMIT": [
       "apps/web/features/models/lib/compare-answers.ts"
     ],
@@ -33040,6 +33122,7 @@
       "apps/cli/src/output_styles.rs",
       "apps/cli/src/platform/runtime/session_control.rs",
       "apps/cli/src/schedules.rs",
+      "apps/desktop/gpui/src/capture.rs",
       "apps/desktop/src-tauri/src/core/artifacts/store.rs",
       "apps/desktop/src-tauri/src/features/document/create_excel.rs",
       "apps/desktop/src-tauri/src/features/document/create_pdf.rs",
@@ -35130,7 +35213,10 @@
       "apps/cli/src/cloud/data_export.rs",
       "apps/cli/src/cloud/project_files.rs",
       "apps/cli/src/features/exec/tools/web/site_rules.rs",
+      "apps/desktop/gpui/src/notifications.rs",
+      "apps/desktop/gpui/src/preferences.rs",
       "apps/desktop/gpui/src/terminal.rs",
+      "apps/desktop/gpui/src/updates.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/control.rs",
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -35689,6 +35775,9 @@
     "data": [
       "apps/desktop/src-tauri/src/lib.rs",
       "crates/agiworkforce-app-server/src/developer_sessions.rs"
+    ],
+    "data_directory": [
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "data_export": [
       "apps/cli/src/cloud/mod.rs"
@@ -36717,11 +36806,18 @@
     "DEEP_CHECKS": [
       "packages/guardian/github/src/cli/checks-catalog.ts"
     ],
+    "DEEP_LINK_MAX_LENGTH": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "DEEP_LINK_PATH": [
       "scripts/check-concept-registry.mjs"
     ],
     "DEEP_LINK_QUEUE_LIMIT": [
-      "apps/desktop/electron/deepLinkQueue.ts"
+      "apps/desktop/electron/deepLinkQueue.ts",
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "DEEP_LINK_QUEUE_TTL": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "DEEP_LINK_QUEUE_TTL_MS": [
       "apps/desktop/electron/deepLinkQueue.ts"
@@ -36736,9 +36832,21 @@
       "apps/web/features/chat/lib/messageThread.ts",
       "packages/contracts/cloud-contracts/src/message-thread.ts"
     ],
+    "DeepLinkContract": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "deepLinkDestination": [
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/deep-links.ts"
+    ],
+    "DeepLinkQueue": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "DeepLinkRejection": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "DeepLinkRoute": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "DeepResearchPage": [
       "apps/desktop/src/features/research/DeepResearchPage.tsx",
@@ -38834,6 +38942,9 @@
     "delimiterFor": [
       "apps/web/lib/server/chat-file-preparation/delimited.ts"
     ],
+    "deliver": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
     "deliver_notification": [
       "apps/desktop/src-tauri/src/sys/commands/notification_center.rs"
     ],
@@ -39815,6 +39926,7 @@
       "apps/desktop/src/constants/cloudAvailability.ts"
     ],
     "DESKTOP_DEEP_LINK_SCHEME": [
+      "apps/desktop/gpui/scripts/dev.mjs",
       "apps/desktop/src/lib/tauri-electron/bridgeContract.ts",
       "packages/contracts/local-runtime/src/host-bridge.ts",
       "packages/contracts/local-runtime/src/index.ts"
@@ -40413,7 +40525,8 @@
     "detail": [
       "apps/cli/src/errors.rs",
       "apps/cli/src/safety/push_consent.rs",
-      "apps/desktop/electron/applicationsFolder.ts"
+      "apps/desktop/electron/applicationsFolder.ts",
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "DETAIL_HEADER_BAND": [
       "packages/ui/ui/src/directory/styles.ts"
@@ -42684,7 +42797,8 @@
       "apps/cli/src/repo/index_policy.rs"
     ],
     "directory": [
-      "apps/cli/src/agent/checkpoints/storage.rs"
+      "apps/cli/src/agent/checkpoints/storage.rs",
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "DIRECTORY_ADD_BUTTON": [
       "packages/ui/ui/src/directory/styles.ts"
@@ -43804,6 +43918,9 @@
       "packages/platform/utils/src/remoteControl/dispatchEnvelope.ts",
       "packages/platform/utils/src/remoteControl/index.ts"
     ],
+    "dispatch_extension": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
+    ],
     "DISPATCH_HKDF_INFO": [
       "packages/contracts/types/src/dispatch.ts"
     ],
@@ -44721,6 +44838,7 @@
     "download": [
       "apps/cli/src/cloud/data_export.rs",
       "apps/cli/src/cloud/library.rs",
+      "apps/desktop/gpui/src/updates.rs",
       "apps/desktop/src-tauri/src/integrations/cloud/dropbox.rs",
       "apps/desktop/src-tauri/src/integrations/cloud/google_drive.rs",
       "apps/desktop/src-tauri/src/integrations/cloud/mod.rs",
@@ -44872,6 +44990,9 @@
     "DownloadResponse": [
       "apps/extension/src/types.ts"
     ],
+    "downloads_directory": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "DownloadSaveError": [
       "apps/cli/src/path_security/file_authority/download.rs"
     ],
@@ -45009,6 +45130,9 @@
     ],
     "drain_events": [
       "apps/desktop/src-tauri/src/automation/audit.rs"
+    ],
+    "drain_fresh": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "DRAIN_PATH": [
       "scripts/check-image-job-termination.mjs"
@@ -45288,6 +45412,9 @@
     "dropHiddenHtmlBlocks": [
       "apps/mobile/src/features/chat/utils/markdownHiddenHtml.ts"
     ],
+    "dropped_file": [
+      "apps/desktop/gpui/src/capture.rs"
+    ],
     "DROPPED_HISTORY_MARKER": [
       "apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts"
     ],
@@ -45296,6 +45423,9 @@
     ],
     "droppedExports": [
       "scripts/check-mock-exports.mjs"
+    ],
+    "DroppedFile": [
+      "apps/desktop/gpui/src/capture.rs"
     ],
     "droppedSpanIncludesUntrustedTool": [
       "apps/web/app/api/llm/v1/chat/completions/lib/summarized-history.ts"
@@ -50047,6 +50177,9 @@
     "extension_list": [
       "apps/desktop/src-tauri/src/sys/commands/mcp_extensions.rs"
     ],
+    "extension_nav": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
+    ],
     "EXTENSION_PAGE_ONLY_MESSAGE_TYPES": [
       "apps/extension/src/background/policy.ts"
     ],
@@ -50061,6 +50194,9 @@
     ],
     "extension_uninstall": [
       "apps/desktop/src-tauri/src/sys/commands/mcp_extensions.rs"
+    ],
+    "ExtensionAction": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
     ],
     "ExtensionAgentEffort": [
       "apps/extension-vscode/src/features/permissions/agentModeConsent.ts",
@@ -50164,6 +50300,9 @@
       "apps/cli/src/repo/index_policy.rs",
       "apps/desktop/src-tauri/src/core/mcp/mod.rs",
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
+    ],
+    "Extensions": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
     ],
     "ExtensionSettingsSnapshot": [
       "apps/extension-vscode/src/platform/config.ts"
@@ -51136,6 +51275,9 @@
     "fetch_latest_release": [
       "apps/cli/src/update_check.rs"
     ],
+    "fetch_metadata": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "fetch_model_token_limits": [
       "tools/skill-vetting/src/skillspector/llm_utils.py"
     ],
@@ -51681,7 +51823,8 @@
     ],
     "file": [
       "apps/cli/src/diff_model.rs",
-      "apps/cli/src/path_security/file_authority/instructions.rs"
+      "apps/cli/src/path_security/file_authority/instructions.rs",
+      "apps/desktop/gpui/src/capture.rs"
     ],
     "File": [
       "packages/ui/icons/src/glyphs/Files.tsx"
@@ -51728,6 +51871,9 @@
     ],
     "FILE_LIST_TIMEOUT_MS": [
       "apps/desktop/src-tauri/src/core/llm/tool_executor/file_tools.rs"
+    ],
+    "FILE_NAME": [
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "file_open_with_default_app": [
       "apps/desktop/src-tauri/src/sys/commands/file_ops.rs"
@@ -53853,6 +53999,9 @@
     "for_state": [
       "apps/cli/src/trust/mod.rs"
     ],
+    "for_target": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "for_token": [
       "apps/cli/src/tier_cache.rs"
     ],
@@ -53906,6 +54055,9 @@
     ],
     "forget_choice": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
+    ],
+    "forget_cloud": [
+      "apps/desktop/gpui/src/notifications.rs"
     ],
     "forget_credential_rows": [
       "apps/desktop/src-tauri/src/sys/commands/mcp.rs"
@@ -55981,6 +56133,9 @@
     "from_frame": [
       "crates/agiworkforce-llm/src/error.rs"
     ],
+    "from_id": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "from_json": [
       "apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs",
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
@@ -56089,7 +56244,9 @@
       "crates/agiworkforce-protocol/src/items.rs"
     ],
     "from_sources": [
-      "apps/cli/src/features/plugins/plugins.rs"
+      "apps/cli/src/features/plugins/plugins.rs",
+      "apps/desktop/gpui/src/integration.rs",
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "from_startup_arg": [
       "crates/agiworkforce-protocol/src/protocol.rs"
@@ -56388,6 +56545,9 @@
     ],
     "gateFindings": [
       "scripts/check-scan-findings.mjs"
+    ],
+    "gatekeeper_gate": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "GateOutcome": [
       "apps/desktop/src-tauri/src/sys/security/exec_gate.rs"
@@ -63103,6 +63263,9 @@
     "HIDE_ARTIFACT_LABEL": [
       "apps/web/features/chat/components/artifacts/ArtifactCard.tsx"
     ],
+    "hide_extensions": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
+    ],
     "hide_window": [
       "apps/desktop/src-tauri/src/lib.rs",
       "apps/desktop/src-tauri/src/ui/window/mod.rs"
@@ -63271,6 +63434,9 @@
       "apps/web/lib/services/legal-hold-gate.ts",
       "apps/web/lib/services/retention-service.ts"
     ],
+    "hold_plan": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
     "HOLD_TO_TALK_THRESHOLD_MS": [
       "apps/mobile/src/features/voice/holdToTalk.ts"
     ],
@@ -63304,6 +63470,9 @@
     ],
     "holdMockDevBrowser": [
       "apps/web/e2e/lib/mock-auth-provider.ts"
+    ],
+    "HoldPlan": [
+      "apps/desktop/gpui/src/notifications.rs"
     ],
     "holdPushRegistrationFor": [
       "apps/mobile/src/features/auth/services/pushTokenAccountLifecycle.ts"
@@ -64304,6 +64473,8 @@
     "id": [
       "apps/cli/src/app_server/project_uploads.rs",
       "apps/cli/src/routing/profile.rs",
+      "apps/desktop/gpui/src/integration.rs",
+      "apps/desktop/gpui/src/notifications.rs",
       "apps/desktop/src-tauri/src/core/agi/tools/skill_tool.rs",
       "apps/desktop/src-tauri/src/core/mcp/extensions/package.rs",
       "crates/agiworkforce-protocol/src/items.rs"
@@ -65364,6 +65535,12 @@
     ],
     "InboundRequestFacts": [
       "apps/web/lib/api-gateway-policy.ts"
+    ],
+    "INBOX_CAPACITY": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "InboxEvent": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "INCIDENT_CHANNEL_WEBHOOK_ENV": [
       "apps/web/lib/server/incident/pager.ts"
@@ -66439,6 +66616,9 @@
     "INSTALL_ENTRY_UNAVAILABLE_MESSAGE": [
       "apps/web/features/plugins/server/directory/constants.ts"
     ],
+    "install_extensions": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
+    ],
     "install_from_file": [
       "apps/desktop/src-tauri/src/core/mcp/extensions/installer.rs",
       "apps/desktop/src-tauri/src/core/mcp/extensions/manager.rs"
@@ -66654,8 +66834,14 @@
     "INSTALLER": [
       "scripts/release/release-signing-key.mjs"
     ],
+    "installer_url": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "InstallerChecksum": [
       "apps/web/app/api/download/checksums/route.ts"
+    ],
+    "InstallerDigest": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "installFailureMessage": [
       "apps/mobile/src/features/model-picker/installStore.ts"
@@ -66907,6 +67093,33 @@
     "IntakeTransitionDeps": [
       "apps/web/lib/server/chat-file-intake/transitions.ts"
     ],
+    "integration": [
+      "apps/desktop/gpui/src/lib.rs"
+    ],
+    "integration_attach": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_dispatch": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_hide": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_install": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_nav": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_observe": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_preferences_changed": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
+    "integration_render": [
+      "apps/desktop/gpui/src/ui/ext_integration.rs"
+    ],
     "integrations": [
       "apps/desktop/src-tauri/src/lib.rs"
     ],
@@ -67150,6 +67363,12 @@
     "InterpolationMethod": [
       "apps/desktop/src-tauri/src/automation/computer_use/mod.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/zoom.rs"
+    ],
+    "interpret_availability": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
+    "interpret_checksums": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "interpretElementChoice": [
       "tools/evals/semantic-decisions/questions/element-resolution.mts"
@@ -67714,6 +67933,7 @@
       "apps/cli/src/pr_feedback.rs",
       "apps/cli/src/repo/workspace.rs",
       "apps/cli/src/tui/widgets/interactive.rs",
+      "apps/desktop/gpui/src/integration.rs",
       "apps/desktop/src-tauri/src/core/agi/tools/skill_tool.rs",
       "apps/desktop/src-tauri/src/core/llm/thinking.rs",
       "apps/desktop/src-tauri/src/core/skills/skill.rs",
@@ -67878,6 +68098,9 @@
     ],
     "is_nested": [
       "apps/cli/src/repo/layout.rs"
+    ],
+    "is_newer_than": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "is_non_root_agent": [
       "crates/agiworkforce-protocol/src/protocol.rs"
@@ -71992,6 +72215,9 @@
     "keepArtifactDraft": [
       "apps/mobile/src/features/artifacts/artifactDrafts.ts"
     ],
+    "KeepAwake": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
     "keepCurrentPlan": [
       "apps/web/features/billing/services/billing-account.ts",
       "apps/web/lib/server/stripe-plan-change.ts"
@@ -72382,6 +72608,9 @@
       "crates/agiworkforce-llm/src/error.rs",
       "crates/agiworkforce-mcp/src/config.rs",
       "crates/agiworkforce-protocol/src/protocol.rs"
+    ],
+    "Kind": [
+      "apps/desktop/gpui/src/notifications.rs"
     ],
     "KIND_TO_BADGE": [
       "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
@@ -73267,6 +73496,7 @@
       "apps/cli/src/agent/checkpoints.rs",
       "apps/cli/src/features/exec/tools/registry.rs",
       "apps/cli/src/tui/widgets/interactive.rs",
+      "apps/desktop/gpui/src/integration.rs",
       "apps/desktop/src-tauri/src/data/cache/tool_results.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/capture.rs",
       "apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs"
@@ -73799,6 +74029,12 @@
     ],
     "link_cloud_project": [
       "apps/cli/src/project_registry.rs"
+    ],
+    "LINK_READY_POLL_INTERVAL": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "LINK_READY_TIMEOUT": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "link_to_message": [
       "apps/desktop/src-tauri/src/core/artifacts/store.rs"
@@ -75823,6 +76059,8 @@
       "apps/cli/src/project_registry.rs",
       "apps/cli/src/tui/prompt_history.rs",
       "apps/desktop/gpui/src/config.rs",
+      "apps/desktop/gpui/src/integration.rs",
+      "apps/desktop/gpui/src/preferences.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs",
       "apps/desktop/src-tauri/src/core/mcp/manifest.rs",
       "apps/desktop/src-tauri/src/data/state.rs"
@@ -75900,7 +76138,8 @@
     "load_from": [
       "apps/cli/src/config.rs",
       "apps/cli/src/features/plan/plan_mode.rs",
-      "apps/cli/src/mcp/registry.rs"
+      "apps/cli/src/mcp/registry.rs",
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "load_from_db": [
       "apps/desktop/src-tauri/src/core/artifacts/store.rs"
@@ -78203,6 +78442,7 @@
       "apps/desktop/src-tauri/src/automation/mod.rs"
     ],
     "MacArchitecture": [
+      "apps/desktop/gpui/src/updates.rs",
       "apps/web/app/download/detect-architecture.ts"
     ],
     "MacAutomationService": [
@@ -85978,6 +86218,9 @@
       "packages/ui/ui/src/sidebar/index.ts",
       "packages/ui/ui/src/sidebar/Menu.tsx"
     ],
+    "menu_bar_status": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "MENU_PANEL_ATTRIBUTE": [
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/sidebar/escape-guard.ts",
@@ -85986,6 +86229,9 @@
     ],
     "MenuBarResidencySetting": [
       "apps/desktop/src/features/settings/tabs/General/index.tsx"
+    ],
+    "MenuBarStatus": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "menuCollisionPadding": [
       "apps/web/features/code/components/LocalModelChip.tsx"
@@ -86199,6 +86445,7 @@
       "apps/cli/src/cloud/connectors.rs",
       "apps/cli/src/repl/registry.rs",
       "apps/cli/src/sessions.rs",
+      "apps/desktop/gpui/src/integration.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/control.rs",
       "apps/desktop/src-tauri/src/sys/native_confirm.rs",
       "crates/agiworkforce-app-server/src/developer_sessions.rs",
@@ -89521,6 +89768,9 @@
     "NaturalLanguageParser": [
       "apps/desktop/src-tauri/src/automation/browser/semantic.rs"
     ],
+    "nav_button": [
+      "apps/desktop/gpui/src/ui/frame.rs"
+    ],
     "NAV_GROUP_LABEL_TESTID": [
       "packages/ui/ui/src/settings-modal/SettingsModal.tsx"
     ],
@@ -89928,7 +90178,9 @@
       "apps/desktop/gpui/src/account.rs",
       "apps/desktop/gpui/src/cloud_history.rs",
       "apps/desktop/gpui/src/code_worktree_apply.rs",
+      "apps/desktop/gpui/src/notifications.rs",
       "apps/desktop/gpui/src/terminal_view.rs",
+      "apps/desktop/gpui/src/updates.rs",
       "apps/desktop/src-tauri/src/automation/action_router/accessibility.rs",
       "apps/desktop/src-tauri/src/automation/action_router/dispatch.rs",
       "apps/desktop/src-tauri/src/automation/action_router/mod.rs",
@@ -90626,6 +90878,9 @@
     ],
     "normalizationOptions": [
       "apps/web/scripts/normalize-project-knowledge-keys.mjs"
+    ],
+    "normalize_accelerator": [
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "normalize_accelerator_for_platform": [
       "apps/desktop/src-tauri/src/sys/commands/shortcuts.rs"
@@ -91495,6 +91750,9 @@
       "apps/cli/src/cloud/connectors.rs",
       "apps/cli/src/errors.rs"
     ],
+    "Notice": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
     "NOTICE_ADDRESS": [
       "apps/web/lib/legal-constants.ts"
     ],
@@ -91522,6 +91780,9 @@
     ],
     "notices": [
       "apps/cli/src/installs.rs"
+    ],
+    "notices_file_name": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "NOTICES_FILE_NAME": [
       "apps/desktop/electron/openSourceNotices.mjs"
@@ -91760,14 +92021,36 @@
       "apps/web/lib/server/neon-types.ts"
     ],
     "notifications": [
+      "apps/desktop/gpui/src/lib.rs",
       "crates/agiworkforce-mcp/src/client.rs",
       "packages/client/desktop-command-client/src/index.ts"
     ],
     "NOTIFICATIONS": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "notifications_attach": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
+    ],
+    "notifications_hide": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
+    ],
+    "notifications_install": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
+    ],
+    "notifications_nav": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
+    ],
+    "notifications_observe": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
+    ],
     "NOTIFICATIONS_PATH": [
       "packages/contracts/cloud-contracts/src/notifications.ts"
+    ],
+    "notifications_preferences_changed": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
+    ],
+    "notifications_render": [
+      "apps/desktop/gpui/src/ui/ext_notifications.rs"
     ],
     "NOTIFICATIONS_SCREEN_TITLE": [
       "apps/mobile/src/features/settings/screenTitles.ts"
@@ -92275,7 +92558,14 @@
       "apps/cli/src/tui/turn_transcript.rs",
       "apps/desktop/gpui/src/drafts.rs",
       "apps/desktop/gpui/src/editor_recovery.rs",
+      "apps/desktop/gpui/src/notifications.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/accelerator.rs"
+    ],
+    "observe_cloud": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
+    "observe_extensions": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
     ],
     "observe_screen": [
       "apps/desktop/src-tauri/src/automation/computer_use/visual_reasoner.rs"
@@ -95046,6 +95336,9 @@
     "orgShortIdFromServerId": [
       "apps/web/lib/services/org-shared-connector-service.ts"
     ],
+    "origin": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "ORIGIN_EXTENSION_PAGE": [
       "apps/extension/src/background/policy.ts"
     ],
@@ -96099,6 +96392,8 @@
       "apps/cli/src/routing/profile.rs",
       "apps/cli/src/sandbox.rs",
       "apps/cli/src/tui/widgets/screen_renderers.rs",
+      "apps/desktop/gpui/src/integration.rs",
+      "apps/desktop/gpui/src/updates.rs",
       "apps/desktop/src-tauri/src/automation/action_router/intent.rs",
       "apps/desktop/src-tauri/src/automation/browser/semantic.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/targeted_input.rs",
@@ -96108,6 +96403,9 @@
       "crates/agiworkforce-execpolicy/src/parser.rs",
       "crates/agiworkforce-execpolicy/src/rule.rs",
       "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "parse_accelerator": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "parse_account_usage": [
       "apps/cli/src/usage_summary.rs"
@@ -96274,6 +96572,9 @@
     "parse_schedule_at": [
       "apps/desktop/src-tauri/src/core/scheduler/nlp_parser.rs"
     ],
+    "parse_sha256_output": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "parse_simple_command": [
       "apps/cli/src/safety/argv.rs"
     ],
@@ -96298,6 +96599,9 @@
     ],
     "parse_submodule_paths": [
       "apps/cli/src/platform/runtime/git.rs"
+    ],
+    "parse_team_identifier": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "parse_tier": [
       "apps/cli/src/tier_cache.rs"
@@ -98070,6 +98374,8 @@
       "apps/cli/src/diff_model.rs",
       "apps/cli/src/path_security/file_authority.rs",
       "apps/cli/src/path_security/file_authority/download.rs",
+      "apps/desktop/gpui/src/capture.rs",
+      "apps/desktop/gpui/src/preferences.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs",
       "apps/desktop/src-tauri/src/core/skills/skill.rs"
     ],
@@ -100514,6 +100820,8 @@
       "apps/cli/src/lib.rs"
     ],
     "Platform": [
+      "apps/desktop/gpui/src/notifications.rs",
+      "apps/desktop/gpui/src/preferences.rs",
       "apps/mobile/scripts/screenshots/catalog.ts",
       "apps/mobile/scripts/screenshots/pipeline.ts"
     ],
@@ -102322,6 +102630,7 @@
       "crates/agiworkforce-execpolicy/src/lib.rs"
     ],
     "Policy": [
+      "apps/desktop/gpui/src/notifications.rs",
       "crates/agiworkforce-execpolicy/src/lib.rs",
       "crates/agiworkforce-execpolicy/src/policy.rs"
     ],
@@ -102652,7 +102961,8 @@
       "apps/web/lib/marketing-constants.ts"
     ],
     "post": [
-      "apps/cli/src/cloud/client.rs"
+      "apps/cli/src/cloud/client.rs",
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "POST": [
       "apps/web/app/api/account-security/credentials/options/route.ts",
@@ -103143,6 +103453,15 @@
     ],
     "PreferenceRow": [
       "apps/extension/src/features/options/preference-rows.ts"
+    ],
+    "preferences": [
+      "apps/desktop/gpui/src/lib.rs"
+    ],
+    "Preferences": [
+      "apps/desktop/gpui/src/preferences.rs"
+    ],
+    "preferences_changed": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
     ],
     "PREFERENCES_PATH": [
       "apps/cli/src/cloud/personalization.rs"
@@ -104477,6 +104796,9 @@
     ],
     "ProductId": [
       "packages/contracts/types/src/product-plan.ts"
+    ],
+    "production": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "PRODUCTION_CONFIG_ENFORCEMENT_VAR": [
       "apps/web/lib/validate-env.ts"
@@ -107783,6 +108105,7 @@
       "apps/cli/src/cloud/projects.rs",
       "apps/cli/src/platform/runtime/git.rs",
       "apps/desktop/gpui/src/code_worktree_apply.rs",
+      "apps/desktop/gpui/src/integration.rs",
       "crates/agiworkforce-command-registry/src/lib.rs",
       "crates/agiworkforce-llm/src/decode.rs",
       "crates/agiworkforce-mcp/src/transport/sse_stream.rs"
@@ -108217,8 +108540,17 @@
     "queueToolExecution": [
       "apps/web/lib/offline/offlineQueue.ts"
     ],
+    "quick_ask_choices": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "quick_ask_default": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "QUICK_ASK_PATH": [
       "apps/web/features/chat/lib/new-chat-entry.ts"
+    ],
+    "quick_ask_shortcut": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "QuickAskConversationPage": [
       "apps/web/app/quick-ask/[sessionId]/page.tsx"
@@ -108231,6 +108563,9 @@
     ],
     "quickAskPanel": [
       "apps/desktop/electron/quickAsk.ts"
+    ],
+    "QuickAskShortcut": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "quickbooks": [
       "packages/contracts/cloud-contracts/src/connector-scopes.ts"
@@ -111486,6 +111821,9 @@
     "receive": [
       "apps/cli/src/tui/remote_host.rs"
     ],
+    "receive_open_urls": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "receivedSecretsNotice": [
       "apps/desktop/src/features/mcp/receivedSecrets.ts"
     ],
@@ -114236,6 +114574,9 @@
     "releaseExpiredFreeTrialReservations": [
       "apps/web/lib/services/free-trial-service.ts"
     ],
+    "ReleaseFeed": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "releaseFocusedConversation": [
       "apps/mobile/services/conversationFocus.ts"
     ],
@@ -115274,6 +115615,9 @@
     ],
     "render_entry_detail": [
       "apps/cli/src/cloud/marketplaces.rs"
+    ],
+    "render_extension": [
+      "apps/desktop/gpui/src/ui/extensions.rs"
     ],
     "render_fallback": [
       "apps/cli/src/claude_parity.rs"
@@ -117626,6 +117970,9 @@
     ],
     "reset_loaded_session_stats": [
       "apps/cli/src/repl/mod.rs"
+    ],
+    "reset_local": [
+      "apps/desktop/gpui/src/notifications.rs"
     ],
     "reset_plan_state": [
       "apps/cli/src/agent/mod.rs"
@@ -124173,6 +124520,9 @@
     "SAFE_IMAGE_PICKER_OPTIONS": [
       "apps/mobile/src/features/media/image-normalization.ts"
     ],
+    "safe_installer_name": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "SAFE_PREFIXES": [
       "apps/cli/src/safety/dangerous_commands.rs"
     ],
@@ -124723,7 +125073,8 @@
       "apps/cli/src/memory.rs",
       "apps/cli/src/path_security/file_authority/download.rs",
       "apps/cli/src/permissions.rs",
-      "apps/cli/src/platform/runtime/session_control.rs"
+      "apps/cli/src/platform/runtime/session_control.rs",
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "SAVE_ANSWER_AS_DOCUMENT_LABEL": [
       "packages/ui/unified-chat/src/lib/answer-document.ts"
@@ -124858,7 +125209,8 @@
       "apps/cli/src/mcp/oauth_store.rs"
     ],
     "save_to": [
-      "apps/cli/src/features/plan/plan_mode.rs"
+      "apps/cli/src/features/plan/plan_mode.rs",
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "save_to_file": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs",
@@ -126341,6 +126693,9 @@
       "packages/tools/mcp/src/connect.ts",
       "packages/tools/mcp/src/index.ts"
     ],
+    "scheme": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "SCIM_CONTENT_TYPE": [
       "apps/web/lib/server/scim/scim-protocol.ts"
     ],
@@ -126653,14 +127008,26 @@
       "apps/desktop/src/stores/unifiedChatStore.ts",
       "apps/mobile/scripts/screenshots/catalog.ts"
     ],
+    "screenshot_command": [
+      "apps/desktop/gpui/src/capture.rs"
+    ],
     "SCREENSHOT_JPEG_QUALITY": [
       "apps/extension/src/features/computer-use/screenshotEncoding.ts"
     ],
     "SCREENSHOT_MIME_TYPE": [
       "apps/extension/src/features/computer-use/screenshotEncoding.ts"
     ],
+    "screenshot_name": [
+      "apps/desktop/gpui/src/capture.rs"
+    ],
+    "screenshot_outcome": [
+      "apps/desktop/gpui/src/capture.rs"
+    ],
     "screenshot_paths": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs"
+    ],
+    "screenshot_supported": [
+      "apps/desktop/gpui/src/capture.rs"
     ],
     "screenshotAttachment": [
       "apps/web/features/desktop-host/index.ts",
@@ -126668,6 +127035,9 @@
     ],
     "ScreenshotEvent": [
       "apps/desktop/src/hooks/useAgenticEvents.ts"
+    ],
+    "ScreenshotOutcome": [
+      "apps/desktop/gpui/src/capture.rs"
     ],
     "ScreenshotRef": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs"
@@ -130907,6 +131277,9 @@
     "SETTINGS_API_ROUTE_DEADLINE_MS": [
       "apps/web/lib/deadline-policy.ts"
     ],
+    "settings_attach": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
+    ],
     "SETTINGS_COMMANDS": [
       "apps/extension-vscode/src/features/settings/index.ts",
       "apps/extension-vscode/src/features/settings/settingsProtocol.ts"
@@ -130918,8 +131291,17 @@
     "SETTINGS_DEEP_LINK_QUERY_KEY": [
       "apps/web/features/settings/lib/web-settings-sections.ts"
     ],
+    "settings_dispatch": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
+    ],
     "SETTINGS_FOCUS_RING": [
       "apps/desktop/src/features/settings/cloud/SectionChrome.tsx"
+    ],
+    "settings_hide": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
+    ],
+    "settings_install": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
     ],
     "SETTINGS_INSTRUCTIONS_READ": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
@@ -130941,6 +131323,9 @@
     ],
     "SETTINGS_LOCAL_CAPABILITY_KINDS": [
       "apps/extension-vscode/src/features/settings/settingsProtocol.ts"
+    ],
+    "settings_nav": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
     ],
     "SETTINGS_NAV": [
       "packages/ui/ui/src/index.ts",
@@ -130977,11 +131362,20 @@
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/settings-nav.ts"
     ],
+    "settings_observe": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
+    ],
     "SETTINGS_PANEL_SETTING_KEYS": [
       "apps/extension-vscode/src/platform/config.ts"
     ],
+    "settings_preferences_changed": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
+    ],
     "SETTINGS_READ": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "settings_render": [
+      "apps/desktop/gpui/src/ui/ext_settings.rs"
     ],
     "settings_save": [
       "apps/desktop/src-tauri/src/sys/commands/settings.rs"
@@ -131624,6 +132018,9 @@
     "sha256": [
       "packages/platform/utils/src/crypto.ts",
       "packages/platform/utils/src/index.ts"
+    ],
+    "sha256_file": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "sha256_hex": [
       "apps/desktop/src-tauri/src/core/llm/tool_executor/file_tools.rs"
@@ -132561,7 +132958,8 @@
       "apps/desktop/src-tauri/src/sys/commands/shortcuts.rs"
     ],
     "ShortcutStatus": [
-      "apps/desktop/electron/shortcuts.ts"
+      "apps/desktop/electron/shortcuts.ts",
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "shortcutStatusDetail": [
       "apps/desktop/electron/shortcuts.ts"
@@ -136657,6 +137055,7 @@
       "apps/cli/src/background.rs",
       "apps/cli/src/session_browser.rs",
       "apps/cli/src/terminals.rs",
+      "apps/desktop/gpui/src/notifications.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs",
       "apps/desktop/src-tauri/src/core/agent/background_agent.rs",
       "apps/desktop/src-tauri/src/core/agent/triggers.rs",
@@ -137197,7 +137596,12 @@
       "apps/desktop/src-tauri/src/sys/commands/chat/mod.rs"
     ],
     "State": [
-      "apps/cli/src/app_server/attachment_recovery/store.rs"
+      "apps/cli/src/app_server/attachment_recovery/store.rs",
+      "apps/desktop/gpui/src/ui/ext_capture.rs",
+      "apps/desktop/gpui/src/ui/ext_integration.rs",
+      "apps/desktop/gpui/src/ui/ext_notifications.rs",
+      "apps/desktop/gpui/src/ui/ext_settings.rs",
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
     ],
     "STATE_LABELS": [
       "scripts/check-surface-feature-matrix.mjs"
@@ -140619,6 +141023,9 @@
     "SWEEP_INTERVAL_MS": [
       "packages/platform/utils/src/scheduling/schedule-time.ts"
     ],
+    "sweep_stale": [
+      "apps/desktop/gpui/src/capture.rs"
+    ],
     "sweepAbandonedFeedbackScreenshots": [
       "apps/web/lib/server/feedback-screenshot-cleanup.ts"
     ],
@@ -141289,6 +141696,9 @@
     "take_events": [
       "apps/desktop/gpui/src/runtime.rs"
     ],
+    "take_inbox": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "take_last_bytes_at_char_boundary": [
       "crates/agiworkforce-protocol/src/string_utils.rs"
     ],
@@ -141457,6 +141867,9 @@
     "TargetRole": [
       "apps/desktop/src-tauri/src/automation/action_router/intent.rs",
       "apps/desktop/src-tauri/src/automation/action_router/mod.rs"
+    ],
+    "targets": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "targets_for": [
       "apps/cli/src/tui/widgets/approval_overlay.rs"
@@ -146261,6 +146674,9 @@
     "trackedRuntimeChildCount": [
       "apps/extension-vscode/src/integrations/runtimeProcessRegistry.ts"
     ],
+    "Tracker": [
+      "apps/desktop/gpui/src/notifications.rs"
+    ],
     "trackLastTextEditor": [
       "apps/extension-vscode/src/platform/lastTextEditor.ts"
     ],
@@ -146641,11 +147057,23 @@
     "TRAY": [
       "packages/ui/icons/src/glyphs/shapes.ts"
     ],
+    "tray_menu": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
+    "tray_supported": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "TrayActivity": [
       "apps/desktop/electron/tray.ts"
     ],
+    "TrayCommand": [
+      "apps/desktop/gpui/src/integration.rs"
+    ],
     "TrayHandlers": [
       "apps/desktop/electron/tray.ts"
+    ],
+    "TrayMenuItem": [
+      "apps/desktop/gpui/src/integration.rs"
     ],
     "TraySession": [
       "apps/desktop/electron/tray.ts"
@@ -149073,6 +149501,9 @@
     "updateChromeScheduleDetails": [
       "apps/extension/src/features/cloud-bridge/schedulesClient.ts"
     ],
+    "UpdateClient": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "updateCloudCodeEnvironment": [
       "apps/web/lib/services/cloud-code-environment-service.ts"
     ],
@@ -149235,6 +149666,33 @@
     ],
     "updaterMayOffer": [
       "apps/desktop/src/features/upgrade/localRuntimeUpgrade.ts"
+    ],
+    "updates": [
+      "apps/desktop/gpui/src/lib.rs"
+    ],
+    "updates_attach": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_dispatch": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_hide": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_install": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_nav": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_observe": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_preferences_changed": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
+    ],
+    "updates_render": [
+      "apps/desktop/gpui/src/ui/ext_updates.rs"
     ],
     "updateSchedule": [
       "apps/mobile/src/features/schedules/index.ts",
@@ -153372,7 +153830,8 @@
       "apps/web/lib/csrf.ts"
     ],
     "validated": [
-      "apps/cli/src/cloud/project_files.rs"
+      "apps/cli/src/cloud/project_files.rs",
+      "apps/desktop/gpui/src/preferences.rs"
     ],
     "validated_provider": [
       "apps/cli/src/platform/runtime/session.rs"
@@ -154171,6 +154630,9 @@
       "apps/desktop/src-tauri/src/core/mcp/extensions/package.rs",
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
     ],
+    "Version": [
+      "apps/desktop/gpui/src/updates.rs"
+    ],
     "version_callback": [
       "tools/skill-vetting/src/skillspector/cli.py"
     ],
@@ -154179,6 +154641,9 @@
     ],
     "version_greater": [
       "apps/cli/src/cloud/state.rs"
+    ],
+    "version_header": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "VERSION_INPUT": [
       "apps/web/app/api/developers/prompts/__tests__/prompt-route-kit.ts"
@@ -157036,7 +157501,8 @@
       "apps/desktop/src-tauri/src/core/research/citation.rs"
     ],
     "with_origin": [
-      "apps/cli/src/mcp/mod.rs"
+      "apps/cli/src/mcp/mod.rs",
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "with_page_size": [
       "apps/cli/src/tui/widgets/interactive.rs"
@@ -157910,6 +158376,9 @@
     ],
     "WorkflowTrigger": [
       "packages/contracts/types/src/workflow.ts"
+    ],
+    "working": [
+      "apps/desktop/gpui/src/notifications.rs"
     ],
     "working_directory": [
       "apps/cli/src/powershell_tool.rs"
@@ -159380,6 +159849,9 @@
     ],
     "write_message": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
+    ],
+    "write_notices": [
+      "apps/desktop/gpui/src/updates.rs"
     ],
     "WRITE_OUTCOMES": [
       "packages/contracts/types/src/resource-metadata-contract.ts"
