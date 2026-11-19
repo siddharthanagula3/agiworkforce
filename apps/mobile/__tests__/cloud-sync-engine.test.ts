@@ -287,6 +287,47 @@ describe('syncNow, pull', () => {
     expect(cloud.messages.c1?.[0]).toHaveProperty('parentId', null);
   });
 
+  describe('a pull that lands while a regenerated answer is on the phone', () => {
+    const leaf = () =>
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1')
+        ?.activeLeafMessageId;
+
+    function pullNamingLeaf(serverLeaf: string, title = 'Chat c1') {
+      mockGet.mockResolvedValueOnce({
+        conversations: [{ ...convDelta('c1', '5'), title, active_leaf_message_id: serverLeaf }],
+        messages: [],
+        artifacts: [],
+        cursor: '5',
+        hasMore: false,
+      } as never);
+    }
+
+    beforeEach(() => {
+      seedConversation('c1', { activeLeafMessageId: 'a2' });
+      seedMessage('c1', { id: 'u1', parentId: null });
+      seedMessage('c1', { id: 'a1', role: 'assistant', parentId: 'u1' });
+    });
+
+    it('keeps following the answer being written when the server still names its question', async () => {
+      seedMessage('c1', { id: 'a2', role: 'assistant', parentId: 'u1', isStreaming: true });
+      pullNamingLeaf('u1', 'Oceans');
+
+      await syncNow();
+
+      expect(leaf()).toBe('a2');
+      expect(useChatCloudMessageStore.getState().conversations[0]?.title).toBe('Oceans');
+    });
+
+    it('takes the server leaf once the answer has finished', async () => {
+      seedMessage('c1', { id: 'a2', role: 'assistant', parentId: 'u1' });
+      pullNamingLeaf('a1');
+
+      await syncNow();
+
+      expect(leaf()).toBe('a1');
+    });
+  });
+
   it('keeps a lineage the transcript fetch learned when the delta carries no parent', async () => {
     seedConversation('c1', { activeLeafMessageId: 'm1' });
     seedMessage('c1', { id: 'm1', parentId: 'm0' });
