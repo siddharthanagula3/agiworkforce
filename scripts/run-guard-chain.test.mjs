@@ -16,7 +16,7 @@ const CHAIN_SCRIPT = 'check:llm-operability';
 const WRAPPER = /^node scripts\/run-guard-chain\.mjs "([^"]+)"$/;
 const WRITES =
   /\b(?:writeFileSync|appendFileSync|mkdirSync|rmSync|cpSync|copyFileSync|renameSync|unlinkSync)\b/;
-const OWN_DIRECTORY = /\b(?:tmpdir|mkdtemp|mkdtempSync|TMPDIR|RUNNER_TEMP)\b/;
+const OWN_DIRECTORY = /\b(?:tmpdir|mkdtemp|mkdtempSync|makeTempDir|TMPDIR|RUNNER_TEMP)\b/;
 
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
